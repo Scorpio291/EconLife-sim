@@ -1,0 +1,4 @@
+add_library(econlife_weapons_trafficking STATIC
+    weapons_trafficking_module.cpp
+)
+target_link_libraries(econlife_weapons_trafficking PUBLIC econlife_criminal_operations)

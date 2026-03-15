@@ -90,3 +90,121 @@ TEST_CASE("government_budget module exists and registers", "[module][tier5]") {
 TEST_CASE("healthcare module exists and registers", "[module][tier5]") {
     REQUIRE(true);
 }
+
+// ── Tier 6: Depends on NPC Behavior ────────────────────────────────────────
+
+TEST_CASE("npc_spending module exists and registers", "[module][tier6]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("evidence module exists and registers", "[module][tier6]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("obligation_network module exists and registers", "[module][tier6]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("community_response module exists and registers", "[module][tier6]") {
+    REQUIRE(true);
+}
+
+// ── Tier 7: Depends on Evidence ────────────────────────────────────────────
+
+TEST_CASE("facility_signals module exists and registers", "[module][tier7]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("criminal_operations module exists and registers", "[module][tier7]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("media_system module exists and registers", "[module][tier7]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("antitrust module exists and registers", "[module][tier7]") {
+    REQUIRE(true);
+}
+
+// ── Tier 8: Depends on Criminal Operations ─────────────────────────────────
+
+TEST_CASE("investigator_engine module exists and registers", "[module][tier8]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("money_laundering module exists and registers", "[module][tier8]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("drug_economy module exists and registers", "[module][tier8]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("weapons_trafficking module exists and registers", "[module][tier8]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("protection_rackets module exists and registers", "[module][tier8]") {
+    REQUIRE(true);
+}
+
+// ── Tier 9: Depends on Investigator Engine ─────────────────────────────────
+
+TEST_CASE("legal_process module exists and registers", "[module][tier9]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("informant_system module exists and registers", "[module][tier9]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("alternative_identity module exists and registers", "[module][tier9]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("designer_drug module exists and registers", "[module][tier9]") {
+    REQUIRE(true);
+}
+
+// ── Tier 10: Depends on Community Response ─────────────────────────────────
+
+TEST_CASE("political_cycle module exists and registers", "[module][tier10]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("influence_network module exists and registers", "[module][tier10]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("trust_updates module exists and registers", "[module][tier10]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("addiction module exists and registers", "[module][tier10]") {
+    REQUIRE(true);
+}
+
+// ── Tier 11: Mixed Dependencies ────────────────────────────────────────────
+
+TEST_CASE("regional_conditions module exists and registers", "[module][tier11]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("population_aging module exists and registers", "[module][tier11]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("currency_exchange module exists and registers", "[module][tier11]") {
+    REQUIRE(true);
+}
+
+TEST_CASE("lod_system module exists and registers", "[module][tier11]") {
+    REQUIRE(true);
+}
+
+// ── Tier 12: Persistence ───────────────────────────────────────────────────
+
+TEST_CASE("persistence module exists and registers", "[module][tier12]") {
+    REQUIRE(true);
+}

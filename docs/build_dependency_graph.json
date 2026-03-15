@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "EconLife module build dependency graph. Pass 1 modules are 'stub', Pass 2 modules are 'pending'.",
+  "description": "EconLife module build dependency graph. All modules scaffolded (Pass 1 + Pass 2).",
   "modules": {
     "rng": {
       "tier": 0,
@@ -194,158 +194,236 @@
     "npc_spending": {
       "tier": 6,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["npc_behavior"]
+      "status": "stub",
+      "cmake_target": "econlife_npc_spending",
+      "depends_on": ["npc_behavior"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/npc_spending/INTERFACE.md"
     },
     "evidence": {
       "tier": 6,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["npc_behavior"]
+      "status": "stub",
+      "cmake_target": "econlife_evidence",
+      "depends_on": ["npc_behavior"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/evidence/INTERFACE.md"
     },
     "obligation_network": {
       "tier": 6,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["npc_behavior"]
+      "status": "stub",
+      "cmake_target": "econlife_obligation_network",
+      "depends_on": ["npc_behavior"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/obligation_network/INTERFACE.md"
     },
     "community_response": {
       "tier": 6,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["npc_behavior"]
+      "status": "stub",
+      "cmake_target": "econlife_community_response",
+      "depends_on": ["npc_behavior"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/community_response/INTERFACE.md"
     },
     "facility_signals": {
       "tier": 7,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["evidence"]
+      "status": "stub",
+      "cmake_target": "econlife_facility_signals",
+      "depends_on": ["evidence"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/facility_signals/INTERFACE.md"
     },
     "criminal_operations": {
       "tier": 7,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["evidence"]
+      "status": "stub",
+      "cmake_target": "econlife_criminal_operations",
+      "depends_on": ["evidence"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/criminal_operations/INTERFACE.md"
     },
     "media_system": {
       "tier": 7,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["evidence"]
+      "status": "stub",
+      "cmake_target": "econlife_media_system",
+      "depends_on": ["evidence"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/media_system/INTERFACE.md"
     },
     "antitrust": {
       "tier": 7,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["evidence"]
+      "status": "stub",
+      "cmake_target": "econlife_antitrust",
+      "depends_on": ["evidence"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/antitrust/INTERFACE.md"
     },
     "investigator_engine": {
       "tier": 8,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["criminal_operations"]
+      "status": "stub",
+      "cmake_target": "econlife_investigator_engine",
+      "depends_on": ["criminal_operations"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/investigator_engine/INTERFACE.md"
     },
     "money_laundering": {
       "tier": 8,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["criminal_operations"]
+      "status": "stub",
+      "cmake_target": "econlife_money_laundering",
+      "depends_on": ["criminal_operations"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/money_laundering/INTERFACE.md"
     },
     "drug_economy": {
       "tier": 8,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["criminal_operations"]
+      "status": "stub",
+      "cmake_target": "econlife_drug_economy",
+      "depends_on": ["criminal_operations"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/drug_economy/INTERFACE.md"
     },
     "weapons_trafficking": {
       "tier": 8,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["criminal_operations"]
+      "status": "stub",
+      "cmake_target": "econlife_weapons_trafficking",
+      "depends_on": ["criminal_operations"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/weapons_trafficking/INTERFACE.md"
     },
     "protection_rackets": {
       "tier": 8,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["criminal_operations"]
+      "status": "stub",
+      "cmake_target": "econlife_protection_rackets",
+      "depends_on": ["criminal_operations"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/protection_rackets/INTERFACE.md"
     },
     "legal_process": {
       "tier": 9,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["investigator_engine"]
+      "status": "stub",
+      "cmake_target": "econlife_legal_process",
+      "depends_on": ["investigator_engine"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/legal_process/INTERFACE.md"
     },
     "informant_system": {
       "tier": 9,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["investigator_engine"]
+      "status": "stub",
+      "cmake_target": "econlife_informant_system",
+      "depends_on": ["investigator_engine"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/informant_system/INTERFACE.md"
     },
     "alternative_identity": {
       "tier": 9,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["investigator_engine"]
+      "status": "stub",
+      "cmake_target": "econlife_alternative_identity",
+      "depends_on": ["investigator_engine"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/alternative_identity/INTERFACE.md"
     },
     "designer_drug": {
       "tier": 9,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["investigator_engine"]
+      "status": "stub",
+      "cmake_target": "econlife_designer_drug",
+      "depends_on": ["investigator_engine"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/designer_drug/INTERFACE.md"
     },
     "political_cycle": {
       "tier": 10,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["community_response"]
+      "status": "stub",
+      "cmake_target": "econlife_political_cycle",
+      "depends_on": ["community_response"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/political_cycle/INTERFACE.md"
     },
     "influence_network": {
       "tier": 10,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["community_response"]
+      "status": "stub",
+      "cmake_target": "econlife_influence_network",
+      "depends_on": ["community_response"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/influence_network/INTERFACE.md"
     },
     "trust_updates": {
       "tier": 10,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["community_response"]
+      "status": "stub",
+      "cmake_target": "econlife_trust_updates",
+      "depends_on": ["community_response"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/trust_updates/INTERFACE.md"
     },
     "addiction": {
       "tier": 10,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["community_response"]
+      "status": "stub",
+      "cmake_target": "econlife_addiction",
+      "depends_on": ["community_response"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/addiction/INTERFACE.md"
     },
     "regional_conditions": {
       "tier": 11,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["political_cycle", "influence_network"]
+      "status": "stub",
+      "cmake_target": "econlife_regional_conditions",
+      "depends_on": ["political_cycle", "influence_network"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/regional_conditions/INTERFACE.md"
     },
     "population_aging": {
       "tier": 11,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["healthcare"]
+      "status": "stub",
+      "cmake_target": "econlife_population_aging",
+      "depends_on": ["healthcare"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/population_aging/INTERFACE.md"
     },
     "currency_exchange": {
       "tier": 11,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["commodity_trading", "government_budget"]
+      "status": "stub",
+      "cmake_target": "econlife_currency_exchange",
+      "depends_on": ["commodity_trading", "government_budget"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/currency_exchange/INTERFACE.md"
     },
     "lod_system": {
       "tier": 11,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["regional_conditions"]
+      "status": "stub",
+      "cmake_target": "econlife_lod_system",
+      "depends_on": ["regional_conditions"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/lod_system/INTERFACE.md"
     },
     "persistence": {
       "tier": 12,
       "pass": 2,
-      "status": "pending",
-      "depends_on": ["world_state"]
+      "status": "stub",
+      "cmake_target": "econlife_persistence",
+      "depends_on": ["world_state"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/persistence/INTERFACE.md"
     }
   }
 }

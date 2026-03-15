@@ -1,0 +1,4 @@
+add_library(econlife_regional_conditions STATIC
+    regional_conditions_module.cpp
+)
+target_link_libraries(econlife_regional_conditions PUBLIC econlife_political_cycle econlife_influence_network)

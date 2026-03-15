@@ -1,0 +1,4 @@
+add_library(econlife_alternative_identity STATIC
+    alternative_identity_module.cpp
+)
+target_link_libraries(econlife_alternative_identity PUBLIC econlife_investigator_engine)

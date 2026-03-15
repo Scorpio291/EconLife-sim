@@ -1,0 +1,4 @@
+add_library(econlife_political_cycle STATIC
+    political_cycle_module.cpp
+)
+target_link_libraries(econlife_political_cycle PUBLIC econlife_community_response)

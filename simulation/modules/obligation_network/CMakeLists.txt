@@ -1,0 +1,4 @@
+add_library(econlife_obligation_network STATIC
+    obligation_network_module.cpp
+)
+target_link_libraries(econlife_obligation_network PUBLIC econlife_npc_behavior)

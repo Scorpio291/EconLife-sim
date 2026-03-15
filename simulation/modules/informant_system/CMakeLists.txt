@@ -1,0 +1,4 @@
+add_library(econlife_informant_system STATIC
+    informant_system_module.cpp
+)
+target_link_libraries(econlife_informant_system PUBLIC econlife_investigator_engine)

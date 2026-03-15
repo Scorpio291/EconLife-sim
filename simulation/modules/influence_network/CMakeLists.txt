@@ -1,0 +1,4 @@
+add_library(econlife_influence_network STATIC
+    influence_network_module.cpp
+)
+target_link_libraries(econlife_influence_network PUBLIC econlife_community_response)
