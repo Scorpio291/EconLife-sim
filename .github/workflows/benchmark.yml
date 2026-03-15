@@ -1,0 +1,30 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake (Release)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DECONLIFE_BUILD_TESTS=ON -DECONLIFE_BUILD_BENCHMARKS=ON
+
+      - name: Build
+        run: cmake --build build --config Release -j
+
+      - name: Run benchmarks
+        run: |
+          ctest --test-dir build -C Release -L "benchmark" --output-on-failure || true
+          echo "Benchmark results above. Compare against baseline for regressions."
+
+      # TODO: When benchmarks produce actual timings, add:
+      # - Baseline comparison against previous main branch results
+      # - PR comment with performance delta
+      # - Fail if any benchmark regresses by > 20%

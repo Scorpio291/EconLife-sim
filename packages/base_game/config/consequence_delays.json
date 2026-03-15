@@ -1,0 +1,65 @@
+{
+  "_comment": "BASE_DELAY values for consequence queue scheduling. All values in ticks (1 tick = 1 in-game day). From GDD Section 10 / TDD Section 6.",
+  "consequence_delays": {
+    "whistleblower_emergence": {
+      "base_delay_min": 30,
+      "base_delay_max": 180,
+      "description": "Time for a dissatisfied worker to decide to act on knowledge"
+    },
+    "journalist_investigation_start": {
+      "base_delay_min": 14,
+      "base_delay_max": 90,
+      "description": "Time from receiving a tip to starting active investigation"
+    },
+    "regulator_investigation_start": {
+      "base_delay_min": 30,
+      "base_delay_max": 120,
+      "description": "Time from receiving complaint to opening formal investigation"
+    },
+    "law_enforcement_response": {
+      "base_delay_min": 7,
+      "base_delay_max": 60,
+      "description": "Time from evidence threshold to active investigation"
+    },
+    "obligation_escalation": {
+      "base_delay_min": 90,
+      "base_delay_max": 365,
+      "description": "Time between obligation escalation demands"
+    },
+    "community_response_stage_advance": {
+      "base_delay_min": 30,
+      "base_delay_max": 180,
+      "description": "Time for community response to advance one stage"
+    },
+    "evidence_decay": {
+      "base_delay": 7,
+      "description": "Recurring evidence actionability decay check interval"
+    },
+    "relationship_decay": {
+      "base_delay": 30,
+      "description": "Recurring NPC relationship decay batch interval"
+    },
+    "market_recompute": {
+      "base_delay": 1,
+      "description": "Market price recomputation (every tick for active markets)"
+    },
+    "npc_business_decision": {
+      "base_delay": 90,
+      "description": "Quarterly NPC business decision cycle"
+    },
+    "legal_process_charge_to_trial": {
+      "base_delay_min": 90,
+      "base_delay_max": 365,
+      "description": "Time from charges filed to trial date"
+    },
+    "political_election_cycle": {
+      "base_delay": 1460,
+      "description": "Election cycle length (4 years = 1460 ticks)"
+    },
+    "legislative_proposal_to_vote": {
+      "base_delay_min": 30,
+      "base_delay_max": 180,
+      "description": "Time from proposal introduction to committee vote"
+    }
+  }
+}

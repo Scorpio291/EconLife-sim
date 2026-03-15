@@ -1,0 +1,84 @@
+good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available
+steel,Steel,1,tonne,metals,180.00,false,false,1
+steel_sheet,Steel Sheet,1,tonne,metals,220.00,false,false,1
+steel_pipe,Steel Pipe,1,tonne,metals,250.00,false,false,1
+steel_wire_rod,Steel Wire Rod,1,tonne,metals,200.00,false,false,1
+stainless_steel,Stainless Steel,1,tonne,metals,350.00,false,false,1
+cast_iron,Cast Iron,1,tonne,metals,140.00,false,false,1
+copper_wire_rod,Copper Wire Rod,1,tonne,metals,280.00,false,false,1
+copper_pipe,Copper Pipe,1,tonne,metals,300.00,false,false,1
+copper_foil,Copper Foil,1,tonne,metals,350.00,false,false,1
+aluminum_ingot,Aluminum Ingot,1,tonne,metals,160.00,false,false,1
+aluminum_sheet,Aluminum Sheet,1,tonne,metals,200.00,false,false,1
+aluminum_extrusion,Aluminum Extrusion,1,tonne,metals,220.00,false,false,1
+tin_ingot,Tin Ingot,1,tonne,metals,180.00,false,false,1
+zinc_ingot,Zinc Ingot,1,tonne,metals,120.00,false,false,1
+lead_ingot,Lead Ingot,1,tonne,metals,100.00,false,false,1
+nickel_ingot,Nickel Ingot,1,tonne,metals,200.00,false,false,1
+cobalt_refined,Refined Cobalt,1,tonne,metals,500.00,false,false,1
+lithium_carbonate,Lithium Carbonate,1,tonne,metals,450.00,false,false,1
+rare_earth_oxides,Rare Earth Oxides,1,tonne,metals,600.00,false,false,1
+titanium_sponge,Titanium Sponge,1,tonne,metals,400.00,false,false,1
+brass,Brass,1,tonne,metals,280.00,false,false,1
+bronze,Bronze,1,tonne,metals,300.00,false,false,1
+refined_gold,Refined Gold,1,tonne,metals,3000.00,false,false,1
+refined_silver,Refined Silver,1,tonne,metals,800.00,false,false,1
+gasoline,Gasoline,1,litre,petroleum,75.00,false,false,1
+diesel,Diesel,1,litre,petroleum,70.00,false,false,1
+jet_fuel,Jet Fuel (Kerosene),1,litre,petroleum,80.00,false,false,1
+heavy_fuel_oil,Heavy Fuel Oil,1,litre,petroleum,40.00,false,false,1
+naphtha,Naphtha,1,litre,petroleum,50.00,false,false,1
+lubricants,Lubricants,1,litre,petroleum,90.00,false,false,1
+bitumen,Bitumen / Asphalt,1,tonne,petroleum,30.00,false,false,1
+lpg,LPG,1,litre,petroleum,35.00,false,false,1
+paraffin_wax,Paraffin Wax,1,tonne,petroleum,45.00,false,false,1
+petroleum_coke,Petroleum Coke,1,tonne,petroleum,20.00,false,false,1
+ethylene,Ethylene,1,tonne,chemicals,120.00,false,false,1
+propylene,Propylene,1,tonne,chemicals,110.00,false,false,1
+benzene,Benzene,1,tonne,chemicals,100.00,false,false,1
+methanol,Methanol,1,litre,chemicals,60.00,false,false,1
+ammonia,Ammonia,1,tonne,chemicals,50.00,false,false,1
+sulfuric_acid,Sulfuric Acid,1,tonne,chemicals,30.00,false,false,1
+chlorine,Chlorine,1,tonne,chemicals,40.00,false,false,1
+caustic_soda,Caustic Soda (NaOH),1,tonne,chemicals,45.00,false,false,1
+plastics_polymer,Plastics (Polymer Resin),1,tonne,chemicals,130.00,false,false,1
+synthetic_rubber,Synthetic Rubber,1,tonne,chemicals,150.00,false,false,1
+polyester_fiber,Polyester Fiber,1,tonne,chemicals,100.00,false,false,1
+fertilizer_npk,Fertilizer (NPK Blend),1,tonne,chemicals,60.00,false,false,1
+drug_precursors,Drug Precursor Chemicals,1,tonne,chemicals,200.00,false,false,1
+epoxy_resin,Epoxy Resin,1,tonne,chemicals,180.00,false,false,1
+fiberglass,Fiberglass,1,tonne,chemicals,120.00,false,false,1
+paint_pigments,Paint & Coatings,1,tonne,chemicals,160.00,false,false,1
+industrial_gas,Industrial Gases (O2/N2/Ar),1,tonne,chemicals,25.00,false,false,1
+soap_base,Soap Base,1,tonne,chemicals,40.00,false,false,1
+flour,Flour,1,tonne,agricultural,45.00,true,false,1
+corn_starch,Corn Starch,1,tonne,agricultural,35.00,false,false,1
+corn_syrup,Corn Syrup,1,litre,agricultural,30.00,false,false,1
+soy_oil_crude,Soy Oil (Crude),1,litre,agricultural,55.00,false,false,1
+soy_oil_refined,Soy Oil (Refined),1,litre,agricultural,70.00,false,false,1
+soy_meal,Soy Meal,1,tonne,agricultural,40.00,false,false,1
+palm_oil_crude,Palm Oil (Crude),1,litre,agricultural,50.00,false,false,1
+palm_oil_refined,Palm Oil (Refined),1,litre,agricultural,65.00,false,false,1
+rapeseed_oil,Rapeseed Oil,1,litre,agricultural,60.00,false,false,1
+cotton_fiber,Cotton Fiber,1,tonne,agricultural,70.00,false,false,1
+raw_sugar,Raw Sugar,1,tonne,agricultural,25.00,false,false,1
+refined_sugar,Refined Sugar,1,tonne,agricultural,40.00,false,false,1
+cured_tobacco,Cured Tobacco,1,tonne,agricultural,80.00,false,false,1
+roasted_coffee,Roasted Coffee,1,tonne,agricultural,150.00,false,false,1
+cocoa_mass,Cocoa Mass / Butter,1,tonne,agricultural,120.00,false,false,1
+beef,Beef,1,tonne,agricultural,200.00,true,false,1
+pork,Pork,1,tonne,agricultural,150.00,true,false,1
+poultry_meat,Poultry Meat,1,tonne,agricultural,100.00,true,false,1
+wool_raw,Raw Wool,1,tonne,agricultural,60.00,false,false,1
+leather_raw,Raw Leather / Hides,1,tonne,agricultural,80.00,false,false,1
+seafood_processed,Processed Seafood,1,tonne,agricultural,120.00,true,false,1
+fishmeal,Fishmeal,1,tonne,agricultural,50.00,false,false,1
+dairy_products,Dairy Products,1,tonne,agricultural,90.00,true,false,1
+malt,Malt,1,tonne,agricultural,35.00,false,false,1
+lumber,Lumber,1,tonne,timber,80.00,false,false,1
+paper_pulp,Paper Pulp,1,tonne,timber,40.00,false,false,1
+engineered_wood,Engineered Wood (LVL/Plywood),1,tonne,timber,120.00,false,false,1
+paper,Paper,1,tonne,timber,50.00,false,false,1
+cardboard,Cardboard,1,tonne,timber,35.00,false,false,1
+wood_chips,Wood Chips,1,tonne,timber,15.00,false,false,1
+tannin_extract,Tannin Extract,1,tonne,timber,30.00,false,false,1

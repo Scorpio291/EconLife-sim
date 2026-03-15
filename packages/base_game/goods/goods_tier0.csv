@@ -1,0 +1,58 @@
+good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available
+iron_ore,Iron Ore,0,tonne,geological,12.00,false,false,1
+copper_ore,Copper Ore,0,tonne,geological,55.00,false,false,1
+bauxite,Bauxite,0,tonne,geological,30.00,false,false,1
+tin_ore,Tin Ore,0,tonne,geological,70.00,false,false,1
+zinc_ore,Zinc Ore,0,tonne,geological,25.00,false,false,1
+lead_ore,Lead Ore,0,tonne,geological,18.00,false,false,1
+nickel_ore,Nickel Ore,0,tonne,geological,85.00,false,false,1
+cobalt_ore,Cobalt Ore,0,tonne,geological,250.00,false,false,1
+lithium_ore,Lithium Ore,0,tonne,geological,200.00,false,false,1
+rare_earth_ore,Rare Earth Ore,0,tonne,geological,300.00,false,false,1
+manganese_ore,Manganese Ore,0,tonne,geological,20.00,false,false,1
+chromite_ore,Chromite Ore,0,tonne,geological,45.00,false,false,1
+titanium_ore,Titanium Ore,0,tonne,geological,120.00,false,false,1
+gold_ore,Gold Ore,0,tonne,geological,1500.00,false,false,1
+silver_ore,Silver Ore,0,tonne,geological,400.00,false,false,1
+platinum_ore,Platinum Group Ore,0,tonne,geological,2500.00,false,false,1
+gemstones,Gemstones,0,unit,geological,5000.00,false,false,1
+thermal_coal,Thermal Coal,0,tonne,geological,8.00,false,false,1
+coking_coal,Coking Coal,0,tonne,geological,15.00,false,false,1
+crude_oil,Crude Oil,0,litre,geological,60.00,false,false,1
+natural_gas,Natural Gas,0,litre,geological,35.00,false,false,1
+uranium_ore,Uranium Ore,0,tonne,geological,90.00,false,false,1
+limestone,Limestone,0,tonne,geological,5.00,false,false,1
+silica_sand,Silica Sand,0,tonne,geological,8.00,false,false,1
+potash,Potash,0,tonne,geological,22.00,false,false,1
+phosphate_rock,Phosphate Rock,0,tonne,geological,18.00,false,false,1
+sulfur,Sulfur,0,tonne,geological,10.00,false,false,1
+graphite_ore,Graphite Ore,0,tonne,geological,65.00,false,false,1
+salt,Salt,0,tonne,geological,4.00,false,false,1
+kaolin,Kaolin (Clay),0,tonne,geological,12.00,false,false,1
+wheat,Wheat,0,tonne,biological,28.00,true,false,1
+corn,Corn (Maize),0,tonne,biological,22.00,true,false,1
+soybeans,Soybeans,0,tonne,biological,35.00,true,false,1
+cotton,Cotton (Raw),0,tonne,biological,50.00,false,false,1
+natural_rubber,Natural Rubber (Latex),0,tonne,biological,45.00,false,false,1
+sugarcane,Sugar Cane,0,tonne,biological,15.00,true,false,1
+tobacco_leaf,Tobacco Leaf,0,tonne,biological,40.00,true,false,1
+coffee_beans_raw,Coffee Beans (Raw),0,tonne,biological,80.00,true,false,1
+cacao_beans,Cacao Beans,0,tonne,biological,75.00,true,false,1
+palm_fruit,Palm Fruit,0,tonne,biological,18.00,true,false,1
+rapeseed,Rapeseed (Canola),0,tonne,biological,30.00,true,false,1
+hops,Hops,0,tonne,biological,60.00,true,false,1
+barley,Barley,0,tonne,biological,20.00,true,false,1
+rice,Rice,0,tonne,biological,32.00,true,false,1
+cattle_live,Cattle (Live),0,unit,biological,120.00,true,false,1
+pigs_live,Pigs (Live),0,unit,biological,60.00,true,false,1
+poultry_live,Poultry (Live),0,unit,biological,8.00,true,false,1
+sheep_live,Sheep (Live),0,unit,biological,45.00,true,false,1
+fish_wild,Fish - Wild-Caught,0,tonne,biological,50.00,true,false,1
+fish_farmed,Fish - Farmed,0,tonne,biological,40.00,true,false,1
+softwood_logs,Softwood Timber (Logs),0,tonne,biological,15.00,false,false,1
+hardwood_logs,Hardwood Timber (Logs),0,tonne,biological,35.00,false,false,1
+pulpwood,Pulpwood,0,tonne,biological,10.00,false,false,1
+hemp,Hemp,0,tonne,biological,25.00,false,false,1
+coca_leaf,Coca Leaf,0,tonne,biological,100.00,true,true,1
+poppy,Poppy,0,tonne,biological,80.00,true,true,1
+milk_raw,Raw Milk,0,litre,biological,12.00,true,false,1

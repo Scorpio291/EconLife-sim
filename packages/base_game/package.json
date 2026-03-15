@@ -1,0 +1,12 @@
+{
+  "package_id": "base_game",
+  "display_name": "EconLife",
+  "version": "0.1.0",
+  "type": "base_game",
+  "author": "Studio",
+  "load_after": [],
+  "load_before": [],
+  "schema_version_bump": 0,
+  "scripts": [],
+  "description": "EconLife base game — engine core. Always loaded first."
+}

@@ -1,0 +1,41 @@
+{
+  "simulation": {
+    "tick_budget_ms": 500,
+    "tick_budget_target_ms": 200,
+    "max_significant_npcs": 3000,
+    "v1_significant_npcs": 2000,
+    "max_named_background_npcs": 5000,
+    "thread_pool_max_workers": 6,
+    "npc_memory_log_cap": 500,
+    "npc_relationship_cap_per_npc": 100,
+    "province_count_v1": 6,
+    "nation_count_v1": 1,
+    "ticks_per_in_game_day": 1,
+    "start_year": 2000,
+    "start_month": 1,
+    "start_day": 1
+  },
+  "determinism": {
+    "floating_point_sort_order": "good_id_asc_then_province_id_asc",
+    "cross_province_delay_ticks": 1,
+    "delta_merge_order": "province_index_ascending"
+  },
+  "persistence": {
+    "autosave_interval_ticks": 30,
+    "monthly_snapshot_interval_ticks": 30,
+    "wal_segment_size_ticks": 10,
+    "max_snapshots_retained": 12,
+    "compression": "lz4"
+  },
+  "performance": {
+    "benchmark_npc_levels": [100, 500, 1000, 2000, 5000],
+    "regression_threshold_percent": 10,
+    "lazy_eval_state_change_threshold": true
+  },
+  "scripting": {
+    "lua_version": "5.4",
+    "hook_budget_normal_ms": 0.1,
+    "hook_budget_extended_ms": 0.5,
+    "max_consecutive_overruns_before_disable": 3
+  }
+}

@@ -1,0 +1,351 @@
+{
+  "version": "1.0",
+  "description": "EconLife module build dependency graph. Pass 1 modules are 'stub', Pass 2 modules are 'pending'.",
+  "modules": {
+    "rng": {
+      "tier": 0,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_core",
+      "depends_on": [],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/rng/INTERFACE.md"
+    },
+    "world_state": {
+      "tier": 0,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_core",
+      "depends_on": [],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/world_state/INTERFACE.md"
+    },
+    "deferred_work_queue": {
+      "tier": 0,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_core",
+      "depends_on": [],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/deferred_work_queue/INTERFACE.md"
+    },
+    "tick_orchestrator": {
+      "tier": 0,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_core",
+      "depends_on": [],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/tick_orchestrator/INTERFACE.md"
+    },
+    "production": {
+      "tier": 1,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_production",
+      "depends_on": [],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/production/INTERFACE.md"
+    },
+    "calendar": {
+      "tier": 1,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_calendar",
+      "depends_on": [],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/calendar/INTERFACE.md"
+    },
+    "scene_cards": {
+      "tier": 1,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_scene_cards",
+      "depends_on": ["calendar"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/scene_cards/INTERFACE.md"
+    },
+    "random_events": {
+      "tier": 1,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_random_events",
+      "depends_on": ["calendar"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/random_events/INTERFACE.md"
+    },
+    "supply_chain": {
+      "tier": 2,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_supply_chain",
+      "depends_on": ["production"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/supply_chain/INTERFACE.md"
+    },
+    "labor_market": {
+      "tier": 2,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_labor_market",
+      "depends_on": ["production"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/labor_market/INTERFACE.md"
+    },
+    "seasonal_agriculture": {
+      "tier": 2,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_seasonal_agriculture",
+      "depends_on": ["production"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/seasonal_agriculture/INTERFACE.md"
+    },
+    "price_engine": {
+      "tier": 3,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_price_engine",
+      "depends_on": ["supply_chain", "labor_market", "seasonal_agriculture"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/price_engine/INTERFACE.md"
+    },
+    "trade_infrastructure": {
+      "tier": 3,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_trade_infrastructure",
+      "depends_on": ["supply_chain"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/trade_infrastructure/INTERFACE.md"
+    },
+    "financial_distribution": {
+      "tier": 4,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_financial_distribution",
+      "depends_on": ["price_engine"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/financial_distribution/INTERFACE.md"
+    },
+    "npc_business": {
+      "tier": 4,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_npc_business",
+      "depends_on": ["price_engine"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/npc_business/INTERFACE.md"
+    },
+    "commodity_trading": {
+      "tier": 4,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_commodity_trading",
+      "depends_on": ["price_engine"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/commodity_trading/INTERFACE.md"
+    },
+    "real_estate": {
+      "tier": 4,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_real_estate",
+      "depends_on": ["price_engine"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/real_estate/INTERFACE.md"
+    },
+    "npc_behavior": {
+      "tier": 5,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_npc_behavior",
+      "depends_on": ["financial_distribution"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/npc_behavior/INTERFACE.md"
+    },
+    "banking": {
+      "tier": 5,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_banking",
+      "depends_on": ["financial_distribution"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/banking/INTERFACE.md"
+    },
+    "government_budget": {
+      "tier": 5,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_government_budget",
+      "depends_on": ["financial_distribution"],
+      "province_parallel": false,
+      "interface_spec": "docs/interfaces/government_budget/INTERFACE.md"
+    },
+    "healthcare": {
+      "tier": 5,
+      "pass": 1,
+      "status": "stub",
+      "cmake_target": "econlife_healthcare",
+      "depends_on": ["financial_distribution"],
+      "province_parallel": true,
+      "interface_spec": "docs/interfaces/healthcare/INTERFACE.md"
+    },
+    "npc_spending": {
+      "tier": 6,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["npc_behavior"]
+    },
+    "evidence": {
+      "tier": 6,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["npc_behavior"]
+    },
+    "obligation_network": {
+      "tier": 6,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["npc_behavior"]
+    },
+    "community_response": {
+      "tier": 6,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["npc_behavior"]
+    },
+    "facility_signals": {
+      "tier": 7,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["evidence"]
+    },
+    "criminal_operations": {
+      "tier": 7,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["evidence"]
+    },
+    "media_system": {
+      "tier": 7,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["evidence"]
+    },
+    "antitrust": {
+      "tier": 7,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["evidence"]
+    },
+    "investigator_engine": {
+      "tier": 8,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["criminal_operations"]
+    },
+    "money_laundering": {
+      "tier": 8,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["criminal_operations"]
+    },
+    "drug_economy": {
+      "tier": 8,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["criminal_operations"]
+    },
+    "weapons_trafficking": {
+      "tier": 8,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["criminal_operations"]
+    },
+    "protection_rackets": {
+      "tier": 8,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["criminal_operations"]
+    },
+    "legal_process": {
+      "tier": 9,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["investigator_engine"]
+    },
+    "informant_system": {
+      "tier": 9,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["investigator_engine"]
+    },
+    "alternative_identity": {
+      "tier": 9,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["investigator_engine"]
+    },
+    "designer_drug": {
+      "tier": 9,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["investigator_engine"]
+    },
+    "political_cycle": {
+      "tier": 10,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["community_response"]
+    },
+    "influence_network": {
+      "tier": 10,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["community_response"]
+    },
+    "trust_updates": {
+      "tier": 10,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["community_response"]
+    },
+    "addiction": {
+      "tier": 10,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["community_response"]
+    },
+    "regional_conditions": {
+      "tier": 11,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["political_cycle", "influence_network"]
+    },
+    "population_aging": {
+      "tier": 11,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["healthcare"]
+    },
+    "currency_exchange": {
+      "tier": 11,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["commodity_trading", "government_budget"]
+    },
+    "lod_system": {
+      "tier": 11,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["regional_conditions"]
+    },
+    "persistence": {
+      "tier": 12,
+      "pass": 2,
+      "status": "pending",
+      "depends_on": ["world_state"]
+    }
+  }
+}

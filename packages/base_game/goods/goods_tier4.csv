@@ -1,0 +1,15 @@
+good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available
+cannabis_raw,Cannabis (Raw),4,tonne,criminal,150.00,true,true,1
+cannabis_processed,Cannabis (Processed),4,unit,criminal,300.00,false,true,1
+methamphetamine,Methamphetamine,4,unit,criminal,800.00,false,true,1
+synthetic_opioid,Synthetic Opioid,4,unit,criminal,1200.00,false,true,1
+designer_drug,Designer Drug,4,unit,criminal,1500.00,false,true,1
+cocaine,Cocaine,4,unit,criminal,2000.00,false,true,1
+heroin,Heroin,4,unit,criminal,1800.00,false,true,1
+counterfeit_currency,Counterfeit Currency,4,unit,criminal,500.00,false,true,1
+stolen_goods,Stolen Goods,4,unit,criminal,100.00,false,true,1
+real_estate_residential,Residential Real Estate,5,unit,financial,250000.00,false,false,1
+real_estate_commercial,Commercial Real Estate,5,unit,financial,500000.00,false,false,1
+company_shares,Company Shares,5,unit,financial,100.00,false,false,1
+government_bond,Government Bond,5,unit,financial,1000.00,false,false,1
+commodity_futures,Commodity Futures,5,unit,financial,500.00,false,false,1

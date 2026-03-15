@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DECONLIFE_BUILD_TESTS=ON -DECONLIFE_BUILD_BENCHMARKS=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} -j
+
+      - name: Run unit tests
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "module" --output-on-failure
+
+      - name: Run determinism tests
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "determinism" --output-on-failure
+
+      # Scenario tests are expected to FAIL during bootstrap.
+      # Uncomment when module implementations are ready:
+      # - name: Run scenario tests
+      #   run: ctest --test-dir build -C ${{ matrix.build_type }} -L "scenario" --output-on-failure
+
+  dependency-direction-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify simulation/ does not import from ui/
+        run: |
+          # Check that no simulation source file includes anything from ui/
+          if grep -r '#include.*"ui/' simulation/ --include="*.h" --include="*.cpp" --include="*.hpp"; then
+            echo "ERROR: simulation/ must not depend on ui/"
+            echo "Dependency direction: ui/ -> simulation/, never the reverse."
+            exit 1
+          fi
+          echo "Dependency direction check passed."
+
+      - name: Verify no std::rand or system time in simulation
+        run: |
+          # Check for forbidden randomness sources
+          FORBIDDEN_PATTERNS="std::rand|srand|std::random_device|std::time|time(nullptr)|clock()"
+          if grep -rE "$FORBIDDEN_PATTERNS" simulation/ --include="*.h" --include="*.cpp" --include="*.hpp"; then
+            echo "ERROR: Simulation code must use DeterministicRNG only."
+            echo "Found forbidden randomness/time source."
+            exit 1
+          fi
+          echo "Deterministic randomness check passed."
+
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get install -y clang-format-17
+
+      - name: Check formatting
+        run: |
+          find simulation/ -name "*.h" -o -name "*.cpp" -o -name "*.hpp" | \
+            xargs clang-format-17 --dry-run --Werror

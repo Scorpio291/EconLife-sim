@@ -1,0 +1,39 @@
+good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available
+passenger_car,Passenger Car,3,unit,vehicles,28000.00,false,false,1
+commercial_truck,Commercial Truck,3,unit,vehicles,45000.00,false,false,1
+electric_vehicle,Electric Vehicle,3,unit,vehicles,35000.00,false,false,2
+motorcycle,Motorcycle,3,unit,vehicles,8000.00,false,false,1
+agricultural_machinery,Agricultural Machinery,3,unit,vehicles,60000.00,false,false,1
+construction_equipment,Construction Equipment,3,unit,vehicles,80000.00,false,false,1
+mobile_phone,Mobile Phone,3,unit,electronics,600.00,false,false,2
+personal_computer,Personal Computer,3,unit,electronics,1200.00,false,false,1
+television,Television,3,unit,electronics,500.00,false,false,1
+server_unit,Server Unit,3,unit,electronics,5000.00,false,false,2
+industrial_electronics,Industrial Electronics,3,unit,electronics,2000.00,false,false,1
+household_appliance,Household Appliance,3,unit,electronics,400.00,false,false,1
+solar_panel,Solar Panel,3,unit,electronics,300.00,false,false,2
+pharmaceutical_otc,Pharmaceutical (OTC),3,unit,pharmaceutical,50.00,false,false,1
+pharmaceutical_rx,Pharmaceutical (Prescription),3,unit,pharmaceutical,150.00,false,false,1
+medical_device,Medical Device,3,unit,pharmaceutical,2000.00,false,false,1
+personal_care_product,Personal Care Product,3,unit,pharmaceutical,15.00,false,false,1
+packaged_food,Packaged Food,3,unit,food_beverage,10.00,true,false,1
+dairy_consumer,Consumer Dairy Products,3,unit,food_beverage,8.00,true,false,1
+beer,Beer,3,litre,food_beverage,5.00,false,false,1
+spirits,Spirits / Liquor,3,litre,food_beverage,25.00,false,false,1
+cigarettes,Cigarettes,3,unit,food_beverage,12.00,false,false,1
+coffee_consumer,Consumer Coffee,3,unit,food_beverage,15.00,false,false,1
+chocolate_consumer,Consumer Chocolate,3,unit,food_beverage,8.00,false,false,1
+apparel_mass,Mass Market Apparel,3,unit,apparel,20.00,false,false,1
+apparel_premium,Premium Apparel,3,unit,apparel,120.00,false,false,1
+industrial_textile,Industrial Textile,3,unit,apparel,40.00,false,false,1
+prefab_building_component,Prefabricated Building Component,3,unit,construction,5000.00,false,false,1
+window_unit,Window Unit,3,unit,construction,200.00,false,false,1
+electrical_cable,Electrical Cable,3,tonne,construction,250.00,false,false,1
+plumbing_system,Plumbing System,3,unit,construction,400.00,false,false,1
+industrial_chemical,Industrial Chemical,3,tonne,chemicals,80.00,false,false,1
+agricultural_chemical,Agricultural Chemical,3,tonne,chemicals,60.00,false,false,1
+cleaning_product,Cleaning Product,3,unit,chemicals,10.00,false,false,1
+adhesive_sealant,Adhesive and Sealant,3,unit,chemicals,30.00,false,false,1
+industrial_machinery,Industrial Machinery,3,unit,heavy_industry,50000.00,false,false,1
+mining_equipment,Mining Equipment,3,unit,heavy_industry,70000.00,false,false,1
+aircraft_component,Aircraft Component,3,unit,heavy_industry,100000.00,false,false,1

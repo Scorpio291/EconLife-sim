@@ -1,0 +1,4 @@
+add_library(econlife_commodity_trading STATIC
+    commodity_trading_module.cpp
+)
+target_link_libraries(econlife_commodity_trading PUBLIC econlife_core econlife_price_engine)

@@ -1,0 +1,46 @@
+# Build output
+build/
+out/
+cmake-build-*/
+
+# IDE
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Package manager
+node_modules/
+package-lock.json
+yarn.lock
+
+# Generated files
+*.pb.h
+*.pb.cc
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test output
+Testing/
+*.log
+
+# Autosave / runtime
+*.autosave
+*.snapshot

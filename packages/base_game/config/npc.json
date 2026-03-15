@@ -1,0 +1,49 @@
+{
+  "npc_behavior": {
+    "motivation_weights": {
+      "financial_security": 0.25,
+      "social_standing": 0.15,
+      "personal_safety": 0.20,
+      "power_influence": 0.10,
+      "ideology": 0.10,
+      "loyalty": 0.10,
+      "self_preservation": 0.10,
+      "_comment": "Normalized additive scoring. Weights vary per NPC archetype."
+    },
+    "memory_log_cap": 500,
+    "memory_decay_rate_per_tick": 0.002,
+    "memory_emotional_weight_cap": 1.0,
+    "risk_tolerance_range": [0.0, 1.0],
+    "risk_tolerance_default": 0.5,
+    "lazy_eval_enabled": true,
+    "lazy_eval_skip_if_no_state_change": true
+  },
+  "relationships": {
+    "trust_range": [-1.0, 1.0],
+    "respect_range": [-1.0, 1.0],
+    "fear_range": [0.0, 1.0],
+    "familiarity_range": [0.0, 1.0],
+    "decay_rate_per_30_ticks": 0.01,
+    "default_trust": 0.0,
+    "default_respect": 0.0,
+    "default_fear": 0.0,
+    "max_relationships_per_npc": 100
+  },
+  "knowledge": {
+    "propagation_probability_per_interaction": 0.1,
+    "knowledge_decay_enabled": false,
+    "max_knowledge_entries_per_npc": 200
+  },
+  "promotion": {
+    "background_to_significant_threshold": {
+      "relevance_score_min": 0.7,
+      "interaction_count_min": 3,
+      "description": "Background NPCs promoted to significant when they become relevant to player or simulation events"
+    },
+    "significant_to_background_threshold": {
+      "inactivity_ticks": 365,
+      "relevance_score_max": 0.1,
+      "description": "Significant NPCs demoted to background after extended irrelevance"
+    }
+  }
+}

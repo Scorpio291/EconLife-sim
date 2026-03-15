@@ -1,0 +1,4 @@
+add_library(econlife_government_budget STATIC
+    government_budget_module.cpp
+)
+target_link_libraries(econlife_government_budget PUBLIC econlife_core econlife_financial_distribution)

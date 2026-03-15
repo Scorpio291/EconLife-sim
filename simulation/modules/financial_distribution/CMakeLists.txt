@@ -1,0 +1,4 @@
+add_library(econlife_financial_distribution STATIC
+    financial_distribution_module.cpp
+)
+target_link_libraries(econlife_financial_distribution PUBLIC econlife_core econlife_price_engine)
