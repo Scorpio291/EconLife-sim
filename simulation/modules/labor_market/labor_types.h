@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <unordered_map>
 #include <vector>
 
 namespace econlife {
@@ -10,7 +12,7 @@ namespace econlife {
 // =============================================================================
 
 // Forward declarations for types defined in other modules
-enum class SkillDomain : uint8_t;  // defined in NPC/population types (§4/§14)
+enum class SkillDomain : uint8_t;  // defined in player.h (§4/§14)
 
 // --- §30.1 — HiringChannel ---
 
@@ -71,5 +73,85 @@ struct WorkerApplication {
     //   salary_expectation > 0.0
     //   loyalty_prior in [0.0, 1.0]
 };
+
+// =============================================================================
+// Employment Record — V1 employment tracking per NPC
+//
+// Stored in LaborMarketModule member state rather than on NPC struct
+// (NPC struct does not yet have employer_business_id; this avoids core
+// header churn during early prototyping). When the NPC struct is expanded,
+// these records migrate there.
+// =============================================================================
+
+struct EmploymentRecord {
+    uint32_t npc_id;
+    uint32_t employer_business_id;       // 0 = unemployed
+    float    offered_wage;               // per-tick wage being paid
+    uint32_t hired_tick;                 // tick when employment started
+    uint32_t deferred_salary_ticks;      // consecutive ticks salary was deferred
+};
+
+// =============================================================================
+// NPC Skill Record — V1 per-domain skill level for an NPC
+//
+// Stored in LaborMarketModule. The NPC struct does not currently carry
+// per-SkillDomain skill levels (only the player has PlayerSkill). For V1,
+// NPC skill levels are seeded at world gen and stored here.
+// =============================================================================
+
+struct NPCSkillEntry {
+    SkillDomain domain;
+    float       level;     // 0.0-1.0
+};
+
+// =============================================================================
+// Labor Configuration Constants — §30 / INTERFACE.md
+// =============================================================================
+
+struct LaborConfig {
+    static constexpr float wage_adjustment_rate            = 0.03f;
+    static constexpr float wage_floor                      = 0.01f;
+    static constexpr float wage_ceiling_multiplier         = 5.0f;
+    static constexpr uint32_t pool_size_public             = 12;
+    static constexpr uint32_t pool_size_professional       = 5;
+    static constexpr uint32_t pool_size_referral           = 3;
+    static constexpr float reputation_threshold            = 0.3f;
+    static constexpr float reputation_pool_penalty_scale   = 8.0f;
+    static constexpr float salary_premium_per_rep_point    = 0.5f;
+    static constexpr float voluntary_departure_threshold   = 0.35f;
+    static constexpr float departure_base_rate             = 0.08f;
+    static constexpr float reputation_default              = 0.5f;
+    static constexpr uint32_t deferred_salary_max_ticks    = 30;
+    static constexpr float personal_referral_trust_min     = 0.4f;
+    static constexpr uint32_t monthly_tick_interval        = 30;
+};
+
+// =============================================================================
+// Per-province wage state — stored in module member state
+// Key: (province_id, SkillDomain) -> regional wage per tick
+// =============================================================================
+
+struct ProvinceSkillKey {
+    uint32_t    province_id;
+    SkillDomain domain;
+
+    bool operator==(const ProvinceSkillKey& o) const noexcept {
+        return province_id == o.province_id
+            && domain == o.domain;
+    }
+};
+
+struct ProvinceSkillKeyHash {
+    std::size_t operator()(const ProvinceSkillKey& k) const noexcept {
+        // Combine province_id and domain into a single hash.
+        return std::hash<uint64_t>{}(
+            (static_cast<uint64_t>(k.province_id) << 8)
+            | static_cast<uint64_t>(k.domain));
+    }
+};
+
+using RegionalWageMap = std::unordered_map<ProvinceSkillKey,
+                                            float,
+                                            ProvinceSkillKeyHash>;
 
 }  // namespace econlife

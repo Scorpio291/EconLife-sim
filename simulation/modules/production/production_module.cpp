@@ -89,9 +89,23 @@ void ProductionModule::execute_province(uint32_t province_idx,
     std::unordered_map<std::string, float> available_supply;
 
     // Pre-populate available supply from regional markets for this province.
+    // We need to map from uint32_t market.good_id back to string keys.
+    // Build reverse lookup from registered recipes' input/output good_id strings.
+    std::unordered_map<uint32_t, std::string> id_to_string;
+    for (const auto& [recipe_id, recipe] : recipe_registry_.all()) {
+        for (const auto& input : recipe.inputs) {
+            id_to_string[good_id_from_string(input.good_id)] = input.good_id;
+        }
+        for (const auto& output : recipe.outputs) {
+            id_to_string[good_id_from_string(output.good_id)] = output.good_id;
+        }
+    }
     for (const auto& market : state.regional_markets) {
         if (market.province_id == province_idx) {
-            available_supply[std::to_string(market.good_id)] = market.supply;
+            auto it = id_to_string.find(market.good_id);
+            if (it != id_to_string.end()) {
+                available_supply[it->second] = market.supply;
+            }
         }
     }
 
