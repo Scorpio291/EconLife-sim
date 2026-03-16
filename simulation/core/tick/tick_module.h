@@ -4,11 +4,11 @@
 #include <string_view>
 #include <vector>
 
-// Forward declarations
+namespace econlife {
+
+// Forward declarations — in econlife namespace to match type definitions
 struct WorldState;
 struct DeltaBuffer;
-
-namespace econlife {
 
 enum class ModuleScope : uint8_t {
     core = 0,   // Always runs. Architectural foundation.

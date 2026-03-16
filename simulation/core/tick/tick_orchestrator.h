@@ -5,11 +5,11 @@
 
 #include "tick_module.h"
 
-// Forward declarations
+namespace econlife {
+
+// Forward declarations — in econlife namespace to match type definitions
 struct WorldState;
 class ThreadPool;
-
-namespace econlife {
 
 // Manages module registration, topological sorting, and tick execution.
 // Module list is locked after finalize_registration() — subsequent

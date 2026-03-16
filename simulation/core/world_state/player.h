@@ -8,10 +8,12 @@
 
 namespace econlife {
 
-// Forward declarations for types defined in other domain headers
-struct Relationship;          // defined in npc.h
-struct InfluenceNetworkHealth; // defined in influence.h (§13)
-enum class NPCTravelStatus : uint8_t; // defined in trade_infrastructure.h (§18)
+// Complete type definitions needed for value members
+#include "npc.h"             // Relationship (used in std::vector)
+#include "shared_types.h"    // InfluenceNetworkHealth (used as value member)
+
+// Forward declaration with underlying type — sufficient for value member
+enum class NPCTravelStatus : uint8_t; // defined in trade_infrastructure/trade_types.h (§18)
 
 // ============================================================================
 // Trait — persistent character attributes (from EconLife_Trait_System.md §2)

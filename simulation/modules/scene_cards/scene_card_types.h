@@ -5,9 +5,9 @@
 
 namespace econlife {
 
-// Forward declarations for types defined in other domain headers
-struct DialogueLine;   // NPC dialogue line; defined in dialogue module
-struct PlayerChoice;   // player choice option with consequence payload; defined in dialogue module
+// DialogueLine and PlayerChoice defined in shared_types.h (core stubs).
+// They will be expanded during scene_cards module implementation.
+#include "core/world_state/shared_types.h"
 
 // ---------------------------------------------------------------------------
 // SceneSetting

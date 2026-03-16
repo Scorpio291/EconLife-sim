@@ -6,10 +6,10 @@
 #include <variant>
 #include <vector>
 
-// Forward declarations
-struct WorldState;
-
 namespace econlife {
+
+// Forward declaration — in econlife namespace to match type definition
+struct WorldState;
 
 enum class WorkType : uint8_t {
     consequence,                // ConsequenceEntry execution

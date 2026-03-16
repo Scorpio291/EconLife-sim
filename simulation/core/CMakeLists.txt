@@ -2,10 +2,9 @@
 # All simulation modules depend on this target.
 
 add_library(econlife_core STATIC
-    # Headers are included via target_include_directories.
-    # Source files will be added as implementations are written.
-    # For now, a placeholder source to allow the library to link.
-    core_placeholder.cpp
+    rng/deterministic_rng.cpp
+    tick/tick_orchestrator.cpp
+    world_state/cross_province_delta_buffer.cpp
 )
 
 target_include_directories(econlife_core PUBLIC

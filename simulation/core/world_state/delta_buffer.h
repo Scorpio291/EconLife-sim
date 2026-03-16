@@ -4,16 +4,13 @@
 #include <optional>
 #include <vector>
 
-namespace econlife {
+// Complete type definitions needed for std::optional and std::vector members.
+#include "npc.h"                                    // MemoryEntry, Relationship, NPCStatus
+#include "shared_types.h"                           // EvidenceToken, ObligationNode
+#include "modules/calendar/calendar_types.h"        // CalendarEntry
+#include "modules/scene_cards/scene_card_types.h"   // SceneCard
 
-// Forward declarations for types defined in domain headers
-struct MemoryEntry;
-struct Relationship;
-struct EvidenceToken;
-struct CalendarEntry;
-struct SceneCard;
-struct ObligationNode;
-enum class NPCStatus : uint8_t;
+namespace econlife {
 
 // --- Per-entity delta structs ---
 // Additive deltas are summed and clamped to domain range before application.

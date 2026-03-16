@@ -5,8 +5,8 @@
 
 namespace econlife {
 
-// Forward declarations for types defined in other domain headers.
-struct ActorTechnologyState;  // R&D system (§Part 3.5)
+// ActorTechnologyState defined in shared_types.h (core stub).
+#include "core/world_state/shared_types.h"
 
 // ---------------------------------------------------------------------------
 // BusinessSector — what an NPCBusiness does (§5)

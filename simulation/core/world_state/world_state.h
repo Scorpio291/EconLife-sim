@@ -1,32 +1,28 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <utility>
 #include <vector>
 
-#include "delta_buffer.h"
-#include "../tick/deferred_work.h"
+// Core headers (provide DeltaBuffer, DeferredWorkQueue, and transitive types)
+#include "delta_buffer.h"                                   // DeltaBuffer + npc.h + shared_types.h
+#include "../tick/deferred_work.h"                          // DeferredWorkQueue
+
+// Complete type definitions needed for std::vector/std::map value members
+#include "geography.h"                                      // Nation, Province, Region
+#include "modules/economy/economy_types.h"                  // RegionalMarket, NPCBusiness
+#include "modules/trade_infrastructure/trade_types.h"       // TariffSchedule, NationalTradeOffer,
+                                                            //   Lod1NationStats, RouteProfile
 
 namespace econlife {
 
-// Forward declarations for types defined in domain headers (Phases 1B–1E)
-struct Nation;
-struct Province;
-struct Region;
-struct NPC;
-struct PlayerCharacter;
-struct RegionalMarket;
-struct NPCBusiness;
-struct EvidenceToken;
-struct ObligationNode;
-struct CalendarEntry;
-struct SceneCard;
-struct TariffSchedule;
-struct NationalTradeOffer;
-struct GlobalCommodityPriceIndex;
-struct Lod1NationStats;
-struct RouteProfile;
+// Forward declarations for types used only as pointers (complete type not needed)
+struct PlayerCharacter;            // defined in player.h; used as PlayerCharacter*
+struct GlobalCommodityPriceIndex;  // defined in trade_types.h; used as pointer
+                                   // (already complete from trade_types.h include above,
+                                   //  but kept as documentation of the pointer contract)
 
 enum class GameMode : uint8_t {
     ironman  = 0,  // Timeline restoration locked. Achievement-eligible.
