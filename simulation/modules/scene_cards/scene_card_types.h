@@ -3,11 +3,11 @@
 #include <cstdint>
 #include <vector>
 
-namespace econlife {
-
 // DialogueLine and PlayerChoice defined in shared_types.h (core stubs).
 // They will be expanded during scene_cards module implementation.
 #include "core/world_state/shared_types.h"
+
+namespace econlife {
 
 // ---------------------------------------------------------------------------
 // SceneSetting
@@ -107,6 +107,11 @@ struct SceneCard {
                                                        // (forward-declared)
     float                     npc_presentation_state;  // 0.0 (hostile/closed) to 1.0 (open/cooperative)
                                                        // drives visual state of NPC portrait
+    bool                      is_authored = false;     // true = authored content; false = procedurally generated.
+                                                       //   Authored cards take priority over procedural for
+                                                       //   same NPC + tick.
+    uint32_t                  chosen_choice_id = 0;    // 0 = no choice made yet. Set by UI when player selects
+                                                       //   a choice. Module processes cards with non-zero value.
 };
 
 }  // namespace econlife
