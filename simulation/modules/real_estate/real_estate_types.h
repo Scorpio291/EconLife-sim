@@ -67,4 +67,20 @@ struct PropertyListing {
     //   (mean market_value across all PropertyListing in province; recomputed monthly)
 };
 
+// --- §33.2 — RealEstateConstants ---
+// Configuration constants for real estate market computations.
+// These are compile-time defaults; runtime config overrides may be loaded
+// from simulation_config.json -> realestate.
+
+struct RealEstateConstants {
+    static constexpr float residential_yield_rate = 0.003f;   // 0.3% of market value per tick
+    static constexpr float commercial_yield_rate  = 0.004f;   // 0.4% per tick
+    static constexpr float industrial_yield_rate  = 0.005f;   // 0.5% per tick
+    static constexpr float price_convergence_rate = 0.05f;    // 5% per month
+    static constexpr uint32_t convergence_interval = 30;      // monthly (every 30 ticks)
+    static constexpr float criminal_dominance_penalty = 0.15f; // 15% value reduction per 1.0 dominance
+    static constexpr float laundering_premium = 0.10f;        // 10% value inflation from laundering activity
+    static constexpr float transaction_evidence_threshold = 50000.0f; // suspicious transaction threshold
+};
+
 }  // namespace econlife

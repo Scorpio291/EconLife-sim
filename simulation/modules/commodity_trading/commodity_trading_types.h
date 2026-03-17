@@ -24,4 +24,11 @@ struct MarketImpact {
     float demand_impact = 0.0f;
 };
 
+// Constants for commodity trading calculations.
+struct CommodityTradingConstants {
+    static constexpr float market_impact_threshold = 0.05f;   // 5% of market supply triggers impact
+    static constexpr float market_impact_coefficient = 0.01f; // impact per unit beyond threshold
+    static constexpr float capital_gains_tax_rate = 0.15f;    // 15% on realized gains
+};
+
 }  // namespace econlife

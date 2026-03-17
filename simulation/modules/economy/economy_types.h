@@ -3,10 +3,11 @@
 #include <cstdint>
 #include <vector>
 
-namespace econlife {
-
 // ActorTechnologyState defined in shared_types.h (core stub).
+// Must be included OUTSIDE the namespace to avoid pulling std headers into econlife.
 #include "core/world_state/shared_types.h"
+
+namespace econlife {
 
 // ---------------------------------------------------------------------------
 // BusinessSector — what an NPCBusiness does (§5)

@@ -13,6 +13,10 @@ add_executable(econlife_unit_tests
     labor_market_test.cpp
     price_engine_test.cpp
     trade_infrastructure_test.cpp
+    financial_distribution_test.cpp
+    npc_business_test.cpp
+    commodity_trading_test.cpp
+    real_estate_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -27,6 +31,10 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_labor_market
     econlife_price_engine
     econlife_trade_infrastructure
+    econlife_financial_distribution
+    econlife_npc_business
+    econlife_commodity_trading
+    econlife_real_estate
 )
 
 catch_discover_tests(econlife_unit_tests)
