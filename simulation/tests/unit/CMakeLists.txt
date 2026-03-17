@@ -11,6 +11,8 @@ add_executable(econlife_unit_tests
     supply_chain_test.cpp
     seasonal_agriculture_test.cpp
     labor_market_test.cpp
+    price_engine_test.cpp
+    trade_infrastructure_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -23,6 +25,8 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_supply_chain
     econlife_seasonal_agriculture
     econlife_labor_market
+    econlife_price_engine
+    econlife_trade_infrastructure
 )
 
 catch_discover_tests(econlife_unit_tests)
