@@ -17,6 +17,10 @@ add_executable(econlife_unit_tests
     npc_business_test.cpp
     commodity_trading_test.cpp
     real_estate_test.cpp
+    npc_behavior_test.cpp
+    banking_test.cpp
+    government_budget_test.cpp
+    healthcare_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -35,6 +39,10 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_npc_business
     econlife_commodity_trading
     econlife_real_estate
+    econlife_npc_behavior
+    econlife_banking
+    econlife_government_budget
+    econlife_healthcare
 )
 
 catch_discover_tests(econlife_unit_tests)
