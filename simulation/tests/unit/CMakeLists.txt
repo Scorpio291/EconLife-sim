@@ -21,6 +21,10 @@ add_executable(econlife_unit_tests
     banking_test.cpp
     government_budget_test.cpp
     healthcare_test.cpp
+    npc_spending_test.cpp
+    evidence_test.cpp
+    obligation_network_test.cpp
+    community_response_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -43,6 +47,10 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_banking
     econlife_government_budget
     econlife_healthcare
+    econlife_npc_spending
+    econlife_evidence
+    econlife_obligation_network
+    econlife_community_response
 )
 
 catch_discover_tests(econlife_unit_tests)
