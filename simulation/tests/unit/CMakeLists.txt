@@ -29,6 +29,11 @@ add_executable(econlife_unit_tests
     criminal_operations_test.cpp
     media_system_test.cpp
     antitrust_test.cpp
+    investigator_engine_test.cpp
+    money_laundering_test.cpp
+    drug_economy_test.cpp
+    weapons_trafficking_test.cpp
+    protection_rackets_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -59,6 +64,11 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_criminal_operations
     econlife_media_system
     econlife_antitrust
+    econlife_investigator_engine
+    econlife_money_laundering
+    econlife_drug_economy
+    econlife_weapons_trafficking
+    econlife_protection_rackets
 )
 
 catch_discover_tests(econlife_unit_tests)
