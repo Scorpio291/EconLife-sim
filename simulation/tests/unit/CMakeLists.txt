@@ -25,6 +25,10 @@ add_executable(econlife_unit_tests
     evidence_test.cpp
     obligation_network_test.cpp
     community_response_test.cpp
+    facility_signals_test.cpp
+    criminal_operations_test.cpp
+    media_system_test.cpp
+    antitrust_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -51,6 +55,10 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_evidence
     econlife_obligation_network
     econlife_community_response
+    econlife_facility_signals
+    econlife_criminal_operations
+    econlife_media_system
+    econlife_antitrust
 )
 
 catch_discover_tests(econlife_unit_tests)
