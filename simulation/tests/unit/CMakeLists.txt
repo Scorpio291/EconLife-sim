@@ -47,6 +47,7 @@ add_executable(econlife_unit_tests
     currency_exchange_test.cpp
     lod_system_test.cpp
     persistence_test.cpp
+    apply_deltas_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE

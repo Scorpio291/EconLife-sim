@@ -5,6 +5,7 @@ add_library(econlife_core STATIC
     rng/deterministic_rng.cpp
     tick/tick_orchestrator.cpp
     world_state/cross_province_delta_buffer.cpp
+    world_state/apply_deltas.cpp
 )
 
 target_include_directories(econlife_core PUBLIC

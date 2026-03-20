@@ -6,6 +6,7 @@
 #include "core/tick/tick_orchestrator.h"
 #include "core/tick/thread_pool.h"
 #include "core/world_state/world_state.h"   // Complete WorldState + DeltaBuffer definitions
+#include "core/world_state/apply_deltas.h"
 
 #include <algorithm>
 #include <cassert>
@@ -130,20 +131,21 @@ void TickOrchestrator::resolve_and_sort() {
 void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) {
     assert(finalized_ && "execute_tick() called before finalize_registration()");
 
-    DeltaBuffer delta;
+    // Step 0: Apply cross-province deltas from previous tick (one-tick propagation delay).
+    apply_cross_province_deltas(state);
 
     for (auto& module : modules_) {
+        DeltaBuffer delta;
+
         if (module->is_province_parallel()) {
             // Province-parallel execution.
-            // TODO: Dispatch to thread_pool for true parallelism.
-            // For now, execute sequentially per province in ascending index order
+            // Execute sequentially per province in ascending index order
             // to maintain determinism. This matches the merge order.
             const uint32_t province_count = static_cast<uint32_t>(state.provinces.size());
             for (uint32_t p = 0; p < province_count; ++p) {
                 DeltaBuffer province_delta;
                 module->execute_province(p, state, province_delta);
                 // Merge province delta into main delta buffer.
-                // Append all vectors from province_delta into delta.
                 delta.npc_deltas.insert(delta.npc_deltas.end(),
                     province_delta.npc_deltas.begin(),
                     province_delta.npc_deltas.end());
@@ -173,11 +175,11 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
             // Sequential execution on main thread.
             module->execute(state, delta);
         }
-    }
 
-    // TODO: Apply delta buffer to WorldState.
-    // This will be implemented as part of the WorldState delta application system.
-    // For now, modules are responsible for knowing their deltas are accumulated.
+        // Apply this module's deltas to WorldState immediately.
+        // Each module sees the effects of all prior modules in this tick.
+        apply_deltas(state, delta);
+    }
 
     state.current_tick++;
 }
