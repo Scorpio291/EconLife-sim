@@ -89,7 +89,7 @@ Facility make_test_facility(uint32_t id, uint32_t business_id, uint32_t province
     f.tech_tier = tech_tier;
     f.output_rate_modifier = 1.0f;
     f.soil_health = 1.0f;
-    f.worker_count = 10;
+    f.worker_count = 1;
     f.is_operational = true;
     return f;
 }
@@ -584,4 +584,109 @@ TEST_CASE("test_multiple_businesses_deterministic_order", "[production][tier1]")
 
     // Total: 3 * 8.0 = 24.0
     REQUIRE_THAT(steel_summary.total_supply_delta, WithinAbs(24.0f, 0.001f));
+}
+
+TEST_CASE("test_worker_count_throughput_effect", "[production][tier1]") {
+    // Worker count affects throughput with diminishing returns.
+    // 1 worker = 1.0x, 5 workers = 1 + 0.15*4 = 1.6x, 0 workers = 0x.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+
+    add_market(state, "iron_ore", province_id, 1000.0f);
+    add_market(state, "coking_coal", province_id, 500.0f);
+    add_market(state, "steel", province_id, 0.0f, 15.0f);
+
+    Province prov{};
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_steel_recipe());
+
+    // 5 workers: multiplier = 1.0 + 0.15 * 4 = 1.6
+    auto facility = make_test_facility(1, 1, province_id, "steel_smelting");
+    facility.worker_count = 5;
+    module.facility_registry().register_facility(facility);
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // Expected: 8.0 * 1.6 = 12.8
+    auto steel_summary = summarize_deltas(delta, "steel", province_id);
+    REQUIRE_THAT(steel_summary.total_supply_delta, WithinAbs(12.8f, 0.01f));
+}
+
+TEST_CASE("test_zero_workers_no_production", "[production][tier1]") {
+    // A facility with 0 workers should produce nothing.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+
+    add_market(state, "iron_ore", province_id, 100.0f);
+    add_market(state, "coking_coal", province_id, 50.0f);
+    add_market(state, "steel", province_id, 0.0f, 15.0f);
+
+    Province prov{};
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_steel_recipe());
+
+    auto facility = make_test_facility(1, 1, province_id, "steel_smelting");
+    facility.worker_count = 0;
+    module.facility_registry().register_facility(facility);
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // No supply deltas (0 workers = 0 output)
+    auto steel_summary = summarize_deltas(delta, "steel", province_id);
+    REQUIRE(steel_summary.supply_count == 0);
+}
+
+TEST_CASE("test_business_delta_written", "[production][tier1]") {
+    // Verify that production writes BusinessDelta with revenue and cost.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+
+    add_market(state, "iron_ore", province_id, 100.0f);
+    add_market(state, "coking_coal", province_id, 50.0f);
+    add_market(state, "steel", province_id, 0.0f, 15.0f);
+
+    Province prov{};
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_steel_recipe());
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "steel_smelting"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // Should have one BusinessDelta for business id=1.
+    REQUIRE(delta.business_deltas.size() == 1);
+    REQUIRE(delta.business_deltas[0].business_id == 1);
+
+    // Revenue = 8.0 steel * 15.0 price = 120.0
+    REQUIRE(delta.business_deltas[0].revenue_per_tick_update.has_value());
+    REQUIRE_THAT(*delta.business_deltas[0].revenue_per_tick_update, WithinAbs(120.0f, 0.01f));
+
+    // Cost = 100.0 * 1.0 (no tier bonus) = 100.0
+    REQUIRE(delta.business_deltas[0].cost_per_tick_update.has_value());
+    REQUIRE_THAT(*delta.business_deltas[0].cost_per_tick_update, WithinAbs(100.0f, 0.01f));
+
+    // Cash delta = revenue - cost = 120.0 - 100.0 = 20.0
+    REQUIRE(delta.business_deltas[0].cash_delta.has_value());
+    REQUIRE_THAT(*delta.business_deltas[0].cash_delta, WithinAbs(20.0f, 0.01f));
 }

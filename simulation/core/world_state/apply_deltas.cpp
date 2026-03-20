@@ -169,6 +169,29 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
 }
 
 // ---------------------------------------------------------------------------
+// apply_business_deltas
+// ---------------------------------------------------------------------------
+static void apply_business_deltas(WorldState& world, const std::vector<BusinessDelta>& deltas) {
+    for (const auto& d : deltas) {
+        for (auto& biz : world.npc_businesses) {
+            if (biz.id == d.business_id) {
+                if (d.cash_delta.has_value()) {
+                    biz.cash = safe_add(biz.cash, *d.cash_delta);
+                    // Business cash can go negative (indicates insolvency)
+                }
+                if (d.revenue_per_tick_update.has_value()) {
+                    biz.revenue_per_tick = std::max(0.0f, *d.revenue_per_tick_update);
+                }
+                if (d.cost_per_tick_update.has_value()) {
+                    biz.cost_per_tick = std::max(0.0f, *d.cost_per_tick_update);
+                }
+                break;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_market_deltas
 // ---------------------------------------------------------------------------
 static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta>& deltas) {
@@ -296,6 +319,7 @@ static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
 void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     apply_npc_deltas(world, delta.npc_deltas);
     apply_player_delta(world, delta.player_delta);
+    apply_business_deltas(world, delta.business_deltas);
     apply_market_deltas(world, delta.market_deltas);
     apply_evidence_deltas(world, delta.evidence_deltas);
     apply_region_deltas(world, delta.region_deltas);
@@ -307,6 +331,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     delta.market_deltas.clear();
     delta.evidence_deltas.clear();
     delta.consequence_deltas.clear();
+    delta.business_deltas.clear();
     delta.region_deltas.clear();
     delta.new_calendar_entries.clear();
     delta.new_scene_cards.clear();

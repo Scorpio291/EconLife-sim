@@ -166,6 +166,9 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
                 delta.consequence_deltas.insert(delta.consequence_deltas.end(),
                     province_delta.consequence_deltas.begin(),
                     province_delta.consequence_deltas.end());
+                delta.business_deltas.insert(delta.business_deltas.end(),
+                    province_delta.business_deltas.begin(),
+                    province_delta.business_deltas.end());
                 delta.region_deltas.insert(delta.region_deltas.end(),
                     province_delta.region_deltas.begin(),
                     province_delta.region_deltas.end());

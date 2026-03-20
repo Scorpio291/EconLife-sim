@@ -274,10 +274,22 @@ void ProductionModule::process_facility(
     // Clamp quality ceiling to valid range.
     quality_ceiling = std::max(0.0f, std::min(1.0f, quality_ceiling));
 
+    // Worker count throughput effect.
+    // Baseline assumes 1 worker. Each additional worker adds diminishing returns.
+    // Formula: worker_multiplier = min(worker_count, 1) + 0.15 * max(0, worker_count - 1)
+    // Capped so that 10 workers = 1 + 0.15*9 = 2.35x throughput (not 10x).
+    float worker_multiplier = 1.0f;
+    if (facility.worker_count > 1) {
+        worker_multiplier = 1.0f + 0.15f * static_cast<float>(facility.worker_count - 1);
+    } else if (facility.worker_count == 0) {
+        worker_multiplier = 0.0f;  // no workers = no production
+    }
+
     float total_revenue = 0.0f;
 
     for (const RecipeOutput* output : sorted_outputs) {
-        float actual_output = output->quantity_per_tick * output_multiplier * bottleneck_ratio;
+        float actual_output = output->quantity_per_tick * output_multiplier
+                            * bottleneck_ratio * worker_multiplier;
 
         // Clamp NaN or negative to 0.
         if (std::isnan(actual_output) || actual_output < 0.0f) {
@@ -306,11 +318,14 @@ void ProductionModule::process_facility(
         actual_cost = 0.0f;
     }
 
-    // Revenue and cost are recorded for the financial distribution module
-    // to apply as business cash changes. The production module's primary
-    // outputs are MarketDelta entries for supply and demand.
-    (void)total_revenue;
-    (void)actual_cost;
+    // Write BusinessDelta for revenue and cost.
+    // Net cash effect: revenue minus operating cost.
+    BusinessDelta biz_delta{};
+    biz_delta.business_id = biz.id;
+    biz_delta.cash_delta = total_revenue - actual_cost;
+    biz_delta.revenue_per_tick_update = total_revenue;
+    biz_delta.cost_per_tick_update = actual_cost;
+    delta.business_deltas.push_back(biz_delta);
 }
 
 // ===========================================================================

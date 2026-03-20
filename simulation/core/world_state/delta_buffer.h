@@ -68,6 +68,13 @@ struct ConsequenceDelta {
     std::optional<uint32_t> cancelled_entry_id;
 };
 
+struct BusinessDelta {
+    uint32_t business_id;
+    std::optional<float> cash_delta;              // additive; operating cost deduction or revenue credit
+    std::optional<float> revenue_per_tick_update;  // replacement; latest revenue figure
+    std::optional<float> cost_per_tick_update;     // replacement; latest cost figure
+};
+
 struct RegionDelta {
     uint32_t region_id;
     std::optional<float> stability_delta;              // additive
@@ -88,6 +95,7 @@ struct DeltaBuffer {
     std::vector<MarketDelta>     market_deltas;
     std::vector<EvidenceDelta>   evidence_deltas;
     std::vector<ConsequenceDelta> consequence_deltas;
+    std::vector<BusinessDelta>   business_deltas;
     std::vector<RegionDelta>     region_deltas;
     std::vector<CalendarEntry>   new_calendar_entries;
     std::vector<SceneCard>       new_scene_cards;
