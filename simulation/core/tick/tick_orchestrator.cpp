@@ -7,6 +7,7 @@
 #include "core/tick/thread_pool.h"
 #include "core/world_state/world_state.h"   // Complete WorldState + DeltaBuffer definitions
 #include "core/world_state/apply_deltas.h"
+#include "core/tick/drain_deferred_work.h"
 
 #include <algorithm>
 #include <cassert>
@@ -133,6 +134,13 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
 
     // Step 0: Apply cross-province deltas from previous tick (one-tick propagation delay).
     apply_cross_province_deltas(state);
+
+    // Step 1: Drain deferred work queue — process all items due at current_tick.
+    {
+        DeltaBuffer dwq_delta;
+        drain_deferred_work(state, dwq_delta);
+        apply_deltas(state, dwq_delta);
+    }
 
     for (auto& module : modules_) {
         DeltaBuffer delta;

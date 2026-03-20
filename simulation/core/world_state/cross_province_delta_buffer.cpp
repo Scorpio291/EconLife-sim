@@ -13,14 +13,9 @@ void CrossProvinceDeltaBuffer::push(CrossProvinceDelta delta) {
 
 void CrossProvinceDeltaBuffer::flush_to_deferred_queue(WorldState& world_state) {
     // Cross-province effects are applied at the start of the next tick.
-    // We don't convert to DeferredWorkItem here — instead, the cross-province
-    // deltas are held in the buffer and applied directly during step 1 of the
-    // next tick (before deferred work queue drain).
-    //
-    // For now, clear the buffer. The orchestrator will apply pending entries
-    // at the start of the next tick during the cross-province application step.
-    //
-    // TODO: Implement cross-province delta application in TickOrchestrator step 1.
+    // The orchestrator calls apply_cross_province_deltas() at tick start,
+    // which processes entries where due_tick <= current_tick, then clears.
+    // This function is kept for the explicit flush path (e.g., before save).
     entries.clear();
 }
 
