@@ -8,6 +8,7 @@
 // See docs/interfaces/npc_behavior/INTERFACE.md for the canonical specification.
 
 #include "core/tick/tick_module.h"
+#include "core/world_state/npc.h"  // NPC, MemoryType, MemoryEntry, Relationship, MotivationVector
 #include "modules/npc_behavior/npc_behavior_types.h"
 
 #include <cstdint>
@@ -19,11 +20,7 @@ namespace econlife {
 // Forward declarations
 struct WorldState;
 struct DeltaBuffer;
-struct NPC;
-struct MemoryEntry;
 struct ActionOutcome;
-struct MotivationVector;
-struct Relationship;
 
 // ---------------------------------------------------------------------------
 // NpcBehaviorModule — ITickModule implementation for NPC daily behavior
@@ -88,6 +85,13 @@ public:
     // Clamp relationship trust to [-1.0, 1.0], fear to [0.0, 1.0].
     // Trust cannot exceed recovery_ceiling.
     static void clamp_relationship(Relationship& rel);
+
+    // Compute worker satisfaction from memory log.
+    // Returns 0.0-1.0; based on ratio of positive to negative employment memories.
+    static float worker_satisfaction(const NPC& npc);
+
+    // Map MemoryType to the closest OutcomeType for motivation shift.
+    static size_t memory_type_to_outcome_index(MemoryType type);
 
     // --- Constants ---
     struct Constants {
