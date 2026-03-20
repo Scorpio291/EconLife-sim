@@ -34,6 +34,10 @@ add_executable(econlife_unit_tests
     drug_economy_test.cpp
     weapons_trafficking_test.cpp
     protection_rackets_test.cpp
+    legal_process_test.cpp
+    informant_system_test.cpp
+    alternative_identity_test.cpp
+    designer_drug_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -69,6 +73,10 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_drug_economy
     econlife_weapons_trafficking
     econlife_protection_rackets
+    econlife_legal_process
+    econlife_informant_system
+    econlife_alternative_identity
+    econlife_designer_drug
 )
 
 catch_discover_tests(econlife_unit_tests)
