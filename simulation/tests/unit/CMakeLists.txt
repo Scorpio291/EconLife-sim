@@ -42,6 +42,10 @@ add_executable(econlife_unit_tests
     influence_network_test.cpp
     trust_updates_test.cpp
     addiction_test.cpp
+    regional_conditions_test.cpp
+    population_aging_test.cpp
+    currency_exchange_test.cpp
+    lod_system_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -85,6 +89,10 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_influence_network
     econlife_trust_updates
     econlife_addiction
+    econlife_regional_conditions
+    econlife_population_aging
+    econlife_currency_exchange
+    econlife_lod_system
 )
 
 catch_discover_tests(econlife_unit_tests)

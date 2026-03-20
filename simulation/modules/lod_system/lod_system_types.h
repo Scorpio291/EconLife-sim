@@ -1,15 +1,14 @@
 #pragma once
 
 // lod_system module types.
-// Module-specific types for the lod_system module (Tier 11).
-// Core shared types are in their respective core headers.
+// SimulationLOD, Lod1NationProfile are in geography.h.
+// Lod1NationStats, GlobalCommodityPriceIndex, NationalTradeOffer are in trade_types.h.
 
 #include <cstdint>
-#include <string>
-#include <vector>
 
 namespace econlife {
 
-// Placeholder — types will be defined during implementation based on INTERFACE.md.
+// Module does not define new types — it operates on types
+// already defined in geography.h and trade_types.h.
 
 }  // namespace econlife

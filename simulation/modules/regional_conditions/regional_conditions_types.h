@@ -1,15 +1,13 @@
 #pragma once
 
 // regional_conditions module types.
-// Module-specific types for the regional_conditions module (Tier 11).
-// Core shared types are in their respective core headers.
+// RegionConditions is in geography.h.
 
 #include <cstdint>
-#include <string>
-#include <vector>
 
 namespace econlife {
 
-// Placeholder — types will be defined during implementation based on INTERFACE.md.
+// Module does not define new types — it computes and updates
+// RegionConditions fields already defined in geography.h.
 
 }  // namespace econlife
