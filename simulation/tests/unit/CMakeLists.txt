@@ -46,6 +46,7 @@ add_executable(econlife_unit_tests
     population_aging_test.cpp
     currency_exchange_test.cpp
     lod_system_test.cpp
+    persistence_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -93,6 +94,7 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_population_aging
     econlife_currency_exchange
     econlife_lod_system
+    econlife_persistence
 )
 
 catch_discover_tests(econlife_unit_tests)
