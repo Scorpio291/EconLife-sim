@@ -38,6 +38,10 @@ add_executable(econlife_unit_tests
     informant_system_test.cpp
     alternative_identity_test.cpp
     designer_drug_test.cpp
+    political_cycle_test.cpp
+    influence_network_test.cpp
+    trust_updates_test.cpp
+    addiction_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -77,6 +81,10 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_informant_system
     econlife_alternative_identity
     econlife_designer_drug
+    econlife_political_cycle
+    econlife_influence_network
+    econlife_trust_updates
+    econlife_addiction
 )
 
 catch_discover_tests(econlife_unit_tests)

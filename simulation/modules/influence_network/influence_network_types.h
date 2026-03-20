@@ -2,14 +2,17 @@
 
 // influence_network module types.
 // Module-specific types for the influence_network module (Tier 10).
-// Core shared types are in their respective core headers.
+// InfluenceNetworkHealth is in shared_types.h.
 
 #include <cstdint>
-#include <string>
-#include <vector>
 
 namespace econlife {
 
-// Placeholder — types will be defined during implementation based on INTERFACE.md.
+enum class InfluenceType : uint8_t {
+    trust_based,
+    fear_based,
+    obligation_based,
+    movement_based
+};
 
 }  // namespace econlife
