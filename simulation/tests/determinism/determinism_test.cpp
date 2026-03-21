@@ -11,6 +11,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "../test_world_factory.h"
+#include "core/world_state/apply_deltas.h"
 
 using namespace econlife;
 using namespace econlife::test;
@@ -182,4 +183,80 @@ TEST_CASE("serialization captures meaningful differences", "[determinism][serial
 
     auto bytes_after = serialize_world_state(world);
     REQUIRE(bytes_before != bytes_after);
+}
+
+// ── Scale determinism: 365 ticks ──────────────────────────────────────────
+
+TEST_CASE("365-tick determinism at scale", "[determinism][scale]") {
+    // Run 365 ticks (one in-game year) on two identical worlds.
+    // No modules registered — this verifies orchestrator + state management determinism.
+    auto world1 = create_test_world(42, 200, 6, 15);
+    auto world2 = create_test_world(42, 200, 6, 15);
+
+    // Verify initial state is identical
+    auto init1 = serialize_world_state(world1);
+    auto init2 = serialize_world_state(world2);
+    REQUIRE(init1 == init2);
+
+    TickOrchestrator orch1, orch2;
+    orch1.finalize_registration();
+    orch2.finalize_registration();
+
+    // Run with different thread pool sizes (1 vs 6)
+    ThreadPool pool1(1), pool2(6);
+
+    run_ticks(world1, orch1, pool1, 365);
+    run_ticks(world2, orch2, pool2, 365);
+
+    REQUIRE(world1.current_tick == 365);
+    REQUIRE(world2.current_tick == 365);
+
+    auto bytes1 = serialize_world_state(world1);
+    auto bytes2 = serialize_world_state(world2);
+    REQUIRE(bytes1 == bytes2);
+}
+
+TEST_CASE("365-tick determinism with deltas applied", "[determinism][scale]") {
+    // Apply identical deltas each tick for 365 ticks on two worlds.
+    // Verifies apply_deltas determinism at scale.
+    auto world1 = create_test_world(42, 100, 3, 10);
+    auto world2 = create_test_world(42, 100, 3, 10);
+
+    DeterministicRNG rng1(42), rng2(42);
+
+    for (uint32_t tick = 0; tick < 365; ++tick) {
+        DeltaBuffer delta1{}, delta2{};
+
+        // Generate identical deltas from identical RNG streams
+        for (uint32_t i = 0; i < 10; ++i) {
+            NPCDelta nd1{}, nd2{};
+            nd1.npc_id = 100 + (tick * 10 + i) % 100;
+            nd2.npc_id = nd1.npc_id;
+            nd1.capital_delta = rng1.next_float() * 100.0f - 50.0f;
+            nd2.capital_delta = rng2.next_float() * 100.0f - 50.0f;
+            delta1.npc_deltas.push_back(nd1);
+            delta2.npc_deltas.push_back(nd2);
+        }
+
+        for (uint32_t p = 0; p < 3; ++p) {
+            RegionDelta rd1{}, rd2{};
+            rd1.region_id = p;
+            rd2.region_id = p;
+            rd1.stability_delta = rng1.next_float() * 0.01f - 0.005f;
+            rd2.stability_delta = rng2.next_float() * 0.01f - 0.005f;
+            rd1.crime_rate_delta = rng1.next_float() * 0.005f - 0.0025f;
+            rd2.crime_rate_delta = rng2.next_float() * 0.005f - 0.0025f;
+            delta1.region_deltas.push_back(rd1);
+            delta2.region_deltas.push_back(rd2);
+        }
+
+        apply_deltas(world1, delta1);
+        apply_deltas(world2, delta2);
+        world1.current_tick = tick + 1;
+        world2.current_tick = tick + 1;
+    }
+
+    auto bytes1 = serialize_world_state(world1);
+    auto bytes2 = serialize_world_state(world2);
+    REQUIRE(bytes1 == bytes2);
 }
