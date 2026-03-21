@@ -151,6 +151,15 @@ void InvestigatorEngineModule::execute_province(
         bool is_reg = (inv->role == NPCRole::regulator);
         bool is_jrn = (inv->role == NPCRole::journalist);
 
+        // Compute evidence_pool bonus: sum actionability of active tokens targeting
+        // the current investigation subject (resolved below after case lookup).
+        // We use a forward pass over the evidence_pool here, keyed on target_npc_id.
+        // Contribution is summed in token.id ascending order for determinism.
+        // NOTE: found_case->target_id is resolved later; we accumulate a province-wide
+        // pool bonus keyed per target and apply after target resolution.
+        // For now, compute total actionability across all active tokens in this province
+        // as a fill_rate bonus additive (subject-filtering applied post target resolve below).
+
         float fill_rate = 0.0f;
         if (is_le || is_ngo) {
             fill_rate = compute_fill_rate(regional_signal, DETECTION_TO_FILL_RATE_SCALE, FILL_RATE_MAX);
@@ -217,19 +226,63 @@ void InvestigatorEngineModule::execute_province(
             actor_signal_map.begin(), actor_signal_map.end());
         found_case->target_id = resolve_target(contributions);
 
+        // Read evidence_pool: sum actionability of active tokens targeting the
+        // investigation subject and add as a fill_rate bonus.
+        // Tokens are accumulated in ascending id order for determinism.
+        if (found_case->target_id != 0) {
+            std::vector<const EvidenceToken*> relevant_tokens;
+            for (const auto& token : state.evidence_pool) {
+                if (token.is_active && token.target_npc_id == found_case->target_id) {
+                    relevant_tokens.push_back(&token);
+                }
+            }
+            std::sort(relevant_tokens.begin(), relevant_tokens.end(),
+                      [](const EvidenceToken* a, const EvidenceToken* b) {
+                          return a->id < b->id;
+                      });
+            float evidence_bonus = 0.0f;
+            for (const auto* token : relevant_tokens) {
+                evidence_bonus += token->actionability;
+            }
+            // Scale bonus to fill_rate units: each 1.0 total actionability
+            // contributes DETECTION_TO_FILL_RATE_SCALE worth of fill.
+            float bonus_fill = compute_fill_rate(evidence_bonus,
+                                                 DETECTION_TO_FILL_RATE_SCALE,
+                                                 FILL_RATE_MAX);
+            found_case->fill_rate = fill_rate + bonus_fill;
+            found_case->current_level = std::clamp(
+                found_case->current_level + bonus_fill, 0.0f, 1.0f);
+        }
+
         auto new_status = static_cast<InvestigatorMeterStatus>(found_case->status);
 
-        // Surveillance transition: generate physical evidence token
+        // Surveillance transition: generate physical evidence token and update
+        // the investigator's knowledge map with a memory observation entry.
         if (new_status >= InvestigatorMeterStatus::surveillance &&
             old_status < static_cast<uint8_t>(InvestigatorMeterStatus::surveillance)) {
             EvidenceDelta ev_delta;
             ev_delta.new_token = EvidenceToken{
-                0, EvidenceType::physical,
+                // Fix token.id collision: use tick * 1000 + investigator npc id
+                state.current_tick * 1000 + inv->id,
+                EvidenceType::physical,
                 inv->id, found_case->target_id,
                 0.3f, 0.001f,
                 state.current_tick, province.id, true
             };
             province_delta.evidence_deltas.push_back(ev_delta);
+
+            // Write knowledge map update: investigator observed the target.
+            NPCDelta npc_delta;
+            npc_delta.npc_id = inv->id;
+            MemoryEntry obs_entry;
+            obs_entry.tick_timestamp  = state.current_tick;
+            obs_entry.type            = MemoryType::observation;
+            obs_entry.subject_id      = found_case->target_id;
+            obs_entry.emotional_weight = -0.5f;
+            obs_entry.decay           = 0.0f;
+            obs_entry.is_actionable   = true;
+            npc_delta.new_memory_entry = obs_entry;
+            province_delta.npc_deltas.push_back(npc_delta);
         }
 
         // Formal inquiry transition: mark opened, queue consequence

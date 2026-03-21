@@ -214,11 +214,31 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
             pstate.last_stage_change_tick = state.current_tick;
         }
 
+        // Opposition org formation: signal via ConsequenceDelta when sustained_opposition
+        // is first reached so downstream modules can create the org entity.
+        if (new_stage == CommunityResponseStage::sustained_opposition &&
+            !pstate.opposition_org_exists) {
+            pstate.opposition_org_exists = true;
+            ConsequenceDelta cd;
+            cd.new_entry_id = province.id;  // Encodes province as pending org formation signal.
+            delta.consequence_deltas.push_back(cd);
+        }
+
+        // Stage-intensity grievance accumulation: higher stages drive additional grievance
+        // each tick proportional to stage ordinal (quiescent = 0, sustained_opposition = 6).
+        static constexpr float stage_grievance_rate = 0.002f;
+        float stage_grievance_bonus = static_cast<float>(static_cast<uint8_t>(new_stage))
+                                      * stage_grievance_rate;
+
         // Write deltas for this province.
         RegionDelta rd;
         rd.region_id = province.id;
         rd.cohesion_delta = cohesion - province.community.cohesion;
-        rd.grievance_delta = grievance - province.community.grievance_level;
+        // Fold resource_access improvement into stability_delta: a more resource-capable
+        // community is more stable; a declining one is less stable.
+        rd.stability_delta = resource_access - province.community.resource_access;
+        rd.grievance_delta = (grievance - province.community.grievance_level)
+                             + stage_grievance_bonus;
         rd.institutional_trust_delta = inst_trust - province.community.institutional_trust;
         delta.region_deltas.push_back(rd);
     }

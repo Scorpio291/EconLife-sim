@@ -161,11 +161,47 @@ void CriminalOperationsModule::process_strategic_decision(
         le_heat, territory_pressure, cash_level);
 
     switch (decision) {
-        case CriminalStrategicDecision::reduce_activity:
+        case CriminalStrategicDecision::reduce_activity: {
+            // Reduce revenue for all criminal businesses owned by this org.
+            // Process in ascending business id order for deterministic accumulation.
+            std::vector<const NPCBusiness*> owned_criminal_bizs;
+            for (const auto& biz : state.npc_businesses) {
+                if (biz.criminal_sector && biz.owner_id == org.leadership_npc_id) {
+                    owned_criminal_bizs.push_back(&biz);
+                }
+            }
+            std::sort(owned_criminal_bizs.begin(), owned_criminal_bizs.end(),
+                      [](const NPCBusiness* a, const NPCBusiness* b) {
+                          return a->id < b->id;
+                      });
+            for (const auto* biz : owned_criminal_bizs) {
+                BusinessDelta bd;
+                bd.business_id = biz->id;
+                bd.revenue_per_tick_update = biz->revenue_per_tick * 0.8f;
+                delta.business_deltas.push_back(bd);
+            }
             break;
+        }
 
-        case CriminalStrategicDecision::expand_territory:
+        case CriminalStrategicDecision::expand_territory: {
+            // Write criminal dominance increase to the org's primary province.
+            // Target is the province where the org has the highest current dominance.
+            if (!org.dominance_by_province.empty()) {
+                uint32_t target_province_id = org.dominance_by_province.begin()->first;
+                float best_dom = org.dominance_by_province.begin()->second;
+                for (const auto& [prov_id, dom] : org.dominance_by_province) {
+                    if (dom > best_dom) {
+                        best_dom = dom;
+                        target_province_id = prov_id;
+                    }
+                }
+                RegionDelta rd;
+                rd.region_id = target_province_id;
+                rd.criminal_dominance_delta = 0.05f;
+                delta.region_deltas.push_back(rd);
+            }
             break;
+        }
 
         case CriminalStrategicDecision::initiate_conflict:
             if (org.conflict_state == TerritorialConflictStage::none) {
@@ -190,8 +226,14 @@ void CriminalOperationsModule::process_strategic_decision(
             }
             break;
 
-        case CriminalStrategicDecision::reduce_headcount:
+        case CriminalStrategicDecision::reduce_headcount: {
+            // Signal a personnel reduction by queuing a consequence entry
+            // keyed to the org's leadership NPC.
+            ConsequenceDelta cd;
+            cd.new_entry_id = org.leadership_npc_id;
+            delta.consequence_deltas.push_back(cd);
             break;
+        }
 
         case CriminalStrategicDecision::maintain:
         default:
@@ -224,6 +266,9 @@ void CriminalOperationsModule::process_conflict_states(
             org.conflict_state = TerritorialConflictStage::resolution;
             continue;
         }
+
+        // Advance conflict stage by one step each tick the conflict is active.
+        org.conflict_state = advance_conflict_stage(org.conflict_state);
 
         // Personnel violence and above generates evidence
         if (org.conflict_state >= TerritorialConflictStage::personnel_violence) {
