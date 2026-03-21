@@ -445,6 +445,20 @@ void NpcBusinessModule::apply_decision_to_deltas(
     const BusinessDecisionResult& result,
     DeltaBuffer& delta) {
 
+    // --- BusinessDelta: deduct cash_spent from the business and update cost_per_tick ---
+    // This is the primary financial outcome of every quarterly decision.
+    if (result.cash_spent > 0.0f || result.cost_per_tick_delta != 0.0f) {
+        BusinessDelta biz_delta{};
+        biz_delta.business_id = biz.id;
+        if (result.cash_spent > 0.0f) {
+            biz_delta.cash_delta = -result.cash_spent;  // investment deducted from business cash
+        }
+        if (result.cost_per_tick_delta != 0.0f) {
+            biz_delta.cost_per_tick_update = biz.cost_per_tick + result.cost_per_tick_delta;
+        }
+        delta.business_deltas.push_back(biz_delta);
+    }
+
     // Workforce changes (hiring or layoffs).
     if (result.hiring_target_change != 0) {
         NPCDelta npc_delta{};
@@ -464,6 +478,13 @@ void NpcBusinessModule::apply_decision_to_deltas(
         // Expansion increases future supply capacity.
         market_delta.supply_delta = result.cash_spent * 0.001f;
         delta.market_deltas.push_back(market_delta);
+
+        // Significant expansion decision: emit ConsequenceDelta so the consequence
+        // system can schedule downstream effects (new facility, competitor response, etc.).
+        // new_entry_id encodes the business id; the consequence engine resolves the type.
+        ConsequenceDelta expansion_cons{};
+        expansion_cons.new_entry_id = biz.id;
+        delta.consequence_deltas.push_back(expansion_cons);
     }
 
     // Market supply adjustments from contraction.
@@ -476,10 +497,12 @@ void NpcBusinessModule::apply_decision_to_deltas(
         delta.market_deltas.push_back(market_delta);
     }
 
-    // Market exit generates a consequence delta.
+    // Market exit (hiring_target_change <= -1000 signals full exit).
+    // Generates a consequence delta for the dissolution event (separate from expansion).
     if (result.hiring_target_change <= -1000) {
         ConsequenceDelta cons_delta{};
-        cons_delta.new_entry_id = biz.id;
+        // Use id offset to distinguish exit consequences from expansion consequences.
+        cons_delta.new_entry_id = biz.id + 1000000u;
         delta.consequence_deltas.push_back(cons_delta);
     }
 

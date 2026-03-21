@@ -137,6 +137,48 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
             actor_output.begin(), actor_output.end());
         std::sort(sorted_actors.begin(), sorted_actors.end());
 
+        // Compute HHI (Herfindahl-Hirschman Index) = sum of squared market shares (0-10000).
+        // HHI > 2500 = highly concentrated; > 1500 = moderately concentrated.
+        float hhi = 0.0f;
+        for (const auto& [actor_id, output] : sorted_actors) {
+            float share = compute_supply_share(output, total_actor_output);
+            hhi += (share * 100.0f) * (share * 100.0f);  // shares as percentages, squared
+        }
+
+        // HHI thresholds for evidence generation (DOJ/FTC standard):
+        //   > 2500 = highly concentrated -> antitrust investigation evidence
+        //   > 1500 = moderately concentrated -> regulatory monitoring signal
+        constexpr float HHI_HIGHLY_CONCENTRATED    = 2500.0f;
+        constexpr float HHI_MODERATELY_CONCENTRATED = 1500.0f;
+
+        if (hhi > HHI_MODERATELY_CONCENTRATED) {
+            // Generate documentary evidence of market concentration.
+            // Actionability scales with HHI above the moderate threshold.
+            // Highly-concentrated markets (HHI > 2500) receive an additional
+            // actionability boost reflecting the strength of the DOJ/FTC case.
+            float actionability = std::clamp(
+                (hhi - HHI_MODERATELY_CONCENTRATED) / (10000.0f - HHI_MODERATELY_CONCENTRATED),
+                0.0f, 1.0f);
+            if (hhi > HHI_HIGHLY_CONCENTRATED) {
+                actionability = std::clamp(actionability + 0.2f, 0.0f, 1.0f);
+            }
+
+            EvidenceDelta hhi_ev;
+            EvidenceToken hhi_token;
+            // Synthetic id: encode province + good to avoid collision across markets.
+            hhi_token.id = (state.current_tick * 10000) + (mk.province_id * 100) + (mk.good_id % 100);
+            hhi_token.type = EvidenceType::financial;
+            hhi_token.source_npc_id = 0;   // public market data
+            hhi_token.target_npc_id = 0;   // market-level, not actor-specific
+            hhi_token.actionability = actionability;
+            hhi_token.decay_rate = 0.0005f;
+            hhi_token.created_tick = state.current_tick;
+            hhi_token.province_id = mk.province_id;
+            hhi_token.is_active = true;
+            hhi_ev.new_token = hhi_token;
+            delta.evidence_deltas.push_back(hhi_ev);
+        }
+
         for (const auto& [actor_id, output] : sorted_actors) {
             float share = compute_supply_share(output, total_actor_output);
 
@@ -155,7 +197,7 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
                     }
                 }
 
-                // Generate evidence if share is significantly above threshold
+                // Generate actor-targeted evidence if share is significantly above threshold.
                 if (share > Constants::market_share_threshold + 0.10f) {
                     EvidenceDelta ev_delta;
                     EvidenceToken token;
@@ -178,6 +220,30 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
 
                 // Increment proposal pressure
                 proposal_pressure_[mk.province_id] += compute_pressure_increment();
+
+                // Dominant price-mover: generate an enforcement ConsequenceDelta.
+                // Encoded as new_entry_id = actor_id (placeholder until ConsequenceEntry
+                // type is available; consistent with the pattern in npc_business).
+                ConsequenceDelta enforcement;
+                enforcement.new_entry_id = actor_id;
+                delta.consequence_deltas.push_back(enforcement);
+
+                // Also generate a highly actionable evidence token for Tier 2 actors.
+                EvidenceDelta tier2_ev;
+                EvidenceToken tier2_token;
+                tier2_token.id = state.current_tick * 2000 + actor_id;
+                tier2_token.type = EvidenceType::financial;
+                tier2_token.source_npc_id = 0;
+                tier2_token.target_npc_id = actor_id;
+                tier2_token.actionability = share - Constants::dominant_price_mover_threshold
+                                            + Constants::dominant_price_mover_threshold * 0.5f;
+                tier2_token.actionability = std::clamp(tier2_token.actionability, 0.0f, 1.0f);
+                tier2_token.decay_rate = 0.0005f;
+                tier2_token.created_tick = state.current_tick;
+                tier2_token.province_id = mk.province_id;
+                tier2_token.is_active = true;
+                tier2_ev.new_token = tier2_token;
+                delta.evidence_deltas.push_back(tier2_ev);
             }
         }
     }

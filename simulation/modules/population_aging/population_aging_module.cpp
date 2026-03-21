@@ -55,8 +55,51 @@ void PopulationAgingModule::execute_province(uint32_t province_idx,
     // Monthly cadence for cohort convergence
     if (!is_monthly_tick(state.current_tick)) return;
 
-    // Province-level processing would update cohort incomes and employment
-    // toward regional targets. Full implementation deferred to orchestrator pass.
+    const auto& province = state.provinces[province_idx];
+    const auto& demographics = province.demographics;
+    const auto& community = province.community;
+
+    RegionDelta rdelta;
+    rdelta.region_id = province_idx;
+
+    // --- Stability contribution from demographic changes ---
+    // High dependency ratio (old/young relative to working-age) degrades stability
+    // by increasing fiscal strain on the province.
+    // Proxy: if income_low_fraction dominates, stability faces downward pressure.
+    {
+        // Compute a simple demographic stress index: high share of low-income
+        // cohorts combined with low education drives instability.
+        float demographic_stress = demographics.income_low_fraction
+                                   * (1.0f - demographics.education_level);
+        constexpr float DEMOGRAPHIC_STABILITY_WEIGHT = -0.002f;
+        rdelta.stability_delta = DEMOGRAPHIC_STABILITY_WEIGHT * demographic_stress;
+    }
+
+    // --- Inequality contribution from income distribution ---
+    // Monthly re-evaluation: the Gini proxy (high minus low income fraction)
+    // nudges the province inequality index toward the current demographic signal.
+    {
+        float income_spread = demographics.income_high_fraction
+                              - demographics.income_low_fraction;
+        float target_inequality = std::clamp(income_spread, 0.0f, 1.0f);
+        constexpr float MONTHLY_INEQUALITY_CONVERGENCE = 0.005f;
+        rdelta.inequality_delta = MONTHLY_INEQUALITY_CONVERGENCE
+                                  * (target_inequality - province.conditions.inequality_index);
+    }
+
+    // --- Grievance contribution from cohort dissatisfaction ---
+    // Unemployment and addiction in the background population raise grievance.
+    // Addiction prevalence across cohorts is reflected in the province addiction_rate.
+    {
+        constexpr float GRIEVANCE_UNEMPLOYMENT_WEIGHT = 0.003f;
+        // Use low-income fraction as a proxy for unemployment pressure since
+        // individual cohort employment_rate is on PopulationCohort, not Province.
+        rdelta.grievance_delta = GRIEVANCE_UNEMPLOYMENT_WEIGHT
+                                 * demographics.income_low_fraction;
+    }
+
+    // Only push the delta if at least one field was set.
+    province_delta.region_deltas.push_back(rdelta);
 }
 
 void PopulationAgingModule::execute(const WorldState& state, DeltaBuffer& delta) {

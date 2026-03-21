@@ -114,10 +114,16 @@ void NpcSpendingModule::execute_province(uint32_t province_idx,
                   return a->good_id < b->good_id;
               });
 
+    // Track total spending per NPC across all markets for NPCDelta emission.
+    // Key: npc_id, value: sum of (demand_units * spot_price) across all goods.
+    // Sorted insertion order matches province_npcs (already sorted by id ascending).
+    std::vector<float> npc_total_spending(province_npcs.size(), 0.0f);
+
     for (const auto* market : province_markets) {
         float total_demand = 0.0f;
 
-        for (const auto* npc : province_npcs) {
+        for (size_t ni = 0; ni < province_npcs.size(); ++ni) {
+            const auto* npc = province_npcs[ni];
             BuyerType bt = get_buyer_type(npc->id);
 
             float income_f = compute_income_factor(
@@ -137,6 +143,11 @@ void NpcSpendingModule::execute_province(uint32_t province_idx,
                 Constants::default_base_demand_units, income_f, price_f, quality_f);
 
             total_demand += demand;
+
+            // Accumulate spending for this NPC: cost = demand_units * spot_price.
+            // spot_price is the market clearing price; demand units are the quantity.
+            float spot = std::max(market->spot_price, 0.0f);
+            npc_total_spending[ni] += demand * spot;
         }
 
         // Write demand contribution to delta buffer.
@@ -147,6 +158,18 @@ void NpcSpendingModule::execute_province(uint32_t province_idx,
             md.demand_buffer_delta = total_demand;
             province_delta.market_deltas.push_back(md);
         }
+    }
+
+    // Emit NPCDelta for each NPC that spent capital this tick.
+    // capital_delta is negative (spending reduces capital).
+    for (size_t ni = 0; ni < province_npcs.size(); ++ni) {
+        float spent = npc_total_spending[ni];
+        if (spent <= 0.0f) continue;
+
+        NPCDelta npc_delta;
+        npc_delta.npc_id = province_npcs[ni]->id;
+        npc_delta.capital_delta = -spent;
+        province_delta.npc_deltas.push_back(npc_delta);
     }
 }
 
