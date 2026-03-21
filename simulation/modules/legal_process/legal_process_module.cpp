@@ -55,6 +55,24 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             lcase.conviction_probability = compute_conviction_probability(
                 lcase.evidence_weight, lcase.defense_quality, 1.0f, 1.0f);
 
+            // EvidenceDelta: evidence is presented at trial — each active token
+            // associated with this case is flagged as presented (actionability reduced
+            // by presentation; the record is now part of the public court record).
+            for (const auto& token : state.evidence_pool) {
+                if (token.is_active && token.target_npc_id == lcase.defendant_npc_id) {
+                    EvidenceDelta presented_ev;
+                    presented_ev.retired_token_id   = token.id;  // retire from active pool
+                    // Also emit a documentary token representing the court record
+                    presented_ev.new_token = EvidenceToken{
+                        0, EvidenceType::documentary,
+                        lcase.prosecutor_npc_id, lcase.defendant_npc_id,
+                        token.actionability, 0.0f,  // court record does not decay
+                        state.current_tick, token.province_id, true
+                    };
+                    delta.evidence_deltas.push_back(presented_ev);
+                }
+            }
+
             bool convicted = lcase.conviction_probability >= CONVICTION_THRESHOLD;
             lcase.stage = advance_stage(lcase.stage, convicted);
 

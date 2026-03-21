@@ -114,13 +114,29 @@ void ProtectionRacketsModule::execute_province(
         if (racket.status == RacketStatus::active) {
             // Active racket: attempt collection
             if (can_business_pay(target_biz->cash, racket.demand_per_tick)) {
-                // Payment collected: debit business, credit criminal org
-                NPCDelta biz_delta;
-                biz_delta.npc_id = racket.target_business_id;
-                biz_delta.capital_delta = -racket.demand_per_tick;
-                province_delta.npc_deltas.push_back(biz_delta);
+                // Payment collected: debit victim business cash
+                BusinessDelta victim_delta;
+                victim_delta.business_id = racket.target_business_id;
+                victim_delta.cash_delta  = -racket.demand_per_tick;
+                province_delta.business_deltas.push_back(victim_delta);
+
+                // Credit criminal org business cash
+                BusinessDelta criminal_delta;
+                criminal_delta.business_id = racket.criminal_org_id;
+                criminal_delta.cash_delta  = racket.demand_per_tick;
+                province_delta.business_deltas.push_back(criminal_delta);
 
                 racket.last_payment_tick = state.current_tick;
+
+                // EvidenceDelta: observable protection activity (financial pattern)
+                EvidenceDelta ev;
+                ev.new_token = EvidenceToken{
+                    0, EvidenceType::financial,
+                    racket.criminal_org_id, target_biz->owner_id,
+                    0.15f, 0.002f,
+                    state.current_tick, province.id, true
+                };
+                province_delta.evidence_deltas.push_back(ev);
             }
             // If can't pay: no payment, no escalation; status remains active
 

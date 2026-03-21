@@ -141,6 +141,7 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         }
 
         // Check hostile trigger.
+        bool went_hostile = false;
         if (should_trigger_hostile(obl.status, creditor->risk_tolerance,
                                     Constants::hostile_action_threshold)) {
             EscalationStep step;
@@ -149,18 +150,75 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
             step.to_status = ObligationStatus::hostile;
             obl.history.push_back(step);
             obl.status = ObligationStatus::hostile;
+            went_hostile = true;
+
+            // ConsequenceDelta: register hostile-action consequence entry
+            ConsequenceDelta cdelta;
+            cdelta.new_entry_id = obl.obligation_id;
+            delta.consequence_deltas.push_back(cdelta);
+
+            // new_obligation_nodes: publish a coercive counter-obligation from
+            // creditor to debtor recording the hostile action (criminal_cooperation
+            // favor type mirrors the hostile escalation)
+            ObligationNode hostile_node;
+            hostile_node.id           = 0;  // apply_deltas auto-assigns id
+            hostile_node.creditor_npc_id = obl.creditor_npc_id;
+            hostile_node.debtor_npc_id   = (state.player &&
+                                             state.player->id != obl.creditor_npc_id)
+                                            ? state.player->id
+                                            : obl.creditor_npc_id;  // fallback
+            hostile_node.favor_type   = FavorType::criminal_cooperation;
+            hostile_node.weight       = std::clamp(
+                obl.current_demand / std::max(1.0f, obl.original_value), 0.0f, 1.0f);
+            hostile_node.created_tick = state.current_tick;
+            hostile_node.is_active    = true;
+            delta.new_obligation_nodes.push_back(hostile_node);
         }
 
-        // Trust erosion for overdue obligation.
+        // Trust erosion for overdue obligation: write proper updated_relationship delta.
         uint32_t overdue_ticks = state.current_tick - obl.deadline_tick;
         if (overdue_ticks > 0) {
-            // Write trust delta for this tick (erosion per tick, not cumulative).
-            NPCDelta nd;
-            nd.npc_id = obl.creditor_npc_id;
-            // Trust erosion applied as relationship delta.
-            // In V1 bootstrap, we use motivation_delta as a proxy for trust erosion.
-            nd.motivation_delta = Constants::trust_erosion_per_tick;
-            delta.npc_deltas.push_back(nd);
+            float erosion = compute_trust_erosion(1u, Constants::trust_erosion_per_tick);
+
+            // Find creditor's current relationship with the debtor (player) to
+            // build the updated relationship struct.
+            const Relationship* current_rel = nullptr;
+            if (state.player) {
+                for (const auto& rel : state.player->relationships) {
+                    if (rel.target_npc_id == obl.creditor_npc_id) {
+                        current_rel = &rel;
+                        break;
+                    }
+                }
+            }
+
+            if (current_rel && state.player) {
+                // Write proper updated_relationship (player's view of creditor) with
+                // decreased trust — delta is owned by the player NPC entry
+                NPCDelta nd;
+                nd.npc_id = state.player->id;
+                Relationship updated_rel = *current_rel;
+                updated_rel.trust = std::clamp(
+                    updated_rel.trust + erosion,  // erosion is negative
+                    0.0f, updated_rel.recovery_ceiling);
+                updated_rel.obligation_balance = std::clamp(
+                    updated_rel.obligation_balance + erosion, -1.0f, 1.0f);
+                updated_rel.last_interaction_tick = state.current_tick;
+                if (went_hostile) {
+                    // Hostile escalation lowers recovery ceiling
+                    updated_rel.recovery_ceiling = std::max(
+                        updated_rel.trust * 0.60f, 0.15f);
+                }
+                nd.updated_relationship = updated_rel;
+                delta.npc_deltas.push_back(nd);
+            } else {
+                // No existing relationship record — write creditor motivation_delta
+                // as a distrust signal until a relationship is established
+                NPCDelta nd;
+                nd.npc_id = obl.creditor_npc_id;
+                nd.motivation_delta = erosion;
+                delta.npc_deltas.push_back(nd);
+            }
         }
     }
 }

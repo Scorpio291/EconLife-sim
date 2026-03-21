@@ -39,6 +39,15 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
               [](const InformantRecord& a, const InformantRecord& b) { return a.npc_id < b.npc_id; });
 
     for (auto& rec : records_) {
+        // Handle per-tick capital drain for actively cooperating informants
+        if (rec.status == InformantStatus::cooperating) {
+            NPCDelta ongoing_delta;
+            ongoing_delta.npc_id       = rec.npc_id;
+            ongoing_delta.capital_delta = -PAY_SILENCE_COST * 0.001f;  // tiny per-tick cost
+            delta.npc_deltas.push_back(ongoing_delta);
+            continue;
+        }
+
         if (rec.status != InformantStatus::not_cooperating) continue;
 
         const NPC* npc = nullptr;
@@ -73,16 +82,23 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
             rec.cooperation_start_tick = state.current_tick;
 
             for (const auto& ke : npc->known_evidence) {
+                // EvidenceDelta: testimonial evidence from informant-provided knowledge
                 EvidenceDelta ev;
                 ev.new_token = EvidenceToken{
-                    0, (ke.type == KnowledgeType::identity_link)
-                        ? EvidenceType::financial : EvidenceType::testimonial,
+                    0, EvidenceType::testimonial,
                     npc->id, ke.subject_id,
                     0.50f, 0.003f,
                     state.current_tick, npc->current_province_id, true
                 };
                 delta.evidence_deltas.push_back(ev);
             }
+
+            // NPCDelta: reliability update — informant incurs implicit capital cost
+            // (legal fees, witness protection costs, relocation expenses proxy)
+            NPCDelta reliability_delta;
+            reliability_delta.npc_id       = rec.npc_id;
+            reliability_delta.capital_delta = -PAY_SILENCE_COST * 0.10f;  // 10% of silence cost
+            delta.npc_deltas.push_back(reliability_delta);
         }
     }
 }

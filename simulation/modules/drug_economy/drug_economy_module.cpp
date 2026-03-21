@@ -128,6 +128,13 @@ void DrugEconomyModule::execute_province(
         supply_delta.supply_delta = production_output;
         province_delta.market_deltas.push_back(supply_delta);
 
+        // BusinessDelta: credit drug revenue to the criminal business
+        BusinessDelta biz_revenue;
+        biz_revenue.business_id           = biz->id;
+        biz_revenue.cash_delta            = revenue;
+        biz_revenue.revenue_per_tick_update = revenue;
+        province_delta.business_deltas.push_back(biz_revenue);
+
         // Compute precursor consumption (meth requires 2x precursor)
         if (drug_type == DrugType::methamphetamine) {
             float precursor = compute_precursor_consumption(production_output, PRECURSOR_RATIO_METH);
@@ -167,6 +174,15 @@ void DrugEconomyModule::execute_province(
         demand_delta.region_id = province.id;
         demand_delta.demand_buffer_delta = demand;
         province_delta.market_deltas.push_back(demand_delta);
+
+        // RegionDelta: addiction_rate_delta grows proportionally to consumption volume
+        // Consumption approximated as min(demand, total supply available this tick).
+        // Use demand as upper bound; scale factor keeps the per-tick delta small.
+        constexpr float ADDICTION_GROWTH_PER_UNIT = 0.000001f;
+        RegionDelta region;
+        region.region_id         = province.id;
+        region.addiction_rate_delta = demand * ADDICTION_GROWTH_PER_UNIT;
+        province_delta.region_deltas.push_back(region);
     }
 }
 

@@ -45,6 +45,25 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
     for (auto& compound : compounds_) {
         if (compound.stage == SchedulingStage::scheduled) continue;
 
+        // BusinessDelta: R&D investment cost each tick for active (unscheduled) compounds
+        // Find the criminal business owned by creator_actor_id in the compound's province
+        for (const auto& biz : state.npc_businesses) {
+            if (biz.owner_id == compound.creator_actor_id &&
+                biz.province_id == compound.province_id &&
+                biz.criminal_sector) {
+                // R&D investment rate: 1% of revenue per tick
+                constexpr float RD_INVESTMENT_RATE = 0.01f;
+                float rd_cost = biz.revenue_per_tick * RD_INVESTMENT_RATE;
+                if (rd_cost > 0.0f) {
+                    BusinessDelta rd_delta;
+                    rd_delta.business_id = biz.id;
+                    rd_delta.cash_delta  = -rd_cost;
+                    delta.business_deltas.push_back(rd_delta);
+                }
+                break;
+            }
+        }
+
         if (monthly_check && compound.stage == SchedulingStage::unscheduled) {
             float evidence_sum = 0.0f;
             for (const auto& token : state.evidence_pool) {
@@ -83,6 +102,20 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 cons.new_entry_id = compound.compound_id;
                 delta.consequence_deltas.push_back(cons);
             }
+        }
+
+        // MarketDelta: compound enters/remains in informal market with initial supply
+        // Unscheduled compounds supply the formal market; scheduled ones the informal market.
+        // Emit a supply delta each tick to represent ongoing production availability.
+        if (compound.stage == SchedulingStage::unscheduled ||
+            compound.stage == SchedulingStage::review_initiated) {
+            // Use compound_id as the goods key proxy (maps to "designer_drug_{id}" in goods.csv)
+            constexpr float BASE_SUPPLY_PER_TICK = 10.0f;  // units per tick at baseline
+            MarketDelta supply_entry;
+            supply_entry.good_id      = compound.compound_id;
+            supply_entry.region_id    = compound.province_id;
+            supply_entry.supply_delta = BASE_SUPPLY_PER_TICK * compound.market_margin_multiplier;
+            delta.market_deltas.push_back(supply_entry);
         }
 
         compound.market_margin_multiplier = compute_market_margin(

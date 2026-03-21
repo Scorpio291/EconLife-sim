@@ -66,11 +66,57 @@ float InfluenceNetworkModule::compute_recovery_ceiling(float trust_before, float
 void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta) {
     if (!state.player) return;
 
-    // Process obligation trust erosion for overdue obligations
+    // Process obligation trust erosion for active obligations involving the player.
+    // Each active obligation erodes the obligation_balance in the corresponding relationship.
     for (const auto& obligation : state.obligation_network) {
         if (!obligation.is_active) continue;
-        // Obligations that are active but old enough contribute erosion
-        // (simplified: all active obligations with weight > 0 erode)
+        if (obligation.weight <= 0.0f) continue;
+
+        // Identify the NPC counterpart to the player in this obligation
+        uint32_t counterpart_npc_id = 0;
+        if (obligation.debtor_npc_id == state.player->id) {
+            counterpart_npc_id = obligation.creditor_npc_id;
+        } else if (obligation.creditor_npc_id == state.player->id) {
+            counterpart_npc_id = obligation.debtor_npc_id;
+        }
+        if (counterpart_npc_id == 0) continue;
+
+        // Find the current relationship to build an updated copy
+        const Relationship* current_rel = nullptr;
+        for (const auto& rel : state.player->relationships) {
+            if (rel.target_npc_id == counterpart_npc_id) {
+                current_rel = &rel;
+                break;
+            }
+        }
+        if (!current_rel) continue;
+
+        // Apply obligation erosion to obligation_balance and trust
+        float erosion = compute_obligation_erosion();  // returns -OBLIGATION_EROSION_RATE
+        Relationship updated_rel = *current_rel;
+        updated_rel.obligation_balance = std::clamp(
+            updated_rel.obligation_balance + erosion, -1.0f, 1.0f);
+        // Small trust decay from sustained obligation weight
+        float trust_decay = -OBLIGATION_EROSION_RATE * obligation.weight;
+        updated_rel.trust = std::clamp(updated_rel.trust + trust_decay, 0.0f, 1.0f);
+        updated_rel.last_interaction_tick = state.current_tick;
+
+        NPCDelta nd;
+        nd.npc_id = state.player->id;
+        nd.updated_relationship = updated_rel;
+        delta.npc_deltas.push_back(nd);
+
+        // Counterpart NPC: motivation_delta reflects continued influence hold
+        // (fear-based obligations reinforce compliance motivation)
+        InfluenceType inf_type = classify_relationship(
+            current_rel->trust, current_rel->fear, current_rel->is_movement_ally);
+        if (inf_type == InfluenceType::fear_based || inf_type == InfluenceType::obligation_based) {
+            NPCDelta counterpart_nd;
+            counterpart_nd.npc_id = counterpart_npc_id;
+            // Small positive motivation_delta: NPC feels compelled to comply
+            counterpart_nd.motivation_delta = obligation.weight * 0.01f;
+            delta.npc_deltas.push_back(counterpart_nd);
+        }
     }
 
     // Recompute health if dirty
@@ -92,6 +138,16 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
         if (is_trust_based(rel.trust)) trust_count++;
         if (is_fear_based(rel.fear, rel.trust)) fear_count++;
         if (rel.is_movement_ally) movement_count++;
+
+        // Write motivation_delta for NPCs in trust-based relationships: they
+        // receive a small positive nudge reflecting the player's influence.
+        InfluenceType inf_type = classify_relationship(rel.trust, rel.fear, rel.is_movement_ally);
+        if (inf_type == InfluenceType::trust_based) {
+            NPCDelta nd;
+            nd.npc_id = rel.target_npc_id;
+            nd.motivation_delta = rel.trust * 0.005f;
+            delta.npc_deltas.push_back(nd);
+        }
     }
 
     // Obligation counts

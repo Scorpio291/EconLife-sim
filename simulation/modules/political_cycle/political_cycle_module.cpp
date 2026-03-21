@@ -103,13 +103,17 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
             NPCDelta npc_delta;
             npc_delta.npc_id = static_cast<uint32_t>(campaign.active_candidate_id);
 
-            if (final_share >= office.win_threshold) {
+            bool won = (final_share >= office.win_threshold);
+            if (won) {
                 office.current_holder_id = campaign.active_candidate_id;
                 npc_delta.new_memory_entry = MemoryEntry{
                     state.current_tick, MemoryType::event,
                     static_cast<uint32_t>(office.id),
                     0.8f, 0.01f, true
                 };
+                // Career advance: write updated relationship with self as marker via
+                // motivation_delta (career_advance outcome weight boost)
+                npc_delta.motivation_delta = 0.05f;
             } else {
                 npc_delta.new_memory_entry = MemoryEntry{
                     state.current_tick, MemoryType::event,
@@ -118,6 +122,23 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
                 };
             }
             delta.npc_deltas.push_back(npc_delta);
+
+            // RegionDelta: institutional_trust increases on clean win, decreases on contested
+            // Use office province (stored as lower 16 bits of office.id in V1 bootstrap)
+            {
+                RegionDelta rdelta;
+                rdelta.region_id = static_cast<uint32_t>(office.id & 0xFFFF);
+                rdelta.institutional_trust_delta = won ? 0.02f : -0.01f;
+                delta.region_deltas.push_back(rdelta);
+            }
+
+            // ConsequenceDelta: schedule election consequence entry
+            {
+                ConsequenceDelta cdelta;
+                cdelta.new_entry_id = static_cast<uint32_t>(campaign.id);
+                delta.consequence_deltas.push_back(cdelta);
+            }
+
             campaign.resolved = true;
         }
 

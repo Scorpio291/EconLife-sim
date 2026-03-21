@@ -115,6 +115,20 @@ void WeaponsTraffickingModule::execute_province(
             diversion_fraction, diverted, formal, province.id
         });
 
+        // BusinessDelta: credit weapons sales revenue to the diverted business
+        if (diverted > 0.0f) {
+            // Revenue = diverted quantity * informal spot price
+            float informal_price = compute_informal_spot_price(
+                BASE_PRICE_SMALL_ARMS, demand_modifier, diverted, PRICE_FLOOR_SUPPLY);
+            float sales_revenue = diverted * informal_price;
+
+            BusinessDelta revenue_delta;
+            revenue_delta.business_id           = biz->id;
+            revenue_delta.cash_delta            = sales_revenue;
+            revenue_delta.revenue_per_tick_update = sales_revenue;
+            province_delta.business_deltas.push_back(revenue_delta);
+        }
+
         // Generate documentary evidence per diverted shipment (inventory discrepancy)
         if (diverted > 0.0f) {
             EvidenceDelta ev;
@@ -125,6 +139,16 @@ void WeaponsTraffickingModule::execute_province(
                 state.current_tick, province.id, true
             };
             province_delta.evidence_deltas.push_back(ev);
+
+            // Physical trafficking evidence (contraband seizure risk)
+            EvidenceDelta phys_ev;
+            phys_ev.new_token = EvidenceToken{
+                0, EvidenceType::physical,
+                biz->owner_id, biz->owner_id,
+                0.35f, 0.002f,
+                state.current_tick, province.id, true
+            };
+            province_delta.evidence_deltas.push_back(phys_ev);
         }
 
         // Add diverted supply to informal market

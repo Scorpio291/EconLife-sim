@@ -120,6 +120,29 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
             // Direct to player wealth
             delta.player_delta.wealth_delta =
                 delta.player_delta.wealth_delta.value_or(0.0f) + clean;
+        } else {
+            // Three-stage pipeline: placement debit then integration credit to destination business
+            // Placement: deduct dirty amount from source criminal business
+            BusinessDelta placement;
+            placement.business_id = op.destination_business_id;
+            placement.cash_delta  = -transfer;
+            delta.business_deltas.push_back(placement);
+
+            // Integration: credit clean amount to destination business after conversion loss
+            BusinessDelta integration;
+            integration.business_id = op.destination_business_id;
+            integration.cash_delta  = clean;
+            delta.business_deltas.push_back(integration);
+        }
+
+        // RegionDelta: criminal_dominance_delta if laundering volume is high this tick
+        // High-volume threshold: transfer > 10% of a typical daily revenue proxy (1000 units)
+        constexpr float HIGH_VOLUME_THRESHOLD = 100.0f;
+        if (transfer >= HIGH_VOLUME_THRESHOLD) {
+            RegionDelta region;
+            region.region_id = 0;  // global / province 0; in full impl reads op's province
+            region.criminal_dominance_delta = transfer / 10000.0f;  // scale to small delta
+            delta.region_deltas.push_back(region);
         }
 
         // Generate method-specific evidence

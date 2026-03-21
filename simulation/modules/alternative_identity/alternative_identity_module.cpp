@@ -42,6 +42,37 @@ void AlternativeIdentityModule::execute(const WorldState& state, DeltaBuffer& de
                 identity.documentation_quality, DOCUMENTATION_DECAY_RATE * ticks_since);
         }
 
+        if (identity.status == IdentityStatus::active) {
+            // EvidenceDelta: redirect evidence tokens that target real_actor_id to the
+            // cover alias instead. For each attributed evidence token, reduce its
+            // actionability toward the real actor (cover absorbs investigative pressure).
+            for (const auto& token : state.evidence_pool) {
+                if (token.is_active &&
+                    token.target_npc_id == identity.real_actor_id &&
+                    identity.documentation_quality > BURN_THRESHOLD) {
+                    // Reduce actionability in proportion to documentation quality
+                    EvidenceDelta redirect_ev;
+                    redirect_ev.retired_token_id = token.id;  // retire original
+                    // Re-emit token pointing at alias_id with quality-scaled actionability
+                    redirect_ev.new_token = EvidenceToken{
+                        0, token.type,
+                        token.source_npc_id, identity.alias_id,
+                        token.actionability * identity.documentation_quality, token.decay_rate,
+                        state.current_tick, token.province_id, true
+                    };
+                    delta.evidence_deltas.push_back(redirect_ev);
+                }
+            }
+
+            // NPCDelta: identity maintenance costs (documents, bribes, upkeep)
+            // Per-tick cost scales with documentation quality (higher quality = more upkeep)
+            constexpr float MAINTENANCE_COST_PER_TICK = 50.0f;
+            NPCDelta cost_delta;
+            cost_delta.npc_id       = identity.real_actor_id;
+            cost_delta.capital_delta = -(MAINTENANCE_COST_PER_TICK * identity.documentation_quality);
+            delta.npc_deltas.push_back(cost_delta);
+        }
+
         if (identity.status == IdentityStatus::active &&
             should_burn_identity(identity.documentation_quality, BURN_THRESHOLD)) {
             identity.status = IdentityStatus::burned;

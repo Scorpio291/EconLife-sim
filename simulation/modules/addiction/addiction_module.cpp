@@ -142,6 +142,30 @@ void AddictionModule::execute_province(uint32_t province_idx,
         // Province rate delta
         addiction_rate_delta += compute_addiction_rate_delta(old_stage, new_stage);
 
+        // NPCDelta: deduct substance spending from NPC capital
+        // Spending scales with addiction severity.
+        constexpr float SUBSTANCE_SPEND_CASUAL    = 5.0f;
+        constexpr float SUBSTANCE_SPEND_REGULAR   = 15.0f;
+        constexpr float SUBSTANCE_SPEND_DEPENDENT = 30.0f;
+        constexpr float SUBSTANCE_SPEND_ACTIVE    = 50.0f;
+        constexpr float SUBSTANCE_SPEND_TERMINAL  = 20.0f;  // reduced capacity to obtain
+
+        float spend = 0.0f;
+        switch (new_stage) {
+            case AddictionStage::casual:    spend = SUBSTANCE_SPEND_CASUAL;    break;
+            case AddictionStage::regular:   spend = SUBSTANCE_SPEND_REGULAR;   break;
+            case AddictionStage::dependent: spend = SUBSTANCE_SPEND_DEPENDENT; break;
+            case AddictionStage::active:    spend = SUBSTANCE_SPEND_ACTIVE;    break;
+            case AddictionStage::terminal:  spend = SUBSTANCE_SPEND_TERMINAL;  break;
+            default: break;
+        }
+        if (spend > 0.0f) {
+            NPCDelta npc_delta;
+            npc_delta.npc_id = npc_id;
+            npc_delta.capital_delta = -spend;
+            province_delta.npc_deltas.push_back(npc_delta);
+        }
+
         // Update internal state
         it->second = current;
     }
@@ -151,6 +175,11 @@ void AddictionModule::execute_province(uint32_t province_idx,
         RegionDelta rdelta;
         rdelta.region_id = province_idx;
         rdelta.addiction_rate_delta = addiction_rate_delta;
+        // High addiction rate degrades regional stability
+        // Stability penalty proportional to how much the rate increased
+        if (addiction_rate_delta > 0.0f) {
+            rdelta.stability_delta = -addiction_rate_delta * GRIEVANCE_PER_ADDICT_FRACTION;
+        }
         province_delta.region_deltas.push_back(rdelta);
     }
 }

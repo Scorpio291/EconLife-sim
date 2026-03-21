@@ -178,6 +178,56 @@ void MediaSystemModule::create_stories_from_journalists(
                 story.evidence_token_ids.push_back(token->id);
                 story.is_active = true;
                 active_stories_.push_back(story);
+
+                // EvidenceDelta: published story creates a new documentary evidence token
+                {
+                    EvidenceDelta ev_delta;
+                    EvidenceToken doc_token;
+                    // Offset story IDs into a dedicated range for documentary tokens
+                    doc_token.id           = story.id + 0x00100000u;
+                    doc_token.type         = EvidenceType::documentary;
+                    doc_token.source_npc_id = journalist_id;
+                    doc_token.target_npc_id = token->target_npc_id;
+                    doc_token.actionability = token->actionability * outlet.credibility;
+                    doc_token.decay_rate    = 0.002f;
+                    doc_token.created_tick  = state.current_tick;
+                    doc_token.province_id   = outlet.province_id;
+                    doc_token.is_active     = true;
+                    ev_delta.new_token = doc_token;
+                    delta.evidence_deltas.push_back(ev_delta);
+                }
+
+                // NPCDelta: journalist gets a memory entry for the publish event
+                {
+                    NPCDelta journalist_delta;
+                    journalist_delta.npc_id = journalist_id;
+                    MemoryEntry mem;
+                    mem.tick_timestamp = state.current_tick;
+                    mem.type           = MemoryType::event;
+                    mem.subject_id     = token->target_npc_id;
+                    mem.emotional_weight = 0.40f;  // publishing is a positive career event
+                    mem.decay          = 0.005f;
+                    mem.is_actionable  = false;
+                    journalist_delta.new_memory_entry = mem;
+                    delta.npc_deltas.push_back(journalist_delta);
+                }
+
+                // RegionDelta: published story raises grievance and shifts institutional trust
+                {
+                    RegionDelta rdelta;
+                    rdelta.region_id = outlet.province_id;
+                    // Investigative stories exposing wrongdoing raise grievance
+                    float weight = token->actionability * outlet.reach;
+                    rdelta.grievance_delta = weight * 0.03f;
+                    // Damaging stories about power figures erode institutional trust
+                    if (story.tone == StoryTone::damaging) {
+                        rdelta.institutional_trust_delta = -weight * 0.02f;
+                    } else {
+                        // Neutral investigative reporting slightly improves trust in press
+                        rdelta.institutional_trust_delta = weight * 0.005f;
+                    }
+                    delta.region_deltas.push_back(rdelta);
+                }
             }
         }
     }
@@ -263,17 +313,36 @@ void MediaSystemModule::convert_exposure(const WorldState& state,
         if (story.tone != StoryTone::damaging) continue;
         if (story.evidence_weight < Constants::crisis_evidence_threshold) continue;
 
-        if (story.subject_id == state.player->id) {
-            float exposure = compute_exposure_delta(
-                story.amplification,
-                Constants::exposure_per_amplification_unit);
+        // Find the outlet province for region effects
+        uint32_t story_province = 0;
+        for (const auto& outlet : outlets_) {
+            if (outlet.id == story.outlet_id) {
+                story_province = outlet.province_id;
+                break;
+            }
+        }
 
+        float exposure = compute_exposure_delta(
+            story.amplification,
+            Constants::exposure_per_amplification_unit);
+
+        if (story.subject_id == state.player->id) {
             // V1: accumulate into player health_delta as reputation proxy
             if (!delta.player_delta.health_delta.has_value()) {
                 delta.player_delta.health_delta = 0.0f;
             }
             // Exposure doesn't directly damage health; this is a placeholder
             // for the reputation system. The player delta tracks it.
+        }
+
+        // RegionDelta: ongoing damaging coverage raises regional grievance and
+        // erodes institutional trust proportional to amplified exposure
+        if (exposure > 0.0f) {
+            RegionDelta rdelta;
+            rdelta.region_id = story_province;
+            rdelta.grievance_delta             = exposure * 0.01f;
+            rdelta.institutional_trust_delta   = -exposure * 0.005f;
+            delta.region_deltas.push_back(rdelta);
         }
     }
 }
