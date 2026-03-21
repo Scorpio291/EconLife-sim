@@ -20,6 +20,19 @@ public:
     bool is_province_parallel() const noexcept override { return false; }
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // --- Serialization API ---
+
+    // Serialize WorldState to flat binary format with LZ4 compression.
+    // Header: MAGIC(4) + schema_version(4) + uncompressed_size(4) + checksum(4)
+    // Body: LZ4-compressed flat binary of all WorldState fields.
+    // Deterministic: same state always produces identical bytes.
+    static std::vector<uint8_t> serialize(const WorldState& state);
+
+    // Deserialize LZ4-compressed flat binary back to WorldState.
+    // Validates magic, schema, and checksum. Overwrites all fields in out_state.
+    // Returns RestoreResult::success on success, error code otherwise.
+    static RestoreResult deserialize(const std::vector<uint8_t>& data, WorldState& out_state);
+
     // --- Static utilities for testing ---
 
     // Compute CRC32 checksum of data
@@ -49,6 +62,7 @@ public:
     static constexpr uint32_t WAL_SEGMENT_TICKS      = 30;   // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES            = 0x45434F4E;  // "ECON"
     static constexpr float    COMPRESSION_TARGET     = 0.60f; // < 60% of uncompressed
+    static constexpr uint32_t HEADER_SIZE            = 16;    // magic + schema + uncompressed_size + checksum
 
 private:
     bool is_restoring_ = false;
