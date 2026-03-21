@@ -97,9 +97,13 @@ public:
 private:
     std::vector<LoanRecord> active_loans_;
     std::vector<BorrowerCredit> borrower_credits_;
+    uint32_t next_loan_id_ = 1;
 
     // Find or create a BorrowerCredit entry for the given borrower.
     BorrowerCredit* find_borrower_credit(uint32_t borrower_id);
+
+    // Evaluate NPC businesses for new loan applications (quarterly, every 90 ticks).
+    void process_loan_origination(const WorldState& state, DeltaBuffer& delta);
 
     // Process a single loan repayment for one tick.
     void process_loan_repayment(LoanRecord& loan, const WorldState& state,
@@ -112,7 +116,7 @@ private:
     void retire_matured_loans(uint32_t current_tick);
 
     // Recompute derived credit fields (total_debt, debt_service, dti) for a borrower.
-    void update_derived_credit_fields(BorrowerCredit& credit);
+    void update_derived_credit_fields(BorrowerCredit& credit, float revenue_per_tick);
 };
 
 }  // namespace econlife

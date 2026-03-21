@@ -122,7 +122,8 @@ private:
     void execute_spending(DeltaBuffer& delta);
 
     // Step 4: Update province infrastructure ratings (decay + investment).
-    void update_infrastructure(const WorldState& state);
+    // Writes RegionDelta.stability_delta proportional to the infrastructure change.
+    void update_infrastructure(const WorldState& state, DeltaBuffer& delta);
 
     // Step 5: Check fiscal health and queue consequences.
     void check_fiscal_health(DeltaBuffer& delta);

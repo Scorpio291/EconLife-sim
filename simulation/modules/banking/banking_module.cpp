@@ -231,7 +231,8 @@ void BankingModule::retire_matured_loans(uint32_t current_tick) {
         active_loans_.end());
 }
 
-void BankingModule::update_derived_credit_fields(BorrowerCredit& credit) {
+void BankingModule::update_derived_credit_fields(BorrowerCredit& credit,
+                                                   float revenue_per_tick) {
     float total_debt = 0.0f;
     float debt_service = 0.0f;
 
@@ -245,9 +246,102 @@ void BankingModule::update_derived_credit_fields(BorrowerCredit& credit) {
     credit.profile.total_debt_outstanding = total_debt;
     credit.profile.debt_service_per_tick = debt_service;
 
-    // debt_to_income_ratio = total_debt / (revenue_per_tick * TICKS_PER_YEAR)
-    // Since we don't have revenue_per_tick here, use debt_service as proxy.
-    // DTI is typically set externally; update total_debt and debt_service only.
+    // DTI = total_debt / annual_revenue (revenue_per_tick * 365)
+    float annual_revenue = revenue_per_tick * 365.0f;
+    credit.profile.debt_to_income_ratio = (total_debt > 0.0f && annual_revenue > 0.0f)
+        ? total_debt / annual_revenue : 0.0f;
+}
+
+// ===========================================================================
+// BankingModule — loan origination (quarterly)
+// ===========================================================================
+
+void BankingModule::process_loan_origination(const WorldState& state, DeltaBuffer& delta) {
+    // Only run quarterly.
+    if (state.current_tick % 90 != 0) {
+        return;
+    }
+
+    // Iterate npc_businesses sorted by id ascending for deterministic processing.
+    std::vector<const NPCBusiness*> sorted_businesses;
+    sorted_businesses.reserve(state.npc_businesses.size());
+    for (const auto& biz : state.npc_businesses) {
+        sorted_businesses.push_back(&biz);
+    }
+    std::sort(sorted_businesses.begin(), sorted_businesses.end(),
+              [](const NPCBusiness* a, const NPCBusiness* b) {
+                  return a->id < b->id;
+              });
+
+    for (const NPCBusiness* biz : sorted_businesses) {
+        // Only consider businesses with revenue that need capital.
+        if (biz->revenue_per_tick <= 0.0f) {
+            continue;
+        }
+        if (biz->cash >= biz->revenue_per_tick * 30.0f) {
+            continue;
+        }
+
+        // Find or create BorrowerCredit for the business owner.
+        BorrowerCredit* credit = find_borrower_credit(biz->owner_id);
+        if (credit == nullptr) {
+            BorrowerCredit new_credit{};
+            new_credit.borrower_id = biz->owner_id;
+            new_credit.profile.credit_score = 0.5f;
+            new_credit.profile.total_debt_outstanding = 0.0f;
+            new_credit.profile.debt_service_per_tick = 0.0f;
+            new_credit.profile.debt_to_income_ratio = 0.0f;
+            new_credit.consecutive_misses = 0;
+            borrower_credits_.push_back(new_credit);
+            credit = &borrower_credits_.back();
+        }
+
+        // Compute DTI: debt_service_per_tick / max(1.0, revenue_per_tick)
+        float dti = credit->profile.debt_service_per_tick
+                  / std::max(1.0f, biz->revenue_per_tick);
+
+        if (!evaluate_loan_application(credit->profile.credit_score, dti,
+                                       LoanPurpose::business_capital)) {
+            continue;
+        }
+
+        // Compute loan terms.
+        float loan_amount = std::min(compute_max_loan_amount(biz->revenue_per_tick),
+                                     biz->revenue_per_tick * 180.0f);
+        float interest_rate = compute_interest_rate(credit->profile.credit_score, false);
+        constexpr uint32_t duration_ticks = 365;
+        float repayment = compute_repayment_per_tick(loan_amount, interest_rate,
+                                                     duration_ticks);
+
+        // Create the loan record.
+        LoanRecord loan{};
+        loan.id                = next_loan_id_++;
+        loan.borrower_id       = biz->owner_id;
+        loan.lender_id         = 0;  // institutional lender (no NPC bank entity in V1)
+        loan.purpose           = LoanPurpose::business_capital;
+        loan.principal         = loan_amount;
+        loan.outstanding_balance = loan_amount;
+        loan.interest_rate     = interest_rate;
+        loan.repayment_per_tick = repayment;
+        loan.originated_tick   = state.current_tick;
+        loan.maturity_tick     = state.current_tick + duration_ticks;
+        loan.in_default        = false;
+        loan.collateral_id     = 0;
+
+        active_loans_.push_back(loan);
+
+        // Credit the loan proceeds to the business owner's capital.
+        NPCDelta npc_delta{};
+        npc_delta.npc_id       = biz->owner_id;
+        npc_delta.capital_delta = loan_amount;
+        delta.npc_deltas.push_back(npc_delta);
+
+        // Also credit the business cash directly.
+        BusinessDelta biz_delta{};
+        biz_delta.business_id = biz->id;
+        biz_delta.cash_delta   = loan_amount;
+        delta.business_deltas.push_back(biz_delta);
+    }
 }
 
 // ===========================================================================
@@ -255,6 +349,9 @@ void BankingModule::update_derived_credit_fields(BorrowerCredit& credit) {
 // ===========================================================================
 
 void BankingModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Step 0: Evaluate NPC businesses for new loan applications (quarterly).
+    process_loan_origination(state, delta);
+
     // Ensure loans are sorted by id ascending for deterministic processing.
     std::sort(active_loans_.begin(), active_loans_.end(),
               [](const LoanRecord& a, const LoanRecord& b) {
@@ -270,8 +367,15 @@ void BankingModule::execute(const WorldState& state, DeltaBuffer& delta) {
     retire_matured_loans(state.current_tick);
 
     // Step 3: Update derived credit fields for all borrowers.
+    // Build a lookup of revenue_per_tick per owner for DTI computation.
     for (auto& credit : borrower_credits_) {
-        update_derived_credit_fields(credit);
+        float revenue_per_tick = 0.0f;
+        for (const auto& biz : state.npc_businesses) {
+            if (biz.owner_id == credit.borrower_id) {
+                revenue_per_tick += biz.revenue_per_tick;
+            }
+        }
+        update_derived_credit_fields(credit, revenue_per_tick);
     }
 }
 

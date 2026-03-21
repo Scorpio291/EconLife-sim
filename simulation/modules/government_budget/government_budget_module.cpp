@@ -34,13 +34,26 @@ void GovernmentBudgetModule::execute(const WorldState& state, DeltaBuffer& delta
         process_quarterly_taxes(state, delta);
         process_intergovernmental_transfers();
         execute_spending(delta);
-        update_infrastructure(state);
         check_fiscal_health(delta);
         apply_spending_effects(delta);
+        // Infrastructure runs last so its delta merges after spending effects.
+        update_infrastructure(state, delta);
     }
-    // Non-quarterly ticks are a no-op for V1 bootstrap.
-    // In later passes, per-tick infrastructure effects and spending
-    // consequence propagation will be added here.
+    // Non-quarterly ticks: apply passive per-tick infrastructure decay as a
+    // small negative stability signal.  The decay constant (0.0001) is chosen
+    // so that ~90 ticks of neglect (one quarter without investment) produces
+    // a cumulative stability drag comparable to one quarter of infrastructure
+    // decay (0.01), keeping the two code paths in proportion.
+    else {
+        for (const auto& budget : budgets_) {
+            if (budget.level != GovernmentLevel::province) continue;
+
+            RegionDelta decay_delta{};
+            decay_delta.region_id    = budget.jurisdiction_id;
+            decay_delta.stability_delta = -0.0001f;
+            delta.region_deltas.push_back(decay_delta);
+        }
+    }
 }
 
 // ===========================================================================
@@ -274,16 +287,73 @@ void GovernmentBudgetModule::execute_spending(DeltaBuffer& /* delta */) {
 // Step 4: Infrastructure Update
 // ===========================================================================
 
-void GovernmentBudgetModule::update_infrastructure(const WorldState& /* state */) {
-    // For each provincial budget, update the infrastructure stored in the budget.
-    // NOTE: Province.infrastructure_rating on WorldState is const.
-    // Infrastructure changes are tracked internally and would be applied via delta
-    // in a full implementation. For V1 bootstrap, we track the effect in a
-    // comment and compute the delta for testing purposes via the static utility.
-    //
-    // The actual infrastructure_rating update is handled through the static
-    // compute_infrastructure_change function which is tested directly.
-    // In the full implementation, this would write an infrastructure delta.
+void GovernmentBudgetModule::update_infrastructure(const WorldState& state,
+                                                   DeltaBuffer& delta) {
+    // Process provincial budgets in ascending jurisdiction_id order (determinism).
+    std::vector<const GovernmentBudget*> prov_budgets;
+    for (const auto& b : budgets_) {
+        if (b.level == GovernmentLevel::province) {
+            prov_budgets.push_back(&b);
+        }
+    }
+    std::sort(prov_budgets.begin(), prov_budgets.end(),
+              [](const GovernmentBudget* a, const GovernmentBudget* b) {
+                  return a->jurisdiction_id < b->jurisdiction_id;
+              });
+
+    for (const GovernmentBudget* budget : prov_budgets) {
+        // Look up the matching Province to get current infrastructure_rating
+        // and area_km2.  jurisdiction_id for province-level budgets equals
+        // province.id (see budget_types.h).
+        const Province* province = nullptr;
+        for (const auto& prov : state.provinces) {
+            if (prov.id == budget->jurisdiction_id) {
+                province = &prov;
+                break;
+            }
+        }
+        if (!province) continue;
+
+        // Derive spending_fraction: infrastructure spend as a fraction of
+        // total expenditure.  When total_expenditure is 0 (no spending at
+        // all), fraction is 0 and the quarter contributes no investment.
+        float infra_spend = 0.0f;
+        auto it = budget->spending_actual.find(SpendingCategory::infrastructure);
+        if (it != budget->spending_actual.end()) {
+            infra_spend = it->second;
+        }
+
+        // Scale the actual infrastructure spend by province area so that
+        // larger provinces require proportionally more investment to achieve
+        // the same rating improvement.  area_km2 is used directly as the
+        // investment_scale denominator (1 km2 ~ 1 unit of monetary effort).
+        // For very small or zero areas fall back to the module constant.
+        float area_km2 = province->geography.area_km2;
+        float investment_scale = (area_km2 > 0.0f)
+            ? area_km2
+            : Constants::infrastructure_investment_scale;
+
+        float new_rating = compute_infrastructure_change(
+            province->infrastructure_rating,
+            infra_spend,
+            Constants::infrastructure_decay_per_quarter,
+            investment_scale);
+
+        // Province.infrastructure_rating is const on WorldState; write the
+        // net change as a stability_delta on the region that owns this
+        // province.  Positive infrastructure change -> positive stability;
+        // negative (decay with no investment) -> negative stability.
+        // The proportionality constant keeps the effect small relative to
+        // other stability sources: each full point of infrastructure
+        // improvement contributes +0.05 stability (tunable).
+        float infra_change = new_rating - province->infrastructure_rating;
+        if (infra_change != 0.0f) {
+            RegionDelta region_delta{};
+            region_delta.region_id     = province->region_id;
+            region_delta.stability_delta = infra_change * 0.05f;
+            delta.region_deltas.push_back(region_delta);
+        }
+    }
 }
 
 // ===========================================================================

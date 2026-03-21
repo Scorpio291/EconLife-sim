@@ -153,6 +153,11 @@ void HealthcareModule::execute_province(uint32_t province_idx,
             death_delta.npc_id = hr->npc_id;
             death_delta.new_status = NPCStatus::dead;
             province_delta.npc_deltas.push_back(death_delta);
+
+            // Notify consequence system of critical/fatal health event.
+            ConsequenceDelta cons_delta{};
+            cons_delta.new_entry_id = hr->npc_id;
+            province_delta.consequence_deltas.push_back(cons_delta);
         }
 
         // ---------------------------------------------------------------
@@ -188,6 +193,19 @@ void HealthcareModule::execute_province(uint32_t province_idx,
         labour_force,
         phs->sick_leave_fraction,
         Constants::labour_supply_impact);
+
+    // ---------------------------------------------------------------
+    // Step 6: Health Crisis — RegionDelta
+    // If sick leave fraction exceeds the crisis threshold, apply a
+    // stability penalty to the region containing this province.
+    // ---------------------------------------------------------------
+    constexpr float kHealthCrisisThreshold = 0.15f;
+    if (phs->sick_leave_fraction > kHealthCrisisThreshold) {
+        RegionDelta region_delta{};
+        region_delta.region_id = state.provinces[province_idx].region_id;
+        region_delta.stability_delta = -0.01f * phs->sick_leave_fraction;
+        province_delta.region_deltas.push_back(region_delta);
+    }
 }
 
 void HealthcareModule::execute(const WorldState& state, DeltaBuffer& delta) {
