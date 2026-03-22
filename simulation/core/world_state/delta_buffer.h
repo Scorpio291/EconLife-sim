@@ -76,6 +76,13 @@ struct BusinessDelta {
     std::optional<float> output_quality_update;   // replacement; latest production quality [0,1]
 };
 
+struct CurrencyDelta {
+    uint32_t nation_id;
+    std::optional<float> usd_rate_update;           // replacement; new exchange rate
+    std::optional<bool>  pegged_update;              // replacement; peg status change
+    std::optional<float> foreign_reserves_delta;     // additive; reserve depletion
+};
+
 struct RegionDelta {
     uint32_t region_id;
     std::optional<float> stability_delta;              // additive
@@ -99,6 +106,7 @@ struct DeltaBuffer {
     std::vector<ConsequenceDelta> consequence_deltas;
     std::vector<BusinessDelta>   business_deltas;
     std::vector<RegionDelta>     region_deltas;
+    std::vector<CurrencyDelta>   currency_deltas;
     std::vector<CalendarEntry>   new_calendar_entries;
     std::vector<SceneCard>       new_scene_cards;
     std::vector<ObligationNode>  new_obligation_nodes;

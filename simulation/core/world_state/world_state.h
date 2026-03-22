@@ -15,6 +15,7 @@
 #include "modules/economy/economy_types.h"                  // RegionalMarket, NPCBusiness
 #include "modules/trade_infrastructure/trade_types.h"       // TariffSchedule, NationalTradeOffer,
                                                             //   Lod1NationStats, RouteProfile
+#include "modules/currency_exchange/currency_exchange_types.h"  // CurrencyRecord
 
 namespace econlife {
 
@@ -74,6 +75,9 @@ struct WorldState {
     // --- Global Tick Metadata ---
     uint32_t ticks_this_session;  // monotonic; reset on load; for WAL
     GameMode game_mode;           // set at game creation; immutable
+
+    // --- Currency Exchange ---
+    std::vector<CurrencyRecord> currencies;  // one per nation; keyed by nation_id
 
     // --- Trade and Transport Infrastructure ---
     std::vector<TariffSchedule>     tariff_schedules;

@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "modules/currency_exchange/currency_exchange_module.h"
+#include "core/world_state/world_state.h"
+#include "core/world_state/delta_buffer.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -67,6 +69,123 @@ TEST_CASE("CurrencyExchange: round trip loss", "[currency_exchange][tier11]") {
     // But the transaction costs apply
     float no_cost_round = 100.0f * (2.0f/1.0f) * (1.0f/2.0f);  // 100
     REQUIRE(b_to_a > no_cost_round);  // 1% cost applies twice but rate is symmetric
+}
+
+TEST_CASE("CurrencyExchange: execute writes CurrencyDelta on weekly tick", "[currency_exchange][tier11]") {
+    CurrencyExchangeModule module;
+
+    WorldState state{};
+    state.current_tick = 7;  // weekly tick (7 % 7 == 0)
+    state.world_seed = 42;
+    state.player = nullptr;
+    state.lod2_price_index = nullptr;
+    state.game_mode = GameMode::standard;
+
+    // Add a nation with economic indicators
+    Nation nation{};
+    nation.id = 1;
+    nation.trade_balance_fraction = 0.10f;
+    nation.inflation_rate = 0.05f;
+    nation.credit_rating = 0.80f;
+    state.nations.push_back(nation);
+
+    // Add a free-floating currency
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.iso_code = "BRL";
+    cur.usd_rate = 5.0f;
+    cur.usd_rate_baseline = 5.0f;
+    cur.volatility = 0.0f;  // zero volatility for deterministic test
+    cur.pegged = false;
+    cur.foreign_reserves = 0.8f;
+    state.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // macro_factor = 1.0 + (0.10*0.30) - (0.05*0.40) - (0.20*0.30) = 0.95
+    // new_rate = 5.0 * 0.95 = 4.75
+    REQUIRE(delta.currency_deltas.size() == 1);
+    REQUIRE(delta.currency_deltas[0].nation_id == 1);
+    REQUIRE(delta.currency_deltas[0].usd_rate_update.has_value());
+    REQUIRE_THAT(*delta.currency_deltas[0].usd_rate_update, WithinAbs(4.75f, 0.01f));
+}
+
+TEST_CASE("CurrencyExchange: execute is noop on non-weekly tick", "[currency_exchange][tier11]") {
+    CurrencyExchangeModule module;
+
+    WorldState state{};
+    state.current_tick = 3;  // not a weekly tick
+    state.world_seed = 42;
+    state.player = nullptr;
+    state.lod2_price_index = nullptr;
+    state.game_mode = GameMode::standard;
+
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 5.0f;
+    cur.usd_rate_baseline = 5.0f;
+    cur.pegged = false;
+    state.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.currency_deltas.empty());
+}
+
+TEST_CASE("CurrencyExchange: peg break emits pegged_update delta", "[currency_exchange][tier11]") {
+    CurrencyExchangeModule module;
+
+    WorldState state{};
+    state.current_tick = 14;  // weekly tick
+    state.world_seed = 42;
+    state.player = nullptr;
+    state.lod2_price_index = nullptr;
+    state.game_mode = GameMode::standard;
+
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 3.5f;
+    cur.usd_rate_baseline = 3.5f;
+    cur.pegged = true;
+    cur.peg_rate = 3.5f;
+    cur.foreign_reserves = 0.10f;  // below 0.15 threshold
+    state.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.currency_deltas.size() == 1);
+    REQUIRE(delta.currency_deltas[0].nation_id == 1);
+    REQUIRE(delta.currency_deltas[0].pegged_update.has_value());
+    REQUIRE(*delta.currency_deltas[0].pegged_update == false);
+}
+
+TEST_CASE("CurrencyExchange: pegged currency with healthy reserves produces no delta", "[currency_exchange][tier11]") {
+    CurrencyExchangeModule module;
+
+    WorldState state{};
+    state.current_tick = 7;  // weekly tick
+    state.world_seed = 42;
+    state.player = nullptr;
+    state.lod2_price_index = nullptr;
+    state.game_mode = GameMode::standard;
+
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 3.5f;
+    cur.usd_rate_baseline = 3.5f;
+    cur.pegged = true;
+    cur.peg_rate = 3.5f;
+    cur.foreign_reserves = 0.50f;  // above threshold
+    state.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // Healthy peg: no rate change, no peg break.
+    REQUIRE(delta.currency_deltas.empty());
 }
 
 TEST_CASE("CurrencyExchange: constants match spec", "[currency_exchange][tier11]") {

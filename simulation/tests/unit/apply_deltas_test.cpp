@@ -326,6 +326,121 @@ TEST_CASE("apply_deltas: obligation node append with auto-id", "[apply_deltas][c
     REQUIRE(w.obligation_network[0].id == 1);
 }
 
+TEST_CASE("apply_deltas: business output_quality update", "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    NPCBusiness biz{};
+    biz.id = 1;
+    biz.cash = 5000.0f;
+    biz.output_quality = 0.5f;
+    w.npc_businesses.push_back(biz);
+
+    DeltaBuffer delta{};
+    BusinessDelta bd{};
+    bd.business_id = 1;
+    bd.output_quality_update = 0.85f;
+    delta.business_deltas.push_back(bd);
+
+    apply_deltas(w, delta);
+    REQUIRE_THAT(w.npc_businesses[0].output_quality, WithinAbs(0.85, 0.01));
+}
+
+TEST_CASE("apply_deltas: business output_quality clamped to 0-1", "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    NPCBusiness biz{};
+    biz.id = 1;
+    biz.cash = 5000.0f;
+    biz.output_quality = 0.5f;
+    w.npc_businesses.push_back(biz);
+
+    DeltaBuffer delta{};
+    BusinessDelta bd{};
+    bd.business_id = 1;
+    bd.output_quality_update = 1.5f;  // exceeds 1.0
+    delta.business_deltas.push_back(bd);
+
+    apply_deltas(w, delta);
+    REQUIRE_THAT(w.npc_businesses[0].output_quality, WithinAbs(1.0, 0.01));
+}
+
+TEST_CASE("apply_deltas: currency rate update", "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 5.0f;
+    cur.usd_rate_baseline = 5.0f;
+    cur.pegged = false;
+    cur.foreign_reserves = 0.8f;
+    w.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    CurrencyDelta cd{};
+    cd.nation_id = 1;
+    cd.usd_rate_update = 4.8f;
+    delta.currency_deltas.push_back(cd);
+
+    apply_deltas(w, delta);
+    REQUIRE_THAT(w.currencies[0].usd_rate, WithinAbs(4.8, 0.01));
+}
+
+TEST_CASE("apply_deltas: currency peg break", "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 3.5f;
+    cur.usd_rate_baseline = 3.5f;
+    cur.pegged = true;
+    cur.peg_rate = 3.5f;
+    cur.foreign_reserves = 0.5f;
+    w.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    CurrencyDelta cd{};
+    cd.nation_id = 1;
+    cd.pegged_update = false;
+    delta.currency_deltas.push_back(cd);
+
+    apply_deltas(w, delta);
+    REQUIRE(w.currencies[0].pegged == false);
+}
+
+TEST_CASE("apply_deltas: currency reserves additive and clamped", "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 1.0f;
+    cur.usd_rate_baseline = 1.0f;
+    cur.pegged = true;
+    cur.foreign_reserves = 0.2f;
+    w.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    CurrencyDelta cd{};
+    cd.nation_id = 1;
+    cd.foreign_reserves_delta = -0.3f;  // would push to -0.1
+    delta.currency_deltas.push_back(cd);
+
+    apply_deltas(w, delta);
+    REQUIRE(w.currencies[0].foreign_reserves == 0.0f);  // clamped to 0
+}
+
+TEST_CASE("apply_deltas: currency deltas cleared after application", "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 1.0f;
+    cur.usd_rate_baseline = 1.0f;
+    w.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    CurrencyDelta cd{};
+    cd.nation_id = 1;
+    cd.usd_rate_update = 1.1f;
+    delta.currency_deltas.push_back(cd);
+
+    apply_deltas(w, delta);
+    REQUIRE(delta.currency_deltas.empty());
+}
+
 TEST_CASE("apply_deltas: multiple NPC deltas accumulate", "[apply_deltas][core]") {
     auto w = make_minimal_world();
     DeltaBuffer delta{};

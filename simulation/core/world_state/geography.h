@@ -407,6 +407,11 @@ struct Nation {
     std::vector<uint32_t>               province_ids;
     float                               corporate_tax_rate;
     float                               income_tax_rate_top_bracket;
+
+    // --- Macro-economic indicators (updated monthly by government_budget) ---
+    float                               trade_balance_fraction;   // net exports as fraction of GDP proxy; -1.0 to 1.0
+    float                               inflation_rate;           // current inflation differential; 0.0-1.0
+    float                               credit_rating;            // sovereign creditworthiness; 0.0 (junk) to 1.0 (AAA)
     std::map<uint32_t, float>           diplomatic_relations; // [EX] nation_id -> -1.0 to 1.0; empty in V1
     TariffSchedule*                     tariff_schedule;      // see Section 18 (forward-declared)
     std::optional<Lod1NationProfile>    lod1_profile;         // nullopt -> LOD 0 (player's home nation,

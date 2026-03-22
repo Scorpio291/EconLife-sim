@@ -26,7 +26,31 @@ namespace econlife {
 // ===========================================================================
 
 void CommodityTradingModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    // Process all open positions in id-ascending order (deterministic).
+    // Phase 1: Settle recently-closed positions — emit NPCDelta for P&L transfer.
+    // Positions closed this tick (exit_tick == current_tick) need their realized
+    // P&L written to the holder NPC's capital via DeltaBuffer.
+    for (const auto& pos : positions_) {
+        if (pos.exit_tick == state.current_tick && pos.realised_pnl != 0.0f) {
+            NPCDelta pnl_delta{};
+            pnl_delta.npc_id = pos.actor_id;
+            pnl_delta.capital_delta = pos.realised_pnl;
+            delta.npc_deltas.push_back(pnl_delta);
+        }
+    }
+
+    // Phase 2: Garbage-collect positions closed more than 30 ticks ago.
+    // Prevents unbounded growth of the positions vector.
+    if (state.current_tick > 30) {
+        uint32_t gc_cutoff = state.current_tick - 30;
+        positions_.erase(
+            std::remove_if(positions_.begin(), positions_.end(),
+                [gc_cutoff](const CommodityPosition& p) {
+                    return p.exit_tick != 0 && p.exit_tick < gc_cutoff;
+                }),
+            positions_.end());
+    }
+
+    // Phase 3: Process all open positions in id-ascending order (deterministic).
     // Positions are already kept sorted by id.
     for (auto& pos : positions_) {
         // Skip already-closed positions.

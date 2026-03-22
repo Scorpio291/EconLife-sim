@@ -1,6 +1,7 @@
 #include "currency_exchange_module.h"
 #include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
+#include "core/rng/deterministic_rng.h"
 #include <algorithm>
 #include <cmath>
 
@@ -37,23 +38,68 @@ bool CurrencyExchangeModule::is_weekly_tick(uint32_t current_tick) {
 void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     if (!is_weekly_tick(state.current_tick)) return;
 
-    // Process each currency in module-internal state
-    for (auto& currency : currencies_) {
+    DeterministicRNG rng(state.world_seed + state.current_tick * 7919);
+
+    // Process each currency from WorldState in nation_id ascending order (deterministic).
+    for (const auto& currency : state.currencies) {
         if (currency.pegged) {
             if (is_peg_broken(currency.foreign_reserves)) {
-                currency.pegged = false;
-                // Currency crisis event would be queued
+                // Peg break: emit delta to set pegged = false.
+                CurrencyDelta cd{};
+                cd.nation_id = currency.nation_id;
+                cd.pegged_update = false;
+                delta.currency_deltas.push_back(cd);
+
+                // TODO: Queue currency_crisis random event via DeferredWorkQueue.
             }
-            // Pegged: rate stays at peg_rate
+            // Pegged: rate stays at peg_rate; no rate delta needed.
             continue;
         }
 
-        // Free-floating: apply macro model
-        // In full implementation, would read nation economic indicators
-        float macro_factor = 1.0f;  // neutral default
-        float new_rate = currency.usd_rate * macro_factor;
-        currency.usd_rate = apply_rate_clamp(new_rate, currency.usd_rate_baseline,
-                                              FLOOR_FRACTION, CEILING_FRACTION);
+        // Free-floating: compute macro-driven rate adjustment.
+        // Look up nation economic indicators.
+        float trade_balance = 0.0f;
+        float inflation = 0.0f;
+        float credit_rating = 0.8f;  // default
+        for (const auto& nation : state.nations) {
+            if (nation.id == currency.nation_id) {
+                trade_balance = nation.trade_balance_fraction;
+                inflation = nation.inflation_rate;
+                credit_rating = nation.credit_rating;
+                break;
+            }
+        }
+
+        float macro_factor = compute_macro_factor(trade_balance, inflation, credit_rating);
+
+        // Add noise term using DeterministicRNG for this nation.
+        float noise = 0.0f;
+        if (currency.volatility > 0.0f) {
+            // Approximate normal distribution from uniform: Box-Muller.
+            float u1 = rng.next_float();
+            float u2 = rng.next_float();
+            // Clamp u1 away from 0 to avoid log(0).
+            u1 = std::max(u1, 0.0001f);
+            noise = currency.volatility * std::sqrt(-2.0f * std::log(u1)) * std::cos(6.2831853f * u2);
+        }
+
+        float new_rate = currency.usd_rate * (macro_factor + noise);
+
+        // Guard against NaN from extreme values.
+        if (std::isnan(new_rate) || std::isinf(new_rate)) {
+            new_rate = currency.usd_rate;  // fallback to previous rate
+        }
+
+        new_rate = apply_rate_clamp(new_rate, currency.usd_rate_baseline,
+                                     FLOOR_FRACTION, CEILING_FRACTION);
+
+        // Only emit delta if rate actually changed.
+        if (new_rate != currency.usd_rate) {
+            CurrencyDelta cd{};
+            cd.nation_id = currency.nation_id;
+            cd.usd_rate_update = new_rate;
+            delta.currency_deltas.push_back(cd);
+        }
     }
 }
 

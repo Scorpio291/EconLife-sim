@@ -185,10 +185,9 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
                 if (d.cost_per_tick_update.has_value()) {
                     biz.cost_per_tick = std::max(0.0f, *d.cost_per_tick_update);
                 }
-                // output_quality_update: stored for downstream module reads.
-                // Currently no dedicated field on NPCBusiness; quality is derived
-                // per-facility in production. The delta is recorded for future use
-                // when a business-level quality field is added.
+                if (d.output_quality_update.has_value()) {
+                    biz.output_quality = clamp01(*d.output_quality_update);
+                }
                 break;
             }
         }
@@ -301,6 +300,29 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
 }
 
 // ---------------------------------------------------------------------------
+// apply_currency_deltas
+// ---------------------------------------------------------------------------
+static void apply_currency_deltas(WorldState& world, const std::vector<CurrencyDelta>& deltas) {
+    for (const auto& d : deltas) {
+        for (auto& cur : world.currencies) {
+            if (cur.nation_id == d.nation_id) {
+                if (d.usd_rate_update.has_value()) {
+                    cur.usd_rate = std::max(0.001f, *d.usd_rate_update);
+                }
+                if (d.pegged_update.has_value()) {
+                    cur.pegged = *d.pegged_update;
+                }
+                if (d.foreign_reserves_delta.has_value()) {
+                    cur.foreign_reserves = clamp01(
+                        safe_add(cur.foreign_reserves, *d.foreign_reserves_delta));
+                }
+                break;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_append_deltas — calendar entries, scene cards, obligations
 // ---------------------------------------------------------------------------
 static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
@@ -332,6 +354,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     apply_market_deltas(world, delta.market_deltas);
     apply_evidence_deltas(world, delta.evidence_deltas);
     apply_region_deltas(world, delta.region_deltas);
+    apply_currency_deltas(world, delta.currency_deltas);
     apply_append_deltas(world, delta);
 
     // Clear the delta buffer for next step
@@ -342,6 +365,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     delta.consequence_deltas.clear();
     delta.business_deltas.clear();
     delta.region_deltas.clear();
+    delta.currency_deltas.clear();
     delta.new_calendar_entries.clear();
     delta.new_scene_cards.clear();
     delta.new_obligation_nodes.clear();

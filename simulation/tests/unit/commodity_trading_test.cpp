@@ -445,6 +445,102 @@ TEST_CASE("test_close_nonexistent_position", "[commodity_trading][tier4]") {
 // Constants verification
 // ===========================================================================
 
+// ===========================================================================
+// Settlement: execute() emits NPCDelta for position closed this tick
+// ===========================================================================
+
+TEST_CASE("test_execute_emits_npc_delta_for_settlement", "[commodity_trading][tier4]") {
+    CommodityTradingModule module;
+    auto state = make_test_world_state();
+
+    Province prov{};
+    prov.id = 0;
+    state.provinces.push_back(prov);
+    state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
+
+    // Open a position, then close it at the current tick.
+    auto pos = make_test_position(1, 10, 5, 0,
+                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    module.open_position(pos);
+
+    // Close at tick 100 (matches state.current_tick) with exit price 70.
+    // P&L = (70 - 50) * 100 = 2000.
+    module.close_position(1, 70.0f, 100);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // Should emit an NPCDelta with capital_delta = 2000 for actor_id 10.
+    bool found_pnl_delta = false;
+    for (const auto& nd : delta.npc_deltas) {
+        if (nd.npc_id == 10 && nd.capital_delta.has_value()) {
+            REQUIRE_THAT(*nd.capital_delta, WithinAbs(2000.0f, 0.001f));
+            found_pnl_delta = true;
+        }
+    }
+    REQUIRE(found_pnl_delta);
+}
+
+// ===========================================================================
+// Settlement: no NPCDelta for positions closed on earlier ticks
+// ===========================================================================
+
+TEST_CASE("test_execute_no_npc_delta_for_old_settlement", "[commodity_trading][tier4]") {
+    CommodityTradingModule module;
+    auto state = make_test_world_state();
+    state.current_tick = 200;
+
+    Province prov{};
+    prov.id = 0;
+    state.provinces.push_back(prov);
+    state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
+
+    // Open and close at tick 150 (not current tick 200).
+    auto pos = make_test_position(1, 10, 5, 0,
+                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    module.open_position(pos);
+    module.close_position(1, 70.0f, 150);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // Should NOT emit NPCDelta for this old settlement.
+    for (const auto& nd : delta.npc_deltas) {
+        if (nd.npc_id == 10 && nd.capital_delta.has_value()) {
+            FAIL("Should not emit P&L delta for position closed on a previous tick");
+        }
+    }
+}
+
+// ===========================================================================
+// Garbage collection: old closed positions are removed
+// ===========================================================================
+
+TEST_CASE("test_execute_garbage_collects_old_positions", "[commodity_trading][tier4]") {
+    CommodityTradingModule module;
+    auto state = make_test_world_state();
+    state.current_tick = 200;
+
+    Province prov{};
+    prov.id = 0;
+    state.provinces.push_back(prov);
+    state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
+
+    // Open and close a position at tick 100 (100 ticks ago, well past 30-tick GC window).
+    auto pos = make_test_position(1, 10, 5, 0,
+                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    module.open_position(pos);
+    module.close_position(1, 70.0f, 100);
+
+    REQUIRE(module.positions().size() == 1);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // Old closed position should be garbage collected.
+    REQUIRE(module.positions().size() == 0);
+}
+
 TEST_CASE("test_commodity_trading_constants", "[commodity_trading][tier4]") {
     REQUIRE_THAT(CommodityTradingConstants::market_impact_threshold,
                  WithinAbs(0.05f, 0.0001f));

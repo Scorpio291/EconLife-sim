@@ -403,6 +403,12 @@ struct NPCBusiness {
                                            // eligibility, IPO listing authorization, and board composition.
 
     // --- Field addition from §5.1a: Deferred salary ---
+    float output_quality;                 // [0.0, 1.0] Current production quality ceiling for this business.
+                                           // Written by production module via BusinessDelta::output_quality_update.
+                                           // Derived from facility tech tier and actor maturation level.
+                                           // Default: 0.5 (mid-quality). Consumers and supply chain use this
+                                           // for quality-weighted demand matching.
+
     float deferred_salary_liability;      // Accumulated unpaid salary when business.cash < salary_per_tick.
                                            // Deferred salary is paid first when cash recovers.
                                            // Sustained deferred salary (> config.business.deferred_salary_max_ticks

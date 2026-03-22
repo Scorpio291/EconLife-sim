@@ -38,8 +38,6 @@ public:
     static constexpr float FX_TRANSACTION_COST      = 0.01f;
     static constexpr uint32_t TICKS_PER_WEEK        = 7;
 
-private:
-    std::vector<CurrencyRecord> currencies_;
 };
 
 }  // namespace econlife
