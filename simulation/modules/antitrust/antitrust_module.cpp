@@ -271,7 +271,7 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
                 }
             }
 
-            LegislativeProposal proposal;
+            AntitrustProposal proposal;
             proposal.id = next_proposal_id_++;
             proposal.province_id = prov_id;
             proposal.proposer_npc_id = proposer;

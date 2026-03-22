@@ -5,8 +5,7 @@ add_executable(econlife_benchmarks
 
 target_link_libraries(econlife_benchmarks PRIVATE
     Catch2::Catch2WithMain
-    econlife_core
-    econlife_persistence
+    econlife_modules
 )
 
 catch_discover_tests(econlife_benchmarks)

@@ -52,8 +52,8 @@ public:
     uint32_t& next_check_tick() { return next_check_tick_; }
 
     // Generated proposals
-    std::vector<LegislativeProposal>& proposals() { return proposals_; }
-    const std::vector<LegislativeProposal>& proposals() const { return proposals_; }
+    std::vector<AntitrustProposal>& proposals() { return proposals_; }
+    const std::vector<AntitrustProposal>& proposals() const { return proposals_; }
 
     // --- Static utility functions (exposed for testing) ---
 
@@ -93,7 +93,7 @@ public:
 private:
     std::map<uint32_t, float> proposal_pressure_;
     uint32_t next_check_tick_ = 30;
-    std::vector<LegislativeProposal> proposals_;
+    std::vector<AntitrustProposal> proposals_;
     uint32_t next_proposal_id_ = 1000;
 
     // Run the monthly antitrust scan.

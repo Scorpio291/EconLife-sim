@@ -5,7 +5,7 @@ add_executable(econlife_determinism_tests
 
 target_link_libraries(econlife_determinism_tests PRIVATE
     Catch2::Catch2WithMain
-    econlife_core
+    econlife_modules
 )
 
 catch_discover_tests(econlife_determinism_tests)

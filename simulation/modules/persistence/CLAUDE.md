@@ -6,7 +6,7 @@ Serializes and deserializes WorldState for save/load. LZ4 compression, round-tri
 ## Tier: 12 | Sequential (global).
 
 ## Key Dependencies
-- runs_after: [world_state]
+- runs_after: [lod_system]
 - Reads: WorldState (see INTERFACE.md for specific fields)
 - Writes: DeltaBuffer (see INTERFACE.md for specific deltas)
 

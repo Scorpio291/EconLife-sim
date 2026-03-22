@@ -73,3 +73,59 @@ add_subdirectory(lod_system)
 
 # Tier 12: Persistence
 add_subdirectory(persistence)
+
+# Module registration — links all module libraries into a single target.
+add_library(econlife_modules STATIC
+    register_base_game_modules.cpp
+)
+
+target_include_directories(econlife_modules PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/..        # simulation/ root
+)
+
+target_link_libraries(econlife_modules PUBLIC
+    econlife_core
+    econlife_calendar
+    econlife_production
+    econlife_scene_cards
+    econlife_random_events
+    econlife_supply_chain
+    econlife_labor_market
+    econlife_seasonal_agriculture
+    econlife_price_engine
+    econlife_trade_infrastructure
+    econlife_financial_distribution
+    econlife_npc_business
+    econlife_commodity_trading
+    econlife_real_estate
+    econlife_npc_behavior
+    econlife_banking
+    econlife_government_budget
+    econlife_healthcare
+    econlife_npc_spending
+    econlife_evidence
+    econlife_obligation_network
+    econlife_community_response
+    econlife_facility_signals
+    econlife_criminal_operations
+    econlife_media_system
+    econlife_antitrust
+    econlife_investigator_engine
+    econlife_money_laundering
+    econlife_drug_economy
+    econlife_weapons_trafficking
+    econlife_protection_rackets
+    econlife_legal_process
+    econlife_informant_system
+    econlife_alternative_identity
+    econlife_designer_drug
+    econlife_political_cycle
+    econlife_influence_network
+    econlife_trust_updates
+    econlife_addiction
+    econlife_regional_conditions
+    econlife_population_aging
+    econlife_currency_exchange
+    econlife_lod_system
+    econlife_persistence
+)

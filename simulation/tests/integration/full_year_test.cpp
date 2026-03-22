@@ -11,7 +11,10 @@
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/player.h"
 #include "core/tick/drain_deferred_work.h"
+#include "core/tick/tick_orchestrator.h"
+#include "core/tick/thread_pool.h"
 #include "modules/persistence/persistence_module.h"
+#include "modules/register_base_game_modules.h"
 #include "tests/test_world_factory.h"
 
 using namespace econlife;
@@ -471,4 +474,111 @@ TEST_CASE("cross-province delta buffer one-tick delay", "[integration][cross_pro
 
     REQUIRE_THAT(capital_after - capital_before, WithinAbs(5000.0f, 0.01f));
     REQUIRE(world.cross_province_delta_buffer.entries.empty());
+}
+
+// ── Full Orchestrator Integration ───────────────────────────────────────────
+
+TEST_CASE("43 modules register and finalize without cycle", "[integration][orchestrator]") {
+    TickOrchestrator orchestrator;
+    register_base_game_modules(orchestrator);
+    REQUIRE(orchestrator.modules().size() == 43);
+    orchestrator.finalize_registration();
+    REQUIRE(orchestrator.is_finalized());
+}
+
+TEST_CASE("full orchestrator tick executes all modules", "[integration][orchestrator]") {
+    TickOrchestrator orchestrator;
+    register_base_game_modules(orchestrator);
+    orchestrator.finalize_registration();
+
+    auto world = create_test_world(42, 50, 2, 5);
+    ThreadPool pool(1);
+
+    uint32_t tick_before = world.current_tick;
+    orchestrator.execute_tick(world, pool);
+
+    REQUIRE(world.current_tick == tick_before + 1);
+}
+
+TEST_CASE("orchestrator 30-tick run produces state changes", "[integration][orchestrator]") {
+    TickOrchestrator orchestrator;
+    register_base_game_modules(orchestrator);
+    orchestrator.finalize_registration();
+
+    auto world = create_test_world(42, 50, 2, 5);
+    ThreadPool pool(1);
+
+    // Snapshot initial state
+    float initial_stability = world.provinces[0].conditions.stability_score;
+    uint32_t initial_tick = world.current_tick;
+
+    for (int i = 0; i < 30; ++i) {
+        orchestrator.execute_tick(world, pool);
+    }
+
+    REQUIRE(world.current_tick == initial_tick + 30);
+
+    // After 30 ticks, something should have changed.
+    // At minimum, calendar advanced and random events may have fired.
+    // We can't predict exact values, but the world should not be identical.
+    bool any_change = false;
+
+    // Check stability changed
+    if (world.provinces[0].conditions.stability_score != initial_stability) {
+        any_change = true;
+    }
+
+    // Check if any market prices moved
+    for (const auto& m : world.regional_markets) {
+        if (m.spot_price != m.equilibrium_price) {
+            any_change = true;
+            break;
+        }
+    }
+
+    // Check if calendar entries were added
+    if (!world.calendar.empty()) {
+        any_change = true;
+    }
+
+    REQUIRE(any_change);
+}
+
+TEST_CASE("orchestrator determinism: same seed same output", "[integration][orchestrator][determinism]") {
+    auto run_30_ticks = [](uint64_t seed) -> WorldState {
+        TickOrchestrator orchestrator;
+        register_base_game_modules(orchestrator);
+        orchestrator.finalize_registration();
+
+        auto world = create_test_world(seed, 50, 2, 5);
+        ThreadPool pool(1);
+
+        for (int i = 0; i < 30; ++i) {
+            orchestrator.execute_tick(world, pool);
+        }
+        return world;
+    };
+
+    auto state_a = run_30_ticks(12345);
+    auto state_b = run_30_ticks(12345);
+
+    REQUIRE(state_a.current_tick == state_b.current_tick);
+
+    // Compare NPC capital values
+    REQUIRE(state_a.significant_npcs.size() == state_b.significant_npcs.size());
+    for (size_t i = 0; i < state_a.significant_npcs.size(); ++i) {
+        REQUIRE(state_a.significant_npcs[i].capital == state_b.significant_npcs[i].capital);
+    }
+
+    // Compare market prices
+    REQUIRE(state_a.regional_markets.size() == state_b.regional_markets.size());
+    for (size_t i = 0; i < state_a.regional_markets.size(); ++i) {
+        REQUIRE(state_a.regional_markets[i].spot_price == state_b.regional_markets[i].spot_price);
+    }
+
+    // Compare province stability
+    for (size_t i = 0; i < state_a.provinces.size(); ++i) {
+        REQUIRE(state_a.provinces[i].conditions.stability_score ==
+                state_b.provinces[i].conditions.stability_score);
+    }
 }

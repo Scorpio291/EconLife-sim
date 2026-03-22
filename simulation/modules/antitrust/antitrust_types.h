@@ -24,9 +24,9 @@ struct AntitrustCheckResult {
 };
 
 // ---------------------------------------------------------------------------
-// LegislativeProposal — auto-generated antitrust legislation
+// AntitrustProposal — auto-generated antitrust legislation
 // ---------------------------------------------------------------------------
-struct LegislativeProposal {
+struct AntitrustProposal {
     uint32_t id;
     uint32_t province_id;
     uint32_t proposer_npc_id;   // NPC legislator who authored

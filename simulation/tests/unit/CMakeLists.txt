@@ -53,50 +53,7 @@ add_executable(econlife_unit_tests
 
 target_link_libraries(econlife_unit_tests PRIVATE
     Catch2::Catch2WithMain
-    econlife_core
-    econlife_production
-    econlife_calendar
-    econlife_scene_cards
-    econlife_random_events
-    econlife_supply_chain
-    econlife_seasonal_agriculture
-    econlife_labor_market
-    econlife_price_engine
-    econlife_trade_infrastructure
-    econlife_financial_distribution
-    econlife_npc_business
-    econlife_commodity_trading
-    econlife_real_estate
-    econlife_npc_behavior
-    econlife_banking
-    econlife_government_budget
-    econlife_healthcare
-    econlife_npc_spending
-    econlife_evidence
-    econlife_obligation_network
-    econlife_community_response
-    econlife_facility_signals
-    econlife_criminal_operations
-    econlife_media_system
-    econlife_antitrust
-    econlife_investigator_engine
-    econlife_money_laundering
-    econlife_drug_economy
-    econlife_weapons_trafficking
-    econlife_protection_rackets
-    econlife_legal_process
-    econlife_informant_system
-    econlife_alternative_identity
-    econlife_designer_drug
-    econlife_political_cycle
-    econlife_influence_network
-    econlife_trust_updates
-    econlife_addiction
-    econlife_regional_conditions
-    econlife_population_aging
-    econlife_currency_exchange
-    econlife_lod_system
-    econlife_persistence
+    econlife_modules
 )
 
 catch_discover_tests(econlife_unit_tests)
