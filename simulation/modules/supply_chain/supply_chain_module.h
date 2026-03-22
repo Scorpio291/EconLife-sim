@@ -43,7 +43,7 @@ public:
         return {"price_engine"};
     }
 
-    bool is_province_parallel() const noexcept override { return true; }
+    bool is_province_parallel() const noexcept override { return false; }
 
     // Per-province: local matching of sell offers to buy orders.
     void execute_province(uint32_t province_idx,

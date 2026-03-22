@@ -73,6 +73,7 @@ struct BusinessDelta {
     std::optional<float> cash_delta;              // additive; operating cost deduction or revenue credit
     std::optional<float> revenue_per_tick_update;  // replacement; latest revenue figure
     std::optional<float> cost_per_tick_update;     // replacement; latest cost figure
+    std::optional<float> output_quality_update;   // replacement; latest production quality [0,1]
 };
 
 struct RegionDelta {

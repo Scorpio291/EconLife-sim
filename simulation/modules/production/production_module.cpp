@@ -289,7 +289,8 @@ void ProductionModule::process_facility(
 
     for (const RecipeOutput* output : sorted_outputs) {
         float actual_output = output->quantity_per_tick * output_multiplier
-                            * bottleneck_ratio * worker_multiplier;
+                            * bottleneck_ratio * worker_multiplier
+                            * facility.output_rate_modifier;
 
         // Clamp NaN or negative to 0.
         if (std::isnan(actual_output) || actual_output < 0.0f) {
@@ -318,13 +319,13 @@ void ProductionModule::process_facility(
         actual_cost = 0.0f;
     }
 
-    // Write BusinessDelta for revenue and cost.
-    // Net cash effect: revenue minus operating cost.
+    // Write BusinessDelta for revenue, cost, and quality.
     BusinessDelta biz_delta{};
     biz_delta.business_id = biz.id;
     biz_delta.cash_delta = total_revenue - actual_cost;
     biz_delta.revenue_per_tick_update = total_revenue;
     biz_delta.cost_per_tick_update = actual_cost;
+    biz_delta.output_quality_update = quality_ceiling;
     delta.business_deltas.push_back(biz_delta);
 }
 

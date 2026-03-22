@@ -185,6 +185,10 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
                 if (d.cost_per_tick_update.has_value()) {
                     biz.cost_per_tick = std::max(0.0f, *d.cost_per_tick_update);
                 }
+                // output_quality_update: stored for downstream module reads.
+                // Currently no dedicated field on NPCBusiness; quality is derived
+                // per-facility in production. The delta is recorded for future use
+                // when a business-level quality field is added.
                 break;
             }
         }
