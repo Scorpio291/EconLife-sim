@@ -37,7 +37,7 @@ public:
         return {"price_engine"};
     }
 
-    bool is_province_parallel() const noexcept override { return true; }
+    bool is_province_parallel() const noexcept override { return false; }
 
     void execute_province(uint32_t province_idx,
                           const WorldState& state,

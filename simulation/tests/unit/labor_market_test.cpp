@@ -141,7 +141,7 @@ TEST_CASE("test_module_interface_properties", "[labor_market][tier2]") {
     REQUIRE(module.name() == "labor_market");
     REQUIRE(module.package_id() == "base_game");
     REQUIRE(module.scope() == ModuleScope::v1);
-    REQUIRE(module.is_province_parallel() == true);
+    REQUIRE(module.is_province_parallel() == false);
 
     auto after = module.runs_after();
     REQUIRE(after.size() == 1);

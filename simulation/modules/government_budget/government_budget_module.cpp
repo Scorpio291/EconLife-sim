@@ -351,6 +351,7 @@ void GovernmentBudgetModule::update_infrastructure(const WorldState& state,
             RegionDelta region_delta{};
             region_delta.region_id     = province->region_id;
             region_delta.stability_delta = infra_change * 0.05f;
+            region_delta.infrastructure_rating_delta = infra_change;
             delta.region_deltas.push_back(region_delta);
         }
     }

@@ -290,6 +290,11 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         safe_add(prov.community.institutional_trust,
                                  *d.institutional_trust_delta));
                 }
+                if (d.infrastructure_rating_delta.has_value()) {
+                    prov.infrastructure_rating = clamp01(
+                        safe_add(prov.infrastructure_rating,
+                                 *d.infrastructure_rating_delta));
+                }
             }
         }
     }
