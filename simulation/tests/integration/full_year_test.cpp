@@ -582,3 +582,46 @@ TEST_CASE("orchestrator determinism: same seed same output", "[integration][orch
                 state_b.provinces[i].conditions.stability_score);
     }
 }
+
+TEST_CASE("full orchestrator 365-tick year completes without crash", "[integration][orchestrator][year]") {
+    TickOrchestrator orchestrator;
+    register_base_game_modules(orchestrator);
+    orchestrator.finalize_registration();
+
+    auto world = create_test_world(42, 100, 3, 10);
+    ThreadPool pool(1);
+
+    float initial_total_capital = 0.0f;
+    for (const auto& npc : world.significant_npcs) {
+        initial_total_capital += npc.capital;
+    }
+
+    for (int i = 0; i < 365; ++i) {
+        orchestrator.execute_tick(world, pool);
+    }
+
+    REQUIRE(world.current_tick == 365);
+
+    // Verify no NaN contamination in key fields
+    for (const auto& npc : world.significant_npcs) {
+        REQUIRE_FALSE(std::isnan(npc.capital));
+    }
+    for (const auto& m : world.regional_markets) {
+        REQUIRE_FALSE(std::isnan(m.spot_price));
+        REQUIRE_FALSE(std::isnan(m.supply));
+    }
+    for (const auto& p : world.provinces) {
+        REQUIRE_FALSE(std::isnan(p.conditions.stability_score));
+        REQUIRE_FALSE(std::isnan(p.infrastructure_rating));
+    }
+
+    // Economy should show activity: businesses should have non-zero revenue
+    bool any_active_business = false;
+    for (const auto& biz : world.npc_businesses) {
+        if (biz.revenue_per_tick > 0.0f || biz.cost_per_tick > 0.0f) {
+            any_active_business = true;
+            break;
+        }
+    }
+    REQUIRE(any_active_business);
+}
