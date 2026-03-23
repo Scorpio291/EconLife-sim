@@ -44,3 +44,4 @@ Testing/
 # Autosave / runtime
 *.autosave
 *.snapshot
+.worktrees/
