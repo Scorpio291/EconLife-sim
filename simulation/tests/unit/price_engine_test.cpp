@@ -270,8 +270,8 @@ TEST_CASE("test_execute_province_writes_market_deltas", "[price_engine][tier3]")
     REQUIRE(md.good_id == 1);
     REQUIRE(md.region_id == province_id);
     REQUIRE(md.spot_price_override.has_value());
-    REQUIRE(md.equilibrium_price_override.has_value());
-    REQUIRE_THAT(md.equilibrium_price_override.value(), WithinAbs(10.0f, 0.001f));
+    // equilibrium_price is no longer overridden — it's kept as stable base reference.
+    REQUIRE_FALSE(md.equilibrium_price_override.has_value());
     REQUIRE_THAT(md.spot_price_override.value(), WithinAbs(10.0f, 0.001f));
 }
 
@@ -295,7 +295,7 @@ TEST_CASE("test_execute_province_high_demand", "[price_engine][tier3]") {
 
     REQUIRE(delta.market_deltas.size() == 1);
     const auto& md = delta.market_deltas[0];
-    REQUIRE_THAT(md.equilibrium_price_override.value(), WithinAbs(20.0f, 0.001f));
+    // equilibrium_price is no longer overridden — stable base reference.
     REQUIRE_THAT(md.spot_price_override.value(), WithinAbs(11.0f, 0.001f));
 }
 
@@ -386,7 +386,7 @@ TEST_CASE("test_execute_fallback_processes_all_provinces", "[price_engine][tier3
     // Province 1: supply shortage => eq=20, spot moves up.
     auto* md1 = find_market_delta(delta, 1, 1);
     REQUIRE(md1 != nullptr);
-    REQUIRE_THAT(md1->equilibrium_price_override.value(), WithinAbs(20.0f, 0.001f));
+    // equilibrium_price is no longer overridden — stable base reference.
     REQUIRE_THAT(md1->spot_price_override.value(), WithinAbs(11.0f, 0.001f));
 }
 

@@ -135,6 +135,14 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
     // Step 0: Apply cross-province deltas from previous tick (one-tick propagation delay).
     apply_cross_province_deltas(state);
 
+    // Step 0.5: Reset per-tick flow fields.
+    // demand_buffer is a per-tick flow: NPC spending fills it fresh each tick,
+    // and the price engine reads it. Without reset, demand accumulates across
+    // ticks, breaking the supply/demand ratio.
+    for (auto& m : state.regional_markets) {
+        m.demand_buffer = 0.0f;
+    }
+
     // Step 1: Drain deferred work queue — process all items due at current_tick.
     {
         DeltaBuffer dwq_delta;
@@ -191,6 +199,14 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
         // Each module sees the effects of all prior modules in this tick.
         apply_deltas(state, delta);
     }
+
+    // Garbage collect inactive evidence tokens to prevent unbounded pool growth.
+    // Tokens are marked is_active=false by decay and retirement deltas; remove them
+    // at end of tick so no module sees stale references mid-tick.
+    state.evidence_pool.erase(
+        std::remove_if(state.evidence_pool.begin(), state.evidence_pool.end(),
+                        [](const EvidenceToken& t) { return !t.is_active; }),
+        state.evidence_pool.end());
 
     state.current_tick++;
 }

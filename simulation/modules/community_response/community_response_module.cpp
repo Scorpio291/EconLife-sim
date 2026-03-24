@@ -225,10 +225,15 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
         }
 
         // Stage-intensity grievance accumulation: higher stages drive additional grievance
-        // each tick proportional to stage ordinal (quiescent = 0, sustained_opposition = 6).
-        static constexpr float stage_grievance_rate = 0.002f;
-        float stage_grievance_bonus = static_cast<float>(static_cast<uint8_t>(new_stage))
-                                      * stage_grievance_rate;
+        // proportional to stage ordinal (quiescent = 0, sustained_opposition = 6).
+        // Per INTERFACE.md, stage checks fire every 7 ticks. Apply the bonus only at
+        // those intervals to prevent runaway positive feedback.
+        float stage_grievance_bonus = 0.0f;
+        if (state.current_tick % 7 == 0) {
+            static constexpr float stage_grievance_rate = 0.002f;
+            stage_grievance_bonus = static_cast<float>(static_cast<uint8_t>(new_stage))
+                                    * stage_grievance_rate;
+        }
 
         // Write deltas for this province.
         RegionDelta rd;

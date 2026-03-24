@@ -45,10 +45,34 @@ void FinancialDistributionModule::execute_province(uint32_t province_idx,
 
     // Process each business through the distribution pipeline.
     for (const NPCBusiness* biz : province_businesses) {
-        // Find or skip if no compensation record exists for this business.
+        // Find or auto-create compensation record for this business.
         BusinessCompensationRecord* record = find_compensation_record(biz->id);
         if (!record) {
-            continue;
+            // Auto-create: determine scale from worker count proxy (revenue_per_tick).
+            BusinessCompensationRecord new_rec{};
+            new_rec.business_id = biz->id;
+            // Scale heuristic: micro < 5 workers, small < 20, medium < 100, large >= 100.
+            // Use revenue_per_tick as proxy: micro < 100, small < 500, medium < 2000.
+            if (biz->revenue_per_tick < 100.0f) {
+                new_rec.scale = BusinessScale::micro;
+                new_rec.compensation.mechanism = CompensationMechanism::owners_draw;
+            } else if (biz->revenue_per_tick < 500.0f) {
+                new_rec.scale = BusinessScale::small;
+                new_rec.compensation.mechanism = CompensationMechanism::salary_only;
+                new_rec.compensation.salary_per_tick = biz->revenue_per_tick * 0.3f;
+            } else if (biz->revenue_per_tick < 2000.0f) {
+                new_rec.scale = BusinessScale::medium;
+                new_rec.compensation.mechanism = CompensationMechanism::salary_bonus;
+                new_rec.compensation.salary_per_tick = biz->revenue_per_tick * 0.25f;
+                new_rec.compensation.bonus_rate = 0.10f;
+            } else {
+                new_rec.scale = BusinessScale::large;
+                new_rec.compensation.mechanism = CompensationMechanism::salary_bonus;
+                new_rec.compensation.salary_per_tick = biz->revenue_per_tick * 0.20f;
+                new_rec.compensation.bonus_rate = 0.15f;
+            }
+            compensation_records_.push_back(new_rec);
+            record = &compensation_records_.back();
         }
 
         // Validate compensation mechanism for scale; fall back to salary_only
@@ -147,26 +171,30 @@ void FinancialDistributionModule::process_salary_payments(
 
         // Emit payment to owner.
         if (state.player && business.owner_id == state.player->id) {
-            // Player-owned: add to player wealth.
             if (delta.player_delta.wealth_delta.has_value()) {
                 delta.player_delta.wealth_delta = delta.player_delta.wealth_delta.value() + net_payment;
             } else {
                 delta.player_delta.wealth_delta = net_payment;
             }
         } else if (business.owner_id != 0) {
-            // NPC-owned: add to NPC capital.
             NPCDelta npc_delta{};
             npc_delta.npc_id = business.owner_id;
             npc_delta.capital_delta = net_payment;
             delta.npc_deltas.push_back(npc_delta);
         }
 
+        // Deduct from business cash.
+        BusinessDelta biz_delta{};
+        biz_delta.business_id = business.id;
+        biz_delta.cash_delta = -total_payment;
+        delta.business_deltas.push_back(biz_delta);
+
         // Reset deferred state.
         record.deferred_salary_ticks = 0;
 
     } else if (available_cash > 0.0f) {
         // Partial payment: pay what we can. Deferred salary paid first (FIFO).
-        float payment = available_cash;  // Pay all available cash.
+        float payment = available_cash;
 
         float tax = payment * FinancialDistributionConstants::default_tax_withholding_rate;
         float net_payment = payment - tax;
@@ -184,8 +212,13 @@ void FinancialDistributionModule::process_salary_payments(
             delta.npc_deltas.push_back(npc_delta);
         }
 
+        // Deduct from business cash.
+        BusinessDelta biz_delta{};
+        biz_delta.business_id = business.id;
+        biz_delta.cash_delta = -payment;
+        delta.business_deltas.push_back(biz_delta);
+
         // Remaining amount becomes new deferred liability.
-        // The deferred salary tracking increments.
         record.deferred_salary_ticks++;
 
     } else {
@@ -259,6 +292,14 @@ void FinancialDistributionModule::process_owners_draw(
         npc_delta.npc_id = business.owner_id;
         npc_delta.capital_delta = draw_amount;
         delta.npc_deltas.push_back(npc_delta);
+    }
+
+    // Deduct from business cash.
+    {
+        BusinessDelta biz_delta{};
+        biz_delta.business_id = business.id;
+        biz_delta.cash_delta = -draw_amount;
+        delta.business_deltas.push_back(biz_delta);
     }
 
     // Check if monthly draw exceeds reporting threshold — generate evidence.
@@ -336,6 +377,14 @@ void FinancialDistributionModule::process_quarterly_bonus(
         npc_delta.capital_delta = net_bonus;
         delta.npc_deltas.push_back(npc_delta);
     }
+
+    // Deduct from business cash.
+    {
+        BusinessDelta biz_delta{};
+        biz_delta.business_id = business.id;
+        biz_delta.cash_delta = -bonus_amount;
+        delta.business_deltas.push_back(biz_delta);
+    }
 }
 
 // ===========================================================================
@@ -394,6 +443,14 @@ void FinancialDistributionModule::process_quarterly_dividend(
         npc_delta.npc_id = business.owner_id;
         npc_delta.capital_delta = net_dividend;
         delta.npc_deltas.push_back(npc_delta);
+    }
+
+    // Deduct from business cash.
+    {
+        BusinessDelta biz_delta{};
+        biz_delta.business_id = business.id;
+        biz_delta.cash_delta = -actual_payout;
+        delta.business_deltas.push_back(biz_delta);
     }
 }
 

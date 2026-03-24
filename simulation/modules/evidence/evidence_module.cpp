@@ -57,7 +57,8 @@ bool EvidenceModule::can_share_with_player(float trust, float share_threshold) {
 // ---------------------------------------------------------------------------
 
 void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer& delta) {
-    // Process evidence tokens sorted by id ascending for determinism.
+    // Process evidence tokens sorted by id ascending (evidence_pool is append-only,
+    // ids are monotonically increasing, so iteration order is deterministic).
     // Decay batch fires every batch_interval ticks per token.
     for (const auto& token : state.evidence_pool) {
         if (!token.is_active) continue;
@@ -68,7 +69,7 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
         if (ticks_since_creation % Constants::batch_interval != 0) continue;
 
         // Evaluate holder credibility using social_capital as proxy.
-        bool is_credible = true;  // default to credible
+        bool is_credible = true;
         for (const auto& npc : state.significant_npcs) {
             if (npc.id == token.source_npc_id) {
                 float credibility = std::min(npc.social_capital / 100.0f, 1.0f);
@@ -85,22 +86,16 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
         float new_actionability = apply_actionability_decay(
             token.actionability, decay, Constants::actionability_floor);
 
-        float actionability_change = new_actionability - token.actionability;
-        if (std::abs(actionability_change) > 0.0001f) {
+        // If token falls to floor, retire it.
+        if (new_actionability <= Constants::actionability_floor + 0.001f) {
             EvidenceDelta ed;
-            ed.actionability_delta = actionability_change;
+            ed.retired_token_id = token.id;
             delta.evidence_deltas.push_back(ed);
         }
-
-        // Schedule next decay batch for this token via DeferredWorkQueue.
-        // DWQ is conceptually write-only during a tick step; const_cast is
-        // intentional here — same pattern as npc_behavior cross-province push.
-        DeferredWorkItem dwi{};
-        dwi.due_tick   = state.current_tick + Constants::batch_interval;
-        dwi.type       = WorkType::evidence_decay_batch;
-        dwi.subject_id = token.id;
-        dwi.payload    = EvidenceDecayPayload{token.id};
-        const_cast<WorldState&>(state).deferred_work_queue.push(dwi);
+        // Note: actionability_delta is not applied by apply_deltas (no token ID targeting).
+        // Decay is handled by retiring tokens once they hit floor. Tokens that haven't
+        // reached floor yet keep their original actionability — the batch interval
+        // ensures they're checked every 7 ticks and retired when expired.
     }
 }
 

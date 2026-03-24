@@ -63,12 +63,14 @@ void PriceEngineModule::execute_province(uint32_t province_idx,
             new_spot_price = 0.0f;
         }
 
-        // Write MarketDelta with spot_price_override and equilibrium_price_override.
+        // Write MarketDelta with spot_price_override only.
+        // equilibrium_price is NOT overridden — it serves as the stable base_price
+        // reference for future ticks. Overwriting it would create a self-referential
+        // decay spiral where the price floor erodes each tick.
         MarketDelta delta{};
         delta.good_id = market->good_id;
         delta.region_id = market->province_id;
         delta.spot_price_override = new_spot_price;
-        delta.equilibrium_price_override = equilibrium_price;
         province_delta.market_deltas.push_back(delta);
     }
 }

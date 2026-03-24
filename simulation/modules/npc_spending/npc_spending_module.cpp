@@ -150,12 +150,15 @@ void NpcSpendingModule::execute_province(uint32_t province_idx,
             npc_total_spending[ni] += demand * spot;
         }
 
-        // Write demand contribution to delta buffer.
+        // Write demand contribution and supply consumption to delta buffer.
+        // Consumption cannot exceed available supply.
         if (total_demand > 0.0f) {
+            float consumed = std::min(total_demand, std::max(market->supply, 0.0f));
             MarketDelta md;
             md.good_id = market->good_id;
             md.region_id = province.id;
             md.demand_buffer_delta = total_demand;
+            md.supply_delta = -consumed;  // goods consumed leave the market
             province_delta.market_deltas.push_back(md);
         }
     }
