@@ -25,6 +25,12 @@ static float safe_add(float base, float delta) {
     return std::isnan(delta) ? base : base + delta;
 }
 
+// Magnitude ceilings: prevent float overflow from runaway accumulation.
+// These are safety clamps, not game mechanics — if values hit these,
+// the economic loop has a balance issue to investigate.
+static constexpr float BUSINESS_CASH_CEILING = 1.0e10f;
+static constexpr float NPC_CAPITAL_CEILING   = 1.0e9f;
+
 // ---------------------------------------------------------------------------
 // apply_npc_deltas
 // ---------------------------------------------------------------------------
@@ -37,9 +43,13 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
         }
         if (!npc) continue;
 
-        // capital_delta: additive, floor at 0
+        // capital_delta: additive, floor at 0, ceiling at NPC_CAPITAL_CEILING
         if (d.capital_delta.has_value()) {
-            npc->capital = std::max(0.0f, safe_add(npc->capital, *d.capital_delta));
+            npc->capital = safe_add(npc->capital, *d.capital_delta);
+            if (std::isinf(npc->capital) || std::isnan(npc->capital)) {
+                npc->capital = NPC_CAPITAL_CEILING;
+            }
+            npc->capital = std::clamp(npc->capital, 0.0f, NPC_CAPITAL_CEILING);
         }
 
         // new_status: replacement
@@ -177,7 +187,13 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
             if (biz.id == d.business_id) {
                 if (d.cash_delta.has_value()) {
                     biz.cash = safe_add(biz.cash, *d.cash_delta);
-                    // Business cash can go negative (indicates insolvency)
+                    // Business cash can go negative (indicates insolvency).
+                    // Clamp magnitude to prevent float overflow/Inf/NaN.
+                    if (std::isinf(biz.cash) || std::isnan(biz.cash)) {
+                        biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash))
+                            ? BUSINESS_CASH_CEILING : -BUSINESS_CASH_CEILING;
+                    }
+                    biz.cash = std::clamp(biz.cash, -BUSINESS_CASH_CEILING, BUSINESS_CASH_CEILING);
                 }
                 if (d.revenue_per_tick_update.has_value()) {
                     biz.revenue_per_tick = std::max(0.0f, *d.revenue_per_tick_update);
@@ -197,22 +213,33 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
 // ---------------------------------------------------------------------------
 // apply_market_deltas
 // ---------------------------------------------------------------------------
+static constexpr float MARKET_SUPPLY_CEILING = 1.0e8f;
+static constexpr float MARKET_PRICE_CEILING  = 1.0e6f;
+
 static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta>& deltas) {
     for (const auto& d : deltas) {
         for (auto& m : world.regional_markets) {
             if (m.good_id == d.good_id && m.province_id == d.region_id) {
                 if (d.supply_delta.has_value()) {
-                    m.supply = std::max(0.0f, safe_add(m.supply, *d.supply_delta));
+                    m.supply = std::clamp(safe_add(m.supply, *d.supply_delta),
+                                          0.0f, MARKET_SUPPLY_CEILING);
                 }
                 if (d.demand_buffer_delta.has_value()) {
-                    m.demand_buffer = std::max(0.0f,
-                        safe_add(m.demand_buffer, *d.demand_buffer_delta));
+                    m.demand_buffer = std::clamp(
+                        safe_add(m.demand_buffer, *d.demand_buffer_delta),
+                        0.0f, MARKET_SUPPLY_CEILING);
                 }
                 if (d.spot_price_override.has_value()) {
-                    m.spot_price = std::max(0.001f, *d.spot_price_override);
+                    float price = *d.spot_price_override;
+                    m.spot_price = std::clamp(
+                        std::isnan(price) ? m.spot_price : price,
+                        0.001f, MARKET_PRICE_CEILING);
                 }
                 if (d.equilibrium_price_override.has_value()) {
-                    m.equilibrium_price = std::max(0.001f, *d.equilibrium_price_override);
+                    float price = *d.equilibrium_price_override;
+                    m.equilibrium_price = std::clamp(
+                        std::isnan(price) ? m.equilibrium_price : price,
+                        0.001f, MARKET_PRICE_CEILING);
                 }
                 break;
             }
