@@ -1,0 +1,8 @@
+{
+    "tech_tier_output_bonus_per_tier": 0.08,
+    "tech_tier_cost_reduction_per_tier": 0.05,
+    "tech_quality_ceiling_base": 0.5,
+    "tech_quality_ceiling_step": 0.1,
+    "worker_productivity_diminishing_factor": 0.15,
+    "minimum_input_fraction_to_produce": 0.1
+}

@@ -1,0 +1,18 @@
+facility_type_key,display_name,category,base_construction_cost,base_operating_cost,max_workers,signal_weight_noise,signal_weight_waste,signal_weight_traffic,signal_weight_pollution,signal_weight_odor
+mine,Mine,extraction,500000,3000,60,0.7,0.6,0.3,0.5,0.2
+oil_well,Oil Well,extraction,750000,4000,25,0.5,0.4,0.2,0.6,0.4
+quarry,Quarry,extraction,300000,2000,40,0.8,0.5,0.4,0.4,0.1
+logging_camp,Logging Camp,extraction,200000,1500,30,0.6,0.3,0.3,0.2,0.1
+farm,Farm,agriculture,150000,1000,25,0.2,0.3,0.2,0.2,0.4
+plantation,Plantation,agriculture,200000,1200,35,0.2,0.2,0.2,0.3,0.3
+sawmill,Sawmill,processing,250000,1800,20,0.8,0.4,0.3,0.3,0.3
+smelter,Smelter,processing,400000,3500,50,0.7,0.7,0.3,0.8,0.5
+refinery,Refinery,processing,800000,5000,60,0.6,0.8,0.4,0.9,0.7
+chemical_plant,Chemical Plant,processing,600000,4000,40,0.5,0.9,0.3,0.8,0.6
+paper_mill,Paper Mill,processing,350000,2500,30,0.5,0.6,0.3,0.5,0.4
+food_processing_plant,Food Processing Plant,manufacturing,300000,2000,45,0.4,0.4,0.5,0.3,0.6
+textile_mill,Textile Mill,manufacturing,280000,1800,40,0.6,0.4,0.3,0.3,0.2
+electronics_factory,Electronics Factory,manufacturing,500000,3500,50,0.3,0.5,0.4,0.3,0.1
+vehicle_plant,Vehicle Plant,manufacturing,700000,5000,100,0.8,0.5,0.6,0.5,0.3
+machinery_factory,Machinery Factory,manufacturing,450000,3000,60,0.7,0.4,0.4,0.4,0.2
+workshop,Workshop,manufacturing,100000,800,15,0.4,0.3,0.3,0.2,0.2

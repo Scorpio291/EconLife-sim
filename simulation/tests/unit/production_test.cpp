@@ -248,7 +248,7 @@ TEST_CASE("test_tech_tier_cost_reduction", "[production][tier1]") {
     constexpr uint32_t facility_tier = 3;
     int32_t tier_diff = static_cast<int32_t>(facility_tier) - static_cast<int32_t>(min_tier);
 
-    float cost_multiplier = 1.0f - ProductionConstants::tech_tier_cost_reduction_per_tier *
+    float cost_multiplier = 1.0f - ProductionConstants{}.tech_tier_cost_reduction_per_tier *
                                        static_cast<float>(std::max(0, tier_diff));
     float actual_cost = base_cost * cost_multiplier;
 
@@ -257,7 +257,7 @@ TEST_CASE("test_tech_tier_cost_reduction", "[production][tier1]") {
 
     // At min tier, no reduction.
     int32_t zero_diff = 0;
-    float no_reduction = 1.0f - ProductionConstants::tech_tier_cost_reduction_per_tier *
+    float no_reduction = 1.0f - ProductionConstants{}.tech_tier_cost_reduction_per_tier *
                                     static_cast<float>(std::max(0, zero_diff));
     REQUIRE_THAT(base_cost * no_reduction, WithinAbs(100.0f, 0.001f));
 }
@@ -492,8 +492,8 @@ TEST_CASE("test_non_operational_facility_skipped", "[production][tier1]") {
 TEST_CASE("test_quality_ceiling_computation", "[production][tier1]") {
     // Verify quality ceiling formula:
     //   quality_ceiling = 0.5 + 0.1 * (tech_tier - min_tech_tier)
-    constexpr float base = ProductionConstants::tech_quality_ceiling_base;
-    constexpr float step = ProductionConstants::tech_quality_ceiling_step;
+    const float base = ProductionConstants{}.tech_quality_ceiling_base;
+    const float step = ProductionConstants{}.tech_quality_ceiling_step;
 
     // At min tier (diff = 0): 0.5 + 0.1 * 0 = 0.5
     REQUIRE_THAT(base + step * 0.0f, WithinAbs(0.5f, 0.001f));

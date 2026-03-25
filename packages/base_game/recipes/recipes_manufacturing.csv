@@ -1,0 +1,35 @@
+recipe_key,facility_type_key,display_name,input_1_key,input_1_qty,input_2_key,input_2_qty,input_3_key,input_3_qty,input_4_key,input_4_qty,output_1_key,output_1_qty,output_1_is_byproduct,output_2_key,output_2_qty,output_2_is_byproduct,labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available
+steel_sheet_rolling,machinery_factory,Steel Sheet Rolling,steel,2,,,,,,,steel_sheet,1.8,0,steel_wire_rod,0.2,1,25,2.5,2,,1
+steel_casting_production,machinery_factory,Steel Casting,steel,3,,,,,,,steel_casting,2,0,,,0,35,3.5,2,,1
+structural_steel_production,machinery_factory,Structural Steel Production,steel,3,,,,,,,structural_steel_section,2.5,0,,,0,30,2.0,2,,1
+cement_production,machinery_factory,Cement Production,limestone,4,thermal_coal,1,,,,,cement,3,0,,,0,30,3.0,1,,1
+silicon_wafer_fabrication,electronics_factory,Silicon Wafer Fabrication,silica_sand,3,industrial_gas,1,,,,,silicon_wafer,1,0,,,0,30,5.0,4,semiconductor_fabrication,2
+pcb_manufacturing,electronics_factory,PCB Manufacturing,fiberglass,2,copper_foil,1,,,,,pcb_blank,3,0,,,0,20,1.5,3,,1
+electronic_components_assembly,electronics_factory,Electronic Components Assembly,silicon_wafer,1,rare_earth_oxides,0.3,copper_wire_rod,0.5,,,electronic_components,2,0,,,0,40,2.5,4,semiconductor_fabrication,2
+pcb_assembly,electronics_factory,PCB Assembly,pcb_blank,1,electronic_components,1,solder,0.2,,,pcb_populated,1,0,,,0,30,1.0,3,,1
+display_panel_manufacturing,electronics_factory,Display Panel Manufacturing,silica_sand,2,rare_earth_oxides,0.2,plastics_polymer,0.5,,,display_panel,1,0,,,0,50,4.0,4,display_technology,2
+battery_cell_production,electronics_factory,Battery Cell Production,lithium_carbonate,1,cobalt_refined,0.5,graphite_ore,1,,,battery_cell,4,0,,,0,40,3.0,4,battery_technology,2
+mobile_phone_assembly,electronics_factory,Mobile Phone Assembly,pcb_populated,1,display_panel,1,battery_pack,1,camera_module,1,mobile_phone,1,0,,,0,50,1.0,4,consumer_electronics,3
+engine_block_manufacturing,vehicle_plant,Engine Block Manufacturing,steel_casting,2,aluminum_casting,1,precision_machined_parts,1,,,engine_block,1,0,,,0,60,3.0,3,,1
+engine_assembly,vehicle_plant,Engine Assembly,engine_block,1,precision_machined_parts,1,electronic_components,0.5,,,engine_assembled,1,0,,,0,50,1.5,3,,2
+tire_manufacturing,vehicle_plant,Tire Manufacturing,synthetic_rubber,2,steel_wire_rod,0.5,,,,,tires,4,0,,,0,50,2.0,2,,1
+vehicle_assembly,vehicle_plant,Vehicle Assembly,engine_assembled,1,car_chassis,1,car_body_stamping,1,vehicle_interior,1,passenger_car,1,0,,,0,120,3.0,3,automotive_engineering,2
+industrial_machinery_production,machinery_factory,Industrial Machinery Production,steel,3,electronic_components,1,precision_machined_parts,2,,,industrial_machinery,1,0,,,0,80,3.0,3,,2
+agricultural_machinery_production,machinery_factory,Agricultural Machinery Production,steel,2,engine_block,1,hydraulic_components,1,,,agricultural_machinery,1,0,,,0,60,2.5,3,,1
+packaged_food_production,food_processing_plant,Packaged Food Production,flour,2,refined_vegetable_oil,0.5,refined_sugar,0.3,,,packaged_food,3,0,,,0,40,1.5,1,,1
+beer_brewing,food_processing_plant,Beer Brewing,malt,2,hops,0.3,,,,,beer,2.5,0,,,0,15,1.0,1,,1
+coffee_roasting,food_processing_plant,Coffee Roasting,coffee_beans_raw,3,,,,,,,roasted_coffee,2.5,0,,,0,10,0.8,1,,1
+chocolate_production,food_processing_plant,Chocolate Production,cacao_beans,3,refined_sugar,1,,,,,chocolate,2,0,,,0,15,0.8,1,,1
+clothing_manufacturing,textile_mill,Clothing Manufacturing,woven_fabric,2,,,,,,,apparel_mass,3,0,,,0,30,0.5,1,,1
+leather_goods_production,workshop,Leather Goods Production,leather_raw,2,tannin_extract,0.5,,,,,leather_goods,1.5,0,,,0,20,0.3,1,,1
+pharma_api_synthesis,chemical_plant,Pharma API Synthesis,drug_precursors,2,,,,,,,active_pharma_ingredient,1,0,,,0,50,2.0,4,pharmaceutical_research,2
+pharma_otc_formulation,chemical_plant,OTC Pharma Formulation,active_pharma_ingredient,1,plastics_polymer,0.5,,,,,pharmaceutical_otc,2,0,,,0,40,1.5,3,,2
+pharma_rx_formulation,chemical_plant,Rx Pharma Formulation,active_pharma_ingredient,1.5,plastics_polymer,0.3,,,,,pharmaceutical_rx,1,0,,,0,50,1.5,4,pharmaceutical_research,2
+cocaine_synthesis,chemical_plant,Cocaine Synthesis,coca_leaf,4,sulfuric_acid,0.5,,,,,cocaine,1,0,,,0,5,1.0,2,,1
+methamphetamine_synthesis,chemical_plant,Methamphetamine Synthesis,drug_precursors,2,,,,,,,methamphetamine,1,0,,,0,5,1.5,2,,1
+heroin_synthesis,chemical_plant,Heroin Synthesis,poppy,3,sulfuric_acid,0.3,,,,,heroin,1,0,,,0,5,0.8,2,,1
+synthetic_opioid_synthesis,chemical_plant,Synthetic Opioid Synthesis,drug_precursors,1.5,,,,,,,synthetic_opioid,1,0,,,0,5,1.0,3,,2
+cannabis_processing,workshop,Cannabis Processing,cannabis_raw,3,,,,,,,cannabis_processed,2,0,,,0,3,0.2,1,,1
+counterfeit_production,workshop,Counterfeit Production,paper,2,paint_pigments,0.5,,,,,counterfeit_currency,1,0,,,0,8,0.5,2,,1
+cigarette_manufacturing,food_processing_plant,Cigarette Manufacturing,cured_tobacco,2,paper,0.5,,,,,cigarettes,4,0,,,0,15,0.3,1,,1
+tobacco_curing,food_processing_plant,Tobacco Curing,tobacco_leaf,3,,,,,,,cured_tobacco,2.5,0,,,0,10,0.5,1,,1

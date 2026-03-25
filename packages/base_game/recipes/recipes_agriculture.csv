@@ -1,0 +1,17 @@
+recipe_key,facility_type_key,display_name,input_1_key,input_1_qty,input_2_key,input_2_qty,input_3_key,input_3_qty,input_4_key,input_4_qty,output_1_key,output_1_qty,output_1_is_byproduct,output_2_key,output_2_qty,output_2_is_byproduct,labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available
+wheat_farming,farm,Wheat Farming,fertilizer_npk,1,,,,,,,wheat,15,0,,,0,20,0.5,1,,1
+corn_farming,farm,Corn Farming,fertilizer_npk,1,,,,,,,corn,15,0,,,0,20,0.5,1,,1
+rice_farming,farm,Rice Farming,fertilizer_npk,1,,,,,,,rice,12,0,,,0,25,0.5,1,,1
+soybean_farming,farm,Soybean Farming,fertilizer_npk,0.8,,,,,,,soybeans,12,0,,,0,20,0.5,1,,1
+cotton_farming,farm,Cotton Farming,fertilizer_npk,0.5,,,,,,,cotton,8,0,,,0,25,0.3,1,,1
+cattle_ranching,farm,Cattle Ranching,corn,3,,,,,,,cattle_live,2,0,,,0,15,0.3,1,,1
+pig_farming,farm,Pig Farming,corn,2,,,,,,,pigs_live,4,0,,,0,12,0.3,1,,1
+poultry_farming,farm,Poultry Farming,corn,1.5,,,,,,,poultry_live,6,0,,,0,10,0.2,1,,1
+dairy_farming,farm,Dairy Farming,corn,2,,,,,,,milk_raw,10,0,,,0,15,0.3,1,,1
+coffee_plantation,plantation,Coffee Plantation,,,,,,,,,coffee_beans_raw,5,0,,,0,30,0.2,1,,1
+tobacco_plantation,plantation,Tobacco Plantation,,,,,,,,,tobacco_leaf,6,0,,,0,25,0.2,1,,1
+sugarcane_plantation,plantation,Sugarcane Plantation,,,,,,,,,sugarcane,12,0,,,0,25,0.2,1,,1
+coca_cultivation,plantation,Coca Cultivation,,,,,,,,,coca_leaf,4,0,,,0,15,0.1,1,,1
+poppy_cultivation,plantation,Poppy Cultivation,,,,,,,,,poppy,3,0,,,0,15,0.1,1,,1
+hemp_farming,farm,Hemp Farming,,,,,,,,,hemp,8,0,,,0,15,0.2,1,,1
+palm_farming,plantation,Palm Farming,,,,,,,,,palm_fruit,10,0,,,0,20,0.2,1,,1

@@ -1,0 +1,34 @@
+recipe_key,facility_type_key,display_name,input_1_key,input_1_qty,input_2_key,input_2_qty,input_3_key,input_3_qty,input_4_key,input_4_qty,output_1_key,output_1_qty,output_1_is_byproduct,output_2_key,output_2_qty,output_2_is_byproduct,labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available
+iron_smelting,smelter,Iron Smelting,iron_ore,5,coking_coal,2,,,,,steel,3,0,,,0,80,5.0,2,,1
+copper_smelting,smelter,Copper Smelting,copper_ore,4,,,,,,,copper_wire_rod,2,0,copper_pipe,1,1,40,3.0,2,,1
+aluminum_smelting,smelter,Aluminum Smelting,bauxite,4,,,,,,,aluminum_ingot,1,0,,,0,40,8.0,3,,1
+tin_smelting,smelter,Tin Smelting,tin_ore,3,,,,,,,tin_ingot,2,0,,,0,30,2.5,1,,1
+zinc_smelting,smelter,Zinc Smelting,zinc_ore,3,,,,,,,zinc_ingot,2,0,,,0,30,2.5,1,,1
+lead_smelting,smelter,Lead Smelting,lead_ore,3,,,,,,,lead_ingot,2,0,,,0,30,2.5,1,,1
+nickel_smelting,smelter,Nickel Smelting,nickel_ore,3,,,,,,,nickel_ingot,2,0,,,0,35,3.0,2,,1
+gold_refining,smelter,Gold Refining,gold_ore,2,,,,,,,refined_gold,0.5,0,,,0,30,2.0,2,,1
+silver_refining,smelter,Silver Refining,silver_ore,2,,,,,,,refined_silver,0.8,0,,,0,25,1.5,2,,1
+petroleum_refining,refinery,Petroleum Refining,crude_oil,10,,,,,,,gasoline,4,0,diesel,3,1,60,4.0,3,,1
+naphtha_cracking,refinery,Naphtha Cracking,naphtha,3,,,,,,,ethylene,1.5,0,propylene,1,1,40,4.0,3,,1
+jet_fuel_refining,refinery,Jet Fuel Refining,crude_oil,8,,,,,,,jet_fuel,3,0,heavy_fuel_oil,2,1,50,3.5,3,,1
+sulfuric_acid_production,chemical_plant,Sulfuric Acid Production,sulfur,2,,,,,,,sulfuric_acid,3,0,,,0,20,2.0,2,,1
+ammonia_synthesis,chemical_plant,Ammonia Synthesis,natural_gas,3,,,,,,,ammonia,2,0,,,0,25,3.0,2,,1
+fertilizer_production,chemical_plant,Fertilizer Production,ammonia,1.5,potash,1,phosphate_rock,1,,,fertilizer_npk,3,0,,,0,25,2.0,2,,1
+plastics_production,chemical_plant,Plastics Production,ethylene,2,,,,,,,plastics_polymer,1.5,0,,,0,20,2.5,3,,1
+synthetic_rubber_production,chemical_plant,Synthetic Rubber Production,benzene,1,ethylene,1,,,,,synthetic_rubber,1,0,,,0,15,2.0,3,,1
+caustic_soda_production,chemical_plant,Caustic Soda Production,salt,2,,,,,,,caustic_soda,1.5,0,chlorine,1,1,20,3.0,2,,1
+drug_precursor_synthesis,chemical_plant,Drug Precursor Synthesis,naphtha,2,sulfuric_acid,0.5,,,,,drug_precursors,1,0,,,0,30,2.5,3,,1
+lumber_milling,sawmill,Lumber Milling,softwood_logs,5,,,,,,,lumber,4,0,,,0,15,1.0,1,,1
+hardwood_milling,sawmill,Hardwood Milling,hardwood_logs,4,,,,,,,lumber,3,0,wood_chips,1,1,18,1.2,1,,1
+paper_pulp_production,paper_mill,Paper Pulp Production,pulpwood,5,,,,,,,paper_pulp,4,0,,,0,20,2.0,1,,1
+paper_production,paper_mill,Paper Production,paper_pulp,3,,,,,,,paper,2.5,0,cardboard,0.5,1,15,1.5,1,,1
+flour_milling,food_processing_plant,Flour Milling,wheat,5,,,,,,,flour,4,0,,,0,15,0.8,1,,1
+sugar_refining,food_processing_plant,Sugar Refining,sugarcane,10,,,,,,,raw_sugar,2,0,,,0,20,1.0,1,,1
+refined_sugar_production,food_processing_plant,Refined Sugar Production,raw_sugar,2,,,,,,,refined_sugar,1.8,0,,,0,10,0.5,1,,1
+meat_processing_cattle,food_processing_plant,Cattle Meat Processing,cattle_live,2,,,,,,,beef,1.5,0,leather_raw,0.3,1,25,0.5,1,,1
+meat_processing_pigs,food_processing_plant,Pig Meat Processing,pigs_live,4,,,,,,,pork,3,0,,,0,20,0.5,1,,1
+meat_processing_poultry,food_processing_plant,Poultry Meat Processing,poultry_live,6,,,,,,,poultry_meat,5,0,,,0,15,0.3,1,,1
+dairy_processing,food_processing_plant,Dairy Processing,milk_raw,5,,,,,,,dairy_products,1.5,0,dairy_consumer,0.5,1,15,0.5,1,,1
+vegetable_oil_refining,food_processing_plant,Vegetable Oil Refining,soybeans,5,,,,,,,soy_oil_crude,1.5,0,soy_meal,3,1,15,0.8,1,,1
+cotton_spinning,textile_mill,Cotton Spinning,cotton,3,,,,,,,cotton_fiber,2,0,yarn,1,1,20,0.5,1,,1
+fabric_weaving,textile_mill,Fabric Weaving,yarn,2,,,,,,,woven_fabric,1.5,0,,,0,25,0.8,1,,1

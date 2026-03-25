@@ -13,6 +13,7 @@
 // Complete type definitions needed for std::vector/std::map value members
 #include "geography.h"                                 // Nation, Province, Region
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
+#include "modules/production/production_types.h"       // Facility, Recipe
 #include "modules/trade_infrastructure/trade_types.h"  // TariffSchedule, NationalTradeOffer,
                                                        //   Lod1NationStats, RouteProfile
 #include "modules/currency_exchange/currency_exchange_types.h"  // CurrencyRecord
@@ -56,6 +57,7 @@ struct WorldState {
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)
     std::vector<NPCBusiness> npc_businesses;
+    std::vector<Facility> facilities;  // all production facilities; indexed by facility.id
 
     // --- Evidence ---
     std::vector<EvidenceToken> evidence_pool;  // all active tokens in the world

@@ -47,6 +47,17 @@ const std::vector<Facility>* FacilityRegistry::find_by_business(uint32_t busines
 }
 
 // ===========================================================================
+// ProductionModule — init from WorldState
+// ===========================================================================
+
+void ProductionModule::init_from_world_state(const WorldState& state) {
+    // Populate facility registry from WorldState.facilities.
+    for (const auto& facility : state.facilities) {
+        facility_registry_.register_facility(facility);
+    }
+}
+
+// ===========================================================================
 // ProductionModule — utility
 // ===========================================================================
 
@@ -176,11 +187,11 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         static_cast<int32_t>(facility.tech_tier) - static_cast<int32_t>(recipe->min_tech_tier);
     int32_t effective_tier_diff = std::max(0, tier_diff);
 
-    float output_multiplier = 1.0f + ProductionConstants::tech_tier_output_bonus_per_tier *
-                                         static_cast<float>(effective_tier_diff);
+    float output_multiplier =
+        1.0f + config_.tech_tier_output_bonus_per_tier * static_cast<float>(effective_tier_diff);
 
-    float cost_multiplier = 1.0f - ProductionConstants::tech_tier_cost_reduction_per_tier *
-                                       static_cast<float>(effective_tier_diff);
+    float cost_multiplier =
+        1.0f - config_.tech_tier_cost_reduction_per_tier * static_cast<float>(effective_tier_diff);
 
     // Determine input availability — compute bottleneck ratio.
     // The bottleneck ratio is the minimum ratio of (available / required)
@@ -247,8 +258,8 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
     // Compute quality ceiling.
     float quality_ceiling =
-        ProductionConstants::tech_quality_ceiling_base +
-        ProductionConstants::tech_quality_ceiling_step * static_cast<float>(effective_tier_diff);
+        config_.tech_quality_ceiling_base +
+        config_.tech_quality_ceiling_step * static_cast<float>(effective_tier_diff);
 
     // For technology-intensive recipes, cap by maturation level.
     // ActorTechnologyState stub does not yet have maturation_of();

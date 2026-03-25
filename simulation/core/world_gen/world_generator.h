@@ -14,7 +14,9 @@
 #include <string>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_gen/facility_type_catalog.h"
 #include "core/world_gen/goods_catalog.h"
+#include "core/world_gen/recipe_catalog.h"
 #include "core/world_state/geography.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -34,6 +36,9 @@ struct WorldGeneratorConfig {
     float corruption_baseline = 0.2f;  // 0.0-1.0 starting corruption
     float criminal_baseline = 0.05f;   // 0.0-1.0 starting criminal dominance
     std::string goods_directory;       // path to packages/base_game/goods/
+    std::string recipes_directory;     // path to packages/base_game/recipes/
+    std::string
+        facility_types_filepath;  // path to packages/base_game/facility_types/facility_types.csv
 };
 
 // ---------------------------------------------------------------------------
@@ -74,6 +79,10 @@ class WorldGenerator {
     static void create_npcs(WorldState& world, DeterministicRNG& rng,
                             const WorldGeneratorConfig& config);
     static void create_businesses(WorldState& world, DeterministicRNG& rng,
+                                  const WorldGeneratorConfig& config);
+    static void create_facilities(WorldState& world, DeterministicRNG& rng,
+                                  const RecipeCatalog& recipes,
+                                  const FacilityTypeCatalog& facility_types,
                                   const WorldGeneratorConfig& config);
     static ProvinceArchetype assign_archetype(DeterministicRNG& rng, uint32_t province_idx,
                                               uint32_t province_count);

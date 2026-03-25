@@ -66,6 +66,9 @@ class ProductionModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Populate registries from WorldState data at init.
+    void init_from_world_state(const WorldState& state);
+
     // --- Registry access (for test injection and runtime loading) ---
     RecipeRegistry& recipe_registry() { return recipe_registry_; }
     const RecipeRegistry& recipe_registry() const { return recipe_registry_; }
@@ -79,7 +82,12 @@ class ProductionModule : public ITickModule {
     // Informal market price discount factor (criminal sector).
     static constexpr float informal_price_discount = 0.7f;
 
+    // --- Configuration ---
+    ProductionConstants& config() { return config_; }
+    const ProductionConstants& config() const { return config_; }
+
    private:
+    ProductionConstants config_;
     RecipeRegistry recipe_registry_;
     FacilityRegistry facility_registry_;
 

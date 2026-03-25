@@ -50,6 +50,8 @@ add_executable(econlife_unit_tests
     apply_deltas_test.cpp
     drain_deferred_work_test.cpp
     world_generator_test.cpp
+    recipe_catalog_test.cpp
+    facility_type_catalog_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE

@@ -1,0 +1,20 @@
+recipe_key,facility_type_key,display_name,input_1_key,input_1_qty,input_2_key,input_2_qty,input_3_key,input_3_qty,input_4_key,input_4_qty,output_1_key,output_1_qty,output_1_is_byproduct,output_2_key,output_2_qty,output_2_is_byproduct,labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available
+iron_mining,mine,Iron Mining,,,,,,,,,iron_ore,10,0,,,0,50,2.0,1,,1
+copper_mining,mine,Copper Mining,,,,,,,,,copper_ore,8,0,,,0,45,2.0,1,,1
+bauxite_mining,mine,Bauxite Mining,,,,,,,,,bauxite,8,0,,,0,45,2.0,1,,1
+coal_mining,mine,Coal Mining,,,,,,,,,coking_coal,8,0,thermal_coal,5,1,45,1.5,1,,1
+gold_mining,mine,Gold Mining,,,,,,,,,gold_ore,2,0,silver_ore,0.5,1,60,3.0,1,,1
+tin_mining,mine,Tin Mining,,,,,,,,,tin_ore,6,0,,,0,40,1.5,1,,1
+zinc_mining,mine,Zinc Mining,,,,,,,,,zinc_ore,6,0,,,0,40,1.5,1,,1
+nickel_mining,mine,Nickel Mining,,,,,,,,,nickel_ore,5,0,,,0,45,2.0,1,,1
+rare_earth_mining,mine,Rare Earth Mining,,,,,,,,,rare_earth_ore,3,0,,,0,55,3.0,2,,2
+lithium_mining,mine,Lithium Mining,,,,,,,,,lithium_ore,4,0,,,0,50,2.5,2,,2
+uranium_mining,mine,Uranium Mining,,,,,,,,,uranium_ore,3,0,,,0,60,3.0,2,,2
+phosphate_mining,mine,Phosphate Mining,,,,,,,,,phosphate_rock,8,0,,,0,40,1.5,1,,1
+potash_mining,mine,Potash Mining,,,,,,,,,potash,8,0,,,0,40,1.5,1,,1
+sulfur_mining,mine,Sulfur Mining,,,,,,,,,sulfur,6,0,,,0,35,1.5,1,,1
+crude_oil_extraction,oil_well,Crude Oil Extraction,,,,,,,,,crude_oil,15,0,natural_gas,8,1,20,3.0,2,,1
+natural_gas_extraction,oil_well,Natural Gas Extraction,,,,,,,,,natural_gas,20,0,,,0,15,2.0,2,,1
+stone_quarrying,quarry,Stone Quarrying,,,,,,,,,limestone,12,0,silica_sand,3,1,30,1.5,1,,1
+softwood_logging,logging_camp,Softwood Logging,,,,,,,,,softwood_logs,10,0,,,0,25,0.5,1,,1
+hardwood_logging,logging_camp,Hardwood Logging,,,,,,,,,hardwood_logs,6,0,,,0,30,0.5,1,,1

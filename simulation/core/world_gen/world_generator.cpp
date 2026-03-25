@@ -69,6 +69,19 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Step 6: Businesses
     create_businesses(world, rng, config);
 
+    // Step 7: Facilities (assign recipes to businesses)
+    RecipeCatalog recipe_catalog;
+    FacilityTypeCatalog facility_type_catalog;
+    if (!config.recipes_directory.empty()) {
+        recipe_catalog.load_from_directory(config.recipes_directory);
+    }
+    if (!config.facility_types_filepath.empty()) {
+        facility_type_catalog.load_from_csv(config.facility_types_filepath);
+    }
+    if (recipe_catalog.size() > 0 && facility_type_catalog.size() > 0) {
+        create_facilities(world, rng, recipe_catalog, facility_type_catalog, config);
+    }
+
     return world;
 }
 
@@ -930,6 +943,105 @@ void WorldGenerator::create_businesses(WorldState& world, DeterministicRNG& rng,
         biz.accounts_payable_float = 0.0f;
 
         world.npc_businesses.push_back(std::move(biz));
+    }
+}
+
+// ===========================================================================
+// Facility assignment — gives each business 1-3 facilities with recipes
+// ===========================================================================
+
+// Maps business sector to preferred facility type categories.
+static std::vector<std::string> facility_categories_for_sector(BusinessSector sector) {
+    switch (sector) {
+        case BusinessSector::manufacturing:
+            return {"manufacturing", "processing"};
+        case BusinessSector::food_beverage:
+            return {"manufacturing", "agriculture"};
+        case BusinessSector::agriculture:
+            return {"agriculture"};
+        case BusinessSector::energy:
+            return {"extraction", "processing"};
+        case BusinessSector::technology:
+            return {"manufacturing"};
+        case BusinessSector::research:
+            return {"manufacturing"};
+        case BusinessSector::transport_logistics:
+            return {"processing", "manufacturing"};
+        case BusinessSector::criminal:
+            return {"processing", "manufacturing", "agriculture"};
+        default:
+            return {"manufacturing", "processing"};
+    }
+}
+
+void WorldGenerator::create_facilities(WorldState& world, DeterministicRNG& rng,
+                                       const RecipeCatalog& recipes,
+                                       const FacilityTypeCatalog& facility_types,
+                                       const WorldGeneratorConfig& config) {
+    uint32_t facility_id_counter = 5000;
+
+    for (auto& biz : world.npc_businesses) {
+        // Determine how many facilities this business gets (1-3).
+        uint32_t facility_count = 1 + rng.next_uint(3);
+
+        // Get preferred categories for this business sector.
+        auto preferred_cats = facility_categories_for_sector(biz.sector);
+
+        // Collect candidate facility types from preferred categories.
+        std::vector<const FacilityType*> candidate_types;
+        for (const auto& cat : preferred_cats) {
+            auto cat_types = facility_types.by_category(cat);
+            for (const auto* ft : cat_types) {
+                candidate_types.push_back(ft);
+            }
+        }
+
+        // Fallback: all facility types if no match.
+        if (candidate_types.empty()) {
+            for (const auto& ft : facility_types.all()) {
+                candidate_types.push_back(&ft);
+            }
+        }
+        if (candidate_types.empty())
+            continue;
+
+        for (uint32_t f = 0; f < facility_count; ++f) {
+            // Pick a facility type.
+            uint32_t ft_idx = rng.next_uint(static_cast<uint32_t>(candidate_types.size()));
+            const FacilityType* ft = candidate_types[ft_idx];
+
+            // Pick a recipe that runs on this facility type.
+            auto ft_recipes = recipes.recipes_for_facility_type(ft->key);
+
+            // Filter by era.
+            std::vector<const Recipe*> available;
+            for (const auto* r : ft_recipes) {
+                if (r->era_available <= config.starting_era) {
+                    available.push_back(r);
+                }
+            }
+            if (available.empty())
+                continue;
+
+            uint32_t r_idx = rng.next_uint(static_cast<uint32_t>(available.size()));
+            const Recipe* recipe = available[r_idx];
+
+            Facility facility{};
+            facility.id = facility_id_counter++;
+            facility.business_id = biz.id;
+            facility.province_id = biz.province_id;
+            facility.recipe_id = recipe->id;
+            facility.tech_tier = recipe->min_tech_tier;
+            facility.output_rate_modifier = 1.0f;
+            facility.soil_health =
+                (ft->category == "agriculture") ? 0.8f + rng.next_float() * 0.2f : 1.0f;
+            facility.worker_count = std::min(
+                ft->max_workers,
+                static_cast<uint32_t>(3 + rng.next_uint(std::max(1u, ft->max_workers / 4))));
+            facility.is_operational = true;
+
+            world.facilities.push_back(std::move(facility));
+        }
     }
 }
 
