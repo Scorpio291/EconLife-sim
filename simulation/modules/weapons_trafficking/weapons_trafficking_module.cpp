@@ -1,11 +1,11 @@
 #include "weapons_trafficking_module.h"
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
-#include "modules/criminal_operations/criminal_operations_types.h"
-
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/criminal_operations/criminal_operations_types.h"
 
 namespace econlife {
 
@@ -13,12 +13,10 @@ namespace econlife {
 // Static utility functions
 // ============================================================================
 
-float WeaponsTraffickingModule::compute_informal_spot_price(
-    float base_price,
-    float conflict_demand_modifier,
-    float supply_this_tick,
-    float price_floor_supply)
-{
+float WeaponsTraffickingModule::compute_informal_spot_price(float base_price,
+                                                            float conflict_demand_modifier,
+                                                            float supply_this_tick,
+                                                            float price_floor_supply) {
     float effective_supply = std::max(supply_this_tick, price_floor_supply);
     return base_price * (1.0f + conflict_demand_modifier) / effective_supply;
 }
@@ -27,19 +25,15 @@ float WeaponsTraffickingModule::get_conflict_demand_modifier(uint8_t conflict_st
     return TerritorialConflictDemandModifier::get_modifier(conflict_stage);
 }
 
-float WeaponsTraffickingModule::compute_diversion_output(
-    float total_output,
-    float diversion_fraction,
-    float max_diversion_fraction)
-{
+float WeaponsTraffickingModule::compute_diversion_output(float total_output,
+                                                         float diversion_fraction,
+                                                         float max_diversion_fraction) {
     float clamped_fraction = clamp_diversion_fraction(diversion_fraction, max_diversion_fraction);
     return total_output * clamped_fraction;
 }
 
-float WeaponsTraffickingModule::clamp_diversion_fraction(
-    float requested_fraction,
-    float max_diversion_fraction)
-{
+float WeaponsTraffickingModule::clamp_diversion_fraction(float requested_fraction,
+                                                         float max_diversion_fraction) {
     return std::clamp(requested_fraction, 0.0f, max_diversion_fraction);
 }
 
@@ -55,12 +49,10 @@ float WeaponsTraffickingModule::compute_chain_custody_actionability(float base_a
 // Province-parallel execution
 // ============================================================================
 
-void WeaponsTraffickingModule::execute_province(
-    uint32_t province_idx,
-    const WorldState& state,
-    DeltaBuffer& province_delta)
-{
-    if (province_idx >= state.provinces.size()) return;
+void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                                DeltaBuffer& province_delta) {
+    if (province_idx >= state.provinces.size())
+        return;
     const auto& province = state.provinces[province_idx];
 
     diversion_records_.clear();
@@ -86,8 +78,7 @@ void WeaponsTraffickingModule::execute_province(
     // Collect manufacturing businesses sorted by id ascending
     std::vector<const NPCBusiness*> manufacturers;
     for (const auto& biz : state.npc_businesses) {
-        if (biz.province_id == province.id &&
-            biz.sector == BusinessSector::manufacturing &&
+        if (biz.province_id == province.id && biz.sector == BusinessSector::manufacturing &&
             biz.regulatory_violation_severity > 0.0f) {
             // regulatory_violation_severity > 0 serves as proxy for diversion_fraction
             manufacturers.push_back(&biz);
@@ -100,20 +91,20 @@ void WeaponsTraffickingModule::execute_province(
 
     for (const auto* biz : manufacturers) {
         float total_output = biz->revenue_per_tick * 0.01f;  // proxy for weapon output
-        if (total_output <= 0.0f) continue;
+        if (total_output <= 0.0f)
+            continue;
 
         float diversion_fraction = biz->regulatory_violation_severity * 0.5f;  // proxy
         diversion_fraction = clamp_diversion_fraction(diversion_fraction, MAX_DIVERSION_FRACTION);
 
-        float diverted = compute_diversion_output(total_output, diversion_fraction, MAX_DIVERSION_FRACTION);
+        float diverted =
+            compute_diversion_output(total_output, diversion_fraction, MAX_DIVERSION_FRACTION);
         float formal = total_output - diverted;
 
         total_weapon_supply += diverted;
 
         diversion_records_.push_back(WeaponDiversionRecord{
-            biz->id, WeaponType::small_arms,
-            diversion_fraction, diverted, formal, province.id
-        });
+            biz->id, WeaponType::small_arms, diversion_fraction, diverted, formal, province.id});
 
         // BusinessDelta: credit weapons sales revenue to the diverted business
         if (diverted > 0.0f) {
@@ -123,8 +114,8 @@ void WeaponsTraffickingModule::execute_province(
             float sales_revenue = diverted * informal_price;
 
             BusinessDelta revenue_delta;
-            revenue_delta.business_id           = biz->id;
-            revenue_delta.cash_delta            = sales_revenue;
+            revenue_delta.business_id = biz->id;
+            revenue_delta.cash_delta = sales_revenue;
             revenue_delta.revenue_per_tick_update = sales_revenue;
             province_delta.business_deltas.push_back(revenue_delta);
         }
@@ -133,21 +124,15 @@ void WeaponsTraffickingModule::execute_province(
         if (diverted > 0.0f) {
             EvidenceDelta ev;
             ev.new_token = EvidenceToken{
-                0, EvidenceType::documentary,
-                biz->owner_id, biz->owner_id,
-                0.25f, 0.003f,
-                state.current_tick, province.id, true
-            };
+                0,      EvidenceType::documentary, biz->owner_id, biz->owner_id, 0.25f,
+                0.003f, state.current_tick,        province.id,   true};
             province_delta.evidence_deltas.push_back(ev);
 
             // Physical trafficking evidence (contraband seizure risk)
             EvidenceDelta phys_ev;
-            phys_ev.new_token = EvidenceToken{
-                0, EvidenceType::physical,
-                biz->owner_id, biz->owner_id,
-                0.35f, 0.002f,
-                state.current_tick, province.id, true
-            };
+            phys_ev.new_token =
+                EvidenceToken{0,      EvidenceType::physical, biz->owner_id, biz->owner_id, 0.35f,
+                              0.002f, state.current_tick,     province.id,   true};
             province_delta.evidence_deltas.push_back(phys_ev);
         }
 
@@ -182,18 +167,20 @@ void WeaponsTraffickingModule::execute_province(
                 // Heavy weapons embargo: spike all LE NPCs in province
                 for (const auto& npc : state.significant_npcs) {
                     if (npc.current_province_id == province.id &&
-                        npc.role == NPCRole::law_enforcement &&
-                        npc.status == NPCStatus::active) {
+                        npc.role == NPCRole::law_enforcement && npc.status == NPCStatus::active) {
                         // InvestigatorMeter spike — cannot be suppressed by corruption
                         // In full impl, directly modifies InvestigatorMeter.current_level
                         // Here, emit evidence with high actionability to represent the spike
                         EvidenceDelta ev;
-                        ev.new_token = EvidenceToken{
-                            0, EvidenceType::physical,
-                            biz.owner_id, biz.owner_id,
-                            EMBARGO_METER_SPIKE, 0.001f,
-                            state.current_tick, province.id, true
-                        };
+                        ev.new_token = EvidenceToken{0,
+                                                     EvidenceType::physical,
+                                                     biz.owner_id,
+                                                     biz.owner_id,
+                                                     EMBARGO_METER_SPIKE,
+                                                     0.001f,
+                                                     state.current_tick,
+                                                     province.id,
+                                                     true};
                         province_delta.evidence_deltas.push_back(ev);
                     }
                 }

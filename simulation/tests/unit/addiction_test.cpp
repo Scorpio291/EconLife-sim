@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+
 #include "modules/addiction/addiction_module.h"
 
 using namespace econlife;
@@ -57,11 +58,16 @@ TEST_CASE("Addiction: active to recovery with clean ticks", "[addiction][tier10]
 }
 
 TEST_CASE("Addiction: craving increment per stage", "[addiction][tier10]") {
-    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::casual), WithinAbs(0.01f, 0.001f));
-    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::regular), WithinAbs(0.02f, 0.001f));
-    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::dependent), WithinAbs(0.03f, 0.001f));
-    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::active), WithinAbs(0.05f, 0.001f));
-    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::recovery), WithinAbs(-0.003f, 0.001f));
+    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::casual),
+                 WithinAbs(0.01f, 0.001f));
+    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::regular),
+                 WithinAbs(0.02f, 0.001f));
+    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::dependent),
+                 WithinAbs(0.03f, 0.001f));
+    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::active),
+                 WithinAbs(0.05f, 0.001f));
+    REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::recovery),
+                 WithinAbs(-0.003f, 0.001f));
     REQUIRE_THAT(AddictionModule::craving_increment(AddictionStage::none), WithinAbs(0.0f, 0.001f));
 }
 
@@ -71,33 +77,44 @@ TEST_CASE("Addiction: withdrawal damage at dependent stage", "[addiction][tier10
 }
 
 TEST_CASE("Addiction: no withdrawal below dependent", "[addiction][tier10]") {
-    REQUIRE_THAT(AddictionModule::compute_withdrawal_damage(AddictionStage::casual, 10), WithinAbs(0.0f, 0.001f));
-    REQUIRE_THAT(AddictionModule::compute_withdrawal_damage(AddictionStage::regular, 10), WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(AddictionModule::compute_withdrawal_damage(AddictionStage::casual, 10),
+                 WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(AddictionModule::compute_withdrawal_damage(AddictionStage::regular, 10),
+                 WithinAbs(0.0f, 0.001f));
 }
 
 TEST_CASE("Addiction: no withdrawal with zero supply gap", "[addiction][tier10]") {
-    REQUIRE_THAT(AddictionModule::compute_withdrawal_damage(AddictionStage::dependent, 0), WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(AddictionModule::compute_withdrawal_damage(AddictionStage::dependent, 0),
+                 WithinAbs(0.0f, 0.001f));
 }
 
 TEST_CASE("Addiction: work efficiency per stage", "[addiction][tier10]") {
-    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::none), WithinAbs(1.0f, 0.01f));
-    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::casual), WithinAbs(1.0f, 0.01f));
-    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::dependent), WithinAbs(0.70f, 0.01f));
-    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::active), WithinAbs(0.50f, 0.01f));
-    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::terminal), WithinAbs(0.20f, 0.01f));
+    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::none),
+                 WithinAbs(1.0f, 0.01f));
+    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::casual),
+                 WithinAbs(1.0f, 0.01f));
+    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::dependent),
+                 WithinAbs(0.70f, 0.01f));
+    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::active),
+                 WithinAbs(0.50f, 0.01f));
+    REQUIRE_THAT(AddictionModule::compute_work_efficiency(AddictionStage::terminal),
+                 WithinAbs(0.20f, 0.01f));
 }
 
 TEST_CASE("Addiction: rate delta from stage transition", "[addiction][tier10]") {
     // Entering counted stage
-    float enter = AddictionModule::compute_addiction_rate_delta(AddictionStage::regular, AddictionStage::dependent);
+    float enter = AddictionModule::compute_addiction_rate_delta(AddictionStage::regular,
+                                                                AddictionStage::dependent);
     REQUIRE_THAT(enter, WithinAbs(0.001f, 0.0001f));
 
     // Leaving counted stage (recovery)
-    float leave = AddictionModule::compute_addiction_rate_delta(AddictionStage::active, AddictionStage::recovery);
+    float leave = AddictionModule::compute_addiction_rate_delta(AddictionStage::active,
+                                                                AddictionStage::recovery);
     REQUIRE_THAT(leave, WithinAbs(-0.001f, 0.0001f));
 
     // No change within counted stages
-    float same = AddictionModule::compute_addiction_rate_delta(AddictionStage::dependent, AddictionStage::active);
+    float same = AddictionModule::compute_addiction_rate_delta(AddictionStage::dependent,
+                                                               AddictionStage::active);
     REQUIRE_THAT(same, WithinAbs(0.0f, 0.0001f));
 }
 

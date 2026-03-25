@@ -23,10 +23,10 @@ namespace econlife {
 // ---------------------------------------------------------------------------
 struct GoodsData {
     uint32_t good_id;
-    float    base_consumer_demand_units;  // default demand units per tick per NPC
-    float    income_elasticity;           // exponent on income_factor power function
-    float    price_elasticity;            // exponent on price_factor (sign: negative = normal good)
-    float    base_price;                  // reference base price for price_factor denominator
+    float base_consumer_demand_units;  // default demand units per tick per NPC
+    float income_elasticity;           // exponent on income_factor power function
+    float price_elasticity;            // exponent on price_factor (sign: negative = normal good)
+    float base_price;                  // reference base price for price_factor denominator
 };
 
 // ---------------------------------------------------------------------------
@@ -36,9 +36,9 @@ struct GoodsData {
 // match the canonical INTERFACE.md specification.
 // ---------------------------------------------------------------------------
 struct DemandConfig {
-    float reference_income    = 1000.0f;  // daily reference income for income_factor normalization
-    float max_income_factor   = 5.0f;     // ceiling clamp on income_factor
-    float min_price_factor    = 0.05f;    // floor clamp on price_factor
+    float reference_income = 1000.0f;  // daily reference income for income_factor normalization
+    float max_income_factor = 5.0f;    // ceiling clamp on income_factor
+    float min_price_factor = 0.05f;    // floor clamp on price_factor
 };
 
 // ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ struct DemandConfig {
 // Updated quarterly (every 90 ticks).
 // ---------------------------------------------------------------------------
 struct NPCBuyerProfile {
-    uint32_t  npc_id;
+    uint32_t npc_id;
     BuyerType buyer_type;
 };
 

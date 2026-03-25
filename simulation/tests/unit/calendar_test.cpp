@@ -2,16 +2,16 @@
 // suppression, entry expiration, and dead NPC handling.
 // All tests tagged [calendar][tier1].
 
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <memory>
 
-#include "modules/calendar/calendar_module.h"
-#include "modules/calendar/calendar_types.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/npc.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/calendar/calendar_module.h"
+#include "modules/calendar/calendar_types.h"
 
 using namespace econlife;
 
@@ -64,8 +64,7 @@ static NPC make_test_npc(uint32_t id, NPCStatus status = NPCStatus::active) {
     NPC npc{};
     npc.id = id;
     npc.role = NPCRole::corporate_executive;
-    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f,
-                               0.125f, 0.125f, 0.125f, 0.125f};
+    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
     npc.risk_tolerance = 0.5f;
     npc.capital = 5000.0f;
     npc.social_capital = 0.5f;
@@ -79,15 +78,10 @@ static NPC make_test_npc(uint32_t id, NPCStatus status = NPCStatus::active) {
 // ---------------------------------------------------------------------------
 // Helper: build a deadline CalendarEntry.
 // ---------------------------------------------------------------------------
-static CalendarEntry make_deadline_entry(uint32_t id,
-                                          uint32_t start_tick,
-                                          uint32_t duration_ticks,
-                                          uint32_t npc_id,
-                                          float relationship_penalty,
-                                          uint32_t consequence_delay_ticks,
-                                          bool npc_initiative,
-                                          bool player_committed = false,
-                                          bool mandatory = false) {
+static CalendarEntry make_deadline_entry(uint32_t id, uint32_t start_tick, uint32_t duration_ticks,
+                                         uint32_t npc_id, float relationship_penalty,
+                                         uint32_t consequence_delay_ticks, bool npc_initiative,
+                                         bool player_committed = false, bool mandatory = false) {
     CalendarEntry entry{};
     entry.id = id;
     entry.start_tick = start_tick;
@@ -467,8 +461,10 @@ TEST_CASE("test_dead_npc_skips_relationship", "[calendar][tier1]") {
     bool has_memory = false;
     for (const auto& nd : delta.npc_deltas) {
         if (nd.npc_id == 42) {
-            if (nd.updated_relationship.has_value()) has_relationship = true;
-            if (nd.new_memory_entry.has_value()) has_memory = true;
+            if (nd.updated_relationship.has_value())
+                has_relationship = true;
+            if (nd.new_memory_entry.has_value())
+                has_memory = true;
         }
     }
     REQUIRE_FALSE(has_relationship);

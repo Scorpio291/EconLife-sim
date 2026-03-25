@@ -7,11 +7,11 @@
 //
 // See docs/interfaces/price_engine/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/price_engine/price_engine_types.h"
-
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/price_engine/price_engine_types.h"
 
 namespace econlife {
 
@@ -25,7 +25,7 @@ struct GlobalCommodityPriceIndex;
 // PriceEngineModule — ITickModule implementation for price equilibrium
 // ---------------------------------------------------------------------------
 class PriceEngineModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "price_engine"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -40,8 +40,7 @@ public:
 
     bool is_province_parallel() const noexcept override { return true; }
 
-    void execute_province(uint32_t province_idx,
-                          const WorldState& state,
+    void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
@@ -52,13 +51,11 @@ public:
     static float compute_equilibrium_price(const RegionalMarket& market);
 
     // Step 2: Compute the new spot price after sticky adjustment.
-    static float compute_sticky_adjustment(float spot_price,
-                                           float equilibrium_price,
+    static float compute_sticky_adjustment(float spot_price, float equilibrium_price,
                                            float adjustment_rate);
 
     // Step 3: Apply LOD 2 modifier (returns 1.0 if no modifier found).
-    static float get_lod2_modifier(uint32_t good_id,
-                                   const GlobalCommodityPriceIndex* index);
+    static float get_lod2_modifier(uint32_t good_id, const GlobalCommodityPriceIndex* index);
 };
 
 }  // namespace econlife

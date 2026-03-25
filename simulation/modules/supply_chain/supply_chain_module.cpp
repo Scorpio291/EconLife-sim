@@ -3,12 +3,13 @@
 // docs/interfaces/supply_chain/INTERFACE.md for the canonical specification.
 
 #include "modules/supply_chain/supply_chain_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/rng/deterministic_rng.h"
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/rng/deterministic_rng.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -25,14 +26,13 @@ uint32_t SupplyChainModule::good_id_from_string(const std::string& good_id_str) 
     return hash;
 }
 
-uint32_t SupplyChainModule::compute_transit_ticks(const RouteProfile& route,
-                                                   float mode_speed,
-                                                   float infrastructure_rating) {
+uint32_t SupplyChainModule::compute_transit_ticks(const RouteProfile& route, float mode_speed,
+                                                  float infrastructure_rating) {
     // Transit time formula:
     //   ticks = ceil(distance_km / (mode_speed * (1 + infrastructure * infra_speed_coeff)))
     // Minimum 1 tick for inter-province shipments.
-    float effective_speed = mode_speed
-        * (1.0f + infrastructure_rating * SupplyChainConfig::infra_speed_coeff);
+    float effective_speed =
+        mode_speed * (1.0f + infrastructure_rating * SupplyChainConfig::infra_speed_coeff);
 
     if (effective_speed <= 0.0f) {
         return 1;
@@ -43,27 +43,22 @@ uint32_t SupplyChainModule::compute_transit_ticks(const RouteProfile& route,
     return std::max(ticks, static_cast<uint32_t>(1));
 }
 
-float SupplyChainModule::compute_transport_cost(const RouteProfile& route,
-                                                 float quantity) {
+float SupplyChainModule::compute_transport_cost(const RouteProfile& route, float quantity) {
     // Transport cost formula:
     //   cost = base_transport_rate * distance_km * quantity
     //          * (1 + terrain_roughness * terrain_cost_coeff)
-    float terrain_factor = 1.0f
-        + route.route_terrain_roughness * SupplyChainConfig::terrain_cost_coeff;
+    float terrain_factor =
+        1.0f + route.route_terrain_roughness * SupplyChainConfig::terrain_cost_coeff;
 
-    return SupplyChainConfig::base_transport_rate
-         * route.distance_km
-         * quantity
-         * terrain_factor;
+    return SupplyChainConfig::base_transport_rate * route.distance_km * quantity * terrain_factor;
 }
 
 // ===========================================================================
 // SupplyChainModule — per-province local matching
 // ===========================================================================
 
-void SupplyChainModule::execute_province(uint32_t province_idx,
-                                          const WorldState& state,
-                                          DeltaBuffer& province_delta) {
+void SupplyChainModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                         DeltaBuffer& province_delta) {
     // Skip provinces that are not at full LOD.
     if (province_idx >= state.provinces.size()) {
         return;
@@ -96,9 +91,8 @@ void SupplyChainModule::execute_province(uint32_t province_idx,
     dispatch_inter_province(province_idx, state, province_delta, unfulfilled, rng);
 }
 
-void SupplyChainModule::collect_sell_offers(uint32_t province_id,
-                                             const WorldState& state,
-                                             std::vector<SellOffer>& offers) const {
+void SupplyChainModule::collect_sell_offers(uint32_t province_id, const WorldState& state,
+                                            std::vector<SellOffer>& offers) const {
     // Build sell offers from regional market supply for this province.
     // Each market with positive supply generates a sell offer.
     // In V1, we treat the aggregated market supply as available for matching.
@@ -117,14 +111,11 @@ void SupplyChainModule::collect_sell_offers(uint32_t province_id,
 
     // Sort by good_id ascending for deterministic order.
     std::sort(offers.begin(), offers.end(),
-              [](const SellOffer& a, const SellOffer& b) {
-                  return a.good_id < b.good_id;
-              });
+              [](const SellOffer& a, const SellOffer& b) { return a.good_id < b.good_id; });
 }
 
-void SupplyChainModule::collect_buy_orders(uint32_t province_id,
-                                            const WorldState& state,
-                                            std::vector<BuyOrder>& orders) const {
+void SupplyChainModule::collect_buy_orders(uint32_t province_id, const WorldState& state,
+                                           std::vector<BuyOrder>& orders) const {
     // Build buy orders from demand buffer for this province.
     // Each market with positive demand_buffer generates a buy order.
     for (const auto& market : state.regional_markets) {
@@ -142,16 +133,12 @@ void SupplyChainModule::collect_buy_orders(uint32_t province_id,
 
     // Sort by good_id ascending for deterministic order.
     std::sort(orders.begin(), orders.end(),
-              [](const BuyOrder& a, const BuyOrder& b) {
-                  return a.good_id < b.good_id;
-              });
+              [](const BuyOrder& a, const BuyOrder& b) { return a.good_id < b.good_id; });
 }
 
-void SupplyChainModule::match_local(uint32_t province_id,
-                                     const WorldState& state,
-                                     DeltaBuffer& delta,
-                                     std::vector<SellOffer>& offers,
-                                     std::vector<BuyOrder>& orders) const {
+void SupplyChainModule::match_local(uint32_t province_id, const WorldState& state,
+                                    DeltaBuffer& delta, std::vector<SellOffer>& offers,
+                                    std::vector<BuyOrder>& orders) const {
     // Local matching: for each good, match available supply to demand.
     // Same province = zero transit time, supply updated immediately.
     // No TransitShipment created for local matches.
@@ -202,12 +189,10 @@ void SupplyChainModule::match_local(uint32_t province_id,
     }
 }
 
-void SupplyChainModule::dispatch_inter_province(
-        uint32_t province_id,
-        const WorldState& state,
-        DeltaBuffer& delta,
-        const std::vector<BuyOrder>& unfulfilled_orders,
-        DeterministicRNG& rng) const {
+void SupplyChainModule::dispatch_inter_province(uint32_t province_id, const WorldState& state,
+                                                DeltaBuffer& delta,
+                                                const std::vector<BuyOrder>& unfulfilled_orders,
+                                                DeterministicRNG& rng) const {
     if (unfulfilled_orders.empty()) {
         return;
     }
@@ -279,8 +264,8 @@ void SupplyChainModule::dispatch_inter_province(
 
             // Compute transit time.
             float infra = state.provinces[src].infrastructure_rating;
-            uint32_t transit_ticks = compute_transit_ticks(
-                route, SupplyChainConfig::road_speed, infra);
+            uint32_t transit_ticks =
+                compute_transit_ticks(route, SupplyChainConfig::road_speed, infra);
 
             // Deduct transport cost from shipper.
             NPCDelta cost_delta{};
@@ -360,20 +345,19 @@ void SupplyChainModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
             // Merge province delta into main delta.
             delta.market_deltas.insert(delta.market_deltas.end(),
-                province_delta.market_deltas.begin(),
-                province_delta.market_deltas.end());
-            delta.npc_deltas.insert(delta.npc_deltas.end(),
-                province_delta.npc_deltas.begin(),
-                province_delta.npc_deltas.end());
+                                       province_delta.market_deltas.begin(),
+                                       province_delta.market_deltas.end());
+            delta.npc_deltas.insert(delta.npc_deltas.end(), province_delta.npc_deltas.begin(),
+                                    province_delta.npc_deltas.end());
             delta.evidence_deltas.insert(delta.evidence_deltas.end(),
-                province_delta.evidence_deltas.begin(),
-                province_delta.evidence_deltas.end());
+                                         province_delta.evidence_deltas.begin(),
+                                         province_delta.evidence_deltas.end());
         }
     }
 }
 
 void SupplyChainModule::process_transit_arrivals(const WorldState& state,
-                                                  DeltaBuffer& delta) const {
+                                                 DeltaBuffer& delta) const {
     // In V1, transit arrivals are DeferredWorkItems with
     // type == transit_arrival and due_tick <= current_tick.
     //
@@ -399,9 +383,8 @@ void SupplyChainModule::process_transit_arrivals(const WorldState& state,
     // 5. Set shipment status to arrived
 }
 
-void SupplyChainModule::process_interception_checks(const WorldState& state,
-                                                     DeltaBuffer& delta,
-                                                     DeterministicRNG& rng) const {
+void SupplyChainModule::process_interception_checks(const WorldState& state, DeltaBuffer& delta,
+                                                    DeterministicRNG& rng) const {
     // Process interception_check DeferredWorkItems for criminal shipments.
     //
     // For each interception check:
@@ -417,8 +400,7 @@ void SupplyChainModule::process_interception_checks(const WorldState& state,
     // Step 2 drain. For now, no-op.
 }
 
-void SupplyChainModule::process_lod1_imports(const WorldState& state,
-                                              DeltaBuffer& delta) const {
+void SupplyChainModule::process_lod1_imports(const WorldState& state, DeltaBuffer& delta) const {
     // Process NationalTradeOffer records from LOD 1 nations.
     //
     // For each offer in state.lod1_trade_offers:
@@ -437,8 +419,7 @@ void SupplyChainModule::process_lod1_imports(const WorldState& state,
             bool found = false;
 
             for (const auto& market : state.regional_markets) {
-                if (market.good_id == export_good.good_id
-                    && market.demand_buffer > best_demand) {
+                if (market.good_id == export_good.good_id && market.demand_buffer > best_demand) {
                     best_demand = market.demand_buffer;
                     best_province = market.province_id;
                     found = true;

@@ -1,8 +1,10 @@
 #include "designer_drug_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
+
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -10,7 +12,8 @@ bool DesignerDrugModule::is_detection_triggered(float cumulative_evidence, float
     return cumulative_evidence >= threshold;
 }
 
-uint32_t DesignerDrugModule::compute_review_duration(uint32_t base_duration, float political_delay) {
+uint32_t DesignerDrugModule::compute_review_duration(uint32_t base_duration,
+                                                     float political_delay) {
     return static_cast<uint32_t>(static_cast<float>(base_duration) * political_delay);
 }
 
@@ -43,21 +46,21 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
     bool monthly_check = should_check_detection(state.current_tick, MONTHLY_INTERVAL);
 
     for (auto& compound : compounds_) {
-        if (compound.stage == SchedulingStage::scheduled) continue;
+        if (compound.stage == SchedulingStage::scheduled)
+            continue;
 
         // BusinessDelta: R&D investment cost each tick for active (unscheduled) compounds
         // Find the criminal business owned by creator_actor_id in the compound's province
         for (const auto& biz : state.npc_businesses) {
             if (biz.owner_id == compound.creator_actor_id &&
-                biz.province_id == compound.province_id &&
-                biz.criminal_sector) {
+                biz.province_id == compound.province_id && biz.criminal_sector) {
                 // R&D investment rate: 1% of revenue per tick
                 constexpr float RD_INVESTMENT_RATE = 0.01f;
                 float rd_cost = biz.revenue_per_tick * RD_INVESTMENT_RATE;
                 if (rd_cost > 0.0f) {
                     BusinessDelta rd_delta;
                     rd_delta.business_id = biz.id;
-                    rd_delta.cash_delta  = -rd_cost;
+                    rd_delta.cash_delta = -rd_cost;
                     delta.business_deltas.push_back(rd_delta);
                 }
                 break;
@@ -68,13 +71,15 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
             float evidence_sum = 0.0f;
             for (const auto& token : state.evidence_pool) {
                 if (token.is_active && token.target_npc_id == compound.creator_actor_id &&
-                    (token.type == EvidenceType::financial || token.type == EvidenceType::physical)) {
+                    (token.type == EvidenceType::financial ||
+                     token.type == EvidenceType::physical)) {
                     evidence_sum += token.actionability;
                 }
             }
             compound.cumulative_evidence_weight = evidence_sum;
 
-            if (is_detection_triggered(compound.cumulative_evidence_weight, compound.detection_threshold)) {
+            if (is_detection_triggered(compound.cumulative_evidence_weight,
+                                       compound.detection_threshold)) {
                 compound.stage = SchedulingStage::review_initiated;
                 compound.review_start_tick = state.current_tick;
             }
@@ -95,8 +100,8 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     }
                 }
 
-                compound.market_margin_multiplier = compute_market_margin(
-                    compound.stage, compound.has_successor);
+                compound.market_margin_multiplier =
+                    compute_market_margin(compound.stage, compound.has_successor);
 
                 ConsequenceDelta cons;
                 cons.new_entry_id = compound.compound_id;
@@ -112,14 +117,14 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // Use compound_id as the goods key proxy (maps to "designer_drug_{id}" in goods.csv)
             constexpr float BASE_SUPPLY_PER_TICK = 10.0f;  // units per tick at baseline
             MarketDelta supply_entry;
-            supply_entry.good_id      = compound.compound_id;
-            supply_entry.region_id    = compound.province_id;
+            supply_entry.good_id = compound.compound_id;
+            supply_entry.region_id = compound.province_id;
             supply_entry.supply_delta = BASE_SUPPLY_PER_TICK * compound.market_margin_multiplier;
             delta.market_deltas.push_back(supply_entry);
         }
 
-        compound.market_margin_multiplier = compute_market_margin(
-            compound.stage, compound.has_successor);
+        compound.market_margin_multiplier =
+            compute_market_margin(compound.stage, compound.has_successor);
     }
 }
 

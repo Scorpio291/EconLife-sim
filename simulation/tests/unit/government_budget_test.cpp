@@ -11,15 +11,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
 #include <cmath>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
-#include "modules/government_budget/government_budget_module.h"
-#include "modules/government_budget/budget_types.h"
+#include "core/world_state/world_state.h"
 #include "modules/economy/economy_types.h"
+#include "modules/government_budget/budget_types.h"
+#include "modules/government_budget/government_budget_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -62,9 +61,8 @@ WorldState make_test_world_state() {
 }
 
 // Create a basic NPCBusiness with sensible defaults.
-NPCBusiness make_test_business(uint32_t id, float revenue_per_tick,
-                                uint32_t province_id = 0,
-                                bool criminal = false) {
+NPCBusiness make_test_business(uint32_t id, float revenue_per_tick, uint32_t province_id = 0,
+                               bool criminal = false) {
     NPCBusiness biz{};
     biz.id = id;
     biz.sector = criminal ? BusinessSector::criminal : BusinessSector::retail;
@@ -78,8 +76,8 @@ NPCBusiness make_test_business(uint32_t id, float revenue_per_tick,
     biz.criminal_sector = criminal;
     biz.province_id = province_id;
     biz.regulatory_violation_severity = 0.0f;
-    biz.default_activity_scope = criminal ? VisibilityScope::concealed
-                                          : VisibilityScope::institutional;
+    biz.default_activity_scope =
+        criminal ? VisibilityScope::concealed : VisibilityScope::institutional;
     biz.owner_id = 100 + id;
     biz.deferred_salary_liability = 0.0f;
     biz.accounts_payable_float = 0.0f;
@@ -178,11 +176,11 @@ TEST_CASE("test_sequential_execution", "[government_budget][tier5]") {
 // ===========================================================================
 
 TEST_CASE("test_is_quarterly_tick", "[government_budget][tier5]") {
-    REQUIRE(GovernmentBudgetModule::is_quarterly_tick(0) == false);   // tick 0 excluded
+    REQUIRE(GovernmentBudgetModule::is_quarterly_tick(0) == false);  // tick 0 excluded
     REQUIRE(GovernmentBudgetModule::is_quarterly_tick(1) == false);
     REQUIRE(GovernmentBudgetModule::is_quarterly_tick(45) == false);
     REQUIRE(GovernmentBudgetModule::is_quarterly_tick(89) == false);
-    REQUIRE(GovernmentBudgetModule::is_quarterly_tick(90) == true);   // first quarter
+    REQUIRE(GovernmentBudgetModule::is_quarterly_tick(90) == true);  // first quarter
     REQUIRE(GovernmentBudgetModule::is_quarterly_tick(91) == false);
     REQUIRE(GovernmentBudgetModule::is_quarterly_tick(180) == true);  // second quarter
     REQUIRE(GovernmentBudgetModule::is_quarterly_tick(270) == true);  // third quarter
@@ -275,10 +273,10 @@ TEST_CASE("test_compute_corporate_tax_filters_by_province", "[government_budget]
 
 TEST_CASE("test_compute_infrastructure_change_decay_only", "[government_budget][tier5]") {
     float result = GovernmentBudgetModule::compute_infrastructure_change(
-        0.80f,     // current_rating
-        0.0f,      // spending_actual (no investment)
-        0.01f,     // decay_rate
-        1000000.0f // investment_scale
+        0.80f,      // current_rating
+        0.0f,       // spending_actual (no investment)
+        0.01f,      // decay_rate
+        1000000.0f  // investment_scale
     );
 
     // Expected: 0.80 - 0.01 = 0.79
@@ -290,12 +288,12 @@ TEST_CASE("test_compute_infrastructure_change_decay_only", "[government_budget][
 // ===========================================================================
 
 TEST_CASE("test_compute_infrastructure_change_with_investment", "[government_budget][tier5]") {
-    float result = GovernmentBudgetModule::compute_infrastructure_change(
-        0.80f,       // current_rating
-        500000.0f,   // spending_actual
-        0.01f,       // decay_rate
-        1000000.0f   // investment_scale
-    );
+    float result =
+        GovernmentBudgetModule::compute_infrastructure_change(0.80f,      // current_rating
+                                                              500000.0f,  // spending_actual
+                                                              0.01f,      // decay_rate
+                                                              1000000.0f  // investment_scale
+        );
 
     // Expected: 0.80 - 0.01 + (500000 / 1000000) = 0.80 - 0.01 + 0.50 = 1.29
     // But clamped to 1.0.
@@ -308,18 +306,18 @@ TEST_CASE("test_compute_infrastructure_change_with_investment", "[government_bud
 
 TEST_CASE("test_infrastructure_clamped_to_bounds", "[government_budget][tier5]") {
     // Test lower bound: heavy decay on low rating.
-    float low_result = GovernmentBudgetModule::compute_infrastructure_change(
-        0.005f, 0.0f, 0.01f, 1000000.0f);
+    float low_result =
+        GovernmentBudgetModule::compute_infrastructure_change(0.005f, 0.0f, 0.01f, 1000000.0f);
     REQUIRE_THAT(low_result, WithinAbs(0.0f, 0.001f));  // Clamped to 0.0
 
     // Test upper bound: heavy investment on high rating.
-    float high_result = GovernmentBudgetModule::compute_infrastructure_change(
-        0.95f, 2000000.0f, 0.01f, 1000000.0f);
+    float high_result =
+        GovernmentBudgetModule::compute_infrastructure_change(0.95f, 2000000.0f, 0.01f, 1000000.0f);
     REQUIRE_THAT(high_result, WithinAbs(1.0f, 0.001f));  // Clamped to 1.0
 
     // Moderate investment balances decay.
-    float balanced = GovernmentBudgetModule::compute_infrastructure_change(
-        0.50f, 10000.0f, 0.01f, 1000000.0f);
+    float balanced =
+        GovernmentBudgetModule::compute_infrastructure_change(0.50f, 10000.0f, 0.01f, 1000000.0f);
     // Expected: 0.50 - 0.01 + (10000/1000000) = 0.50 - 0.01 + 0.01 = 0.50
     REQUIRE_THAT(balanced, WithinAbs(0.50f, 0.001f));
 }
@@ -579,8 +577,10 @@ TEST_CASE("test_fiscal_warning_at_threshold", "[government_budget][tier5]") {
     bool found_crisis = false;
     for (const auto& c : delta.consequence_deltas) {
         if (c.new_entry_id.has_value()) {
-            if (c.new_entry_id.value() == 1) found_warning = true;
-            if (c.new_entry_id.value() == 2) found_crisis = true;
+            if (c.new_entry_id.value() == 1)
+                found_warning = true;
+            if (c.new_entry_id.value() == 2)
+                found_crisis = true;
         }
     }
     REQUIRE(found_warning);
@@ -717,11 +717,10 @@ TEST_CASE("test_spending_effects_on_inequality", "[government_budget][tier5]") {
 
 TEST_CASE("test_infrastructure_decays_without_investment", "[government_budget][tier5]") {
     float new_rating = GovernmentBudgetModule::compute_infrastructure_change(
-        0.80f,     // current rating
-        0.0f,      // no spending
+        0.80f,  // current rating
+        0.0f,   // no spending
         GovernmentBudgetModule::Constants::infrastructure_decay_per_quarter,
-        GovernmentBudgetModule::Constants::infrastructure_investment_scale
-    );
+        GovernmentBudgetModule::Constants::infrastructure_investment_scale);
 
     // Expected: 0.80 - 0.01 = 0.79
     REQUIRE_THAT(new_rating, WithinAbs(0.79f, 0.001f));

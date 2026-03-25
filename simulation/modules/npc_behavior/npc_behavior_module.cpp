@@ -14,13 +14,14 @@
 //   2. Write NPCDeltas to province_delta.
 
 #include "modules/npc_behavior/npc_behavior_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"  // PlayerCharacter complete type
 
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"  // PlayerCharacter complete type
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -28,8 +29,7 @@ namespace econlife {
 // Static utilities
 // ===========================================================================
 
-float NpcBehaviorModule::compute_expected_value(const NPC& npc,
-                                                 const ActionOutcome& outcome) {
+float NpcBehaviorModule::compute_expected_value(const NPC& npc, const ActionOutcome& outcome) {
     auto type_idx = static_cast<size_t>(outcome.type);
     if (type_idx >= npc.motivations.weights.size()) {
         return 0.0f;
@@ -37,26 +37,20 @@ float NpcBehaviorModule::compute_expected_value(const NPC& npc,
     return npc.motivations.weights[type_idx] * outcome.probability * outcome.magnitude;
 }
 
-float NpcBehaviorModule::compute_risk_discount(float exposure_risk,
-                                                float risk_tolerance) {
+float NpcBehaviorModule::compute_risk_discount(float exposure_risk, float risk_tolerance) {
     float raw = 1.0f - (exposure_risk - risk_tolerance) * Constants::risk_sensitivity_coeff;
     return std::max(Constants::min_risk_discount, std::min(1.0f, raw));
 }
 
-float NpcBehaviorModule::apply_relationship_modifier(float base_ev,
-                                                      float trust,
-                                                      float trust_ev_bonus) {
+float NpcBehaviorModule::apply_relationship_modifier(float base_ev, float trust,
+                                                     float trust_ev_bonus) {
     return base_ev * (1.0f + trust * trust_ev_bonus);
 }
 
-ActionEvaluation NpcBehaviorModule::evaluate_action(
-    const NPC& npc,
-    DailyAction action,
-    const std::vector<ActionOutcome>& outcomes,
-    float exposure_risk,
-    float trust_bonus_target,
-    float trust_ev_bonus) {
-
+ActionEvaluation NpcBehaviorModule::evaluate_action(const NPC& npc, DailyAction action,
+                                                    const std::vector<ActionOutcome>& outcomes,
+                                                    float exposure_risk, float trust_bonus_target,
+                                                    float trust_ev_bonus) {
     float total_ev = 0.0f;
     for (const auto& outcome : outcomes) {
         total_ev += compute_expected_value(npc, outcome);
@@ -89,16 +83,13 @@ void NpcBehaviorModule::decay_memories(NPC& npc_copy, float decay_rate) {
     }
 }
 
-void NpcBehaviorModule::archive_lowest_decay_memory(
-    std::vector<MemoryEntry>& memory_log) {
+void NpcBehaviorModule::archive_lowest_decay_memory(std::vector<MemoryEntry>& memory_log) {
     if (memory_log.empty()) {
         return;
     }
     auto min_it = std::min_element(
         memory_log.begin(), memory_log.end(),
-        [](const MemoryEntry& a, const MemoryEntry& b) {
-            return a.decay < b.decay;
-        });
+        [](const MemoryEntry& a, const MemoryEntry& b) { return a.decay < b.decay; });
     memory_log.erase(min_it);
 }
 
@@ -212,9 +203,8 @@ size_t NpcBehaviorModule::memory_type_to_outcome_index(MemoryType type) {
 // NpcBehaviorModule — per-province tick execution
 // ===========================================================================
 
-void NpcBehaviorModule::execute_province(uint32_t province_idx,
-                                          const WorldState& state,
-                                          DeltaBuffer& province_delta) {
+void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                         DeltaBuffer& province_delta) {
     const auto& province = state.provinces[province_idx];
 
     // Collect NPCs in this province — both active and waiting are evaluated.
@@ -273,24 +263,20 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
 
         // work: probability scales with employment rate
         float work_prob = std::min(1.0f, 0.5f + employment_rate * 0.4f);
-        candidates.push_back({
-            DailyAction::work,
-            {{OutcomeType::financial_gain, work_prob, 0.5f}},
-            0.0f,
-            -2.0f,
-            0.0f
-        });
+        candidates.push_back({DailyAction::work,
+                              {{OutcomeType::financial_gain, work_prob, 0.5f}},
+                              0.0f,
+                              -2.0f,
+                              0.0f});
 
         // shop: magnitude scales inversely with price (stability proxy)
         float shop_mag = std::min(1.0f, 0.2f + stability * 0.2f);
         float shop_cost = std::min(npc.capital, npc.capital * 0.05f);
-        candidates.push_back({
-            DailyAction::shop,
-            {{OutcomeType::security_gain, 0.7f, shop_mag}},
-            0.0f,
-            -2.0f,
-            shop_cost
-        });
+        candidates.push_back({DailyAction::shop,
+                              {{OutcomeType::security_gain, 0.7f, shop_mag}},
+                              0.0f,
+                              -2.0f,
+                              shop_cost});
 
         // socialize: trust modifier from best relationship
         {
@@ -300,55 +286,42 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
                     best_trust = rel.trust;
                 }
             }
-            candidates.push_back({
-                DailyAction::socialize,
-                {{OutcomeType::relationship_repair, 0.6f, 0.4f}},
-                0.0f,
-                best_trust,
-                0.0f
-            });
+            candidates.push_back({DailyAction::socialize,
+                                  {{OutcomeType::relationship_repair, 0.6f, 0.4f}},
+                                  0.0f,
+                                  best_trust,
+                                  0.0f});
         }
 
         // rest: always available
-        candidates.push_back({
-            DailyAction::rest,
-            {{OutcomeType::self_preservation, 0.9f, 0.2f}},
-            0.0f,
-            -2.0f,
-            0.0f
-        });
+        candidates.push_back(
+            {DailyAction::rest, {{OutcomeType::self_preservation, 0.9f, 0.2f}}, 0.0f, -2.0f, 0.0f});
 
         // seek_employment: probability scales inversely with employment rate
         float seek_prob = std::min(1.0f, 0.3f + (1.0f - employment_rate) * 0.4f);
-        candidates.push_back({
-            DailyAction::seek_employment,
-            {{OutcomeType::career_advance, seek_prob, 0.6f}},
-            0.1f,
-            -2.0f,
-            0.0f
-        });
+        candidates.push_back({DailyAction::seek_employment,
+                              {{OutcomeType::career_advance, seek_prob, 0.6f}},
+                              0.1f,
+                              -2.0f,
+                              0.0f});
 
         // criminal_activity: magnitude scales with crime rate, risk scales with stability
         float crim_mag = std::min(1.0f, 0.4f + crime_rate * 0.6f);
         float crim_risk = std::max(0.3f, 0.8f - crime_rate * 0.5f);
-        candidates.push_back({
-            DailyAction::criminal_activity,
-            {{OutcomeType::financial_gain, 0.5f, crim_mag}},
-            crim_risk,
-            -2.0f,
-            0.0f
-        });
+        candidates.push_back({DailyAction::criminal_activity,
+                              {{OutcomeType::financial_gain, 0.5f, crim_mag}},
+                              crim_risk,
+                              -2.0f,
+                              0.0f});
 
         // migrate: available if satisfaction is low and another province exists
         if (state.provinces.size() > 1 && stability < 0.4f) {
-            candidates.push_back({
-                DailyAction::migrate,
-                {{OutcomeType::security_gain, 0.4f, 0.5f},
-                 {OutcomeType::self_preservation, 0.3f, 0.4f}},
-                0.2f,
-                -2.0f,
-                0.0f
-            });
+            candidates.push_back({DailyAction::migrate,
+                                  {{OutcomeType::security_gain, 0.4f, 0.5f},
+                                   {OutcomeType::self_preservation, 0.3f, 0.4f}},
+                                  0.2f,
+                                  -2.0f,
+                                  0.0f});
         }
 
         // whistleblow: eligibility check per spec
@@ -364,14 +337,12 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
                 }
             }
             if (satisfaction < 0.35f && has_witnessed && npc.risk_tolerance > 0.4f) {
-                candidates.push_back({
-                    DailyAction::whistleblow,
-                    {{OutcomeType::ideological, 0.6f, 0.7f},
-                     {OutcomeType::self_preservation, 0.3f, 0.3f}},
-                    0.6f,
-                    -2.0f,
-                    0.0f
-                });
+                candidates.push_back({DailyAction::whistleblow,
+                                      {{OutcomeType::ideological, 0.6f, 0.7f},
+                                       {OutcomeType::self_preservation, 0.3f, 0.3f}},
+                                      0.6f,
+                                      -2.0f,
+                                      0.0f});
             }
         }
 
@@ -386,10 +357,9 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
                 continue;
             }
 
-            ActionEvaluation eval = evaluate_action(
-                npc, candidate.action, candidate.outcomes,
-                candidate.exposure_risk, candidate.trust_target,
-                Constants::trust_ev_bonus);
+            ActionEvaluation eval =
+                evaluate_action(npc, candidate.action, candidate.outcomes, candidate.exposure_risk,
+                                candidate.trust_target, Constants::trust_ev_bonus);
 
             // NaN guard.
             if (std::isnan(eval.net_utility)) {
@@ -530,7 +500,8 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
                     // The actual province_id change is handled by npc_travel_arrival DWQ.
                     cpd.npc_delta = migration_delta;
                     // Write to cross-province buffer (thread-safe via partitioning).
-                    const_cast<WorldState&>(state).cross_province_delta_buffer.entries.push_back(cpd);
+                    const_cast<WorldState&>(state).cross_province_delta_buffer.entries.push_back(
+                        cpd);
                 }
             }
         }
@@ -541,8 +512,9 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
             if (mem.is_actionable && mem.decay > Constants::memory_decay_floor) {
                 size_t target_idx = memory_type_to_outcome_index(mem.type);
                 if (target_idx < shifted_motivations.weights.size()) {
-                    shifted_motivations.weights[target_idx] +=
-                        Constants::motivation_shift_rate * std::abs(mem.emotional_weight) * mem.decay;
+                    shifted_motivations.weights[target_idx] += Constants::motivation_shift_rate *
+                                                               std::abs(mem.emotional_weight) *
+                                                               mem.decay;
                 }
             }
         }
@@ -551,7 +523,8 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
         // Check if motivation actually shifted enough to warrant a delta.
         float motivation_diff = 0.0f;
         for (size_t i = 0; i < 8; ++i) {
-            motivation_diff += std::abs(shifted_motivations.weights[i] - npc.motivations.weights[i]);
+            motivation_diff +=
+                std::abs(shifted_motivations.weights[i] - npc.motivations.weights[i]);
         }
         if (motivation_diff > 0.0001f) {
             // Use the first changed weight as the delta signal.
@@ -564,11 +537,11 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx,
         // Find the most-interacted-with relationship and write a clamped update.
         if (!npc_copy.relationships.empty()) {
             // Pick the relationship with the most recent interaction.
-            auto best_rel_it = std::max_element(
-                npc_copy.relationships.begin(), npc_copy.relationships.end(),
-                [](const Relationship& a, const Relationship& b) {
-                    return a.last_interaction_tick < b.last_interaction_tick;
-                });
+            auto best_rel_it =
+                std::max_element(npc_copy.relationships.begin(), npc_copy.relationships.end(),
+                                 [](const Relationship& a, const Relationship& b) {
+                                     return a.last_interaction_tick < b.last_interaction_tick;
+                                 });
             Relationship rel_copy = *best_rel_it;
             clamp_relationship(rel_copy);
             rel_copy.last_interaction_tick = state.current_tick;

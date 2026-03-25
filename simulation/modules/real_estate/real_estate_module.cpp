@@ -12,12 +12,13 @@
 //   3. Assign commercial tenants to unoccupied commercial properties.
 
 #include "modules/real_estate/real_estate_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"  // PlayerCharacter complete type
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"  // PlayerCharacter complete type
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -29,9 +30,7 @@ void RealEstateModule::add_property(PropertyListing listing) {
     properties_.push_back(listing);
     // Maintain sorted order by id ascending for deterministic processing.
     std::sort(properties_.begin(), properties_.end(),
-              [](const PropertyListing& a, const PropertyListing& b) {
-                  return a.id < b.id;
-              });
+              [](const PropertyListing& a, const PropertyListing& b) { return a.id < b.id; });
 }
 
 const std::vector<PropertyListing>& RealEstateModule::properties() const {
@@ -47,7 +46,7 @@ std::vector<PropertyListing>& RealEstateModule::properties() {
 // ===========================================================================
 
 float RealEstateModule::compute_market_value(const PropertyListing& prop,
-                                              const Province& province) {
+                                             const Province& province) {
     // Start with current market_value as baseline.
     float base_value = prop.market_value;
     if (base_value <= 0.0f) {
@@ -73,8 +72,7 @@ float RealEstateModule::compute_market_value(const PropertyListing& prop,
     return base_value * multiplier;
 }
 
-float RealEstateModule::compute_rental_income(float market_value,
-                                               float rental_yield_rate) {
+float RealEstateModule::compute_rental_income(float market_value, float rental_yield_rate) {
     return market_value * rental_yield_rate;
 }
 
@@ -88,10 +86,8 @@ void RealEstateModule::converge_asking_price(PropertyListing& prop, float rate) 
     }
 }
 
-float RealEstateModule::compute_avg_property_value(
-    const std::vector<PropertyListing>& props,
-    uint32_t province_id) {
-
+float RealEstateModule::compute_avg_property_value(const std::vector<PropertyListing>& props,
+                                                   uint32_t province_id) {
     float sum = 0.0f;
     uint32_t count = 0;
 
@@ -114,9 +110,8 @@ float RealEstateModule::compute_avg_property_value(
 // RealEstateModule — per-province tick execution
 // ===========================================================================
 
-void RealEstateModule::execute_province(uint32_t province_idx,
-                                         const WorldState& state,
-                                         DeltaBuffer& province_delta) {
+void RealEstateModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                        DeltaBuffer& province_delta) {
     const bool is_monthly_tick =
         (state.current_tick % RealEstateConstants::convergence_interval == 0);
 
@@ -200,8 +195,7 @@ void RealEstateModule::execute_province(uint32_t province_idx,
             bool already_has_premises = false;
             for (const auto& other_prop : properties_) {
                 if (other_prop.province_id == province_idx &&
-                    other_prop.type == PropertyType::commercial &&
-                    other_prop.rented &&
+                    other_prop.type == PropertyType::commercial && other_prop.rented &&
                     other_prop.tenant_id == biz.id) {
                     already_has_premises = true;
                     break;

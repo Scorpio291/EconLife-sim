@@ -13,9 +13,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 #include "modules/healthcare/healthcare_module.h"
 #include "modules/healthcare/healthcare_types.h"
 
@@ -76,16 +76,13 @@ NPC make_test_npc(uint32_t id, uint32_t province_id, float capital = 1000.0f) {
     npc.social_capital = 0.0f;
     npc.risk_tolerance = 0.5f;
     npc.movement_follower_count = 0;
-    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f,
-                               0.125f, 0.125f, 0.125f, 0.125f};
+    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
     return npc;
 }
 
 // Create a HealthcareProfile with sensible defaults.
-HealthcareProfile make_test_profile(float access = 0.8f,
-                                     float quality = 0.9f,
-                                     float cost = 500.0f,
-                                     float utilisation = 0.5f) {
+HealthcareProfile make_test_profile(float access = 0.8f, float quality = 0.9f, float cost = 500.0f,
+                                    float utilisation = 0.5f) {
     HealthcareProfile profile{};
     profile.access_level = access;
     profile.quality_level = quality;
@@ -96,8 +93,7 @@ HealthcareProfile make_test_profile(float access = 0.8f,
 
 // Create a ProvinceHealthState for a province.
 HealthcareModule::ProvinceHealthState make_test_province_health(
-        uint32_t province_id,
-        HealthcareProfile profile = make_test_profile()) {
+    uint32_t province_id, HealthcareProfile profile = make_test_profile()) {
     HealthcareModule::ProvinceHealthState phs{};
     phs.province_id = province_id;
     phs.profile = profile;
@@ -107,10 +103,8 @@ HealthcareModule::ProvinceHealthState make_test_province_health(
 }
 
 // Create an NpcHealthRecord.
-HealthcareModule::NpcHealthRecord make_test_health_record(
-        uint32_t npc_id,
-        float health = 1.0f,
-        uint32_t last_treatment_tick = 0) {
+HealthcareModule::NpcHealthRecord make_test_health_record(uint32_t npc_id, float health = 1.0f,
+                                                          uint32_t last_treatment_tick = 0) {
     HealthcareModule::NpcHealthRecord rec{};
     rec.npc_id = npc_id;
     rec.health = health;
@@ -427,8 +421,8 @@ TEST_CASE("NPC death at zero health", "[healthcare][tier5]") {
     // Verify death delta emitted.
     bool found_death = false;
     for (const auto& nd : delta.npc_deltas) {
-        if (nd.npc_id == 1 && nd.new_status.has_value()
-            && nd.new_status.value() == NPCStatus::dead) {
+        if (nd.npc_id == 1 && nd.new_status.has_value() &&
+            nd.new_status.value() == NPCStatus::dead) {
             found_death = true;
         }
     }
@@ -523,8 +517,10 @@ TEST_CASE("capacity utilisation incremented by treatment", "[healthcare][tier5]"
 
     auto* phs = mod.find_province_health(0);
     REQUIRE(phs != nullptr);
-    REQUIRE_THAT(phs->profile.capacity_utilisation,
-                 WithinAbs(initial_utilisation + HealthcareModule::Constants::capacity_per_treatment, 1e-7f));
+    REQUIRE_THAT(
+        phs->profile.capacity_utilisation,
+        WithinAbs(initial_utilisation + HealthcareModule::Constants::capacity_per_treatment,
+                  1e-7f));
 }
 
 TEST_CASE("execute processes all provinces", "[healthcare][tier5]") {
@@ -801,8 +797,7 @@ TEST_CASE("find_npc_health returns nullptr for unknown id", "[healthcare][tier5]
 
 TEST_CASE("find_province_health returns nullptr for unknown id", "[healthcare][tier5]") {
     HealthcareModule mod;
-    mod.province_health_states().push_back(
-        make_test_province_health(0, make_test_profile()));
+    mod.province_health_states().push_back(make_test_province_health(0, make_test_profile()));
     REQUIRE(mod.find_province_health(999) == nullptr);
 }
 
@@ -835,8 +830,7 @@ TEST_CASE("empty province has zero sick leave fraction", "[healthcare][tier5]") 
     state.provinces.push_back(make_test_province(0));
 
     // No NPCs.
-    mod.province_health_states().push_back(
-        make_test_province_health(0, make_test_profile()));
+    mod.province_health_states().push_back(make_test_province_health(0, make_test_profile()));
 
     DeltaBuffer delta{};
     mod.execute_province(0, state, delta);

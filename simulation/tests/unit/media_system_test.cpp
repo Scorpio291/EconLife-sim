@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "modules/media_system/media_system_module.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/media_system/media_system_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -228,7 +228,7 @@ TEST_CASE("Editorial filter suppresses story at player outlet", "[media_system][
     outlet.credibility = 0.80f;
     outlet.reach = 0.40f;
     outlet.editorial_independence = 0.30f;  // threshold = 0.30 * 0.50 = 0.15
-    outlet.owner_npc_id = 999;  // player-owned
+    outlet.owner_npc_id = 999;              // player-owned
     outlet.journalist_ids = {50};
     module.outlets().push_back(outlet);
 

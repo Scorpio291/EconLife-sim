@@ -11,13 +11,14 @@
 //   Step 6: Update retained earnings
 
 #include "modules/financial_distribution/financial_distribution_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"  // PlayerCharacter complete type
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"  // PlayerCharacter complete type
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -25,9 +26,8 @@ namespace econlife {
 // FinancialDistributionModule — tick execution
 // ===========================================================================
 
-void FinancialDistributionModule::execute_province(uint32_t province_idx,
-                                                    const WorldState& state,
-                                                    DeltaBuffer& province_delta) {
+void FinancialDistributionModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                                   DeltaBuffer& province_delta) {
     // Collect businesses in this province, sorted by business_id ascending
     // for deterministic processing order.
     std::vector<const NPCBusiness*> province_businesses;
@@ -39,9 +39,7 @@ void FinancialDistributionModule::execute_province(uint32_t province_idx,
 
     // Sort by business_id ascending (canonical order per CLAUDE.md).
     std::sort(province_businesses.begin(), province_businesses.end(),
-              [](const NPCBusiness* a, const NPCBusiness* b) {
-                  return a->id < b->id;
-              });
+              [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
 
     // Process each business through the distribution pipeline.
     for (const NPCBusiness* biz : province_businesses) {
@@ -92,8 +90,9 @@ void FinancialDistributionModule::execute_province(uint32_t province_idx,
         }
 
         // Quarterly processing (bonus, dividend) — only on quarter boundaries.
-        bool is_quarter_tick = (state.current_tick > 0)
-                            && (state.current_tick % FinancialDistributionConstants::ticks_per_quarter == 0);
+        bool is_quarter_tick =
+            (state.current_tick > 0) &&
+            (state.current_tick % FinancialDistributionConstants::ticks_per_quarter == 0);
 
         if (is_quarter_tick) {
             // Reset quarterly approval flags at quarter boundary.
@@ -112,14 +111,14 @@ void FinancialDistributionModule::execute_province(uint32_t province_idx,
             }
 
             // Step 3: Quarterly bonus.
-            if (record->compensation.mechanism == CompensationMechanism::salary_bonus
-                || record->compensation.mechanism == CompensationMechanism::full_package) {
+            if (record->compensation.mechanism == CompensationMechanism::salary_bonus ||
+                record->compensation.mechanism == CompensationMechanism::full_package) {
                 process_quarterly_bonus(*biz, *record, state, province_delta);
             }
 
             // Step 4: Quarterly dividend.
-            if (record->compensation.mechanism == CompensationMechanism::salary_dividend
-                || record->compensation.mechanism == CompensationMechanism::full_package) {
+            if (record->compensation.mechanism == CompensationMechanism::salary_dividend ||
+                record->compensation.mechanism == CompensationMechanism::full_package) {
                 process_quarterly_dividend(*biz, *record, state, province_delta);
             }
         }
@@ -146,14 +145,13 @@ void FinancialDistributionModule::execute(const WorldState& state, DeltaBuffer& 
 // Step 1: Salary Payments
 // ===========================================================================
 
-void FinancialDistributionModule::process_salary_payments(
-        const NPCBusiness& business,
-        BusinessCompensationRecord& record,
-        const WorldState& state,
-        DeltaBuffer& delta) {
-
+void FinancialDistributionModule::process_salary_payments(const NPCBusiness& business,
+                                                          BusinessCompensationRecord& record,
+                                                          const WorldState& state,
+                                                          DeltaBuffer& delta) {
     float salary = record.compensation.salary_per_tick;
-    if (salary <= 0.0f) return;
+    if (salary <= 0.0f)
+        return;
 
     float available_cash = business.cash;
 
@@ -172,7 +170,8 @@ void FinancialDistributionModule::process_salary_payments(
         // Emit payment to owner.
         if (state.player && business.owner_id == state.player->id) {
             if (delta.player_delta.wealth_delta.has_value()) {
-                delta.player_delta.wealth_delta = delta.player_delta.wealth_delta.value() + net_payment;
+                delta.player_delta.wealth_delta =
+                    delta.player_delta.wealth_delta.value() + net_payment;
             } else {
                 delta.player_delta.wealth_delta = net_payment;
             }
@@ -201,7 +200,8 @@ void FinancialDistributionModule::process_salary_payments(
 
         if (state.player && business.owner_id == state.player->id) {
             if (delta.player_delta.wealth_delta.has_value()) {
-                delta.player_delta.wealth_delta = delta.player_delta.wealth_delta.value() + net_payment;
+                delta.player_delta.wealth_delta =
+                    delta.player_delta.wealth_delta.value() + net_payment;
             } else {
                 delta.player_delta.wealth_delta = net_payment;
             }
@@ -250,17 +250,16 @@ void FinancialDistributionModule::process_salary_payments(
 // Step 2: Owner's Draw (micro businesses only)
 // ===========================================================================
 
-void FinancialDistributionModule::process_owners_draw(
-        const NPCBusiness& business,
-        BusinessCompensationRecord& record,
-        const WorldState& state,
-        DeltaBuffer& delta) {
-
-    if (record.scale != BusinessScale::micro) return;
+void FinancialDistributionModule::process_owners_draw(const NPCBusiness& business,
+                                                      BusinessCompensationRecord& record,
+                                                      const WorldState& state, DeltaBuffer& delta) {
+    if (record.scale != BusinessScale::micro)
+        return;
 
     // Compute draw amount: fraction of available profit.
     float profit_this_tick = business.revenue_per_tick - business.cost_per_tick;
-    if (profit_this_tick <= 0.0f) return;
+    if (profit_this_tick <= 0.0f)
+        return;
 
     float draw_amount = profit_this_tick * FinancialDistributionConstants::owners_draw_fraction;
 
@@ -268,11 +267,12 @@ void FinancialDistributionModule::process_owners_draw(
     if (draw_amount > business.cash) {
         draw_amount = business.cash;
     }
-    if (draw_amount <= 0.0f) return;
+    if (draw_amount <= 0.0f)
+        return;
 
     // Reset monthly draw accumulator if we've crossed a month boundary.
-    if (state.current_tick >= record.draw_accumulator_reset_tick
-                            + FinancialDistributionConstants::ticks_per_month) {
+    if (state.current_tick >=
+        record.draw_accumulator_reset_tick + FinancialDistributionConstants::ticks_per_month) {
         record.monthly_draw_accumulator = 0.0f;
         record.draw_accumulator_reset_tick = state.current_tick;
     }
@@ -303,7 +303,8 @@ void FinancialDistributionModule::process_owners_draw(
     }
 
     // Check if monthly draw exceeds reporting threshold — generate evidence.
-    if (record.monthly_draw_accumulator > FinancialDistributionConstants::draw_reporting_threshold) {
+    if (record.monthly_draw_accumulator >
+        FinancialDistributionConstants::draw_reporting_threshold) {
         EvidenceDelta ev_delta{};
         EvidenceToken token{};
         token.id = business.id * 1000 + state.current_tick % 1000;  // deterministic ID
@@ -325,14 +326,13 @@ void FinancialDistributionModule::process_owners_draw(
 // Step 3: Quarterly Bonus Distribution
 // ===========================================================================
 
-void FinancialDistributionModule::process_quarterly_bonus(
-        const NPCBusiness& business,
-        BusinessCompensationRecord& record,
-        const WorldState& state,
-        DeltaBuffer& delta) {
-
+void FinancialDistributionModule::process_quarterly_bonus(const NPCBusiness& business,
+                                                          BusinessCompensationRecord& record,
+                                                          const WorldState& state,
+                                                          DeltaBuffer& delta) {
     float bonus_rate = record.compensation.bonus_rate;
-    if (bonus_rate <= 0.0f) return;
+    if (bonus_rate <= 0.0f)
+        return;
 
     // Board approval check for medium/large businesses.
     if (record.scale == BusinessScale::medium || record.scale == BusinessScale::large) {
@@ -346,11 +346,10 @@ void FinancialDistributionModule::process_quarterly_bonus(
 
     // Compute quarterly net profit.
     float net_profit = compute_quarterly_net_profit(
-        business.revenue_per_tick,
-        business.cost_per_tick,
-        record.compensation.salary_per_tick);
+        business.revenue_per_tick, business.cost_per_tick, record.compensation.salary_per_tick);
 
-    if (net_profit <= 0.0f) return;
+    if (net_profit <= 0.0f)
+        return;
 
     float bonus_amount = net_profit * bonus_rate;
 
@@ -358,7 +357,8 @@ void FinancialDistributionModule::process_quarterly_bonus(
     if (bonus_amount > business.cash) {
         bonus_amount = business.cash;
     }
-    if (bonus_amount <= 0.0f) return;
+    if (bonus_amount <= 0.0f)
+        return;
 
     // Apply tax withholding.
     float tax = bonus_amount * FinancialDistributionConstants::default_tax_withholding_rate;
@@ -391,14 +391,13 @@ void FinancialDistributionModule::process_quarterly_bonus(
 // Step 4: Quarterly Dividend Payout
 // ===========================================================================
 
-void FinancialDistributionModule::process_quarterly_dividend(
-        const NPCBusiness& business,
-        BusinessCompensationRecord& record,
-        const WorldState& state,
-        DeltaBuffer& delta) {
-
+void FinancialDistributionModule::process_quarterly_dividend(const NPCBusiness& business,
+                                                             BusinessCompensationRecord& record,
+                                                             const WorldState& state,
+                                                             DeltaBuffer& delta) {
     float yield_target = record.compensation.dividend_yield_target;
-    if (yield_target <= 0.0f) return;
+    if (yield_target <= 0.0f)
+        return;
 
     // Board approval required for medium/large businesses.
     if (record.scale == BusinessScale::medium || record.scale == BusinessScale::large) {
@@ -407,7 +406,8 @@ void FinancialDistributionModule::process_quarterly_dividend(
         }
     }
 
-    if (record.retained_earnings <= 0.0f) return;
+    if (record.retained_earnings <= 0.0f)
+        return;
 
     // Compute target payout from retained earnings.
     float target_payout = record.retained_earnings * yield_target;
@@ -416,10 +416,12 @@ void FinancialDistributionModule::process_quarterly_dividend(
     float working_capital_floor = compute_working_capital_floor(business.cost_per_tick);
     float max_payout = business.cash - working_capital_floor;
 
-    if (max_payout <= 0.0f) return;
+    if (max_payout <= 0.0f)
+        return;
 
     float actual_payout = std::min(target_payout, max_payout);
-    if (actual_payout <= 0.0f) return;
+    if (actual_payout <= 0.0f)
+        return;
 
     // Deduct from retained earnings.
     record.retained_earnings -= actual_payout;
@@ -434,7 +436,8 @@ void FinancialDistributionModule::process_quarterly_dividend(
     // Pay dividend to owner.
     if (state.player && business.owner_id == state.player->id) {
         if (delta.player_delta.wealth_delta.has_value()) {
-            delta.player_delta.wealth_delta = delta.player_delta.wealth_delta.value() + net_dividend;
+            delta.player_delta.wealth_delta =
+                delta.player_delta.wealth_delta.value() + net_dividend;
         } else {
             delta.player_delta.wealth_delta = net_dividend;
         }
@@ -458,22 +461,24 @@ void FinancialDistributionModule::process_quarterly_dividend(
 // Step 5: Equity Grant Vesting
 // ===========================================================================
 
-void FinancialDistributionModule::process_equity_vesting(
-        const NPCBusiness& business,
-        BusinessCompensationRecord& record,
-        const WorldState& state,
-        DeltaBuffer& /* delta */) {
-
-    if (record.scale != BusinessScale::large) return;
+void FinancialDistributionModule::process_equity_vesting(const NPCBusiness& business,
+                                                         BusinessCompensationRecord& record,
+                                                         const WorldState& state,
+                                                         DeltaBuffer& /* delta */) {
+    if (record.scale != BusinessScale::large)
+        return;
 
     for (auto& grant : record.compensation.equity_grants) {
-        if (grant.business_id != business.id) continue;
+        if (grant.business_id != business.id)
+            continue;
 
         // Past cliff tick?
-        if (state.current_tick < grant.cliff_tick) continue;
+        if (state.current_tick < grant.cliff_tick)
+            continue;
 
         // Already fully vested?
-        if (grant.shares_vested >= grant.shares_granted) continue;
+        if (grant.shares_vested >= grant.shares_granted)
+            continue;
 
         // Advance vesting.
         grant.shares_vested += grant.vesting_rate;
@@ -487,10 +492,8 @@ void FinancialDistributionModule::process_equity_vesting(
 // Step 6: Update Retained Earnings
 // ===========================================================================
 
-void FinancialDistributionModule::update_retained_earnings(
-        const NPCBusiness& business,
-        BusinessCompensationRecord& record) {
-
+void FinancialDistributionModule::update_retained_earnings(const NPCBusiness& business,
+                                                           BusinessCompensationRecord& record) {
     float net_income = business.revenue_per_tick - business.cost_per_tick;
     // Negative revenue_per_tick treated as zero per interface spec.
     if (business.revenue_per_tick < 0.0f) {
@@ -505,22 +508,19 @@ void FinancialDistributionModule::update_retained_earnings(
 // Static Utility Functions
 // ===========================================================================
 
-bool FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism mechanism,
-        BusinessScale scale) {
+bool FinancialDistributionModule::is_mechanism_valid_for_scale(CompensationMechanism mechanism,
+                                                               BusinessScale scale) {
     switch (mechanism) {
         case CompensationMechanism::owners_draw:
             return scale == BusinessScale::micro;
 
         case CompensationMechanism::salary_only:
         case CompensationMechanism::salary_bonus:
-            return scale == BusinessScale::small
-                || scale == BusinessScale::medium
-                || scale == BusinessScale::large;
+            return scale == BusinessScale::small || scale == BusinessScale::medium ||
+                   scale == BusinessScale::large;
 
         case CompensationMechanism::salary_dividend:
-            return scale == BusinessScale::medium
-                || scale == BusinessScale::large;
+            return scale == BusinessScale::medium || scale == BusinessScale::large;
 
         case CompensationMechanism::full_package:
             return scale == BusinessScale::large;
@@ -528,10 +528,9 @@ bool FinancialDistributionModule::is_mechanism_valid_for_scale(
     return false;
 }
 
-float FinancialDistributionModule::compute_quarterly_net_profit(
-        float revenue_per_tick,
-        float cost_per_tick,
-        float salary_per_tick) {
+float FinancialDistributionModule::compute_quarterly_net_profit(float revenue_per_tick,
+                                                                float cost_per_tick,
+                                                                float salary_per_tick) {
     // Net profit = (revenue - cost - salary) * ticks_per_quarter.
     float net_per_tick = revenue_per_tick - cost_per_tick - salary_per_tick;
     return net_per_tick * static_cast<float>(FinancialDistributionConstants::ticks_per_quarter);
@@ -539,12 +538,12 @@ float FinancialDistributionModule::compute_quarterly_net_profit(
 
 float FinancialDistributionModule::compute_working_capital_floor(float cost_per_tick) {
     // Working capital floor = cost_per_tick * cash_surplus_months * ticks_per_month.
-    return cost_per_tick * FinancialDistributionConstants::cash_surplus_months
-                         * static_cast<float>(FinancialDistributionConstants::ticks_per_month);
+    return cost_per_tick * FinancialDistributionConstants::cash_surplus_months *
+           static_cast<float>(FinancialDistributionConstants::ticks_per_month);
 }
 
 bool FinancialDistributionModule::is_board_approved(const BoardComposition& board,
-                                                     uint32_t current_tick) {
+                                                    uint32_t current_tick) {
     // Captured boards (independence_score below rubber stamp threshold) auto-approve.
     if (board.independence_score < FinancialDistributionConstants::board_rubber_stamp_threshold) {
         return true;
@@ -560,7 +559,7 @@ bool FinancialDistributionModule::is_board_approved(const BoardComposition& boar
 // ===========================================================================
 
 BusinessCompensationRecord* FinancialDistributionModule::find_compensation_record(
-        uint32_t business_id) {
+    uint32_t business_id) {
     for (auto& rec : compensation_records_) {
         if (rec.business_id == business_id) {
             return &rec;
@@ -570,7 +569,7 @@ BusinessCompensationRecord* FinancialDistributionModule::find_compensation_recor
 }
 
 const BusinessCompensationRecord* FinancialDistributionModule::find_compensation_record(
-        uint32_t business_id) const {
+    uint32_t business_id) const {
     for (const auto& rec : compensation_records_) {
         if (rec.business_id == business_id) {
             return &rec;
@@ -579,9 +578,8 @@ const BusinessCompensationRecord* FinancialDistributionModule::find_compensation
     return nullptr;
 }
 
-const NPCBusiness* FinancialDistributionModule::find_business(
-        const WorldState& state,
-        uint32_t business_id) {
+const NPCBusiness* FinancialDistributionModule::find_business(const WorldState& state,
+                                                              uint32_t business_id) {
     for (const auto& biz : state.npc_businesses) {
         if (biz.id == business_id) {
             return &biz;

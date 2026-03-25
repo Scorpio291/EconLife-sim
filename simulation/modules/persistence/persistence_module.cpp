@@ -1,10 +1,13 @@
 #include "persistence_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
-#include "core/world_state/delta_buffer.h"
+
+#include <lz4.h>
+
 #include <algorithm>
 #include <cstring>
-#include <lz4.h>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -15,7 +18,7 @@ namespace econlife {
 namespace {
 
 class ByteWriter {
-public:
+   public:
     void write_u8(uint8_t v) { buf_.push_back(v); }
 
     void write_u32(uint32_t v) {
@@ -40,34 +43,40 @@ public:
 
     void write_string(const std::string& s) {
         write_u32(static_cast<uint32_t>(s.size()));
-        for (char c : s) buf_.push_back(static_cast<uint8_t>(c));
+        for (char c : s)
+            buf_.push_back(static_cast<uint8_t>(c));
     }
 
     std::vector<uint8_t>& data() { return buf_; }
     const std::vector<uint8_t>& data() const { return buf_; }
 
-private:
+   private:
     std::vector<uint8_t> buf_;
 };
 
 class ByteReader {
-public:
-    ByteReader(const uint8_t* data, size_t size)
-        : data_(data), size_(size), pos_(0) {}
+   public:
+    ByteReader(const uint8_t* data, size_t size) : data_(data), size_(size), pos_(0) {}
 
     bool ok() const { return pos_ <= size_; }
 
     uint8_t read_u8() {
-        if (pos_ + 1 > size_) { error_ = true; return 0; }
+        if (pos_ + 1 > size_) {
+            error_ = true;
+            return 0;
+        }
         return data_[pos_++];
     }
 
     uint32_t read_u32() {
-        if (pos_ + 4 > size_) { error_ = true; return 0; }
-        uint32_t v = static_cast<uint32_t>(data_[pos_])
-                   | (static_cast<uint32_t>(data_[pos_+1]) << 8)
-                   | (static_cast<uint32_t>(data_[pos_+2]) << 16)
-                   | (static_cast<uint32_t>(data_[pos_+3]) << 24);
+        if (pos_ + 4 > size_) {
+            error_ = true;
+            return 0;
+        }
+        uint32_t v = static_cast<uint32_t>(data_[pos_]) |
+                     (static_cast<uint32_t>(data_[pos_ + 1]) << 8) |
+                     (static_cast<uint32_t>(data_[pos_ + 2]) << 16) |
+                     (static_cast<uint32_t>(data_[pos_ + 3]) << 24);
         pos_ += 4;
         return v;
     }
@@ -89,7 +98,10 @@ public:
 
     std::string read_string() {
         uint32_t len = read_u32();
-        if (pos_ + len > size_) { error_ = true; return ""; }
+        if (pos_ + len > size_) {
+            error_ = true;
+            return "";
+        }
         std::string s(reinterpret_cast<const char*>(data_ + pos_), len);
         pos_ += len;
         return s;
@@ -97,7 +109,7 @@ public:
 
     bool has_error() const { return error_; }
 
-private:
+   private:
     const uint8_t* data_;
     size_t size_;
     size_t pos_;
@@ -214,14 +226,16 @@ void write_relationship(ByteWriter& w, const Relationship& r) {
     w.write_float(r.fear);
     w.write_float(r.obligation_balance);
     w.write_u32(static_cast<uint32_t>(r.shared_secrets.size()));
-    for (uint32_t s : r.shared_secrets) w.write_u32(s);
+    for (uint32_t s : r.shared_secrets)
+        w.write_u32(s);
     w.write_u32(r.last_interaction_tick);
     w.write_bool(r.is_movement_ally);
     w.write_float(r.recovery_ceiling);
 }
 
 void write_motivation(ByteWriter& w, const MotivationVector& m) {
-    for (float wt : m.weights) w.write_float(wt);
+    for (float wt : m.weights)
+        w.write_float(wt);
 }
 
 void write_npc(ByteWriter& w, const NPC& npc) {
@@ -232,23 +246,28 @@ void write_npc(ByteWriter& w, const NPC& npc) {
 
     // Memory log
     w.write_u32(static_cast<uint32_t>(npc.memory_log.size()));
-    for (const auto& m : npc.memory_log) write_memory_entry(w, m);
+    for (const auto& m : npc.memory_log)
+        write_memory_entry(w, m);
 
     // Knowledge
     w.write_u32(static_cast<uint32_t>(npc.known_evidence.size()));
-    for (const auto& k : npc.known_evidence) write_knowledge_entry(w, k);
+    for (const auto& k : npc.known_evidence)
+        write_knowledge_entry(w, k);
     w.write_u32(static_cast<uint32_t>(npc.known_relationships.size()));
-    for (const auto& k : npc.known_relationships) write_knowledge_entry(w, k);
+    for (const auto& k : npc.known_relationships)
+        write_knowledge_entry(w, k);
 
     // Relationships
     w.write_u32(static_cast<uint32_t>(npc.relationships.size()));
-    for (const auto& r : npc.relationships) write_relationship(w, r);
+    for (const auto& r : npc.relationships)
+        write_relationship(w, r);
 
     // Resources
     w.write_float(npc.capital);
     w.write_float(npc.social_capital);
     w.write_u32(static_cast<uint32_t>(npc.contact_ids.size()));
-    for (uint32_t c : npc.contact_ids) w.write_u32(c);
+    for (uint32_t c : npc.contact_ids)
+        w.write_u32(c);
 
     w.write_u32(npc.movement_follower_count);
     w.write_u32(npc.home_province_id);
@@ -322,7 +341,8 @@ void write_province(ByteWriter& w, const Province& p) {
 
     // Deposits
     w.write_u32(static_cast<uint32_t>(p.deposits.size()));
-    for (const auto& d : p.deposits) write_resource_deposit(w, d);
+    for (const auto& d : p.deposits)
+        write_resource_deposit(w, d);
 
     write_demographics(w, p.demographics);
     w.write_float(p.infrastructure_rating);
@@ -337,7 +357,8 @@ void write_province(ByteWriter& w, const Province& p) {
 
     // NPC ids
     w.write_u32(static_cast<uint32_t>(p.significant_npc_ids.size()));
-    for (uint32_t id : p.significant_npc_ids) w.write_u32(id);
+    for (uint32_t id : p.significant_npc_ids)
+        w.write_u32(id);
 
     // cohort_stats presence flag + data
     bool has_cohort = (p.cohort_stats != nullptr);
@@ -356,11 +377,13 @@ void write_province(ByteWriter& w, const Province& p) {
 
     // Links
     w.write_u32(static_cast<uint32_t>(p.links.size()));
-    for (const auto& l : p.links) write_province_link(w, l);
+    for (const auto& l : p.links)
+        write_province_link(w, l);
 
     // Market ids
     w.write_u32(static_cast<uint32_t>(p.market_ids.size()));
-    for (uint32_t mid : p.market_ids) w.write_u32(mid);
+    for (uint32_t mid : p.market_ids)
+        w.write_u32(mid);
 }
 
 void write_nation_political(ByteWriter& w, const NationPoliticalCycleState& p) {
@@ -378,7 +401,8 @@ void write_nation(ByteWriter& w, const Nation& n) {
     write_nation_political(w, n.political_cycle);
 
     w.write_u32(static_cast<uint32_t>(n.province_ids.size()));
-    for (uint32_t pid : n.province_ids) w.write_u32(pid);
+    for (uint32_t pid : n.province_ids)
+        w.write_u32(pid);
 
     w.write_float(n.corporate_tax_rate);
     w.write_float(n.income_tax_rate_top_bracket);
@@ -449,9 +473,11 @@ void write_scene_card(ByteWriter& w, const SceneCard& s) {
     w.write_u8(static_cast<uint8_t>(s.setting));
     w.write_u32(s.npc_id);
     w.write_u32(static_cast<uint32_t>(s.dialogue.size()));
-    for (const auto& d : s.dialogue) write_dialogue_line(w, d);
+    for (const auto& d : s.dialogue)
+        write_dialogue_line(w, d);
     w.write_u32(static_cast<uint32_t>(s.choices.size()));
-    for (const auto& c : s.choices) write_player_choice(w, c);
+    for (const auto& c : s.choices)
+        write_player_choice(w, c);
     w.write_float(s.npc_presentation_state);
     w.write_bool(s.is_authored);
     w.write_u32(s.chosen_choice_id);
@@ -460,7 +486,8 @@ void write_scene_card(ByteWriter& w, const SceneCard& s) {
 void write_player(ByteWriter& w, const PlayerCharacter& p) {
     w.write_u32(p.id);
     w.write_u8(static_cast<uint8_t>(p.background));
-    for (auto t : p.traits) w.write_u8(static_cast<uint8_t>(t));
+    for (auto t : p.traits)
+        w.write_u8(static_cast<uint8_t>(t));
     w.write_u32(p.starting_province_id);
 
     // Health
@@ -500,22 +527,26 @@ void write_player(ByteWriter& w, const PlayerCharacter& p) {
 
     // Obligation node ids
     w.write_u32(static_cast<uint32_t>(p.obligation_node_ids.size()));
-    for (uint32_t id : p.obligation_node_ids) w.write_u32(id);
+    for (uint32_t id : p.obligation_node_ids)
+        w.write_u32(id);
 
     // Calendar entry ids
     w.write_u32(static_cast<uint32_t>(p.calendar_entry_ids.size()));
-    for (uint32_t id : p.calendar_entry_ids) w.write_u32(id);
+    for (uint32_t id : p.calendar_entry_ids)
+        w.write_u32(id);
 
     // Personal
     w.write_u32(p.residence_id);
     w.write_u32(p.partner_npc_id);
     w.write_u32(static_cast<uint32_t>(p.children_npc_ids.size()));
-    for (uint32_t id : p.children_npc_ids) w.write_u32(id);
+    for (uint32_t id : p.children_npc_ids)
+        w.write_u32(id);
     w.write_u32(p.designated_heir_npc_id);
 
     // Relationships
     w.write_u32(static_cast<uint32_t>(p.relationships.size()));
-    for (const auto& r : p.relationships) write_relationship(w, r);
+    for (const auto& r : p.relationships)
+        write_relationship(w, r);
 
     // Network health
     w.write_float(p.network_health.overall_score);
@@ -567,13 +598,13 @@ void write_deferred_work_queue(ByteWriter& w, DeferredWorkQueue queue_copy) {
         queue_copy.pop();
     }
     // Sort by (due_tick, type, subject_id) for determinism
-    std::sort(items.begin(), items.end(),
-              [](const DeferredWorkItem& a, const DeferredWorkItem& b) {
-                  if (a.due_tick != b.due_tick) return a.due_tick < b.due_tick;
-                  if (a.type != b.type)
-                      return static_cast<uint8_t>(a.type) < static_cast<uint8_t>(b.type);
-                  return a.subject_id < b.subject_id;
-              });
+    std::sort(items.begin(), items.end(), [](const DeferredWorkItem& a, const DeferredWorkItem& b) {
+        if (a.due_tick != b.due_tick)
+            return a.due_tick < b.due_tick;
+        if (a.type != b.type)
+            return static_cast<uint8_t>(a.type) < static_cast<uint8_t>(b.type);
+        return a.subject_id < b.subject_id;
+    });
 
     w.write_u32(static_cast<uint32_t>(items.size()));
     for (const auto& item : items) {
@@ -582,35 +613,37 @@ void write_deferred_work_queue(ByteWriter& w, DeferredWorkQueue queue_copy) {
         w.write_u32(item.subject_id);
         // Payload variant index + fields
         w.write_u8(static_cast<uint8_t>(item.payload.index()));
-        std::visit([&w](const auto& p) {
-            using T = std::decay_t<decltype(p)>;
-            if constexpr (std::is_same_v<T, EmptyPayload>) {
-                // nothing
-            } else if constexpr (std::is_same_v<T, ConsequencePayload>) {
-                w.write_u32(p.consequence_id);
-            } else if constexpr (std::is_same_v<T, TransitPayload>) {
-                w.write_u32(p.shipment_id);
-                w.write_u32(p.destination_province_id);
-            } else if constexpr (std::is_same_v<T, NPCRelationshipDecayPayload>) {
-                w.write_u32(p.npc_id);
-            } else if constexpr (std::is_same_v<T, EvidenceDecayPayload>) {
-                w.write_u32(p.evidence_token_id);
-            } else if constexpr (std::is_same_v<T, NPCBusinessDecisionPayload>) {
-                w.write_u32(p.business_id);
-            } else if constexpr (std::is_same_v<T, MarketRecomputePayload>) {
-                w.write_u32(p.good_id);
-                w.write_u32(p.region_id);
-            } else if constexpr (std::is_same_v<T, InvestigatorMeterPayload>) {
-                w.write_u32(p.npc_id);
-            } else if constexpr (std::is_same_v<T, MaturationPayload>) {
-                w.write_u32(p.business_id);
-                w.write_u32(p.node_key);
-            } else if constexpr (std::is_same_v<T, CommercializePayload>) {
-                w.write_u32(p.business_id);
-                w.write_u32(p.node_key);
-                w.write_u8(p.decision);
-            }
-        }, item.payload);
+        std::visit(
+            [&w](const auto& p) {
+                using T = std::decay_t<decltype(p)>;
+                if constexpr (std::is_same_v<T, EmptyPayload>) {
+                    // nothing
+                } else if constexpr (std::is_same_v<T, ConsequencePayload>) {
+                    w.write_u32(p.consequence_id);
+                } else if constexpr (std::is_same_v<T, TransitPayload>) {
+                    w.write_u32(p.shipment_id);
+                    w.write_u32(p.destination_province_id);
+                } else if constexpr (std::is_same_v<T, NPCRelationshipDecayPayload>) {
+                    w.write_u32(p.npc_id);
+                } else if constexpr (std::is_same_v<T, EvidenceDecayPayload>) {
+                    w.write_u32(p.evidence_token_id);
+                } else if constexpr (std::is_same_v<T, NPCBusinessDecisionPayload>) {
+                    w.write_u32(p.business_id);
+                } else if constexpr (std::is_same_v<T, MarketRecomputePayload>) {
+                    w.write_u32(p.good_id);
+                    w.write_u32(p.region_id);
+                } else if constexpr (std::is_same_v<T, InvestigatorMeterPayload>) {
+                    w.write_u32(p.npc_id);
+                } else if constexpr (std::is_same_v<T, MaturationPayload>) {
+                    w.write_u32(p.business_id);
+                    w.write_u32(p.node_key);
+                } else if constexpr (std::is_same_v<T, CommercializePayload>) {
+                    w.write_u32(p.business_id);
+                    w.write_u32(p.node_key);
+                    w.write_u8(p.decision);
+                }
+            },
+            item.payload);
     }
 }
 
@@ -642,9 +675,11 @@ void write_trade_offer(ByteWriter& w, const NationalTradeOffer& o) {
     w.write_u32(o.nation_id);
     w.write_u32(o.tick_generated);
     w.write_u32(static_cast<uint32_t>(o.exports.size()));
-    for (const auto& e : o.exports) write_good_offer(w, e);
+    for (const auto& e : o.exports)
+        write_good_offer(w, e);
     w.write_u32(static_cast<uint32_t>(o.imports.size()));
-    for (const auto& i : o.imports) write_good_offer(w, i);
+    for (const auto& i : o.imports)
+        write_good_offer(w, i);
 }
 
 void write_lod1_stats(ByteWriter& w, const std::map<uint32_t, Lod1NationStats>& stats) {
@@ -664,9 +699,9 @@ void write_lod1_stats(ByteWriter& w, const std::map<uint32_t, Lod1NationStats>& 
     }
 }
 
-void write_route_table(ByteWriter& w,
-                       const std::map<std::pair<uint32_t, uint32_t>,
-                                      std::array<RouteProfile, 5>>& table) {
+void write_route_table(
+    ByteWriter& w,
+    const std::map<std::pair<uint32_t, uint32_t>, std::array<RouteProfile, 5>>& table) {
     w.write_u32(static_cast<uint32_t>(table.size()));
     for (const auto& [key, routes] : table) {
         w.write_u32(key.first);
@@ -680,7 +715,8 @@ void write_route_table(ByteWriter& w,
             w.write_bool(rp.requires_rail);
             w.write_float(rp.concealment_bonus);
             w.write_u32(static_cast<uint32_t>(rp.province_path.size()));
-            for (uint32_t p : rp.province_path) w.write_u32(p);
+            for (uint32_t p : rp.province_path)
+                w.write_u32(p);
         }
     }
 }
@@ -817,7 +853,8 @@ Relationship read_relationship(ByteReader& r) {
     rel.obligation_balance = r.read_float();
     uint32_t secrets_count = r.read_u32();
     rel.shared_secrets.resize(secrets_count);
-    for (uint32_t i = 0; i < secrets_count; ++i) rel.shared_secrets[i] = r.read_u32();
+    for (uint32_t i = 0; i < secrets_count; ++i)
+        rel.shared_secrets[i] = r.read_u32();
     rel.last_interaction_tick = r.read_u32();
     rel.is_movement_ally = r.read_bool();
     rel.recovery_ceiling = r.read_float();
@@ -826,7 +863,8 @@ Relationship read_relationship(ByteReader& r) {
 
 MotivationVector read_motivation(ByteReader& r) {
     MotivationVector m{};
-    for (float& w : m.weights) w = r.read_float();
+    for (float& w : m.weights)
+        w = r.read_float();
     return m;
 }
 
@@ -839,25 +877,30 @@ NPC read_npc(ByteReader& r) {
 
     uint32_t mem_count = r.read_u32();
     npc.memory_log.resize(mem_count);
-    for (uint32_t i = 0; i < mem_count; ++i) npc.memory_log[i] = read_memory_entry(r);
+    for (uint32_t i = 0; i < mem_count; ++i)
+        npc.memory_log[i] = read_memory_entry(r);
 
     uint32_t ke_count = r.read_u32();
     npc.known_evidence.resize(ke_count);
-    for (uint32_t i = 0; i < ke_count; ++i) npc.known_evidence[i] = read_knowledge_entry(r);
+    for (uint32_t i = 0; i < ke_count; ++i)
+        npc.known_evidence[i] = read_knowledge_entry(r);
 
     uint32_t kr_count = r.read_u32();
     npc.known_relationships.resize(kr_count);
-    for (uint32_t i = 0; i < kr_count; ++i) npc.known_relationships[i] = read_knowledge_entry(r);
+    for (uint32_t i = 0; i < kr_count; ++i)
+        npc.known_relationships[i] = read_knowledge_entry(r);
 
     uint32_t rel_count = r.read_u32();
     npc.relationships.resize(rel_count);
-    for (uint32_t i = 0; i < rel_count; ++i) npc.relationships[i] = read_relationship(r);
+    for (uint32_t i = 0; i < rel_count; ++i)
+        npc.relationships[i] = read_relationship(r);
 
     npc.capital = r.read_float();
     npc.social_capital = r.read_float();
     uint32_t contact_count = r.read_u32();
     npc.contact_ids.resize(contact_count);
-    for (uint32_t i = 0; i < contact_count; ++i) npc.contact_ids[i] = r.read_u32();
+    for (uint32_t i = 0; i < contact_count; ++i)
+        npc.contact_ids[i] = r.read_u32();
 
     npc.movement_follower_count = r.read_u32();
     npc.home_province_id = r.read_u32();
@@ -941,7 +984,8 @@ Province read_province(ByteReader& r) {
 
     uint32_t dep_count = r.read_u32();
     p.deposits.resize(dep_count);
-    for (uint32_t i = 0; i < dep_count; ++i) p.deposits[i] = read_resource_deposit(r);
+    for (uint32_t i = 0; i < dep_count; ++i)
+        p.deposits[i] = read_resource_deposit(r);
 
     p.demographics = read_demographics(r);
     p.infrastructure_rating = r.read_float();
@@ -956,7 +1000,8 @@ Province read_province(ByteReader& r) {
 
     uint32_t npc_id_count = r.read_u32();
     p.significant_npc_ids.resize(npc_id_count);
-    for (uint32_t i = 0; i < npc_id_count; ++i) p.significant_npc_ids[i] = r.read_u32();
+    for (uint32_t i = 0; i < npc_id_count; ++i)
+        p.significant_npc_ids[i] = r.read_u32();
 
     bool has_cohort = r.read_bool();
     if (has_cohort) {
@@ -976,11 +1021,13 @@ Province read_province(ByteReader& r) {
 
     uint32_t link_count = r.read_u32();
     p.links.resize(link_count);
-    for (uint32_t i = 0; i < link_count; ++i) p.links[i] = read_province_link(r);
+    for (uint32_t i = 0; i < link_count; ++i)
+        p.links[i] = read_province_link(r);
 
     uint32_t market_id_count = r.read_u32();
     p.market_ids.resize(market_id_count);
-    for (uint32_t i = 0; i < market_id_count; ++i) p.market_ids[i] = r.read_u32();
+    for (uint32_t i = 0; i < market_id_count; ++i)
+        p.market_ids[i] = r.read_u32();
 
     return p;
 }
@@ -1004,7 +1051,8 @@ Nation read_nation(ByteReader& r) {
 
     uint32_t prov_count = r.read_u32();
     n.province_ids.resize(prov_count);
-    for (uint32_t i = 0; i < prov_count; ++i) n.province_ids[i] = r.read_u32();
+    for (uint32_t i = 0; i < prov_count; ++i)
+        n.province_ids[i] = r.read_u32();
 
     n.corporate_tax_rate = r.read_float();
     n.income_tax_rate_top_bracket = r.read_float();
@@ -1093,7 +1141,8 @@ PlayerCharacter read_player(ByteReader& r) {
     PlayerCharacter p{};
     p.id = r.read_u32();
     p.background = static_cast<Background>(r.read_u8());
-    for (auto& t : p.traits) t = static_cast<Trait>(r.read_u8());
+    for (auto& t : p.traits)
+        t = static_cast<Trait>(r.read_u8());
     p.starting_province_id = r.read_u32();
 
     p.health.current_health = r.read_float();
@@ -1131,22 +1180,26 @@ PlayerCharacter read_player(ByteReader& r) {
 
     uint32_t on_count = r.read_u32();
     p.obligation_node_ids.resize(on_count);
-    for (uint32_t i = 0; i < on_count; ++i) p.obligation_node_ids[i] = r.read_u32();
+    for (uint32_t i = 0; i < on_count; ++i)
+        p.obligation_node_ids[i] = r.read_u32();
 
     uint32_t ce_count = r.read_u32();
     p.calendar_entry_ids.resize(ce_count);
-    for (uint32_t i = 0; i < ce_count; ++i) p.calendar_entry_ids[i] = r.read_u32();
+    for (uint32_t i = 0; i < ce_count; ++i)
+        p.calendar_entry_ids[i] = r.read_u32();
 
     p.residence_id = r.read_u32();
     p.partner_npc_id = r.read_u32();
     uint32_t child_count = r.read_u32();
     p.children_npc_ids.resize(child_count);
-    for (uint32_t i = 0; i < child_count; ++i) p.children_npc_ids[i] = r.read_u32();
+    for (uint32_t i = 0; i < child_count; ++i)
+        p.children_npc_ids[i] = r.read_u32();
     p.designated_heir_npc_id = r.read_u32();
 
     uint32_t rel_count = r.read_u32();
     p.relationships.resize(rel_count);
-    for (uint32_t i = 0; i < rel_count; ++i) p.relationships[i] = read_relationship(r);
+    for (uint32_t i = 0; i < rel_count; ++i)
+        p.relationships[i] = read_relationship(r);
 
     p.network_health.overall_score = r.read_float();
     p.network_health.network_reach = r.read_float();
@@ -1200,7 +1253,9 @@ DeferredWorkQueue read_deferred_work_queue(ByteReader& r) {
         item.subject_id = r.read_u32();
         uint8_t variant_idx = r.read_u8();
         switch (variant_idx) {
-            case 0: item.payload = EmptyPayload{}; break;
+            case 0:
+                item.payload = EmptyPayload{};
+                break;
             case 1: {
                 ConsequencePayload cp{};
                 cp.consequence_id = r.read_u32();
@@ -1346,8 +1401,10 @@ bool PersistenceModule::is_save_allowed(bool cross_province_buffer_empty) {
 }
 
 RestoreResult PersistenceModule::check_restore_preconditions(bool is_ironman, bool is_restoring) {
-    if (is_ironman) return RestoreResult::locked_ironman_mode;
-    if (is_restoring) return RestoreResult::already_restoring;
+    if (is_ironman)
+        return RestoreResult::locked_ironman_mode;
+    if (is_restoring)
+        return RestoreResult::already_restoring;
     return RestoreResult::success;
 }
 
@@ -1356,9 +1413,12 @@ bool PersistenceModule::is_snapshot_tick(uint32_t current_tick) {
 }
 
 uint8_t PersistenceModule::compute_disruption_tier(uint32_t restoration_count) {
-    if (restoration_count == 0) return 0;
-    if (restoration_count <= 2) return 1;
-    if (restoration_count <= 5) return 2;
+    if (restoration_count == 0)
+        return 0;
+    if (restoration_count <= 2)
+        return 1;
+    if (restoration_count <= 5)
+        return 2;
     return 3;
 }
 
@@ -1379,11 +1439,13 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
 
     // --- Nations ---
     w.write_u32(static_cast<uint32_t>(state.nations.size()));
-    for (const auto& n : state.nations) write_nation(w, n);
+    for (const auto& n : state.nations)
+        write_nation(w, n);
 
     // --- Provinces ---
     w.write_u32(static_cast<uint32_t>(state.provinces.size()));
-    for (const auto& p : state.provinces) write_province(w, p);
+    for (const auto& p : state.provinces)
+        write_province(w, p);
 
     // --- Regions ---
     w.write_u32(static_cast<uint32_t>(state.region_groups.size()));
@@ -1392,53 +1454,65 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
         w.write_string(r.fictional_name);
         w.write_u32(r.nation_id);
         w.write_u32(static_cast<uint32_t>(r.province_ids.size()));
-        for (uint32_t pid : r.province_ids) w.write_u32(pid);
+        for (uint32_t pid : r.province_ids)
+            w.write_u32(pid);
     }
 
     // --- NPCs ---
     w.write_u32(static_cast<uint32_t>(state.significant_npcs.size()));
-    for (const auto& npc : state.significant_npcs) write_npc(w, npc);
+    for (const auto& npc : state.significant_npcs)
+        write_npc(w, npc);
 
     w.write_u32(static_cast<uint32_t>(state.named_background_npcs.size()));
-    for (const auto& npc : state.named_background_npcs) write_npc(w, npc);
+    for (const auto& npc : state.named_background_npcs)
+        write_npc(w, npc);
 
     // --- Player ---
     bool has_player = (state.player != nullptr);
     w.write_bool(has_player);
-    if (has_player) write_player(w, *state.player);
+    if (has_player)
+        write_player(w, *state.player);
 
     // --- Economy ---
     w.write_u32(static_cast<uint32_t>(state.regional_markets.size()));
-    for (const auto& m : state.regional_markets) write_market(w, m);
+    for (const auto& m : state.regional_markets)
+        write_market(w, m);
 
     w.write_u32(static_cast<uint32_t>(state.npc_businesses.size()));
-    for (const auto& b : state.npc_businesses) write_business(w, b);
+    for (const auto& b : state.npc_businesses)
+        write_business(w, b);
 
     // --- Evidence ---
     w.write_u32(static_cast<uint32_t>(state.evidence_pool.size()));
-    for (const auto& e : state.evidence_pool) write_evidence_token(w, e);
+    for (const auto& e : state.evidence_pool)
+        write_evidence_token(w, e);
 
     // --- DeferredWorkQueue ---
     write_deferred_work_queue(w, state.deferred_work_queue);
 
     // --- Obligation network ---
     w.write_u32(static_cast<uint32_t>(state.obligation_network.size()));
-    for (const auto& o : state.obligation_network) write_obligation(w, o);
+    for (const auto& o : state.obligation_network)
+        write_obligation(w, o);
 
     // --- Calendar ---
     w.write_u32(static_cast<uint32_t>(state.calendar.size()));
-    for (const auto& c : state.calendar) write_calendar_entry(w, c);
+    for (const auto& c : state.calendar)
+        write_calendar_entry(w, c);
 
     // --- Scene cards ---
     w.write_u32(static_cast<uint32_t>(state.pending_scene_cards.size()));
-    for (const auto& s : state.pending_scene_cards) write_scene_card(w, s);
+    for (const auto& s : state.pending_scene_cards)
+        write_scene_card(w, s);
 
     // --- Trade infrastructure ---
     w.write_u32(static_cast<uint32_t>(state.tariff_schedules.size()));
-    for (const auto& ts : state.tariff_schedules) write_tariff_schedule(w, ts);
+    for (const auto& ts : state.tariff_schedules)
+        write_tariff_schedule(w, ts);
 
     w.write_u32(static_cast<uint32_t>(state.lod1_trade_offers.size()));
-    for (const auto& o : state.lod1_trade_offers) write_trade_offer(w, o);
+    for (const auto& o : state.lod1_trade_offers)
+        write_trade_offer(w, o);
 
     // lod2_price_index
     bool has_lod2 = (state.lod2_price_index != nullptr);
@@ -1466,7 +1540,7 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
 
     // Write header
     auto write_le32 = [&](size_t offset, uint32_t v) {
-        result[offset]     = static_cast<uint8_t>(v & 0xFF);
+        result[offset] = static_cast<uint8_t>(v & 0xFF);
         result[offset + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
         result[offset + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
         result[offset + 3] = static_cast<uint8_t>((v >> 24) & 0xFF);
@@ -1476,11 +1550,9 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
     write_le32(8, raw_size);
     write_le32(12, checksum);
 
-    int compressed_size = LZ4_compress_default(
-        reinterpret_cast<const char*>(raw.data()),
-        reinterpret_cast<char*>(result.data() + HEADER_SIZE),
-        static_cast<int>(raw_size),
-        max_compressed);
+    int compressed_size = LZ4_compress_default(reinterpret_cast<const char*>(raw.data()),
+                                               reinterpret_cast<char*>(result.data() + HEADER_SIZE),
+                                               static_cast<int>(raw_size), max_compressed);
 
     result.resize(HEADER_SIZE + static_cast<size_t>(compressed_size));
     return result;
@@ -1491,18 +1563,20 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
-                                              WorldState& out_state) {
-    if (data.size() < HEADER_SIZE) return RestoreResult::io_error;
+                                             WorldState& out_state) {
+    if (data.size() < HEADER_SIZE)
+        return RestoreResult::io_error;
 
     auto read_le32 = [&](size_t offset) -> uint32_t {
-        return static_cast<uint32_t>(data[offset])
-             | (static_cast<uint32_t>(data[offset+1]) << 8)
-             | (static_cast<uint32_t>(data[offset+2]) << 16)
-             | (static_cast<uint32_t>(data[offset+3]) << 24);
+        return static_cast<uint32_t>(data[offset]) |
+               (static_cast<uint32_t>(data[offset + 1]) << 8) |
+               (static_cast<uint32_t>(data[offset + 2]) << 16) |
+               (static_cast<uint32_t>(data[offset + 3]) << 24);
     };
 
     uint32_t magic = read_le32(0);
-    if (magic != MAGIC_BYTES) return RestoreResult::io_error;
+    if (magic != MAGIC_BYTES)
+        return RestoreResult::io_error;
 
     uint32_t schema_ver = read_le32(4);
     if (!is_schema_compatible(schema_ver, CURRENT_SCHEMA_VERSION))
@@ -1513,11 +1587,10 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
 
     // Decompress
     std::vector<uint8_t> raw(raw_size);
-    int decompressed = LZ4_decompress_safe(
-        reinterpret_cast<const char*>(data.data() + HEADER_SIZE),
-        reinterpret_cast<char*>(raw.data()),
-        static_cast<int>(data.size() - HEADER_SIZE),
-        static_cast<int>(raw_size));
+    int decompressed = LZ4_decompress_safe(reinterpret_cast<const char*>(data.data() + HEADER_SIZE),
+                                           reinterpret_cast<char*>(raw.data()),
+                                           static_cast<int>(data.size() - HEADER_SIZE),
+                                           static_cast<int>(raw_size));
 
     if (decompressed < 0 || static_cast<uint32_t>(decompressed) != raw_size)
         return RestoreResult::io_error;
@@ -1540,12 +1613,14 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // Nations
     uint32_t nation_count = r.read_u32();
     out_state.nations.resize(nation_count);
-    for (uint32_t i = 0; i < nation_count; ++i) out_state.nations[i] = read_nation(r);
+    for (uint32_t i = 0; i < nation_count; ++i)
+        out_state.nations[i] = read_nation(r);
 
     // Provinces
     uint32_t prov_count = r.read_u32();
     out_state.provinces.resize(prov_count);
-    for (uint32_t i = 0; i < prov_count; ++i) out_state.provinces[i] = read_province(r);
+    for (uint32_t i = 0; i < prov_count; ++i)
+        out_state.provinces[i] = read_province(r);
 
     // Regions
     uint32_t region_count = r.read_u32();
@@ -1556,17 +1631,20 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         out_state.region_groups[i].nation_id = r.read_u32();
         uint32_t pc = r.read_u32();
         out_state.region_groups[i].province_ids.resize(pc);
-        for (uint32_t j = 0; j < pc; ++j) out_state.region_groups[i].province_ids[j] = r.read_u32();
+        for (uint32_t j = 0; j < pc; ++j)
+            out_state.region_groups[i].province_ids[j] = r.read_u32();
     }
 
     // NPCs
     uint32_t sig_count = r.read_u32();
     out_state.significant_npcs.resize(sig_count);
-    for (uint32_t i = 0; i < sig_count; ++i) out_state.significant_npcs[i] = read_npc(r);
+    for (uint32_t i = 0; i < sig_count; ++i)
+        out_state.significant_npcs[i] = read_npc(r);
 
     uint32_t bg_count = r.read_u32();
     out_state.named_background_npcs.resize(bg_count);
-    for (uint32_t i = 0; i < bg_count; ++i) out_state.named_background_npcs[i] = read_npc(r);
+    for (uint32_t i = 0; i < bg_count; ++i)
+        out_state.named_background_npcs[i] = read_npc(r);
 
     // Player
     bool has_player = r.read_bool();
@@ -1579,17 +1657,20 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // Markets
     uint32_t market_count = r.read_u32();
     out_state.regional_markets.resize(market_count);
-    for (uint32_t i = 0; i < market_count; ++i) out_state.regional_markets[i] = read_market(r);
+    for (uint32_t i = 0; i < market_count; ++i)
+        out_state.regional_markets[i] = read_market(r);
 
     // Businesses
     uint32_t biz_count = r.read_u32();
     out_state.npc_businesses.resize(biz_count);
-    for (uint32_t i = 0; i < biz_count; ++i) out_state.npc_businesses[i] = read_business(r);
+    for (uint32_t i = 0; i < biz_count; ++i)
+        out_state.npc_businesses[i] = read_business(r);
 
     // Evidence
     uint32_t ev_count = r.read_u32();
     out_state.evidence_pool.resize(ev_count);
-    for (uint32_t i = 0; i < ev_count; ++i) out_state.evidence_pool[i] = read_evidence_token(r);
+    for (uint32_t i = 0; i < ev_count; ++i)
+        out_state.evidence_pool[i] = read_evidence_token(r);
 
     // DeferredWorkQueue
     out_state.deferred_work_queue = read_deferred_work_queue(r);
@@ -1597,27 +1678,32 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // Obligations
     uint32_t ob_count = r.read_u32();
     out_state.obligation_network.resize(ob_count);
-    for (uint32_t i = 0; i < ob_count; ++i) out_state.obligation_network[i] = read_obligation(r);
+    for (uint32_t i = 0; i < ob_count; ++i)
+        out_state.obligation_network[i] = read_obligation(r);
 
     // Calendar
     uint32_t cal_count = r.read_u32();
     out_state.calendar.resize(cal_count);
-    for (uint32_t i = 0; i < cal_count; ++i) out_state.calendar[i] = read_calendar_entry(r);
+    for (uint32_t i = 0; i < cal_count; ++i)
+        out_state.calendar[i] = read_calendar_entry(r);
 
     // Scene cards
     uint32_t sc_count = r.read_u32();
     out_state.pending_scene_cards.resize(sc_count);
-    for (uint32_t i = 0; i < sc_count; ++i) out_state.pending_scene_cards[i] = read_scene_card(r);
+    for (uint32_t i = 0; i < sc_count; ++i)
+        out_state.pending_scene_cards[i] = read_scene_card(r);
 
     // Tariff schedules
     uint32_t ts_count = r.read_u32();
     out_state.tariff_schedules.resize(ts_count);
-    for (uint32_t i = 0; i < ts_count; ++i) out_state.tariff_schedules[i] = read_tariff_schedule(r);
+    for (uint32_t i = 0; i < ts_count; ++i)
+        out_state.tariff_schedules[i] = read_tariff_schedule(r);
 
     // Trade offers
     uint32_t to_count = r.read_u32();
     out_state.lod1_trade_offers.resize(to_count);
-    for (uint32_t i = 0; i < to_count; ++i) out_state.lod1_trade_offers[i] = read_trade_offer(r);
+    for (uint32_t i = 0; i < to_count; ++i)
+        out_state.lod1_trade_offers[i] = read_trade_offer(r);
 
     // LOD2 price index
     bool has_lod2 = r.read_bool();
@@ -1672,7 +1758,8 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             rp.concealment_bonus = r.read_float();
             uint32_t path_len = r.read_u32();
             rp.province_path.resize(path_len);
-            for (uint32_t j = 0; j < path_len; ++j) rp.province_path[j] = r.read_u32();
+            for (uint32_t j = 0; j < path_len; ++j)
+                rp.province_path[j] = r.read_u32();
         }
         out_state.province_route_table[{from, to}] = routes;
     }
@@ -1680,7 +1767,8 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();
 
-    if (r.has_error()) return RestoreResult::io_error;
+    if (r.has_error())
+        return RestoreResult::io_error;
     return RestoreResult::success;
 }
 

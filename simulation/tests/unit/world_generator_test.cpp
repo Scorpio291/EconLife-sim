@@ -2,18 +2,18 @@
 // Tests: CSV parsing, deterministic generation, province diversity,
 //        NPC/business distribution, market creation from goods catalog.
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "core/world_gen/goods_catalog.h"
 #include "core/world_gen/world_generator.h"
 
 #include <algorithm>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <set>
 #include <string>
+
+#include "core/world_gen/goods_catalog.h"
 
 using namespace econlife;
 namespace fs = std::filesystem;
@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 
 // Create a temporary CSV file with goods data for testing.
 static std::string create_temp_goods_csv(const std::string& dir, const std::string& filename,
-                                          const std::string& content) {
+                                         const std::string& content) {
     fs::create_directories(dir);
     std::string path = dir + "/" + filename;
     std::ofstream f(path);
@@ -42,7 +42,8 @@ static void cleanup_temp_dir(const std::string& dir) {
 // ===========================================================================
 
 TEST_CASE("GoodsCatalog  - loads CSV file correctly", "[world_gen][goods_catalog]") {
-    std::string tmp_dir = "test_goods_tmp_" + std::to_string(std::hash<std::string>{}("catalog_test"));
+    std::string tmp_dir =
+        "test_goods_tmp_" + std::to_string(std::hash<std::string>{}("catalog_test"));
 
     std::string csv_content =
         "good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available\n"
@@ -162,7 +163,8 @@ TEST_CASE("WorldGenerator  - generates valid WorldState", "[world_gen][generator
     CHECK_FALSE(world.regional_markets.empty());
 }
 
-TEST_CASE("WorldGenerator  - deterministic: same seed produces same world", "[world_gen][determinism]") {
+TEST_CASE("WorldGenerator  - deterministic: same seed produces same world",
+          "[world_gen][determinism]") {
     WorldGeneratorConfig config{};
     config.seed = 99999;
     config.province_count = 4;
@@ -190,11 +192,13 @@ TEST_CASE("WorldGenerator  - deterministic: same seed produces same world", "[wo
 
     // Same market prices.
     for (size_t i = 0; i < world1.regional_markets.size(); ++i) {
-        CHECK(world1.regional_markets[i].equilibrium_price == world2.regional_markets[i].equilibrium_price);
+        CHECK(world1.regional_markets[i].equilibrium_price ==
+              world2.regional_markets[i].equilibrium_price);
     }
 }
 
-TEST_CASE("WorldGenerator  - different seeds produce different worlds", "[world_gen][determinism]") {
+TEST_CASE("WorldGenerator  - different seeds produce different worlds",
+          "[world_gen][determinism]") {
     WorldGeneratorConfig config1{};
     config1.seed = 111;
     config1.province_count = 3;
@@ -230,17 +234,19 @@ TEST_CASE("WorldGenerator  - provinces have diverse geography", "[world_gen][pro
     for (const auto& p : world.provinces) {
         infra_values.insert(std::round(p.infrastructure_rating * 10.0f));
     }
-    CHECK(infra_values.size() >= 3); // at least 3 distinct levels
+    CHECK(infra_values.size() >= 3);  // at least 3 distinct levels
 
     // Check that some provinces are landlocked and some aren't.
     bool has_landlocked = false;
     bool has_coastal = false;
     for (const auto& p : world.provinces) {
-        if (p.geography.is_landlocked) has_landlocked = true;
-        else has_coastal = true;
+        if (p.geography.is_landlocked)
+            has_landlocked = true;
+        else
+            has_coastal = true;
     }
     // With 6 provinces and varied archetypes, we expect both.
-    CHECK((has_landlocked || has_coastal)); // at least one type present
+    CHECK((has_landlocked || has_coastal));  // at least one type present
 
     // Check province links exist.
     for (const auto& p : world.provinces) {
@@ -262,7 +268,7 @@ TEST_CASE("WorldGenerator  - provinces have resource deposits", "[world_gen][res
             CHECK(d.quantity > 0.0f);
             CHECK(d.quality >= 0.0f);
             CHECK(d.quality <= 1.0f);
-            CHECK(d.quantity_remaining == d.quantity); // fresh world
+            CHECK(d.quantity_remaining == d.quantity);  // fresh world
         }
     }
 
@@ -273,14 +279,14 @@ TEST_CASE("WorldGenerator  - provinces have resource deposits", "[world_gen][res
         max_deposits = std::max(max_deposits, p.deposits.size());
         min_deposits = std::min(min_deposits, p.deposits.size());
     }
-    CHECK(max_deposits > min_deposits); // variation exists
+    CHECK(max_deposits > min_deposits);  // variation exists
 }
 
 TEST_CASE("WorldGenerator  - NPCs distributed proportionally to population", "[world_gen][npcs]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
-    config.npc_count = 600; // large enough for distribution to matter
+    config.npc_count = 600;  // large enough for distribution to matter
 
     auto world = WorldGenerator::generate(config);
 
@@ -331,9 +337,10 @@ TEST_CASE("WorldGenerator  - NPC roles have diversity", "[world_gen][npcs]") {
     // Workers should be the most common role.
     uint32_t worker_count = 0;
     for (const auto& npc : world.significant_npcs) {
-        if (npc.role == NPCRole::worker) worker_count++;
+        if (npc.role == NPCRole::worker)
+            worker_count++;
     }
-    CHECK(worker_count > world.significant_npcs.size() / 5); // at least 20%
+    CHECK(worker_count > world.significant_npcs.size() / 5);  // at least 20%
 }
 
 TEST_CASE("WorldGenerator  - NPC motivation vectors normalized", "[world_gen][npcs]") {
@@ -369,13 +376,14 @@ TEST_CASE("WorldGenerator  - businesses have diverse sectors", "[world_gen][busi
     bool has_criminal = false;
     for (const auto& biz : world.npc_businesses) {
         observed_sectors.insert(biz.sector);
-        if (biz.criminal_sector) has_criminal = true;
+        if (biz.criminal_sector)
+            has_criminal = true;
         CHECK(biz.cash > 0.0f);
         CHECK(biz.revenue_per_tick > 0.0f);
         CHECK(biz.cost_per_tick > 0.0f);
-        CHECK(biz.cost_per_tick < biz.revenue_per_tick); // profitable at start
+        CHECK(biz.cost_per_tick < biz.revenue_per_tick);  // profitable at start
     }
-    CHECK(observed_sectors.size() >= 4); // reasonable sector diversity
+    CHECK(observed_sectors.size() >= 4);  // reasonable sector diversity
 }
 
 TEST_CASE("WorldGenerator  - markets created with fallback goods", "[world_gen][markets]") {
@@ -446,7 +454,8 @@ TEST_CASE("WorldGenerator  - generate_with_player creates player", "[world_gen][
     CHECK(result.world.provinces.size() == 3);
 }
 
-TEST_CASE("WorldGenerator  - province community state initialized correctly", "[world_gen][community]") {
+TEST_CASE("WorldGenerator  - province community state initialized correctly",
+          "[world_gen][community]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -463,15 +472,15 @@ TEST_CASE("WorldGenerator  - province community state initialized correctly", "[
         CHECK(p.community.grievance_level <= 1.0f);
         CHECK(p.community.institutional_trust >= 0.0f);
         CHECK(p.community.institutional_trust <= 1.0f);
-        CHECK(p.community.response_stage == 0); // fresh world
+        CHECK(p.community.response_stage == 0);  // fresh world
 
         // Conditions should be initialized within valid ranges.
         CHECK(p.conditions.stability_score >= 0.0f);
         CHECK(p.conditions.stability_score <= 1.0f);
         CHECK(p.conditions.crime_rate >= 0.0f);
         CHECK(p.conditions.crime_rate <= 1.0f);
-        CHECK(p.conditions.drought_modifier == 1.0f); // no active drought
-        CHECK(p.conditions.flood_modifier == 1.0f);   // no active flood
+        CHECK(p.conditions.drought_modifier == 1.0f);  // no active drought
+        CHECK(p.conditions.flood_modifier == 1.0f);    // no active flood
 
         // Corruption baseline enforced.
         CHECK(p.political.corruption_index >= config.corruption_baseline);
@@ -496,7 +505,7 @@ TEST_CASE("WorldGenerator  - nation structure valid", "[world_gen][nation]") {
     CHECK_FALSE(nation.name.empty());
     CHECK(nation.government_type == GovernmentType::Democracy);
     CHECK(nation.province_ids.size() == 6);
-    CHECK(nation.lod1_profile == std::nullopt); // LOD 0
+    CHECK(nation.lod1_profile == std::nullopt);  // LOD 0
     CHECK(nation.corporate_tax_rate > 0.0f);
     CHECK(nation.income_tax_rate_top_bracket > 0.0f);
 }

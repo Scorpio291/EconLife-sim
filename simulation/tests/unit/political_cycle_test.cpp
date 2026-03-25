@@ -1,32 +1,26 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+
 #include "modules/political_cycle/political_cycle_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("PoliticalCycle: raw vote share weighted calculation", "[political_cycle][tier10]") {
-    std::unordered_map<std::string, float> approval = {
-        {"working_class", 0.7f},
-        {"corporate", 0.3f}
-    };
-    std::vector<DemographicWeight> demographics = {
-        {"working_class", 0.6f, 1.0f},
-        {"corporate", 0.4f, 1.0f}
-    };
+    std::unordered_map<std::string, float> approval = {{"working_class", 0.7f},
+                                                       {"corporate", 0.3f}};
+    std::vector<DemographicWeight> demographics = {{"working_class", 0.6f, 1.0f},
+                                                   {"corporate", 0.4f, 1.0f}};
     // (0.7*0.6 + 0.3*0.4) / (0.6 + 0.4) = (0.42 + 0.12) / 1.0 = 0.54
     float share = PoliticalCycleModule::compute_raw_vote_share(approval, demographics);
     REQUIRE_THAT(share, WithinAbs(0.54f, 0.01f));
 }
 
-TEST_CASE("PoliticalCycle: vote share default approval for missing demographic", "[political_cycle][tier10]") {
-    std::unordered_map<std::string, float> approval = {
-        {"working_class", 0.8f}
-    };
-    std::vector<DemographicWeight> demographics = {
-        {"working_class", 0.5f, 1.0f},
-        {"corporate", 0.5f, 1.0f}
-    };
+TEST_CASE("PoliticalCycle: vote share default approval for missing demographic",
+          "[political_cycle][tier10]") {
+    std::unordered_map<std::string, float> approval = {{"working_class", 0.8f}};
+    std::vector<DemographicWeight> demographics = {{"working_class", 0.5f, 1.0f},
+                                                   {"corporate", 0.5f, 1.0f}};
     // working_class: 0.8*0.5 = 0.40; corporate uses default 0.5: 0.5*0.5 = 0.25
     // total = 0.65 / 1.0 = 0.65
     float share = PoliticalCycleModule::compute_raw_vote_share(approval, demographics);
@@ -35,9 +29,7 @@ TEST_CASE("PoliticalCycle: vote share default approval for missing demographic",
 
 TEST_CASE("PoliticalCycle: zero weight demographics return 0.5", "[political_cycle][tier10]") {
     std::unordered_map<std::string, float> approval;
-    std::vector<DemographicWeight> demographics = {
-        {"empty", 0.0f, 0.0f}
-    };
+    std::vector<DemographicWeight> demographics = {{"empty", 0.0f, 0.0f}};
     float share = PoliticalCycleModule::compute_raw_vote_share(approval, demographics);
     REQUIRE_THAT(share, WithinAbs(0.5f, 0.01f));
 }

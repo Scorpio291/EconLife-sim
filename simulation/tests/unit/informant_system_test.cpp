@@ -1,8 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "modules/informant_system/informant_system_module.h"
-#include "core/world_state/world_state.h"
+
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/informant_system/informant_system_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -22,13 +23,17 @@ TEST_CASE("Informant: trust factor computation", "[informant_system][tier9]") {
 }
 
 TEST_CASE("Informant: incrimination suppression", "[informant_system][tier9]") {
-    REQUIRE_THAT(InformantSystemModule::compute_incrimination_suppression(0), WithinAbs(0.0f, 0.01f));
-    REQUIRE_THAT(InformantSystemModule::compute_incrimination_suppression(2), WithinAbs(0.16f, 0.01f));
+    REQUIRE_THAT(InformantSystemModule::compute_incrimination_suppression(0),
+                 WithinAbs(0.0f, 0.01f));
+    REQUIRE_THAT(InformantSystemModule::compute_incrimination_suppression(2),
+                 WithinAbs(0.16f, 0.01f));
 }
 
 TEST_CASE("Informant: compartmentalization bonus", "[informant_system][tier9]") {
-    REQUIRE_THAT(InformantSystemModule::compute_compartmentalization_bonus(0), WithinAbs(0.0f, 0.01f));
-    REQUIRE_THAT(InformantSystemModule::compute_compartmentalization_bonus(3), WithinAbs(0.15f, 0.01f));
+    REQUIRE_THAT(InformantSystemModule::compute_compartmentalization_bonus(0),
+                 WithinAbs(0.0f, 0.01f));
+    REQUIRE_THAT(InformantSystemModule::compute_compartmentalization_bonus(3),
+                 WithinAbs(0.15f, 0.01f));
 }
 
 TEST_CASE("Informant: flip probability full formula", "[informant_system][tier9]") {

@@ -16,24 +16,20 @@ namespace econlife {
 //
 // See docs/interfaces/calendar/INTERFACE.md for the canonical specification.
 class CalendarModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "calendar"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
 
-    std::vector<std::string_view> runs_after() const override {
-        return {};
-    }
+    std::vector<std::string_view> runs_after() const override { return {}; }
 
-    std::vector<std::string_view> runs_before() const override {
-        return {"scene_cards"};
-    }
+    std::vector<std::string_view> runs_before() const override { return {"scene_cards"}; }
 
     bool is_province_parallel() const noexcept override { return false; }
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
-private:
+   private:
     // Returns true if the NPC with the given id is dead in the current world state.
     static bool is_npc_dead(const WorldState& state, uint32_t npc_id);
 
@@ -49,10 +45,8 @@ private:
     //   4. Add memory entry: type=event, emotional_weight = -(0.3 + relationship_penalty)
     //
     // Steps 1 and 4 are skipped for dead NPCs. Step 2 and 3 always execute.
-    static void execute_missed_deadline(const WorldState& state,
-                                        DeltaBuffer& delta,
-                                        const CalendarEntry& entry,
-                                        uint32_t deadline_tick);
+    static void execute_missed_deadline(const WorldState& state, DeltaBuffer& delta,
+                                        const CalendarEntry& entry, uint32_t deadline_tick);
 };
 
 }  // namespace econlife

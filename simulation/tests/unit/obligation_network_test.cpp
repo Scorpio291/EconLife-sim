@@ -1,13 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "modules/obligation_network/obligation_network_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"
-
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/obligation_network/obligation_network_module.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace econlife;
@@ -25,23 +24,19 @@ TEST_CASE("test_compute_demand_growth_basic", "[obligation_network][tier6]") {
 
 TEST_CASE("test_compute_player_wealth_factor", "[obligation_network][tier6]") {
     // 100k net worth / 1M reference = 0.1
-    float f1 = ObligationNetworkModule::compute_player_wealth_factor(
-        100000.0f, 1000000.0f, 2.0f);
+    float f1 = ObligationNetworkModule::compute_player_wealth_factor(100000.0f, 1000000.0f, 2.0f);
     REQUIRE_THAT(f1, WithinAbs(0.1f, 0.001f));
 
     // 2M net worth / 1M reference = 2.0 (at max)
-    float f2 = ObligationNetworkModule::compute_player_wealth_factor(
-        2000000.0f, 1000000.0f, 2.0f);
+    float f2 = ObligationNetworkModule::compute_player_wealth_factor(2000000.0f, 1000000.0f, 2.0f);
     REQUIRE_THAT(f2, WithinAbs(2.0f, 0.001f));
 
     // 5M net worth / 1M reference = 5.0 but clamped to 2.0
-    float f3 = ObligationNetworkModule::compute_player_wealth_factor(
-        5000000.0f, 1000000.0f, 2.0f);
+    float f3 = ObligationNetworkModule::compute_player_wealth_factor(5000000.0f, 1000000.0f, 2.0f);
     REQUIRE_THAT(f3, WithinAbs(2.0f, 0.001f));
 
     // Negative net worth -> 0.0
-    float f4 = ObligationNetworkModule::compute_player_wealth_factor(
-        -100000.0f, 1000000.0f, 2.0f);
+    float f4 = ObligationNetworkModule::compute_player_wealth_factor(-100000.0f, 1000000.0f, 2.0f);
     REQUIRE_THAT(f4, WithinAbs(0.0f, 0.001f));
 }
 
@@ -67,16 +62,16 @@ TEST_CASE("test_evaluate_escalation_thresholds", "[obligation_network][tier6]") 
 
 TEST_CASE("test_should_trigger_hostile", "[obligation_network][tier6]") {
     // Critical + high risk tolerance -> hostile
-    REQUIRE(ObligationNetworkModule::should_trigger_hostile(
-        ObligationStatus::critical, 0.8f, 0.7f) == true);
+    REQUIRE(ObligationNetworkModule::should_trigger_hostile(ObligationStatus::critical, 0.8f,
+                                                            0.7f) == true);
 
     // Critical + low risk tolerance -> not hostile
-    REQUIRE(ObligationNetworkModule::should_trigger_hostile(
-        ObligationStatus::critical, 0.5f, 0.7f) == false);
+    REQUIRE(ObligationNetworkModule::should_trigger_hostile(ObligationStatus::critical, 0.5f,
+                                                            0.7f) == false);
 
     // Not critical -> not hostile
-    REQUIRE(ObligationNetworkModule::should_trigger_hostile(
-        ObligationStatus::escalated, 0.9f, 0.7f) == false);
+    REQUIRE(ObligationNetworkModule::should_trigger_hostile(ObligationStatus::escalated, 0.9f,
+                                                            0.7f) == false);
 }
 
 TEST_CASE("test_compute_trust_erosion", "[obligation_network][tier6]") {
@@ -157,8 +152,7 @@ TEST_CASE("test_not_yet_overdue_no_escalation", "[obligation_network][tier6]") {
     module.execute(state, delta);
 
     // Demand unchanged
-    REQUIRE_THAT(module.obligation_states()[0].current_demand,
-                 WithinAbs(100.0f, 0.001f));
+    REQUIRE_THAT(module.obligation_states()[0].current_demand, WithinAbs(100.0f, 0.001f));
 }
 
 TEST_CASE("test_status_transitions_open_to_escalated", "[obligation_network][tier6]") {
@@ -365,7 +359,6 @@ TEST_CASE("test_dead_creditor_freezes_obligation", "[obligation_network][tier6]"
     module.execute(state, delta);
 
     // Demand unchanged — creditor dead, obligation frozen
-    REQUIRE_THAT(module.obligation_states()[0].current_demand,
-                 WithinAbs(200.0f, 0.001f));
+    REQUIRE_THAT(module.obligation_states()[0].current_demand, WithinAbs(200.0f, 0.001f));
     REQUIRE(module.obligation_states()[0].status == ObligationStatus::escalated);
 }

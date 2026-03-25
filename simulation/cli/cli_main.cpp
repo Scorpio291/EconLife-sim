@@ -3,13 +3,6 @@
 // registers all 43 base game modules, and runs the full tick loop with
 // per-tick metric output.
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
-#include "core/world_gen/world_generator.h"
-#include "core/tick/tick_orchestrator.h"
-#include "core/tick/thread_pool.h"
-#include "modules/register_base_game_modules.h"
-
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -17,19 +10,26 @@
 #include <cstring>
 #include <filesystem>
 
+#include "core/tick/thread_pool.h"
+#include "core/tick/tick_orchestrator.h"
+#include "core/world_gen/world_generator.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/register_base_game_modules.h"
+
 using namespace econlife;
 
 struct CliArgs {
-    uint64_t    seed           = 42;
-    uint32_t    npc_count      = 2000;
-    uint32_t    province_count = 6;
-    uint32_t    ticks          = 365;
-    uint32_t    threads        = 1;
-    uint32_t    report_every   = 30;   // print metrics every N ticks
-    uint8_t     max_good_tier  = 1;    // tier 0-1 at game start
-    bool        verbose        = false;
-    bool        use_test_world = false; // fallback to test_world_factory
-    std::string goods_dir;             // path to goods CSVs
+    uint64_t seed = 42;
+    uint32_t npc_count = 2000;
+    uint32_t province_count = 6;
+    uint32_t ticks = 365;
+    uint32_t threads = 1;
+    uint32_t report_every = 30;  // print metrics every N ticks
+    uint8_t max_good_tier = 1;   // tier 0-1 at game start
+    bool verbose = false;
+    bool use_test_world = false;  // fallback to test_world_factory
+    std::string goods_dir;        // path to goods CSVs
 };
 
 static void print_usage(const char* prog) {
@@ -97,9 +97,11 @@ static std::string find_goods_directory() {
 }
 
 static void print_header() {
-    std::printf("%-6s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n",
-                "Tick", "AvgCapital", "AvgPrice", "Stability", "Crime", "Grievance", "Cohesion", "BizCash");
-    std::printf("-------+------------+------------+------------+------------+------------+------------+-----------\n");
+    std::printf("%-6s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n", "Tick",
+                "AvgCapital", "AvgPrice", "Stability", "Crime", "Grievance", "Cohesion", "BizCash");
+    std::printf(
+        "-------+------------+------------+------------+------------+------------+------------+----"
+        "-------\n");
 }
 
 static void print_metrics(const WorldState& world) {
@@ -108,24 +110,26 @@ static void print_metrics(const WorldState& world) {
     for (const auto& npc : world.significant_npcs) {
         total_capital += npc.capital;
     }
-    float avg_capital = world.significant_npcs.empty() ? 0.0f
-        : total_capital / static_cast<float>(world.significant_npcs.size());
+    float avg_capital = world.significant_npcs.empty()
+                            ? 0.0f
+                            : total_capital / static_cast<float>(world.significant_npcs.size());
 
     // Average market spot price
     float total_price = 0.0f;
     for (const auto& m : world.regional_markets) {
         total_price += m.spot_price;
     }
-    float avg_price = world.regional_markets.empty() ? 0.0f
-        : total_price / static_cast<float>(world.regional_markets.size());
+    float avg_price = world.regional_markets.empty()
+                          ? 0.0f
+                          : total_price / static_cast<float>(world.regional_markets.size());
 
     // Province 0 metrics (representative)
     float stability = 0.0f, crime = 0.0f, grievance = 0.0f, cohesion = 0.0f;
     if (!world.provinces.empty()) {
         stability = world.provinces[0].conditions.stability_score;
-        crime     = world.provinces[0].conditions.crime_rate;
+        crime = world.provinces[0].conditions.crime_rate;
         grievance = world.provinces[0].community.grievance_level;
-        cohesion  = world.provinces[0].community.cohesion;
+        cohesion = world.provinces[0].community.cohesion;
     }
 
     // Average business cash
@@ -133,27 +137,31 @@ static void print_metrics(const WorldState& world) {
     for (const auto& biz : world.npc_businesses) {
         total_biz_cash += biz.cash;
     }
-    float avg_biz_cash = world.npc_businesses.empty() ? 0.0f
-        : total_biz_cash / static_cast<float>(world.npc_businesses.size());
+    float avg_biz_cash = world.npc_businesses.empty()
+                             ? 0.0f
+                             : total_biz_cash / static_cast<float>(world.npc_businesses.size());
 
     std::printf("%-6u | %10.1f | %10.2f | %10.3f | %10.3f | %10.3f | %10.3f | %10.1f\n",
-                world.current_tick, avg_capital, avg_price, stability,
-                crime, grievance, cohesion, avg_biz_cash);
+                world.current_tick, avg_capital, avg_price, stability, crime, grievance, cohesion,
+                avg_biz_cash);
 }
 
 static bool check_nan_contamination(const WorldState& world) {
     for (const auto& npc : world.significant_npcs) {
-        if (std::isnan(npc.capital)) return true;
+        if (std::isnan(npc.capital))
+            return true;
         for (float w : npc.motivations.weights) {
-            if (std::isnan(w)) return true;
+            if (std::isnan(w))
+                return true;
         }
     }
     for (const auto& m : world.regional_markets) {
-        if (std::isnan(m.spot_price) || std::isnan(m.supply)) return true;
+        if (std::isnan(m.spot_price) || std::isnan(m.supply))
+            return true;
     }
     for (const auto& p : world.provinces) {
-        if (std::isnan(p.conditions.stability_score) ||
-            std::isnan(p.conditions.crime_rate)) return true;
+        if (std::isnan(p.conditions.stability_score) || std::isnan(p.conditions.crime_rate))
+            return true;
     }
     return false;
 }
@@ -162,8 +170,7 @@ int main(int argc, char* argv[]) {
     CliArgs args = parse_args(argc, argv);
 
     std::printf("EconLife CLI — seed=%llu, npcs=%u, provinces=%u, ticks=%u, threads=%u\n",
-                static_cast<unsigned long long>(args.seed),
-                args.npc_count, args.province_count,
+                static_cast<unsigned long long>(args.seed), args.npc_count, args.province_count,
                 args.ticks, args.threads);
 
     // 1. Create world using WorldGenerator
@@ -190,15 +197,14 @@ int main(int argc, char* argv[]) {
     world.player = &player;
 
     std::printf("World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets\n\n",
-                world.provinces.size(), world.significant_npcs.size(),
-                world.npc_businesses.size(), world.regional_markets.size());
+                world.provinces.size(), world.significant_npcs.size(), world.npc_businesses.size(),
+                world.regional_markets.size());
 
     // 2. Set up orchestrator
     TickOrchestrator orchestrator;
     register_base_game_modules(orchestrator);
     orchestrator.finalize_registration();
-    std::printf("Registered %zu modules, topological sort OK.\n\n",
-                orchestrator.modules().size());
+    std::printf("Registered %zu modules, topological sort OK.\n\n", orchestrator.modules().size());
 
     // 3. Create thread pool
     ThreadPool pool(args.threads);
@@ -218,7 +224,8 @@ int main(int argc, char* argv[]) {
 
         double tick_ms = std::chrono::duration<double, std::milli>(tick_end - tick_start).count();
         total_tick_ms += tick_ms;
-        if (tick_ms > max_tick_ms) max_tick_ms = tick_ms;
+        if (tick_ms > max_tick_ms)
+            max_tick_ms = tick_ms;
 
         if (args.verbose) {
             std::printf("  tick %u: %.2f ms\n", world.current_tick, tick_ms);
@@ -243,8 +250,8 @@ int main(int argc, char* argv[]) {
     print_metrics(world);
 
     std::printf("\n--- Performance ---\n");
-    std::printf("Wall time:    %.1f ms (%.1f ms/tick avg, %.1f ms max)\n",
-                wall_ms, total_tick_ms / args.ticks, max_tick_ms);
+    std::printf("Wall time:    %.1f ms (%.1f ms/tick avg, %.1f ms max)\n", wall_ms,
+                total_tick_ms / args.ticks, max_tick_ms);
     std::printf("NPCs:         %zu\n", world.significant_npcs.size());
     std::printf("Businesses:   %zu\n", world.npc_businesses.size());
     std::printf("Markets:      %zu\n", world.regional_markets.size());
@@ -255,13 +262,9 @@ int main(int argc, char* argv[]) {
     std::printf("\n--- Provinces ---\n");
     for (const auto& p : world.provinces) {
         std::printf("  [%u] %-20s pop=%u infra=%.2f agri=%.2f deposits=%zu markets=%zu npcs=%zu\n",
-                    p.id, p.fictional_name.c_str(),
-                    p.demographics.total_population,
-                    p.infrastructure_rating,
-                    p.agricultural_productivity,
-                    p.deposits.size(),
-                    p.market_ids.size(),
-                    p.significant_npc_ids.size());
+                    p.id, p.fictional_name.c_str(), p.demographics.total_population,
+                    p.infrastructure_rating, p.agricultural_productivity, p.deposits.size(),
+                    p.market_ids.size(), p.significant_npc_ids.size());
     }
 
     return 0;

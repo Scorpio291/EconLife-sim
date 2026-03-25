@@ -8,9 +8,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdint>
-#include "core/world_state/world_state.h"
-#include "core/world_state/apply_deltas.h"
+
 #include "core/tick/drain_deferred_work.h"
+#include "core/world_state/apply_deltas.h"
+#include "core/world_state/world_state.h"
 #include "tests/test_world_factory.h"
 
 using namespace econlife;
@@ -19,7 +20,8 @@ using Catch::Matchers::WithinAbs;
 
 // ── Motivation-driven decisions ─────────────────────────────────────────────
 
-TEST_CASE("NPC with high greed motivation prioritizes high-paying job", "[scenario][npc][motivation]") {
+TEST_CASE("NPC with high greed motivation prioritizes high-paying job",
+          "[scenario][npc][motivation]") {
     // Setup: NPC with financial_gain (index 0) as dominant motivation weight (0.8).
     // The NPC accepts the high-paying job: capital_delta = +200 applied.
     // Assert: capital increased by exactly 200.
@@ -41,13 +43,13 @@ TEST_CASE("NPC with high greed motivation prioritizes high-paying job", "[scenar
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.significant_npcs[0].capital,
-                 WithinAbs(initial_capital + 200.0f, 0.01f));
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(initial_capital + 200.0f, 0.01f));
     // Confirm the motivation vector was set correctly (dominant weight at index 0).
     REQUIRE(world.significant_npcs[0].motivations.weights[0] > 0.5f);
 }
 
-TEST_CASE("NPC with high security motivation avoids risky business", "[scenario][npc][motivation]") {
+TEST_CASE("NPC with high security motivation avoids risky business",
+          "[scenario][npc][motivation]") {
     // Setup: NPC with security_gain (index 1) as dominant motivation weight (0.8).
     // The NPC rejects the criminal opportunity — no capital_delta applied.
     // Assert: capital is unchanged.
@@ -63,8 +65,7 @@ TEST_CASE("NPC with high security motivation avoids risky business", "[scenario]
     DeltaBuffer delta{};
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.significant_npcs[0].capital,
-                 WithinAbs(initial_capital, 0.01f));
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(initial_capital, 0.01f));
     // Confirm the motivation vector was set correctly (dominant weight at index 1).
     REQUIRE(world.significant_npcs[0].motivations.weights[1] > 0.5f);
 }
@@ -256,7 +257,7 @@ TEST_CASE("positive interactions increase relationship trust", "[scenario][npc][
     // then clamps to [-1, 1] and enforces recovery_ceiling.
     Relationship delta_rel{};
     delta_rel.target_npc_id = npc_b_id;
-    delta_rel.trust = 0.1f;   // additive delta
+    delta_rel.trust = 0.1f;  // additive delta
     delta_rel.fear = 0.0f;
     delta_rel.obligation_balance = 0.0f;
     delta_rel.last_interaction_tick = 1;
@@ -300,12 +301,8 @@ TEST_CASE("NPC migrates when satisfaction below threshold", "[scenario][npc][mig
     npc.current_province_id = 1;  // destination
 
     // Schedule the arrival for the current tick.
-    world.deferred_work_queue.push({
-        10,  // due_tick == current_tick, so it fires immediately
-        WorkType::npc_travel_arrival,
-        npc.id,
-        EmptyPayload{}
-    });
+    world.deferred_work_queue.push({10,  // due_tick == current_tick, so it fires immediately
+                                    WorkType::npc_travel_arrival, npc.id, EmptyPayload{}});
 
     DeltaBuffer delta{};
     drain_deferred_work(world, delta);
@@ -328,7 +325,7 @@ TEST_CASE("NPC with good credit approved for loan", "[scenario][npc][banking]") 
     MemoryEntry approval_memory{};
     approval_memory.tick_timestamp = world.current_tick;
     approval_memory.type = MemoryType::interaction;
-    approval_memory.subject_id = 0;  // bank entity
+    approval_memory.subject_id = 0;           // bank entity
     approval_memory.emotional_weight = 0.5f;  // positive: loan granted
     approval_memory.decay = 0.97f;
     approval_memory.is_actionable = false;
@@ -341,8 +338,7 @@ TEST_CASE("NPC with good credit approved for loan", "[scenario][npc][banking]") 
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.significant_npcs[0].capital,
-                 WithinAbs(initial_capital + 50000.0f, 0.01f));
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(initial_capital + 50000.0f, 0.01f));
     REQUIRE(world.significant_npcs[0].memory_log.size() == 1u);
     REQUIRE(world.significant_npcs[0].memory_log[0].type == MemoryType::interaction);
     REQUIRE(world.significant_npcs[0].memory_log[0].emotional_weight > 0.0f);
@@ -363,7 +359,7 @@ TEST_CASE("loan default triggers credit penalty", "[scenario][npc][banking]") {
     MemoryEntry default_memory{};
     default_memory.tick_timestamp = world.current_tick;
     default_memory.type = MemoryType::event;
-    default_memory.subject_id = 0;  // bank entity
+    default_memory.subject_id = 0;            // bank entity
     default_memory.emotional_weight = -0.7f;  // negative: default consequence
     default_memory.decay = 0.99f;
     default_memory.is_actionable = true;
@@ -372,7 +368,7 @@ TEST_CASE("loan default triggers credit penalty", "[scenario][npc][banking]") {
     NPCDelta nd{};
     nd.npc_id = npc.id;
     nd.capital_delta = -remaining_capital;  // collateral seizure
-    nd.new_status = NPCStatus::active;       // still active but credit-penalized
+    nd.new_status = NPCStatus::active;      // still active but credit-penalized
     nd.new_memory_entry = default_memory;
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
@@ -472,8 +468,7 @@ TEST_CASE("budget deficit increases borrowing costs", "[scenario][npc][budget]")
     float final_stability = world.provinces[0].conditions.stability_score;
     REQUIRE(final_stability < initial_stability);
     // At -0.005 per tick * 30 ticks = -0.15 total expected drag.
-    REQUIRE_THAT(final_stability,
-                 WithinAbs(std::max(0.0f, initial_stability - 0.15f), 0.01f));
+    REQUIRE_THAT(final_stability, WithinAbs(std::max(0.0f, initial_stability - 0.15f), 0.01f));
 }
 
 TEST_CASE("spending allocation affects service quality", "[scenario][npc][budget]") {
@@ -484,21 +479,20 @@ TEST_CASE("spending allocation affects service quality", "[scenario][npc][budget
     auto world = create_test_world(42, 10, 1, 5);
 
     float initial_stability = world.provinces[0].conditions.stability_score;
-    float initial_crime     = world.provinces[0].conditions.crime_rate;
+    float initial_crime = world.provinces[0].conditions.crime_rate;
 
     DeltaBuffer delta{};
     RegionDelta rd{};
     rd.region_id = 0;
-    rd.stability_delta  =  0.08f;  // high healthcare spend boosts stability
-    rd.crime_rate_delta =  0.06f;  // low law enforcement → crime rises
+    rd.stability_delta = 0.08f;   // high healthcare spend boosts stability
+    rd.crime_rate_delta = 0.06f;  // low law enforcement → crime rises
     delta.region_deltas.push_back(rd);
     apply_deltas(world, delta);
 
     REQUIRE(world.provinces[0].conditions.stability_score > initial_stability);
-    REQUIRE(world.provinces[0].conditions.crime_rate     > initial_crime);
+    REQUIRE(world.provinces[0].conditions.crime_rate > initial_crime);
 
     REQUIRE_THAT(world.provinces[0].conditions.stability_score,
                  WithinAbs(initial_stability + 0.08f, 0.01f));
-    REQUIRE_THAT(world.provinces[0].conditions.crime_rate,
-                 WithinAbs(initial_crime + 0.06f, 0.01f));
+    REQUIRE_THAT(world.provinces[0].conditions.crime_rate, WithinAbs(initial_crime + 0.06f, 0.01f));
 }

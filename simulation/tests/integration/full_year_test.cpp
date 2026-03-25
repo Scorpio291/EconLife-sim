@@ -7,12 +7,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
+#include "core/tick/drain_deferred_work.h"
+#include "core/tick/thread_pool.h"
+#include "core/tick/tick_orchestrator.h"
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/player.h"
-#include "core/tick/drain_deferred_work.h"
-#include "core/tick/tick_orchestrator.h"
-#include "core/tick/thread_pool.h"
+#include "core/world_state/world_state.h"
 #include "modules/persistence/persistence_module.h"
 #include "modules/register_base_game_modules.h"
 #include "tests/test_world_factory.h"
@@ -64,7 +64,7 @@ TEST_CASE("economy reaches equilibrium over 365 ticks", "[integration][economy]"
             MarketDelta md{};
             md.good_id = m.good_id;
             md.region_id = m.province_id;
-            md.supply_delta = -excess * 0.05f; // Markets correct 5% per tick
+            md.supply_delta = -excess * 0.05f;  // Markets correct 5% per tick
             md.demand_buffer_delta = excess * 0.02f;
             delta.market_deltas.push_back(md);
         }
@@ -79,7 +79,8 @@ TEST_CASE("economy reaches equilibrium over 365 ticks", "[integration][economy]"
     float max_gap = 0.0f;
     for (const auto& m : world.regional_markets) {
         float gap = std::abs(m.supply - m.demand_buffer);
-        if (gap > max_gap) max_gap = gap;
+        if (gap > max_gap)
+            max_gap = gap;
     }
     // After 365 ticks of 5% correction, gaps should be small
     REQUIRE(max_gap < 50.0f);
@@ -144,7 +145,8 @@ TEST_CASE("crime-evidence-enforcement cycle over 365 ticks", "[integration][crim
             for (auto& tok : world.evidence_pool) {
                 if (tok.is_active) {
                     tok.actionability -= tok.decay_rate;
-                    if (tok.actionability <= 0.0f) tok.is_active = false;
+                    if (tok.actionability <= 0.0f)
+                        tok.is_active = false;
                 }
             }
         }
@@ -156,7 +158,7 @@ TEST_CASE("crime-evidence-enforcement cycle over 365 ticks", "[integration][crim
     // Crime rose and then fell — should be lower than peak
     float final_crime = world.provinces[0].conditions.crime_rate;
     // Crime rate should have been reduced by enforcement
-    REQUIRE(final_crime < 0.35f); // Should be below peak
+    REQUIRE(final_crime < 0.35f);  // Should be below peak
     // Some evidence tokens should exist
     REQUIRE(!world.evidence_pool.empty());
 }
@@ -544,7 +546,8 @@ TEST_CASE("orchestrator 30-tick run produces state changes", "[integration][orch
     REQUIRE(any_change);
 }
 
-TEST_CASE("orchestrator determinism: same seed same output", "[integration][orchestrator][determinism]") {
+TEST_CASE("orchestrator determinism: same seed same output",
+          "[integration][orchestrator][determinism]") {
     auto run_30_ticks = [](uint64_t seed) -> WorldState {
         TickOrchestrator orchestrator;
         register_base_game_modules(orchestrator);
@@ -583,7 +586,8 @@ TEST_CASE("orchestrator determinism: same seed same output", "[integration][orch
     }
 }
 
-TEST_CASE("full orchestrator 365-tick year completes without crash", "[integration][orchestrator][year]") {
+TEST_CASE("full orchestrator 365-tick year completes without crash",
+          "[integration][orchestrator][year]") {
     TickOrchestrator orchestrator;
     register_base_game_modules(orchestrator);
     orchestrator.finalize_registration();

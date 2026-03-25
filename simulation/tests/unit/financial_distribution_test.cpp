@@ -12,9 +12,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 #include "modules/financial_distribution/financial_distribution_module.h"
 #include "modules/financial_distribution/financial_distribution_types.h"
 
@@ -49,9 +49,8 @@ WorldState make_test_world_state() {
 }
 
 // Create a basic NPCBusiness with sensible defaults.
-NPCBusiness make_test_business(uint32_t id, uint32_t owner_id,
-                                float cash, float revenue_per_tick,
-                                float cost_per_tick, uint32_t province_id = 0) {
+NPCBusiness make_test_business(uint32_t id, uint32_t owner_id, float cash, float revenue_per_tick,
+                               float cost_per_tick, uint32_t province_id = 0) {
     NPCBusiness biz{};
     biz.id = id;
     biz.sector = BusinessSector::retail;
@@ -73,13 +72,11 @@ NPCBusiness make_test_business(uint32_t id, uint32_t owner_id,
 }
 
 // Create a compensation record for a business.
-BusinessCompensationRecord make_test_comp_record(
-        uint32_t business_id,
-        BusinessScale scale,
-        CompensationMechanism mechanism,
-        float salary_per_tick = 100.0f,
-        float bonus_rate = 0.0f,
-        float dividend_yield = 0.0f) {
+BusinessCompensationRecord make_test_comp_record(uint32_t business_id, BusinessScale scale,
+                                                 CompensationMechanism mechanism,
+                                                 float salary_per_tick = 100.0f,
+                                                 float bonus_rate = 0.0f,
+                                                 float dividend_yield = 0.0f) {
     BusinessCompensationRecord rec{};
     rec.business_id = business_id;
     rec.scale = scale;
@@ -170,15 +167,16 @@ TEST_CASE("test_salary_paid_when_cash_sufficient", "[financial_distribution][tie
         make_test_business(business_id, owner_npc_id, 10000.0f, 500.0f, 200.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_only, 100.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_only, 100.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
     // Owner NPC should receive salary minus tax withholding (20%).
-    float expected_net = 100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float expected_net =
+        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(expected_net, 0.01f));
 
@@ -205,15 +203,16 @@ TEST_CASE("test_salary_deferred_when_cash_insufficient", "[financial_distributio
         make_test_business(business_id, owner_npc_id, 30.0f, 100.0f, 50.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_only, 100.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_only, 100.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
     // Owner should receive 30 (partial payment) minus tax.
-    float expected_net = 30.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float expected_net =
+        30.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(expected_net, 0.01f));
 
@@ -235,8 +234,8 @@ TEST_CASE("test_salary_deferred_when_no_cash", "[financial_distribution][tier4]"
         make_test_business(business_id, owner_npc_id, 0.0f, 100.0f, 50.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_only, 100.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_only, 100.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -270,8 +269,8 @@ TEST_CASE("test_deferred_salary_paid_first_on_recovery", "[financial_distributio
     state.npc_businesses.push_back(biz);
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_only, 100.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_only, 100.0f);
     // Pre-set deferred_salary_ticks to simulate prior deferral.
     comp_rec.deferred_salary_ticks = 5;
     module.compensation_records().push_back(comp_rec);
@@ -280,7 +279,8 @@ TEST_CASE("test_deferred_salary_paid_first_on_recovery", "[financial_distributio
     module.execute_province(0, state, delta);
 
     // Total payment = 200 (deferred) + 100 (current) = 300, minus 20% tax = 240.
-    float expected_net = 300.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float expected_net =
+        300.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(expected_net, 0.01f));
 
@@ -310,9 +310,8 @@ TEST_CASE("test_quarterly_bonus_from_net_profit", "[financial_distribution][tier
         make_test_business(business_id, owner_npc_id, 50000.0f, 1000.0f, 500.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_bonus,
-        100.0f, 0.10f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_bonus, 100.0f, 0.10f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -322,11 +321,13 @@ TEST_CASE("test_quarterly_bonus_from_net_profit", "[financial_distribution][tier
     // salary net = 100 * 0.80 = 80
     // bonus net = 3640 * 0.80 = 2912
     // total = 80 + 2912 = 2992
-    float salary_net = 100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
-    float quarterly_net_profit = FinancialDistributionModule::compute_quarterly_net_profit(
-        1000.0f, 500.0f, 100.0f);
+    float salary_net =
+        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float quarterly_net_profit =
+        FinancialDistributionModule::compute_quarterly_net_profit(1000.0f, 500.0f, 100.0f);
     float bonus_amount = quarterly_net_profit * 0.10f;
-    float bonus_net = bonus_amount * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float bonus_net =
+        bonus_amount * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
 
     float total_expected = salary_net + bonus_net;
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
@@ -346,16 +347,16 @@ TEST_CASE("test_quarterly_bonus_zero_when_no_profit", "[financial_distribution][
         make_test_business(business_id, owner_npc_id, 50000.0f, 100.0f, 500.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_bonus,
-        100.0f, 0.10f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_bonus, 100.0f, 0.10f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
     // Only salary should be paid, no bonus (net profit is negative).
-    float salary_net = 100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float salary_net =
+        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -364,7 +365,8 @@ TEST_CASE("test_quarterly_bonus_zero_when_no_profit", "[financial_distribution][
 // Test 5: Dividend payout from retained earnings respects working capital floor
 // ===========================================================================
 
-TEST_CASE("test_dividend_payout_respects_working_capital_floor", "[financial_distribution][tier4]") {
+TEST_CASE("test_dividend_payout_respects_working_capital_floor",
+          "[financial_distribution][tier4]") {
     // Business with cash=50,000, cost_per_tick=1,000, dividend_yield_target=0.5,
     // retained_earnings=100,000.
     // Working capital floor = 1000 * 5.0 * 30 = 150,000.
@@ -380,9 +382,9 @@ TEST_CASE("test_dividend_payout_respects_working_capital_floor", "[financial_dis
         make_test_business(business_id, owner_npc_id, 50000.0f, 5000.0f, 1000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::medium, CompensationMechanism::salary_dividend,
-        500.0f, 0.0f, 0.5f);
+    auto comp_rec =
+        make_test_comp_record(business_id, BusinessScale::medium,
+                              CompensationMechanism::salary_dividend, 500.0f, 0.0f, 0.5f);
     comp_rec.retained_earnings = 100000.0f;
     // Independent board that approves.
     comp_rec.board.independence_score = 0.2f;  // Below rubber stamp = auto-approve.
@@ -395,7 +397,8 @@ TEST_CASE("test_dividend_payout_respects_working_capital_floor", "[financial_dis
     // Working capital floor = 1000 * 5.0 * 30 = 150,000.
     // Cash = 50,000 < 150,000 => max_payout = 50,000 - 150,000 = negative => no dividend.
     // Only salary should be paid.
-    float salary_net = 500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float salary_net =
+        500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -418,9 +421,9 @@ TEST_CASE("test_dividend_payout_when_sufficient_cash", "[financial_distribution]
         make_test_business(business_id, owner_npc_id, 100000.0f, 5000.0f, 10.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::medium, CompensationMechanism::salary_dividend,
-        200.0f, 0.0f, 0.5f);
+    auto comp_rec =
+        make_test_comp_record(business_id, BusinessScale::medium,
+                              CompensationMechanism::salary_dividend, 200.0f, 0.0f, 0.5f);
     comp_rec.retained_earnings = 50000.0f;
     comp_rec.board.independence_score = 0.1f;  // Rubber stamp board.
     module.compensation_records().push_back(comp_rec);
@@ -428,8 +431,10 @@ TEST_CASE("test_dividend_payout_when_sufficient_cash", "[financial_distribution]
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
-    float salary_net = 200.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
-    float dividend_net = 25000.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float salary_net =
+        200.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float dividend_net =
+        25000.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float expected_total = salary_net + dividend_net;
 
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
@@ -460,8 +465,8 @@ TEST_CASE("test_owners_draw_only_micro", "[financial_distribution][tier4]") {
         make_test_business(business_id, owner_npc_id, 5000.0f, 2000.0f, 1000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::micro, CompensationMechanism::owners_draw, 0.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::micro,
+                                          CompensationMechanism::owners_draw, 0.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -485,8 +490,8 @@ TEST_CASE("test_owners_draw_not_available_for_small", "[financial_distribution][
 
     FinancialDistributionModule module;
     // Intentionally invalid: owners_draw on small business.
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::owners_draw, 100.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::owners_draw, 100.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -498,7 +503,8 @@ TEST_CASE("test_owners_draw_not_available_for_small", "[financial_distribution][
     REQUIRE(rec->compensation.mechanism == CompensationMechanism::salary_only);
 
     // Should receive salary payment instead of draw.
-    float salary_net = 100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float salary_net =
+        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -510,58 +516,59 @@ TEST_CASE("test_owners_draw_not_available_for_small", "[financial_distribution][
 TEST_CASE("test_mechanism_validation_per_scale", "[financial_distribution][tier4]") {
     // owners_draw: micro only
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::owners_draw, BusinessScale::micro) == true);
+                CompensationMechanism::owners_draw, BusinessScale::micro) == true);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::owners_draw, BusinessScale::small) == false);
+                CompensationMechanism::owners_draw, BusinessScale::small) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::owners_draw, BusinessScale::medium) == false);
+                CompensationMechanism::owners_draw, BusinessScale::medium) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::owners_draw, BusinessScale::large) == false);
+                CompensationMechanism::owners_draw, BusinessScale::large) == false);
 
     // salary_only: small, medium, large
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_only, BusinessScale::micro) == false);
+                CompensationMechanism::salary_only, BusinessScale::micro) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_only, BusinessScale::small) == true);
+                CompensationMechanism::salary_only, BusinessScale::small) == true);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_only, BusinessScale::medium) == true);
+                CompensationMechanism::salary_only, BusinessScale::medium) == true);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_only, BusinessScale::large) == true);
+                CompensationMechanism::salary_only, BusinessScale::large) == true);
 
     // salary_bonus: small, medium, large
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_bonus, BusinessScale::micro) == false);
+                CompensationMechanism::salary_bonus, BusinessScale::micro) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_bonus, BusinessScale::small) == true);
+                CompensationMechanism::salary_bonus, BusinessScale::small) == true);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_bonus, BusinessScale::medium) == true);
+                CompensationMechanism::salary_bonus, BusinessScale::medium) == true);
 
     // salary_dividend: medium, large
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_dividend, BusinessScale::micro) == false);
+                CompensationMechanism::salary_dividend, BusinessScale::micro) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_dividend, BusinessScale::small) == false);
+                CompensationMechanism::salary_dividend, BusinessScale::small) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_dividend, BusinessScale::medium) == true);
+                CompensationMechanism::salary_dividend, BusinessScale::medium) == true);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::salary_dividend, BusinessScale::large) == true);
+                CompensationMechanism::salary_dividend, BusinessScale::large) == true);
 
     // full_package: large only
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::full_package, BusinessScale::micro) == false);
+                CompensationMechanism::full_package, BusinessScale::micro) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::full_package, BusinessScale::small) == false);
+                CompensationMechanism::full_package, BusinessScale::small) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::full_package, BusinessScale::medium) == false);
+                CompensationMechanism::full_package, BusinessScale::medium) == false);
     REQUIRE(FinancialDistributionModule::is_mechanism_valid_for_scale(
-        CompensationMechanism::full_package, BusinessScale::large) == true);
+                CompensationMechanism::full_package, BusinessScale::large) == true);
 }
 
 // ===========================================================================
 // Test 8: Suspicious transaction evidence generation
 // ===========================================================================
 
-TEST_CASE("test_owners_draw_generates_evidence_above_threshold", "[financial_distribution][tier4]") {
+TEST_CASE("test_owners_draw_generates_evidence_above_threshold",
+          "[financial_distribution][tier4]") {
     // Micro business owner executes draws that accumulate above the monthly
     // draw_reporting_threshold (20,000). Verify evidence token generated.
     auto state = make_test_world_state();
@@ -576,8 +583,8 @@ TEST_CASE("test_owners_draw_generates_evidence_above_threshold", "[financial_dis
         make_test_business(business_id, owner_npc_id, 100000.0f, 50000.0f, 5000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::micro, CompensationMechanism::owners_draw, 0.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::micro,
+                                          CompensationMechanism::owners_draw, 0.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -590,8 +597,7 @@ TEST_CASE("test_owners_draw_generates_evidence_above_threshold", "[financial_dis
     for (const auto& ev : delta.evidence_deltas) {
         if (ev.new_token.has_value()) {
             const auto& token = ev.new_token.value();
-            if (token.type == EvidenceType::financial
-                && token.source_npc_id == owner_npc_id) {
+            if (token.type == EvidenceType::financial && token.source_npc_id == owner_npc_id) {
                 found_suspicious = true;
                 REQUIRE(token.is_active == true);
                 REQUIRE(token.province_id == 0);
@@ -614,8 +620,8 @@ TEST_CASE("test_owners_draw_no_evidence_below_threshold", "[financial_distributi
         make_test_business(business_id, owner_npc_id, 5000.0f, 200.0f, 100.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::micro, CompensationMechanism::owners_draw, 0.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::micro,
+                                          CompensationMechanism::owners_draw, 0.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -665,9 +671,8 @@ TEST_CASE("test_no_cash_negative_from_compensation", "[financial_distribution][t
         make_test_business(business_id, owner_npc_id, 50.0f, 1000.0f, 100.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_bonus,
-        100.0f, 0.20f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_bonus, 100.0f, 0.20f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -697,8 +702,8 @@ TEST_CASE("test_no_cash_negative_from_owners_draw", "[financial_distribution][ti
         make_test_business(business_id, owner_npc_id, 100.0f, 10000.0f, 1000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::micro, CompensationMechanism::owners_draw, 0.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::micro,
+                                          CompensationMechanism::owners_draw, 0.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -727,9 +732,9 @@ TEST_CASE("test_board_rejects_bonus_when_independent", "[financial_distribution]
         make_test_business(business_id, owner_npc_id, 500000.0f, 10000.0f, 2000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::medium, CompensationMechanism::salary_bonus,
-        500.0f, 0.30f);  // 0.30 > board_approval_bonus_threshold (0.25)
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::medium,
+                                          CompensationMechanism::salary_bonus, 500.0f,
+                                          0.30f);  // 0.30 > board_approval_bonus_threshold (0.25)
     // Independent board: score above rubber stamp, next meeting in the future.
     comp_rec.board.independence_score = 0.8f;
     comp_rec.board.next_approval_tick = state.current_tick + 100;  // Future meeting.
@@ -739,7 +744,8 @@ TEST_CASE("test_board_rejects_bonus_when_independent", "[financial_distribution]
     module.execute_province(0, state, delta);
 
     // Only salary should be paid (bonus blocked by board).
-    float salary_net = 500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float salary_net =
+        500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -757,9 +763,8 @@ TEST_CASE("test_captured_board_auto_approves", "[financial_distribution][tier4]"
         make_test_business(business_id, owner_npc_id, 500000.0f, 10000.0f, 2000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::medium, CompensationMechanism::salary_bonus,
-        500.0f, 0.30f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::medium,
+                                          CompensationMechanism::salary_bonus, 500.0f, 0.30f);
     // Captured board (rubber stamp).
     comp_rec.board.independence_score = 0.1f;
     comp_rec.board.next_approval_tick = state.current_tick + 1000;  // Far future.
@@ -769,11 +774,13 @@ TEST_CASE("test_captured_board_auto_approves", "[financial_distribution][tier4]"
     module.execute_province(0, state, delta);
 
     // Both salary and bonus should be paid.
-    float salary_net = 500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
-    float quarterly_net = FinancialDistributionModule::compute_quarterly_net_profit(
-        10000.0f, 2000.0f, 500.0f);
+    float salary_net =
+        500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float quarterly_net =
+        FinancialDistributionModule::compute_quarterly_net_profit(10000.0f, 2000.0f, 500.0f);
     float bonus_amount = quarterly_net * 0.30f;
-    float bonus_net = bonus_amount * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float bonus_net =
+        bonus_amount * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float expected = salary_net + bonus_net;
 
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
@@ -796,14 +803,15 @@ TEST_CASE("test_player_owned_business_salary", "[financial_distribution][tier4]"
         make_test_business(business_id, player.id, 10000.0f, 500.0f, 200.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_only, 100.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_only, 100.0f);
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
-    float expected_net = 100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+    float expected_net =
+        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
     float player_wealth = get_player_wealth_delta(delta);
     REQUIRE_THAT(player_wealth, WithinAbs(expected_net, 0.01f));
 
@@ -827,9 +835,8 @@ TEST_CASE("test_equity_grant_vesting_advances", "[financial_distribution][tier4]
         make_test_business(business_id, owner_npc_id, 1000000.0f, 50000.0f, 10000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::large, CompensationMechanism::full_package,
-        1000.0f, 0.0f, 0.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::large,
+                                          CompensationMechanism::full_package, 1000.0f, 0.0f, 0.0f);
 
     // Add equity grant.
     EquityGrant grant{};
@@ -869,9 +876,8 @@ TEST_CASE("test_equity_grant_before_cliff_no_vesting", "[financial_distribution]
         make_test_business(business_id, owner_npc_id, 1000000.0f, 50000.0f, 10000.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::large, CompensationMechanism::full_package,
-        1000.0f, 0.0f, 0.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::large,
+                                          CompensationMechanism::full_package, 1000.0f, 0.0f, 0.0f);
 
     EquityGrant grant{};
     grant.business_id = business_id;
@@ -892,8 +898,7 @@ TEST_CASE("test_equity_grant_before_cliff_no_vesting", "[financial_distribution]
     // No vesting should have occurred.
     const auto* rec = module.find_compensation_record(business_id);
     REQUIRE(rec != nullptr);
-    REQUIRE_THAT(rec->compensation.equity_grants[0].shares_vested,
-                 WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(rec->compensation.equity_grants[0].shares_vested, WithinAbs(0.0f, 0.001f));
 }
 
 // ===========================================================================
@@ -912,8 +917,8 @@ TEST_CASE("test_wage_theft_memory_on_sustained_deferral", "[financial_distributi
         make_test_business(business_id, owner_npc_id, 0.0f, 100.0f, 50.0f));
 
     FinancialDistributionModule module;
-    auto comp_rec = make_test_comp_record(
-        business_id, BusinessScale::small, CompensationMechanism::salary_only, 100.0f);
+    auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
+                                          CompensationMechanism::salary_only, 100.0f);
     // Pre-set to just at the threshold.
     comp_rec.deferred_salary_ticks = FinancialDistributionConstants::deferred_salary_max_ticks;
     module.compensation_records().push_back(comp_rec);
@@ -930,8 +935,9 @@ TEST_CASE("test_wage_theft_memory_on_sustained_deferral", "[financial_distributi
             if (mem.type == MemoryType::witnessed_wage_theft) {
                 found_wage_theft = true;
                 REQUIRE(mem.subject_id == business_id);
-                REQUIRE_THAT(mem.emotional_weight,
-                             WithinAbs(FinancialDistributionConstants::wage_theft_emotional_weight, 0.01f));
+                REQUIRE_THAT(
+                    mem.emotional_weight,
+                    WithinAbs(FinancialDistributionConstants::wage_theft_emotional_weight, 0.01f));
                 REQUIRE(mem.is_actionable == true);
             }
         }
@@ -953,12 +959,12 @@ TEST_CASE("test_businesses_processed_in_id_order", "[financial_distribution][tie
     state.npc_businesses.push_back(make_test_business(20, 200, 10000.0f, 500.0f, 200.0f));
 
     FinancialDistributionModule module;
-    module.compensation_records().push_back(
-        make_test_comp_record(30, BusinessScale::small, CompensationMechanism::salary_only, 100.0f));
-    module.compensation_records().push_back(
-        make_test_comp_record(10, BusinessScale::small, CompensationMechanism::salary_only, 100.0f));
-    module.compensation_records().push_back(
-        make_test_comp_record(20, BusinessScale::small, CompensationMechanism::salary_only, 100.0f));
+    module.compensation_records().push_back(make_test_comp_record(
+        30, BusinessScale::small, CompensationMechanism::salary_only, 100.0f));
+    module.compensation_records().push_back(make_test_comp_record(
+        10, BusinessScale::small, CompensationMechanism::salary_only, 100.0f));
+    module.compensation_records().push_back(make_test_comp_record(
+        20, BusinessScale::small, CompensationMechanism::salary_only, 100.0f));
 
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
@@ -1013,7 +1019,8 @@ TEST_CASE("test_compute_quarterly_net_profit", "[financial_distribution][tier4]"
     // revenue=1000, cost=500, salary=100
     // net_per_tick = 400
     // quarterly = 400 * 91 = 36,400
-    float profit = FinancialDistributionModule::compute_quarterly_net_profit(1000.0f, 500.0f, 100.0f);
+    float profit =
+        FinancialDistributionModule::compute_quarterly_net_profit(1000.0f, 500.0f, 100.0f);
     REQUIRE_THAT(profit, WithinAbs(36400.0f, 0.1f));
 }
 
@@ -1021,7 +1028,8 @@ TEST_CASE("test_compute_quarterly_net_profit_negative", "[financial_distribution
     // revenue=100, cost=500, salary=100
     // net_per_tick = -500
     // quarterly = -500 * 91 = -45,500
-    float profit = FinancialDistributionModule::compute_quarterly_net_profit(100.0f, 500.0f, 100.0f);
+    float profit =
+        FinancialDistributionModule::compute_quarterly_net_profit(100.0f, 500.0f, 100.0f);
     REQUIRE(profit < 0.0f);
 }
 
@@ -1062,16 +1070,14 @@ TEST_CASE("test_financial_distribution_constants", "[financial_distribution][tie
     REQUIRE_THAT(FinancialDistributionConstants::draw_reporting_threshold,
                  WithinAbs(20000.0f, 0.01f));
     REQUIRE(FinancialDistributionConstants::ticks_per_month == 30);
-    REQUIRE_THAT(FinancialDistributionConstants::cash_surplus_months,
-                 WithinAbs(5.0f, 0.01f));
+    REQUIRE_THAT(FinancialDistributionConstants::cash_surplus_months, WithinAbs(5.0f, 0.01f));
     REQUIRE_THAT(FinancialDistributionConstants::board_rubber_stamp_threshold,
                  WithinAbs(0.3f, 0.01f));
     REQUIRE_THAT(FinancialDistributionConstants::board_approval_bonus_threshold,
                  WithinAbs(0.25f, 0.01f));
     REQUIRE_THAT(FinancialDistributionConstants::default_tax_withholding_rate,
                  WithinAbs(0.20f, 0.01f));
-    REQUIRE_THAT(FinancialDistributionConstants::owners_draw_fraction,
-                 WithinAbs(0.5f, 0.01f));
+    REQUIRE_THAT(FinancialDistributionConstants::owners_draw_fraction, WithinAbs(0.5f, 0.01f));
     REQUIRE_THAT(FinancialDistributionConstants::wage_theft_emotional_weight,
                  WithinAbs(-0.6f, 0.01f));
 }

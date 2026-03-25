@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+
 #include "modules/persistence/persistence_module.h"
 #include "tests/test_world_factory.h"
 
@@ -90,7 +91,8 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
 
 // ── Serialization round-trip tests ─────────────────────────────────────────
 
-TEST_CASE("Persistence: serialize produces non-empty output", "[persistence][tier12][serialization]") {
+TEST_CASE("Persistence: serialize produces non-empty output",
+          "[persistence][tier12][serialization]") {
     auto world = test::create_test_world(42, 10, 2, 5);
     auto bytes = PersistenceModule::serialize(world);
     REQUIRE(!bytes.empty());
@@ -105,7 +107,8 @@ TEST_CASE("Persistence: serialize is deterministic", "[persistence][tier12][seri
     REQUIRE(bytes1 == bytes2);
 }
 
-TEST_CASE("Persistence: round-trip preserves global scalars", "[persistence][tier12][serialization]") {
+TEST_CASE("Persistence: round-trip preserves global scalars",
+          "[persistence][tier12][serialization]") {
     auto world = test::create_test_world(99, 10, 2, 5);
     world.current_tick = 42;
     world.ticks_this_session = 7;
@@ -214,7 +217,8 @@ TEST_CASE("Persistence: round-trip preserves provinces", "[persistence][tier12][
     }
 }
 
-TEST_CASE("Persistence: round-trip preserves evidence pool", "[persistence][tier12][serialization]") {
+TEST_CASE("Persistence: round-trip preserves evidence pool",
+          "[persistence][tier12][serialization]") {
     auto world = test::create_test_world(42, 10, 1, 5);
     EvidenceToken token{};
     token.id = 99;
@@ -266,10 +270,8 @@ TEST_CASE("Persistence: LZ4 compression reduces size", "[persistence][tier12][se
 
     // Header contains uncompressed size at offset 8
     uint32_t uncompressed_size =
-        static_cast<uint32_t>(bytes[8])
-      | (static_cast<uint32_t>(bytes[9]) << 8)
-      | (static_cast<uint32_t>(bytes[10]) << 16)
-      | (static_cast<uint32_t>(bytes[11]) << 24);
+        static_cast<uint32_t>(bytes[8]) | (static_cast<uint32_t>(bytes[9]) << 8) |
+        (static_cast<uint32_t>(bytes[10]) << 16) | (static_cast<uint32_t>(bytes[11]) << 24);
 
     // Compressed size should be smaller than uncompressed
     REQUIRE(bytes.size() < uncompressed_size + PersistenceModule::HEADER_SIZE);
@@ -290,15 +292,21 @@ TEST_CASE("Persistence: corrupted data fails checksum", "[persistence][tier12][s
     REQUIRE(result != RestoreResult::success);
 }
 
-TEST_CASE("Persistence: serialize-deserialize-serialize is byte-identical", "[persistence][tier12][serialization]") {
+TEST_CASE("Persistence: serialize-deserialize-serialize is byte-identical",
+          "[persistence][tier12][serialization]") {
     auto world = test::create_test_world(42, 20, 2, 5);
 
     // Add some state
     EvidenceToken tok{};
-    tok.id = 1; tok.type = EvidenceType::testimonial;
-    tok.source_npc_id = 100; tok.target_npc_id = 101;
-    tok.actionability = 0.5f; tok.decay_rate = 0.01f;
-    tok.created_tick = 0; tok.province_id = 0; tok.is_active = true;
+    tok.id = 1;
+    tok.type = EvidenceType::testimonial;
+    tok.source_npc_id = 100;
+    tok.target_npc_id = 101;
+    tok.actionability = 0.5f;
+    tok.decay_rate = 0.01f;
+    tok.created_tick = 0;
+    tok.province_id = 0;
+    tok.is_active = true;
     world.evidence_pool.push_back(tok);
 
     auto bytes1 = PersistenceModule::serialize(world);

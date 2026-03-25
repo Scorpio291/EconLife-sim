@@ -1,11 +1,11 @@
 #include "modules/obligation_network/obligation_network_module.h"
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"
-
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -14,21 +14,22 @@ namespace econlife {
 // ---------------------------------------------------------------------------
 
 float ObligationNetworkModule::compute_demand_growth(float creditor_urgency,
-                                                      float escalation_rate_base,
-                                                      float player_wealth_factor) {
+                                                     float escalation_rate_base,
+                                                     float player_wealth_factor) {
     return creditor_urgency * escalation_rate_base * (1.0f + player_wealth_factor);
 }
 
 float ObligationNetworkModule::compute_player_wealth_factor(float visible_net_worth,
-                                                             float wealth_reference_scale,
-                                                             float max_wealth_factor) {
-    if (visible_net_worth <= 0.0f) return 0.0f;
+                                                            float wealth_reference_scale,
+                                                            float max_wealth_factor) {
+    if (visible_net_worth <= 0.0f)
+        return 0.0f;
     float factor = visible_net_worth / wealth_reference_scale;
     return std::min(factor, max_wealth_factor);
 }
 
 float ObligationNetworkModule::compute_creditor_urgency(const float* motivation_weights,
-                                                         size_t count) {
+                                                        size_t count) {
     float max_weight = 0.0f;
     for (size_t i = 0; i < count; ++i) {
         if (motivation_weights[i] > max_weight) {
@@ -39,25 +40,27 @@ float ObligationNetworkModule::compute_creditor_urgency(const float* motivation_
 }
 
 ObligationStatus ObligationNetworkModule::evaluate_escalation(float current_demand,
-                                                               float original_value,
-                                                               float escalation_threshold,
-                                                               float critical_threshold) {
-    if (original_value <= 0.0f) return ObligationStatus::open;
+                                                              float original_value,
+                                                              float escalation_threshold,
+                                                              float critical_threshold) {
+    if (original_value <= 0.0f)
+        return ObligationStatus::open;
     float ratio = current_demand / original_value;
 
-    if (ratio > critical_threshold) return ObligationStatus::critical;
-    if (ratio > escalation_threshold) return ObligationStatus::escalated;
+    if (ratio > critical_threshold)
+        return ObligationStatus::critical;
+    if (ratio > escalation_threshold)
+        return ObligationStatus::escalated;
     return ObligationStatus::open;
 }
 
-bool ObligationNetworkModule::should_trigger_hostile(ObligationStatus status,
-                                                      float risk_tolerance,
-                                                      float hostile_threshold) {
+bool ObligationNetworkModule::should_trigger_hostile(ObligationStatus status, float risk_tolerance,
+                                                     float hostile_threshold) {
     return status == ObligationStatus::critical && risk_tolerance > hostile_threshold;
 }
 
 float ObligationNetworkModule::compute_trust_erosion(uint32_t overdue_ticks,
-                                                      float trust_erosion_per_tick) {
+                                                     float trust_erosion_per_tick) {
     return static_cast<float>(overdue_ticks) * trust_erosion_per_tick;
 }
 
@@ -66,9 +69,10 @@ float ObligationNetworkModule::compute_trust_erosion(uint32_t overdue_ticks,
 // ---------------------------------------------------------------------------
 
 const NPC* ObligationNetworkModule::find_creditor(const WorldState& state,
-                                                    uint32_t creditor_npc_id) const {
+                                                  uint32_t creditor_npc_id) const {
     for (const auto& npc : state.significant_npcs) {
-        if (npc.id == creditor_npc_id) return &npc;
+        if (npc.id == creditor_npc_id)
+            return &npc;
     }
     return nullptr;
 }
@@ -94,8 +98,7 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
 
     for (auto& obl : obligation_states_) {
         // Skip resolved obligations.
-        if (obl.status == ObligationStatus::fulfilled ||
-            obl.status == ObligationStatus::forgiven ||
+        if (obl.status == ObligationStatus::fulfilled || obl.status == ObligationStatus::forgiven ||
             obl.status == ObligationStatus::hostile) {
             continue;
         }
@@ -115,23 +118,22 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         }
 
         // Compute demand growth.
-        float urgency = compute_creditor_urgency(
-            creditor->motivations.weights.data(),
-            creditor->motivations.weights.size());
-        float growth = compute_demand_growth(urgency, Constants::escalation_rate_base,
-                                              wealth_factor);
+        float urgency = compute_creditor_urgency(creditor->motivations.weights.data(),
+                                                 creditor->motivations.weights.size());
+        float growth =
+            compute_demand_growth(urgency, Constants::escalation_rate_base, wealth_factor);
         obl.current_demand += growth;
 
         // Evaluate escalation status.
-        ObligationStatus new_status = evaluate_escalation(
-            obl.current_demand, obl.original_value,
-            Constants::escalation_threshold, Constants::critical_threshold);
+        ObligationStatus new_status =
+            evaluate_escalation(obl.current_demand, obl.original_value,
+                                Constants::escalation_threshold, Constants::critical_threshold);
 
         // At most one status transition per tick.
         if (new_status > obl.status) {
             // Advance one step at a time.
-            ObligationStatus next = static_cast<ObligationStatus>(
-                static_cast<uint8_t>(obl.status) + 1);
+            ObligationStatus next =
+                static_cast<ObligationStatus>(static_cast<uint8_t>(obl.status) + 1);
             EscalationStep step;
             step.tick = state.current_tick;
             step.from_status = obl.status;
@@ -143,7 +145,7 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         // Check hostile trigger.
         bool went_hostile = false;
         if (should_trigger_hostile(obl.status, creditor->risk_tolerance,
-                                    Constants::hostile_action_threshold)) {
+                                   Constants::hostile_action_threshold)) {
             EscalationStep step;
             step.tick = state.current_tick;
             step.from_status = obl.status;
@@ -161,17 +163,16 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
             // creditor to debtor recording the hostile action (criminal_cooperation
             // favor type mirrors the hostile escalation)
             ObligationNode hostile_node;
-            hostile_node.id           = 0;  // apply_deltas auto-assigns id
+            hostile_node.id = 0;  // apply_deltas auto-assigns id
             hostile_node.creditor_npc_id = obl.creditor_npc_id;
-            hostile_node.debtor_npc_id   = (state.player &&
-                                             state.player->id != obl.creditor_npc_id)
-                                            ? state.player->id
-                                            : obl.creditor_npc_id;  // fallback
-            hostile_node.favor_type   = FavorType::criminal_cooperation;
-            hostile_node.weight       = std::clamp(
-                obl.current_demand / std::max(1.0f, obl.original_value), 0.0f, 1.0f);
+            hostile_node.debtor_npc_id = (state.player && state.player->id != obl.creditor_npc_id)
+                                             ? state.player->id
+                                             : obl.creditor_npc_id;  // fallback
+            hostile_node.favor_type = FavorType::criminal_cooperation;
+            hostile_node.weight =
+                std::clamp(obl.current_demand / std::max(1.0f, obl.original_value), 0.0f, 1.0f);
             hostile_node.created_tick = state.current_tick;
-            hostile_node.is_active    = true;
+            hostile_node.is_active = true;
             delta.new_obligation_nodes.push_back(hostile_node);
         }
 
@@ -198,16 +199,14 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
                 NPCDelta nd;
                 nd.npc_id = state.player->id;
                 Relationship updated_rel = *current_rel;
-                updated_rel.trust = std::clamp(
-                    updated_rel.trust + erosion,  // erosion is negative
-                    0.0f, updated_rel.recovery_ceiling);
-                updated_rel.obligation_balance = std::clamp(
-                    updated_rel.obligation_balance + erosion, -1.0f, 1.0f);
+                updated_rel.trust = std::clamp(updated_rel.trust + erosion,  // erosion is negative
+                                               0.0f, updated_rel.recovery_ceiling);
+                updated_rel.obligation_balance =
+                    std::clamp(updated_rel.obligation_balance + erosion, -1.0f, 1.0f);
                 updated_rel.last_interaction_tick = state.current_tick;
                 if (went_hostile) {
                     // Hostile escalation lowers recovery ceiling
-                    updated_rel.recovery_ceiling = std::max(
-                        updated_rel.trust * 0.60f, 0.15f);
+                    updated_rel.recovery_ceiling = std::max(updated_rel.trust * 0.60f, 0.15f);
                 }
                 nd.updated_relationship = updated_rel;
                 delta.npc_deltas.push_back(nd);

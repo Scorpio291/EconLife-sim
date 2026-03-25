@@ -12,21 +12,21 @@ namespace econlife {
 struct WorldState;
 
 enum class WorkType : uint8_t {
-    consequence,                // ConsequenceEntry execution
-    transit_arrival,            // TransitShipment arriving at destination
-    interception_check,         // per-tick criminal shipment exposure check
-    npc_relationship_decay,     // batch decay for one NPC's relationships
-    evidence_decay_batch,       // batch decay for one evidence token
-    npc_business_decision,      // quarterly decision for one NPCBusiness
-    market_recompute,           // price recompute for one RegionalMarket
-    investigator_meter_update,  // InvestigatorMeter recalc for one LE NPC
-    climate_downstream_batch,   // agricultural + community stress update
-    background_work,            // non-urgent: route table rebuild, log compaction
-    npc_travel_arrival,         // NPC physically arrives at destination province
-    player_travel_arrival,      // Player character physically arrives at destination
-    community_stage_check,      // community response stage threshold evaluation
-    maturation_project_advance, // advance one MaturationProject per active project
-    commercialize_technology,   // player command: bring researched tech to market
+    consequence,                 // ConsequenceEntry execution
+    transit_arrival,             // TransitShipment arriving at destination
+    interception_check,          // per-tick criminal shipment exposure check
+    npc_relationship_decay,      // batch decay for one NPC's relationships
+    evidence_decay_batch,        // batch decay for one evidence token
+    npc_business_decision,       // quarterly decision for one NPCBusiness
+    market_recompute,            // price recompute for one RegionalMarket
+    investigator_meter_update,   // InvestigatorMeter recalc for one LE NPC
+    climate_downstream_batch,    // agricultural + community stress update
+    background_work,             // non-urgent: route table rebuild, log compaction
+    npc_travel_arrival,          // NPC physically arrives at destination province
+    player_travel_arrival,       // Player character physically arrives at destination
+    community_stage_check,       // community response stage threshold evaluation
+    maturation_project_advance,  // advance one MaturationProject per active project
+    commercialize_technology,    // player command: bring researched tech to market
 };
 
 // Type-specific payload for deferred work items.
@@ -70,29 +70,21 @@ struct MaturationPayload {
 struct CommercializePayload {
     uint32_t business_id;
     uint32_t node_key;
-    uint8_t  decision;  // CommercializationDecision enum value
+    uint8_t decision;  // CommercializationDecision enum value
 };
 
 struct EmptyPayload {};
 
-using WorkPayload = std::variant<
-    EmptyPayload,
-    ConsequencePayload,
-    TransitPayload,
-    NPCRelationshipDecayPayload,
-    EvidenceDecayPayload,
-    NPCBusinessDecisionPayload,
-    MarketRecomputePayload,
-    InvestigatorMeterPayload,
-    MaturationPayload,
-    CommercializePayload
->;
+using WorkPayload =
+    std::variant<EmptyPayload, ConsequencePayload, TransitPayload, NPCRelationshipDecayPayload,
+                 EvidenceDecayPayload, NPCBusinessDecisionPayload, MarketRecomputePayload,
+                 InvestigatorMeterPayload, MaturationPayload, CommercializePayload>;
 
 struct DeferredWorkItem {
-    uint32_t    due_tick;       // min-heap sort key
-    WorkType    type;
-    uint32_t    subject_id;     // NPC id, shipment id, market id, etc.
-    WorkPayload payload;        // type-specific
+    uint32_t due_tick;  // min-heap sort key
+    WorkType type;
+    uint32_t subject_id;  // NPC id, shipment id, market id, etc.
+    WorkPayload payload;  // type-specific
 };
 
 // Min-heap comparator: lowest due_tick has highest priority.
@@ -102,10 +94,7 @@ struct DeferredWorkComparator {
     }
 };
 
-using DeferredWorkQueue = std::priority_queue<
-    DeferredWorkItem,
-    std::vector<DeferredWorkItem>,
-    DeferredWorkComparator
->;
+using DeferredWorkQueue =
+    std::priority_queue<DeferredWorkItem, std::vector<DeferredWorkItem>, DeferredWorkComparator>;
 
 }  // namespace econlife

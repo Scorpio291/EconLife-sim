@@ -18,12 +18,12 @@ namespace econlife {
 // trade-off.
 // ---------------------------------------------------------------------------
 enum class LaunderingMethod : uint8_t {
-    structuring          = 0,
-    shell_company_chain  = 1,
-    real_estate          = 2,
-    trade_invoice        = 3,
-    crypto_mixing        = 4,
-    cash_commingling     = 5,
+    structuring = 0,
+    shell_company_chain = 1,
+    real_estate = 2,
+    trade_invoice = 3,
+    crypto_mixing = 4,
+    cash_commingling = 5,
 };
 
 // ---------------------------------------------------------------------------

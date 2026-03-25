@@ -23,9 +23,9 @@ enum class DailyAction : uint8_t {
 // Expected value calculation result for a potential action.
 struct ActionEvaluation {
     DailyAction action = DailyAction::work;
-    float expected_value = 0.0f;     // Weighted sum of motivation contributions
-    float risk_discount = 1.0f;      // Multiplier for risk-averse NPCs
-    float net_utility = 0.0f;        // expected_value * risk_discount
+    float expected_value = 0.0f;  // Weighted sum of motivation contributions
+    float risk_discount = 1.0f;   // Multiplier for risk-averse NPCs
+    float net_utility = 0.0f;     // expected_value * risk_discount
 };
 
 }  // namespace econlife

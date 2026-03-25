@@ -5,11 +5,11 @@
 //
 // See docs/interfaces/labor_market/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/labor_market/labor_types.h"
-
 #include <unordered_map>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/labor_market/labor_types.h"
 
 namespace econlife {
 
@@ -24,23 +24,18 @@ class DeterministicRNG;
 // LaborMarketModule — ITickModule implementation for labor market
 // ---------------------------------------------------------------------------
 class LaborMarketModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "labor_market"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
 
-    std::vector<std::string_view> runs_after() const override {
-        return {"production"};
-    }
+    std::vector<std::string_view> runs_after() const override { return {"production"}; }
 
-    std::vector<std::string_view> runs_before() const override {
-        return {"price_engine"};
-    }
+    std::vector<std::string_view> runs_before() const override { return {"price_engine"}; }
 
     bool is_province_parallel() const noexcept override { return false; }
 
-    void execute_province(uint32_t province_idx,
-                          const WorldState& state,
+    void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
@@ -78,8 +73,7 @@ public:
 
     // Compute employer reputation from worker memory logs.
     // Returns a value in [0.0, 1.0]. Unknown employers default to 0.5.
-    static float compute_employer_reputation(uint32_t business_id,
-                                             const WorldState& state);
+    static float compute_employer_reputation(uint32_t business_id, const WorldState& state);
 
     // Compute worker satisfaction from NPC memory log.
     // Returns a value in [0.0, 1.0].
@@ -93,43 +87,36 @@ public:
     static uint32_t effective_pool_size(HiringChannel channel, float reputation);
 
     // Compute salary expectation for an applicant, including reputation premium.
-    static float compute_salary_expectation(float regional_wage,
-                                            float money_motivation,
+    static float compute_salary_expectation(float regional_wage, float money_motivation,
                                             float employer_reputation);
 
     // Find employment record for an NPC. Returns nullptr if not employed.
     EmploymentRecord* find_employment(uint32_t npc_id);
     const EmploymentRecord* find_employment(uint32_t npc_id) const;
 
-private:
-    std::vector<JobPosting>       job_postings_;
+   private:
+    std::vector<JobPosting> job_postings_;
     std::vector<EmploymentRecord> employment_records_;
     std::unordered_map<uint32_t, std::vector<NPCSkillEntry>> npc_skills_;
-    RegionalWageMap               regional_wages_;
+    RegionalWageMap regional_wages_;
     std::unordered_map<uint32_t, std::vector<WorkerApplication>> applications_;
 
     // --- Per-province processing ---
 
     // Step 1: Pay wages for all employed NPCs in this province.
-    void process_wage_payments(uint32_t province_id,
-                               const WorldState& state,
-                               DeltaBuffer& delta);
+    void process_wage_payments(uint32_t province_id, const WorldState& state, DeltaBuffer& delta);
 
     // Step 2: Process hiring decisions for postings in this province.
-    void process_hiring_decisions(uint32_t province_id,
-                                  const WorldState& state,
+    void process_hiring_decisions(uint32_t province_id, const WorldState& state,
                                   DeltaBuffer& delta);
 
     // Step 3: Evaluate voluntary departures for workers in this province
     // (monthly, when current_tick % 30 == 0).
-    void process_voluntary_departures(uint32_t province_id,
-                                      const WorldState& state,
-                                      DeltaBuffer& delta,
-                                      DeterministicRNG& rng);
+    void process_voluntary_departures(uint32_t province_id, const WorldState& state,
+                                      DeltaBuffer& delta, DeterministicRNG& rng);
 
     // Step 4: Close expired postings.
-    void close_expired_postings(uint32_t province_id,
-                                uint32_t current_tick);
+    void close_expired_postings(uint32_t province_id, uint32_t current_tick);
 
     // --- Monthly global processing ---
 

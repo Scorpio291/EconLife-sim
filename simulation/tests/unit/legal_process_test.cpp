@@ -1,8 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "modules/legal_process/legal_process_module.h"
-#include "core/world_state/world_state.h"
+
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/legal_process/legal_process_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -43,11 +44,16 @@ TEST_CASE("LegalProcess: double jeopardy cooldown", "[legal_process][tier9]") {
 }
 
 TEST_CASE("LegalProcess: stage advancement", "[legal_process][tier9]") {
-    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::investigation, false) == LegalCaseStage::arrested);
-    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::arrested, false) == LegalCaseStage::charged);
-    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::charged, false) == LegalCaseStage::trial);
-    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::trial, true) == LegalCaseStage::convicted);
-    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::trial, false) == LegalCaseStage::acquitted);
+    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::investigation, false) ==
+            LegalCaseStage::arrested);
+    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::arrested, false) ==
+            LegalCaseStage::charged);
+    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::charged, false) ==
+            LegalCaseStage::trial);
+    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::trial, true) ==
+            LegalCaseStage::convicted);
+    REQUIRE(LegalProcessModule::advance_stage(LegalCaseStage::trial, false) ==
+            LegalCaseStage::acquitted);
 }
 
 TEST_CASE("LegalProcess: evidence weight aggregation", "[legal_process][tier9]") {

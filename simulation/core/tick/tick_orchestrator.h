@@ -19,7 +19,7 @@ class ThreadPool;
 // declares runs_after(["module_a"]), resolve_and_sort() panics at startup
 // with a descriptive error naming the cycle.
 class TickOrchestrator {
-public:
+   public:
     // Called internally by PackageManager::load_all() for each compiled module.
     void register_module(std::unique_ptr<ITickModule> module);
 
@@ -37,7 +37,7 @@ public:
 
     const std::vector<std::unique_ptr<ITickModule>>& modules() const { return modules_; }
 
-private:
+   private:
     std::vector<std::unique_ptr<ITickModule>> modules_;
     bool finalized_ = false;
 

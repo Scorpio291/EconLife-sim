@@ -16,13 +16,13 @@ namespace econlife {
 // CommunityResponseStage — 7-stage escalation state machine
 // ---------------------------------------------------------------------------
 enum class CommunityResponseStage : uint8_t {
-    quiescent              = 0,  // grievance < 0.15 OR cohesion < 0.10
-    informal_complaint     = 1,  // grievance >= 0.15 AND cohesion >= 0.10
-    organized_complaint    = 2,  // grievance >= 0.28 AND cohesion >= 0.25
+    quiescent = 0,               // grievance < 0.15 OR cohesion < 0.10
+    informal_complaint = 1,      // grievance >= 0.15 AND cohesion >= 0.10
+    organized_complaint = 2,     // grievance >= 0.28 AND cohesion >= 0.25
     political_mobilization = 3,  // grievance >= 0.42 AND institutional_trust >= 0.20
-    economic_resistance    = 4,  // grievance >= 0.56 AND resource_access >= 0.25
-    direct_action          = 5,  // grievance >= 0.70 AND cohesion >= 0.45
-    sustained_opposition   = 6,  // grievance >= 0.85 AND resource_access >= 0.35
+    economic_resistance = 4,     // grievance >= 0.56 AND resource_access >= 0.25
+    direct_action = 5,           // grievance >= 0.70 AND cohesion >= 0.45
+    sustained_opposition = 6,    // grievance >= 0.85 AND resource_access >= 0.35
 };
 
 // ---------------------------------------------------------------------------

@@ -19,10 +19,10 @@ TEST_CASE("items drain in ascending due_tick order", "[deferred_work][tier0]") {
 
     // Push in arbitrary order.
     queue.push({10, WorkType::consequence, 1, EmptyPayload{}});
-    queue.push({5,  WorkType::transit_arrival, 2, EmptyPayload{}});
+    queue.push({5, WorkType::transit_arrival, 2, EmptyPayload{}});
     queue.push({15, WorkType::evidence_decay_batch, 3, EmptyPayload{}});
-    queue.push({5,  WorkType::npc_business_decision, 4, EmptyPayload{}});
-    queue.push({1,  WorkType::market_recompute, 5, EmptyPayload{}});
+    queue.push({5, WorkType::npc_business_decision, 4, EmptyPayload{}});
+    queue.push({1, WorkType::market_recompute, 5, EmptyPayload{}});
 
     REQUIRE(queue.size() == 5);
 

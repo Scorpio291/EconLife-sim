@@ -6,12 +6,12 @@
 //
 // See docs/interfaces/media_system/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/media_system/media_system_types.h"
-
 #include <cstdint>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/media_system/media_system_types.h"
 
 namespace econlife {
 
@@ -25,7 +25,7 @@ struct EvidenceToken;
 // MediaSystemModule — ITickModule implementation
 // ---------------------------------------------------------------------------
 class MediaSystemModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "media_system"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -56,28 +56,22 @@ public:
     // Evaluate editorial filter: returns true if story passes (published).
     // publish_decision = editorial_independence * (1.0 - owner_suppression_rate)
     static bool evaluate_editorial_filter(float editorial_independence,
-                                           float owner_suppression_rate,
-                                           float roll);
+                                          float owner_suppression_rate, float roll);
 
     // Compute cross-outlet pickup probability.
-    static float compute_pickup_probability(float evidence_weight,
-                                              float other_outlet_credibility,
-                                              float cross_outlet_pickup_rate);
+    static float compute_pickup_probability(float evidence_weight, float other_outlet_credibility,
+                                            float cross_outlet_pickup_rate);
 
     // Compute social media amplification contribution.
-    static float compute_social_amplification(float current_amplification,
-                                                float social_reach,
-                                                float social_multiplier,
-                                                float evidence_weight);
+    static float compute_social_amplification(float current_amplification, float social_reach,
+                                              float social_multiplier, float evidence_weight);
 
     // Compute exposure delta from a damaging story.
-    static float compute_exposure_delta(float amplification,
-                                          float exposure_per_unit);
+    static float compute_exposure_delta(float amplification, float exposure_per_unit);
 
     // Check if story is within propagation window.
-    static bool is_within_propagation_window(uint32_t published_tick,
-                                               uint32_t current_tick,
-                                               uint32_t window_ticks);
+    static bool is_within_propagation_window(uint32_t published_tick, uint32_t current_tick,
+                                             uint32_t window_ticks);
 
     // --- Constants ---
     struct Constants {
@@ -91,14 +85,13 @@ public:
         static constexpr float editorial_independence_journalist_bonus = 0.30f;
     };
 
-private:
+   private:
     std::vector<MediaOutlet> outlets_;
     std::vector<Story> active_stories_;
     uint32_t next_story_id_ = 1000;
 
     // Create stories from journalist evidence awareness.
-    void create_stories_from_journalists(const WorldState& state,
-                                          DeltaBuffer& delta);
+    void create_stories_from_journalists(const WorldState& state, DeltaBuffer& delta);
 
     // Propagate active stories (cross-outlet pickup, social amplification).
     void propagate_stories(const WorldState& state, DeltaBuffer& delta);

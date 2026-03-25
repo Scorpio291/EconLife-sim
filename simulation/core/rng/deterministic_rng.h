@@ -12,7 +12,7 @@ namespace econlife {
 // Implementation: SplitMix64 or similar fast, deterministic PRNG.
 // Seed is derived from WorldState.world_seed + per-call context.
 class DeterministicRNG {
-public:
+   public:
     explicit DeterministicRNG(uint64_t seed) : state_(seed) {}
 
     // Returns a uniformly distributed uint64_t.
@@ -36,7 +36,7 @@ public:
 
     uint64_t state() const noexcept { return state_; }
 
-private:
+   private:
     uint64_t state_;
 };
 

@@ -1,10 +1,10 @@
 #include "drug_economy_module.h"
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
-
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -12,46 +12,30 @@ namespace econlife {
 // Static utility functions
 // ============================================================================
 
-float DrugEconomyModule::compute_wholesale_price(
-    float retail_spot_price,
-    float wholesale_price_fraction)
-{
+float DrugEconomyModule::compute_wholesale_price(float retail_spot_price,
+                                                 float wholesale_price_fraction) {
     return retail_spot_price * wholesale_price_fraction;
 }
 
-float DrugEconomyModule::degrade_quality(
-    float input_quality,
-    float degradation_factor)
-{
+float DrugEconomyModule::degrade_quality(float input_quality, float degradation_factor) {
     return std::clamp(input_quality * degradation_factor, 0.0f, 1.0f);
 }
 
-float DrugEconomyModule::compute_addiction_demand(
-    float addiction_rate,
-    uint32_t province_population,
-    float demand_per_addict)
-{
+float DrugEconomyModule::compute_addiction_demand(float addiction_rate,
+                                                  uint32_t province_population,
+                                                  float demand_per_addict) {
     return addiction_rate * static_cast<float>(province_population) * demand_per_addict;
 }
 
-float DrugEconomyModule::compute_precursor_consumption(
-    float drug_output,
-    float precursor_ratio)
-{
+float DrugEconomyModule::compute_precursor_consumption(float drug_output, float precursor_ratio) {
     return drug_output * precursor_ratio;
 }
 
-bool DrugEconomyModule::is_drug_legal(
-    const DrugLegalizationStatus& status,
-    DrugType drug_type)
-{
+bool DrugEconomyModule::is_drug_legal(const DrugLegalizationStatus& status, DrugType drug_type) {
     return status.is_legal(drug_type);
 }
 
-float DrugEconomyModule::compute_meth_waste_signature(
-    float output_quantity,
-    float waste_per_unit)
-{
+float DrugEconomyModule::compute_meth_waste_signature(float output_quantity, float waste_per_unit) {
     return std::clamp(output_quantity * waste_per_unit, 0.0f, 1.0f);
 }
 
@@ -59,12 +43,10 @@ float DrugEconomyModule::compute_meth_waste_signature(
 // Province-parallel execution
 // ============================================================================
 
-void DrugEconomyModule::execute_province(
-    uint32_t province_idx,
-    const WorldState& state,
-    DeltaBuffer& province_delta)
-{
-    if (province_idx >= state.provinces.size()) return;
+void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                         DeltaBuffer& province_delta) {
+    if (province_idx >= state.provinces.size())
+        return;
     const auto& province = state.provinces[province_idx];
 
     // Collect criminal drug businesses in this province, sorted by id ascending
@@ -88,15 +70,16 @@ void DrugEconomyModule::execute_province(
         // Simplified: each criminal business produces a drug type based on sector
         // In full impl, this reads from the recipe registry
         float production_output = biz->revenue_per_tick * 0.1f;  // proxy for drug output
-        if (production_output <= 0.0f) continue;
+        if (production_output <= 0.0f)
+            continue;
 
         // Assume cannabis type for province-based businesses; in full impl,
         // drug type comes from the business's assigned recipe
         DrugType drug_type = DrugType::cannabis;
 
         // Determine market tier (simplified: smaller businesses are retail)
-        DrugMarketTier tier = (biz->market_share >= 0.1f)
-            ? DrugMarketTier::wholesale : DrugMarketTier::retail;
+        DrugMarketTier tier =
+            (biz->market_share >= 0.1f) ? DrugMarketTier::wholesale : DrugMarketTier::retail;
 
         // Compute quality (starts at 0.85 for production)
         float base_quality = 0.85f;
@@ -106,9 +89,9 @@ void DrugEconomyModule::execute_province(
         if (tier == DrugMarketTier::wholesale) {
             output_quality = degrade_quality(base_quality, WHOLESALE_QUALITY_DEGRADATION);
         } else {
-            output_quality = degrade_quality(
-                degrade_quality(base_quality, WHOLESALE_QUALITY_DEGRADATION),
-                RETAIL_QUALITY_DEGRADATION);
+            output_quality =
+                degrade_quality(degrade_quality(base_quality, WHOLESALE_QUALITY_DEGRADATION),
+                                RETAIL_QUALITY_DEGRADATION);
         }
 
         // Compute pricing
@@ -116,7 +99,8 @@ void DrugEconomyModule::execute_province(
         float spot_price = 100.0f;  // proxy
         float revenue = 0.0f;
         if (tier == DrugMarketTier::wholesale) {
-            revenue = production_output * compute_wholesale_price(spot_price, WHOLESALE_PRICE_FRACTION);
+            revenue =
+                production_output * compute_wholesale_price(spot_price, WHOLESALE_PRICE_FRACTION);
         } else {
             revenue = production_output * spot_price;
         }
@@ -130,14 +114,15 @@ void DrugEconomyModule::execute_province(
 
         // BusinessDelta: credit drug revenue to the criminal business
         BusinessDelta biz_revenue;
-        biz_revenue.business_id           = biz->id;
-        biz_revenue.cash_delta            = revenue;
+        biz_revenue.business_id = biz->id;
+        biz_revenue.cash_delta = revenue;
         biz_revenue.revenue_per_tick_update = revenue;
         province_delta.business_deltas.push_back(biz_revenue);
 
         // Compute precursor consumption (meth requires 2x precursor)
         if (drug_type == DrugType::methamphetamine) {
-            float precursor = compute_precursor_consumption(production_output, PRECURSOR_RATIO_METH);
+            float precursor =
+                compute_precursor_consumption(production_output, PRECURSOR_RATIO_METH);
             MarketDelta precursor_demand;
             precursor_demand.good_id = 9999;  // proxy precursor good_id
             precursor_demand.region_id = province.id;
@@ -147,20 +132,14 @@ void DrugEconomyModule::execute_province(
 
         // Generate evidence tokens for drug operations
         EvidenceDelta ev;
-        ev.new_token = EvidenceToken{
-            0, EvidenceType::physical,
-            biz->owner_id, biz->owner_id,
-            0.20f, 0.003f,
-            state.current_tick, province.id, true
-        };
+        ev.new_token =
+            EvidenceToken{0,      EvidenceType::physical, biz->owner_id, biz->owner_id, 0.20f,
+                          0.003f, state.current_tick,     province.id,   true};
         province_delta.evidence_deltas.push_back(ev);
 
         // Track production
         production_records_.push_back(DrugProductionRecord{
-            biz->id, drug_type, tier,
-            production_output, output_quality,
-            0.0f, province.id
-        });
+            biz->id, drug_type, tier, production_output, output_quality, 0.0f, province.id});
     }
 
     // Consumer demand from addiction rates
@@ -180,7 +159,7 @@ void DrugEconomyModule::execute_province(
         // Use demand as upper bound; scale factor keeps the per-tick delta small.
         constexpr float ADDICTION_GROWTH_PER_UNIT = 0.000001f;
         RegionDelta region;
-        region.region_id         = province.id;
+        region.region_id = province.id;
         region.addiction_rate_delta = demand * ADDICTION_GROWTH_PER_UNIT;
         province_delta.region_deltas.push_back(region);
     }

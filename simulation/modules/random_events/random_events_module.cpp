@@ -1,8 +1,9 @@
 #include "random_events_module.h"
-#include "core/world_state/player.h"        // PlayerCharacter (complete type for state.player->)
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/player.h"  // PlayerCharacter (complete type for state.player->)
 
 namespace econlife {
 
@@ -10,33 +11,33 @@ namespace econlife {
 // Constants — from INTERFACE.md §19 invariants
 // =============================================================================
 
-static constexpr float    BASE_RATE                    = 0.15f;  // events/province/month
-static constexpr float    TICKS_PER_MONTH              = 30.0f;
-static constexpr float    CLIMATE_EVENT_AMPLIFIER      = 1.5f;
-static constexpr float    INSTABILITY_EVENT_AMPLIFIER  = 1.0f;
-static constexpr float    EVIDENCE_SEVERITY_THRESHOLD  = 0.3f;
+static constexpr float BASE_RATE = 0.15f;  // events/province/month
+static constexpr float TICKS_PER_MONTH = 30.0f;
+static constexpr float CLIMATE_EVENT_AMPLIFIER = 1.5f;
+static constexpr float INSTABILITY_EVENT_AMPLIFIER = 1.0f;
+static constexpr float EVIDENCE_SEVERITY_THRESHOLD = 0.3f;
 
 // Category base weights (before conditioning on province state)
-static constexpr float    WEIGHT_NATURAL               = 0.25f;
-static constexpr float    WEIGHT_ACCIDENT              = 0.20f;
-static constexpr float    WEIGHT_ECONOMIC              = 0.30f;
-static constexpr float    WEIGHT_HUMAN                 = 0.25f;
+static constexpr float WEIGHT_NATURAL = 0.25f;
+static constexpr float WEIGHT_ACCIDENT = 0.20f;
+static constexpr float WEIGHT_ECONOMIC = 0.30f;
+static constexpr float WEIGHT_HUMAN = 0.25f;
 
 // Natural event effect ranges
-static constexpr float    NATURAL_AGRI_MOD_MIN         = -0.40f;
-static constexpr float    NATURAL_AGRI_MOD_MAX         = -0.05f;
-static constexpr float    NATURAL_INFRA_DMG_MIN        =  0.01f;
-static constexpr float    NATURAL_INFRA_DMG_MAX        =  0.15f;
+static constexpr float NATURAL_AGRI_MOD_MIN = -0.40f;
+static constexpr float NATURAL_AGRI_MOD_MAX = -0.05f;
+static constexpr float NATURAL_INFRA_DMG_MIN = 0.01f;
+static constexpr float NATURAL_INFRA_DMG_MAX = 0.15f;
 
 // Accident event effect ranges
-static constexpr float    ACCIDENT_OUTPUT_RATE_MIN     = -1.0f;
-static constexpr float    ACCIDENT_OUTPUT_RATE_MAX     = -0.10f;
-static constexpr float    ACCIDENT_INFRA_DMG_MIN       =  0.01f;
-static constexpr float    ACCIDENT_INFRA_DMG_MAX       =  0.05f;
+static constexpr float ACCIDENT_OUTPUT_RATE_MIN = -1.0f;
+static constexpr float ACCIDENT_OUTPUT_RATE_MAX = -0.10f;
+static constexpr float ACCIDENT_INFRA_DMG_MIN = 0.01f;
+static constexpr float ACCIDENT_INFRA_DMG_MAX = 0.05f;
 
 // Economic event effect ranges
-static constexpr float    ECONOMIC_PRICE_SHIFT_MIN     =  0.10f;
-static constexpr float    ECONOMIC_PRICE_SHIFT_MAX     =  0.40f;
+static constexpr float ECONOMIC_PRICE_SHIFT_MIN = 0.10f;
+static constexpr float ECONOMIC_PRICE_SHIFT_MAX = 0.40f;
 
 // =============================================================================
 // Default templates — used when template registry is not loaded.
@@ -45,35 +46,36 @@ static constexpr float    ECONOMIC_PRICE_SHIFT_MAX     =  0.40f;
 static std::vector<RandomEventTemplate> get_default_templates() {
     std::vector<RandomEventTemplate> templates;
 
-    templates.push_back({"drought_mild", "drought_mild", EventCategory::natural,
-        "Mild Drought", 1.0f, 0.10f, 0.30f, 10, 30, 2.0f, 1.0f, 1.0f, false});
+    templates.push_back({"drought_mild", "drought_mild", EventCategory::natural, "Mild Drought",
+                         1.0f, 0.10f, 0.30f, 10, 30, 2.0f, 1.0f, 1.0f, false});
     templates.push_back({"drought_severe", "drought_severe", EventCategory::natural,
-        "Severe Drought", 0.5f, 0.40f, 0.70f, 20, 60, 3.0f, 1.0f, 1.0f, false});
-    templates.push_back({"flood", "flood", EventCategory::natural,
-        "Flood", 0.8f, 0.20f, 0.60f, 5, 15, 1.5f, 1.0f, 1.0f, false});
-    templates.push_back({"earthquake", "earthquake", EventCategory::natural,
-        "Earthquake", 0.3f, 0.30f, 0.90f, 1, 5, 1.0f, 1.0f, 1.0f, false});
+                         "Severe Drought", 0.5f, 0.40f, 0.70f, 20, 60, 3.0f, 1.0f, 1.0f, false});
+    templates.push_back({"flood", "flood", EventCategory::natural, "Flood", 0.8f, 0.20f, 0.60f, 5,
+                         15, 1.5f, 1.0f, 1.0f, false});
+    templates.push_back({"earthquake", "earthquake", EventCategory::natural, "Earthquake", 0.3f,
+                         0.30f, 0.90f, 1, 5, 1.0f, 1.0f, 1.0f, false});
 
     templates.push_back({"industrial_fire", "industrial_fire", EventCategory::accident,
-        "Industrial Fire", 1.0f, 0.20f, 0.70f, 3, 10, 1.0f, 1.0f, 2.0f, true});
+                         "Industrial Fire", 1.0f, 0.20f, 0.70f, 3, 10, 1.0f, 1.0f, 2.0f, true});
     templates.push_back({"chemical_spill", "chemical_spill", EventCategory::accident,
-        "Chemical Spill", 0.6f, 0.30f, 0.80f, 5, 20, 1.0f, 1.0f, 2.5f, true});
+                         "Chemical Spill", 0.6f, 0.30f, 0.80f, 5, 20, 1.0f, 1.0f, 2.5f, true});
     templates.push_back({"transport_failure", "transport_failure", EventCategory::accident,
-        "Transport Failure", 0.8f, 0.10f, 0.40f, 2, 7, 1.0f, 1.0f, 1.5f, true});
+                         "Transport Failure", 0.8f, 0.10f, 0.40f, 2, 7, 1.0f, 1.0f, 1.5f, true});
 
-    templates.push_back({"market_shock", "market_shock", EventCategory::economic,
-        "Market Shock", 1.0f, 0.20f, 0.60f, 5, 15, 1.0f, 1.0f, 1.0f, false});
+    templates.push_back({"market_shock", "market_shock", EventCategory::economic, "Market Shock",
+                         1.0f, 0.20f, 0.60f, 5, 15, 1.0f, 1.0f, 1.0f, false});
     templates.push_back({"commodity_spike", "commodity_spike", EventCategory::economic,
-        "Commodity Price Spike", 0.7f, 0.15f, 0.50f, 3, 10, 1.0f, 1.0f, 1.0f, false});
+                         "Commodity Price Spike", 0.7f, 0.15f, 0.50f, 3, 10, 1.0f, 1.0f, 1.0f,
+                         false});
     templates.push_back({"credit_tightening", "credit_tightening", EventCategory::economic,
-        "Credit Tightening", 0.5f, 0.30f, 0.70f, 10, 30, 1.0f, 1.5f, 1.0f, false});
+                         "Credit Tightening", 0.5f, 0.30f, 0.70f, 10, 30, 1.0f, 1.5f, 1.0f, false});
 
     templates.push_back({"political_crisis", "political_crisis", EventCategory::human,
-        "Political Crisis", 0.8f, 0.25f, 0.65f, 5, 20, 1.0f, 2.5f, 1.0f, false});
-    templates.push_back({"labor_strike", "labor_strike", EventCategory::human,
-        "Labor Strike", 0.7f, 0.20f, 0.50f, 5, 15, 1.0f, 2.0f, 1.0f, false});
+                         "Political Crisis", 0.8f, 0.25f, 0.65f, 5, 20, 1.0f, 2.5f, 1.0f, false});
+    templates.push_back({"labor_strike", "labor_strike", EventCategory::human, "Labor Strike", 0.7f,
+                         0.20f, 0.50f, 5, 15, 1.0f, 2.0f, 1.0f, false});
     templates.push_back({"community_unrest", "community_unrest", EventCategory::human,
-        "Community Unrest", 0.6f, 0.30f, 0.70f, 3, 10, 1.0f, 3.0f, 1.0f, false});
+                         "Community Unrest", 0.6f, 0.30f, 0.70f, 3, 10, 1.0f, 3.0f, 1.0f, false});
 
     return templates;
 }
@@ -82,31 +84,37 @@ static std::vector<RandomEventTemplate> get_default_templates() {
 // RandomEventsModule — out-of-line method implementations
 // =============================================================================
 
-RandomEventsModule::RandomEventsModule()
-    : templates_(get_default_templates())
-    , next_event_id_(1)
-{}
+RandomEventsModule::RandomEventsModule() : templates_(get_default_templates()), next_event_id_(1) {}
 
-std::string_view RandomEventsModule::name() const noexcept { return "random_events"; }
-std::string_view RandomEventsModule::package_id() const noexcept { return "base_game"; }
-ModuleScope RandomEventsModule::scope() const noexcept { return ModuleScope::v1; }
+std::string_view RandomEventsModule::name() const noexcept {
+    return "random_events";
+}
+std::string_view RandomEventsModule::package_id() const noexcept {
+    return "base_game";
+}
+ModuleScope RandomEventsModule::scope() const noexcept {
+    return ModuleScope::v1;
+}
 
 std::vector<std::string_view> RandomEventsModule::runs_after() const {
     return {"calendar"};
 }
 
-bool RandomEventsModule::is_province_parallel() const noexcept { return true; }
+bool RandomEventsModule::is_province_parallel() const noexcept {
+    return true;
+}
 
-void RandomEventsModule::execute_province(uint32_t province_idx,
-                                          const WorldState& state,
+void RandomEventsModule::execute_province(uint32_t province_idx, const WorldState& state,
                                           DeltaBuffer& province_delta) {
-    if (province_idx >= state.provinces.size()) return;
+    if (province_idx >= state.provinces.size())
+        return;
     const Province& province = state.provinces[province_idx];
 
-    if (province.lod_level != SimulationLOD::full) return;
+    if (province.lod_level != SimulationLOD::full)
+        return;
 
-    uint64_t rng_seed = state.world_seed ^ static_cast<uint64_t>(state.current_tick)
-                        ^ static_cast<uint64_t>(province.id);
+    uint64_t rng_seed = state.world_seed ^ static_cast<uint64_t>(state.current_tick) ^
+                        static_cast<uint64_t>(province.id);
     DeterministicRNG rng(rng_seed);
 
     process_active_events(state, province, province_delta);
@@ -117,40 +125,56 @@ void RandomEventsModule::execute(const WorldState& /*state*/, DeltaBuffer& /*del
     // Province-parallel module; execute() is unused.
 }
 
-const std::vector<RandomEventTemplate>& RandomEventsModule::templates() const { return templates_; }
-void RandomEventsModule::set_templates(std::vector<RandomEventTemplate> t) { templates_ = std::move(t); }
+const std::vector<RandomEventTemplate>& RandomEventsModule::templates() const {
+    return templates_;
+}
+void RandomEventsModule::set_templates(std::vector<RandomEventTemplate> t) {
+    templates_ = std::move(t);
+}
 
-const std::vector<ActiveRandomEvent>& RandomEventsModule::active_events() const { return active_events_; }
-std::vector<ActiveRandomEvent>& RandomEventsModule::active_events_mut() { return active_events_; }
-void RandomEventsModule::add_active_event(ActiveRandomEvent event) { active_events_.push_back(std::move(event)); }
+const std::vector<ActiveRandomEvent>& RandomEventsModule::active_events() const {
+    return active_events_;
+}
+std::vector<ActiveRandomEvent>& RandomEventsModule::active_events_mut() {
+    return active_events_;
+}
+void RandomEventsModule::add_active_event(ActiveRandomEvent event) {
+    active_events_.push_back(std::move(event));
+}
 
-void RandomEventsModule::set_base_rate(float rate) { base_rate_override_ = rate; }
-void RandomEventsModule::clear_base_rate_override() { base_rate_override_ = -1.0f; }
-uint32_t RandomEventsModule::allocate_event_id() { return next_event_id_++; }
+void RandomEventsModule::set_base_rate(float rate) {
+    base_rate_override_ = rate;
+}
+void RandomEventsModule::clear_base_rate_override() {
+    base_rate_override_ = -1.0f;
+}
+uint32_t RandomEventsModule::allocate_event_id() {
+    return next_event_id_++;
+}
 
 float RandomEventsModule::effective_base_rate() const {
     return (base_rate_override_ >= 0.0f) ? base_rate_override_ : BASE_RATE;
 }
 
-void RandomEventsModule::process_active_events(const WorldState& state,
-                                               const Province& province,
+void RandomEventsModule::process_active_events(const WorldState& state, const Province& province,
                                                DeltaBuffer& province_delta) {
     for (auto& event : active_events_) {
-        if (event.province_id != province.id) continue;
+        if (event.province_id != province.id)
+            continue;
 
         if (event.end_tick != 0 && state.current_tick >= event.end_tick) {
             event.end_tick = 0;
             continue;
         }
 
-        if (event.end_tick == 0) continue;
+        if (event.end_tick == 0)
+            continue;
 
         apply_per_tick_effects(state, province, event, province_delta);
     }
 }
 
-void RandomEventsModule::apply_per_tick_effects(const WorldState& state,
-                                                const Province& province,
+void RandomEventsModule::apply_per_tick_effects(const WorldState& state, const Province& province,
                                                 ActiveRandomEvent& event,
                                                 DeltaBuffer& province_delta) {
     switch (event.category) {
@@ -174,7 +198,7 @@ void RandomEventsModule::apply_natural_per_tick(const WorldState& /*state*/,
                                                 const ActiveRandomEvent& event,
                                                 DeltaBuffer& province_delta) {
     float agri_impact = NATURAL_AGRI_MOD_MIN +
-        (NATURAL_AGRI_MOD_MAX - NATURAL_AGRI_MOD_MIN) * (1.0f - event.severity);
+                        (NATURAL_AGRI_MOD_MAX - NATURAL_AGRI_MOD_MIN) * (1.0f - event.severity);
     (void)agri_impact;
 
     RegionDelta rd{};
@@ -183,8 +207,7 @@ void RandomEventsModule::apply_natural_per_tick(const WorldState& /*state*/,
     province_delta.region_deltas.push_back(rd);
 }
 
-void RandomEventsModule::apply_accident_per_tick(const WorldState& state,
-                                                 const Province& province,
+void RandomEventsModule::apply_accident_per_tick(const WorldState& state, const Province& province,
                                                  ActiveRandomEvent& event,
                                                  DeltaBuffer& province_delta) {
     if (!event.evidence_generated && event.severity >= EVIDENCE_SEVERITY_THRESHOLD) {
@@ -239,14 +262,14 @@ void RandomEventsModule::apply_accident_per_tick(const WorldState& state,
     }
 }
 
-void RandomEventsModule::apply_economic_per_tick(const WorldState& state,
-                                                 const Province& province,
+void RandomEventsModule::apply_economic_per_tick(const WorldState& state, const Province& province,
                                                  const ActiveRandomEvent& event,
                                                  DeltaBuffer& province_delta) {
     if (!province.market_ids.empty()) {
         float shift = ECONOMIC_PRICE_SHIFT_MIN +
-            (ECONOMIC_PRICE_SHIFT_MAX - ECONOMIC_PRICE_SHIFT_MIN) * event.severity;
-        if (event.id % 2 == 0) shift = -shift;
+                      (ECONOMIC_PRICE_SHIFT_MAX - ECONOMIC_PRICE_SHIFT_MIN) * event.severity;
+        if (event.id % 2 == 0)
+            shift = -shift;
 
         for (const auto& market : state.regional_markets) {
             if (market.province_id == province.id) {
@@ -261,8 +284,7 @@ void RandomEventsModule::apply_economic_per_tick(const WorldState& state,
     }
 }
 
-void RandomEventsModule::apply_human_per_tick(const WorldState& state,
-                                              const Province& province,
+void RandomEventsModule::apply_human_per_tick(const WorldState& state, const Province& province,
                                               const ActiveRandomEvent& event,
                                               DeltaBuffer& province_delta) {
     RegionDelta rd{};
@@ -271,8 +293,7 @@ void RandomEventsModule::apply_human_per_tick(const WorldState& state,
     rd.cohesion_delta = -0.005f * event.severity;
     province_delta.region_deltas.push_back(rd);
 
-    if (state.player != nullptr &&
-        state.player->current_province_id == province.id) {
+    if (state.player != nullptr && state.player->current_province_id == province.id) {
         SceneCard sc{};
         sc.id = 0;
         sc.type = SceneCardType::news_notification;
@@ -283,38 +304,37 @@ void RandomEventsModule::apply_human_per_tick(const WorldState& state,
     }
 }
 
-void RandomEventsModule::roll_for_new_event(const WorldState& state,
-                                            const Province& province,
-                                            DeterministicRNG& rng,
-                                            DeltaBuffer& province_delta) {
+void RandomEventsModule::roll_for_new_event(const WorldState& state, const Province& province,
+                                            DeterministicRNG& rng, DeltaBuffer& province_delta) {
     float climate_stress = province.climate.climate_stress_current;
-    float instability    = 1.0f - province.conditions.stability_score;
-    float infra_rating   = province.infrastructure_rating;
+    float instability = 1.0f - province.conditions.stability_score;
+    float infra_rating = province.infrastructure_rating;
 
     float economic_volatility = compute_economic_volatility(state, province);
 
-    float adjusted_rate = effective_base_rate()
-        * (1.0f + climate_stress * CLIMATE_EVENT_AMPLIFIER)
-        * (1.0f + instability * INSTABILITY_EVENT_AMPLIFIER)
-        * economic_volatility;
+    float adjusted_rate = effective_base_rate() *
+                          (1.0f + climate_stress * CLIMATE_EVENT_AMPLIFIER) *
+                          (1.0f + instability * INSTABILITY_EVENT_AMPLIFIER) * economic_volatility;
 
     float p = 1.0f - std::exp(-adjusted_rate / TICKS_PER_MONTH);
 
     float roll = rng.next_float();
-    if (roll >= p) return;
+    if (roll >= p)
+        return;
 
-    EventCategory category = select_category(climate_stress, instability,
-                                              infra_rating, economic_volatility,
-                                              rng);
+    EventCategory category =
+        select_category(climate_stress, instability, infra_rating, economic_volatility, rng);
 
     const RandomEventTemplate* selected = select_template(category, province, rng);
-    if (selected == nullptr) return;
+    if (selected == nullptr)
+        return;
 
     float severity = selected->severity_min +
-        rng.next_float() * (selected->severity_max - selected->severity_min);
+                     rng.next_float() * (selected->severity_max - selected->severity_min);
     severity = std::clamp(severity, selected->severity_min, selected->severity_max);
 
-    uint32_t duration = static_cast<uint32_t>(selected->duration_ticks_min) +
+    uint32_t duration =
+        static_cast<uint32_t>(selected->duration_ticks_min) +
         rng.next_uint(selected->duration_ticks_max - selected->duration_ticks_min + 1);
     duration = std::clamp(duration, selected->duration_ticks_min, selected->duration_ticks_max);
 
@@ -341,52 +361,56 @@ float RandomEventsModule::compute_economic_volatility(const WorldState& state,
     uint32_t count = 0;
     for (const auto& market : state.regional_markets) {
         if (market.province_id == province.id && market.equilibrium_price > 0.0f) {
-            float deviation = std::abs(market.spot_price - market.equilibrium_price)
-                              / market.equilibrium_price;
+            float deviation =
+                std::abs(market.spot_price - market.equilibrium_price) / market.equilibrium_price;
             total_deviation += deviation;
             ++count;
         }
     }
-    if (count == 0) return 1.0f;
+    if (count == 0)
+        return 1.0f;
     float avg_deviation = total_deviation / static_cast<float>(count);
     return 1.0f + avg_deviation;
 }
 
-EventCategory RandomEventsModule::select_category(float climate_stress,
-                                                   float instability,
-                                                   float infra_rating,
-                                                   float economic_volatility,
-                                                   DeterministicRNG& rng) const {
-    float w_natural  = WEIGHT_NATURAL  * (1.0f + climate_stress);
+EventCategory RandomEventsModule::select_category(float climate_stress, float instability,
+                                                  float infra_rating, float economic_volatility,
+                                                  DeterministicRNG& rng) const {
+    float w_natural = WEIGHT_NATURAL * (1.0f + climate_stress);
     float w_accident = WEIGHT_ACCIDENT * (1.0f + (1.0f - infra_rating));
     float w_economic = WEIGHT_ECONOMIC * economic_volatility;
-    float w_human    = WEIGHT_HUMAN    * (1.0f + instability);
+    float w_human = WEIGHT_HUMAN * (1.0f + instability);
 
     float total = w_natural + w_accident + w_economic + w_human;
-    if (total <= 0.0f) return EventCategory::natural;
+    if (total <= 0.0f)
+        return EventCategory::natural;
 
     float roll = rng.next_float() * total;
 
-    if (roll < w_natural) return EventCategory::natural;
+    if (roll < w_natural)
+        return EventCategory::natural;
     roll -= w_natural;
-    if (roll < w_accident) return EventCategory::accident;
+    if (roll < w_accident)
+        return EventCategory::accident;
     roll -= w_accident;
-    if (roll < w_economic) return EventCategory::economic;
+    if (roll < w_economic)
+        return EventCategory::economic;
     return EventCategory::human;
 }
 
 const RandomEventTemplate* RandomEventsModule::select_template(EventCategory category,
-                                                                const Province& province,
-                                                                DeterministicRNG& rng) const {
+                                                               const Province& province,
+                                                               DeterministicRNG& rng) const {
     float climate_stress = province.climate.climate_stress_current;
-    float instability    = 1.0f - province.conditions.stability_score;
-    float infra_rating   = province.infrastructure_rating;
+    float instability = 1.0f - province.conditions.stability_score;
+    float infra_rating = province.infrastructure_rating;
 
     std::vector<std::pair<const RandomEventTemplate*, float>> candidates;
     float total_weight = 0.0f;
 
     for (const auto& tmpl : templates_) {
-        if (tmpl.category != category) continue;
+        if (tmpl.category != category)
+            continue;
 
         float w = tmpl.base_weight;
         w *= (1.0f + climate_stress * (tmpl.climate_stress_weight_scale - 1.0f));
@@ -399,27 +423,28 @@ const RandomEventTemplate* RandomEventsModule::select_template(EventCategory cat
         }
     }
 
-    if (candidates.empty() || total_weight <= 0.0f) return nullptr;
+    if (candidates.empty() || total_weight <= 0.0f)
+        return nullptr;
 
     float roll = rng.next_float() * total_weight;
     for (const auto& [tmpl, w] : candidates) {
-        if (roll < w) return tmpl;
+        if (roll < w)
+            return tmpl;
         roll -= w;
     }
 
     return candidates.back().first;
 }
 
-void RandomEventsModule::apply_immediate_effects(const WorldState& state,
-                                                 const Province& province,
+void RandomEventsModule::apply_immediate_effects(const WorldState& state, const Province& province,
                                                  ActiveRandomEvent& event,
                                                  DeltaBuffer& province_delta) {
     switch (event.category) {
         case EventCategory::natural: {
-            float agri_mod = NATURAL_AGRI_MOD_MIN +
-                (NATURAL_AGRI_MOD_MAX - NATURAL_AGRI_MOD_MIN) * (1.0f - event.severity);
+            float agri_mod = NATURAL_AGRI_MOD_MIN + (NATURAL_AGRI_MOD_MAX - NATURAL_AGRI_MOD_MIN) *
+                                                        (1.0f - event.severity);
             float infra_dmg = NATURAL_INFRA_DMG_MIN +
-                (NATURAL_INFRA_DMG_MAX - NATURAL_INFRA_DMG_MIN) * event.severity;
+                              (NATURAL_INFRA_DMG_MAX - NATURAL_INFRA_DMG_MIN) * event.severity;
             (void)agri_mod;
             (void)infra_dmg;
 
@@ -431,10 +456,11 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state,
         }
 
         case EventCategory::accident: {
-            float output_impact = ACCIDENT_OUTPUT_RATE_MIN +
+            float output_impact =
+                ACCIDENT_OUTPUT_RATE_MIN +
                 (ACCIDENT_OUTPUT_RATE_MAX - ACCIDENT_OUTPUT_RATE_MIN) * (1.0f - event.severity);
             float infra_dmg = ACCIDENT_INFRA_DMG_MIN +
-                (ACCIDENT_INFRA_DMG_MAX - ACCIDENT_INFRA_DMG_MIN) * event.severity;
+                              (ACCIDENT_INFRA_DMG_MAX - ACCIDENT_INFRA_DMG_MIN) * event.severity;
             (void)output_impact;
             (void)infra_dmg;
 
@@ -493,9 +519,11 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state,
 
         case EventCategory::economic: {
             if (!province.market_ids.empty()) {
-                float shift = ECONOMIC_PRICE_SHIFT_MIN +
+                float shift =
+                    ECONOMIC_PRICE_SHIFT_MIN +
                     (ECONOMIC_PRICE_SHIFT_MAX - ECONOMIC_PRICE_SHIFT_MIN) * event.severity;
-                if (event.id % 2 == 0) shift = -shift;
+                if (event.id % 2 == 0)
+                    shift = -shift;
 
                 for (const auto& market : state.regional_markets) {
                     if (market.province_id == province.id) {
@@ -537,8 +565,7 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state,
             rd.cohesion_delta = -0.01f * event.severity;
             province_delta.region_deltas.push_back(rd);
 
-            if (state.player != nullptr &&
-                state.player->current_province_id == province.id) {
+            if (state.player != nullptr && state.player->current_province_id == province.id) {
                 SceneCard sc{};
                 sc.id = 0;
                 sc.type = SceneCardType::news_notification;

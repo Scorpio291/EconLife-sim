@@ -1,13 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "modules/evidence/evidence_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"
-
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/evidence/evidence_module.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace econlife;
@@ -46,8 +45,8 @@ TEST_CASE("test_actionability_floor_never_breached", "[evidence][tier6]") {
     float decay_per_batch = 0.014f;
 
     for (int i = 0; i < 200; ++i) {
-        actionability = EvidenceModule::apply_actionability_decay(
-            actionability, decay_per_batch, floor);
+        actionability =
+            EvidenceModule::apply_actionability_decay(actionability, decay_per_batch, floor);
     }
     REQUIRE(actionability >= floor);
     REQUIRE_THAT(actionability, WithinAbs(floor, 0.001f));
@@ -64,14 +63,11 @@ TEST_CASE("test_evaluate_holder_credibility", "[evidence][tier6]") {
 
 TEST_CASE("test_normalize_trust_to_factor", "[evidence][tier6]") {
     // Negative trust -> minimum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(-0.5f),
-                 WithinAbs(0.1f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(-0.5f), WithinAbs(0.1f, 0.001f));
     // Zero trust -> minimum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(0.0f),
-                 WithinAbs(0.1f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(0.0f), WithinAbs(0.1f, 0.001f));
     // Full trust -> maximum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(1.0f),
-                 WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(1.0f), WithinAbs(1.0f, 0.001f));
     // Half trust -> mid factor
     float mid = EvidenceModule::normalize_trust_to_factor(0.5f);
     REQUIRE(mid > 0.1f);
@@ -161,8 +157,9 @@ TEST_CASE("test_criminal_business_generates_evidence", "[evidence][tier6]") {
             REQUIRE(token.target_npc_id == 10);
             REQUIRE(token.province_id == 0);
             REQUIRE(token.is_active == true);
-            REQUIRE_THAT(token.actionability,
-                         WithinAbs(EvidenceModule::Constants::criminal_evidence_actionability, 0.01f));
+            REQUIRE_THAT(
+                token.actionability,
+                WithinAbs(EvidenceModule::Constants::criminal_evidence_actionability, 0.01f));
             found_new_token = true;
         }
     }

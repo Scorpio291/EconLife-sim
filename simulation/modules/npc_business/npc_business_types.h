@@ -20,8 +20,8 @@ struct BusinessDecisionResult {
     int32_t hiring_target_change = 0;
     float rd_investment_rate = 0.0f;
     bool board_approved = true;
-    float cash_spent = 0.0f;            // investment amount deducted from cash
-    float cost_per_tick_delta = 0.0f;   // change in operating costs
+    float cash_spent = 0.0f;           // investment amount deducted from cash
+    float cost_per_tick_delta = 0.0f;  // change in operating costs
 };
 
 }  // namespace econlife

@@ -12,8 +12,8 @@
 #include <vector>
 
 #include "core/rng/deterministic_rng.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/random_events/event_types.h"
 
 // Include the module implementation for direct testing.
@@ -29,10 +29,8 @@ using namespace econlife;
 
 namespace {
 
-Province make_test_province(uint32_t id,
-                             float climate_stress = 0.0f,
-                             float stability = 1.0f,
-                             float infrastructure = 0.5f) {
+Province make_test_province(uint32_t id, float climate_stress = 0.0f, float stability = 1.0f,
+                            float infrastructure = 0.5f) {
     Province p{};
     p.id = id;
     p.h3_index = 0;
@@ -62,8 +60,7 @@ Province make_test_province(uint32_t id,
     return p;
 }
 
-WorldState make_test_world_state(uint64_t seed = 42,
-                                  uint32_t current_tick = 100) {
+WorldState make_test_world_state(uint64_t seed = 42, uint32_t current_tick = 100) {
     WorldState ws{};
     ws.world_seed = seed;
     ws.current_tick = current_tick;
@@ -77,14 +74,11 @@ WorldState make_test_world_state(uint64_t seed = 42,
 }
 
 // Create a single-template vector for controlled testing.
-std::vector<RandomEventTemplate> make_single_template(
-    EventCategory category,
-    float severity_min = 0.1f,
-    float severity_max = 0.9f,
-    uint32_t dur_min = 5,
-    uint32_t dur_max = 15,
-    bool generates_evidence = false) {
-
+std::vector<RandomEventTemplate> make_single_template(EventCategory category,
+                                                      float severity_min = 0.1f,
+                                                      float severity_max = 0.9f,
+                                                      uint32_t dur_min = 5, uint32_t dur_max = 15,
+                                                      bool generates_evidence = false) {
     RandomEventTemplate t{};
     t.id = "test_template";
     t.template_key = "test_template";
@@ -169,12 +163,13 @@ TEST_CASE("test_high_climate_stress_more_natural", "[random_events][tier1]") {
         }
 
         for (const auto& ev : module.active_events()) {
-            if (ev.category == EventCategory::natural) ++natural_count;
+            if (ev.category == EventCategory::natural)
+                ++natural_count;
         }
         return natural_count;
     };
 
-    uint32_t low_stress_count  = run_province(0.0f, 12345);
+    uint32_t low_stress_count = run_province(0.0f, 12345);
     uint32_t high_stress_count = run_province(0.8f, 12345);
 
     // High climate stress should produce more events.
@@ -220,7 +215,8 @@ TEST_CASE("test_event_duration_in_bounds", "[random_events][tier1]") {
 
     uint32_t dur_min = 5;
     uint32_t dur_max = 15;
-    module.set_templates(make_single_template(EventCategory::natural, 0.1f, 0.9f, dur_min, dur_max));
+    module.set_templates(
+        make_single_template(EventCategory::natural, 0.1f, 0.9f, dur_min, dur_max));
 
     WorldState ws = make_test_world_state(888, 0);
     ws.provinces.push_back(make_test_province(0));
@@ -234,7 +230,8 @@ TEST_CASE("test_event_duration_in_bounds", "[random_events][tier1]") {
     REQUIRE(!module.active_events().empty());
 
     for (const auto& ev : module.active_events()) {
-        if (ev.end_tick == 0) continue;  // Skip resolved events.
+        if (ev.end_tick == 0)
+            continue;  // Skip resolved events.
         uint32_t duration = ev.end_tick - ev.started_tick;
         REQUIRE(duration >= dur_min);
         REQUIRE(duration <= dur_max);
@@ -520,8 +517,8 @@ TEST_CASE("test_category_weights_shift_with_conditions", "[random_events][tier1]
     // Run many category selections with extreme conditions and verify
     // the expected category dominates.
 
-    auto count_categories = [](float climate_stress, float stability,
-                               float infrastructure, uint64_t seed) {
+    auto count_categories = [](float climate_stress, float stability, float infrastructure,
+                               uint64_t seed) {
         RandomEventsModule module;
         float instability = 1.0f - stability;
         DeterministicRNG rng(seed);
@@ -530,18 +527,22 @@ TEST_CASE("test_category_weights_shift_with_conditions", "[random_events][tier1]
         for (int i = 0; i < 10000; ++i) {
             // Call select_category directly via the module's internal logic.
             // We replicate the category selection here since it is a private method.
-            float w_natural  = 0.25f * (1.0f + climate_stress);
+            float w_natural = 0.25f * (1.0f + climate_stress);
             float w_accident = 0.20f * (1.0f + (1.0f - infrastructure));
             float w_economic = 0.30f * 1.0f;  // volatility = 1.0
-            float w_human    = 0.25f * (1.0f + instability);
+            float w_human = 0.25f * (1.0f + instability);
             float total = w_natural + w_accident + w_economic + w_human;
 
             float roll = rng.next_float() * total;
             EventCategory cat;
-            if (roll < w_natural) cat = EventCategory::natural;
-            else if (roll < w_natural + w_accident) cat = EventCategory::accident;
-            else if (roll < w_natural + w_accident + w_economic) cat = EventCategory::economic;
-            else cat = EventCategory::human;
+            if (roll < w_natural)
+                cat = EventCategory::natural;
+            else if (roll < w_natural + w_accident)
+                cat = EventCategory::accident;
+            else if (roll < w_natural + w_accident + w_economic)
+                cat = EventCategory::economic;
+            else
+                cat = EventCategory::human;
 
             counts[static_cast<int>(cat)]++;
         }

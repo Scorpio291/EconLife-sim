@@ -8,11 +8,6 @@
 
 namespace econlife {
 
-enum class InfluenceType : uint8_t {
-    trust_based,
-    fear_based,
-    obligation_based,
-    movement_based
-};
+enum class InfluenceType : uint8_t { trust_based, fear_based, obligation_based, movement_based };
 
 }  // namespace econlife

@@ -6,12 +6,12 @@
 //
 // See docs/interfaces/production/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/production/production_types.h"
-
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/production/production_types.h"
 
 namespace econlife {
 
@@ -26,12 +26,12 @@ class DeterministicRNG;
 // Populated at startup from package content files. Immutable after loading.
 // ---------------------------------------------------------------------------
 class RecipeRegistry {
-public:
+   public:
     void register_recipe(Recipe recipe);
     const Recipe* find(const std::string& recipe_id) const;
     const std::unordered_map<std::string, Recipe>& all() const { return recipes_; }
 
-private:
+   private:
     std::unordered_map<std::string, Recipe> recipes_;
 };
 
@@ -39,11 +39,11 @@ private:
 // FacilityRegistry — holds all facilities, indexed by business_id.
 // ---------------------------------------------------------------------------
 class FacilityRegistry {
-public:
+   public:
     void register_facility(Facility facility);
     const std::vector<Facility>* find_by_business(uint32_t business_id) const;
 
-private:
+   private:
     std::unordered_map<uint32_t, std::vector<Facility>> facilities_by_business_;
 };
 
@@ -51,7 +51,7 @@ private:
 // ProductionModule — ITickModule implementation for production
 // ---------------------------------------------------------------------------
 class ProductionModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "production"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -61,8 +61,7 @@ public:
 
     bool is_province_parallel() const noexcept override { return true; }
 
-    void execute_province(uint32_t province_idx,
-                          const WorldState& state,
+    void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
@@ -80,25 +79,20 @@ public:
     // Informal market price discount factor (criminal sector).
     static constexpr float informal_price_discount = 0.7f;
 
-private:
+   private:
     RecipeRegistry recipe_registry_;
     FacilityRegistry facility_registry_;
 
-    void process_business(const NPCBusiness& biz,
-                          const WorldState& state,
+    void process_business(const NPCBusiness& biz, const WorldState& state, DeltaBuffer& delta,
+                          std::unordered_map<std::string, float>& available_supply,
+                          DeterministicRNG& rng);
+
+    void process_facility(const NPCBusiness& biz, const Facility& facility, const WorldState& state,
                           DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,
                           DeterministicRNG& rng);
 
-    void process_facility(const NPCBusiness& biz,
-                          const Facility& facility,
-                          const WorldState& state,
-                          DeltaBuffer& delta,
-                          std::unordered_map<std::string, float>& available_supply,
-                          DeterministicRNG& rng);
-
-    float get_price_for_business(const NPCBusiness& biz,
-                                 uint32_t good_id,
+    float get_price_for_business(const NPCBusiness& biz, uint32_t good_id,
                                  const WorldState& state) const;
 };
 

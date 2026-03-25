@@ -1,10 +1,11 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+#include <vector>
+
 #include "core/tick/tick_module.h"
 #include "persistence_types.h"
-#include <vector>
-#include <string>
-#include <cstdint>
 
 namespace econlife {
 
@@ -12,7 +13,7 @@ struct WorldState;
 struct DeltaBuffer;
 
 class PersistenceModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "persistence"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -58,13 +59,13 @@ public:
 
     // Constants
     static constexpr uint32_t CURRENT_SCHEMA_VERSION = 1;
-    static constexpr uint32_t SNAPSHOT_INTERVAL      = 30;   // ticks per snapshot (monthly)
-    static constexpr uint32_t WAL_SEGMENT_TICKS      = 30;   // ticks per WAL segment
-    static constexpr uint32_t MAGIC_BYTES            = 0x45434F4E;  // "ECON"
-    static constexpr float    COMPRESSION_TARGET     = 0.60f; // < 60% of uncompressed
-    static constexpr uint32_t HEADER_SIZE            = 16;    // magic + schema + uncompressed_size + checksum
+    static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
+    static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
+    static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"
+    static constexpr float COMPRESSION_TARGET = 0.60f;   // < 60% of uncompressed
+    static constexpr uint32_t HEADER_SIZE = 16;  // magic + schema + uncompressed_size + checksum
 
-private:
+   private:
     bool is_restoring_ = false;
     std::vector<SchemaMigration> migrations_;
 };

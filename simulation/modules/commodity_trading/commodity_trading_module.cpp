@@ -13,11 +13,12 @@
 // and market impact propagation for all currently open positions.
 
 #include "modules/commodity_trading/commodity_trading_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -42,12 +43,11 @@ void CommodityTradingModule::execute(const WorldState& state, DeltaBuffer& delta
     // Prevents unbounded growth of the positions vector.
     if (state.current_tick > 30) {
         uint32_t gc_cutoff = state.current_tick - 30;
-        positions_.erase(
-            std::remove_if(positions_.begin(), positions_.end(),
-                [gc_cutoff](const CommodityPosition& p) {
-                    return p.exit_tick != 0 && p.exit_tick < gc_cutoff;
-                }),
-            positions_.end());
+        positions_.erase(std::remove_if(positions_.begin(), positions_.end(),
+                                        [gc_cutoff](const CommodityPosition& p) {
+                                            return p.exit_tick != 0 && p.exit_tick < gc_cutoff;
+                                        }),
+                         positions_.end());
     }
 
     // Phase 3: Process all open positions in id-ascending order (deterministic).
@@ -108,14 +108,11 @@ void CommodityTradingModule::open_position(CommodityPosition position) {
 
     // Maintain sorted order by id ascending for deterministic processing.
     std::sort(positions_.begin(), positions_.end(),
-              [](const CommodityPosition& a, const CommodityPosition& b) {
-                  return a.id < b.id;
-              });
+              [](const CommodityPosition& a, const CommodityPosition& b) { return a.id < b.id; });
 }
 
-SettlementResult CommodityTradingModule::close_position(uint32_t position_id,
-                                                         float exit_price,
-                                                         uint32_t tick) {
+SettlementResult CommodityTradingModule::close_position(uint32_t position_id, float exit_price,
+                                                        uint32_t tick) {
     SettlementResult result{};
     result.position_id = position_id;
     result.position_closed = false;
@@ -142,7 +139,8 @@ SettlementResult CommodityTradingModule::close_position(uint32_t position_id,
 
             // Capital gains tax: applied only on positive realized gains.
             float taxable_gain = std::max(0.0f, pnl);
-            result.capital_gains_tax = taxable_gain * CommodityTradingConstants::capital_gains_tax_rate;
+            result.capital_gains_tax =
+                taxable_gain * CommodityTradingConstants::capital_gains_tax_rate;
 
             return result;
         }
@@ -161,7 +159,7 @@ const std::vector<CommodityPosition>& CommodityTradingModule::positions() const 
 // ===========================================================================
 
 MarketImpact CommodityTradingModule::compute_market_impact(const CommodityPosition& pos,
-                                                            float market_supply) {
+                                                           float market_supply) {
     MarketImpact impact{};
     impact.good_id_hash = pos.good_id;
 
@@ -179,7 +177,8 @@ MarketImpact CommodityTradingModule::compute_market_impact(const CommodityPositi
     }
 
     // Impact magnitude: coefficient * quantity beyond the threshold.
-    float excess_quantity = pos.quantity - (market_supply * CommodityTradingConstants::market_impact_threshold);
+    float excess_quantity =
+        pos.quantity - (market_supply * CommodityTradingConstants::market_impact_threshold);
     float impact_magnitude = CommodityTradingConstants::market_impact_coefficient * excess_quantity;
 
     // Long positions increase demand; short positions increase supply pressure.
@@ -196,10 +195,8 @@ MarketImpact CommodityTradingModule::compute_market_impact(const CommodityPositi
 // Static Utility: P&L Calculation
 // ===========================================================================
 
-float CommodityTradingModule::compute_pnl(PositionType type,
-                                           float entry_price,
-                                           float exit_price,
-                                           float quantity) {
+float CommodityTradingModule::compute_pnl(PositionType type, float entry_price, float exit_price,
+                                          float quantity) {
     if (type == PositionType::long_position) {
         // Long: profit when price rises.
         return (exit_price - entry_price) * quantity;

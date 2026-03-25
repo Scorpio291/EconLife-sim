@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "modules/criminal_operations/criminal_operations_module.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/criminal_operations/criminal_operations_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -60,7 +60,8 @@ TEST_CASE("Decision: reduce activity on high heat", "[criminal_operations][tier7
     CHECK(decision == CriminalStrategicDecision::reduce_activity);
 }
 
-TEST_CASE("Decision: initiate conflict on high pressure with cash", "[criminal_operations][tier7]") {
+TEST_CASE("Decision: initiate conflict on high pressure with cash",
+          "[criminal_operations][tier7]") {
     auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.65f, 1.5f);
     CHECK(decision == CriminalStrategicDecision::initiate_conflict);
 }
@@ -111,8 +112,7 @@ TEST_CASE("Conflict stage escalation chain", "[criminal_operations][tier7]") {
 }
 
 TEST_CASE("Initial dominance seed value", "[criminal_operations][tier7]") {
-    CHECK_THAT(CriminalOperationsModule::initial_dominance_seed(),
-               WithinAbs(0.05f, 0.001f));
+    CHECK_THAT(CriminalOperationsModule::initial_dominance_seed(), WithinAbs(0.05f, 0.001f));
 }
 
 // =============================================================================
@@ -141,8 +141,7 @@ TEST_CASE("Dormant org dominance decays", "[criminal_operations][tier7]") {
     DeltaBuffer delta{};
     module.execute(state, delta);
 
-    CHECK(module.organizations()[0].dominance_by_province[0] <
-          0.10f);
+    CHECK(module.organizations()[0].dominance_by_province[0] < 0.10f);
 }
 
 TEST_CASE("Personnel violence generates evidence", "[criminal_operations][tier7]") {

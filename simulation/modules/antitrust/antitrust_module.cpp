@@ -1,12 +1,12 @@
 #include "modules/antitrust/antitrust_module.h"
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
-
 #include <algorithm>
 #include <cmath>
 #include <map>
 #include <set>
+
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -14,12 +14,12 @@ namespace econlife {
 // Static utility functions
 // ---------------------------------------------------------------------------
 
-float AntitrustModule::compute_supply_share(float actor_output,
-                                              float total_supply)
-{
-    if (total_supply <= 0.0f) return 0.0f;
+float AntitrustModule::compute_supply_share(float actor_output, float total_supply) {
+    if (total_supply <= 0.0f)
+        return 0.0f;
     float share = actor_output / total_supply;
-    if (std::isnan(share)) return 0.0f;
+    if (std::isnan(share))
+        return 0.0f;
     return std::clamp(share, 0.0f, 1.0f);
 }
 
@@ -59,16 +59,15 @@ void AntitrustModule::execute(const WorldState& state, DeltaBuffer& delta) {
     }
 }
 
-void AntitrustModule::run_monthly_check(const WorldState& state,
-                                          DeltaBuffer& delta)
-{
+void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& delta) {
     // Collect unique (good_id, province_id) pairs from regional_markets
     // sorted for deterministic processing
     struct MarketKey {
         uint32_t good_id;
         uint32_t province_id;
         bool operator<(const MarketKey& o) const {
-            if (good_id != o.good_id) return good_id < o.good_id;
+            if (good_id != o.good_id)
+                return good_id < o.good_id;
             return province_id < o.province_id;
         }
     };
@@ -92,7 +91,8 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
         }
 
         // Skip goods with zero supply (avoid division by zero)
-        if (total_supply <= 0.0f) continue;
+        if (total_supply <= 0.0f)
+            continue;
 
         // Aggregate output by actor (owner_id) for formal market only
         // key: actor_id (owner or business id if no owner)
@@ -100,8 +100,10 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
 
         for (const auto& biz : state.npc_businesses) {
             // Exclude criminal_sector businesses
-            if (biz.criminal_sector) continue;
-            if (biz.province_id != mk.province_id) continue;
+            if (biz.criminal_sector)
+                continue;
+            if (biz.province_id != mk.province_id)
+                continue;
 
             // V1 simplified: use revenue_per_tick as proxy for output contribution
             // to the good. In full implementation, per-good output would be tracked.
@@ -116,10 +118,8 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
         // Also count player direct output
         if (state.player) {
             for (const auto& biz : state.npc_businesses) {
-                if (biz.owner_id == state.player->id &&
-                    !biz.criminal_sector &&
-                    biz.province_id == mk.province_id)
-                {
+                if (biz.owner_id == state.player->id && !biz.criminal_sector &&
+                    biz.province_id == mk.province_id) {
                     // Already counted above via owner_id match
                 }
             }
@@ -130,11 +130,12 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
         for (const auto& [aid, output] : actor_output) {
             total_actor_output += output;
         }
-        if (total_actor_output <= 0.0f) continue;
+        if (total_actor_output <= 0.0f)
+            continue;
 
         // Check each actor's share (sorted by actor_id for determinism)
-        std::vector<std::pair<uint32_t, float>> sorted_actors(
-            actor_output.begin(), actor_output.end());
+        std::vector<std::pair<uint32_t, float>> sorted_actors(actor_output.begin(),
+                                                              actor_output.end());
         std::sort(sorted_actors.begin(), sorted_actors.end());
 
         // Compute HHI (Herfindahl-Hirschman Index) = sum of squared market shares (0-10000).
@@ -148,7 +149,7 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
         // HHI thresholds for evidence generation (DOJ/FTC standard):
         //   > 2500 = highly concentrated -> antitrust investigation evidence
         //   > 1500 = moderately concentrated -> regulatory monitoring signal
-        constexpr float HHI_HIGHLY_CONCENTRATED    = 2500.0f;
+        constexpr float HHI_HIGHLY_CONCENTRATED = 2500.0f;
         constexpr float HHI_MODERATELY_CONCENTRATED = 1500.0f;
 
         if (hhi > HHI_MODERATELY_CONCENTRATED) {
@@ -166,10 +167,11 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
             EvidenceDelta hhi_ev;
             EvidenceToken hhi_token;
             // Synthetic id: encode province + good to avoid collision across markets.
-            hhi_token.id = (state.current_tick * 10000) + (mk.province_id * 100) + (mk.good_id % 100);
+            hhi_token.id =
+                (state.current_tick * 10000) + (mk.province_id * 100) + (mk.good_id % 100);
             hhi_token.type = EvidenceType::financial;
-            hhi_token.source_npc_id = 0;   // public market data
-            hhi_token.target_npc_id = 0;   // market-level, not actor-specific
+            hhi_token.source_npc_id = 0;  // public market data
+            hhi_token.target_npc_id = 0;  // market-level, not actor-specific
             hhi_token.actionability = actionability;
             hhi_token.decay_rate = 0.0005f;
             hhi_token.created_tick = state.current_tick;
@@ -187,8 +189,7 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
                 for (const auto& npc : state.significant_npcs) {
                     if (npc.role == NPCRole::regulator &&
                         npc.current_province_id == mk.province_id &&
-                        npc.status == NPCStatus::active)
-                    {
+                        npc.status == NPCStatus::active) {
                         NPCDelta npc_delta;
                         npc_delta.npc_id = npc.id;
                         npc_delta.motivation_delta = compute_meter_fill_increment();
@@ -235,8 +236,8 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
                 tier2_token.type = EvidenceType::financial;
                 tier2_token.source_npc_id = 0;
                 tier2_token.target_npc_id = actor_id;
-                tier2_token.actionability = share - Constants::dominant_price_mover_threshold
-                                            + Constants::dominant_price_mover_threshold * 0.5f;
+                tier2_token.actionability = share - Constants::dominant_price_mover_threshold +
+                                            Constants::dominant_price_mover_threshold * 0.5f;
                 tier2_token.actionability = std::clamp(tier2_token.actionability, 0.0f, 1.0f);
                 tier2_token.decay_rate = 0.0005f;
                 tier2_token.created_tick = state.current_tick;
@@ -262,10 +263,8 @@ void AntitrustModule::run_monthly_check(const WorldState& state,
             // Find a legislator NPC in this province
             uint32_t proposer = 0;
             for (const auto& npc : state.significant_npcs) {
-                if (npc.role == NPCRole::politician &&
-                    npc.current_province_id == prov_id &&
-                    npc.status == NPCStatus::active)
-                {
+                if (npc.role == NPCRole::politician && npc.current_province_id == prov_id &&
+                    npc.status == NPCStatus::active) {
                     proposer = npc.id;
                     break;
                 }

@@ -14,41 +14,41 @@ namespace econlife {
 
 enum class PropertyType : uint8_t {
     residential = 0,  // Apartment, house, multi-family building.
-                       // Primary use: player residence (PlayerCharacter.residence_id),
-                       // rental income, laundering vehicle.
-                       // Price drivers: province population density, income level,
-                       // criminal_dominance_index (suppresses price).
+                      // Primary use: player residence (PlayerCharacter.residence_id),
+                      // rental income, laundering vehicle.
+                      // Price drivers: province population density, income level,
+                      // criminal_dominance_index (suppresses price).
 
-    commercial  = 1,  // Office, retail unit, warehouse.
-                       // Primary use: business premises for NPCBusiness (reduces
-                       // cost_per_tick by config.realestate.commercial_cost_reduction_rate
-                       // when owner_id matches NPCBusiness.owner_id).
-                       // Price drivers: infrastructure_rating, formal_employment_rate.
+    commercial = 1,  // Office, retail unit, warehouse.
+                     // Primary use: business premises for NPCBusiness (reduces
+                     // cost_per_tick by config.realestate.commercial_cost_reduction_rate
+                     // when owner_id matches NPCBusiness.owner_id).
+                     // Price drivers: infrastructure_rating, formal_employment_rate.
 
-    industrial  = 2,  // Factory floor, port facility, storage yard.
-                       // Primary use: facility housing for Facility records.
-                       // Price drivers: energy_cost_baseline, infrastructure_rating.
+    industrial = 2,  // Factory floor, port facility, storage yard.
+                     // Primary use: facility housing for Facility records.
+                     // Price drivers: energy_cost_baseline, infrastructure_rating.
 };
 
 // --- §33.1 — PropertyListing ---
 
 struct PropertyListing {
-    uint32_t    id;
+    uint32_t id;
     PropertyType type;
-    uint32_t    province_id;
-    uint32_t    owner_id;           // player_id, npc_id, or 0 (province-owned / market stock)
-    float       asking_price;       // current list price; converges toward market_value over time
-    float       market_value;       // equilibrium price derived from province conditions (§33.2)
-    float       rental_yield_rate;  // fraction of market_value paid as rent per tick
-                                    // residential default: config.realestate.residential_yield_rate
-                                    // commercial:          config.realestate.commercial_yield_rate
-    float       rental_income_per_tick; // derived: market_value * rental_yield_rate
-    bool        rented;             // true if a tenant NPC or business is currently occupying
-    uint32_t    tenant_id;          // NPC or NPCBusiness id; 0 if not rented
-    bool        launder_eligible;   // true if owned under a nominee or shell structure;
-                                    // enables real_estate LaunderingMethod (§32.4)
-    uint32_t    purchased_tick;     // tick of last ownership transfer
-    float       purchase_price;     // price paid at last transfer; used for capital gain calc
+    uint32_t province_id;
+    uint32_t owner_id;             // player_id, npc_id, or 0 (province-owned / market stock)
+    float asking_price;            // current list price; converges toward market_value over time
+    float market_value;            // equilibrium price derived from province conditions (§33.2)
+    float rental_yield_rate;       // fraction of market_value paid as rent per tick
+                                   // residential default: config.realestate.residential_yield_rate
+                                   // commercial:          config.realestate.commercial_yield_rate
+    float rental_income_per_tick;  // derived: market_value * rental_yield_rate
+    bool rented;                   // true if a tenant NPC or business is currently occupying
+    uint32_t tenant_id;            // NPC or NPCBusiness id; 0 if not rented
+    bool launder_eligible;         // true if owned under a nominee or shell structure;
+                                   // enables real_estate LaunderingMethod (§32.4)
+    uint32_t purchased_tick;       // tick of last ownership transfer
+    float purchase_price;          // price paid at last transfer; used for capital gain calc
 
     // Invariants:
     //   asking_price >= 0.0
@@ -73,14 +73,17 @@ struct PropertyListing {
 // from simulation_config.json -> realestate.
 
 struct RealEstateConstants {
-    static constexpr float residential_yield_rate = 0.003f;   // 0.3% of market value per tick
-    static constexpr float commercial_yield_rate  = 0.004f;   // 0.4% per tick
-    static constexpr float industrial_yield_rate  = 0.005f;   // 0.5% per tick
-    static constexpr float price_convergence_rate = 0.05f;    // 5% per month
-    static constexpr uint32_t convergence_interval = 30;      // monthly (every 30 ticks)
-    static constexpr float criminal_dominance_penalty = 0.15f; // 15% value reduction per 1.0 dominance
-    static constexpr float laundering_premium = 0.10f;        // 10% value inflation from laundering activity
-    static constexpr float transaction_evidence_threshold = 50000.0f; // suspicious transaction threshold
+    static constexpr float residential_yield_rate = 0.003f;  // 0.3% of market value per tick
+    static constexpr float commercial_yield_rate = 0.004f;   // 0.4% per tick
+    static constexpr float industrial_yield_rate = 0.005f;   // 0.5% per tick
+    static constexpr float price_convergence_rate = 0.05f;   // 5% per month
+    static constexpr uint32_t convergence_interval = 30;     // monthly (every 30 ticks)
+    static constexpr float criminal_dominance_penalty =
+        0.15f;  // 15% value reduction per 1.0 dominance
+    static constexpr float laundering_premium =
+        0.10f;  // 10% value inflation from laundering activity
+    static constexpr float transaction_evidence_threshold =
+        50000.0f;  // suspicious transaction threshold
 };
 
 }  // namespace econlife

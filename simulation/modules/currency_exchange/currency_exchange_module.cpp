@@ -1,29 +1,31 @@
 #include "currency_exchange_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/rng/deterministic_rng.h"
+
 #include <algorithm>
 #include <cmath>
+
+#include "core/rng/deterministic_rng.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
 float CurrencyExchangeModule::compute_macro_factor(float trade_balance, float inflation,
-                                                    float credit_rating) {
-    return 1.0f + (trade_balance * TRADE_BALANCE_WEIGHT)
-               - (inflation * INFLATION_WEIGHT)
-               - ((1.0f - credit_rating) * SOVEREIGN_RISK_WEIGHT);
+                                                   float credit_rating) {
+    return 1.0f + (trade_balance * TRADE_BALANCE_WEIGHT) - (inflation * INFLATION_WEIGHT) -
+           ((1.0f - credit_rating) * SOVEREIGN_RISK_WEIGHT);
 }
 
-float CurrencyExchangeModule::apply_rate_clamp(float rate, float baseline,
-                                                float floor_frac, float ceiling_frac) {
+float CurrencyExchangeModule::apply_rate_clamp(float rate, float baseline, float floor_frac,
+                                               float ceiling_frac) {
     float floor_val = floor_frac * baseline;
     float ceiling_val = ceiling_frac * baseline;
     return std::clamp(rate, floor_val, ceiling_val);
 }
 
 float CurrencyExchangeModule::convert_currency(float amount, float seller_usd_rate,
-                                                float buyer_usd_rate, float transaction_cost) {
-    if (buyer_usd_rate <= 0.0f) return 0.0f;
+                                               float buyer_usd_rate, float transaction_cost) {
+    if (buyer_usd_rate <= 0.0f)
+        return 0.0f;
     return amount * (seller_usd_rate / buyer_usd_rate) * (1.0f + transaction_cost);
 }
 
@@ -36,7 +38,8 @@ bool CurrencyExchangeModule::is_weekly_tick(uint32_t current_tick) {
 }
 
 void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    if (!is_weekly_tick(state.current_tick)) return;
+    if (!is_weekly_tick(state.current_tick))
+        return;
 
     DeterministicRNG rng(state.world_seed + state.current_tick * 7919);
 
@@ -80,7 +83,8 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
             float u2 = rng.next_float();
             // Clamp u1 away from 0 to avoid log(0).
             u1 = std::max(u1, 0.0001f);
-            noise = currency.volatility * std::sqrt(-2.0f * std::log(u1)) * std::cos(6.2831853f * u2);
+            noise =
+                currency.volatility * std::sqrt(-2.0f * std::log(u1)) * std::cos(6.2831853f * u2);
         }
 
         float new_rate = currency.usd_rate * (macro_factor + noise);
@@ -90,8 +94,8 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
             new_rate = currency.usd_rate;  // fallback to previous rate
         }
 
-        new_rate = apply_rate_clamp(new_rate, currency.usd_rate_baseline,
-                                     FLOOR_FRACTION, CEILING_FRACTION);
+        new_rate = apply_rate_clamp(new_rate, currency.usd_rate_baseline, FLOOR_FRACTION,
+                                    CEILING_FRACTION);
 
         // Only emit delta if rate actually changed.
         if (new_rate != currency.usd_rate) {

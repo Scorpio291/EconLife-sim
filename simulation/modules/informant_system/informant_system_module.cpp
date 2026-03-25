@@ -1,8 +1,10 @@
 #include "informant_system_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
+
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -22,10 +24,10 @@ float InformantSystemModule::compute_compartmentalization_bonus(uint32_t level) 
     return static_cast<float>(level) * COMPARTMENT_BONUS_PER_LEVEL;
 }
 
-float InformantSystemModule::compute_flip_probability(
-    float base_flip_rate, float risk_tolerance, float trust,
-    uint32_t mutual_incrimination_count, uint32_t compartmentalization_level)
-{
+float InformantSystemModule::compute_flip_probability(float base_flip_rate, float risk_tolerance,
+                                                      float trust,
+                                                      uint32_t mutual_incrimination_count,
+                                                      uint32_t compartmentalization_level) {
     float risk = compute_risk_factor(risk_tolerance);
     float trust_f = compute_trust_factor(trust);
     float incrim = compute_incrimination_suppression(mutual_incrimination_count);
@@ -35,26 +37,32 @@ float InformantSystemModule::compute_flip_probability(
 }
 
 void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    std::sort(records_.begin(), records_.end(),
-              [](const InformantRecord& a, const InformantRecord& b) { return a.npc_id < b.npc_id; });
+    std::sort(
+        records_.begin(), records_.end(),
+        [](const InformantRecord& a, const InformantRecord& b) { return a.npc_id < b.npc_id; });
 
     for (auto& rec : records_) {
         // Handle per-tick capital drain for actively cooperating informants
         if (rec.status == InformantStatus::cooperating) {
             NPCDelta ongoing_delta;
-            ongoing_delta.npc_id       = rec.npc_id;
+            ongoing_delta.npc_id = rec.npc_id;
             ongoing_delta.capital_delta = -PAY_SILENCE_COST * 0.001f;  // tiny per-tick cost
             delta.npc_deltas.push_back(ongoing_delta);
             continue;
         }
 
-        if (rec.status != InformantStatus::not_cooperating) continue;
+        if (rec.status != InformantStatus::not_cooperating)
+            continue;
 
         const NPC* npc = nullptr;
         for (const auto& n : state.significant_npcs) {
-            if (n.id == rec.npc_id) { npc = &n; break; }
+            if (n.id == rec.npc_id) {
+                npc = &n;
+                break;
+            }
         }
-        if (!npc || npc->status != NPCStatus::imprisoned) continue;
+        if (!npc || npc->status != NPCStatus::imprisoned)
+            continue;
 
         float trust = 0.0f;
         for (const auto& rel : npc->relationships) {
@@ -66,16 +74,15 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
 
         uint32_t mutual_count = 0;
         for (const auto& obl : state.obligation_network) {
-            if (obl.is_active &&
-                (obl.creditor_npc_id == npc->id || obl.debtor_npc_id == npc->id) &&
+            if (obl.is_active && (obl.creditor_npc_id == npc->id || obl.debtor_npc_id == npc->id) &&
                 obl.favor_type == FavorType::criminal_cooperation) {
                 mutual_count++;
             }
         }
 
-        rec.flip_probability = compute_flip_probability(
-            rec.base_flip_rate, npc->risk_tolerance, trust,
-            mutual_count, rec.compartmentalization_level);
+        rec.flip_probability =
+            compute_flip_probability(rec.base_flip_rate, npc->risk_tolerance, trust, mutual_count,
+                                     rec.compartmentalization_level);
 
         if (rec.flip_probability >= MAX_FLIP_PROBABILITY * 0.8f) {
             rec.status = InformantStatus::cooperating;
@@ -84,19 +91,22 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
             for (const auto& ke : npc->known_evidence) {
                 // EvidenceDelta: testimonial evidence from informant-provided knowledge
                 EvidenceDelta ev;
-                ev.new_token = EvidenceToken{
-                    0, EvidenceType::testimonial,
-                    npc->id, ke.subject_id,
-                    0.50f, 0.003f,
-                    state.current_tick, npc->current_province_id, true
-                };
+                ev.new_token = EvidenceToken{0,
+                                             EvidenceType::testimonial,
+                                             npc->id,
+                                             ke.subject_id,
+                                             0.50f,
+                                             0.003f,
+                                             state.current_tick,
+                                             npc->current_province_id,
+                                             true};
                 delta.evidence_deltas.push_back(ev);
             }
 
             // NPCDelta: reliability update — informant incurs implicit capital cost
             // (legal fees, witness protection costs, relocation expenses proxy)
             NPCDelta reliability_delta;
-            reliability_delta.npc_id       = rec.npc_id;
+            reliability_delta.npc_id = rec.npc_id;
             reliability_delta.capital_delta = -PAY_SILENCE_COST * 0.10f;  // 10% of silence cost
             delta.npc_deltas.push_back(reliability_delta);
         }

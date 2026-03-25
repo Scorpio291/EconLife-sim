@@ -1,8 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "modules/alternative_identity/alternative_identity_module.h"
-#include "core/world_state/world_state.h"
+
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/alternative_identity/alternative_identity_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;

@@ -1,8 +1,10 @@
+#include "core/world_state/apply_deltas.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "core/world_state/apply_deltas.h"
-#include "core/world_state/world_state.h"
+
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -108,7 +110,7 @@ TEST_CASE("apply_deltas: NPC memory overflow evicts weakest", "[apply_deltas][co
         mem.type = MemoryType::event;
         mem.subject_id = i;
         mem.emotional_weight = 0.1f;
-        mem.decay = 0.5f + static_cast<float>(i) * 0.001f; // increasing decay
+        mem.decay = 0.5f + static_cast<float>(i) * 0.001f;  // increasing decay
         mem.is_actionable = false;
         w.significant_npcs[0].memory_log.push_back(mem);
     }
@@ -196,7 +198,7 @@ TEST_CASE("apply_deltas: relationship trust clamped by recovery ceiling", "[appl
     nd.npc_id = 100;
     Relationship rel{};
     rel.target_npc_id = 200;
-    rel.trust = 0.5f; // would push to 0.6, but ceiling is 0.3
+    rel.trust = 0.5f;  // would push to 0.6, but ceiling is 0.3
     rel.fear = 0.0f;
     rel.obligation_balance = 0.0f;
     rel.last_interaction_tick = 10;
@@ -214,7 +216,7 @@ TEST_CASE("apply_deltas: market supply additive", "[apply_deltas][core]") {
     DeltaBuffer delta{};
     MarketDelta md{};
     md.good_id = 0;
-    md.region_id = 0; // matches province_id for market lookup
+    md.region_id = 0;  // matches province_id for market lookup
     md.supply_delta = 50.0f;
     delta.market_deltas.push_back(md);
 
@@ -240,7 +242,7 @@ TEST_CASE("apply_deltas: region stability additive and clamped", "[apply_deltas]
     DeltaBuffer delta{};
     RegionDelta rd{};
     rd.region_id = 0;
-    rd.stability_delta = -0.8f; // would push 0.7 to -0.1, clamped to 0.0
+    rd.stability_delta = -0.8f;  // would push 0.7 to -0.1, clamped to 0.0
     delta.region_deltas.push_back(rd);
 
     apply_deltas(w, delta);
@@ -252,7 +254,7 @@ TEST_CASE("apply_deltas: evidence token append with auto-id", "[apply_deltas][co
     DeltaBuffer delta{};
     EvidenceDelta ed{};
     EvidenceToken token{};
-    token.id = 0; // auto-assign
+    token.id = 0;  // auto-assign
     token.type = EvidenceType::financial;
     token.actionability = 0.8f;
     token.is_active = true;
@@ -261,7 +263,7 @@ TEST_CASE("apply_deltas: evidence token append with auto-id", "[apply_deltas][co
 
     apply_deltas(w, delta);
     REQUIRE(w.evidence_pool.size() == 1);
-    REQUIRE(w.evidence_pool[0].id == 1); // auto-assigned
+    REQUIRE(w.evidence_pool[0].id == 1);  // auto-assigned
     REQUIRE(w.evidence_pool[0].is_active == true);
 }
 

@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "modules/investigator_engine/investigator_engine_module.h"
-#include "modules/facility_signals/facility_signals_types.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/facility_signals/facility_signals_types.h"
+#include "modules/investigator_engine/investigator_engine_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -43,15 +43,13 @@ TEST_CASE("InvestigatorEngine: compute_fill_rate from regional signal",
     REQUIRE_THAT(result, WithinAbs(0.0005f, 0.0001f));
 }
 
-TEST_CASE("InvestigatorEngine: fill_rate clamped to max",
-          "[investigator_engine][tier8]") {
+TEST_CASE("InvestigatorEngine: fill_rate clamped to max", "[investigator_engine][tier8]") {
     // Very high signal
     float result = InvestigatorEngineModule::compute_fill_rate(100.0f, 0.005f, 0.01f);
     REQUIRE_THAT(result, WithinAbs(0.01f, 0.0001f));
 }
 
-TEST_CASE("InvestigatorEngine: corruption reduces fill_rate",
-          "[investigator_engine][tier8]") {
+TEST_CASE("InvestigatorEngine: corruption reduces fill_rate", "[investigator_engine][tier8]") {
     // corruption_susceptibility 0.5, coverage 0.8
     // modifier = 1.0 - 0.5 * 0.8 = 0.60
     float result = InvestigatorEngineModule::apply_corruption_modifier(0.005f, 0.5f, 0.8f);
@@ -82,11 +80,8 @@ TEST_CASE("InvestigatorEngine: derive_status inactive below surveillance",
     REQUIRE(status == static_cast<uint8_t>(InvestigatorMeterStatus::inactive));
 }
 
-TEST_CASE("InvestigatorEngine: resolve_target returns argmax",
-          "[investigator_engine][tier8]") {
-    std::vector<std::pair<uint32_t, float>> contributions = {
-        {1, 0.30f}, {2, 0.70f}, {3, 0.10f}
-    };
+TEST_CASE("InvestigatorEngine: resolve_target returns argmax", "[investigator_engine][tier8]") {
+    std::vector<std::pair<uint32_t, float>> contributions = {{1, 0.30f}, {2, 0.70f}, {3, 0.10f}};
     uint32_t target = InvestigatorEngineModule::resolve_target(contributions);
     REQUIRE(target == 2);
 }
@@ -98,20 +93,17 @@ TEST_CASE("InvestigatorEngine: resolve_target empty returns sentinel",
     REQUIRE(target == 0);
 }
 
-TEST_CASE("InvestigatorEngine: meter decays when signal drops",
-          "[investigator_engine][tier8]") {
+TEST_CASE("InvestigatorEngine: meter decays when signal drops", "[investigator_engine][tier8]") {
     float result = InvestigatorEngineModule::compute_decay(0.50f, 0.001f);
     REQUIRE_THAT(result, WithinAbs(0.499f, 0.001f));
 }
 
-TEST_CASE("InvestigatorEngine: decay does not go below zero",
-          "[investigator_engine][tier8]") {
+TEST_CASE("InvestigatorEngine: decay does not go below zero", "[investigator_engine][tier8]") {
     float result = InvestigatorEngineModule::compute_decay(0.0005f, 0.001f);
     REQUIRE_THAT(result, WithinAbs(0.0f, 0.001f));
 }
 
-TEST_CASE("InvestigatorEngine: NGO ignores corruption modifier",
-          "[investigator_engine][tier8]") {
+TEST_CASE("InvestigatorEngine: NGO ignores corruption modifier", "[investigator_engine][tier8]") {
     // NGO fill_rate should NOT be modified by corruption
     float base_rate = 0.005f;
     // For NGO, we skip apply_corruption_modifier — rate stays same

@@ -7,13 +7,13 @@
 //
 // See docs/interfaces/npc_behavior/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "core/world_state/npc.h"  // NPC, MemoryType, MemoryEntry, Relationship, MotivationVector
-#include "modules/npc_behavior/npc_behavior_types.h"
-
 #include <cstdint>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "core/world_state/npc.h"  // NPC, MemoryType, MemoryEntry, Relationship, MotivationVector
+#include "modules/npc_behavior/npc_behavior_types.h"
 
 namespace econlife {
 
@@ -26,7 +26,7 @@ struct ActionOutcome;
 // NpcBehaviorModule — ITickModule implementation for NPC daily behavior
 // ---------------------------------------------------------------------------
 class NpcBehaviorModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "npc_behavior"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -40,8 +40,7 @@ public:
         return {};  // end of Pass 1 chain
     }
 
-    void execute_province(uint32_t province_idx,
-                          const WorldState& state,
+    void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
@@ -54,7 +53,8 @@ public:
     static float compute_expected_value(const NPC& npc, const ActionOutcome& outcome);
 
     // Compute risk discount factor from exposure_risk and risk_tolerance.
-    // risk_discount = max(min_risk_discount, 1.0 - (exposure_risk - risk_tolerance) * risk_sensitivity_coeff)
+    // risk_discount = max(min_risk_discount, 1.0 - (exposure_risk - risk_tolerance) *
+    // risk_sensitivity_coeff)
     static float compute_risk_discount(float exposure_risk, float risk_tolerance);
 
     // Apply relationship modifier for cooperative actions.
@@ -63,12 +63,10 @@ public:
 
     // Evaluate a complete action: sum outcome EVs, apply risk discount and
     // optional trust bonus. Returns ActionEvaluation with net_utility.
-    static ActionEvaluation evaluate_action(const NPC& npc,
-                                             DailyAction action,
-                                             const std::vector<ActionOutcome>& outcomes,
-                                             float exposure_risk,
-                                             float trust_bonus_target,
-                                             float trust_ev_bonus);
+    static ActionEvaluation evaluate_action(const NPC& npc, DailyAction action,
+                                            const std::vector<ActionOutcome>& outcomes,
+                                            float exposure_risk, float trust_bonus_target,
+                                            float trust_ev_bonus);
 
     // Decay all memory entries in an NPC's memory_log.
     // decay = decay * (1.0 - decay_rate). Entries below decay_floor are archived (removed).

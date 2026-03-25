@@ -16,19 +16,19 @@ namespace econlife {
 // ObligationStatus — lifecycle state of an obligation
 // ---------------------------------------------------------------------------
 enum class ObligationStatus : uint8_t {
-    open      = 0,  // Obligation active, not yet overdue or below escalation threshold
+    open = 0,       // Obligation active, not yet overdue or below escalation threshold
     escalated = 1,  // current_demand > original_value * escalation_threshold (1.5x)
-    critical  = 2,  // current_demand > original_value * critical_threshold (3.0x)
-    hostile   = 3,  // critical + creditor risk_tolerance > hostile_threshold
+    critical = 2,   // current_demand > original_value * critical_threshold (3.0x)
+    hostile = 3,    // critical + creditor risk_tolerance > hostile_threshold
     fulfilled = 4,  // Obligation settled by debtor
-    forgiven  = 5,  // Obligation written off (creditor dead, timeout, renegotiation)
+    forgiven = 5,   // Obligation written off (creditor dead, timeout, renegotiation)
 };
 
 // ---------------------------------------------------------------------------
 // EscalationStep — history entry for a status transition
 // ---------------------------------------------------------------------------
 struct EscalationStep {
-    uint32_t         tick;
+    uint32_t tick;
     ObligationStatus from_status;
     ObligationStatus to_status;
 };

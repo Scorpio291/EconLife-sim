@@ -6,12 +6,12 @@
 //
 // See docs/interfaces/criminal_operations/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/criminal_operations/criminal_operations_types.h"
-
 #include <cstdint>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/criminal_operations/criminal_operations_types.h"
 
 namespace econlife {
 
@@ -24,7 +24,7 @@ struct NPC;
 // CriminalOperationsModule — ITickModule implementation
 // ---------------------------------------------------------------------------
 class CriminalOperationsModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "criminal_operations"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -50,29 +50,25 @@ public:
     // --- Static utility functions (exposed for testing) ---
 
     // Compute territory_pressure: sum of competing org dominance in shared provinces.
-    static float compute_territory_pressure(
-        const CriminalOrganization& org,
-        const std::vector<CriminalOrganization>& all_orgs);
+    static float compute_territory_pressure(const CriminalOrganization& org,
+                                            const std::vector<CriminalOrganization>& all_orgs);
 
     // Compute cash_level: cash / (monthly_cost_estimate * comfortable_months).
-    static float compute_cash_level(float cash, float monthly_cost,
-                                     float comfortable_months);
+    static float compute_cash_level(float cash, float monthly_cost, float comfortable_months);
 
     // Compute law_enforcement_heat: proxy from LE NPC data in org territories.
     // V1: returns max InvestigatorMeter proxy across org provinces.
-    static float compute_le_heat(const CriminalOrganization& org,
-                                  const std::vector<NPC>& npcs);
+    static float compute_le_heat(const CriminalOrganization& org, const std::vector<NPC>& npcs);
 
     // Evaluate strategic decision from priority matrix.
-    static CriminalStrategicDecision evaluate_decision(
-        float le_heat, float territory_pressure, float cash_level);
+    static CriminalStrategicDecision evaluate_decision(float le_heat, float territory_pressure,
+                                                       float cash_level);
 
     // Compute decision_day_offset from org id.
     static uint8_t compute_decision_offset(uint32_t org_id);
 
     // Advance conflict stage by one step (max one per cycle).
-    static TerritorialConflictStage advance_conflict_stage(
-        TerritorialConflictStage current);
+    static TerritorialConflictStage advance_conflict_stage(TerritorialConflictStage current);
 
     // Compute initial dominance seed on territory establishment.
     static float initial_dominance_seed();
@@ -93,14 +89,13 @@ public:
         static constexpr float dormant_dominance_decay_rate = 0.001f;
     };
 
-private:
+   private:
     std::vector<CriminalOrganization> organizations_;
     std::vector<ExpansionTeam> active_expansions_;
 
     // Process one org's quarterly decision.
-    void process_strategic_decision(CriminalOrganization& org,
-                                     const WorldState& state,
-                                     DeltaBuffer& delta);
+    void process_strategic_decision(CriminalOrganization& org, const WorldState& state,
+                                    DeltaBuffer& delta);
 
     // Advance conflict state machine for orgs with active conflicts.
     void process_conflict_states(const WorldState& state, DeltaBuffer& delta);

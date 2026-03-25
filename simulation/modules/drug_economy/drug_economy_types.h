@@ -15,10 +15,10 @@ namespace econlife {
 // DrugType — V1 drug categories
 // ---------------------------------------------------------------------------
 enum class DrugType : uint8_t {
-    cannabis         = 0,
-    methamphetamine  = 1,
+    cannabis = 0,
+    methamphetamine = 1,
     synthetic_opioid = 2,
-    designer_drug    = 3,
+    designer_drug = 3,
     // EX reserved:
     // cocaine        = 4,
     // heroin         = 5,
@@ -29,7 +29,7 @@ enum class DrugType : uint8_t {
 // ---------------------------------------------------------------------------
 enum class DrugMarketTier : uint8_t {
     wholesale = 0,  // transacts with other criminal businesses
-    retail    = 1,  // transacts with background NPC population cohorts
+    retail = 1,     // transacts with background NPC population cohorts
 };
 
 // ---------------------------------------------------------------------------
@@ -43,11 +43,16 @@ struct DrugLegalizationStatus {
 
     bool is_legal(DrugType type) const {
         switch (type) {
-            case DrugType::cannabis:         return cannabis_legal;
-            case DrugType::methamphetamine:  return methamphetamine_legal;
-            case DrugType::synthetic_opioid: return synthetic_opioid_legal;
-            case DrugType::designer_drug:    return designer_drug_legal;
-            default: return false;
+            case DrugType::cannabis:
+                return cannabis_legal;
+            case DrugType::methamphetamine:
+                return methamphetamine_legal;
+            case DrugType::synthetic_opioid:
+                return synthetic_opioid_legal;
+            case DrugType::designer_drug:
+                return designer_drug_legal;
+            default:
+                return false;
         }
     }
 };
@@ -60,7 +65,7 @@ struct DrugProductionRecord {
     DrugType drug_type;
     DrugMarketTier market_tier;
     float output_quantity;
-    float output_quality;          // 0.0-1.0; degrades through distribution
+    float output_quality;  // 0.0-1.0; degrades through distribution
     float precursor_consumed;
     uint32_t province_id;
 };

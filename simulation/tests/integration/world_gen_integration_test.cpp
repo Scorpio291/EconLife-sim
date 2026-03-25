@@ -9,21 +9,20 @@
 // 4. Province diversity produces meaningful economic differentiation
 // 5. Edge cases: orphaned refs, extreme values, empty provinces
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "core/world_gen/world_generator.h"
-#include "core/world_gen/goods_catalog.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
-#include "core/tick/tick_orchestrator.h"
-#include "core/tick/thread_pool.h"
-#include "modules/register_base_game_modules.h"
-
-#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <set>
+
+#include "core/tick/thread_pool.h"
+#include "core/tick/tick_orchestrator.h"
+#include "core/world_gen/goods_catalog.h"
+#include "core/world_gen/world_generator.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/register_base_game_modules.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -40,7 +39,8 @@ static std::string find_goods_dir() {
         "../../../packages/base_game/goods",
     };
     for (const auto* c : candidates) {
-        if (fs::exists(c) && fs::is_directory(c)) return fs::canonical(c).string();
+        if (fs::exists(c) && fs::is_directory(c))
+            return fs::canonical(c).string();
     }
     return "";
 }
@@ -67,7 +67,7 @@ TEST_CASE("WorldGenerator world runs 365 ticks at V1 scale", "[integration][worl
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
-    config.npc_count = 500; // reduced for test speed, still meaningful
+    config.npc_count = 500;  // reduced for test speed, still meaningful
     config.goods_directory = find_goods_dir();
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
@@ -298,8 +298,7 @@ TEST_CASE("WorldGenerator: no orphaned business owner references",
 // Edge case: all market_ids in provinces point to valid markets
 // ===========================================================================
 
-TEST_CASE("WorldGenerator: no orphaned market references",
-          "[integration][world_gen][safety]") {
+TEST_CASE("WorldGenerator: no orphaned market references", "[integration][world_gen][safety]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -394,5 +393,5 @@ TEST_CASE("WorldGenerator provinces show economic differentiation after 30 ticks
     for (const auto& p : world.provinces) {
         stability_values.insert(std::round(p.conditions.stability_score * 100.0f));
     }
-    CHECK(stability_values.size() >= 2); // at least 2 distinct outcomes
+    CHECK(stability_values.size() >= 2);  // at least 2 distinct outcomes
 }

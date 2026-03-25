@@ -8,14 +8,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
-#include "modules/seasonal_agriculture/agriculture_types.h"
-#include "modules/production/production_types.h"
-
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
+#include "modules/production/production_types.h"
+#include "modules/seasonal_agriculture/agriculture_types.h"
+#include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -109,14 +108,12 @@ struct SupplySummary {
     int count = 0;
 };
 
-SupplySummary summarize_supply(const DeltaBuffer& delta,
-                                const std::string& good_id_str,
-                                uint32_t province_id) {
+SupplySummary summarize_supply(const DeltaBuffer& delta, const std::string& good_id_str,
+                               uint32_t province_id) {
     uint32_t good_id = SeasonalAgricultureModule::good_id_from_string(good_id_str);
     SupplySummary summary{};
     for (const auto& md : delta.market_deltas) {
-        if (md.good_id == good_id && md.region_id == province_id
-            && md.supply_delta.has_value()) {
+        if (md.good_id == good_id && md.region_id == province_id && md.supply_delta.has_value()) {
             summary.total_supply += md.supply_delta.value();
             summary.count++;
         }
@@ -152,8 +149,7 @@ TEST_CASE("seasonal_agriculture module reports correct interface properties",
 // Phase Transition: Fallow -> Planting
 // ===========================================================================
 
-TEST_CASE("fallow to planting transition at correct tick",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("fallow to planting transition at correct tick", "[seasonal_agriculture][tier2]") {
     // Growing season starts at tick 100 of year.
     // Planting starts at 100 - 7 = 93.
     constexpr uint32_t province_id = 0;
@@ -163,8 +159,8 @@ TEST_CASE("fallow to planting transition at correct tick",
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
-    module.register_facility(facility, CropCategory::annual_grain,
-                             growing_start, growing_length, base_growth);
+    module.register_facility(facility, CropCategory::annual_grain, growing_start, growing_length,
+                             base_growth);
 
     // Verify starts in fallow.
     REQUIRE(module.farm_states().at(1).current_phase == SeasonPhase::fallow);
@@ -192,15 +188,13 @@ TEST_CASE("fallow to planting transition at correct tick",
 // Phase Transition: Planting -> Growing (requires seed)
 // ===========================================================================
 
-TEST_CASE("planting to growing requires seed_planted flag",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("planting to growing requires seed_planted flag", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
     constexpr uint32_t growing_start = 100;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
-    module.register_facility(facility, CropCategory::annual_grain,
-                             growing_start, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, growing_start, 120, 1.0f);
 
     // Force into planting phase.
     auto& fs = module.farm_states()[1];
@@ -235,16 +229,14 @@ TEST_CASE("planting to growing requires seed_planted flag",
 // Growing Phase: Daily Growth Accumulation
 // ===========================================================================
 
-TEST_CASE("growing phase accumulates daily_growth correctly",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("growing phase accumulates daily_growth correctly", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
     constexpr float base_growth = 2.5f;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
     facility.soil_health = 0.9f;
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, base_growth);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, base_growth);
 
     // Force into growing phase, away from harvest transition tick.
     auto& fs = module.farm_states()[1];
@@ -266,8 +258,7 @@ TEST_CASE("growing phase accumulates daily_growth correctly",
     // daily_growth = base_growth_rate * drought_mod * flood_mod * soil_health
     //             = 2.5 * 0.8 * 0.9 * 0.9 = 1.62
     float expected_growth = base_growth * 0.8f * 0.9f * 0.9f;
-    REQUIRE_THAT(module.farm_states().at(1).pending_harvest,
-                 WithinAbs(expected_growth, 0.001f));
+    REQUIRE_THAT(module.farm_states().at(1).pending_harvest, WithinAbs(expected_growth, 0.001f));
 
     // No supply deltas during growing phase.
     REQUIRE(delta.market_deltas.empty());
@@ -283,8 +274,7 @@ TEST_CASE("harvest phase spreads supply over harvest_remaining_ticks",
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id, "wheat");
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, 1.0f);
 
     // Force into harvest phase with known pending_harvest.
     constexpr float total_harvest = 140.0f;
@@ -319,8 +309,7 @@ TEST_CASE("harvest completes after all ticks and transitions to fallow",
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id, "wheat");
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, 1.0f);
 
     // Force into harvest phase with 1 tick remaining.
     auto& fs = module.farm_states()[1];
@@ -353,15 +342,14 @@ TEST_CASE("harvest completes after all ticks and transitions to fallow",
 // Fallow Phase: Soil Recovery
 // ===========================================================================
 
-TEST_CASE("fallow phase recovers soil_health",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("fallow phase recovers soil_health", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
     facility.soil_health = 0.8f;
-    module.register_facility(facility, CropCategory::annual_grain,
-                             200, 120, 1.0f);  // growing starts late, so tick 0 is fallow
+    module.register_facility(facility, CropCategory::annual_grain, 200, 120,
+                             1.0f);  // growing starts late, so tick 0 is fallow
 
     // Force into fallow, ensure tick_of_year does not hit planting start.
     auto& fs = module.farm_states()[1];
@@ -386,15 +374,13 @@ TEST_CASE("fallow phase recovers soil_health",
     REQUIRE(delta.market_deltas.empty());
 }
 
-TEST_CASE("soil_health capped at 1.0 during fallow recovery",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("soil_health capped at 1.0 during fallow recovery", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
     facility.soil_health = 0.999f;
-    module.register_facility(facility, CropCategory::annual_grain,
-                             200, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 200, 120, 1.0f);
 
     auto& fs = module.farm_states()[1];
     fs.current_phase = SeasonPhase::fallow;
@@ -413,16 +399,14 @@ TEST_CASE("soil_health capped at 1.0 during fallow recovery",
 // Monoculture Penalty
 // ===========================================================================
 
-TEST_CASE("monoculture penalty applies after 3+ years same crop",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("monoculture penalty applies after 3+ years same crop", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
     constexpr float base_growth = 1.0f;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
     facility.soil_health = 0.9f;
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, base_growth);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, base_growth);
 
     auto& fs = module.farm_states()[1];
     fs.current_phase = SeasonPhase::growing;
@@ -445,20 +429,17 @@ TEST_CASE("monoculture penalty applies after 3+ years same crop",
     // Then soil_health reduced by 0.002 -> 0.898 (applied for next tick).
     // The pending_harvest for this tick uses the pre-reduction soil_health.
     float expected_growth = base_growth * 1.0f * 1.0f * 0.9f;
-    REQUIRE_THAT(module.farm_states().at(1).pending_harvest,
-                 WithinAbs(expected_growth, 0.001f));
+    REQUIRE_THAT(module.farm_states().at(1).pending_harvest, WithinAbs(expected_growth, 0.001f));
 }
 
-TEST_CASE("monoculture penalty does not apply below threshold",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("monoculture penalty does not apply below threshold", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
     constexpr float base_growth = 1.0f;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
     facility.soil_health = 0.9f;
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, base_growth);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, base_growth);
 
     auto& fs = module.farm_states()[1];
     fs.current_phase = SeasonPhase::growing;
@@ -478,19 +459,16 @@ TEST_CASE("monoculture penalty does not apply below threshold",
 
     // No monoculture penalty. daily_growth = 1.0 * 1.0 * 1.0 * 0.9 = 0.9
     float expected_growth = base_growth * 1.0f * 1.0f * 0.9f;
-    REQUIRE_THAT(module.farm_states().at(1).pending_harvest,
-                 WithinAbs(expected_growth, 0.001f));
+    REQUIRE_THAT(module.farm_states().at(1).pending_harvest, WithinAbs(expected_growth, 0.001f));
 }
 
-TEST_CASE("monoculture soil_health floor at 0.5",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("monoculture soil_health floor at 0.5", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
     facility.soil_health = 0.501f;
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, 1.0f);
 
     auto& fs = module.farm_states()[1];
     fs.current_phase = SeasonPhase::growing;
@@ -508,16 +486,14 @@ TEST_CASE("monoculture soil_health floor at 0.5",
     // soil_health = 0.501 - 0.002 = 0.499, but floored at 0.5.
     // The growth should use the pre-penalty soil_health (0.501) for this tick.
     float expected_growth = 1.0f * 1.0f * 1.0f * 0.501f;
-    REQUIRE_THAT(module.farm_states().at(1).pending_harvest,
-                 WithinAbs(expected_growth, 0.001f));
+    REQUIRE_THAT(module.farm_states().at(1).pending_harvest, WithinAbs(expected_growth, 0.001f));
 }
 
 // ===========================================================================
 // Continuous Output: Perennial Cosine Curve
 // ===========================================================================
 
-TEST_CASE("perennial seasonal multiplier follows cosine curve",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("perennial seasonal multiplier follows cosine curve", "[seasonal_agriculture][tier2]") {
     // At peak_tick, cos(0) = 1.0, multiplier = 0.85 + 0.25 * 1.0 = 1.1
     float at_peak = SeasonalAgricultureModule::compute_seasonal_multiplier(
         CropCategory::perennial_tree, 182, 182);
@@ -535,11 +511,10 @@ TEST_CASE("perennial seasonal multiplier follows cosine curve",
     REQUIRE_THAT(at_opposite, WithinAbs(0.60f, 0.01f));
 }
 
-TEST_CASE("livestock seasonal multiplier has minimal variation",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("livestock seasonal multiplier has minimal variation", "[seasonal_agriculture][tier2]") {
     // At peak: 0.85 + 0.10 * 1.0 = 0.95
-    float at_peak = SeasonalAgricultureModule::compute_seasonal_multiplier(
-        CropCategory::livestock, 100, 100);
+    float at_peak =
+        SeasonalAgricultureModule::compute_seasonal_multiplier(CropCategory::livestock, 100, 100);
     REQUIRE_THAT(at_peak, WithinAbs(0.95f, 0.001f));
 
     // At trough (half-year): 0.85 + 0.10 * (-1.0) ~ 0.75
@@ -549,11 +524,10 @@ TEST_CASE("livestock seasonal multiplier has minimal variation",
     REQUIRE_THAT(at_trough, WithinAbs(0.75f, 0.01f));
 }
 
-TEST_CASE("timber seasonal multiplier is constant 1.0",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("timber seasonal multiplier is constant 1.0", "[seasonal_agriculture][tier2]") {
     for (uint32_t tick = 0; tick < 365; tick += 73) {
-        float mult = SeasonalAgricultureModule::compute_seasonal_multiplier(
-            CropCategory::timber, tick, 182);
+        float mult =
+            SeasonalAgricultureModule::compute_seasonal_multiplier(CropCategory::timber, tick, 182);
         REQUIRE_THAT(mult, WithinAbs(1.0f, 0.001f));
     }
 }
@@ -570,7 +544,7 @@ TEST_CASE("continuous facility produces output with seasonal multiplier",
     // Run at peak tick for northern hemisphere.
     auto state = make_test_world_state(182);
     auto prov = make_test_province(province_id, 10.0f);  // northern hemisphere
-    prov.climate.climate_stress_current = 0.0f;  // no stress
+    prov.climate.climate_stress_current = 0.0f;          // no stress
     state.provinces.push_back(prov);
 
     DeltaBuffer delta{};
@@ -584,8 +558,7 @@ TEST_CASE("continuous facility produces output with seasonal multiplier",
     REQUIRE_THAT(supply.total_supply, WithinAbs(11.0f, 0.01f));
 }
 
-TEST_CASE("continuous facility output reduced by climate stress",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("continuous facility output reduced by climate stress", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
 
     SeasonalAgricultureModule module;
@@ -612,8 +585,7 @@ TEST_CASE("continuous facility output reduced by climate stress",
 // Southern Hemisphere Offset
 // ===========================================================================
 
-TEST_CASE("southern hemisphere offsets tick_of_year by 182",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("southern hemisphere offsets tick_of_year by 182", "[seasonal_agriculture][tier2]") {
     // Northern hemisphere: tick 0 -> tick_of_year 0
     uint32_t north = SeasonalAgricultureModule::effective_tick_of_year(0, 45.0f);
     REQUIRE(north == 0);
@@ -627,8 +599,7 @@ TEST_CASE("southern hemisphere offsets tick_of_year by 182",
     REQUIRE(wrapped == 17);
 }
 
-TEST_CASE("southern hemisphere farm transitions at offset tick",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("southern hemisphere farm transitions at offset tick", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
     // Growing season starts at tick_of_year 100 (in effective terms).
     // Planting starts at effective tick 93.
@@ -638,8 +609,7 @@ TEST_CASE("southern hemisphere farm transitions at offset tick",
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id);
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, 1.0f);
 
     auto prov = make_test_province(province_id, -30.0f);  // southern hemisphere
 
@@ -666,8 +636,7 @@ TEST_CASE("southern hemisphere farm transitions at offset tick",
 // is_annual_cycle Classification
 // ===========================================================================
 
-TEST_CASE("is_annual_cycle correctly classifies crop categories",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("is_annual_cycle correctly classifies crop categories", "[seasonal_agriculture][tier2]") {
     REQUIRE(SeasonalAgricultureModule::is_annual_cycle(CropCategory::annual_grain) == true);
     REQUIRE(SeasonalAgricultureModule::is_annual_cycle(CropCategory::annual_oilseed) == true);
     REQUIRE(SeasonalAgricultureModule::is_annual_cycle(CropCategory::annual_fiber) == true);
@@ -681,14 +650,12 @@ TEST_CASE("is_annual_cycle correctly classifies crop categories",
 // LOD Skip
 // ===========================================================================
 
-TEST_CASE("non-full LOD provinces are skipped",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("non-full LOD provinces are skipped", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id, "wheat");
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, 1.0f);
 
     // Force into harvest with pending output.
     auto& fs = module.farm_states()[1];
@@ -714,15 +681,13 @@ TEST_CASE("non-full LOD provinces are skipped",
 // Non-Operational Facility Skip
 // ===========================================================================
 
-TEST_CASE("non-operational facilities are skipped",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("non-operational facilities are skipped", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id, "wheat");
     facility.is_operational = false;
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, 1.0f);
 
     auto& fs = module.farm_states()[1];
     fs.current_phase = SeasonPhase::harvest;
@@ -742,8 +707,7 @@ TEST_CASE("non-operational facilities are skipped",
 // good_id_from_string Determinism
 // ===========================================================================
 
-TEST_CASE("good_id_from_string is deterministic",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("good_id_from_string is deterministic", "[seasonal_agriculture][tier2]") {
     auto id1 = SeasonalAgricultureModule::good_id_from_string("wheat");
     auto id2 = SeasonalAgricultureModule::good_id_from_string("wheat");
     REQUIRE(id1 == id2);
@@ -756,15 +720,13 @@ TEST_CASE("good_id_from_string is deterministic",
 // Full Harvest Cycle Integration
 // ===========================================================================
 
-TEST_CASE("full harvest cycle releases total pending_harvest",
-          "[seasonal_agriculture][tier2]") {
+TEST_CASE("full harvest cycle releases total pending_harvest", "[seasonal_agriculture][tier2]") {
     constexpr uint32_t province_id = 0;
     constexpr float total_harvest = 42.0f;
 
     SeasonalAgricultureModule module;
     auto facility = make_farm_facility(1, province_id, "corn");
-    module.register_facility(facility, CropCategory::annual_grain,
-                             100, 120, 1.0f);
+    module.register_facility(facility, CropCategory::annual_grain, 100, 120, 1.0f);
 
     auto& fs = module.farm_states()[1];
     fs.current_phase = SeasonPhase::harvest;

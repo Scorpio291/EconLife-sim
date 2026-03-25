@@ -4,16 +4,16 @@
 // determinism tests. Every field is initialized to a consistent, non-zero state
 // so that modules have meaningful data to process.
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
-#include "core/rng/deterministic_rng.h"
-#include "core/tick/tick_orchestrator.h"
-#include "core/tick/thread_pool.h"
-
 #include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
+
+#include "core/rng/deterministic_rng.h"
+#include "core/tick/thread_pool.h"
+#include "core/tick/tick_orchestrator.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 namespace test {
@@ -29,7 +29,7 @@ inline PlayerCharacter create_test_player(uint32_t home_province_id) {
     player.starting_province_id = home_province_id;
     player.home_province_id = home_province_id;
     player.current_province_id = home_province_id;
-    player.travel_status = static_cast<NPCTravelStatus>(0); // resident
+    player.travel_status = static_cast<NPCTravelStatus>(0);  // resident
     player.health.current_health = 1.0f;
     player.health.base_lifespan = 75.0f;
     player.health.lifespan_projection = 75.0f;
@@ -106,15 +106,15 @@ inline Province create_test_province(uint32_t id, uint32_t region_id, uint32_t n
     p.community = {0.6f, 0.2f, 0.6f, 0.5f, 0};
     p.political = {0, 0.5f, 365, 0.2f};
     p.conditions = {
-        0.7f,  // stability_score
-        0.3f,  // inequality_index
-        0.1f,  // crime_rate
-        0.05f, // addiction_rate
-        0.05f, // criminal_dominance_index
-        0.7f,  // formal_employment_rate
-        0.8f,  // regulatory_compliance_index
-        1.0f,  // drought_modifier (no drought)
-        1.0f   // flood_modifier (no flood)
+        0.7f,   // stability_score
+        0.3f,   // inequality_index
+        0.1f,   // crime_rate
+        0.05f,  // addiction_rate
+        0.05f,  // criminal_dominance_index
+        0.7f,   // formal_employment_rate
+        0.8f,   // regulatory_compliance_index
+        1.0f,   // drought_modifier (no drought)
+        1.0f    // flood_modifier (no flood)
     };
 
     p.has_karst = false;
@@ -137,7 +137,7 @@ inline NPC create_test_npc(uint32_t id, NPCRole role, uint32_t province_id) {
     npc.movement_follower_count = 0;
     npc.home_province_id = province_id;
     npc.current_province_id = province_id;
-    npc.travel_status = static_cast<NPCTravelStatus>(0); // resident
+    npc.travel_status = static_cast<NPCTravelStatus>(0);  // resident
     npc.status = NPCStatus::active;
 
     // Balanced motivation vector (sums to 1.0)
@@ -149,8 +149,8 @@ inline NPC create_test_npc(uint32_t id, NPCRole role, uint32_t province_id) {
 // ---------------------------------------------------------------------------
 // create_test_market — one regional market
 // ---------------------------------------------------------------------------
-inline RegionalMarket create_test_market(uint32_t good_id, uint32_t province_id,
-                                          float base_price, float supply, float demand) {
+inline RegionalMarket create_test_market(uint32_t good_id, uint32_t province_id, float base_price,
+                                         float supply, float demand) {
     RegionalMarket m{};
     m.good_id = good_id;
     m.province_id = province_id;
@@ -167,8 +167,8 @@ inline RegionalMarket create_test_market(uint32_t good_id, uint32_t province_id,
 // ---------------------------------------------------------------------------
 // create_test_business — one NPC business
 // ---------------------------------------------------------------------------
-inline NPCBusiness create_test_business(uint32_t id, uint32_t owner_id,
-                                         uint32_t province_id, BusinessSector sector) {
+inline NPCBusiness create_test_business(uint32_t id, uint32_t owner_id, uint32_t province_id,
+                                        BusinessSector sector) {
     NPCBusiness b{};
     b.id = id;
     b.sector = sector;
@@ -183,9 +183,8 @@ inline NPCBusiness create_test_business(uint32_t id, uint32_t owner_id,
     b.criminal_sector = (sector == BusinessSector::criminal);
     b.province_id = province_id;
     b.regulatory_violation_severity = 0.0f;
-    b.default_activity_scope = b.criminal_sector
-        ? VisibilityScope::concealed
-        : VisibilityScope::institutional;
+    b.default_activity_scope =
+        b.criminal_sector ? VisibilityScope::concealed : VisibilityScope::institutional;
     b.owner_id = owner_id;
     b.deferred_salary_liability = 0.0f;
     b.accounts_payable_float = 0.0f;
@@ -201,10 +200,8 @@ inline NPCBusiness create_test_business(uint32_t id, uint32_t owner_id,
 //   province_count — number of provinces (1-6)
 //   goods_count    — number of goods per province market (default 10)
 // ---------------------------------------------------------------------------
-inline WorldState create_test_world(uint64_t seed,
-                                     uint32_t npc_count = 100,
-                                     uint32_t province_count = 3,
-                                     uint32_t goods_count = 10) {
+inline WorldState create_test_world(uint64_t seed, uint32_t npc_count = 100,
+                                    uint32_t province_count = 3, uint32_t goods_count = 10) {
     WorldState world{};
     world.current_tick = 0;
     world.world_seed = seed;
@@ -224,7 +221,7 @@ inline WorldState create_test_world(uint64_t seed,
     nation.corporate_tax_rate = 0.20f;
     nation.income_tax_rate_top_bracket = 0.35f;
     nation.tariff_schedule = nullptr;
-    nation.lod1_profile = std::nullopt; // LOD 0 (player's home)
+    nation.lod1_profile = std::nullopt;  // LOD 0 (player's home)
 
     // --- Regions (1 region per province for simplicity) ---
     for (uint32_t r = 0; r < province_count; ++r) {
@@ -273,8 +270,7 @@ inline WorldState create_test_world(uint64_t seed,
             float base_price = 10.0f + static_cast<float>(g) * 5.0f;
             float supply = 100.0f + static_cast<float>(g % 3) * 50.0f;
             float demand = 80.0f + static_cast<float>(g % 4) * 30.0f;
-            world.regional_markets.push_back(
-                create_test_market(g, p, base_price, supply, demand));
+            world.regional_markets.push_back(create_test_market(g, p, base_price, supply, demand));
             world.provinces[p].market_ids.push_back(
                 static_cast<uint32_t>(world.regional_markets.size()) - 1);
         }
@@ -282,12 +278,11 @@ inline WorldState create_test_world(uint64_t seed,
 
     // --- NPCs (distributed round-robin across provinces) ---
     DeterministicRNG rng(seed);
-    static constexpr NPCRole npc_roles[] = {
-        NPCRole::worker, NPCRole::worker, NPCRole::worker,
-        NPCRole::corporate_executive, NPCRole::middle_manager,
-        NPCRole::banker, NPCRole::lawyer, NPCRole::journalist,
-        NPCRole::politician, NPCRole::community_leader
-    };
+    static constexpr NPCRole npc_roles[] = {NPCRole::worker,         NPCRole::worker,
+                                            NPCRole::worker,         NPCRole::corporate_executive,
+                                            NPCRole::middle_manager, NPCRole::banker,
+                                            NPCRole::lawyer,         NPCRole::journalist,
+                                            NPCRole::politician,     NPCRole::community_leader};
     static constexpr uint32_t role_count = sizeof(npc_roles) / sizeof(npc_roles[0]);
 
     for (uint32_t i = 0; i < npc_count; ++i) {
@@ -306,15 +301,13 @@ inline WorldState create_test_world(uint64_t seed,
     // --- Businesses (roughly 1 per 5 NPCs) ---
     uint32_t biz_count = std::max(1u, npc_count / 5);
     static constexpr BusinessSector biz_sectors[] = {
-        BusinessSector::manufacturing, BusinessSector::food_beverage,
-        BusinessSector::retail, BusinessSector::services,
-        BusinessSector::agriculture, BusinessSector::technology
-    };
+        BusinessSector::manufacturing, BusinessSector::food_beverage, BusinessSector::retail,
+        BusinessSector::services,      BusinessSector::agriculture,   BusinessSector::technology};
     static constexpr uint32_t sector_count = sizeof(biz_sectors) / sizeof(biz_sectors[0]);
 
     for (uint32_t i = 0; i < biz_count; ++i) {
         uint32_t prov_id = i % province_count;
-        uint32_t owner_id = 100 + (i * 5); // every 5th NPC owns a business
+        uint32_t owner_id = 100 + (i * 5);  // every 5th NPC owns a business
         BusinessSector sector = biz_sectors[i % sector_count];
         NPCBusiness biz = create_test_business(1000 + i, owner_id, prov_id, sector);
         biz.cash = 50000.0f + static_cast<float>(rng.next_uint(200000));
@@ -327,8 +320,8 @@ inline WorldState create_test_world(uint64_t seed,
 // ---------------------------------------------------------------------------
 // run_ticks — execute N ticks on a WorldState using a TickOrchestrator
 // ---------------------------------------------------------------------------
-inline void run_ticks(WorldState& world, TickOrchestrator& orchestrator,
-                      ThreadPool& pool, uint32_t tick_count) {
+inline void run_ticks(WorldState& world, TickOrchestrator& orchestrator, ThreadPool& pool,
+                      uint32_t tick_count) {
     for (uint32_t i = 0; i < tick_count; ++i) {
         orchestrator.execute_tick(world, pool);
     }
@@ -382,7 +375,8 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
     }
     std::sort(sorted_markets.begin(), sorted_markets.end(),
               [](const RegionalMarket* a, const RegionalMarket* b) {
-                  if (a->good_id != b->good_id) return a->good_id < b->good_id;
+                  if (a->good_id != b->good_id)
+                      return a->good_id < b->good_id;
                   return a->province_id < b->province_id;
               });
 

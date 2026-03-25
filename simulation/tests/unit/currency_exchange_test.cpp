@@ -1,8 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "modules/currency_exchange/currency_exchange_module.h"
-#include "core/world_state/world_state.h"
+
 #include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
+#include "modules/currency_exchange/currency_exchange_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -67,11 +68,12 @@ TEST_CASE("CurrencyExchange: round trip loss", "[currency_exchange][tier11]") {
     // Loss is approximately 2*1% = 2%
     REQUIRE(b_to_a > 100.0f);  // gained from rate difference
     // But the transaction costs apply
-    float no_cost_round = 100.0f * (2.0f/1.0f) * (1.0f/2.0f);  // 100
+    float no_cost_round = 100.0f * (2.0f / 1.0f) * (1.0f / 2.0f);  // 100
     REQUIRE(b_to_a > no_cost_round);  // 1% cost applies twice but rate is symmetric
 }
 
-TEST_CASE("CurrencyExchange: execute writes CurrencyDelta on weekly tick", "[currency_exchange][tier11]") {
+TEST_CASE("CurrencyExchange: execute writes CurrencyDelta on weekly tick",
+          "[currency_exchange][tier11]") {
     CurrencyExchangeModule module;
 
     WorldState state{};
@@ -162,7 +164,8 @@ TEST_CASE("CurrencyExchange: peg break emits pegged_update delta", "[currency_ex
     REQUIRE(*delta.currency_deltas[0].pegged_update == false);
 }
 
-TEST_CASE("CurrencyExchange: pegged currency with healthy reserves produces no delta", "[currency_exchange][tier11]") {
+TEST_CASE("CurrencyExchange: pegged currency with healthy reserves produces no delta",
+          "[currency_exchange][tier11]") {
     CurrencyExchangeModule module;
 
     WorldState state{};

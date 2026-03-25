@@ -3,12 +3,13 @@
 // docs/interfaces/production/INTERFACE.md for the canonical specification.
 
 #include "modules/production/production_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/rng/deterministic_rng.h"
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/rng/deterministic_rng.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -63,8 +64,7 @@ uint32_t ProductionModule::good_id_from_string(const std::string& good_id_str) {
 // ProductionModule — tick execution
 // ===========================================================================
 
-void ProductionModule::execute_province(uint32_t province_idx,
-                                        const WorldState& state,
+void ProductionModule::execute_province(uint32_t province_idx, const WorldState& state,
                                         DeltaBuffer& province_delta) {
     // Fork RNG with province_id for deterministic province-parallel work.
     DeterministicRNG rng = DeterministicRNG(state.world_seed).fork(province_idx);
@@ -80,9 +80,7 @@ void ProductionModule::execute_province(uint32_t province_idx,
 
     // Sort by business_id ascending for deterministic order.
     std::sort(province_businesses.begin(), province_businesses.end(),
-              [](const NPCBusiness* a, const NPCBusiness* b) {
-                  return a->id < b->id;
-              });
+              [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
 
     // Track supply consumed per good in this province to prevent over-consumption.
     // Maps good_id (string) -> remaining available supply.
@@ -127,12 +125,10 @@ void ProductionModule::execute(const WorldState& state, DeltaBuffer& delta) {
 // ProductionModule — per-business processing
 // ===========================================================================
 
-void ProductionModule::process_business(
-        const NPCBusiness& biz,
-        const WorldState& state,
-        DeltaBuffer& delta,
-        std::unordered_map<std::string, float>& available_supply,
-        DeterministicRNG& rng) {
+void ProductionModule::process_business(const NPCBusiness& biz, const WorldState& state,
+                                        DeltaBuffer& delta,
+                                        std::unordered_map<std::string, float>& available_supply,
+                                        DeterministicRNG& rng) {
     // Skip bankrupt businesses: cash <= 0 and no revenue.
     if (biz.cash <= 0.0f && biz.revenue_per_tick <= 0.0f) {
         return;
@@ -163,13 +159,10 @@ void ProductionModule::process_business(
 // ProductionModule — per-facility processing
 // ===========================================================================
 
-void ProductionModule::process_facility(
-        const NPCBusiness& biz,
-        const Facility& facility,
-        const WorldState& state,
-        DeltaBuffer& delta,
-        std::unordered_map<std::string, float>& available_supply,
-        DeterministicRNG& rng) {
+void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& facility,
+                                        const WorldState& state, DeltaBuffer& delta,
+                                        std::unordered_map<std::string, float>& available_supply,
+                                        DeterministicRNG& rng) {
     // Look up recipe.
     const Recipe* recipe = recipe_registry_.find(facility.recipe_id);
     if (!recipe) {
@@ -179,17 +172,15 @@ void ProductionModule::process_facility(
     }
 
     // Compute tech tier bonus.
-    int32_t tier_diff = static_cast<int32_t>(facility.tech_tier)
-                      - static_cast<int32_t>(recipe->min_tech_tier);
+    int32_t tier_diff =
+        static_cast<int32_t>(facility.tech_tier) - static_cast<int32_t>(recipe->min_tech_tier);
     int32_t effective_tier_diff = std::max(0, tier_diff);
 
-    float output_multiplier = 1.0f
-        + ProductionConstants::tech_tier_output_bonus_per_tier
-          * static_cast<float>(effective_tier_diff);
+    float output_multiplier = 1.0f + ProductionConstants::tech_tier_output_bonus_per_tier *
+                                         static_cast<float>(effective_tier_diff);
 
-    float cost_multiplier = 1.0f
-        - ProductionConstants::tech_tier_cost_reduction_per_tier
-          * static_cast<float>(effective_tier_diff);
+    float cost_multiplier = 1.0f - ProductionConstants::tech_tier_cost_reduction_per_tier *
+                                       static_cast<float>(effective_tier_diff);
 
     // Determine input availability — compute bottleneck ratio.
     // The bottleneck ratio is the minimum ratio of (available / required)
@@ -204,9 +195,7 @@ void ProductionModule::process_facility(
         sorted_inputs.push_back(&input);
     }
     std::sort(sorted_inputs.begin(), sorted_inputs.end(),
-              [](const RecipeInput* a, const RecipeInput* b) {
-                  return a->good_id < b->good_id;
-              });
+              [](const RecipeInput* a, const RecipeInput* b) { return a->good_id < b->good_id; });
 
     for (const RecipeInput* input : sorted_inputs) {
         float required = input->quantity_per_tick;
@@ -254,14 +243,12 @@ void ProductionModule::process_facility(
         sorted_outputs.push_back(&output);
     }
     std::sort(sorted_outputs.begin(), sorted_outputs.end(),
-              [](const RecipeOutput* a, const RecipeOutput* b) {
-                  return a->good_id < b->good_id;
-              });
+              [](const RecipeOutput* a, const RecipeOutput* b) { return a->good_id < b->good_id; });
 
     // Compute quality ceiling.
-    float quality_ceiling = ProductionConstants::tech_quality_ceiling_base
-        + ProductionConstants::tech_quality_ceiling_step
-          * static_cast<float>(effective_tier_diff);
+    float quality_ceiling =
+        ProductionConstants::tech_quality_ceiling_base +
+        ProductionConstants::tech_quality_ceiling_step * static_cast<float>(effective_tier_diff);
 
     // For technology-intensive recipes, cap by maturation level.
     // ActorTechnologyState stub does not yet have maturation_of();
@@ -288,9 +275,8 @@ void ProductionModule::process_facility(
     float total_revenue = 0.0f;
 
     for (const RecipeOutput* output : sorted_outputs) {
-        float actual_output = output->quantity_per_tick * output_multiplier
-                            * bottleneck_ratio * worker_multiplier
-                            * facility.output_rate_modifier;
+        float actual_output = output->quantity_per_tick * output_multiplier * bottleneck_ratio *
+                              worker_multiplier * facility.output_rate_modifier;
 
         // Clamp NaN or negative to 0.
         if (std::isnan(actual_output) || actual_output < 0.0f) {
@@ -333,10 +319,8 @@ void ProductionModule::process_facility(
 // ProductionModule — price lookup
 // ===========================================================================
 
-float ProductionModule::get_price_for_business(
-        const NPCBusiness& biz,
-        uint32_t good_id,
-        const WorldState& state) const {
+float ProductionModule::get_price_for_business(const NPCBusiness& biz, uint32_t good_id,
+                                               const WorldState& state) const {
     // Find the regional market for this good in this province.
     for (const auto& market : state.regional_markets) {
         if (market.good_id == good_id && market.province_id == biz.province_id) {

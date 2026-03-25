@@ -1,8 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "modules/designer_drug/designer_drug_module.h"
-#include "core/world_state/world_state.h"
+
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/designer_drug/designer_drug_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -25,7 +26,8 @@ TEST_CASE("DesignerDrug: market margin unscheduled is 2.5x", "[designer_drug][ti
 }
 
 TEST_CASE("DesignerDrug: market margin review_initiated still 2.5x", "[designer_drug][tier9]") {
-    float margin = DesignerDrugModule::compute_market_margin(SchedulingStage::review_initiated, false);
+    float margin =
+        DesignerDrugModule::compute_market_margin(SchedulingStage::review_initiated, false);
     REQUIRE_THAT(margin, WithinAbs(2.5f, 0.01f));
 }
 

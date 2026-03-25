@@ -7,12 +7,12 @@
 //
 // See docs/interfaces/npc_spending/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/npc_spending/npc_spending_types.h"
-
 #include <cstdint>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/npc_spending/npc_spending_types.h"
 
 namespace econlife {
 
@@ -27,7 +27,7 @@ struct NPC;
 // NpcSpendingModule — ITickModule implementation for consumer demand
 // ---------------------------------------------------------------------------
 class NpcSpendingModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "npc_spending"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -37,12 +37,9 @@ public:
         return {"npc_behavior", "price_engine"};
     }
 
-    std::vector<std::string_view> runs_before() const override {
-        return {};
-    }
+    std::vector<std::string_view> runs_before() const override { return {}; }
 
-    void execute_province(uint32_t province_idx,
-                          const WorldState& state,
+    void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
@@ -57,24 +54,21 @@ public:
     // Compute income factor: (capital / reference_income) ^ income_elasticity,
     // clamped to [0.0, max_income_factor].
     static float compute_income_factor(float capital, float reference_income,
-                                        float income_elasticity, float max_income_factor);
+                                       float income_elasticity, float max_income_factor);
 
     // Compute price factor: (base_price / max(spot_price, 0.01)) ^ |adjusted_elasticity|,
     // clamped to [min_price_factor, infinity).
     // adjusted_elasticity = price_elasticity * buyer_type_elasticity_modulator(buyer_type).
-    static float compute_price_factor(float base_price, float spot_price,
-                                       float price_elasticity, BuyerType buyer_type,
-                                       float min_price_factor);
+    static float compute_price_factor(float base_price, float spot_price, float price_elasticity,
+                                      BuyerType buyer_type, float min_price_factor);
 
     // Compute quality factor: 1.0 + quality_weight * (batch_quality - market_quality_avg).
     static float compute_quality_factor(float batch_quality, float market_quality_avg,
-                                         BuyerType buyer_type);
+                                        BuyerType buyer_type);
 
     // Compute full demand contribution for one NPC and one good.
-    static float compute_demand_contribution(float base_demand_units,
-                                              float income_factor,
-                                              float price_factor,
-                                              float quality_factor);
+    static float compute_demand_contribution(float base_demand_units, float income_factor,
+                                             float price_factor, float quality_factor);
 
     // BuyerType elasticity modulator: necessity=0.1, price_sensitive=1.5,
     // quality_seeker=0.6, brand_loyal=0.8.
@@ -96,7 +90,7 @@ public:
         static constexpr float default_quality_weight = 0.0f;
     };
 
-private:
+   private:
     std::vector<NPCBuyerProfile> buyer_profiles_;
 
     // Find buyer type for an NPC. Returns necessity_buyer if no profile found.

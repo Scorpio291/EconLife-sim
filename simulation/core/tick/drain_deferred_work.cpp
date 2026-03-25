@@ -7,13 +7,14 @@
 // Invalid subject_ids are silently skipped (log warning in production).
 
 #include "drain_deferred_work.h"
-#include "deferred_work.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/apply_deltas.h"
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/apply_deltas.h"
+#include "core/world_state/world_state.h"
+#include "deferred_work.h"
 
 namespace econlife {
 
@@ -21,14 +22,15 @@ namespace econlife {
 // Reschedule intervals (ticks)
 // ---------------------------------------------------------------------------
 static constexpr uint32_t RELATIONSHIP_DECAY_INTERVAL = 30;
-static constexpr uint32_t EVIDENCE_DECAY_INTERVAL     = 7;
+static constexpr uint32_t EVIDENCE_DECAY_INTERVAL = 7;
 
 // ---------------------------------------------------------------------------
 // Helper: find NPC by id
 // ---------------------------------------------------------------------------
 static NPC* find_npc(WorldState& world, uint32_t npc_id) {
     for (auto& n : world.significant_npcs) {
-        if (n.id == npc_id) return &n;
+        if (n.id == npc_id)
+            return &n;
     }
     return nullptr;
 }
@@ -43,7 +45,9 @@ static void handle_consequence(const DeferredWorkItem& item, WorldState& world,
     // ConsequenceEntry is not yet fully defined (placeholder in delta_buffer.h).
     // For now, this is a no-op handler that will be filled in Session 16
     // when the investigation → legal process pipeline is implemented.
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_transit_arrival(const DeferredWorkItem& item, WorldState& world,
@@ -51,14 +55,16 @@ static void handle_transit_arrival(const DeferredWorkItem& item, WorldState& wor
     // Transit shipment arriving at destination province.
     // Adds supply to the destination market.
     auto* payload = std::get_if<TransitPayload>(&item.payload);
-    if (!payload) return;
+    if (!payload)
+        return;
 
     // The actual supply amount would come from the shipment record.
     // For now, transit arrival is handled by the supply_chain module
     // which will look up the shipment by id when it gets its real implementation.
     // This handler schedules no delta — the supply_chain module will process
     // arrivals when it runs.
-    (void)world; (void)delta;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldState& world,
@@ -66,13 +72,15 @@ static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldSta
     // Batch decay for one NPC's relationships.
     // Trust and fear decay toward 0 over time.
     auto* payload = std::get_if<NPCRelationshipDecayPayload>(&item.payload);
-    if (!payload) return;
+    if (!payload)
+        return;
 
     NPC* npc = find_npc(world, payload->npc_id);
-    if (!npc) return;
+    if (!npc)
+        return;
 
     static constexpr float TRUST_DECAY_RATE = 0.02f;  // per batch (30 ticks)
-    static constexpr float FEAR_DECAY_RATE  = 0.03f;  // fear decays faster
+    static constexpr float FEAR_DECAY_RATE = 0.03f;   // fear decays faster
 
     for (auto& rel : npc->relationships) {
         // Trust decays toward 0
@@ -88,36 +96,32 @@ static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldSta
     }
 
     // Reschedule
-    world.deferred_work_queue.push({
-        world.current_tick + RELATIONSHIP_DECAY_INTERVAL,
-        WorkType::npc_relationship_decay,
-        payload->npc_id,
-        NPCRelationshipDecayPayload{payload->npc_id}
-    });
+    world.deferred_work_queue.push({world.current_tick + RELATIONSHIP_DECAY_INTERVAL,
+                                    WorkType::npc_relationship_decay, payload->npc_id,
+                                    NPCRelationshipDecayPayload{payload->npc_id}});
 }
 
 static void handle_evidence_decay(const DeferredWorkItem& item, WorldState& world,
                                   DeltaBuffer& delta) {
     // Decay actionability of one evidence token.
     auto* payload = std::get_if<EvidenceDecayPayload>(&item.payload);
-    if (!payload) return;
+    if (!payload)
+        return;
 
     for (auto& token : world.evidence_pool) {
         if (token.id == payload->evidence_token_id && token.is_active) {
-            token.actionability = std::max(0.0f,
-                token.actionability - token.decay_rate * static_cast<float>(EVIDENCE_DECAY_INTERVAL));
+            token.actionability =
+                std::max(0.0f, token.actionability -
+                                   token.decay_rate * static_cast<float>(EVIDENCE_DECAY_INTERVAL));
 
             // If actionability drops to near-zero, retire the token
             if (token.actionability < 0.01f) {
                 token.is_active = false;
             } else {
                 // Reschedule only if still active
-                world.deferred_work_queue.push({
-                    world.current_tick + EVIDENCE_DECAY_INTERVAL,
-                    WorkType::evidence_decay_batch,
-                    payload->evidence_token_id,
-                    EvidenceDecayPayload{payload->evidence_token_id}
-                });
+                world.deferred_work_queue.push(
+                    {world.current_tick + EVIDENCE_DECAY_INTERVAL, WorkType::evidence_decay_batch,
+                     payload->evidence_token_id, EvidenceDecayPayload{payload->evidence_token_id}});
             }
             break;
         }
@@ -128,7 +132,9 @@ static void handle_npc_business_decision(const DeferredWorkItem& item, WorldStat
                                          DeltaBuffer& delta) {
     // Quarterly business decision for one NPCBusiness.
     // Will be implemented in Session 4+ (Production gap-fill).
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_market_recompute(const DeferredWorkItem& item, WorldState& world,
@@ -136,28 +142,35 @@ static void handle_market_recompute(const DeferredWorkItem& item, WorldState& wo
     // Price recompute for one RegionalMarket.
     // Handled by the price_engine module — this is a trigger to force recompute
     // outside the normal tick cycle (e.g., after large supply shock).
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_investigator_meter_update(const DeferredWorkItem& item, WorldState& world,
                                              DeltaBuffer& delta) {
     // InvestigatorMeter recalc for one law enforcement NPC.
     // Will be implemented in Session 15+ (Criminal pipeline).
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_climate_downstream(const DeferredWorkItem& item, WorldState& world,
                                       DeltaBuffer& delta) {
     // Agricultural + community stress update from climate events.
     // Will be wired when seasonal_agriculture gets real implementation.
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_npc_travel_arrival(const DeferredWorkItem& item, WorldState& world,
                                       DeltaBuffer& delta) {
     // NPC physically arrives at destination province.
     NPC* npc = find_npc(world, item.subject_id);
-    if (!npc) return;
+    if (!npc)
+        return;
 
     // The destination is encoded in the subject's current travel state.
     // For now, mark them as arrived (resident at current_province_id).
@@ -168,35 +181,45 @@ static void handle_player_travel_arrival(const DeferredWorkItem& item, WorldStat
                                          DeltaBuffer& delta) {
     // Player arrives at destination province.
     // Will be wired when player travel is implemented.
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_community_stage_check(const DeferredWorkItem& item, WorldState& world,
                                          DeltaBuffer& delta) {
     // Community response stage threshold evaluation.
     // Will be implemented in Session 13 (Community Response).
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_maturation_advance(const DeferredWorkItem& item, WorldState& world,
                                       DeltaBuffer& delta) {
     // Advance one MaturationProject per active project.
     // Will be implemented when R&D/technology system is built.
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_commercialize(const DeferredWorkItem& item, WorldState& world,
                                  DeltaBuffer& delta) {
     // Player command: bring researched tech to market.
     // Will be implemented when R&D/technology system is built.
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 static void handle_interception_check(const DeferredWorkItem& item, WorldState& world,
                                       DeltaBuffer& delta) {
     // Per-tick criminal shipment exposure check.
     // Will be implemented in Session 15+ (Criminal pipeline).
-    (void)item; (void)world; (void)delta;
+    (void)item;
+    (void)world;
+    (void)delta;
 }
 
 // ---------------------------------------------------------------------------

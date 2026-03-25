@@ -1,19 +1,27 @@
 #include "addiction_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
+
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
 float AddictionModule::craving_increment(AddictionStage stage) {
     switch (stage) {
-        case AddictionStage::casual:    return CASUAL_CRAVING_INC;
-        case AddictionStage::regular:   return REGULAR_CRAVING_INC;
-        case AddictionStage::dependent: return DEPENDENT_CRAVING_INC;
-        case AddictionStage::active:    return ACTIVE_CRAVING_INC;
-        case AddictionStage::recovery:  return -CRAVING_DECAY_RATE_RECOVERY;
-        default: return 0.0f;
+        case AddictionStage::casual:
+            return CASUAL_CRAVING_INC;
+        case AddictionStage::regular:
+            return REGULAR_CRAVING_INC;
+        case AddictionStage::dependent:
+            return DEPENDENT_CRAVING_INC;
+        case AddictionStage::active:
+            return ACTIVE_CRAVING_INC;
+        case AddictionStage::recovery:
+            return -CRAVING_DECAY_RATE_RECOVERY;
+        default:
+            return 0.0f;
     }
 }
 
@@ -62,17 +70,23 @@ AddictionStage AddictionModule::compute_next_stage(const AddictionState& state) 
 }
 
 float AddictionModule::compute_withdrawal_damage(AddictionStage stage, uint32_t supply_gap_ticks) {
-    if (stage < AddictionStage::dependent) return 0.0f;
-    if (supply_gap_ticks == 0) return 0.0f;
+    if (stage < AddictionStage::dependent)
+        return 0.0f;
+    if (supply_gap_ticks == 0)
+        return 0.0f;
     return WITHDRAWAL_HEALTH_HIT;
 }
 
 float AddictionModule::compute_work_efficiency(AddictionStage stage) {
     switch (stage) {
-        case AddictionStage::dependent: return DEPENDENT_WORK_EFFICIENCY;
-        case AddictionStage::active:    return ACTIVE_WORK_EFFICIENCY;
-        case AddictionStage::terminal:  return TERMINAL_WORK_EFFICIENCY;
-        default: return 1.0f;
+        case AddictionStage::dependent:
+            return DEPENDENT_WORK_EFFICIENCY;
+        case AddictionStage::active:
+            return ACTIVE_WORK_EFFICIENCY;
+        case AddictionStage::terminal:
+            return TERMINAL_WORK_EFFICIENCY;
+        default:
+            return 1.0f;
     }
 }
 
@@ -92,14 +106,13 @@ float AddictionModule::compute_addiction_rate_delta(AddictionStage old_stage,
 }
 
 bool AddictionModule::is_recovery_complete(uint32_t clean_ticks, float relapse_probability) {
-    return clean_ticks >= FULL_RECOVERY_TICKS &&
-           relapse_probability < RECOVERY_SUCCESS_THRESHOLD;
+    return clean_ticks >= FULL_RECOVERY_TICKS && relapse_probability < RECOVERY_SUCCESS_THRESHOLD;
 }
 
-void AddictionModule::execute_province(uint32_t province_idx,
-                                        const WorldState& state,
-                                        DeltaBuffer& province_delta) {
-    if (province_idx >= state.provinces.size()) return;
+void AddictionModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                       DeltaBuffer& province_delta) {
+    if (province_idx >= state.provinces.size())
+        return;
 
     const auto& province = state.provinces[province_idx];
     float addiction_rate_delta = 0.0f;
@@ -112,27 +125,34 @@ void AddictionModule::execute_province(uint32_t province_idx,
         // Find NPC
         const NPC* npc = nullptr;
         for (const auto& n : state.significant_npcs) {
-            if (n.id == npc_id) { npc = &n; break; }
+            if (n.id == npc_id) {
+                npc = &n;
+                break;
+            }
         }
-        if (!npc) continue;
-        if (npc->status != NPCStatus::active) continue;
+        if (!npc)
+            continue;
+        if (npc->status != NPCStatus::active)
+            continue;
 
         // Check module-internal addiction state
         auto it = addiction_states_.find(npc_id);
-        if (it == addiction_states_.end()) continue;
-        if (it->second.stage == AddictionStage::none) continue;
+        if (it == addiction_states_.end())
+            continue;
+        if (it->second.stage == AddictionStage::none)
+            continue;
 
         AddictionState current = it->second;
         AddictionStage old_stage = current.stage;
 
         // Increment craving
-        current.craving = std::clamp(
-            current.craving + craving_increment(current.stage), 0.0f, 1.0f);
+        current.craving =
+            std::clamp(current.craving + craving_increment(current.stage), 0.0f, 1.0f);
 
         // Tolerance buildup for casual
         if (current.stage == AddictionStage::casual && current.consecutive_use_ticks > 0) {
-            current.tolerance = std::clamp(
-                current.tolerance + TOLERANCE_PER_USE_CASUAL, 0.0f, 1.0f);
+            current.tolerance =
+                std::clamp(current.tolerance + TOLERANCE_PER_USE_CASUAL, 0.0f, 1.0f);
         }
 
         // Stage transition
@@ -144,20 +164,31 @@ void AddictionModule::execute_province(uint32_t province_idx,
 
         // NPCDelta: deduct substance spending from NPC capital
         // Spending scales with addiction severity.
-        constexpr float SUBSTANCE_SPEND_CASUAL    = 5.0f;
-        constexpr float SUBSTANCE_SPEND_REGULAR   = 15.0f;
+        constexpr float SUBSTANCE_SPEND_CASUAL = 5.0f;
+        constexpr float SUBSTANCE_SPEND_REGULAR = 15.0f;
         constexpr float SUBSTANCE_SPEND_DEPENDENT = 30.0f;
-        constexpr float SUBSTANCE_SPEND_ACTIVE    = 50.0f;
-        constexpr float SUBSTANCE_SPEND_TERMINAL  = 20.0f;  // reduced capacity to obtain
+        constexpr float SUBSTANCE_SPEND_ACTIVE = 50.0f;
+        constexpr float SUBSTANCE_SPEND_TERMINAL = 20.0f;  // reduced capacity to obtain
 
         float spend = 0.0f;
         switch (new_stage) {
-            case AddictionStage::casual:    spend = SUBSTANCE_SPEND_CASUAL;    break;
-            case AddictionStage::regular:   spend = SUBSTANCE_SPEND_REGULAR;   break;
-            case AddictionStage::dependent: spend = SUBSTANCE_SPEND_DEPENDENT; break;
-            case AddictionStage::active:    spend = SUBSTANCE_SPEND_ACTIVE;    break;
-            case AddictionStage::terminal:  spend = SUBSTANCE_SPEND_TERMINAL;  break;
-            default: break;
+            case AddictionStage::casual:
+                spend = SUBSTANCE_SPEND_CASUAL;
+                break;
+            case AddictionStage::regular:
+                spend = SUBSTANCE_SPEND_REGULAR;
+                break;
+            case AddictionStage::dependent:
+                spend = SUBSTANCE_SPEND_DEPENDENT;
+                break;
+            case AddictionStage::active:
+                spend = SUBSTANCE_SPEND_ACTIVE;
+                break;
+            case AddictionStage::terminal:
+                spend = SUBSTANCE_SPEND_TERMINAL;
+                break;
+            default:
+                break;
         }
         if (spend > 0.0f) {
             NPCDelta npc_delta;

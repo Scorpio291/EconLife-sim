@@ -9,14 +9,14 @@
 //   - RNG single call: < 10ns; fork: < 50ns
 //   - Persistence serialize: < 2s; deserialize: < 5s
 
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cstdint>
 
 #include "../test_world_factory.h"
-#include "core/world_state/apply_deltas.h"
 #include "core/tick/drain_deferred_work.h"
+#include "core/world_state/apply_deltas.h"
 #include "modules/persistence/persistence_module.h"
 
 using namespace econlife;

@@ -14,11 +14,11 @@ enum class ConsequenceType : uint8_t;
 // Derived from TDD Section 8 inline comment on CalendarEntry.type:
 //   "meeting, event, operation, deadline, personal"
 enum class CalendarEntryType : uint8_t {
-    meeting   = 0,  // scheduled meeting with an NPC
-    event     = 1,  // public or private event
+    meeting = 0,    // scheduled meeting with an NPC
+    event = 1,      // public or private event
     operation = 2,  // player-initiated operation (criminal or business)
-    deadline  = 3,  // obligation or legal deadline; consequence on miss
-    personal  = 4   // personal / lifestyle calendar entry
+    deadline = 3,   // obligation or legal deadline; consequence on miss
+    personal = 4    // personal / lifestyle calendar entry
 };
 
 // ---------------------------------------------------------------------------
@@ -43,13 +43,13 @@ enum class CalendarEntryType : uint8_t {
 //        // missed deadlines are remembered; relationship effect is durable
 //        // across future interactions
 struct DeadlineConsequence {
-    float           relationship_penalty;        // applied immediately on miss to
-                                                 // npc.relationships[player].trust; 0.0 if none
-    bool            npc_initiative;              // if true, NPC acts unilaterally on deadline
-    ConsequenceType consequence_type;            // consequence that fires
-    float           consequence_severity;        // 0.0-1.0; input to consequence engine
-    uint32_t        consequence_delay_ticks;     // delay after deadline before consequence fires
-    std::string     default_outcome_description; // for UI / player information
+    float relationship_penalty;               // applied immediately on miss to
+                                              // npc.relationships[player].trust; 0.0 if none
+    bool npc_initiative;                      // if true, NPC acts unilaterally on deadline
+    ConsequenceType consequence_type;         // consequence that fires
+    float consequence_severity;               // 0.0-1.0; input to consequence engine
+    uint32_t consequence_delay_ticks;         // delay after deadline before consequence fires
+    std::string default_outcome_description;  // for UI / player information
 };
 
 // ---------------------------------------------------------------------------
@@ -60,15 +60,15 @@ struct DeadlineConsequence {
 // interaction is limited to that scene card's choices. Fast-forward is
 // suppressed during mandatory entries.
 struct CalendarEntry {
-    uint32_t              id;
-    uint32_t              start_tick;
-    uint32_t              duration_ticks;
-    CalendarEntryType     type;                  // meeting, event, operation, deadline, personal
-    uint32_t              npc_id;                // for meetings
-    bool                  player_committed;      // false = invited but not yet accepted
-    bool                  mandatory;             // legal summons, etc.
-    DeadlineConsequence   deadline_consequence;  // what happens if the player misses it
-    uint32_t              scene_card_id;         // which scene card to render on engagement
+    uint32_t id;
+    uint32_t start_tick;
+    uint32_t duration_ticks;
+    CalendarEntryType type;                    // meeting, event, operation, deadline, personal
+    uint32_t npc_id;                           // for meetings
+    bool player_committed;                     // false = invited but not yet accepted
+    bool mandatory;                            // legal summons, etc.
+    DeadlineConsequence deadline_consequence;  // what happens if the player misses it
+    uint32_t scene_card_id;                    // which scene card to render on engagement
 };
 
 }  // namespace econlife

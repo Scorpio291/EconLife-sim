@@ -13,10 +13,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
-#include "core/rng/deterministic_rng.h"
+#include "core/world_state/world_state.h"
 #include "modules/npc_business/npc_business_module.h"
 #include "modules/npc_business/npc_business_types.h"
 
@@ -61,9 +61,7 @@ PlayerCharacter make_test_player(uint32_t id) {
 
 // Create an NPCBusiness with sensible defaults.
 // Caller can override fields as needed.
-NPCBusiness make_test_business(uint32_t id,
-                                BusinessProfile profile,
-                                uint32_t province_id = 0) {
+NPCBusiness make_test_business(uint32_t id, BusinessProfile profile, uint32_t province_id = 0) {
     NPCBusiness biz{};
     biz.id = id;
     biz.sector = BusinessSector::manufacturing;
@@ -99,8 +97,7 @@ BoardComposition make_test_board(float independence_score) {
 // Test 1: Business skipped when not on quarterly decision tick
 // ===========================================================================
 
-TEST_CASE("test_business_skipped_when_not_on_decision_tick",
-          "[npc_business][tier4]") {
+TEST_CASE("test_business_skipped_when_not_on_decision_tick", "[npc_business][tier4]") {
     auto state = make_test_world_state();
     state.current_tick = 50;  // before decision tick
 
@@ -128,8 +125,7 @@ TEST_CASE("test_business_skipped_when_not_on_decision_tick",
 // Test 2: Business executes decision when on quarterly tick
 // ===========================================================================
 
-TEST_CASE("test_business_executes_decision_on_quarterly_tick",
-          "[npc_business][tier4]") {
+TEST_CASE("test_business_executes_decision_on_quarterly_tick", "[npc_business][tier4]") {
     auto state = make_test_world_state();
     state.current_tick = 100;
 
@@ -148,9 +144,8 @@ TEST_CASE("test_business_executes_decision_on_quarterly_tick",
     module.execute_province(0, state, delta);
 
     // Should have produced some deltas (fast_expander with cash = expansion).
-    bool has_deltas = !delta.npc_deltas.empty()
-                      || !delta.market_deltas.empty()
-                      || !delta.evidence_deltas.empty();
+    bool has_deltas =
+        !delta.npc_deltas.empty() || !delta.market_deltas.empty() || !delta.evidence_deltas.empty();
     REQUIRE(has_deltas);
 }
 
@@ -158,8 +153,7 @@ TEST_CASE("test_business_executes_decision_on_quarterly_tick",
 // Test 3: Player-owned business is skipped entirely
 // ===========================================================================
 
-TEST_CASE("test_player_owned_business_skipped",
-          "[npc_business][tier4]") {
+TEST_CASE("test_player_owned_business_skipped", "[npc_business][tier4]") {
     auto state = make_test_world_state();
     state.current_tick = 100;
 
@@ -191,8 +185,7 @@ TEST_CASE("test_player_owned_business_skipped",
 // Test 4: cost_cutter reduces workforce when margin is low
 // ===========================================================================
 
-TEST_CASE("test_cost_cutter_reduces_workforce_when_cash_critical",
-          "[npc_business][tier4]") {
+TEST_CASE("test_cost_cutter_reduces_workforce_when_cash_critical", "[npc_business][tier4]") {
     // cost_cutter with cash < cash_critical_months * monthly_costs should
     // contract and emit negative hiring_target_change.
     auto biz = make_test_business(1, BusinessProfile::cost_cutter);
@@ -214,15 +207,14 @@ TEST_CASE("test_cost_cutter_reduces_workforce_when_cash_critical",
 // Test 5: fast_expander invests in expansion when cash available
 // ===========================================================================
 
-TEST_CASE("test_fast_expander_invests_when_cash_available",
-          "[npc_business][tier4]") {
+TEST_CASE("test_fast_expander_invests_when_cash_available", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::fast_expander);
     biz.cost_per_tick = 50.0f;
     biz.revenue_per_tick = 100.0f;
     // Monthly costs = 50 * 30 = 1500
     // Cash comfortable = 3.0 months = 4500
     // Working capital floor = 50 * 30 * 5.0 = 7500
-    biz.cash = 50000.0f;  // well above comfortable threshold
+    biz.cash = 50000.0f;       // well above comfortable threshold
     biz.market_share = 0.35f;  // high market share for market entry
 
     DeterministicRNG rng(42);
@@ -241,8 +233,7 @@ TEST_CASE("test_fast_expander_invests_when_cash_available",
 // Test 6: defensive_incumbent increases stability (no expansion)
 // ===========================================================================
 
-TEST_CASE("test_defensive_incumbent_maintains_stability",
-          "[npc_business][tier4]") {
+TEST_CASE("test_defensive_incumbent_maintains_stability", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::defensive_incumbent);
     biz.cost_per_tick = 50.0f;
     biz.revenue_per_tick = 100.0f;
@@ -265,8 +256,7 @@ TEST_CASE("test_defensive_incumbent_maintains_stability",
 // Test 7: Investment capped at cash minus working capital floor
 // ===========================================================================
 
-TEST_CASE("test_investment_capped_at_available_cash",
-          "[npc_business][tier4]") {
+TEST_CASE("test_investment_capped_at_available_cash", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::fast_expander);
     biz.cost_per_tick = 100.0f;
     biz.revenue_per_tick = 150.0f;
@@ -285,8 +275,7 @@ TEST_CASE("test_investment_capped_at_available_cash",
     REQUIRE(result.cash_spent >= 0.0f);
 }
 
-TEST_CASE("test_no_investment_when_cash_below_floor",
-          "[npc_business][tier4]") {
+TEST_CASE("test_no_investment_when_cash_below_floor", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::fast_expander);
     biz.cost_per_tick = 100.0f;
     biz.revenue_per_tick = 150.0f;
@@ -310,8 +299,7 @@ TEST_CASE("test_no_investment_when_cash_below_floor",
 // Test 8: Board independence affects decision approval
 // ===========================================================================
 
-TEST_CASE("test_captured_board_approves_everything",
-          "[npc_business][tier4]") {
+TEST_CASE("test_captured_board_approves_everything", "[npc_business][tier4]") {
     // Board with independence_score < 0.25 rubber-stamps everything.
     auto board = make_test_board(0.10f);
 
@@ -320,28 +308,24 @@ TEST_CASE("test_captured_board_approves_everything",
     decision.enter_new_market = true;
 
     DeterministicRNG rng(42);
-    bool approved = NpcBusinessModule::check_board_approval(
-        &board, decision, rng);
+    bool approved = NpcBusinessModule::check_board_approval(&board, decision, rng);
 
     REQUIRE(approved == true);
 }
 
-TEST_CASE("test_no_board_approves_everything",
-          "[npc_business][tier4]") {
+TEST_CASE("test_no_board_approves_everything", "[npc_business][tier4]") {
     // No board (nullptr) = micro/small business, auto-approved.
     BusinessDecisionResult decision{};
     decision.expand = true;
     decision.enter_new_market = true;
 
     DeterministicRNG rng(42);
-    bool approved = NpcBusinessModule::check_board_approval(
-        nullptr, decision, rng);
+    bool approved = NpcBusinessModule::check_board_approval(nullptr, decision, rng);
 
     REQUIRE(approved == true);
 }
 
-TEST_CASE("test_independent_board_may_block_risky_decisions",
-          "[npc_business][tier4]") {
+TEST_CASE("test_independent_board_may_block_risky_decisions", "[npc_business][tier4]") {
     // Board with high independence (0.90) should sometimes block risky moves.
     // Run multiple trials to verify blocking occurs probabilistically.
     auto board = make_test_board(0.90f);
@@ -354,8 +338,7 @@ TEST_CASE("test_independent_board_may_block_risky_decisions",
     constexpr int trials = 100;
     for (int i = 0; i < trials; ++i) {
         DeterministicRNG rng(static_cast<uint64_t>(i * 7919));
-        bool approved = NpcBusinessModule::check_board_approval(
-            &board, decision, rng);
+        bool approved = NpcBusinessModule::check_board_approval(&board, decision, rng);
         if (!approved) {
             ++blocked_count;
         }
@@ -364,12 +347,11 @@ TEST_CASE("test_independent_board_may_block_risky_decisions",
     // With independence = 0.90, block_prob = (0.90 - 0.25) * 0.5 = 0.325
     // Expected: ~32.5% blocked out of 100 trials.
     // Allow wide margin for randomness.
-    REQUIRE(blocked_count > 5);    // should block at least some
-    REQUIRE(blocked_count < 80);   // should not block everything
+    REQUIRE(blocked_count > 5);   // should block at least some
+    REQUIRE(blocked_count < 80);  // should not block everything
 }
 
-TEST_CASE("test_independent_board_does_not_block_non_risky_decisions",
-          "[npc_business][tier4]") {
+TEST_CASE("test_independent_board_does_not_block_non_risky_decisions", "[npc_business][tier4]") {
     // Even a fully independent board should not block non-risky decisions
     // (contraction, no expansion, no market entry).
     auto board = make_test_board(1.0f);
@@ -380,8 +362,7 @@ TEST_CASE("test_independent_board_does_not_block_non_risky_decisions",
     decision.contract = true;
 
     DeterministicRNG rng(42);
-    bool approved = NpcBusinessModule::check_board_approval(
-        &board, decision, rng);
+    bool approved = NpcBusinessModule::check_board_approval(&board, decision, rng);
 
     REQUIRE(approved == true);
 }
@@ -390,8 +371,7 @@ TEST_CASE("test_independent_board_does_not_block_non_risky_decisions",
 // Test 9: dispatch_day_offset correctly staggers decisions
 // ===========================================================================
 
-TEST_CASE("test_dispatch_day_offset_staggers_decisions",
-          "[npc_business][tier4]") {
+TEST_CASE("test_dispatch_day_offset_staggers_decisions", "[npc_business][tier4]") {
     auto state = make_test_world_state();
 
     Province prov{};
@@ -458,8 +438,7 @@ TEST_CASE("test_module_interface_properties", "[npc_business][tier4]") {
 // Static utility function tests
 // ===========================================================================
 
-TEST_CASE("test_compute_working_capital_floor",
-          "[npc_business][tier4]") {
+TEST_CASE("test_compute_working_capital_floor", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::cost_cutter);
     biz.cost_per_tick = 100.0f;
 
@@ -468,8 +447,7 @@ TEST_CASE("test_compute_working_capital_floor",
     REQUIRE_THAT(floor, WithinAbs(15000.0f, 0.01f));
 }
 
-TEST_CASE("test_compute_available_cash",
-          "[npc_business][tier4]") {
+TEST_CASE("test_compute_available_cash", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::cost_cutter);
     biz.cost_per_tick = 100.0f;
     biz.cash = 20000.0f;
@@ -479,8 +457,7 @@ TEST_CASE("test_compute_available_cash",
     REQUIRE_THAT(available, WithinAbs(5000.0f, 0.01f));
 }
 
-TEST_CASE("test_compute_available_cash_below_floor",
-          "[npc_business][tier4]") {
+TEST_CASE("test_compute_available_cash_below_floor", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::cost_cutter);
     biz.cost_per_tick = 100.0f;
     biz.cash = 5000.0f;
@@ -490,8 +467,7 @@ TEST_CASE("test_compute_available_cash_below_floor",
     REQUIRE_THAT(available, WithinAbs(0.0f, 0.01f));
 }
 
-TEST_CASE("test_compute_monthly_operating_costs",
-          "[npc_business][tier4]") {
+TEST_CASE("test_compute_monthly_operating_costs", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::cost_cutter);
     biz.cost_per_tick = 100.0f;
 
@@ -500,8 +476,7 @@ TEST_CASE("test_compute_monthly_operating_costs",
     REQUIRE_THAT(monthly, WithinAbs(3000.0f, 0.01f));
 }
 
-TEST_CASE("test_compute_profit_margin",
-          "[npc_business][tier4]") {
+TEST_CASE("test_compute_profit_margin", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::cost_cutter);
     biz.revenue_per_tick = 100.0f;
     biz.cost_per_tick = 80.0f;
@@ -511,8 +486,7 @@ TEST_CASE("test_compute_profit_margin",
     REQUIRE_THAT(margin, WithinAbs(0.20f, 0.001f));
 }
 
-TEST_CASE("test_compute_profit_margin_zero_revenue",
-          "[npc_business][tier4]") {
+TEST_CASE("test_compute_profit_margin_zero_revenue", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::cost_cutter);
     biz.revenue_per_tick = 0.0f;
     biz.cost_per_tick = 80.0f;
@@ -560,8 +534,7 @@ TEST_CASE("test_is_player_owned", "[npc_business][tier4]") {
 // Quality player profile test
 // ===========================================================================
 
-TEST_CASE("test_quality_player_invests_in_rd",
-          "[npc_business][tier4]") {
+TEST_CASE("test_quality_player_invests_in_rd", "[npc_business][tier4]") {
     auto biz = make_test_business(1, BusinessProfile::quality_player);
     biz.cost_per_tick = 50.0f;
     biz.revenue_per_tick = 100.0f;
@@ -581,8 +554,7 @@ TEST_CASE("test_quality_player_invests_in_rd",
 // Board composition management
 // ===========================================================================
 
-TEST_CASE("test_board_composition_storage",
-          "[npc_business][tier4]") {
+TEST_CASE("test_board_composition_storage", "[npc_business][tier4]") {
     NpcBusinessModule module;
 
     // Initially no board.
@@ -605,8 +577,7 @@ TEST_CASE("test_board_composition_storage",
 // Integration: execute with full province setup
 // ===========================================================================
 
-TEST_CASE("test_execute_processes_all_provinces",
-          "[npc_business][tier4]") {
+TEST_CASE("test_execute_processes_all_provinces", "[npc_business][tier4]") {
     auto state = make_test_world_state();
     state.current_tick = 100;
 
@@ -635,8 +606,7 @@ TEST_CASE("test_execute_processes_all_provinces",
     module.execute(state, delta);
 
     // Should have deltas from both provinces.
-    bool has_deltas = !delta.npc_deltas.empty()
-                      || !delta.market_deltas.empty();
+    bool has_deltas = !delta.npc_deltas.empty() || !delta.market_deltas.empty();
     REQUIRE(has_deltas);
 }
 
@@ -645,18 +615,12 @@ TEST_CASE("test_execute_processes_all_provinces",
 // ===========================================================================
 
 TEST_CASE("test_npc_business_constants", "[npc_business][tier4]") {
-    REQUIRE_THAT(NpcBusinessConstants::cash_critical_months,
-                 WithinAbs(2.0f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::cash_comfortable_months,
-                 WithinAbs(3.0f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::cash_surplus_months,
-                 WithinAbs(5.0f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::exit_market_threshold,
-                 WithinAbs(0.05f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::exit_probability,
-                 WithinAbs(0.30f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::expansion_return_threshold,
-                 WithinAbs(0.15f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConstants::cash_critical_months, WithinAbs(2.0f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConstants::cash_comfortable_months, WithinAbs(3.0f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConstants::cash_surplus_months, WithinAbs(5.0f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConstants::exit_market_threshold, WithinAbs(0.05f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConstants::exit_probability, WithinAbs(0.30f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConstants::expansion_return_threshold, WithinAbs(0.15f, 0.001f));
     REQUIRE(NpcBusinessConstants::ticks_per_quarter == 90);
     REQUIRE(NpcBusinessConstants::dispatch_period == 30);
 }

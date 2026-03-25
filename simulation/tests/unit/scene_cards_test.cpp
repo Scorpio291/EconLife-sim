@@ -37,8 +37,7 @@ static PlayerCharacter make_player(uint32_t id, uint32_t province_id) {
     return player;
 }
 
-static NPC make_npc(uint32_t id, uint32_t province_id,
-                    float risk_tolerance = 0.5f,
+static NPC make_npc(uint32_t id, uint32_t province_id, float risk_tolerance = 0.5f,
                     NPCStatus status = NPCStatus::active) {
     NPC npc{};
     npc.id = id;
@@ -66,8 +65,7 @@ static void add_relationship(NPC& npc, uint32_t target_id, float trust) {
     npc.relationships.push_back(rel);
 }
 
-static CalendarEntry make_calendar_entry(uint32_t id, uint32_t start_tick,
-                                         uint32_t scene_card_id,
+static CalendarEntry make_calendar_entry(uint32_t id, uint32_t start_tick, uint32_t scene_card_id,
                                          uint32_t npc_id = 0,
                                          CalendarEntryType type = CalendarEntryType::meeting) {
     CalendarEntry entry{};
@@ -82,8 +80,7 @@ static CalendarEntry make_calendar_entry(uint32_t id, uint32_t start_tick,
     return entry;
 }
 
-static SceneCard make_scene_card(uint32_t id, uint32_t npc_id,
-                                 SceneSetting setting,
+static SceneCard make_scene_card(uint32_t id, uint32_t npc_id, SceneSetting setting,
                                  bool is_authored = false,
                                  SceneCardType type = SceneCardType::meeting) {
     SceneCard card{};

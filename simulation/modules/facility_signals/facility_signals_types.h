@@ -17,13 +17,13 @@ namespace econlife {
 struct FacilitySignals {
     uint32_t facility_id;
     uint32_t business_id;
-    float power_consumption_anomaly;    // 0.0-1.0
-    float chemical_waste_signature;     // 0.0-1.0
-    float foot_traffic_visibility;      // 0.0-1.0
-    float olfactory_signature;          // 0.0-1.0
-    float scrutiny_mitigation;          // 0.0-1.0; from opsec investment or corruption
-    float base_signal_composite;        // computed: weighted sum of four dimensions
-    float net_signal;                   // computed: max(0, composite - mitigation)
+    float power_consumption_anomaly;  // 0.0-1.0
+    float chemical_waste_signature;   // 0.0-1.0
+    float foot_traffic_visibility;    // 0.0-1.0
+    float olfactory_signature;        // 0.0-1.0
+    float scrutiny_mitigation;        // 0.0-1.0; from opsec investment or corruption
+    float base_signal_composite;      // computed: weighted sum of four dimensions
+    float net_signal;                 // computed: max(0, composite - mitigation)
 };
 
 // ---------------------------------------------------------------------------
@@ -41,19 +41,19 @@ struct FacilityTypeSignalWeights {
 // InvestigatorMeterStatus — law enforcement meter status
 // ---------------------------------------------------------------------------
 enum class InvestigatorMeterStatus : uint8_t {
-    inactive        = 0,
-    surveillance    = 1,  // meter >= 0.30
-    formal_inquiry  = 2,  // meter >= 0.60
-    raid_imminent   = 3,  // meter >= 0.80
+    inactive = 0,
+    surveillance = 1,    // meter >= 0.30
+    formal_inquiry = 2,  // meter >= 0.60
+    raid_imminent = 3,   // meter >= 0.80
 };
 
 // ---------------------------------------------------------------------------
 // RegulatorMeterStatus — regulator scrutiny meter status
 // ---------------------------------------------------------------------------
 enum class RegulatorMeterStatus : uint8_t {
-    inactive           = 0,
-    notice_filed       = 1,  // meter >= 0.25
-    formal_audit       = 2,  // meter >= 0.50
+    inactive = 0,
+    notice_filed = 1,        // meter >= 0.25
+    formal_audit = 2,        // meter >= 0.50
     enforcement_action = 3,  // meter >= 0.75
 };
 
@@ -61,10 +61,10 @@ enum class RegulatorMeterStatus : uint8_t {
 // InvestigatorMeter — per-LE-NPC investigation meter
 // ---------------------------------------------------------------------------
 struct InvestigatorMeter {
-    float current_level;    // 0.0-1.0
-    float fill_rate;        // per-tick increment
+    float current_level;  // 0.0-1.0
+    float fill_rate;      // per-tick increment
     InvestigatorMeterStatus status;
-    uint32_t opened_tick;   // when investigation formally opened
+    uint32_t opened_tick;  // when investigation formally opened
 };
 
 // ---------------------------------------------------------------------------

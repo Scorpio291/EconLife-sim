@@ -13,10 +13,11 @@ namespace econlife {
 // Set at world load from world.json; updated at runtime by facility investment.
 
 struct HealthcareProfile {
-    float access_level;          // 0.0-1.0; 0 = no formal healthcare; 1 = universal coverage
-    float quality_level;         // 0.0-1.0; affects NPC health recovery rate and treatment success
-    float cost_per_treatment;    // game currency per NPC treatment event
-    float capacity_utilisation;  // 0.0-1.0; above overload_threshold (default 0.85), quality degrades
+    float access_level;        // 0.0-1.0; 0 = no formal healthcare; 1 = universal coverage
+    float quality_level;       // 0.0-1.0; affects NPC health recovery rate and treatment success
+    float cost_per_treatment;  // game currency per NPC treatment event
+    float
+        capacity_utilisation;  // 0.0-1.0; above overload_threshold (default 0.85), quality degrades
 
     // Invariants:
     //   access_level in [0.0, 1.0]

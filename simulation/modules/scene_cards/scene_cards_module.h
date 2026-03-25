@@ -4,7 +4,7 @@
 // See docs/interfaces/scene_cards/INTERFACE.md for canonical spec.
 
 #include "core/tick/tick_module.h"
-#include "scene_card_types.h"           // SceneSetting, SceneCard (complete types)
+#include "scene_card_types.h"  // SceneSetting, SceneCard (complete types)
 
 namespace econlife {
 
@@ -26,7 +26,7 @@ float compute_presentation_state(float trust, float risk_tolerance);
 bool is_in_person_setting(SceneSetting setting);
 
 class SceneCardsModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override;
     std::string_view package_id() const noexcept override;
     ModuleScope scope() const noexcept override;
@@ -35,24 +35,17 @@ public:
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
-private:
-    void resolve_player_choices(const WorldState& state,
-                                DeltaBuffer& delta) const;
+   private:
+    void resolve_player_choices(const WorldState& state, DeltaBuffer& delta) const;
 
-    void discard_dead_npc_cards(const WorldState& state,
-                                DeltaBuffer& delta) const;
+    void discard_dead_npc_cards(const WorldState& state, DeltaBuffer& delta) const;
 
-    void trigger_calendar_cards(const WorldState& state,
-                                DeltaBuffer& delta,
-                                uint32_t player_id,
+    void trigger_calendar_cards(const WorldState& state, DeltaBuffer& delta, uint32_t player_id,
                                 uint32_t player_province) const;
 
-    void apply_authored_priority(const WorldState& state,
-                                 DeltaBuffer& delta) const;
+    void apply_authored_priority(const WorldState& state, DeltaBuffer& delta) const;
 
-    void finalize_new_cards(const WorldState& state,
-                            DeltaBuffer& delta,
-                            uint32_t player_id,
+    void finalize_new_cards(const WorldState& state, DeltaBuffer& delta, uint32_t player_id,
                             uint32_t player_province) const;
 };
 

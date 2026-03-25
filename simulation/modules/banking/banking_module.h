@@ -5,12 +5,12 @@
 //
 // See docs/interfaces/banking/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/banking/banking_types.h"
-
 #include <cstdint>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/banking/banking_types.h"
 
 namespace econlife {
 
@@ -22,20 +22,16 @@ struct DeltaBuffer;
 // BankingModule — ITickModule implementation for loan and credit processing
 // ---------------------------------------------------------------------------
 class BankingModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "banking"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
     bool is_province_parallel() const noexcept override { return false; }
 
-    std::vector<std::string_view> runs_after() const override {
-        return {"financial_distribution"};
-    }
+    std::vector<std::string_view> runs_after() const override { return {"financial_distribution"}; }
 
     // End of Pass 1 chain — nothing runs after banking.
-    std::vector<std::string_view> runs_before() const override {
-        return {};
-    }
+    std::vector<std::string_view> runs_before() const override { return {}; }
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
@@ -69,14 +65,13 @@ public:
     // Evaluate a loan application: returns true if approved.
     // Deny if credit_score < min_credit_score_for_purpose(purpose)
     // Deny if dti_ratio > denial_dti_threshold (0.40)
-    static bool evaluate_loan_application(float credit_score, float dti_ratio,
-                                           LoanPurpose purpose);
+    static bool evaluate_loan_application(float credit_score, float dti_ratio, LoanPurpose purpose);
 
     // Compute fixed repayment per tick for an amortizing loan.
     // Simple amortization: (principal * (1 + interest_rate * duration_ticks)) / duration_ticks
     // Returns a positive per-tick payment amount.
     static float compute_repayment_per_tick(float principal, float interest_rate,
-                                             uint32_t duration_ticks);
+                                            uint32_t duration_ticks);
 
     // Return the minimum credit score required for a given loan purpose.
     static float min_credit_score_for_purpose(LoanPurpose purpose);
@@ -94,7 +89,7 @@ public:
         static constexpr float criminal_conviction_penalty = 0.20f;
     };
 
-private:
+   private:
     std::vector<LoanRecord> active_loans_;
     std::vector<BorrowerCredit> borrower_credits_;
     uint32_t next_loan_id_ = 1;
@@ -106,8 +101,7 @@ private:
     void process_loan_origination(const WorldState& state, DeltaBuffer& delta);
 
     // Process a single loan repayment for one tick.
-    void process_loan_repayment(LoanRecord& loan, const WorldState& state,
-                                 DeltaBuffer& delta);
+    void process_loan_repayment(LoanRecord& loan, const WorldState& state, DeltaBuffer& delta);
 
     // Handle a loan that has entered default status.
     void process_loan_default(LoanRecord& loan, DeltaBuffer& delta);

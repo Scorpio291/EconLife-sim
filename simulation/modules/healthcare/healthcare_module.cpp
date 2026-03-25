@@ -10,13 +10,14 @@
 //   Step 5: Sick leave fraction and effective labour supply computation
 
 #include "modules/healthcare/healthcare_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"  // PlayerCharacter complete type
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"  // PlayerCharacter complete type
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -24,9 +25,8 @@ namespace econlife {
 // HealthcareModule — tick execution
 // ===========================================================================
 
-void HealthcareModule::execute_province(uint32_t province_idx,
-                                         const WorldState& state,
-                                         DeltaBuffer& province_delta) {
+void HealthcareModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                        DeltaBuffer& province_delta) {
     // Find province health state for this province.
     ProvinceHealthState* phs = find_province_health(province_idx);
     if (!phs) {
@@ -47,18 +47,20 @@ void HealthcareModule::execute_province(uint32_t province_idx,
                 break;
             }
         }
-        if (!npc) continue;
-        if (npc->current_province_id != province_idx) continue;
-        if (npc->status != NPCStatus::active) continue;
+        if (!npc)
+            continue;
+        if (npc->current_province_id != province_idx)
+            continue;
+        if (npc->status != NPCStatus::active)
+            continue;
 
         province_npcs.push_back(&record);
     }
 
     // Sort by npc_id ascending (canonical order per CLAUDE.md).
-    std::sort(province_npcs.begin(), province_npcs.end(),
-              [](const NpcHealthRecord* a, const NpcHealthRecord* b) {
-                  return a->npc_id < b->npc_id;
-              });
+    std::sort(
+        province_npcs.begin(), province_npcs.end(),
+        [](const NpcHealthRecord* a, const NpcHealthRecord* b) { return a->npc_id < b->npc_id; });
 
     // Counters for sick leave computation.
     uint32_t sick_count = 0;
@@ -83,28 +85,24 @@ void HealthcareModule::execute_province(uint32_t province_idx,
                 break;
             }
         }
-        if (!npc) continue;
+        if (!npc)
+            continue;
 
         // ---------------------------------------------------------------
         // Step 1: Passive Health Recovery
         // ---------------------------------------------------------------
-        float recovery = compute_passive_recovery(
-            profile.access_level,
-            profile.quality_level,
-            Constants::base_recovery_rate);
+        float recovery = compute_passive_recovery(profile.access_level, profile.quality_level,
+                                                  Constants::base_recovery_rate);
 
         hr->health += recovery;
 
         // ---------------------------------------------------------------
         // Step 2: Treatment for critically ill NPCs
         // ---------------------------------------------------------------
-        if (hr->health < Constants::critical_health_threshold
-            && profile.access_level > 0.0f
-            && npc->capital >= profile.cost_per_treatment) {
-
-            float boost = compute_treatment_boost(
-                profile.quality_level,
-                Constants::treatment_health_boost);
+        if (hr->health < Constants::critical_health_threshold && profile.access_level > 0.0f &&
+            npc->capital >= profile.cost_per_treatment) {
+            float boost =
+                compute_treatment_boost(profile.quality_level, Constants::treatment_health_boost);
 
             hr->health += boost;
 
@@ -172,9 +170,7 @@ void HealthcareModule::execute_province(uint32_t province_idx,
     // Step 4: Overload Quality Degradation
     // ---------------------------------------------------------------
     profile.quality_level = compute_overload_quality(
-        profile.quality_level,
-        profile.capacity_utilisation,
-        Constants::overload_threshold,
+        profile.quality_level, profile.capacity_utilisation, Constants::overload_threshold,
         Constants::overload_quality_penalty);
 
     // Clamp quality to [0.0, 1.0].
@@ -190,9 +186,7 @@ void HealthcareModule::execute_province(uint32_t province_idx,
     // ---------------------------------------------------------------
     phs->sick_leave_fraction = compute_sick_leave_fraction(sick_count, labour_force);
     phs->effective_labour_supply = compute_effective_labour_supply(
-        labour_force,
-        phs->sick_leave_fraction,
-        Constants::labour_supply_impact);
+        labour_force, phs->sick_leave_fraction, Constants::labour_supply_impact);
 
     // ---------------------------------------------------------------
     // Step 6: Health Crisis — RegionDelta
@@ -220,29 +214,25 @@ void HealthcareModule::execute(const WorldState& state, DeltaBuffer& delta) {
 // Static Utility Functions
 // ===========================================================================
 
-float HealthcareModule::compute_passive_recovery(float access_level,
-                                                  float quality_level,
-                                                  float base_recovery_rate) {
+float HealthcareModule::compute_passive_recovery(float access_level, float quality_level,
+                                                 float base_recovery_rate) {
     return access_level * quality_level * base_recovery_rate;
 }
 
-float HealthcareModule::compute_treatment_boost(float quality_level,
-                                                 float treatment_health_boost) {
+float HealthcareModule::compute_treatment_boost(float quality_level, float treatment_health_boost) {
     return treatment_health_boost * quality_level;
 }
 
-float HealthcareModule::compute_overload_quality(float quality_level,
-                                                  float capacity_utilisation,
-                                                  float overload_threshold,
-                                                  float overload_quality_penalty) {
+float HealthcareModule::compute_overload_quality(float quality_level, float capacity_utilisation,
+                                                 float overload_threshold,
+                                                 float overload_quality_penalty) {
     if (capacity_utilisation > overload_threshold) {
         return quality_level * overload_quality_penalty;
     }
     return quality_level;
 }
 
-float HealthcareModule::compute_sick_leave_fraction(uint32_t sick_count,
-                                                     uint32_t labour_force) {
+float HealthcareModule::compute_sick_leave_fraction(uint32_t sick_count, uint32_t labour_force) {
     if (labour_force == 0) {
         return 0.0f;
     }
@@ -250,10 +240,9 @@ float HealthcareModule::compute_sick_leave_fraction(uint32_t sick_count,
 }
 
 float HealthcareModule::compute_effective_labour_supply(uint32_t labour_force,
-                                                         float sick_leave_fraction,
-                                                         float labour_supply_impact) {
-    return static_cast<float>(labour_force)
-         * (1.0f - sick_leave_fraction * labour_supply_impact);
+                                                        float sick_leave_fraction,
+                                                        float labour_supply_impact) {
+    return static_cast<float>(labour_force) * (1.0f - sick_leave_fraction * labour_supply_impact);
 }
 
 // ===========================================================================
@@ -269,8 +258,7 @@ HealthcareModule::NpcHealthRecord* HealthcareModule::find_npc_health(uint32_t np
     return nullptr;
 }
 
-const HealthcareModule::NpcHealthRecord* HealthcareModule::find_npc_health(
-        uint32_t npc_id) const {
+const HealthcareModule::NpcHealthRecord* HealthcareModule::find_npc_health(uint32_t npc_id) const {
     for (const auto& rec : npc_health_records_) {
         if (rec.npc_id == npc_id) {
             return &rec;
@@ -280,7 +268,7 @@ const HealthcareModule::NpcHealthRecord* HealthcareModule::find_npc_health(
 }
 
 HealthcareModule::ProvinceHealthState* HealthcareModule::find_province_health(
-        uint32_t province_id) {
+    uint32_t province_id) {
     for (auto& phs : province_health_states_) {
         if (phs.province_id == province_id) {
             return &phs;
@@ -290,7 +278,7 @@ HealthcareModule::ProvinceHealthState* HealthcareModule::find_province_health(
 }
 
 const HealthcareModule::ProvinceHealthState* HealthcareModule::find_province_health(
-        uint32_t province_id) const {
+    uint32_t province_id) const {
     for (const auto& phs : province_health_states_) {
         if (phs.province_id == province_id) {
             return &phs;

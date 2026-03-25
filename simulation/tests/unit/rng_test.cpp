@@ -99,7 +99,8 @@ TEST_CASE("distribution_uniformity", "[rng][tier0]") {
         REQUIRE(v >= 0.0);
         REQUIRE(v < 1.0);
         auto bucket = static_cast<int>(v * buckets);
-        if (bucket >= buckets) bucket = buckets - 1;  // guard for v very close to 1.0
+        if (bucket >= buckets)
+            bucket = buckets - 1;  // guard for v very close to 1.0
         counts[static_cast<size_t>(bucket)]++;
     }
 
@@ -133,8 +134,10 @@ TEST_CASE("int_range_bounds", "[rng][tier0]") {
         int32_t v = rng.next_int(lo, hi);
         REQUIRE(v >= lo);
         REQUIRE(v <= hi);
-        if (v == lo) saw_lo = true;
-        if (v == hi) saw_hi = true;
+        if (v == lo)
+            saw_lo = true;
+        if (v == hi)
+            saw_hi = true;
     }
 
     // With 10,000 draws over 6 values, we should hit the extremes.

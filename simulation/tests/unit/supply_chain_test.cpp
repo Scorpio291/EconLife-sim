@@ -6,15 +6,14 @@
 // criminal interception probability.
 
 #include <array>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <string>
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/supply_chain/supply_chain_module.h"
 #include "modules/supply_chain/supply_chain_types.h"
 #include "modules/trade_infrastructure/trade_types.h"
@@ -98,9 +97,8 @@ NPCBusiness make_test_business(uint32_t id, uint32_t province_id, float cash = 1
 }
 
 // Add a regional market entry for a good in a province.
-void add_market(WorldState& state, const std::string& good_id_str,
-                uint32_t province_id, float supply, float demand = 0.0f,
-                float spot_price = 10.0f) {
+void add_market(WorldState& state, const std::string& good_id_str, uint32_t province_id,
+                float supply, float demand = 0.0f, float spot_price = 10.0f) {
     RegionalMarket market{};
     market.good_id = SupplyChainModule::good_id_from_string(good_id_str);
     market.province_id = province_id;
@@ -115,8 +113,8 @@ void add_market(WorldState& state, const std::string& good_id_str,
 }
 
 // Create a RouteProfile between two provinces.
-RouteProfile make_route(float distance_km, float roughness = 0.2f,
-                         float min_infra = 0.3f, uint8_t hops = 1) {
+RouteProfile make_route(float distance_km, float roughness = 0.2f, float min_infra = 0.3f,
+                        uint8_t hops = 1) {
     RouteProfile route{};
     route.distance_km = distance_km;
     route.route_terrain_roughness = roughness;
@@ -129,8 +127,8 @@ RouteProfile make_route(float distance_km, float roughness = 0.2f,
 }
 
 // Add a route between two provinces (road mode at index 0).
-void add_route(WorldState& state, uint32_t from, uint32_t to,
-               float distance_km, float roughness = 0.2f) {
+void add_route(WorldState& state, uint32_t from, uint32_t to, float distance_km,
+               float roughness = 0.2f) {
     auto key = std::make_pair(from, to);
     std::array<RouteProfile, 5> routes{};
     routes[0] = make_route(distance_km, roughness);
@@ -145,9 +143,8 @@ struct MarketDeltaSummary {
     int demand_count = 0;
 };
 
-MarketDeltaSummary summarize_market_deltas(const DeltaBuffer& delta,
-                                            const std::string& good_id_str,
-                                            uint32_t province_id) {
+MarketDeltaSummary summarize_market_deltas(const DeltaBuffer& delta, const std::string& good_id_str,
+                                           uint32_t province_id) {
     uint32_t good_id = SupplyChainModule::good_id_from_string(good_id_str);
     MarketDeltaSummary summary{};
     for (const auto& md : delta.market_deltas) {
@@ -262,8 +259,8 @@ TEST_CASE("test_transit_time_from_route_profile", "[supply_chain][tier2]") {
     RouteProfile route = make_route(600.0f);  // 600 km
     float infra = 0.5f;
 
-    uint32_t ticks = SupplyChainModule::compute_transit_ticks(
-        route, SupplyChainConfig::road_speed, infra);
+    uint32_t ticks =
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, infra);
 
     // Expected: ceil(600 / (300 * (1 + 0.5 * 0.5))) = ceil(600 / 375) = ceil(1.6) = 2
     REQUIRE(ticks == 2);
@@ -274,8 +271,8 @@ TEST_CASE("test_transit_time_minimum_one_tick", "[supply_chain][tier2]") {
     RouteProfile route = make_route(10.0f);  // 10 km
     float infra = 1.0f;
 
-    uint32_t ticks = SupplyChainModule::compute_transit_ticks(
-        route, SupplyChainConfig::road_speed, infra);
+    uint32_t ticks =
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, infra);
 
     // Expected: ceil(10 / (300 * 1.5)) = ceil(0.022) = 1
     REQUIRE(ticks == 1);
@@ -287,10 +284,10 @@ TEST_CASE("test_transit_time_high_infrastructure", "[supply_chain][tier2]") {
     float low_infra = 0.0f;
     float high_infra = 1.0f;
 
-    uint32_t ticks_low = SupplyChainModule::compute_transit_ticks(
-        route, SupplyChainConfig::road_speed, low_infra);
-    uint32_t ticks_high = SupplyChainModule::compute_transit_ticks(
-        route, SupplyChainConfig::road_speed, high_infra);
+    uint32_t ticks_low =
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, low_infra);
+    uint32_t ticks_high =
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, high_infra);
 
     // Low infra: ceil(900 / (300 * 1.0)) = 3
     REQUIRE(ticks_low == 3);
@@ -379,8 +376,8 @@ TEST_CASE("test_perishable_decay_formula", "[supply_chain][tier2]") {
     float decay_rate = SupplyChainConfig::default_perishable_decay_rate;
     uint32_t transit_ticks = 5;
 
-    float quantity_remaining = quantity_dispatched
-        * std::pow(1.0f - decay_rate, static_cast<float>(transit_ticks));
+    float quantity_remaining =
+        quantity_dispatched * std::pow(1.0f - decay_rate, static_cast<float>(transit_ticks));
 
     // Expected: 100 * (1 - 0.02)^5 = 100 * 0.98^5 = 100 * 0.9039... ~= 90.39
     REQUIRE_THAT(quantity_remaining, WithinAbs(90.39f, 0.1f));
@@ -552,8 +549,8 @@ TEST_CASE("test_multiple_goods_local_matching", "[supply_chain][tier2]") {
 
 TEST_CASE("test_transport_cost_terrain_impact", "[supply_chain][tier2]") {
     // Rougher terrain should increase transport cost.
-    RouteProfile smooth = make_route(500.0f, 0.0f);   // no roughness
-    RouteProfile rough = make_route(500.0f, 1.0f);     // max roughness
+    RouteProfile smooth = make_route(500.0f, 0.0f);  // no roughness
+    RouteProfile rough = make_route(500.0f, 1.0f);   // max roughness
     float quantity = 100.0f;
 
     float cost_smooth = SupplyChainModule::compute_transport_cost(smooth, quantity);

@@ -6,14 +6,14 @@
 #include <string>
 #include <vector>
 
+// Complete type definitions needed for value members
+#include "npc.h"           // Relationship (used in std::vector)
+#include "shared_types.h"  // InfluenceNetworkHealth (used as value member)
+
 namespace econlife {
 
-// Complete type definitions needed for value members
-#include "npc.h"             // Relationship (used in std::vector)
-#include "shared_types.h"    // InfluenceNetworkHealth (used as value member)
-
 // Forward declaration with underlying type — sufficient for value member
-enum class NPCTravelStatus : uint8_t; // defined in trade_infrastructure/trade_types.h (§18)
+enum class NPCTravelStatus : uint8_t;  // defined in trade_infrastructure/trade_types.h (§18)
 
 // ============================================================================
 // Trait — persistent character attributes (from EconLife_Trait_System.md §2)
@@ -28,43 +28,43 @@ enum class NPCTravelStatus : uint8_t; // defined in trade_infrastructure/trade_t
 
 enum class Trait : uint8_t {
     // Cognitive
-    Analytical          = 0,
-    Creative            = 1,
-    Scholarly            = 2,
-    Intuitive           = 3,
+    Analytical = 0,
+    Creative = 1,
+    Scholarly = 2,
+    Intuitive = 3,
 
     // Social
-    Charismatic         = 4,
-    Empathetic          = 5,
-    Connected           = 6,
-    Manipulative        = 7,
+    Charismatic = 4,
+    Empathetic = 5,
+    Connected = 6,
+    Manipulative = 7,
 
     // Volitional
-    Disciplined         = 8,
-    Ambitious           = 9,
-    Patient             = 10,
-    Impulsive           = 11,
-    Resilient           = 12,
-    Independent         = 13,
+    Disciplined = 8,
+    Ambitious = 9,
+    Patient = 10,
+    Impulsive = 11,
+    Resilient = 12,
+    Independent = 13,
 
     // Risk / Moral
-    Cautious            = 14,
-    Ruthless            = 15,
-    RiskTolerant        = 16,
-    Paranoid            = 17,
+    Cautious = 14,
+    Ruthless = 15,
+    RiskTolerant = 16,
+    Paranoid = 17,
 
     // Adaptive
-    Adaptable           = 18,
-    Stoic               = 19,
-    Chameleon           = 20,
+    Adaptable = 18,
+    Stoic = 19,
+    Chameleon = 20,
 
     // Physical / Domain
-    PhysicallyRobust    = 21,
-    StreetSmart         = 22,
-    PoliticallyAstute   = 23,
+    PhysicallyRobust = 21,
+    StreetSmart = 22,
+    PoliticallyAstute = 23,
 
     // Character
-    Principled          = 24,
+    Principled = 24,
 };
 
 static constexpr uint8_t TRAIT_COUNT = 25;
@@ -74,21 +74,21 @@ static constexpr uint8_t TRAIT_COUNT = 25;
 // ============================================================================
 
 enum class SkillDomain : uint8_t {
-    Business               = 0,
-    Finance                = 1,
-    Engineering            = 2,
-    Politics               = 3,
-    Management             = 4,
-    Trade                  = 5,
-    Intelligence           = 6,
-    Persuasion             = 7,
-    CriminalOperations     = 8,
-    UndercoverInfiltration = 9,   // [EX] — see Feature Tier List
-    SpecialtyCulinary      = 10,
-    SpecialtyChemistry     = 11,
-    SpecialtyCoding        = 12,
-    SpecialtyAgriculture   = 13,
-    SpecialtyConstruction  = 14,
+    Business = 0,
+    Finance = 1,
+    Engineering = 2,
+    Politics = 3,
+    Management = 4,
+    Trade = 5,
+    Intelligence = 6,
+    Persuasion = 7,
+    CriminalOperations = 8,
+    UndercoverInfiltration = 9,  // [EX] — see Feature Tier List
+    SpecialtyCulinary = 10,
+    SpecialtyChemistry = 11,
+    SpecialtyCoding = 12,
+    SpecialtyAgriculture = 13,
+    SpecialtyConstruction = 14,
 };
 
 // ============================================================================
@@ -96,10 +96,10 @@ enum class SkillDomain : uint8_t {
 // ============================================================================
 
 enum class Background : uint8_t {
-    BornPoor      = 0,
-    WorkingClass  = 1,
-    MiddleClass   = 2,
-    Wealthy       = 3,
+    BornPoor = 0,
+    WorkingClass = 1,
+    MiddleClass = 2,
+    Wealthy = 3,
 };
 
 // ============================================================================
@@ -112,16 +112,16 @@ enum class Background : uint8_t {
 // proportional to the difficulty of the engagement.
 // ============================================================================
 
-static constexpr uint32_t SKILL_DECAY_GRACE_PERIOD = 30; // ticks (~1 in-game month)
-static constexpr float    SKILL_DOMAIN_FLOOR       = 0.05f;
+static constexpr uint32_t SKILL_DECAY_GRACE_PERIOD = 30;  // ticks (~1 in-game month)
+static constexpr float SKILL_DOMAIN_FLOOR = 0.05f;
 
 struct PlayerSkill {
     SkillDomain domain;
-    float       level;                // 0.0–1.0; leveled through use
-                                      //   Invariant: level >= SKILL_DOMAIN_FLOOR (0.05)
-    float       decay_rate;           // per-tick reduction when domain not exercised
-                                      //   default: 0.0002 per tick (~7% per in-game year of neglect)
-    uint32_t    last_exercise_tick;   // used to compute accumulated decay between exercises
+    float level;                  // 0.0–1.0; leveled through use
+                                  //   Invariant: level >= SKILL_DOMAIN_FLOOR (0.05)
+    float decay_rate;             // per-tick reduction when domain not exercised
+                                  //   default: 0.0002 per tick (~7% per in-game year of neglect)
+    uint32_t last_exercise_tick;  // used to compute accumulated decay between exercises
 };
 
 // ============================================================================
@@ -129,11 +129,11 @@ struct PlayerSkill {
 // ============================================================================
 
 struct ReputationState {
-    float public_business;            // -1.0 to 1.0
-    float public_political;           // -1.0 to 1.0
-    float public_social;              // -1.0 to 1.0
-    float street;                     // -1.0 to 1.0; see criminal entry conditions (GDD §12.1)
-                                      //   0.0 at character creation; built through criminal network activity
+    float public_business;   // -1.0 to 1.0
+    float public_political;  // -1.0 to 1.0
+    float public_social;     // -1.0 to 1.0
+    float street;            // -1.0 to 1.0; see criminal entry conditions (GDD §12.1)
+                             //   0.0 at character creation; built through criminal network activity
 };
 
 // ============================================================================
@@ -145,11 +145,12 @@ struct ReputationState {
 // ============================================================================
 
 struct HealthState {
-    float current_health;             // 0.0–1.0; 0.0 = death
-    float lifespan_projection;        // projected in-game years remaining; recalculated each tick
-    float base_lifespan;              // set at character creation; 70.0–80.0 in-game years + trait modifier
-    float exhaustion_accumulator;     // 0.0–1.0; above 0.7: performance penalty on high-stakes engagements
-    float degradation_rate;           // composite: base age rate + violence damage + substance use modifier
+    float current_health;       // 0.0–1.0; 0.0 = death
+    float lifespan_projection;  // projected in-game years remaining; recalculated each tick
+    float base_lifespan;  // set at character creation; 70.0–80.0 in-game years + trait modifier
+    float exhaustion_accumulator;  // 0.0–1.0; above 0.7: performance penalty on high-stakes
+                                   // engagements
+    float degradation_rate;  // composite: base age rate + violence damage + substance use modifier
 };
 
 // ============================================================================
@@ -168,9 +169,9 @@ struct HealthState {
 static constexpr float EVIDENCE_SHARE_TRUST_THRESHOLD = 0.45f;
 
 struct EvidenceAwarenessEntry {
-    uint32_t token_id;                // references EvidenceToken in WorldState.evidence_pool
+    uint32_t token_id;  // references EvidenceToken in WorldState.evidence_pool
     uint32_t discovery_tick;
-    uint32_t source_npc_id;           // 0 = discovered directly
+    uint32_t source_npc_id;  // 0 = discovered directly
 };
 
 // ============================================================================
@@ -212,8 +213,9 @@ enum class MilestoneType : uint8_t {
 
 struct MilestoneRecord {
     MilestoneType type;
-    uint32_t      achieved_tick;
-    std::string   context_summary;    // generated at achievement; e.g., "Valdoria Iron Works, Year 2003"
+    uint32_t achieved_tick;
+    std::string
+        context_summary;  // generated at achievement; e.g., "Valdoria Iron Works, Year 2003"
 };
 
 // ============================================================================
@@ -221,11 +223,11 @@ struct MilestoneRecord {
 // ============================================================================
 
 enum class ModifierSource : uint8_t {
-    disruption    = 0,  // timeline restoration disruption penalty
-    health_event  = 1,  // injury, illness, hospitalization
-    imprisonment  = 2,  // incarcerated; severe capacity reduction
-    exhaustion    = 3,  // burnout / overwork
-    travel        = 4,  // in-transit movement penalty
+    disruption = 0,    // timeline restoration disruption penalty
+    health_event = 1,  // injury, illness, hospitalization
+    imprisonment = 2,  // incarcerated; severe capacity reduction
+    exhaustion = 3,    // burnout / overwork
+    travel = 4,        // in-transit movement penalty
 };
 
 // ============================================================================
@@ -233,9 +235,9 @@ enum class ModifierSource : uint8_t {
 // ============================================================================
 
 struct TimeBoundedModifier {
-    float          delta;             // e.g., -1 calendar slot/day; negative
-    uint32_t       expires_tick;
-    ModifierSource source;            // disruption, health_event, imprisonment, etc.
+    float delta;  // e.g., -1 calendar slot/day; negative
+    uint32_t expires_tick;
+    ModifierSource source;  // disruption, health_event, imprisonment, etc.
 };
 
 // ============================================================================
@@ -243,11 +245,11 @@ struct TimeBoundedModifier {
 // ============================================================================
 
 struct TimelineRestorationRecord {
-    uint32_t restoration_index;       // 1-based
-    uint32_t restored_to_tick;        // snapshot tick that was loaded
-    uint32_t restoration_real_tick;   // tick the player was at when they restored
-    uint32_t ticks_erased;            // restoration_real_tick - restored_to_tick
-    uint8_t  tier_applied;            // 1, 2, or 3
+    uint32_t restoration_index;      // 1-based
+    uint32_t restored_to_tick;       // snapshot tick that was loaded
+    uint32_t restoration_real_tick;  // tick the player was at when they restored
+    uint32_t ticks_erased;           // restoration_real_tick - restored_to_tick
+    uint8_t tier_applied;            // 1, 2, or 3
 };
 
 // ============================================================================
@@ -255,7 +257,7 @@ struct TimelineRestorationRecord {
 // ============================================================================
 
 struct RestorationHistory {
-    uint32_t restoration_count;                         // 0 in ironman mode; increments on each restoration
+    uint32_t restoration_count;  // 0 in ironman mode; increments on each restoration
     std::vector<TimelineRestorationRecord> records;
 };
 
@@ -276,19 +278,19 @@ struct PlayerCharacter {
     uint32_t id;
 
     // --- Character creation outputs ---
-    Background           background;
+    Background background;
     std::array<Trait, 3> traits;
-    uint32_t             starting_province_id;
+    uint32_t starting_province_id;
 
     // --- Stats ---
-    HealthState     health;
-    float           age;                    // in-game years; increments each tick by (1.0 / 365.0)
+    HealthState health;
+    float age;  // in-game years; increments each tick by (1.0 / 365.0)
     ReputationState reputation;
-    float           wealth;                 // liquid cash; can be negative (debt)
-    float           net_assets;             // derived; not authoritative for transactions
+    float wealth;      // liquid cash; can be negative (debt)
+    float net_assets;  // derived; not authoritative for transactions
 
     // --- Skills ---
-    std::vector<PlayerSkill> skills;        // one entry per SkillDomain
+    std::vector<PlayerSkill> skills;  // one entry per SkillDomain
 
     // --- Evidence awareness (Exposure) ---
     std::vector<EvidenceAwarenessEntry> evidence_awareness_map;
@@ -300,34 +302,35 @@ struct PlayerCharacter {
     std::vector<uint32_t> calendar_entry_ids;
 
     // --- Personal life ---
-    uint32_t              residence_id;
-    uint32_t              partner_npc_id;        // 0 = no current partner
+    uint32_t residence_id;
+    uint32_t partner_npc_id;  // 0 = no current partner
     std::vector<uint32_t> children_npc_ids;
-    uint32_t              designated_heir_npc_id; // 0 = no heir established
+    uint32_t designated_heir_npc_id;  // 0 = no heir established
 
     // --- Relationships ---
-    std::vector<Relationship> relationships;     // player's directed view of all NPCs
+    std::vector<Relationship> relationships;  // player's directed view of all NPCs
 
     // --- Influence network summary (computed by tick step 22) ---
     InfluenceNetworkHealth network_health;
-    uint32_t               movement_follower_count;
+    uint32_t movement_follower_count;
 
     // --- Milestone tracking (see §11 "Organic Milestone Tracking") ---
     // Invariant: each MilestoneType appears at most once in achieved_milestones.
     // milestone_log is chronological; populated by tick step 27.
     std::vector<MilestoneRecord> milestone_log;
-    std::set<MilestoneType>      achieved_milestones; // O(1) lookup; prevents duplicate entries
+    std::set<MilestoneType> achieved_milestones;  // O(1) lookup; prevents duplicate entries
 
     // --- Physical location — obeys physics principle (§18.14) ---
-    uint32_t        home_province_id;             // player's base province
-    uint32_t        current_province_id;          // where player physically is this tick
-    NPCTravelStatus travel_status;                // resident, in_transit, visiting (see §18.15)
+    uint32_t home_province_id;      // player's base province
+    uint32_t current_province_id;   // where player physically is this tick
+    NPCTravelStatus travel_status;  // resident, in_transit, visiting (see §18.15)
 
     // --- Timeline restoration ---
-    RestorationHistory              restoration_history;          // see §22a
-    std::vector<TimeBoundedModifier> calendar_capacity_modifiers; // time-bounded overlays on calendar
-    bool                            ironman_eligible;             // true if game_mode == ironman
-                                                                  //   AND restoration_count == 0
+    RestorationHistory restoration_history;  // see §22a
+    std::vector<TimeBoundedModifier>
+        calendar_capacity_modifiers;  // time-bounded overlays on calendar
+    bool ironman_eligible;            // true if game_mode == ironman
+                                      //   AND restoration_count == 0
 };
 
 }  // namespace econlife

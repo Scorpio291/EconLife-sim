@@ -1,9 +1,11 @@
 #include "influence_network_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"
+
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -16,16 +18,19 @@ bool InfluenceNetworkModule::is_fear_based(float fear, float trust) {
 }
 
 InfluenceType InfluenceNetworkModule::classify_relationship(float trust, float fear,
-                                                             bool is_movement_ally) {
-    if (is_trust_based(trust)) return InfluenceType::trust_based;
-    if (is_fear_based(fear, trust)) return InfluenceType::fear_based;
-    if (is_movement_ally) return InfluenceType::movement_based;
+                                                            bool is_movement_ally) {
+    if (is_trust_based(trust))
+        return InfluenceType::trust_based;
+    if (is_fear_based(fear, trust))
+        return InfluenceType::fear_based;
+    if (is_movement_ally)
+        return InfluenceType::movement_based;
     return InfluenceType::obligation_based;
 }
 
 float InfluenceNetworkModule::compute_composite_health(uint32_t trust_count, uint32_t fear_count,
-                                                        uint32_t obligation_count,
-                                                        uint32_t movement_count) {
+                                                       uint32_t obligation_count,
+                                                       uint32_t movement_count) {
     float target = static_cast<float>(HEALTH_TARGET_COUNT);
 
     float trust_component = std::min(1.0f, static_cast<float>(trust_count) / target);
@@ -33,10 +38,8 @@ float InfluenceNetworkModule::compute_composite_health(uint32_t trust_count, uin
     float obligation_component = std::min(1.0f, static_cast<float>(obligation_count) / target);
     float movement_component = std::min(1.0f, static_cast<float>(movement_count) / target);
 
-    float score = TRUST_WEIGHT * trust_component +
-                  OBLIGATION_WEIGHT * obligation_component +
-                  FEAR_WEIGHT * fear_component +
-                  MOVEMENT_WEIGHT * movement_component;
+    float score = TRUST_WEIGHT * trust_component + OBLIGATION_WEIGHT * obligation_component +
+                  FEAR_WEIGHT * fear_component + MOVEMENT_WEIGHT * movement_component;
 
     // Diversity bonus if all four types present
     if (trust_count > 0 && fear_count > 0 && obligation_count > 0 && movement_count > 0) {
@@ -64,13 +67,16 @@ float InfluenceNetworkModule::compute_recovery_ceiling(float trust_before, float
 }
 
 void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    if (!state.player) return;
+    if (!state.player)
+        return;
 
     // Process obligation trust erosion for active obligations involving the player.
     // Each active obligation erodes the obligation_balance in the corresponding relationship.
     for (const auto& obligation : state.obligation_network) {
-        if (!obligation.is_active) continue;
-        if (obligation.weight <= 0.0f) continue;
+        if (!obligation.is_active)
+            continue;
+        if (obligation.weight <= 0.0f)
+            continue;
 
         // Identify the NPC counterpart to the player in this obligation
         uint32_t counterpart_npc_id = 0;
@@ -79,7 +85,8 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
         } else if (obligation.creditor_npc_id == state.player->id) {
             counterpart_npc_id = obligation.debtor_npc_id;
         }
-        if (counterpart_npc_id == 0) continue;
+        if (counterpart_npc_id == 0)
+            continue;
 
         // Find the current relationship to build an updated copy
         const Relationship* current_rel = nullptr;
@@ -89,13 +96,14 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
                 break;
             }
         }
-        if (!current_rel) continue;
+        if (!current_rel)
+            continue;
 
         // Apply obligation erosion to obligation_balance and trust
         float erosion = compute_obligation_erosion();  // returns -OBLIGATION_EROSION_RATE
         Relationship updated_rel = *current_rel;
-        updated_rel.obligation_balance = std::clamp(
-            updated_rel.obligation_balance + erosion, -1.0f, 1.0f);
+        updated_rel.obligation_balance =
+            std::clamp(updated_rel.obligation_balance + erosion, -1.0f, 1.0f);
         // Small trust decay from sustained obligation weight
         float trust_decay = -OBLIGATION_EROSION_RATE * obligation.weight;
         updated_rel.trust = std::clamp(updated_rel.trust + trust_decay, 0.0f, 1.0f);
@@ -108,8 +116,8 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
 
         // Counterpart NPC: motivation_delta reflects continued influence hold
         // (fear-based obligations reinforce compliance motivation)
-        InfluenceType inf_type = classify_relationship(
-            current_rel->trust, current_rel->fear, current_rel->is_movement_ally);
+        InfluenceType inf_type = classify_relationship(current_rel->trust, current_rel->fear,
+                                                       current_rel->is_movement_ally);
         if (inf_type == InfluenceType::fear_based || inf_type == InfluenceType::obligation_based) {
             NPCDelta counterpart_nd;
             counterpart_nd.npc_id = counterpart_npc_id;
@@ -120,7 +128,8 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
     }
 
     // Recompute health if dirty
-    if (!state.network_health_dirty) return;
+    if (!state.network_health_dirty)
+        return;
 
     uint32_t trust_count = 0;
     uint32_t fear_count = 0;
@@ -135,9 +144,12 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
               });
 
     for (const auto& rel : sorted_rels) {
-        if (is_trust_based(rel.trust)) trust_count++;
-        if (is_fear_based(rel.fear, rel.trust)) fear_count++;
-        if (rel.is_movement_ally) movement_count++;
+        if (is_trust_based(rel.trust))
+            trust_count++;
+        if (is_fear_based(rel.fear, rel.trust))
+            fear_count++;
+        if (rel.is_movement_ally)
+            movement_count++;
 
         // Write motivation_delta for NPCs in trust-based relationships: they
         // receive a small positive nudge reflecting the player's influence.
@@ -152,22 +164,23 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
 
     // Obligation counts
     for (const auto& obl : state.obligation_network) {
-        if (!obl.is_active) continue;
-        if (obl.creditor_npc_id == state.player->id ||
-            obl.debtor_npc_id == state.player->id) {
+        if (!obl.is_active)
+            continue;
+        if (obl.creditor_npc_id == state.player->id || obl.debtor_npc_id == state.player->id) {
             obligation_count++;
         }
     }
 
-    float score = compute_composite_health(trust_count, fear_count,
-                                            obligation_count, movement_count);
+    float score =
+        compute_composite_health(trust_count, fear_count, obligation_count, movement_count);
 
     // Update cached health using shared_types InfluenceNetworkHealth
     cached_health_.overall_score = score;
-    cached_health_.network_reach = std::min(1.0f,
-        static_cast<float>(sorted_rels.size()) / static_cast<float>(HEALTH_TARGET_COUNT * 2));
-    cached_health_.network_density = std::min(1.0f,
-        static_cast<float>(trust_count + fear_count) / std::max(1.0f, static_cast<float>(sorted_rels.size())));
+    cached_health_.network_reach = std::min(
+        1.0f, static_cast<float>(sorted_rels.size()) / static_cast<float>(HEALTH_TARGET_COUNT * 2));
+    cached_health_.network_density =
+        std::min(1.0f, static_cast<float>(trust_count + fear_count) /
+                           std::max(1.0f, static_cast<float>(sorted_rels.size())));
     cached_health_.vulnerability = 0.0f;  // Computed from exposure analysis in later pass
 }
 

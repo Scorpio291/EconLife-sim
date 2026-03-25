@@ -1,12 +1,12 @@
 #include "modules/evidence/evidence_module.h"
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"
-#include "core/tick/deferred_work.h"
-
 #include <algorithm>
 #include <cmath>
+
+#include "core/tick/deferred_work.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -15,26 +15,27 @@ namespace econlife {
 // ---------------------------------------------------------------------------
 
 float EvidenceModule::compute_decay_amount(float base_decay_rate, bool is_credible,
-                                            float discredit_multiplier, uint32_t batch_interval) {
+                                           float discredit_multiplier, uint32_t batch_interval) {
     float multiplier = is_credible ? 1.0f : discredit_multiplier;
     return base_decay_rate * multiplier * static_cast<float>(batch_interval);
 }
 
-float EvidenceModule::apply_actionability_decay(float current_actionability,
-                                                 float decay_amount, float actionability_floor) {
+float EvidenceModule::apply_actionability_decay(float current_actionability, float decay_amount,
+                                                float actionability_floor) {
     float result = current_actionability - decay_amount;
     return std::max(result, actionability_floor);
 }
 
 bool EvidenceModule::evaluate_holder_credibility(float public_credibility,
-                                                  float credibility_threshold) {
+                                                 float credibility_threshold) {
     return public_credibility >= credibility_threshold;
 }
 
 float EvidenceModule::normalize_trust_to_factor(float trust) {
     // Map trust from [-1.0, 1.0] range to [trust_factor_min, trust_factor_max].
     // Negative trust maps to minimum factor.
-    if (trust <= 0.0f) return Constants::trust_factor_min;
+    if (trust <= 0.0f)
+        return Constants::trust_factor_min;
     // Positive trust: linear map from (0, 1] -> [trust_factor_min, trust_factor_max]
     float factor = Constants::trust_factor_min +
                    trust * (Constants::trust_factor_max - Constants::trust_factor_min);
@@ -42,7 +43,7 @@ float EvidenceModule::normalize_trust_to_factor(float trust) {
 }
 
 float EvidenceModule::compute_propagation_confidence(float sharer_confidence,
-                                                      float relationship_trust) {
+                                                     float relationship_trust) {
     float trust_factor = normalize_trust_to_factor(relationship_trust);
     float result = sharer_confidence * trust_factor;
     return std::max(0.0f, std::min(1.0f, result));
@@ -61,30 +62,33 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
     // ids are monotonically increasing, so iteration order is deterministic).
     // Decay batch fires every batch_interval ticks per token.
     for (const auto& token : state.evidence_pool) {
-        if (!token.is_active) continue;
+        if (!token.is_active)
+            continue;
 
         // Batch fires every batch_interval ticks since creation.
         uint32_t ticks_since_creation = state.current_tick - token.created_tick;
-        if (ticks_since_creation == 0) continue;
-        if (ticks_since_creation % Constants::batch_interval != 0) continue;
+        if (ticks_since_creation == 0)
+            continue;
+        if (ticks_since_creation % Constants::batch_interval != 0)
+            continue;
 
         // Evaluate holder credibility using social_capital as proxy.
         bool is_credible = true;
         for (const auto& npc : state.significant_npcs) {
             if (npc.id == token.source_npc_id) {
                 float credibility = std::min(npc.social_capital / 100.0f, 1.0f);
-                is_credible = evaluate_holder_credibility(credibility,
-                                                          Constants::credibility_threshold);
+                is_credible =
+                    evaluate_holder_credibility(credibility, Constants::credibility_threshold);
                 break;
             }
         }
 
-        float decay = compute_decay_amount(Constants::base_decay_rate, is_credible,
-                                            Constants::discredit_decay_multiplier,
-                                            Constants::batch_interval);
+        float decay =
+            compute_decay_amount(Constants::base_decay_rate, is_credible,
+                                 Constants::discredit_decay_multiplier, Constants::batch_interval);
 
-        float new_actionability = apply_actionability_decay(
-            token.actionability, decay, Constants::actionability_floor);
+        float new_actionability =
+            apply_actionability_decay(token.actionability, decay, Constants::actionability_floor);
 
         // If token falls to floor, retire it.
         if (new_actionability <= Constants::actionability_floor + 0.001f) {
@@ -99,8 +103,7 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
     }
 }
 
-void EvidenceModule::create_evidence_from_businesses(const WorldState& state,
-                                                      DeltaBuffer& delta) {
+void EvidenceModule::create_evidence_from_businesses(const WorldState& state, DeltaBuffer& delta) {
     // Create evidence tokens from criminal businesses and regulatory violations.
     // Process businesses sorted by id ascending for determinism.
     std::vector<const NPCBusiness*> sorted_businesses;
@@ -131,15 +134,15 @@ void EvidenceModule::create_evidence_from_businesses(const WorldState& state,
             // Write observation memory to the source NPC — they are aware that
             // incriminating evidence has been generated by their activity.
             MemoryEntry mem{};
-            mem.tick_timestamp  = state.current_tick;
-            mem.type            = MemoryType::observation;
-            mem.subject_id      = new_token.id;
+            mem.tick_timestamp = state.current_tick;
+            mem.type = MemoryType::observation;
+            mem.subject_id = new_token.id;
             mem.emotional_weight = -0.3f;
-            mem.decay           = 0.9f;
-            mem.is_actionable   = false;
+            mem.decay = 0.9f;
+            mem.is_actionable = false;
 
             NPCDelta npc_d{};
-            npc_d.npc_id          = biz->owner_id;
+            npc_d.npc_id = biz->owner_id;
             npc_d.new_memory_entry = mem;
             delta.npc_deltas.push_back(npc_d);
         } else if (biz->regulatory_violation_severity > 0.0f) {
@@ -149,8 +152,8 @@ void EvidenceModule::create_evidence_from_businesses(const WorldState& state,
             new_token.type = EvidenceType::documentary;
             new_token.source_npc_id = biz->owner_id;
             new_token.target_npc_id = biz->owner_id;
-            new_token.actionability = Constants::violation_evidence_actionability *
-                                       biz->regulatory_violation_severity;
+            new_token.actionability =
+                Constants::violation_evidence_actionability * biz->regulatory_violation_severity;
             new_token.decay_rate = Constants::base_decay_rate;
             new_token.created_tick = state.current_tick;
             new_token.province_id = biz->province_id;
@@ -162,15 +165,15 @@ void EvidenceModule::create_evidence_from_businesses(const WorldState& state,
 
             // Write observation memory to the source NPC.
             MemoryEntry mem{};
-            mem.tick_timestamp  = state.current_tick;
-            mem.type            = MemoryType::observation;
-            mem.subject_id      = new_token.id;
+            mem.tick_timestamp = state.current_tick;
+            mem.type = MemoryType::observation;
+            mem.subject_id = new_token.id;
             mem.emotional_weight = -0.3f;
-            mem.decay           = 0.9f;
-            mem.is_actionable   = false;
+            mem.decay = 0.9f;
+            mem.is_actionable = false;
 
             NPCDelta npc_d{};
-            npc_d.npc_id          = biz->owner_id;
+            npc_d.npc_id = biz->owner_id;
             npc_d.new_memory_entry = mem;
             delta.npc_deltas.push_back(npc_d);
         }

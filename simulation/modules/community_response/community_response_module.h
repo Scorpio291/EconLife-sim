@@ -6,12 +6,12 @@
 //
 // See docs/interfaces/community_response/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/community_response/community_response_types.h"
-
 #include <cstdint>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/community_response/community_response_types.h"
 
 namespace econlife {
 
@@ -26,15 +26,13 @@ enum class MemoryType : uint8_t;
 // CommunityResponseModule — ITickModule implementation for community metrics
 // ---------------------------------------------------------------------------
 class CommunityResponseModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "community_response"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
     bool is_province_parallel() const noexcept override { return false; }
 
-    std::vector<std::string_view> runs_after() const override {
-        return {"npc_behavior"};
-    }
+    std::vector<std::string_view> runs_after() const override { return {"npc_behavior"}; }
 
     std::vector<std::string_view> runs_before() const override {
         return {"trust_updates", "political_cycle"};
@@ -48,13 +46,13 @@ public:
     // sample = clamp(social_capital / social_capital_max, 0, 1)
     //        * clamp(stability_weight, 0, 1)
     static float compute_cohesion_sample(float social_capital, float social_capital_max,
-                                          float stability_weight);
+                                         float stability_weight);
 
     // Compute grievance contribution from an NPC's memory log.
     // Sum of abs(emotional_weight) * memory_type_grievance_weight(type) for negative entries
     // with decay > memory_decay_floor.
     static float compute_grievance_contribution(const std::vector<MemoryEntry>& memory_log,
-                                                 float memory_decay_floor);
+                                                float memory_decay_floor);
 
     // Get grievance weight for a memory type.
     // Direct harm types = 1.0, economic harm = 0.5, others = 0.0
@@ -63,24 +61,22 @@ public:
     // Compute resource access sample for a single NPC.
     // sample = clamp(capital/capital_normalizer + social_capital/social_normalizer, 0, 1)
     static float compute_resource_access_sample(float capital, float capital_normalizer,
-                                                 float social_capital, float social_normalizer);
+                                                float social_capital, float social_normalizer);
 
     // EMA update: new_value = current * (1 - alpha) + sample * alpha
     static float ema_update(float current_value, float new_sample, float alpha);
 
     // Determine the highest stage whose thresholds are satisfied.
     static CommunityResponseStage evaluate_stage(float grievance, float cohesion,
-                                                   float institutional_trust,
-                                                   float resource_access,
-                                                   bool has_leadership);
+                                                 float institutional_trust, float resource_access,
+                                                 bool has_leadership);
 
     // Apply stage transition rules: at most one step, cannot skip.
     // If opposition_org_exists and current >= sustained_opposition, no regression.
-    static CommunityResponseStage apply_stage_transition(
-        CommunityResponseStage current,
-        CommunityResponseStage target,
-        bool can_regress,
-        bool opposition_org_exists);
+    static CommunityResponseStage apply_stage_transition(CommunityResponseStage current,
+                                                         CommunityResponseStage target,
+                                                         bool can_regress,
+                                                         bool opposition_org_exists);
 
     // --- Internal province tracking ---
     struct ProvinceOppositionState {
@@ -105,7 +101,7 @@ public:
         static constexpr uint32_t regression_cooldown_ticks = 7;
     };
 
-private:
+   private:
     std::vector<ProvinceOppositionState> province_states_;
 };
 

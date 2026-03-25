@@ -9,8 +9,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/price_engine/price_engine_module.h"
 #include "modules/price_engine/price_engine_types.h"
 #include "modules/trade_infrastructure/trade_types.h"
@@ -41,9 +41,8 @@ WorldState make_test_world_state() {
 
 // Create a RegionalMarket with sensible defaults.
 // base_price is proxied via equilibrium_price (RegionalMarket has no base_price field).
-RegionalMarket make_test_market(uint32_t good_id, uint32_t province_id,
-                                 float supply, float demand_buffer,
-                                 float spot_price, float equilibrium_price) {
+RegionalMarket make_test_market(uint32_t good_id, uint32_t province_id, float supply,
+                                float demand_buffer, float spot_price, float equilibrium_price) {
     RegionalMarket market{};
     market.good_id = good_id;
     market.province_id = province_id;
@@ -59,7 +58,7 @@ RegionalMarket make_test_market(uint32_t good_id, uint32_t province_id,
 
 // Find the MarketDelta for a given good_id in the delta buffer.
 const MarketDelta* find_market_delta(const DeltaBuffer& delta, uint32_t good_id,
-                                      uint32_t province_id) {
+                                     uint32_t province_id) {
     for (const auto& md : delta.market_deltas) {
         if (md.good_id == good_id && md.region_id == province_id) {
             return &md;
@@ -286,8 +285,7 @@ TEST_CASE("test_execute_province_high_demand", "[price_engine][tier3]") {
 
     // base_price=10, supply=50, demand=100 => ratio=2.0, eq=20.0
     // spot=10, gap=10, adj=1.0, new_spot=11.0
-    state.regional_markets.push_back(
-        make_test_market(1, province_id, 50.0f, 100.0f, 10.0f, 10.0f));
+    state.regional_markets.push_back(make_test_market(1, province_id, 50.0f, 100.0f, 10.0f, 10.0f));
 
     PriceEngineModule module;
     DeltaBuffer delta{};
@@ -323,8 +321,7 @@ TEST_CASE("test_execute_province_with_lod2_modifier", "[price_engine][tier3]") {
     module.execute_province(province_id, state, delta);
 
     REQUIRE(delta.market_deltas.size() == 1);
-    REQUIRE_THAT(delta.market_deltas[0].spot_price_override.value(),
-                 WithinAbs(12.0f, 0.001f));
+    REQUIRE_THAT(delta.market_deltas[0].spot_price_override.value(), WithinAbs(12.0f, 0.001f));
 }
 
 TEST_CASE("test_execute_province_multiple_goods_canonical_order", "[price_engine][tier3]") {
@@ -340,10 +337,8 @@ TEST_CASE("test_execute_province_multiple_goods_canonical_order", "[price_engine
     // Insert markets in reverse good_id order.
     state.regional_markets.push_back(
         make_test_market(30, province_id, 100.0f, 100.0f, 10.0f, 10.0f));
-    state.regional_markets.push_back(
-        make_test_market(10, province_id, 100.0f, 100.0f, 5.0f, 5.0f));
-    state.regional_markets.push_back(
-        make_test_market(20, province_id, 100.0f, 100.0f, 8.0f, 8.0f));
+    state.regional_markets.push_back(make_test_market(10, province_id, 100.0f, 100.0f, 5.0f, 5.0f));
+    state.regional_markets.push_back(make_test_market(20, province_id, 100.0f, 100.0f, 8.0f, 8.0f));
 
     PriceEngineModule module;
     DeltaBuffer delta{};
@@ -366,10 +361,8 @@ TEST_CASE("test_execute_fallback_processes_all_provinces", "[price_engine][tier3
     state.provinces.push_back(prov0);
     state.provinces.push_back(prov1);
 
-    state.regional_markets.push_back(
-        make_test_market(1, 0, 100.0f, 100.0f, 10.0f, 10.0f));
-    state.regional_markets.push_back(
-        make_test_market(1, 1, 50.0f, 100.0f, 10.0f, 10.0f));
+    state.regional_markets.push_back(make_test_market(1, 0, 100.0f, 100.0f, 10.0f, 10.0f));
+    state.regional_markets.push_back(make_test_market(1, 1, 50.0f, 100.0f, 10.0f, 10.0f));
 
     PriceEngineModule module;
     DeltaBuffer delta{};
@@ -411,8 +404,7 @@ TEST_CASE("test_default_adjustment_rate_used_when_market_rate_zero", "[price_eng
     module.execute_province(province_id, state, delta);
 
     REQUIRE(delta.market_deltas.size() == 1);
-    REQUIRE_THAT(delta.market_deltas[0].spot_price_override.value(),
-                 WithinAbs(11.0f, 0.001f));
+    REQUIRE_THAT(delta.market_deltas[0].spot_price_override.value(), WithinAbs(11.0f, 0.001f));
 }
 
 // ===========================================================================
@@ -444,14 +436,9 @@ TEST_CASE("test_module_interface_properties", "[price_engine][tier3]") {
 
 TEST_CASE("test_price_engine_constants", "[price_engine][tier3]") {
     REQUIRE_THAT(PriceEngineConstants::supply_floor, WithinAbs(0.01f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::default_price_adjustment_rate,
-                 WithinAbs(0.10f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::max_price_change_per_tick,
-                 WithinAbs(0.25f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::export_floor_coeff,
-                 WithinAbs(0.40f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::import_ceiling_coeff,
-                 WithinAbs(3.0f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::default_base_price,
-                 WithinAbs(1.0f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConstants::default_price_adjustment_rate, WithinAbs(0.10f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConstants::max_price_change_per_tick, WithinAbs(0.25f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConstants::export_floor_coeff, WithinAbs(0.40f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConstants::import_ceiling_coeff, WithinAbs(3.0f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConstants::default_base_price, WithinAbs(1.0f, 0.0001f));
 }

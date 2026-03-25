@@ -5,14 +5,13 @@
 // interception probability, concealment cap, transit arrival market supply,
 // shipment loss on full degradation, and module interface properties.
 
-#include <cmath>
-
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/trade_infrastructure/trade_infrastructure_module.h"
 #include "modules/trade_infrastructure/trade_types.h"
 
@@ -39,10 +38,8 @@ WorldState make_test_world_state() {
     return state;
 }
 
-RouteProfile make_test_route(float distance_km = 800.0f,
-                              float terrain_roughness = 0.0f,
-                              float min_infrastructure = 1.0f,
-                              float concealment_bonus = 0.0f) {
+RouteProfile make_test_route(float distance_km = 800.0f, float terrain_roughness = 0.0f,
+                             float min_infrastructure = 1.0f, float concealment_bonus = 0.0f) {
     RouteProfile route{};
     route.distance_km = distance_km;
     route.route_terrain_roughness = terrain_roughness;
@@ -55,13 +52,9 @@ RouteProfile make_test_route(float distance_km = 800.0f,
     return route;
 }
 
-TransitShipment make_test_shipment(uint32_t id = 1,
-                                    uint32_t good_id = 100,
-                                    float quantity = 50.0f,
-                                    uint32_t arrival_tick = 10,
-                                    bool is_criminal = false,
-                                    float interception_risk = 0.0f,
-                                    float concealment_mod = 0.0f) {
+TransitShipment make_test_shipment(uint32_t id = 1, uint32_t good_id = 100, float quantity = 50.0f,
+                                   uint32_t arrival_tick = 10, bool is_criminal = false,
+                                   float interception_risk = 0.0f, float concealment_mod = 0.0f) {
     TransitShipment s{};
     s.id = id;
     s.good_id = good_id;
@@ -219,7 +212,8 @@ TEST_CASE("test_perishable_decay_to_zero_marks_lost", "[trade_infrastructure][ti
     REQUIRE_THAT(shipment.quantity_remaining, WithinAbs(0.0f, 0.0001f));
 }
 
-TEST_CASE("test_perishable_quality_degrades_slower_than_quantity", "[trade_infrastructure][tier3]") {
+TEST_CASE("test_perishable_quality_degrades_slower_than_quantity",
+          "[trade_infrastructure][tier3]") {
     // Quality decay rate is half of quantity decay rate.
     auto shipment = make_test_shipment();
     shipment.quantity_remaining = 100.0f;
@@ -436,14 +430,10 @@ TEST_CASE("test_mode_speed_constants", "[trade_infrastructure][tier3]") {
 }
 
 TEST_CASE("test_delay_coefficient_constants", "[trade_infrastructure][tier3]") {
-    REQUIRE_THAT(TradeInfrastructureConstants::terrain_delay_coeff,
-                 WithinAbs(0.4f, 0.001f));
-    REQUIRE_THAT(TradeInfrastructureConstants::infra_delay_coeff,
-                 WithinAbs(0.6f, 0.001f));
-    REQUIRE_THAT(TradeInfrastructureConstants::max_concealment_modifier,
-                 WithinAbs(0.40f, 0.001f));
-    REQUIRE_THAT(TradeInfrastructureConstants::perishable_decay_base,
-                 WithinAbs(0.01f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConstants::terrain_delay_coeff, WithinAbs(0.4f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConstants::infra_delay_coeff, WithinAbs(0.6f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConstants::max_concealment_modifier, WithinAbs(0.40f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConstants::perishable_decay_base, WithinAbs(0.01f, 0.001f));
 }
 
 // ---------------------------------------------------------------------------

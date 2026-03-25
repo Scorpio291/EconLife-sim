@@ -31,9 +31,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 #include "modules/npc_behavior/npc_behavior_module.h"
 #include "modules/npc_behavior/npc_behavior_types.h"
 
@@ -79,8 +79,7 @@ Province make_test_province(uint32_t id, float criminal_dominance = 0.0f) {
 }
 
 // Create an NPC with sensible defaults for behavior testing.
-NPC make_test_npc(uint32_t id, uint32_t province_id = 0,
-                  float risk_tolerance = 0.5f) {
+NPC make_test_npc(uint32_t id, uint32_t province_id = 0, float risk_tolerance = 0.5f) {
     NPC npc{};
     npc.id = id;
     npc.role = NPCRole::worker;
@@ -101,9 +100,8 @@ NPC make_test_npc(uint32_t id, uint32_t province_id = 0,
 }
 
 // Create a MemoryEntry with specified decay.
-MemoryEntry make_test_memory(uint32_t tick, float decay,
-                              float emotional_weight = 0.5f,
-                              bool actionable = true) {
+MemoryEntry make_test_memory(uint32_t tick, float decay, float emotional_weight = 0.5f,
+                             bool actionable = true) {
     MemoryEntry mem{};
     mem.tick_timestamp = tick;
     mem.type = MemoryType::interaction;
@@ -115,10 +113,8 @@ MemoryEntry make_test_memory(uint32_t tick, float decay,
 }
 
 // Create a Relationship with specified trust and fear.
-Relationship make_test_relationship(uint32_t target_id,
-                                     float trust = 0.5f,
-                                     float fear = 0.1f,
-                                     float recovery_ceiling = 1.0f) {
+Relationship make_test_relationship(uint32_t target_id, float trust = 0.5f, float fear = 0.1f,
+                                    float recovery_ceiling = 1.0f) {
     Relationship rel{};
     rel.target_npc_id = target_id;
     rel.trust = trust;
@@ -153,12 +149,10 @@ TEST_CASE("test_high_ev_action_selected_over_inaction", "[npc_behavior][tier5]")
     }
 
     // Work action with high financial gain outcome.
-    std::vector<ActionOutcome> work_outcomes = {
-        {OutcomeType::financial_gain, 0.9f, 0.8f}
-    };
+    std::vector<ActionOutcome> work_outcomes = {{OutcomeType::financial_gain, 0.9f, 0.8f}};
 
-    ActionEvaluation eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::work, work_outcomes, 0.0f, -2.0f, 0.3f);
+    ActionEvaluation eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::work,
+                                                               work_outcomes, 0.0f, -2.0f, 0.3f);
 
     // EV = 0.9 * 0.9 * 0.8 = 0.648, risk_discount = 1.0 (no risk), net = 0.648
     REQUIRE(eval.net_utility > NpcBehaviorModule::Constants::inaction_threshold);
@@ -186,12 +180,10 @@ TEST_CASE("test_below_threshold_produces_waiting_status", "[npc_behavior][tier5]
     // With low risk tolerance, exposure_risk on criminal_activity (0.7) will
     // heavily discount. But other actions have 0 exposure_risk.
     // Instead, directly test with a tiny outcome.
-    std::vector<ActionOutcome> tiny_outcomes = {
-        {OutcomeType::financial_gain, 0.01f, 0.01f}
-    };
+    std::vector<ActionOutcome> tiny_outcomes = {{OutcomeType::financial_gain, 0.01f, 0.01f}};
 
-    ActionEvaluation eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::rest, tiny_outcomes, 0.5f, -2.0f, 0.3f);
+    ActionEvaluation eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::rest,
+                                                               tiny_outcomes, 0.5f, -2.0f, 0.3f);
 
     // EV = (1/8) * 0.01 * 0.01 = 0.0000125
     // risk_discount = max(0.05, 1.0 - (0.5 - 0.0) * 2.0) = max(0.05, 0.0) = 0.05
@@ -213,17 +205,13 @@ TEST_CASE("test_motivation_vector_drives_action_preference", "[npc_behavior][tie
     npc.motivations.weights[static_cast<size_t>(OutcomeType::self_preservation)] = 1.0f;
 
     // Rest action with self_preservation outcome should score highest.
-    std::vector<ActionOutcome> rest_outcomes = {
-        {OutcomeType::self_preservation, 0.9f, 0.5f}
-    };
-    std::vector<ActionOutcome> work_outcomes = {
-        {OutcomeType::financial_gain, 0.9f, 0.5f}
-    };
+    std::vector<ActionOutcome> rest_outcomes = {{OutcomeType::self_preservation, 0.9f, 0.5f}};
+    std::vector<ActionOutcome> work_outcomes = {{OutcomeType::financial_gain, 0.9f, 0.5f}};
 
-    auto rest_eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::rest, rest_outcomes, 0.0f, -2.0f, 0.3f);
-    auto work_eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::work, work_outcomes, 0.0f, -2.0f, 0.3f);
+    auto rest_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::rest, rest_outcomes, 0.0f,
+                                                        -2.0f, 0.3f);
+    auto work_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::work, work_outcomes, 0.0f,
+                                                        -2.0f, 0.3f);
 
     // rest EV = 1.0 * 0.9 * 0.5 = 0.45
     // work EV = 0.0 * 0.9 * 0.5 = 0.0
@@ -238,9 +226,9 @@ TEST_CASE("test_memory_decay_archives_old_entries", "[npc_behavior][tier5]") {
     NPC npc = make_test_npc(1);
 
     // Add memory entries with varying decay values.
-    npc.memory_log.push_back(make_test_memory(1, 0.5f));   // healthy
-    npc.memory_log.push_back(make_test_memory(2, 0.02f));  // near floor
-    npc.memory_log.push_back(make_test_memory(3, 0.005f)); // below floor after decay
+    npc.memory_log.push_back(make_test_memory(1, 0.5f));    // healthy
+    npc.memory_log.push_back(make_test_memory(2, 0.02f));   // near floor
+    npc.memory_log.push_back(make_test_memory(3, 0.005f));  // below floor after decay
 
     REQUIRE(npc.memory_log.size() == 3);
 
@@ -260,17 +248,15 @@ TEST_CASE("test_memory_decay_archives_old_entries", "[npc_behavior][tier5]") {
 TEST_CASE("test_risk_discount_reduces_high_exposure_ev", "[npc_behavior][tier5]") {
     NPC npc = make_test_npc(1, 0, 0.3f);  // risk_tolerance = 0.3
 
-    std::vector<ActionOutcome> outcomes = {
-        {OutcomeType::financial_gain, 0.8f, 0.7f}
-    };
+    std::vector<ActionOutcome> outcomes = {{OutcomeType::financial_gain, 0.8f, 0.7f}};
 
     // Low exposure_risk action.
-    auto low_risk_eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::work, outcomes, 0.1f, -2.0f, 0.3f);
+    auto low_risk_eval =
+        NpcBehaviorModule::evaluate_action(npc, DailyAction::work, outcomes, 0.1f, -2.0f, 0.3f);
 
     // High exposure_risk action.
-    auto high_risk_eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::criminal_activity, outcomes, 0.8f, -2.0f, 0.3f);
+    auto high_risk_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::criminal_activity,
+                                                             outcomes, 0.8f, -2.0f, 0.3f);
 
     // High risk should produce lower net_utility.
     REQUIRE(low_risk_eval.net_utility > high_risk_eval.net_utility);
@@ -283,17 +269,15 @@ TEST_CASE("test_risk_discount_reduces_high_exposure_ev", "[npc_behavior][tier5]"
 TEST_CASE("test_relationship_modifier_boosts_cooperative_action", "[npc_behavior][tier5]") {
     NPC npc = make_test_npc(1);
 
-    std::vector<ActionOutcome> outcomes = {
-        {OutcomeType::relationship_repair, 0.7f, 0.5f}
-    };
+    std::vector<ActionOutcome> outcomes = {{OutcomeType::relationship_repair, 0.7f, 0.5f}};
 
     // Without trust bonus.
-    auto no_trust_eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::socialize, outcomes, 0.0f, -2.0f, 0.3f);
+    auto no_trust_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::socialize, outcomes,
+                                                            0.0f, -2.0f, 0.3f);
 
     // With positive trust bonus.
-    auto with_trust_eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::socialize, outcomes, 0.0f, 0.8f, 0.3f);
+    auto with_trust_eval =
+        NpcBehaviorModule::evaluate_action(npc, DailyAction::socialize, outcomes, 0.0f, 0.8f, 0.3f);
 
     // Trust modifier: net *= (1.0 + 0.8 * 0.3) = 1.24
     REQUIRE(with_trust_eval.net_utility > no_trust_eval.net_utility);
@@ -387,7 +371,7 @@ TEST_CASE("test_compute_risk_discount_extreme_exposure", "[npc_behavior][tier5]"
 TEST_CASE("test_archive_lowest_decay_memory", "[npc_behavior][tier5]") {
     std::vector<MemoryEntry> memory_log;
     memory_log.push_back(make_test_memory(1, 0.8f));
-    memory_log.push_back(make_test_memory(2, 0.1f));   // lowest
+    memory_log.push_back(make_test_memory(2, 0.1f));  // lowest
     memory_log.push_back(make_test_memory(3, 0.5f));
 
     REQUIRE(memory_log.size() == 3);
@@ -687,8 +671,8 @@ TEST_CASE("test_evaluate_action_with_multiple_outcomes", "[npc_behavior][tier5]"
         {OutcomeType::career_advance, 0.4f, 0.7f},
     };
 
-    auto eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::work, outcomes, 0.0f, -2.0f, 0.3f);
+    auto eval =
+        NpcBehaviorModule::evaluate_action(npc, DailyAction::work, outcomes, 0.0f, -2.0f, 0.3f);
 
     // EV = (1/8)(0.8*0.5) + (1/8)(0.6*0.3) + (1/8)(0.4*0.7)
     //    = (1/8)(0.40 + 0.18 + 0.28)
@@ -709,8 +693,8 @@ TEST_CASE("test_empty_outcomes_produce_zero_ev", "[npc_behavior][tier5]") {
     NPC npc = make_test_npc(1);
     std::vector<ActionOutcome> no_outcomes;
 
-    auto eval = NpcBehaviorModule::evaluate_action(
-        npc, DailyAction::rest, no_outcomes, 0.0f, -2.0f, 0.3f);
+    auto eval =
+        NpcBehaviorModule::evaluate_action(npc, DailyAction::rest, no_outcomes, 0.0f, -2.0f, 0.3f);
 
     REQUIRE_THAT(eval.expected_value, WithinAbs(0.0f, 0.0001f));
     REQUIRE_THAT(eval.net_utility, WithinAbs(0.0f, 0.0001f));
@@ -856,21 +840,14 @@ TEST_CASE("test_npcs_from_other_provinces_not_processed", "[npc_behavior][tier5]
 // ===========================================================================
 
 TEST_CASE("test_npc_behavior_constants", "[npc_behavior][tier5]") {
-    REQUIRE_THAT(NpcBehaviorModule::Constants::inaction_threshold,
-                 WithinAbs(0.10f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::min_risk_discount,
-                 WithinAbs(0.05f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::risk_sensitivity_coeff,
-                 WithinAbs(2.0f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::trust_ev_bonus,
-                 WithinAbs(0.3f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::memory_decay_rate,
-                 WithinAbs(0.002f, 0.0001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::memory_decay_floor,
-                 WithinAbs(0.01f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModule::Constants::inaction_threshold, WithinAbs(0.10f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModule::Constants::min_risk_discount, WithinAbs(0.05f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModule::Constants::risk_sensitivity_coeff, WithinAbs(2.0f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModule::Constants::trust_ev_bonus, WithinAbs(0.3f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModule::Constants::memory_decay_rate, WithinAbs(0.002f, 0.0001f));
+    REQUIRE_THAT(NpcBehaviorModule::Constants::memory_decay_floor, WithinAbs(0.01f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModule::Constants::knowledge_confidence_decay_rate,
                  WithinAbs(0.001f, 0.0001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::motivation_shift_rate,
-                 WithinAbs(0.001f, 0.0001f));
+    REQUIRE_THAT(NpcBehaviorModule::Constants::motivation_shift_rate, WithinAbs(0.001f, 0.0001f));
     REQUIRE(MAX_MEMORY_ENTRIES == 500);
 }

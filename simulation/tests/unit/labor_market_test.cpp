@@ -8,10 +8,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
-#include "core/rng/deterministic_rng.h"
+#include "core/world_state/world_state.h"
 #include "modules/labor_market/labor_market_module.h"
 #include "modules/labor_market/labor_types.h"
 
@@ -66,13 +66,11 @@ NPC make_test_npc(uint32_t id, uint32_t province_id) {
     npc.movement_follower_count = 0;
 
     // Default neutral motivation weights (sum to 1.0).
-    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f,
-                               0.125f, 0.125f, 0.125f, 0.125f};
+    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
     return npc;
 }
 
-NPCBusiness make_test_business(uint32_t id, uint32_t province_id,
-                                float cash = 10000.0f) {
+NPCBusiness make_test_business(uint32_t id, uint32_t province_id, float cash = 10000.0f) {
     NPCBusiness biz{};
     biz.id = id;
     biz.sector = BusinessSector::manufacturing;
@@ -202,9 +200,7 @@ TEST_CASE("test_deferred_salary_when_business_cash_insufficient", "[labor_market
     state.npc_businesses.push_back(biz);
 
     LaborMarketModule module;
-    module.employment_records().push_back(EmploymentRecord{
-        100, 1, 5.0f, 0, 0
-    });
+    module.employment_records().push_back(EmploymentRecord{100, 1, 5.0f, 0, 0});
 
     DeltaBuffer delta{};
     module.execute_province(province_id, state, delta);
@@ -236,9 +232,8 @@ TEST_CASE("test_deferred_salary_generates_wage_theft_memory", "[labor_market][ti
 
     LaborMarketModule module;
     // Pre-set deferred ticks to just at the threshold.
-    module.employment_records().push_back(EmploymentRecord{
-        100, 1, 5.0f, 0, LaborConfig::deferred_salary_max_ticks
-    });
+    module.employment_records().push_back(
+        EmploymentRecord{100, 1, 5.0f, 0, LaborConfig::deferred_salary_max_ticks});
 
     DeltaBuffer delta{};
     module.execute_province(province_id, state, delta);
@@ -428,8 +423,7 @@ TEST_CASE("test_low_reputation_reduces_pool_size", "[labor_market][tier2]") {
     // reputation = 0.1, penalty = (0.3 - 0.1) * 8.0 = 1.6, round = 2.
     // Effective pool for public_board = 12 - 2 = 10.
     float reputation = 0.1f;
-    uint32_t pool = LaborMarketModule::effective_pool_size(
-        HiringChannel::public_board, reputation);
+    uint32_t pool = LaborMarketModule::effective_pool_size(HiringChannel::public_board, reputation);
     REQUIRE(pool == 10);
 }
 
@@ -441,8 +435,8 @@ TEST_CASE("test_low_reputation_salary_premium", "[labor_market][tier2]") {
     float money_motivation = 0.0f;  // Simplify: no money motivation.
     float reputation = 0.2f;
 
-    float expectation = LaborMarketModule::compute_salary_expectation(
-        regional_wage, money_motivation, reputation);
+    float expectation =
+        LaborMarketModule::compute_salary_expectation(regional_wage, money_motivation, reputation);
 
     // Expected: 1.0 * 1.0 * 1.05 = 1.05
     REQUIRE_THAT(expectation, WithinAbs(1.05f, 0.001f));
@@ -454,8 +448,8 @@ TEST_CASE("test_good_reputation_no_salary_premium", "[labor_market][tier2]") {
     float money_motivation = 0.0f;
     float reputation = 0.5f;
 
-    float expectation = LaborMarketModule::compute_salary_expectation(
-        regional_wage, money_motivation, reputation);
+    float expectation =
+        LaborMarketModule::compute_salary_expectation(regional_wage, money_motivation, reputation);
 
     REQUIRE_THAT(expectation, WithinAbs(1.0f, 0.001f));
 }
@@ -498,9 +492,8 @@ TEST_CASE("test_voluntary_departure_probability", "[labor_market][tier2]") {
 
     // Verify departure probability formula.
     float career_motivation = 0.5f;
-    float departure_prob = LaborConfig::departure_base_rate
-                         * (1.0f - satisfaction)
-                         * career_motivation;
+    float departure_prob =
+        LaborConfig::departure_base_rate * (1.0f - satisfaction) * career_motivation;
     // 0.08 * 0.8 * 0.5 = 0.032
     REQUIRE_THAT(departure_prob, WithinAbs(0.032f, 0.001f));
 
@@ -731,32 +724,24 @@ TEST_CASE("test_npc_skill_lookup", "[labor_market][tier2]") {
         {SkillDomain::Engineering, 0.3f},
     };
 
-    REQUIRE_THAT(module.get_npc_skill(42, SkillDomain::Business),
-                 WithinAbs(0.7f, 0.001f));
-    REQUIRE_THAT(module.get_npc_skill(42, SkillDomain::Engineering),
-                 WithinAbs(0.3f, 0.001f));
-    REQUIRE_THAT(module.get_npc_skill(42, SkillDomain::Finance),
-                 WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(module.get_npc_skill(42, SkillDomain::Business), WithinAbs(0.7f, 0.001f));
+    REQUIRE_THAT(module.get_npc_skill(42, SkillDomain::Engineering), WithinAbs(0.3f, 0.001f));
+    REQUIRE_THAT(module.get_npc_skill(42, SkillDomain::Finance), WithinAbs(0.0f, 0.001f));
 
     // Unknown NPC returns 0.0.
-    REQUIRE_THAT(module.get_npc_skill(999, SkillDomain::Business),
-                 WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(module.get_npc_skill(999, SkillDomain::Business), WithinAbs(0.0f, 0.001f));
 }
 
 TEST_CASE("test_effective_pool_size_normal_reputation", "[labor_market][tier2]") {
     // Good reputation: full pool size.
-    REQUIRE(LaborMarketModule::effective_pool_size(
-        HiringChannel::public_board, 0.5f) == 12);
-    REQUIRE(LaborMarketModule::effective_pool_size(
-        HiringChannel::professional_network, 0.5f) == 5);
-    REQUIRE(LaborMarketModule::effective_pool_size(
-        HiringChannel::personal_referral, 0.5f) == 3);
+    REQUIRE(LaborMarketModule::effective_pool_size(HiringChannel::public_board, 0.5f) == 12);
+    REQUIRE(LaborMarketModule::effective_pool_size(HiringChannel::professional_network, 0.5f) == 5);
+    REQUIRE(LaborMarketModule::effective_pool_size(HiringChannel::personal_referral, 0.5f) == 3);
 }
 
 TEST_CASE("test_effective_pool_size_minimum_one", "[labor_market][tier2]") {
     // Very low reputation should not reduce pool below 1.
-    uint32_t pool = LaborMarketModule::effective_pool_size(
-        HiringChannel::personal_referral, 0.0f);
+    uint32_t pool = LaborMarketModule::effective_pool_size(HiringChannel::personal_referral, 0.0f);
     // penalty = (0.3 - 0.0) * 8.0 = 2.4, round = 2. base = 3, result = 1.
     REQUIRE(pool >= 1);
 }
@@ -816,8 +801,8 @@ TEST_CASE("test_salary_expectation_with_money_motivation", "[labor_market][tier2
     float money_motivation = 0.5f;
     float reputation = 0.5f;  // good reputation, no premium.
 
-    float expectation = LaborMarketModule::compute_salary_expectation(
-        regional_wage, money_motivation, reputation);
+    float expectation =
+        LaborMarketModule::compute_salary_expectation(regional_wage, money_motivation, reputation);
 
     // 2.0 * (1.0 + 0.5 * 0.3) = 2.0 * 1.15 = 2.3
     REQUIRE_THAT(expectation, WithinAbs(2.3f, 0.001f));

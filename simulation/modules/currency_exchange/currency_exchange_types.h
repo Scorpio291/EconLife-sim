@@ -13,7 +13,7 @@ struct CurrencyRecord {
     float usd_rate = 1.0f;           // units per 1 USD
     float usd_rate_baseline = 1.0f;  // immutable after load
     float volatility = 0.01f;
-    float foreign_reserves = 1.0f;   // 0.0-1.0
+    float foreign_reserves = 1.0f;  // 0.0-1.0
     bool pegged = false;
     float peg_rate = 1.0f;
 };

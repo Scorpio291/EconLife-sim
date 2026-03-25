@@ -6,13 +6,13 @@
 //
 // See docs/interfaces/government_budget/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/government_budget/budget_types.h"
-
 #include <cmath>
 #include <map>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/government_budget/budget_types.h"
 
 namespace econlife {
 
@@ -25,19 +25,15 @@ struct NPCBusiness;
 // GovernmentBudgetModule — ITickModule implementation for fiscal operations
 // ---------------------------------------------------------------------------
 class GovernmentBudgetModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "government_budget"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
 
-    std::vector<std::string_view> runs_after() const override {
-        return {"financial_distribution"};
-    }
+    std::vector<std::string_view> runs_after() const override { return {"financial_distribution"}; }
 
     // End of Pass 1 chain; no current-tick dependents.
-    std::vector<std::string_view> runs_before() const override {
-        return {};
-    }
+    std::vector<std::string_view> runs_before() const override { return {}; }
 
     bool is_province_parallel() const noexcept override { return false; }
 
@@ -56,29 +52,25 @@ public:
     // Compute corporate tax revenue for a province over a quarter.
     // Sums (business.revenue_per_tick * ticks_per_quarter * tax_rate) for all
     // non-criminal businesses in the given province.
-    static float compute_corporate_tax(const std::vector<NPCBusiness>& businesses,
-                                       float tax_rate, uint32_t province_id);
+    static float compute_corporate_tax(const std::vector<NPCBusiness>& businesses, float tax_rate,
+                                       uint32_t province_id);
 
     // Compute infrastructure rating change for one quarter:
     //   new_rating = (current_rating - decay_rate) + (spending_actual / investment_scale)
     //   clamped to [0.0, 1.0]
-    static float compute_infrastructure_change(float current_rating,
-                                               float spending_actual,
-                                               float decay_rate,
-                                               float investment_scale);
+    static float compute_infrastructure_change(float current_rating, float spending_actual,
+                                               float decay_rate, float investment_scale);
 
     // Pro-rate spending allocations when cash is insufficient.
     // Each category gets: allocation * (available_cash / total_allocations).
     // If total_allocations == 0 or available_cash <= 0, all categories get 0.
     static std::map<SpendingCategory, float> prorate_spending(
-        const std::map<SpendingCategory, float>& allocations,
-        float available_cash);
+        const std::map<SpendingCategory, float>& allocations, float available_cash);
 
     // Compute debt-to-revenue ratio.
     // Returns infinity if total_revenue == 0 and accumulated_debt > 0.
     // Returns 0.0 if both are 0.
-    static float compute_debt_to_revenue_ratio(float accumulated_debt,
-                                               float total_revenue);
+    static float compute_debt_to_revenue_ratio(float accumulated_debt, float total_revenue);
 
     // Returns true if current_tick is a quarterly boundary (multiple of ticks_per_quarter).
     // Tick 0 is NOT treated as quarterly to avoid processing before the world is initialized.
@@ -107,7 +99,7 @@ public:
         static constexpr float cohort_mod_criminal_adjacent = 0.10f;
     };
 
-private:
+   private:
     std::vector<GovernmentBudget> budgets_;
 
     // --- Internal processing steps ---
@@ -135,8 +127,7 @@ private:
 
     // Find a budget by level and jurisdiction_id. Returns nullptr if not found.
     GovernmentBudget* find_budget(GovernmentLevel level, uint32_t jurisdiction_id);
-    const GovernmentBudget* find_budget(GovernmentLevel level,
-                                        uint32_t jurisdiction_id) const;
+    const GovernmentBudget* find_budget(GovernmentLevel level, uint32_t jurisdiction_id) const;
 };
 
 }  // namespace econlife

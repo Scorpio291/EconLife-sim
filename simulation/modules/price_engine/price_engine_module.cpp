@@ -8,13 +8,14 @@
 //   Step 3: Apply LOD 2 global commodity modifier.
 
 #include "modules/price_engine/price_engine_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "modules/trade_infrastructure/trade_types.h"
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
+#include "modules/trade_infrastructure/trade_types.h"
 
 namespace econlife {
 
@@ -22,8 +23,7 @@ namespace econlife {
 // PriceEngineModule — tick execution
 // ===========================================================================
 
-void PriceEngineModule::execute_province(uint32_t province_idx,
-                                         const WorldState& state,
+void PriceEngineModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
     // Collect regional markets for this province, then sort by good_id ascending
     // for deterministic floating-point accumulation order.
@@ -35,10 +35,9 @@ void PriceEngineModule::execute_province(uint32_t province_idx,
     }
 
     // Sort by good_id ascending (canonical order per CLAUDE.md).
-    std::sort(province_markets.begin(), province_markets.end(),
-              [](const RegionalMarket* a, const RegionalMarket* b) {
-                  return a->good_id < b->good_id;
-              });
+    std::sort(
+        province_markets.begin(), province_markets.end(),
+        [](const RegionalMarket* a, const RegionalMarket* b) { return a->good_id < b->good_id; });
 
     // Process each market through the 3-step algorithm.
     for (const RegionalMarket* market : province_markets) {
@@ -50,12 +49,11 @@ void PriceEngineModule::execute_province(uint32_t province_idx,
         if (adjustment_rate <= 0.0f) {
             adjustment_rate = PriceEngineConstants::default_price_adjustment_rate;
         }
-        float new_spot_price = compute_sticky_adjustment(
-            market->spot_price, equilibrium_price, adjustment_rate);
+        float new_spot_price =
+            compute_sticky_adjustment(market->spot_price, equilibrium_price, adjustment_rate);
 
         // Step 3: LOD 2 modifier.
-        float lod2_modifier = get_lod2_modifier(market->good_id,
-                                                 state.lod2_price_index);
+        float lod2_modifier = get_lod2_modifier(market->good_id, state.lod2_price_index);
         new_spot_price *= lod2_modifier;
 
         // Ensure non-negative.
@@ -96,8 +94,7 @@ float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market)
     }
 
     // Effective supply: prevent division by zero.
-    float effective_supply = std::max(market.supply,
-                                      PriceEngineConstants::supply_floor);
+    float effective_supply = std::max(market.supply, PriceEngineConstants::supply_floor);
 
     // Demand/supply ratio drives equilibrium.
     float demand_supply_ratio = market.demand_buffer / effective_supply;
@@ -132,9 +129,8 @@ float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market)
 // PriceEngineModule — Step 2: Sticky Price Adjustment
 // ===========================================================================
 
-float PriceEngineModule::compute_sticky_adjustment(float spot_price,
-                                                    float equilibrium_price,
-                                                    float adjustment_rate) {
+float PriceEngineModule::compute_sticky_adjustment(float spot_price, float equilibrium_price,
+                                                   float adjustment_rate) {
     float gap = equilibrium_price - spot_price;
     float adjustment = gap * adjustment_rate;
 
@@ -161,7 +157,7 @@ float PriceEngineModule::compute_sticky_adjustment(float spot_price,
 // ===========================================================================
 
 float PriceEngineModule::get_lod2_modifier(uint32_t good_id,
-                                            const GlobalCommodityPriceIndex* index) {
+                                           const GlobalCommodityPriceIndex* index) {
     if (index == nullptr) {
         return 1.0f;
     }

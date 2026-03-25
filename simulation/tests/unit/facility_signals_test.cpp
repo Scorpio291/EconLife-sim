@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "modules/facility_signals/facility_signals_module.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/facility_signals/facility_signals_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -14,24 +14,21 @@ using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Signal composite weighted sum", "[facility_signals][tier7]") {
     FacilityTypeSignalWeights w{0.30f, 0.25f, 0.20f, 0.25f};
-    float composite = FacilitySignalsModule::compute_signal_composite(
-        0.8f, 0.6f, 0.3f, 0.9f, w);
+    float composite = FacilitySignalsModule::compute_signal_composite(0.8f, 0.6f, 0.3f, 0.9f, w);
     // 0.30*0.8 + 0.25*0.6 + 0.20*0.3 + 0.25*0.9 = 0.24 + 0.15 + 0.06 + 0.225 = 0.675
     CHECK_THAT(composite, WithinAbs(0.675f, 0.001f));
 }
 
 TEST_CASE("Signal composite default equal weights", "[facility_signals][tier7]") {
     FacilityTypeSignalWeights w{0.25f, 0.25f, 0.25f, 0.25f};
-    float composite = FacilitySignalsModule::compute_signal_composite(
-        1.0f, 1.0f, 1.0f, 1.0f, w);
+    float composite = FacilitySignalsModule::compute_signal_composite(1.0f, 1.0f, 1.0f, 1.0f, w);
     CHECK_THAT(composite, WithinAbs(1.0f, 0.001f));
 }
 
 TEST_CASE("Signal composite clamped to 1.0", "[facility_signals][tier7]") {
     // Weights > 1.0 total shouldn't exceed 1.0 output
     FacilityTypeSignalWeights w{0.5f, 0.5f, 0.5f, 0.5f};
-    float composite = FacilitySignalsModule::compute_signal_composite(
-        1.0f, 1.0f, 1.0f, 1.0f, w);
+    float composite = FacilitySignalsModule::compute_signal_composite(1.0f, 1.0f, 1.0f, 1.0f, w);
     CHECK(composite == 1.0f);
 }
 
@@ -54,14 +51,12 @@ TEST_CASE("LE fill rate from regional signal", "[facility_signals][tier7]") {
     // 3 criminal facilities: net_signals 0.5, 0.3, 0.2 => sum = 1.0
     // regional = 1.0 / 5.0 = 0.2
     // fill_rate = 0.2 * 0.005 = 0.001
-    float rate = FacilitySignalsModule::compute_le_fill_rate(
-        0.2f, 0.005f, 0.01f);
+    float rate = FacilitySignalsModule::compute_le_fill_rate(0.2f, 0.005f, 0.01f);
     CHECK_THAT(rate, WithinAbs(0.001f, 0.0001f));
 }
 
 TEST_CASE("LE fill rate clamped to max", "[facility_signals][tier7]") {
-    float rate = FacilitySignalsModule::compute_le_fill_rate(
-        100.0f, 0.005f, 0.01f);
+    float rate = FacilitySignalsModule::compute_le_fill_rate(100.0f, 0.005f, 0.01f);
     CHECK_THAT(rate, WithinAbs(0.01f, 0.0001f));
 }
 
@@ -101,14 +96,12 @@ TEST_CASE("Regulator meter thresholds", "[facility_signals][tier7]") {
 
 TEST_CASE("Corruption reduces fill rate", "[facility_signals][tier7]") {
     // corruption_susceptibility=0.50, coverage=0.60 => factor = 1 - 0.30 = 0.70
-    float adjusted = FacilitySignalsModule::apply_corruption_to_fill_rate(
-        0.005f, 0.50f, 0.60f);
+    float adjusted = FacilitySignalsModule::apply_corruption_to_fill_rate(0.005f, 0.50f, 0.60f);
     CHECK_THAT(adjusted, WithinAbs(0.0035f, 0.0001f));
 }
 
 TEST_CASE("Full corruption eliminates fill rate", "[facility_signals][tier7]") {
-    float adjusted = FacilitySignalsModule::apply_corruption_to_fill_rate(
-        0.005f, 1.0f, 1.0f);
+    float adjusted = FacilitySignalsModule::apply_corruption_to_fill_rate(0.005f, 1.0f, 1.0f);
     CHECK_THAT(adjusted, WithinAbs(0.0f, 0.0001f));
 }
 

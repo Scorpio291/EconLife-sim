@@ -8,13 +8,14 @@
 //
 // Sequential (not province-parallel) because shipments cross province boundaries.
 
+#include "modules/trade_infrastructure/trade_infrastructure_module.h"
+
 #include <algorithm>
 #include <cmath>
 
-#include "modules/trade_infrastructure/trade_infrastructure_module.h"
 #include "core/rng/deterministic_rng.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -79,8 +80,8 @@ void TradeInfrastructureModule::process_perishable_decay(float decay_rate) {
 // process_interception_checks
 // ---------------------------------------------------------------------------
 void TradeInfrastructureModule::process_interception_checks(uint32_t current_tick,
-                                                             DeltaBuffer& delta,
-                                                             DeterministicRNG& rng) {
+                                                            DeltaBuffer& delta,
+                                                            DeterministicRNG& rng) {
     for (auto& shipment : active_shipments_) {
         if (shipment.status != ShipmentStatus::in_transit) {
             continue;
@@ -118,12 +119,11 @@ void TradeInfrastructureModule::process_interception_checks(uint32_t current_tic
 // remove_completed_shipments
 // ---------------------------------------------------------------------------
 void TradeInfrastructureModule::remove_completed_shipments() {
-    active_shipments_.erase(
-        std::remove_if(active_shipments_.begin(), active_shipments_.end(),
-                        [](const TransitShipment& s) {
-                            return s.status != ShipmentStatus::in_transit;
-                        }),
-        active_shipments_.end());
+    active_shipments_.erase(std::remove_if(active_shipments_.begin(), active_shipments_.end(),
+                                           [](const TransitShipment& s) {
+                                               return s.status != ShipmentStatus::in_transit;
+                                           }),
+                            active_shipments_.end());
 }
 
 // ---------------------------------------------------------------------------
@@ -137,19 +137,19 @@ void TradeInfrastructureModule::add_shipment(TransitShipment shipment) {
 // calculate_transit_ticks (static)
 // ---------------------------------------------------------------------------
 uint32_t TradeInfrastructureModule::calculate_transit_ticks(const RouteProfile& route,
-                                                             TransportMode mode) {
+                                                            TransportMode mode) {
     const float mode_speed = TradeInfrastructureConstants::speed_for_mode(mode);
 
     // Base transit time in ticks (fractional).
     const float base_transit = route.distance_km / mode_speed;
 
     // Terrain delay multiplier: 1.0 + terrain_roughness * coeff.
-    const float terrain_delay = 1.0f
-        + route.route_terrain_roughness * TradeInfrastructureConstants::terrain_delay_coeff;
+    const float terrain_delay =
+        1.0f + route.route_terrain_roughness * TradeInfrastructureConstants::terrain_delay_coeff;
 
     // Infrastructure delay multiplier: 1.0 + (1 - min_infrastructure) * coeff.
-    const float infra_delay = 1.0f
-        + (1.0f - route.min_infrastructure) * TradeInfrastructureConstants::infra_delay_coeff;
+    const float infra_delay =
+        1.0f + (1.0f - route.min_infrastructure) * TradeInfrastructureConstants::infra_delay_coeff;
 
     // Final transit ticks: at least 1.
     const float raw = base_transit * terrain_delay * infra_delay;
@@ -161,7 +161,7 @@ uint32_t TradeInfrastructureModule::calculate_transit_ticks(const RouteProfile& 
 // apply_perishable_decay (static)
 // ---------------------------------------------------------------------------
 bool TradeInfrastructureModule::apply_perishable_decay(TransitShipment& shipment,
-                                                        float decay_rate) {
+                                                       float decay_rate) {
     shipment.quantity_remaining *= (1.0f - decay_rate);
     shipment.quality_current *= (1.0f - decay_rate * 0.5f);
 
@@ -177,15 +177,14 @@ bool TradeInfrastructureModule::apply_perishable_decay(TransitShipment& shipment
 // check_interception (static)
 // ---------------------------------------------------------------------------
 bool TradeInfrastructureModule::check_interception(const TransitShipment& shipment,
-                                                    DeterministicRNG& rng) {
+                                                   DeterministicRNG& rng) {
     // Cap concealment modifier at the configured maximum.
-    const float capped_concealment = std::min(
-        shipment.route_concealment_modifier,
-        TradeInfrastructureConstants::max_concealment_modifier);
+    const float capped_concealment =
+        std::min(shipment.route_concealment_modifier,
+                 TradeInfrastructureConstants::max_concealment_modifier);
 
     // Effective risk per tick after concealment reduction.
-    const float effective_risk = shipment.interception_risk_per_tick
-        * (1.0f - capped_concealment);
+    const float effective_risk = shipment.interception_risk_per_tick * (1.0f - capped_concealment);
 
     if (effective_risk <= 0.0f) {
         return false;

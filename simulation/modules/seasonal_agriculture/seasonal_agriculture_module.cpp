@@ -10,11 +10,12 @@
 //   5. Continuous-output facilities: cosine-curve seasonal multiplier
 
 #include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 // Mathematical constant - defined outside namespace to avoid MSVC issues.
 #ifndef M_PI
@@ -53,33 +54,34 @@ bool SeasonalAgricultureModule::is_annual_cycle(CropCategory category) {
     return false;  // unreachable; silences MSVC warning
 }
 
-uint32_t SeasonalAgricultureModule::effective_tick_of_year(uint32_t current_tick,
-                                                           float latitude) {
+uint32_t SeasonalAgricultureModule::effective_tick_of_year(uint32_t current_tick, float latitude) {
     uint32_t tick_of_year = current_tick % SeasonalAgricultureConstants::TICKS_PER_YEAR;
     if (latitude < 0.0f) {
-        tick_of_year = (tick_of_year + SeasonalAgricultureConstants::southern_hemisphere_offset)
-                       % SeasonalAgricultureConstants::TICKS_PER_YEAR;
+        tick_of_year = (tick_of_year + SeasonalAgricultureConstants::southern_hemisphere_offset) %
+                       SeasonalAgricultureConstants::TICKS_PER_YEAR;
     }
     return tick_of_year;
 }
 
 float SeasonalAgricultureModule::compute_seasonal_multiplier(CropCategory category,
-                                                              uint32_t tick_of_year,
-                                                              uint32_t peak_tick) {
+                                                             uint32_t tick_of_year,
+                                                             uint32_t peak_tick) {
     switch (category) {
         case CropCategory::perennial_tree: {
-            float phase = 2.0f * static_cast<float>(LOCAL_PI)
-                        * static_cast<float>(static_cast<int32_t>(tick_of_year) - static_cast<int32_t>(peak_tick))
-                        / static_cast<float>(SeasonalAgricultureConstants::TICKS_PER_YEAR);
-            return SeasonalAgricultureConstants::perennial_base
-                 + SeasonalAgricultureConstants::perennial_amplitude * std::cos(phase);
+            float phase = 2.0f * static_cast<float>(LOCAL_PI) *
+                          static_cast<float>(static_cast<int32_t>(tick_of_year) -
+                                             static_cast<int32_t>(peak_tick)) /
+                          static_cast<float>(SeasonalAgricultureConstants::TICKS_PER_YEAR);
+            return SeasonalAgricultureConstants::perennial_base +
+                   SeasonalAgricultureConstants::perennial_amplitude * std::cos(phase);
         }
         case CropCategory::livestock: {
-            float phase = 2.0f * static_cast<float>(LOCAL_PI)
-                        * static_cast<float>(static_cast<int32_t>(tick_of_year) - static_cast<int32_t>(peak_tick))
-                        / static_cast<float>(SeasonalAgricultureConstants::TICKS_PER_YEAR);
-            return SeasonalAgricultureConstants::livestock_base
-                 + SeasonalAgricultureConstants::livestock_amplitude * std::cos(phase);
+            float phase = 2.0f * static_cast<float>(LOCAL_PI) *
+                          static_cast<float>(static_cast<int32_t>(tick_of_year) -
+                                             static_cast<int32_t>(peak_tick)) /
+                          static_cast<float>(SeasonalAgricultureConstants::TICKS_PER_YEAR);
+            return SeasonalAgricultureConstants::livestock_base +
+                   SeasonalAgricultureConstants::livestock_amplitude * std::cos(phase);
         }
         case CropCategory::timber:
             return SeasonalAgricultureConstants::timber_multiplier;
@@ -92,12 +94,10 @@ float SeasonalAgricultureModule::compute_seasonal_multiplier(CropCategory catego
 // Registration
 // ===========================================================================
 
-void SeasonalAgricultureModule::register_facility(
-        const Facility& facility,
-        CropCategory category,
-        uint32_t growing_season_start,
-        uint32_t growing_season_length,
-        float base_growth_rate) {
+void SeasonalAgricultureModule::register_facility(const Facility& facility, CropCategory category,
+                                                  uint32_t growing_season_start,
+                                                  uint32_t growing_season_length,
+                                                  float base_growth_rate) {
     facilities_[facility.id] = facility;
 
     FarmSeasonState state{};
@@ -121,14 +121,12 @@ void SeasonalAgricultureModule::register_facility(
     annual_output_goods_[facility.id] = facility.recipe_id;
 }
 
-void SeasonalAgricultureModule::register_continuous_facility(
-        const Facility& facility,
-        CropCategory category,
-        uint32_t peak_tick) {
+void SeasonalAgricultureModule::register_continuous_facility(const Facility& facility,
+                                                             CropCategory category,
+                                                             uint32_t peak_tick) {
     facilities_[facility.id] = facility;
     continuous_facilities_[facility.id] = ContinuousFacilityInfo{
-        category,
-        peak_tick,
+        category, peak_tick,
         facility.recipe_id  // use recipe_id as output good for V1
     };
 }
@@ -137,10 +135,8 @@ void SeasonalAgricultureModule::register_continuous_facility(
 // Tick Execution
 // ===========================================================================
 
-void SeasonalAgricultureModule::execute_province(
-        uint32_t province_idx,
-        const WorldState& state,
-        DeltaBuffer& province_delta) {
+void SeasonalAgricultureModule::execute_province(uint32_t province_idx, const WorldState& state,
+                                                 DeltaBuffer& province_delta) {
     // Skip provinces not at full LOD.
     if (province_idx >= state.provinces.size()) {
         return;
@@ -203,12 +199,11 @@ void SeasonalAgricultureModule::execute(const WorldState& state, DeltaBuffer& de
 // Annual-Cycle Facility Processing
 // ===========================================================================
 
-void SeasonalAgricultureModule::process_annual_facility(
-        uint32_t facility_id,
-        const Facility& facility,
-        const Province& province,
-        const WorldState& state,
-        DeltaBuffer& delta) {
+void SeasonalAgricultureModule::process_annual_facility(uint32_t facility_id,
+                                                        const Facility& facility,
+                                                        const Province& province,
+                                                        const WorldState& state,
+                                                        DeltaBuffer& delta) {
     auto it = farm_states_.find(facility_id);
     if (it == farm_states_.end()) {
         return;
@@ -222,17 +217,18 @@ void SeasonalAgricultureModule::process_annual_facility(
     // Planting starts planting_duration_ticks before growing_season_start.
     uint32_t planting_start;
     if (fs.growing_season_start >= SeasonalAgricultureConstants::planting_duration_ticks) {
-        planting_start = fs.growing_season_start
-                       - SeasonalAgricultureConstants::planting_duration_ticks;
+        planting_start =
+            fs.growing_season_start - SeasonalAgricultureConstants::planting_duration_ticks;
     } else {
         // Wrap around year boundary.
-        planting_start = SeasonalAgricultureConstants::TICKS_PER_YEAR
-                       - (SeasonalAgricultureConstants::planting_duration_ticks - fs.growing_season_start);
+        planting_start =
+            SeasonalAgricultureConstants::TICKS_PER_YEAR -
+            (SeasonalAgricultureConstants::planting_duration_ticks - fs.growing_season_start);
     }
 
     // Harvest start tick-of-year.
-    uint32_t harvest_start = (fs.growing_season_start + fs.growing_season_length)
-                           % SeasonalAgricultureConstants::TICKS_PER_YEAR;
+    uint32_t harvest_start = (fs.growing_season_start + fs.growing_season_length) %
+                             SeasonalAgricultureConstants::TICKS_PER_YEAR;
 
     // --- Climate modifiers ---
     // Use drought_modifier and flood_modifier from RegionConditions if available.
@@ -305,8 +301,8 @@ void SeasonalAgricultureModule::process_annual_facility(
         case SeasonPhase::harvest: {
             // Spread harvest over harvest_remaining_ticks.
             if (fs.harvest_remaining_ticks > 0) {
-                float release_per_tick = fs.pending_harvest
-                                       / static_cast<float>(fs.harvest_remaining_ticks);
+                float release_per_tick =
+                    fs.pending_harvest / static_cast<float>(fs.harvest_remaining_ticks);
 
                 // Write supply delta to market.
                 MarketDelta supply_delta{};
@@ -347,12 +343,8 @@ void SeasonalAgricultureModule::process_annual_facility(
 // ===========================================================================
 
 void SeasonalAgricultureModule::process_continuous_facility(
-        uint32_t facility_id,
-        const ContinuousFacilityInfo& info,
-        const Facility& facility,
-        const Province& province,
-        const WorldState& state,
-        DeltaBuffer& delta) {
+    uint32_t facility_id, const ContinuousFacilityInfo& info, const Facility& facility,
+    const Province& province, const WorldState& state, DeltaBuffer& delta) {
     const float latitude = province.geography.latitude;
     const uint32_t tick_of_year = effective_tick_of_year(state.current_tick, latitude);
 

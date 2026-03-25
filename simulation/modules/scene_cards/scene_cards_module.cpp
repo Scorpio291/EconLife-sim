@@ -6,12 +6,13 @@
 // See docs/interfaces/scene_cards/INTERFACE.md for canonical spec.
 
 #include "scene_cards_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"      // PlayerCharacter (complete type for state.player->)
 
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
+
+#include "core/world_state/player.h"  // PlayerCharacter (complete type for state.player->)
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -27,7 +28,7 @@ static constexpr uint32_t MAX_SCENE_CARDS_PER_TICK = 5;
 // Formula: clamp(trust_weight * trust_normalized + risk_weight * risk_tolerance, 0, 1)
 // where trust_normalized = (trust + 1.0) / 2.0 to map [-1,1] -> [0,1].
 static constexpr float TRUST_WEIGHT = 0.7f;
-static constexpr float RISK_WEIGHT  = 0.3f;
+static constexpr float RISK_WEIGHT = 0.3f;
 
 // ---------------------------------------------------------------------------
 // Free function implementations
@@ -39,7 +40,7 @@ bool is_in_person_setting(SceneSetting setting) {
         case SceneSetting::video_call:
             return false;  // Remote settings -- no province constraint
         default:
-            return true;   // All other settings are in-person
+            return true;  // All other settings are in-person
     }
 }
 
@@ -143,8 +144,7 @@ void SceneCardsModule::execute(const WorldState& state, DeltaBuffer& delta) {
 // Phase 1: Resolve player choices on existing pending scene cards
 // ---------------------------------------------------------------------------
 
-void SceneCardsModule::resolve_player_choices(const WorldState& state,
-                                              DeltaBuffer& delta) const {
+void SceneCardsModule::resolve_player_choices(const WorldState& state, DeltaBuffer& delta) const {
     for (const auto& card : state.pending_scene_cards) {
         if (card.chosen_choice_id == 0) {
             continue;  // Player hasn't chosen yet
@@ -166,9 +166,9 @@ void SceneCardsModule::resolve_player_choices(const WorldState& state,
                     state.current_tick,
                     MemoryType::interaction,
                     state.player->id,
-                    0.5f,   // moderate emotional weight for scene card interaction
-                    1.0f,   // fresh memory, no decay yet
-                    true    // actionable
+                    0.5f,  // moderate emotional weight for scene card interaction
+                    1.0f,  // fresh memory, no decay yet
+                    true   // actionable
                 };
                 delta.npc_deltas.push_back(npc_delta);
             }
@@ -200,8 +200,7 @@ void SceneCardsModule::discard_dead_npc_cards(const WorldState& state,
 // Phase 3: Trigger new scene cards from calendar entries
 // ---------------------------------------------------------------------------
 
-void SceneCardsModule::trigger_calendar_cards(const WorldState& state,
-                                              DeltaBuffer& delta,
+void SceneCardsModule::trigger_calendar_cards(const WorldState& state, DeltaBuffer& delta,
                                               uint32_t /* player_id */,
                                               uint32_t /* player_province */) const {
     uint32_t cards_added = 0;
@@ -241,7 +240,7 @@ void SceneCardsModule::trigger_calendar_cards(const WorldState& state,
 
         // Determine the scene card type from the calendar entry type.
         SceneCardType card_type = SceneCardType::meeting;
-        SceneSetting  card_setting = SceneSetting::private_office;
+        SceneSetting card_setting = SceneSetting::private_office;
         if (entry.type == CalendarEntryType::meeting) {
             card_type = SceneCardType::meeting;
             card_setting = SceneSetting::private_office;
@@ -262,7 +261,7 @@ void SceneCardsModule::trigger_calendar_cards(const WorldState& state,
         card.setting = card_setting;
         card.npc_id = entry.npc_id;
         card.npc_presentation_state = 0.5f;  // Default; computed in Phase 5
-        card.is_authored = false;             // Calendar-triggered = procedural by default
+        card.is_authored = false;            // Calendar-triggered = procedural by default
         card.chosen_choice_id = 0;
 
         delta.new_scene_cards.push_back(card);
@@ -292,11 +291,8 @@ void SceneCardsModule::apply_authored_priority(const WorldState& /* state */,
     // Remove procedural cards for NPCs that have authored cards.
     if (!npc_has_authored.empty()) {
         auto it = std::remove_if(
-            delta.new_scene_cards.begin(),
-            delta.new_scene_cards.end(),
-            [&](const SceneCard& card) {
-                return !card.is_authored &&
-                       npc_has_authored.count(card.npc_id) > 0;
+            delta.new_scene_cards.begin(), delta.new_scene_cards.end(), [&](const SceneCard& card) {
+                return !card.is_authored && npc_has_authored.count(card.npc_id) > 0;
             });
         delta.new_scene_cards.erase(it, delta.new_scene_cards.end());
     }
@@ -306,45 +302,41 @@ void SceneCardsModule::apply_authored_priority(const WorldState& /* state */,
 // Phase 5: Validate physical presence and compute presentation state
 // ---------------------------------------------------------------------------
 
-void SceneCardsModule::finalize_new_cards(const WorldState& state,
-                                          DeltaBuffer& delta,
-                                          uint32_t player_id,
-                                          uint32_t player_province) const {
-    auto it = std::remove_if(
-        delta.new_scene_cards.begin(),
-        delta.new_scene_cards.end(),
-        [&](SceneCard& card) -> bool {
-            // --- Dead NPC check ---
-            if (card.npc_id != 0) {
-                const NPC* npc = find_npc(state, card.npc_id);
-                if (!npc || npc->status == NPCStatus::dead) {
-                    return true;  // Discard
-                }
+void SceneCardsModule::finalize_new_cards(const WorldState& state, DeltaBuffer& delta,
+                                          uint32_t player_id, uint32_t player_province) const {
+    auto it = std::remove_if(delta.new_scene_cards.begin(), delta.new_scene_cards.end(),
+                             [&](SceneCard& card) -> bool {
+                                 // --- Dead NPC check ---
+                                 if (card.npc_id != 0) {
+                                     const NPC* npc = find_npc(state, card.npc_id);
+                                     if (!npc || npc->status == NPCStatus::dead) {
+                                         return true;  // Discard
+                                     }
 
-                // --- Physical presence check for in-person settings ---
-                if (is_in_person_setting(card.setting)) {
-                    if (player_province != npc->current_province_id) {
-                        return true;  // Not delivered; province mismatch
-                    }
-                }
+                                     // --- Physical presence check for in-person settings ---
+                                     if (is_in_person_setting(card.setting)) {
+                                         if (player_province != npc->current_province_id) {
+                                             return true;  // Not delivered; province mismatch
+                                         }
+                                     }
 
-                // --- Compute npc_presentation_state ---
-                // news_notification cards have no NPC portrait interaction;
-                // skip presentation state computation.
-                if (card.type != SceneCardType::news_notification) {
-                    float trust = find_trust_toward_player(*npc, player_id);
-                    card.npc_presentation_state =
-                        compute_presentation_state(trust, npc->risk_tolerance);
-                } else {
-                    card.npc_presentation_state = 0.0f;
-                }
-            } else {
-                // No NPC associated (e.g., pure news notification).
-                card.npc_presentation_state = 0.0f;
-            }
+                                     // --- Compute npc_presentation_state ---
+                                     // news_notification cards have no NPC portrait interaction;
+                                     // skip presentation state computation.
+                                     if (card.type != SceneCardType::news_notification) {
+                                         float trust = find_trust_toward_player(*npc, player_id);
+                                         card.npc_presentation_state =
+                                             compute_presentation_state(trust, npc->risk_tolerance);
+                                     } else {
+                                         card.npc_presentation_state = 0.0f;
+                                     }
+                                 } else {
+                                     // No NPC associated (e.g., pure news notification).
+                                     card.npc_presentation_state = 0.0f;
+                                 }
 
-            return false;  // Keep card
-        });
+                                 return false;  // Keep card
+                             });
     delta.new_scene_cards.erase(it, delta.new_scene_cards.end());
 
     // Enforce per-tick cap on new cards.

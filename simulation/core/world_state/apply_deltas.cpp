@@ -7,11 +7,12 @@
 // - NaN protection: any NaN delta is treated as 0.0
 
 #include "apply_deltas.h"
-#include "world_state.h"
-#include "player.h"
 
 #include <algorithm>
 #include <cmath>
+
+#include "player.h"
+#include "world_state.h"
 
 namespace econlife {
 
@@ -19,8 +20,12 @@ namespace econlife {
 // Helpers
 // ---------------------------------------------------------------------------
 
-static float clamp01(float v) { return std::clamp(v, 0.0f, 1.0f); }
-static float clamp_neg1_1(float v) { return std::clamp(v, -1.0f, 1.0f); }
+static float clamp01(float v) {
+    return std::clamp(v, 0.0f, 1.0f);
+}
+static float clamp_neg1_1(float v) {
+    return std::clamp(v, -1.0f, 1.0f);
+}
 static float safe_add(float base, float delta) {
     return std::isnan(delta) ? base : base + delta;
 }
@@ -29,7 +34,7 @@ static float safe_add(float base, float delta) {
 // These are safety clamps, not game mechanics — if values hit these,
 // the economic loop has a balance issue to investigate.
 static constexpr float BUSINESS_CASH_CEILING = 1.0e10f;
-static constexpr float NPC_CAPITAL_CEILING   = 1.0e9f;
+static constexpr float NPC_CAPITAL_CEILING = 1.0e9f;
 
 // ---------------------------------------------------------------------------
 // apply_npc_deltas
@@ -39,9 +44,13 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
         // Find NPC by id (linear scan; acceptable at <2000 NPCs)
         NPC* npc = nullptr;
         for (auto& n : world.significant_npcs) {
-            if (n.id == d.npc_id) { npc = &n; break; }
+            if (n.id == d.npc_id) {
+                npc = &n;
+                break;
+            }
         }
-        if (!npc) continue;
+        if (!npc)
+            continue;
 
         // capital_delta: additive, floor at 0, ceiling at NPC_CAPITAL_CEILING
         if (d.capital_delta.has_value()) {
@@ -61,10 +70,9 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
         if (d.new_memory_entry.has_value()) {
             if (npc->memory_log.size() >= MAX_MEMORY_ENTRIES) {
                 // Evict lowest-decay entry
-                auto weakest = std::min_element(npc->memory_log.begin(), npc->memory_log.end(),
-                    [](const MemoryEntry& a, const MemoryEntry& b) {
-                        return a.decay < b.decay;
-                    });
+                auto weakest = std::min_element(
+                    npc->memory_log.begin(), npc->memory_log.end(),
+                    [](const MemoryEntry& a, const MemoryEntry& b) { return a.decay < b.decay; });
                 if (weakest != npc->memory_log.end()) {
                     npc->memory_log.erase(weakest);
                 }
@@ -83,7 +91,8 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
                     existing.fear = clamp01(existing.fear + rel.fear);
                     existing.obligation_balance += rel.obligation_balance;
                     existing.last_interaction_tick = rel.last_interaction_tick;
-                    if (rel.is_movement_ally) existing.is_movement_ally = true;
+                    if (rel.is_movement_ally)
+                        existing.is_movement_ally = true;
                     // Enforce recovery ceiling
                     if (existing.trust > existing.recovery_ceiling) {
                         existing.trust = existing.recovery_ceiling;
@@ -97,7 +106,8 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
                 Relationship new_rel = rel;
                 new_rel.trust = clamp_neg1_1(new_rel.trust);
                 new_rel.fear = clamp01(new_rel.fear);
-                if (new_rel.recovery_ceiling < 0.15f) new_rel.recovery_ceiling = 0.15f;
+                if (new_rel.recovery_ceiling < 0.15f)
+                    new_rel.recovery_ceiling = 0.15f;
                 npc->relationships.push_back(new_rel);
             }
         }
@@ -109,7 +119,8 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             npc->motivations.weights[0] += *d.motivation_delta;
             // Renormalize to sum to 1.0
             float sum = 0.0f;
-            for (float w : npc->motivations.weights) sum += std::max(0.0f, w);
+            for (float w : npc->motivations.weights)
+                sum += std::max(0.0f, w);
             if (sum > 0.0f) {
                 for (float& w : npc->motivations.weights) {
                     w = std::max(0.0f, w) / sum;
@@ -123,7 +134,8 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
 // apply_player_delta
 // ---------------------------------------------------------------------------
 static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
-    if (!world.player) return;
+    if (!world.player)
+        return;
     PlayerCharacter& p = *world.player;
 
     if (d.health_delta.has_value()) {
@@ -133,15 +145,14 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
         p.wealth = safe_add(p.wealth, *d.wealth_delta);
     }
     if (d.exhaustion_delta.has_value()) {
-        p.health.exhaustion_accumulator = clamp01(
-            safe_add(p.health.exhaustion_accumulator, *d.exhaustion_delta));
+        p.health.exhaustion_accumulator =
+            clamp01(safe_add(p.health.exhaustion_accumulator, *d.exhaustion_delta));
     }
     if (d.skill_delta.has_value()) {
         const auto& sd = *d.skill_delta;
         for (auto& skill : p.skills) {
             if (skill.domain == static_cast<SkillDomain>(sd.skill_id)) {
-                skill.level = std::clamp(safe_add(skill.level, sd.value),
-                                         SKILL_DOMAIN_FLOOR, 1.0f);
+                skill.level = std::clamp(safe_add(skill.level, sd.value), SKILL_DOMAIN_FLOOR, 1.0f);
                 break;
             }
         }
@@ -159,7 +170,8 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
         for (auto& rel : p.relationships) {
             if (rel.target_npc_id == rd.target_npc_id) {
                 rel.trust = clamp_neg1_1(rel.trust + rd.trust_delta);
-                if (rel.trust > rel.recovery_ceiling) rel.trust = rel.recovery_ceiling;
+                if (rel.trust > rel.recovery_ceiling)
+                    rel.trust = rel.recovery_ceiling;
                 found = true;
                 break;
             }
@@ -191,7 +203,8 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
                     // Clamp magnitude to prevent float overflow/Inf/NaN.
                     if (std::isinf(biz.cash) || std::isnan(biz.cash)) {
                         biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash))
-                            ? BUSINESS_CASH_CEILING : -BUSINESS_CASH_CEILING;
+                                       ? BUSINESS_CASH_CEILING
+                                       : -BUSINESS_CASH_CEILING;
                     }
                     biz.cash = std::clamp(biz.cash, -BUSINESS_CASH_CEILING, BUSINESS_CASH_CEILING);
                 }
@@ -214,32 +227,30 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
 // apply_market_deltas
 // ---------------------------------------------------------------------------
 static constexpr float MARKET_SUPPLY_CEILING = 1.0e8f;
-static constexpr float MARKET_PRICE_CEILING  = 1.0e6f;
+static constexpr float MARKET_PRICE_CEILING = 1.0e6f;
 
 static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta>& deltas) {
     for (const auto& d : deltas) {
         for (auto& m : world.regional_markets) {
             if (m.good_id == d.good_id && m.province_id == d.region_id) {
                 if (d.supply_delta.has_value()) {
-                    m.supply = std::clamp(safe_add(m.supply, *d.supply_delta),
-                                          0.0f, MARKET_SUPPLY_CEILING);
+                    m.supply = std::clamp(safe_add(m.supply, *d.supply_delta), 0.0f,
+                                          MARKET_SUPPLY_CEILING);
                 }
                 if (d.demand_buffer_delta.has_value()) {
-                    m.demand_buffer = std::clamp(
-                        safe_add(m.demand_buffer, *d.demand_buffer_delta),
-                        0.0f, MARKET_SUPPLY_CEILING);
+                    m.demand_buffer = std::clamp(safe_add(m.demand_buffer, *d.demand_buffer_delta),
+                                                 0.0f, MARKET_SUPPLY_CEILING);
                 }
                 if (d.spot_price_override.has_value()) {
                     float price = *d.spot_price_override;
-                    m.spot_price = std::clamp(
-                        std::isnan(price) ? m.spot_price : price,
-                        0.001f, MARKET_PRICE_CEILING);
+                    m.spot_price = std::clamp(std::isnan(price) ? m.spot_price : price, 0.001f,
+                                              MARKET_PRICE_CEILING);
                 }
                 if (d.equilibrium_price_override.has_value()) {
                     float price = *d.equilibrium_price_override;
-                    m.equilibrium_price = std::clamp(
-                        std::isnan(price) ? m.equilibrium_price : price,
-                        0.001f, MARKET_PRICE_CEILING);
+                    m.equilibrium_price =
+                        std::clamp(std::isnan(price) ? m.equilibrium_price : price, 0.001f,
+                                   MARKET_PRICE_CEILING);
                 }
                 break;
             }
@@ -258,7 +269,8 @@ static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceD
             if (token.id == 0) {
                 uint32_t max_id = 0;
                 for (const auto& t : world.evidence_pool) {
-                    if (t.id > max_id) max_id = t.id;
+                    if (t.id > max_id)
+                        max_id = t.id;
                 }
                 token.id = max_id + 1;
             }
@@ -300,35 +312,32 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     c.addiction_rate = clamp01(safe_add(c.addiction_rate, *d.addiction_rate_delta));
                 }
                 if (d.criminal_dominance_delta.has_value()) {
-                    c.criminal_dominance_index = clamp01(
-                        safe_add(c.criminal_dominance_index, *d.criminal_dominance_delta));
+                    c.criminal_dominance_index =
+                        clamp01(safe_add(c.criminal_dominance_index, *d.criminal_dominance_delta));
                 }
                 if (d.cohesion_delta.has_value()) {
-                    prov.community.cohesion = clamp01(
-                        safe_add(prov.community.cohesion, *d.cohesion_delta));
+                    prov.community.cohesion =
+                        clamp01(safe_add(prov.community.cohesion, *d.cohesion_delta));
                 }
                 if (d.grievance_delta.has_value()) {
-                    prov.community.grievance_level = clamp01(
-                        safe_add(prov.community.grievance_level, *d.grievance_delta));
+                    prov.community.grievance_level =
+                        clamp01(safe_add(prov.community.grievance_level, *d.grievance_delta));
                 }
                 if (d.institutional_trust_delta.has_value()) {
                     prov.community.institutional_trust = clamp01(
-                        safe_add(prov.community.institutional_trust,
-                                 *d.institutional_trust_delta));
+                        safe_add(prov.community.institutional_trust, *d.institutional_trust_delta));
                 }
                 if (d.resource_access_delta.has_value()) {
-                    prov.community.resource_access = clamp01(
-                        safe_add(prov.community.resource_access,
-                                 *d.resource_access_delta));
+                    prov.community.resource_access =
+                        clamp01(safe_add(prov.community.resource_access, *d.resource_access_delta));
                 }
                 if (d.response_stage_replacement.has_value()) {
-                    prov.community.response_stage = std::min(
-                        *d.response_stage_replacement, static_cast<uint8_t>(6));
+                    prov.community.response_stage =
+                        std::min(*d.response_stage_replacement, static_cast<uint8_t>(6));
                 }
                 if (d.infrastructure_rating_delta.has_value()) {
                     prov.infrastructure_rating = clamp01(
-                        safe_add(prov.infrastructure_rating,
-                                 *d.infrastructure_rating_delta));
+                        safe_add(prov.infrastructure_rating, *d.infrastructure_rating_delta));
                 }
             }
         }
@@ -349,8 +358,8 @@ static void apply_currency_deltas(WorldState& world, const std::vector<CurrencyD
                     cur.pegged = *d.pegged_update;
                 }
                 if (d.foreign_reserves_delta.has_value()) {
-                    cur.foreign_reserves = clamp01(
-                        safe_add(cur.foreign_reserves, *d.foreign_reserves_delta));
+                    cur.foreign_reserves =
+                        clamp01(safe_add(cur.foreign_reserves, *d.foreign_reserves_delta));
                 }
                 break;
             }
@@ -372,7 +381,8 @@ static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
         if (node.id == 0) {
             uint32_t max_id = 0;
             for (const auto& n : world.obligation_network) {
-                if (n.id > max_id) max_id = n.id;
+                if (n.id > max_id)
+                    max_id = n.id;
             }
             node.id = max_id + 1;
         }
@@ -414,7 +424,8 @@ void apply_cross_province_deltas(WorldState& world) {
     auto& cpd = world.cross_province_delta_buffer;
 
     for (const auto& entry : cpd.entries) {
-        if (entry.due_tick > world.current_tick) continue;
+        if (entry.due_tick > world.current_tick)
+            continue;
 
         if (entry.npc_delta.has_value()) {
             // Apply NPC delta to the target province's NPC

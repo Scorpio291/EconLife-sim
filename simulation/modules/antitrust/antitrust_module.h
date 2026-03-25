@@ -6,13 +6,13 @@
 //
 // See docs/interfaces/antitrust/INTERFACE.md for the canonical specification.
 
-#include "core/tick/tick_module.h"
-#include "modules/antitrust/antitrust_types.h"
-
 #include <cstdint>
 #include <map>
 #include <string_view>
 #include <vector>
+
+#include "core/tick/tick_module.h"
+#include "modules/antitrust/antitrust_types.h"
 
 namespace econlife {
 
@@ -27,7 +27,7 @@ struct NPCBusiness;
 // AntitrustModule — ITickModule implementation
 // ---------------------------------------------------------------------------
 class AntitrustModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "antitrust"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -90,7 +90,7 @@ public:
         static constexpr uint32_t monthly_interval = 30;
     };
 
-private:
+   private:
     std::map<uint32_t, float> proposal_pressure_;
     uint32_t next_check_tick_ = 30;
     std::vector<AntitrustProposal> proposals_;

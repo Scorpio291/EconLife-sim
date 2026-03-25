@@ -14,23 +14,23 @@ namespace econlife {
 // GoodDefinition — one tradeable good loaded from CSV
 // ---------------------------------------------------------------------------
 struct GoodDefinition {
-    uint32_t    numeric_id;       // assigned at load time, sequential from 0
-    std::string good_id;          // string key from CSV (e.g., "iron_ore", "wheat")
-    std::string display_name;     // human-readable name
-    uint8_t     tier;             // 0-4; determines supply chain depth
-    std::string unit;             // "tonne", "litre", "unit"
-    std::string category;         // "geological", "biological", "metals", etc.
-    float       base_price;       // starting equilibrium price
-    bool        perishable;       // true = decays during transit/storage
-    bool        illegal;          // true = contraband (coca_leaf, poppy)
-    uint8_t     era_available;    // era when this good becomes available (1-5)
+    uint32_t numeric_id;       // assigned at load time, sequential from 0
+    std::string good_id;       // string key from CSV (e.g., "iron_ore", "wheat")
+    std::string display_name;  // human-readable name
+    uint8_t tier;              // 0-4; determines supply chain depth
+    std::string unit;          // "tonne", "litre", "unit"
+    std::string category;      // "geological", "biological", "metals", etc.
+    float base_price;          // starting equilibrium price
+    bool perishable;           // true = decays during transit/storage
+    bool illegal;              // true = contraband (coca_leaf, poppy)
+    uint8_t era_available;     // era when this good becomes available (1-5)
 };
 
 // ---------------------------------------------------------------------------
 // GoodsCatalog — loaded from CSV directory
 // ---------------------------------------------------------------------------
 class GoodsCatalog {
-public:
+   public:
     // Load all goods_tier*.csv files from the given directory.
     // Returns false if no files found or parse errors occurred.
     bool load_from_directory(const std::string& goods_dir);
@@ -48,7 +48,7 @@ public:
     // Find by string ID. Returns nullptr if not found.
     const GoodDefinition* find(const std::string& good_id) const;
 
-private:
+   private:
     std::vector<GoodDefinition> goods_;
     uint32_t next_numeric_id_ = 0;
 };

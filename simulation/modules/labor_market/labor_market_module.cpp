@@ -3,12 +3,13 @@
 // docs/interfaces/labor_market/INTERFACE.md for the canonical specification.
 
 #include "modules/labor_market/labor_market_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/rng/deterministic_rng.h"
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/rng/deterministic_rng.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -16,12 +17,11 @@ namespace econlife {
 // LaborMarketModule — tick execution
 // ===========================================================================
 
-void LaborMarketModule::execute_province(uint32_t province_idx,
-                                         const WorldState& state,
+void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
     // Skip provinces not at full LOD.
-    if (province_idx < state.provinces.size()
-        && state.provinces[province_idx].lod_level != SimulationLOD::full) {
+    if (province_idx < state.provinces.size() &&
+        state.provinces[province_idx].lod_level != SimulationLOD::full) {
         return;
     }
 
@@ -59,8 +59,7 @@ void LaborMarketModule::execute(const WorldState& state, DeltaBuffer& delta) {
 // LaborMarketModule — wage payments
 // ===========================================================================
 
-void LaborMarketModule::process_wage_payments(uint32_t province_id,
-                                              const WorldState& state,
+void LaborMarketModule::process_wage_payments(uint32_t province_id, const WorldState& state,
                                               DeltaBuffer& delta) {
     // Sort employment records by npc_id ascending for deterministic processing.
     // We iterate all records and filter to this province.
@@ -68,13 +67,17 @@ void LaborMarketModule::process_wage_payments(uint32_t province_id,
     std::vector<std::size_t> province_records;
     for (std::size_t i = 0; i < employment_records_.size(); ++i) {
         const auto& rec = employment_records_[i];
-        if (rec.employer_business_id == 0) continue;  // unemployed
+        if (rec.employer_business_id == 0)
+            continue;  // unemployed
 
         // Check if the NPC is in this province.
         const NPC* npc = find_npc(state, rec.npc_id);
-        if (!npc) continue;
-        if (npc->current_province_id != province_id) continue;
-        if (npc->status != NPCStatus::active) continue;
+        if (!npc)
+            continue;
+        if (npc->current_province_id != province_id)
+            continue;
+        if (npc->status != NPCStatus::active)
+            continue;
 
         province_records.push_back(i);
     }
@@ -82,8 +85,7 @@ void LaborMarketModule::process_wage_payments(uint32_t province_id,
     // Sort by npc_id ascending for deterministic order.
     std::sort(province_records.begin(), province_records.end(),
               [this](std::size_t a, std::size_t b) {
-                  return employment_records_[a].npc_id
-                       < employment_records_[b].npc_id;
+                  return employment_records_[a].npc_id < employment_records_[b].npc_id;
               });
 
     for (std::size_t idx : province_records) {
@@ -91,7 +93,8 @@ void LaborMarketModule::process_wage_payments(uint32_t province_id,
 
         // Find the employer business.
         const NPCBusiness* biz = find_business(state, rec.employer_business_id);
-        if (!biz) continue;
+        if (!biz)
+            continue;
 
         float wage = rec.offered_wage;
 
@@ -134,23 +137,24 @@ void LaborMarketModule::process_wage_payments(uint32_t province_id,
 // LaborMarketModule — hiring decisions
 // ===========================================================================
 
-void LaborMarketModule::process_hiring_decisions(uint32_t province_id,
-                                                  const WorldState& state,
-                                                  DeltaBuffer& delta) {
+void LaborMarketModule::process_hiring_decisions(uint32_t province_id, const WorldState& state,
+                                                 DeltaBuffer& delta) {
     // Process postings for this province, sorted by posting id ascending.
     std::vector<std::size_t> province_postings;
     for (std::size_t i = 0; i < job_postings_.size(); ++i) {
         auto& posting = job_postings_[i];
-        if (posting.province_id != province_id) continue;
-        if (posting.filled) continue;
-        if (posting.expires_tick <= state.current_tick) continue;
+        if (posting.province_id != province_id)
+            continue;
+        if (posting.filled)
+            continue;
+        if (posting.expires_tick <= state.current_tick)
+            continue;
         province_postings.push_back(i);
     }
 
-    std::sort(province_postings.begin(), province_postings.end(),
-              [this](std::size_t a, std::size_t b) {
-                  return job_postings_[a].id < job_postings_[b].id;
-              });
+    std::sort(
+        province_postings.begin(), province_postings.end(),
+        [this](std::size_t a, std::size_t b) { return job_postings_[a].id < job_postings_[b].id; });
 
     for (std::size_t idx : province_postings) {
         auto& posting = job_postings_[idx];
@@ -170,19 +174,24 @@ void LaborMarketModule::process_hiring_decisions(uint32_t province_id,
 
         for (const auto& app : apps) {
             // Filter: must meet minimum skill level.
-            if (app.skill_level < posting.min_skill_level) continue;
+            if (app.skill_level < posting.min_skill_level)
+                continue;
 
             // Filter: offered wage must meet salary expectation.
-            if (posting.offered_wage < app.salary_expectation) continue;
+            if (posting.offered_wage < app.salary_expectation)
+                continue;
 
             // Filter: NPC must still be active and in this province.
             const NPC* npc = find_npc(state, app.applicant_npc_id);
-            if (!npc) continue;
-            if (npc->status != NPCStatus::active) continue;
+            if (!npc)
+                continue;
+            if (npc->status != NPCStatus::active)
+                continue;
 
             // Check NPC is not already employed.
             const EmploymentRecord* existing = find_employment(app.applicant_npc_id);
-            if (existing && existing->employer_business_id != 0) continue;
+            if (existing && existing->employer_business_id != 0)
+                continue;
 
             float ratio = app.skill_level / app.salary_expectation;
             if (ratio > best_ratio) {
@@ -203,13 +212,9 @@ void LaborMarketModule::process_hiring_decisions(uint32_t province_id,
                 existing->hired_tick = state.current_tick;
                 existing->deferred_salary_ticks = 0;
             } else {
-                employment_records_.push_back(EmploymentRecord{
-                    best->applicant_npc_id,
-                    posting.business_id,
-                    posting.offered_wage,
-                    state.current_tick,
-                    0
-                });
+                employment_records_.push_back(
+                    EmploymentRecord{best->applicant_npc_id, posting.business_id,
+                                     posting.offered_wage, state.current_tick, 0});
             }
 
             // Emit hiring memory: employment_positive.
@@ -239,46 +244,48 @@ void LaborMarketModule::process_hiring_decisions(uint32_t province_id,
 // LaborMarketModule — voluntary departures
 // ===========================================================================
 
-void LaborMarketModule::process_voluntary_departures(uint32_t province_id,
-                                                      const WorldState& state,
-                                                      DeltaBuffer& delta,
-                                                      DeterministicRNG& rng) {
+void LaborMarketModule::process_voluntary_departures(uint32_t province_id, const WorldState& state,
+                                                     DeltaBuffer& delta, DeterministicRNG& rng) {
     // Collect employed NPCs in this province, sorted by npc_id.
     std::vector<std::size_t> province_employed;
     for (std::size_t i = 0; i < employment_records_.size(); ++i) {
         auto& rec = employment_records_[i];
-        if (rec.employer_business_id == 0) continue;
+        if (rec.employer_business_id == 0)
+            continue;
 
         const NPC* npc = find_npc(state, rec.npc_id);
-        if (!npc) continue;
-        if (npc->current_province_id != province_id) continue;
-        if (npc->status != NPCStatus::active) continue;
+        if (!npc)
+            continue;
+        if (npc->current_province_id != province_id)
+            continue;
+        if (npc->status != NPCStatus::active)
+            continue;
 
         province_employed.push_back(i);
     }
 
     std::sort(province_employed.begin(), province_employed.end(),
               [this](std::size_t a, std::size_t b) {
-                  return employment_records_[a].npc_id
-                       < employment_records_[b].npc_id;
+                  return employment_records_[a].npc_id < employment_records_[b].npc_id;
               });
 
     for (std::size_t idx : province_employed) {
         auto& rec = employment_records_[idx];
         const NPC* npc = find_npc(state, rec.npc_id);
-        if (!npc) continue;
+        if (!npc)
+            continue;
 
         float satisfaction = compute_worker_satisfaction(*npc);
 
         // Only evaluate departure if satisfaction below threshold.
-        if (satisfaction >= LaborConfig::voluntary_departure_threshold) continue;
+        if (satisfaction >= LaborConfig::voluntary_departure_threshold)
+            continue;
 
         // career motivation weight (OutcomeType::career_advance = 2).
         float career_motivation = npc->motivations.weights[2];
 
-        float departure_prob = LaborConfig::departure_base_rate
-                             * (1.0f - satisfaction)
-                             * career_motivation;
+        float departure_prob =
+            LaborConfig::departure_base_rate * (1.0f - satisfaction) * career_motivation;
 
         // Draw from RNG to decide departure.
         float roll = rng.next_float();
@@ -312,11 +319,12 @@ void LaborMarketModule::process_voluntary_departures(uint32_t province_id,
 // LaborMarketModule — expired posting cleanup
 // ===========================================================================
 
-void LaborMarketModule::close_expired_postings(uint32_t province_id,
-                                               uint32_t current_tick) {
+void LaborMarketModule::close_expired_postings(uint32_t province_id, uint32_t current_tick) {
     for (auto& posting : job_postings_) {
-        if (posting.province_id != province_id) continue;
-        if (posting.filled) continue;
+        if (posting.province_id != province_id)
+            continue;
+        if (posting.filled)
+            continue;
         if (posting.expires_tick <= current_tick) {
             posting.filled = true;  // Mark as closed (unfilled).
         }
@@ -341,7 +349,8 @@ void LaborMarketModule::update_regional_wages(const WorldState& state) {
     // Clamp to [wage_floor, wage_ceiling].
 
     for (const auto& prov : state.provinces) {
-        if (prov.lod_level != SimulationLOD::full) continue;
+        if (prov.lod_level != SimulationLOD::full)
+            continue;
 
         uint32_t pid = prov.id;
 
@@ -362,9 +371,8 @@ void LaborMarketModule::update_regional_wages(const WorldState& state) {
             // Count demand: active unfilled postings in this province for this domain.
             float demand = 0.0f;
             for (const auto& posting : job_postings_) {
-                if (posting.province_id == pid
-                    && posting.required_domain == domain
-                    && !posting.filled) {
+                if (posting.province_id == pid && posting.required_domain == domain &&
+                    !posting.filled) {
                     demand += 1.0f;
                 }
             }
@@ -373,7 +381,8 @@ void LaborMarketModule::update_regional_wages(const WorldState& state) {
             float supply = 0.0f;
             for (uint32_t npc_id : prov.significant_npc_ids) {
                 const EmploymentRecord* emp = find_employment(npc_id);
-                if (emp && emp->employer_business_id != 0) continue;  // already employed
+                if (emp && emp->employer_business_id != 0)
+                    continue;  // already employed
 
                 // Check if NPC has skill in this domain.
                 float skill = get_npc_skill(npc_id, domain);
@@ -395,13 +404,11 @@ void LaborMarketModule::update_regional_wages(const WorldState& state) {
 
             // Get current wage (or initialize to a reasonable default).
             auto it = regional_wages_.find(key);
-            float current_wage = (it != regional_wages_.end())
-                               ? it->second
-                               : base_wage;
+            float current_wage = (it != regional_wages_.end()) ? it->second : base_wage;
 
             // Adjust wage.
-            float new_wage = current_wage
-                           * (1.0f + LaborConfig::wage_adjustment_rate * (ratio - 1.0f));
+            float new_wage =
+                current_wage * (1.0f + LaborConfig::wage_adjustment_rate * (ratio - 1.0f));
 
             // Clamp.
             new_wage = std::max(LaborConfig::wage_floor, new_wage);
@@ -417,7 +424,7 @@ void LaborMarketModule::update_regional_wages(const WorldState& state) {
 // ===========================================================================
 
 float LaborMarketModule::compute_employer_reputation(uint32_t business_id,
-                                                      const WorldState& state) {
+                                                     const WorldState& state) {
     // Reputation is derived from worker memory logs.
     // For each NPC, scan memory_log for entries with subject_id == business_id.
     // Positive employment memories increase reputation; negative decrease.
@@ -428,14 +435,14 @@ float LaborMarketModule::compute_employer_reputation(uint32_t business_id,
 
     for (const auto& npc : state.significant_npcs) {
         for (const auto& mem : npc.memory_log) {
-            if (mem.subject_id != business_id) continue;
+            if (mem.subject_id != business_id)
+                continue;
 
-            if (mem.type == MemoryType::employment_positive
-                || mem.type == MemoryType::employment_negative
-                || mem.type == MemoryType::witnessed_wage_theft
-                || mem.type == MemoryType::witnessed_illegal_activity
-                || mem.type == MemoryType::witnessed_safety_violation) {
-
+            if (mem.type == MemoryType::employment_positive ||
+                mem.type == MemoryType::employment_negative ||
+                mem.type == MemoryType::witnessed_wage_theft ||
+                mem.type == MemoryType::witnessed_illegal_activity ||
+                mem.type == MemoryType::witnessed_safety_violation) {
                 float abs_weight = std::abs(mem.emotional_weight) * mem.decay;
                 total_weight += abs_weight;
                 if (mem.emotional_weight > 0.0f) {
@@ -470,10 +477,10 @@ float LaborMarketModule::compute_worker_satisfaction(const NPC& npc) {
     for (const auto& mem : npc.memory_log) {
         if (mem.type == MemoryType::employment_positive) {
             positive_sum += mem.emotional_weight * mem.decay;
-        } else if (mem.type == MemoryType::employment_negative
-                   || mem.type == MemoryType::witnessed_wage_theft
-                   || mem.type == MemoryType::witnessed_safety_violation
-                   || mem.type == MemoryType::witnessed_illegal_activity) {
+        } else if (mem.type == MemoryType::employment_negative ||
+                   mem.type == MemoryType::witnessed_wage_theft ||
+                   mem.type == MemoryType::witnessed_safety_violation ||
+                   mem.type == MemoryType::witnessed_illegal_activity) {
             negative_sum += std::abs(mem.emotional_weight) * mem.decay;
         }
     }
@@ -492,7 +499,8 @@ float LaborMarketModule::compute_worker_satisfaction(const NPC& npc) {
 
 float LaborMarketModule::get_npc_skill(uint32_t npc_id, SkillDomain domain) const {
     auto it = npc_skills_.find(npc_id);
-    if (it == npc_skills_.end()) return 0.0f;
+    if (it == npc_skills_.end())
+        return 0.0f;
 
     for (const auto& entry : it->second) {
         if (entry.domain == domain) {
@@ -506,8 +514,7 @@ float LaborMarketModule::get_npc_skill(uint32_t npc_id, SkillDomain domain) cons
 // LaborMarketModule — pool size computation
 // ===========================================================================
 
-uint32_t LaborMarketModule::effective_pool_size(HiringChannel channel,
-                                                 float reputation) {
+uint32_t LaborMarketModule::effective_pool_size(HiringChannel channel, float reputation) {
     uint32_t base_size = 0;
     switch (channel) {
         case HiringChannel::public_board:
@@ -523,8 +530,8 @@ uint32_t LaborMarketModule::effective_pool_size(HiringChannel channel,
 
     // Low reputation penalty: reduce pool size.
     if (reputation < LaborConfig::reputation_threshold) {
-        float penalty = (LaborConfig::reputation_threshold - reputation)
-                       * LaborConfig::reputation_pool_penalty_scale;
+        float penalty = (LaborConfig::reputation_threshold - reputation) *
+                        LaborConfig::reputation_pool_penalty_scale;
         uint32_t reduction = static_cast<uint32_t>(std::round(penalty));
         if (reduction >= base_size) {
             return 1;  // At least 1 applicant.
@@ -539,17 +546,15 @@ uint32_t LaborMarketModule::effective_pool_size(HiringChannel channel,
 // LaborMarketModule — salary expectation computation
 // ===========================================================================
 
-float LaborMarketModule::compute_salary_expectation(float regional_wage,
-                                                     float money_motivation,
-                                                     float employer_reputation) {
+float LaborMarketModule::compute_salary_expectation(float regional_wage, float money_motivation,
+                                                    float employer_reputation) {
     // Base expectation.
     float expectation = regional_wage * (1.0f + money_motivation * 0.3f);
 
     // Low reputation premium.
     if (employer_reputation < LaborConfig::reputation_threshold) {
-        float premium = 1.0f
-            + (LaborConfig::reputation_threshold - employer_reputation)
-              * LaborConfig::salary_premium_per_rep_point;
+        float premium = 1.0f + (LaborConfig::reputation_threshold - employer_reputation) *
+                                   LaborConfig::salary_premium_per_rep_point;
         expectation *= premium;
     }
 
@@ -592,8 +597,7 @@ const NPC* LaborMarketModule::find_npc(const WorldState& state, uint32_t npc_id)
     return nullptr;
 }
 
-const NPCBusiness* LaborMarketModule::find_business(const WorldState& state,
-                                                     uint32_t business_id) {
+const NPCBusiness* LaborMarketModule::find_business(const WorldState& state, uint32_t business_id) {
     for (const auto& biz : state.npc_businesses) {
         if (biz.id == business_id) {
             return &biz;

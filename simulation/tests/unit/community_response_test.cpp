@@ -1,13 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "modules/community_response/community_response_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"
-
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/community_response/community_response_module.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace econlife;
@@ -60,38 +59,44 @@ TEST_CASE("test_compute_grievance_contribution", "[community_response][tier6]") 
 TEST_CASE("test_memory_type_grievance_weight", "[community_response][tier6]") {
     // Direct harm = 1.0
     REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::witnessed_illegal_activity), WithinAbs(1.0f, 0.001f));
+                     MemoryType::witnessed_illegal_activity),
+                 WithinAbs(1.0f, 0.001f));
     REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::witnessed_safety_violation), WithinAbs(1.0f, 0.001f));
-    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::witnessed_wage_theft), WithinAbs(1.0f, 0.001f));
-    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::physical_hazard), WithinAbs(1.0f, 0.001f));
-    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::retaliation_experienced), WithinAbs(1.0f, 0.001f));
+                     MemoryType::witnessed_safety_violation),
+                 WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(
+        CommunityResponseModule::memory_type_grievance_weight(MemoryType::witnessed_wage_theft),
+        WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(MemoryType::physical_hazard),
+                 WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(
+        CommunityResponseModule::memory_type_grievance_weight(MemoryType::retaliation_experienced),
+        WithinAbs(1.0f, 0.001f));
 
     // Economic harm = 0.5
-    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::employment_negative), WithinAbs(0.5f, 0.001f));
-    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::facility_quality), WithinAbs(0.5f, 0.001f));
+    REQUIRE_THAT(
+        CommunityResponseModule::memory_type_grievance_weight(MemoryType::employment_negative),
+        WithinAbs(0.5f, 0.001f));
+    REQUIRE_THAT(
+        CommunityResponseModule::memory_type_grievance_weight(MemoryType::facility_quality),
+        WithinAbs(0.5f, 0.001f));
 
     // Others = 0.0
-    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::interaction), WithinAbs(0.0f, 0.001f));
-    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(
-        MemoryType::observation), WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(MemoryType::interaction),
+                 WithinAbs(0.0f, 0.001f));
+    REQUIRE_THAT(CommunityResponseModule::memory_type_grievance_weight(MemoryType::observation),
+                 WithinAbs(0.0f, 0.001f));
 }
 
 TEST_CASE("test_compute_resource_access_sample", "[community_response][tier6]") {
     // capital=5000/10000=0.5, social=25/50=0.5 -> 1.0 (clamped)
-    float r = CommunityResponseModule::compute_resource_access_sample(
-        5000.0f, 10000.0f, 25.0f, 50.0f);
+    float r =
+        CommunityResponseModule::compute_resource_access_sample(5000.0f, 10000.0f, 25.0f, 50.0f);
     REQUIRE_THAT(r, WithinAbs(1.0f, 0.001f));
 
     // capital=1000/10000=0.1, social=10/50=0.2 -> 0.3
-    float r2 = CommunityResponseModule::compute_resource_access_sample(
-        1000.0f, 10000.0f, 10.0f, 50.0f);
+    float r2 =
+        CommunityResponseModule::compute_resource_access_sample(1000.0f, 10000.0f, 10.0f, 50.0f);
     REQUIRE_THAT(r2, WithinAbs(0.3f, 0.001f));
 }
 
@@ -135,25 +140,21 @@ TEST_CASE("test_evaluate_stage_all_thresholds", "[community_response][tier6]") {
 TEST_CASE("test_apply_stage_transition_up_and_down", "[community_response][tier6]") {
     // Advance from quiescent to organized_complaint target -> only goes to informal
     auto up = CommunityResponseModule::apply_stage_transition(
-        CommunityResponseStage::quiescent,
-        CommunityResponseStage::organized_complaint,
-        true, false);
+        CommunityResponseStage::quiescent, CommunityResponseStage::organized_complaint, true,
+        false);
     REQUIRE(up == CommunityResponseStage::informal_complaint);
 
     // Regress from direct_action to quiescent target -> only goes to economic_resistance
     auto down = CommunityResponseModule::apply_stage_transition(
-        CommunityResponseStage::direct_action,
-        CommunityResponseStage::quiescent,
-        true, false);
+        CommunityResponseStage::direct_action, CommunityResponseStage::quiescent, true, false);
     REQUIRE(down == CommunityResponseStage::economic_resistance);
 }
 
 TEST_CASE("test_stage_cannot_skip", "[community_response][tier6]") {
     // Target jumps to sustained_opposition from quiescent
     auto result = CommunityResponseModule::apply_stage_transition(
-        CommunityResponseStage::quiescent,
-        CommunityResponseStage::sustained_opposition,
-        true, false);
+        CommunityResponseStage::quiescent, CommunityResponseStage::sustained_opposition, true,
+        false);
     // Should only advance one step
     REQUIRE(result == CommunityResponseStage::informal_complaint);
 }
@@ -161,9 +162,8 @@ TEST_CASE("test_stage_cannot_skip", "[community_response][tier6]") {
 TEST_CASE("test_stage_regression_rate_limited", "[community_response][tier6]") {
     // When can_regress = false, no regression allowed
     auto result = CommunityResponseModule::apply_stage_transition(
-        CommunityResponseStage::direct_action,
-        CommunityResponseStage::quiescent,
-        false,   // cannot regress (cooldown not expired)
+        CommunityResponseStage::direct_action, CommunityResponseStage::quiescent,
+        false,  // cannot regress (cooldown not expired)
         false);
     REQUIRE(result == CommunityResponseStage::direct_action);
 }
@@ -171,8 +171,7 @@ TEST_CASE("test_stage_regression_rate_limited", "[community_response][tier6]") {
 TEST_CASE("test_sustained_opposition_no_auto_regress", "[community_response][tier6]") {
     // With opposition org formed, sustained_opposition cannot regress
     auto result = CommunityResponseModule::apply_stage_transition(
-        CommunityResponseStage::sustained_opposition,
-        CommunityResponseStage::quiescent,
+        CommunityResponseStage::sustained_opposition, CommunityResponseStage::quiescent,
         true,   // cooldown expired
         true);  // opposition org exists
     REQUIRE(result == CommunityResponseStage::sustained_opposition);
@@ -260,8 +259,7 @@ TEST_CASE("test_grievance_from_negative_memory", "[community_response][tier6]") 
         npc.status = NPCStatus::active;
         npc.social_capital = 30.0f;
         npc.capital = 1000.0f;
-        npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f,
-                                    0.125f, 0.125f, 0.125f, 0.125f};
+        npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
 
         // witnessed_illegal_activity memory: weight 1.0
         MemoryEntry entry{};
@@ -312,8 +310,7 @@ TEST_CASE("test_grievance_shock_bypasses_ema", "[community_response][tier6]") {
         npc.status = NPCStatus::active;
         npc.social_capital = 30.0f;
         npc.capital = 1000.0f;
-        npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f,
-                                    0.125f, 0.125f, 0.125f, 0.125f};
+        npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
 
         // Many high-weight negative memories
         for (int m = 0; m < 20; ++m) {
@@ -334,7 +331,8 @@ TEST_CASE("test_grievance_shock_bypasses_ema", "[community_response][tier6]") {
     for (const auto& rd : delta.region_deltas) {
         if (rd.region_id == 0 && rd.grievance_delta.has_value()) {
             // With shock, delta should be much larger than EMA would produce
-            REQUIRE(rd.grievance_delta.value() > CommunityResponseModule::Constants::grievance_shock_threshold);
+            REQUIRE(rd.grievance_delta.value() >
+                    CommunityResponseModule::Constants::grievance_shock_threshold);
         }
     }
 }
@@ -356,8 +354,10 @@ TEST_CASE("test_historical_trauma_sets_floors", "[community_response][tier6]") {
     // grievance floor = 0.60 * 0.25 = 0.15
     // trust ceiling = 1.0 - 0.60 * 0.30 = 0.82
     float trauma = 0.60f;
-    float grievance_floor = trauma * CommunityResponseModule::Constants::trauma_grievance_floor_scale;
-    float trust_ceiling = 1.0f - trauma * CommunityResponseModule::Constants::trauma_trust_ceiling_scale;
+    float grievance_floor =
+        trauma * CommunityResponseModule::Constants::trauma_grievance_floor_scale;
+    float trust_ceiling =
+        1.0f - trauma * CommunityResponseModule::Constants::trauma_trust_ceiling_scale;
 
     REQUIRE_THAT(grievance_floor, WithinAbs(0.15f, 0.001f));
     REQUIRE_THAT(trust_ceiling, WithinAbs(0.82f, 0.001f));

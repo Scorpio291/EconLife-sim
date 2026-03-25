@@ -1,8 +1,9 @@
 #pragma once
 
-#include "core/tick/tick_module.h"
-#include "alternative_identity_types.h"
 #include <vector>
+
+#include "alternative_identity_types.h"
+#include "core/tick/tick_module.h"
 
 namespace econlife {
 
@@ -10,7 +11,7 @@ struct WorldState;
 struct DeltaBuffer;
 
 class AlternativeIdentityModule : public ITickModule {
-public:
+   public:
     std::string_view name() const noexcept override { return "alternative_identity"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -25,13 +26,13 @@ public:
     static float compute_witness_discovery_confidence();
     static float compute_forensic_discovery_confidence();
 
-    static constexpr float DOCUMENTATION_DECAY_RATE  = 0.001f;
-    static constexpr float DOCUMENTATION_BUILD_RATE  = 0.005f;
-    static constexpr float BURN_THRESHOLD            = 0.10f;
-    static constexpr float WITNESS_CONFIDENCE        = 0.70f;
-    static constexpr float FORENSIC_CONFIDENCE       = 0.55f;
+    static constexpr float DOCUMENTATION_DECAY_RATE = 0.001f;
+    static constexpr float DOCUMENTATION_BUILD_RATE = 0.005f;
+    static constexpr float BURN_THRESHOLD = 0.10f;
+    static constexpr float WITNESS_CONFIDENCE = 0.70f;
+    static constexpr float FORENSIC_CONFIDENCE = 0.55f;
 
-private:
+   private:
     std::vector<AlternativeIdentity> identities_;
 };
 

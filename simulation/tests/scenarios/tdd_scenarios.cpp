@@ -10,9 +10,9 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdint>
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/apply_deltas.h"
 #include "core/tick/drain_deferred_work.h"
+#include "core/world_state/apply_deltas.h"
+#include "core/world_state/world_state.h"
 #include "tests/test_world_factory.h"
 
 using namespace econlife;
@@ -36,22 +36,22 @@ TEST_CASE("seasonal harvest creates supply spike then gap", "[scenario][tdd][agr
     const uint32_t PROVINCE = 0;
 
     float pre_harvest_supply = world.regional_markets[0].supply;
-    float pre_harvest_price  = world.regional_markets[0].spot_price;
+    float pre_harvest_price = world.regional_markets[0].spot_price;
 
     // ---- Tick 90: harvest arrives ----
     world.current_tick = 90;
 
     DeltaBuffer harvest_delta{};
     MarketDelta harvest_md{};
-    harvest_md.good_id               = WHEAT;
-    harvest_md.region_id             = PROVINCE;
-    harvest_md.supply_delta          = 300.0f;                    // large harvest surplus
-    harvest_md.spot_price_override   = pre_harvest_price * 0.75f; // price drops 25 %
+    harvest_md.good_id = WHEAT;
+    harvest_md.region_id = PROVINCE;
+    harvest_md.supply_delta = 300.0f;                            // large harvest surplus
+    harvest_md.spot_price_override = pre_harvest_price * 0.75f;  // price drops 25 %
     harvest_delta.market_deltas.push_back(harvest_md);
     apply_deltas(world, harvest_delta);
 
     float harvest_supply = world.regional_markets[0].supply;
-    float harvest_price  = world.regional_markets[0].spot_price;
+    float harvest_price = world.regional_markets[0].spot_price;
 
     REQUIRE(harvest_supply > pre_harvest_supply);
     REQUIRE_THAT(harvest_supply, WithinAbs(pre_harvest_supply + 300.0f, 0.01f));
@@ -62,10 +62,10 @@ TEST_CASE("seasonal harvest creates supply spike then gap", "[scenario][tdd][agr
 
     DeltaBuffer offseason_delta{};
     MarketDelta offseason_md{};
-    offseason_md.good_id             = WHEAT;
-    offseason_md.region_id           = PROVINCE;
+    offseason_md.good_id = WHEAT;
+    offseason_md.region_id = PROVINCE;
     // No supply_delta — nothing produced.
-    offseason_md.spot_price_override = pre_harvest_price * 1.20f; // price rises above pre-harvest
+    offseason_md.spot_price_override = pre_harvest_price * 1.20f;  // price rises above pre-harvest
     offseason_delta.market_deltas.push_back(offseason_md);
     apply_deltas(world, offseason_delta);
 
@@ -90,19 +90,22 @@ TEST_CASE("inter-province trade smooths seasonal price differences", "[scenario]
     //   TRADED    — a cross-province delta delivers supply to the high-price province,
     //               keeping its price lower than the isolated case.
 
-    const uint32_t GOOD     = 0;
-    const uint32_t PROV_A   = 0;   // northern hemisphere — harvests at tick 90
-    const uint32_t PROV_B   = 1;   // southern hemisphere — harvests at tick 270
+    const uint32_t GOOD = 0;
+    const uint32_t PROV_A = 0;  // northern hemisphere — harvests at tick 90
+    const uint32_t PROV_B = 1;  // southern hemisphere — harvests at tick 270
 
     // --- ISOLATED scenario ---
     {
         auto world = create_test_world(10, 10, 2, 3);
 
-        float price_A_base = world.regional_markets[0].spot_price; // province 0, good 0
+        float price_A_base = world.regional_markets[0].spot_price;  // province 0, good 0
         // Find Province B's market for good 0.
         float price_B_base = 0.0f;
         for (const auto& m : world.regional_markets) {
-            if (m.good_id == GOOD && m.province_id == PROV_B) { price_B_base = m.spot_price; break; }
+            if (m.good_id == GOOD && m.province_id == PROV_B) {
+                price_B_base = m.spot_price;
+                break;
+            }
         }
 
         // Tick 90: Province A harvests — price drops.
@@ -110,8 +113,9 @@ TEST_CASE("inter-province trade smooths seasonal price differences", "[scenario]
         {
             DeltaBuffer d{};
             MarketDelta md{};
-            md.good_id = GOOD; md.region_id = PROV_A;
-            md.supply_delta        = 200.0f;
+            md.good_id = GOOD;
+            md.region_id = PROV_A;
+            md.supply_delta = 200.0f;
             md.spot_price_override = price_A_base * 0.60f;
             d.market_deltas.push_back(md);
             apply_deltas(world, d);
@@ -122,7 +126,8 @@ TEST_CASE("inter-province trade smooths seasonal price differences", "[scenario]
         {
             DeltaBuffer d{};
             MarketDelta md{};
-            md.good_id = GOOD; md.region_id = PROV_B;
+            md.good_id = GOOD;
+            md.region_id = PROV_B;
             md.spot_price_override = price_B_base * 1.40f;
             d.market_deltas.push_back(md);
             apply_deltas(world, d);
@@ -130,24 +135,26 @@ TEST_CASE("inter-province trade smooths seasonal price differences", "[scenario]
         float price_B_scarce_isolated = 0.0f;
         for (const auto& m : world.regional_markets) {
             if (m.good_id == GOOD && m.province_id == PROV_B) {
-                price_B_scarce_isolated = m.spot_price; break;
+                price_B_scarce_isolated = m.spot_price;
+                break;
             }
         }
 
         float isolated_spread = price_B_scarce_isolated - price_A_harvest;
-        REQUIRE(isolated_spread > 0.0f); // B is more expensive than A in isolation.
+        REQUIRE(isolated_spread > 0.0f);  // B is more expensive than A in isolation.
 
         // --- TRADED scenario (same world, apply cross-province smoothing) ---
         // Province A ships 100 units to Province B at tick 90 (same tick, due_tick == current).
         CrossProvinceDelta cpd{};
         cpd.source_province_id = PROV_A;
         cpd.target_province_id = PROV_B;
-        cpd.due_tick           = 90; // already due this tick
+        cpd.due_tick = 90;  // already due this tick
         MarketDelta trade_arrival{};
-        trade_arrival.good_id             = GOOD;
-        trade_arrival.region_id           = PROV_B;
-        trade_arrival.supply_delta        = 100.0f;
-        trade_arrival.spot_price_override = price_B_base * 1.10f; // smoothed — only 10 % above base
+        trade_arrival.good_id = GOOD;
+        trade_arrival.region_id = PROV_B;
+        trade_arrival.supply_delta = 100.0f;
+        trade_arrival.spot_price_override =
+            price_B_base * 1.10f;  // smoothed — only 10 % above base
         cpd.market_delta = trade_arrival;
         world.cross_province_delta_buffer.entries.push_back(cpd);
 
@@ -156,7 +163,8 @@ TEST_CASE("inter-province trade smooths seasonal price differences", "[scenario]
         float price_B_traded = 0.0f;
         for (const auto& m : world.regional_markets) {
             if (m.good_id == GOOD && m.province_id == PROV_B) {
-                price_B_traded = m.spot_price; break;
+                price_B_traded = m.spot_price;
+                break;
             }
         }
 
@@ -180,13 +188,12 @@ TEST_CASE("weak board approves bad expansion", "[scenario][tdd][business]") {
     DeltaBuffer delta{};
     BusinessDelta bd{};
     bd.business_id = world.npc_businesses[0].id;
-    bd.cash_delta  = -EXPANSION_COST;
+    bd.cash_delta = -EXPANSION_COST;
     delta.business_deltas.push_back(bd);
     apply_deltas(world, delta);
 
     // Board approved: cash has decreased by the expansion amount.
-    REQUIRE_THAT(world.npc_businesses[0].cash,
-                 WithinAbs(initial_cash - EXPANSION_COST, 0.01f));
+    REQUIRE_THAT(world.npc_businesses[0].cash, WithinAbs(initial_cash - EXPANSION_COST, 0.01f));
     REQUIRE(world.npc_businesses[0].cash < initial_cash);
 }
 
@@ -215,35 +222,38 @@ TEST_CASE("transport mode affects transit time", "[scenario][tdd][trade]") {
 
     auto world = create_test_world(42, 10, 2, 5);
 
-    const uint32_t GOOD   = 0;
+    const uint32_t GOOD = 0;
     const uint32_t TARGET = 1;
 
     float supply_before = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_before = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_before = m.supply;
+            break;
+        }
     }
 
     // Road delta: due_tick = current_tick + 3
     CrossProvinceDelta road_cpd{};
     road_cpd.source_province_id = 0;
     road_cpd.target_province_id = TARGET;
-    road_cpd.due_tick           = 3;
+    road_cpd.due_tick = 3;
     MarketDelta road_arrival{};
-    road_arrival.good_id     = GOOD;
-    road_arrival.region_id   = TARGET;
+    road_arrival.good_id = GOOD;
+    road_arrival.region_id = TARGET;
     road_arrival.supply_delta = 50.0f;
-    road_cpd.market_delta    = road_arrival;
+    road_cpd.market_delta = road_arrival;
 
     // Sea delta: due_tick = current_tick + 10
     CrossProvinceDelta sea_cpd{};
     sea_cpd.source_province_id = 0;
     sea_cpd.target_province_id = TARGET;
-    sea_cpd.due_tick           = 10;
+    sea_cpd.due_tick = 10;
     MarketDelta sea_arrival{};
-    sea_arrival.good_id      = GOOD;
-    sea_arrival.region_id    = TARGET;
+    sea_arrival.good_id = GOOD;
+    sea_arrival.region_id = TARGET;
     sea_arrival.supply_delta = 80.0f;
-    sea_cpd.market_delta     = sea_arrival;
+    sea_cpd.market_delta = sea_arrival;
 
     // At tick 2: neither should have fired yet.
     world.current_tick = 2;
@@ -253,7 +263,10 @@ TEST_CASE("transport mode affects transit time", "[scenario][tdd][trade]") {
 
     float supply_tick2 = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_tick2 = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_tick2 = m.supply;
+            break;
+        }
     }
     REQUIRE_THAT(supply_tick2, WithinAbs(supply_before, 0.01f));
 
@@ -265,7 +278,10 @@ TEST_CASE("transport mode affects transit time", "[scenario][tdd][trade]") {
 
     float supply_tick3 = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_tick3 = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_tick3 = m.supply;
+            break;
+        }
     }
     REQUIRE_THAT(supply_tick3, WithinAbs(supply_before + 50.0f, 0.01f));
 
@@ -276,7 +292,10 @@ TEST_CASE("transport mode affects transit time", "[scenario][tdd][trade]") {
 
     float supply_tick10 = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_tick10 = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_tick10 = m.supply;
+            break;
+        }
     }
     REQUIRE_THAT(supply_tick10, WithinAbs(supply_before + 50.0f + 80.0f, 0.01f));
 
@@ -290,32 +309,35 @@ TEST_CASE("perishable goods degrade during transit", "[scenario][tdd][trade]") {
 
     auto world = create_test_world(42, 10, 2, 5);
 
-    const uint32_t GOOD     = 0;
-    const uint32_t TARGET   = 1;
-    const float    SHIPPED  = 100.0f;
+    const uint32_t GOOD = 0;
+    const uint32_t TARGET = 1;
+    const float SHIPPED = 100.0f;
     // 10-tick transit with 2 % decay per tick: 100 * (0.98)^10 ≈ 81.7 units delivered.
-    const float    DECAY_RATE    = 0.02f;
-    const float    TRANSIT_TICKS = 10.0f;
-    float          delivered = SHIPPED;
+    const float DECAY_RATE = 0.02f;
+    const float TRANSIT_TICKS = 10.0f;
+    float delivered = SHIPPED;
     for (int i = 0; i < static_cast<int>(TRANSIT_TICKS); ++i) {
         delivered *= (1.0f - DECAY_RATE);
     }
 
     float supply_before = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_before = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_before = m.supply;
+            break;
+        }
     }
 
     // Cross-province delta carries the degraded quantity.
     CrossProvinceDelta cpd{};
     cpd.source_province_id = 0;
     cpd.target_province_id = TARGET;
-    cpd.due_tick           = 10;
+    cpd.due_tick = 10;
     MarketDelta arrival{};
-    arrival.good_id      = GOOD;
-    arrival.region_id    = TARGET;
-    arrival.supply_delta = delivered;    // degraded amount
-    cpd.market_delta     = arrival;
+    arrival.good_id = GOOD;
+    arrival.region_id = TARGET;
+    arrival.supply_delta = delivered;  // degraded amount
+    cpd.market_delta = arrival;
 
     world.current_tick = 10;
     world.cross_province_delta_buffer.entries.push_back(cpd);
@@ -323,7 +345,10 @@ TEST_CASE("perishable goods degrade during transit", "[scenario][tdd][trade]") {
 
     float supply_after = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_after = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_after = m.supply;
+            break;
+        }
     }
 
     float received = supply_after - supply_before;
@@ -340,12 +365,15 @@ TEST_CASE("route capacity bottleneck delays shipments", "[scenario][tdd][trade]"
 
     auto world = create_test_world(42, 10, 2, 5);
 
-    const uint32_t GOOD   = 0;
+    const uint32_t GOOD = 0;
     const uint32_t TARGET = 1;
 
     float supply_before = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_before = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_before = m.supply;
+            break;
+        }
     }
 
     // Enqueue three shipments, each delayed by one tick due to capacity.
@@ -353,12 +381,12 @@ TEST_CASE("route capacity bottleneck delays shipments", "[scenario][tdd][trade]"
         CrossProvinceDelta cpd{};
         cpd.source_province_id = 0;
         cpd.target_province_id = TARGET;
-        cpd.due_tick           = 5 + i;   // staggered: 5, 6, 7
+        cpd.due_tick = 5 + i;  // staggered: 5, 6, 7
         MarketDelta arrival{};
-        arrival.good_id      = GOOD;
-        arrival.region_id    = TARGET;
+        arrival.good_id = GOOD;
+        arrival.region_id = TARGET;
         arrival.supply_delta = 100.0f;
-        cpd.market_delta     = arrival;
+        cpd.market_delta = arrival;
         world.cross_province_delta_buffer.entries.push_back(cpd);
     }
 
@@ -368,7 +396,10 @@ TEST_CASE("route capacity bottleneck delays shipments", "[scenario][tdd][trade]"
 
     float supply_t5 = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_t5 = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_t5 = m.supply;
+            break;
+        }
     }
     REQUIRE_THAT(supply_t5, WithinAbs(supply_before + 100.0f, 0.01f));
 
@@ -387,23 +418,22 @@ TEST_CASE("long position profits when price rises", "[scenario][tdd][commodity]"
 
     auto world = create_test_world(42, 10, 1, 5);
 
-    const float ENTRY_PRICE   = 50.0f;
-    const float EXIT_PRICE    = 70.0f;
+    const float ENTRY_PRICE = 50.0f;
+    const float EXIT_PRICE = 70.0f;
     const float POSITION_SIZE = 100.0f;
-    const float PROFIT        = (EXIT_PRICE - ENTRY_PRICE) * POSITION_SIZE; // 2000.0
+    const float PROFIT = (EXIT_PRICE - ENTRY_PRICE) * POSITION_SIZE;  // 2000.0
 
     float initial_capital = world.significant_npcs[0].capital;
 
     // Settlement: apply profit as capital_delta.
     DeltaBuffer delta{};
     NPCDelta nd{};
-    nd.npc_id        = world.significant_npcs[0].id;
+    nd.npc_id = world.significant_npcs[0].id;
     nd.capital_delta = PROFIT;
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.significant_npcs[0].capital,
-                 WithinAbs(initial_capital + PROFIT, 0.01f));
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(initial_capital + PROFIT, 0.01f));
     REQUIRE(world.significant_npcs[0].capital > initial_capital);
 }
 
@@ -413,17 +443,17 @@ TEST_CASE("margin call triggered on losing position", "[scenario][tdd][commodity
 
     auto world = create_test_world(42, 10, 1, 5);
 
-    const float ENTRY_PRICE   = 50.0f;
-    const float DROP_PRICE    = 38.0f;   // below maintenance margin (e.g. 80 % of entry)
+    const float ENTRY_PRICE = 50.0f;
+    const float DROP_PRICE = 38.0f;  // below maintenance margin (e.g. 80 % of entry)
     const float POSITION_SIZE = 100.0f;
-    const float LOSS          = (DROP_PRICE - ENTRY_PRICE) * POSITION_SIZE; // -1200.0
+    const float LOSS = (DROP_PRICE - ENTRY_PRICE) * POSITION_SIZE;  // -1200.0
 
     float initial_capital = world.significant_npcs[0].capital;
 
     // Margin call: apply loss.
     DeltaBuffer delta{};
     NPCDelta nd{};
-    nd.npc_id        = world.significant_npcs[0].id;
+    nd.npc_id = world.significant_npcs[0].id;
     nd.capital_delta = LOSS;
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
@@ -435,29 +465,30 @@ TEST_CASE("margin call triggered on losing position", "[scenario][tdd][commodity
 
 // ── Real estate scenarios ───────────────────────────────────────────────────
 
-TEST_CASE("rent collection transfers capital from tenant to owner", "[scenario][tdd][real_estate]") {
+TEST_CASE("rent collection transfers capital from tenant to owner",
+          "[scenario][tdd][real_estate]") {
     // Tenant NPC pays 100 in rent to owner NPC in the same tick.
 
     auto world = create_test_world(42, 10, 1, 5);
 
     // Use first two NPCs as tenant and owner.
     uint32_t tenant_id = world.significant_npcs[0].id;
-    uint32_t owner_id  = world.significant_npcs[1].id;
+    uint32_t owner_id = world.significant_npcs[1].id;
 
     float tenant_initial = world.significant_npcs[0].capital;
-    float owner_initial  = world.significant_npcs[1].capital;
+    float owner_initial = world.significant_npcs[1].capital;
 
     const float RENT = 100.0f;
 
     DeltaBuffer delta{};
 
     NPCDelta tenant_delta{};
-    tenant_delta.npc_id        = tenant_id;
+    tenant_delta.npc_id = tenant_id;
     tenant_delta.capital_delta = -RENT;
     delta.npc_deltas.push_back(tenant_delta);
 
     NPCDelta owner_delta{};
-    owner_delta.npc_id        = owner_id;
+    owner_delta.npc_id = owner_id;
     owner_delta.capital_delta = RENT;
     delta.npc_deltas.push_back(owner_delta);
 
@@ -465,8 +496,7 @@ TEST_CASE("rent collection transfers capital from tenant to owner", "[scenario][
 
     REQUIRE_THAT(world.significant_npcs[0].capital,
                  WithinAbs(std::max(0.0f, tenant_initial - RENT), 0.01f));
-    REQUIRE_THAT(world.significant_npcs[1].capital,
-                 WithinAbs(owner_initial + RENT, 0.01f));
+    REQUIRE_THAT(world.significant_npcs[1].capital, WithinAbs(owner_initial + RENT, 0.01f));
 }
 
 TEST_CASE("property value correlates with economic health", "[scenario][tdd][real_estate]") {
@@ -476,12 +506,13 @@ TEST_CASE("property value correlates with economic health", "[scenario][tdd][rea
     auto world = create_test_world(42, 10, 1, 5);
 
     const uint32_t REAL_ESTATE_GOOD = 2;
-    const uint32_t PROVINCE         = 0;
+    const uint32_t PROVINCE = 0;
 
     float price_before = 0.0f;
     for (const auto& m : world.regional_markets) {
         if (m.good_id == REAL_ESTATE_GOOD && m.province_id == PROVINCE) {
-            price_before = m.spot_price; break;
+            price_before = m.spot_price;
+            break;
         }
     }
 
@@ -491,8 +522,8 @@ TEST_CASE("property value correlates with economic health", "[scenario][tdd][rea
     {
         DeltaBuffer d{};
         RegionDelta rd{};
-        rd.region_id        = PROVINCE;
-        rd.stability_delta  = 0.1f;
+        rd.region_id = PROVINCE;
+        rd.stability_delta = 0.1f;
         d.region_deltas.push_back(rd);
         apply_deltas(world, d);
     }
@@ -501,12 +532,13 @@ TEST_CASE("property value correlates with economic health", "[scenario][tdd][rea
     REQUIRE(stability_after > stability_before);
 
     // Economic health improved — raise property listing price via price override.
-    float price_after_stability = price_before * (1.0f + (stability_after - stability_before) * 0.5f);
+    float price_after_stability =
+        price_before * (1.0f + (stability_after - stability_before) * 0.5f);
     {
         DeltaBuffer d{};
         MarketDelta md{};
-        md.good_id             = REAL_ESTATE_GOOD;
-        md.region_id           = PROVINCE;
+        md.good_id = REAL_ESTATE_GOOD;
+        md.region_id = PROVINCE;
         md.spot_price_override = price_after_stability;
         d.market_deltas.push_back(md);
         apply_deltas(world, d);
@@ -515,7 +547,8 @@ TEST_CASE("property value correlates with economic health", "[scenario][tdd][rea
     float price_after = 0.0f;
     for (const auto& m : world.regional_markets) {
         if (m.good_id == REAL_ESTATE_GOOD && m.province_id == PROVINCE) {
-            price_after = m.spot_price; break;
+            price_after = m.spot_price;
+            break;
         }
     }
 
@@ -531,24 +564,27 @@ TEST_CASE("cross-province effect has one-tick delay", "[scenario][tdd][core]") {
 
     auto world = create_test_world(42, 10, 2, 5);
 
-    const uint32_t GOOD     = 0;
-    const uint32_t TARGET   = 1;
+    const uint32_t GOOD = 0;
+    const uint32_t TARGET = 1;
     const uint32_t TICK_NOW = 10;
 
     float supply_before = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_before = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_before = m.supply;
+            break;
+        }
     }
 
     CrossProvinceDelta cpd{};
     cpd.source_province_id = 0;
     cpd.target_province_id = TARGET;
-    cpd.due_tick           = TICK_NOW + 1;   // one tick in the future
+    cpd.due_tick = TICK_NOW + 1;  // one tick in the future
     MarketDelta arrival{};
-    arrival.good_id      = GOOD;
-    arrival.region_id    = TARGET;
+    arrival.good_id = GOOD;
+    arrival.region_id = TARGET;
     arrival.supply_delta = 77.0f;
-    cpd.market_delta     = arrival;
+    cpd.market_delta = arrival;
 
     // ---- At tick N: effect must NOT be visible ----
     world.current_tick = TICK_NOW;
@@ -557,7 +593,10 @@ TEST_CASE("cross-province effect has one-tick delay", "[scenario][tdd][core]") {
 
     float supply_tick_n = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_tick_n = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_tick_n = m.supply;
+            break;
+        }
     }
     // apply_cross_province_deltas skips entries where due_tick > current_tick,
     // then clears the buffer. The delta must NOT have been applied.
@@ -571,7 +610,10 @@ TEST_CASE("cross-province effect has one-tick delay", "[scenario][tdd][core]") {
 
     float supply_tick_n1 = 0.0f;
     for (const auto& m : world.regional_markets) {
-        if (m.good_id == GOOD && m.province_id == TARGET) { supply_tick_n1 = m.supply; break; }
+        if (m.good_id == GOOD && m.province_id == TARGET) {
+            supply_tick_n1 = m.supply;
+            break;
+        }
     }
     REQUIRE_THAT(supply_tick_n1, WithinAbs(supply_before + 77.0f, 0.01f));
 }
@@ -582,7 +624,7 @@ TEST_CASE("cross-province buffer empty at save time", "[scenario][tdd][core]") {
 
     auto world = create_test_world(42, 10, 2, 5);
 
-    const uint32_t GOOD   = 0;
+    const uint32_t GOOD = 0;
     const uint32_t TARGET = 1;
 
     // Push several entries at various due_ticks.
@@ -590,10 +632,10 @@ TEST_CASE("cross-province buffer empty at save time", "[scenario][tdd][core]") {
         CrossProvinceDelta cpd{};
         cpd.source_province_id = 0;
         cpd.target_province_id = TARGET;
-        cpd.due_tick           = i;   // past, present, and future relative to tick 2
+        cpd.due_tick = i;  // past, present, and future relative to tick 2
         MarketDelta md{};
-        md.good_id      = GOOD;
-        md.region_id    = TARGET;
+        md.good_id = GOOD;
+        md.region_id = TARGET;
         md.supply_delta = 10.0f;
         cpd.market_delta = md;
         world.cross_province_delta_buffer.entries.push_back(cpd);

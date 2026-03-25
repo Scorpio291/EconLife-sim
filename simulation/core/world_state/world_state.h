@@ -7,14 +7,14 @@
 #include <vector>
 
 // Core headers (provide DeltaBuffer, DeferredWorkQueue, and transitive types)
-#include "delta_buffer.h"                                   // DeltaBuffer + npc.h + shared_types.h
-#include "../tick/deferred_work.h"                          // DeferredWorkQueue
+#include "../tick/deferred_work.h"  // DeferredWorkQueue
+#include "delta_buffer.h"           // DeltaBuffer + npc.h + shared_types.h
 
 // Complete type definitions needed for std::vector/std::map value members
-#include "geography.h"                                      // Nation, Province, Region
-#include "modules/economy/economy_types.h"                  // RegionalMarket, NPCBusiness
-#include "modules/trade_infrastructure/trade_types.h"       // TariffSchedule, NationalTradeOffer,
-                                                            //   Lod1NationStats, RouteProfile
+#include "geography.h"                                 // Nation, Province, Region
+#include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
+#include "modules/trade_infrastructure/trade_types.h"  // TariffSchedule, NationalTradeOffer,
+                                                       //   Lod1NationStats, RouteProfile
 #include "modules/currency_exchange/currency_exchange_types.h"  // CurrencyRecord
 
 namespace econlife {
@@ -26,7 +26,7 @@ struct GlobalCommodityPriceIndex;  // defined in trade_types.h; used as pointer
                                    //  but kept as documentation of the pointer contract)
 
 enum class GameMode : uint8_t {
-    ironman  = 0,  // Timeline restoration locked. Achievement-eligible.
+    ironman = 0,   // Timeline restoration locked. Achievement-eligible.
     standard = 1,  // Timeline restoration available with disruption consequences.
 };
 
@@ -41,9 +41,9 @@ struct WorldState {
     uint64_t world_seed;    // determinism anchor; used by all RNG calls
 
     // --- Geography ---
-    std::vector<Nation>   nations;        // V1: exactly 1 nation
-    std::vector<Province> provinces;      // see §12
-    std::vector<Region>   region_groups;  // thin grouping layer
+    std::vector<Nation> nations;        // V1: exactly 1 nation
+    std::vector<Province> provinces;    // see §12
+    std::vector<Region> region_groups;  // thin grouping layer
 
     // --- NPC Population ---
     std::vector<NPC> significant_npcs;       // full model; see §4
@@ -55,7 +55,7 @@ struct WorldState {
 
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)
-    std::vector<NPCBusiness>    npc_businesses;
+    std::vector<NPCBusiness> npc_businesses;
 
     // --- Evidence ---
     std::vector<EvidenceToken> evidence_pool;  // all active tokens in the world
@@ -80,12 +80,12 @@ struct WorldState {
     std::vector<CurrencyRecord> currencies;  // one per nation; keyed by nation_id
 
     // --- Trade and Transport Infrastructure ---
-    std::vector<TariffSchedule>     tariff_schedules;
+    std::vector<TariffSchedule> tariff_schedules;
     std::vector<NationalTradeOffer> lod1_trade_offers;  // regenerated monthly
-    GlobalCommodityPriceIndex*      lod2_price_index;   // updated annually
+    GlobalCommodityPriceIndex* lod2_price_index;        // updated annually
     std::map<uint32_t, Lod1NationStats> lod1_national_stats;
-    std::map<std::pair<uint32_t, uint32_t>,
-             std::array<RouteProfile, 5>> province_route_table;  // precomputed at load
+    std::map<std::pair<uint32_t, uint32_t>, std::array<RouteProfile, 5>>
+        province_route_table;  // precomputed at load
 
     // --- Schema ---
     uint32_t current_schema_version;

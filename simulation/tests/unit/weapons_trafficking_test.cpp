@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "modules/weapons_trafficking/weapons_trafficking_module.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/weapons_trafficking/weapons_trafficking_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -47,8 +47,7 @@ TEST_CASE("WeaponsTrafficking: no conflict gives zero demand modifier",
     REQUIRE_THAT(mod, WithinAbs(0.0f, 0.01f));
 }
 
-TEST_CASE("WeaponsTrafficking: conflict demand modifier mapping",
-          "[weapons_trafficking][tier8]") {
+TEST_CASE("WeaponsTrafficking: conflict demand modifier mapping", "[weapons_trafficking][tier8]") {
     REQUIRE_THAT(WeaponsTraffickingModule::get_conflict_demand_modifier(0), WithinAbs(0.0f, 0.01f));
     REQUIRE_THAT(WeaponsTraffickingModule::get_conflict_demand_modifier(1), WithinAbs(0.2f, 0.01f));
     REQUIRE_THAT(WeaponsTraffickingModule::get_conflict_demand_modifier(2), WithinAbs(0.2f, 0.01f));
@@ -58,8 +57,7 @@ TEST_CASE("WeaponsTrafficking: conflict demand modifier mapping",
     REQUIRE_THAT(WeaponsTraffickingModule::get_conflict_demand_modifier(6), WithinAbs(0.0f, 0.01f));
 }
 
-TEST_CASE("WeaponsTrafficking: diversion output computation",
-          "[weapons_trafficking][tier8]") {
+TEST_CASE("WeaponsTrafficking: diversion output computation", "[weapons_trafficking][tier8]") {
     // total 100, diversion 0.20, max 0.30 -> 20 diverted
     float diverted = WeaponsTraffickingModule::compute_diversion_output(100.0f, 0.20f, 0.30f);
     REQUIRE_THAT(diverted, WithinAbs(20.0f, 0.01f));
@@ -78,8 +76,7 @@ TEST_CASE("WeaponsTrafficking: diversion fraction zero gives zero output",
     REQUIRE_THAT(diverted, WithinAbs(0.0f, 0.01f));
 }
 
-TEST_CASE("WeaponsTrafficking: heavy_weapons is embargo item",
-          "[weapons_trafficking][tier8]") {
+TEST_CASE("WeaponsTrafficking: heavy_weapons is embargo item", "[weapons_trafficking][tier8]") {
     REQUIRE(WeaponsTraffickingModule::is_embargo_item(WeaponType::heavy_weapons) == true);
     REQUIRE(WeaponsTraffickingModule::is_embargo_item(WeaponType::small_arms) == false);
     REQUIRE(WeaponsTraffickingModule::is_embargo_item(WeaponType::ammunition) == false);

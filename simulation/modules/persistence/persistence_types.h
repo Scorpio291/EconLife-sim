@@ -4,9 +4,9 @@
 // Types for save/load, WAL, schema migration, and timeline restoration.
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
-#include <functional>
 
 namespace econlife {
 

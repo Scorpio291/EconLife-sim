@@ -22,8 +22,8 @@ void CalendarModule::execute(const WorldState& state, DeltaBuffer& delta) {
     for (const auto& entry : state.calendar) {
         const uint32_t deadline_tick = entry.start_tick + entry.duration_ticks;
         const bool is_expired = state.current_tick >= deadline_tick;
-        const bool is_active = (entry.start_tick <= state.current_tick) &&
-                               (state.current_tick <= deadline_tick);
+        const bool is_active =
+            (entry.start_tick <= state.current_tick) && (state.current_tick <= deadline_tick);
 
         // --- Fast-forward suppression for mandatory entries ---
         // Calendar entries with mandatory == true suppress fast-forward while active.
@@ -40,8 +40,7 @@ void CalendarModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // For deadline-type entries: check if the deadline was missed.
             // Per INTERFACE.md: missed when current_tick > deadline_tick AND
             // player_committed == false.
-            if (entry.type == CalendarEntryType::deadline &&
-                !entry.player_committed &&
+            if (entry.type == CalendarEntryType::deadline && !entry.player_committed &&
                 state.current_tick > deadline_tick) {
                 execute_missed_deadline(state, delta, entry, deadline_tick);
             }
@@ -104,10 +103,8 @@ const NPC* CalendarModule::find_npc(const WorldState& state, uint32_t npc_id) {
 //
 // Steps 1 and 4 are SKIPPED for dead NPCs (per Failure Modes in spec).
 // Steps 2 and 3 always execute regardless of NPC status.
-void CalendarModule::execute_missed_deadline(const WorldState& state,
-                                              DeltaBuffer& delta,
-                                              const CalendarEntry& entry,
-                                              uint32_t deadline_tick) {
+void CalendarModule::execute_missed_deadline(const WorldState& state, DeltaBuffer& delta,
+                                             const CalendarEntry& entry, uint32_t deadline_tick) {
     const auto& consequence = entry.deadline_consequence;
     const bool npc_dead = is_npc_dead(state, entry.npc_id);
 
@@ -178,7 +175,7 @@ void CalendarModule::execute_missed_deadline(const WorldState& state,
         // emotional_weight = -(0.3 + relationship_penalty)
         // This is always negative, reflecting the negative impact of a missed deadline.
         mem.emotional_weight = -(0.3f + consequence.relationship_penalty);
-        mem.decay = 1.0f;  // starts at full strength
+        mem.decay = 1.0f;          // starts at full strength
         mem.is_actionable = true;  // missed deadlines motivate NPC action
 
         memory_delta.new_memory_entry = mem;

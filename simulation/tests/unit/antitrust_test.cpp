@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "modules/antitrust/antitrust_module.h"
-#include "core/world_state/world_state.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/antitrust/antitrust_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -48,18 +48,15 @@ TEST_CASE("Tier 2 at threshold triggers", "[antitrust][tier7]") {
 }
 
 TEST_CASE("Meter fill increment value", "[antitrust][tier7]") {
-    CHECK_THAT(AntitrustModule::compute_meter_fill_increment(),
-               WithinAbs(0.002f, 0.0001f));
+    CHECK_THAT(AntitrustModule::compute_meter_fill_increment(), WithinAbs(0.002f, 0.0001f));
 }
 
 TEST_CASE("Pressure increment value", "[antitrust][tier7]") {
-    CHECK_THAT(AntitrustModule::compute_pressure_increment(),
-               WithinAbs(0.005f, 0.0001f));
+    CHECK_THAT(AntitrustModule::compute_pressure_increment(), WithinAbs(0.005f, 0.0001f));
 }
 
 TEST_CASE("Pressure decay value", "[antitrust][tier7]") {
-    CHECK_THAT(AntitrustModule::compute_pressure_decay(),
-               WithinAbs(0.01f, 0.001f));
+    CHECK_THAT(AntitrustModule::compute_pressure_decay(), WithinAbs(0.01f, 0.001f));
 }
 
 TEST_CASE("Proposal generation threshold", "[antitrust][tier7]") {
@@ -198,8 +195,7 @@ TEST_CASE("Tier 1 triggers regulator meter fill", "[antitrust][tier7]") {
     for (const auto& d : delta.npc_deltas) {
         if (d.npc_id == 50 && d.motivation_delta.has_value()) {
             found_reg_fill = true;
-            CHECK_THAT(*d.motivation_delta,
-                       WithinAbs(0.002f, 0.001f));
+            CHECK_THAT(*d.motivation_delta, WithinAbs(0.002f, 0.001f));
             break;
         }
     }

@@ -7,8 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/production/production_module.h"
 #include "modules/production/production_types.h"
 
@@ -64,13 +64,8 @@ Recipe make_steel_recipe() {
     Recipe recipe{};
     recipe.id = "steel_smelting";
     recipe.name = "Steel Smelting";
-    recipe.inputs = {
-        RecipeInput{"iron_ore", 10.0f},
-        RecipeInput{"coking_coal", 5.0f}
-    };
-    recipe.outputs = {
-        RecipeOutput{"steel", 8.0f, 0.6f}
-    };
+    recipe.inputs = {RecipeInput{"iron_ore", 10.0f}, RecipeInput{"coking_coal", 5.0f}};
+    recipe.outputs = {RecipeOutput{"steel", 8.0f, 0.6f}};
     recipe.min_tech_tier = 1;
     recipe.base_cost_per_tick = 100.0f;
     recipe.is_technology_intensive = false;
@@ -95,8 +90,8 @@ Facility make_test_facility(uint32_t id, uint32_t business_id, uint32_t province
 }
 
 // Add a regional market entry for a good in a province.
-void add_market(WorldState& state, const std::string& good_id_str,
-                uint32_t province_id, float supply, float spot_price = 10.0f) {
+void add_market(WorldState& state, const std::string& good_id_str, uint32_t province_id,
+                float supply, float spot_price = 10.0f) {
     RegionalMarket market{};
     market.good_id = ProductionModule::good_id_from_string(good_id_str);
     market.province_id = province_id;
@@ -228,8 +223,7 @@ TEST_CASE("test_tech_tier_bonus", "[production][tier1]") {
     uint32_t steel_id = ProductionModule::good_id_from_string("steel");
     std::vector<float> steel_supplies;
     for (const auto& md : delta.market_deltas) {
-        if (md.good_id == steel_id && md.region_id == province_id
-            && md.supply_delta.has_value()) {
+        if (md.good_id == steel_id && md.region_id == province_id && md.supply_delta.has_value()) {
             steel_supplies.push_back(md.supply_delta.value());
         }
     }
@@ -254,9 +248,8 @@ TEST_CASE("test_tech_tier_cost_reduction", "[production][tier1]") {
     constexpr uint32_t facility_tier = 3;
     int32_t tier_diff = static_cast<int32_t>(facility_tier) - static_cast<int32_t>(min_tier);
 
-    float cost_multiplier = 1.0f
-        - ProductionConstants::tech_tier_cost_reduction_per_tier
-          * static_cast<float>(std::max(0, tier_diff));
+    float cost_multiplier = 1.0f - ProductionConstants::tech_tier_cost_reduction_per_tier *
+                                       static_cast<float>(std::max(0, tier_diff));
     float actual_cost = base_cost * cost_multiplier;
 
     // Expected: 100.0 * (1.0 - 0.05 * 2) = 100.0 * 0.9 = 90.0
@@ -264,9 +257,8 @@ TEST_CASE("test_tech_tier_cost_reduction", "[production][tier1]") {
 
     // At min tier, no reduction.
     int32_t zero_diff = 0;
-    float no_reduction = 1.0f
-        - ProductionConstants::tech_tier_cost_reduction_per_tier
-          * static_cast<float>(std::max(0, zero_diff));
+    float no_reduction = 1.0f - ProductionConstants::tech_tier_cost_reduction_per_tier *
+                                    static_cast<float>(std::max(0, zero_diff));
     REQUIRE_THAT(base_cost * no_reduction, WithinAbs(100.0f, 0.001f));
 }
 

@@ -15,9 +15,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 #include "modules/banking/banking_module.h"
 #include "modules/banking/banking_types.h"
 
@@ -68,14 +68,11 @@ NPC make_test_npc(uint32_t id, float capital = 5000.0f) {
 
 // Create a LoanRecord with sensible defaults.
 LoanRecord make_test_loan(uint32_t id, uint32_t borrower_id, uint32_t lender_id,
-                           LoanPurpose purpose = LoanPurpose::business_capital,
-                           float principal = 10000.0f,
-                           float outstanding = 10000.0f,
-                           float interest_rate = 0.000050f,
-                           float repayment_per_tick = 30.0f,
-                           uint32_t originated_tick = 0,
-                           uint32_t maturity_tick = 500,
-                           uint32_t collateral_id = 0) {
+                          LoanPurpose purpose = LoanPurpose::business_capital,
+                          float principal = 10000.0f, float outstanding = 10000.0f,
+                          float interest_rate = 0.000050f, float repayment_per_tick = 30.0f,
+                          uint32_t originated_tick = 0, uint32_t maturity_tick = 500,
+                          uint32_t collateral_id = 0) {
     LoanRecord loan{};
     loan.id = id;
     loan.borrower_id = borrower_id;
@@ -98,8 +95,7 @@ LoanRecord make_test_loan(uint32_t id, uint32_t borrower_id, uint32_t lender_id,
 // Test 1: Successful repayment reduces balance and improves credit
 // ===========================================================================
 
-TEST_CASE("test_successful_repayment_reduces_balance_and_improves_credit",
-          "[banking][tier5]") {
+TEST_CASE("test_successful_repayment_reduces_balance_and_improves_credit", "[banking][tier5]") {
     auto state = make_test_world_state(10);
     NPC npc = make_test_npc(100, 5000.0f);
     state.significant_npcs.push_back(npc);
@@ -132,16 +128,14 @@ TEST_CASE("test_successful_repayment_reduces_balance_and_improves_credit",
     // Credit score should have improved by 0.002.
     const auto& credits = module.borrower_credits();
     REQUIRE(credits.size() == 1);
-    REQUIRE_THAT(credits[0].profile.credit_score,
-                 WithinAbs(0.502f, 0.001f));
+    REQUIRE_THAT(credits[0].profile.credit_score, WithinAbs(0.502f, 0.001f));
 }
 
 // ===========================================================================
 // Test 2: Missed payment triggers default after grace period
 // ===========================================================================
 
-TEST_CASE("test_missed_payment_triggers_default_after_grace_period",
-          "[banking][tier5]") {
+TEST_CASE("test_missed_payment_triggers_default_after_grace_period", "[banking][tier5]") {
     auto state = make_test_world_state(10);
     // NPC with zero capital — cannot afford any repayment.
     NPC npc = make_test_npc(100, 0.0f);
@@ -190,21 +184,21 @@ TEST_CASE("test_missed_payment_triggers_default_after_grace_period",
 
 TEST_CASE("test_loan_denial_on_high_dti", "[banking][tier5]") {
     // DTI above threshold (0.40) should be denied.
-    bool approved = BankingModule::evaluate_loan_application(
-        0.60f, 0.50f, LoanPurpose::business_capital);
+    bool approved =
+        BankingModule::evaluate_loan_application(0.60f, 0.50f, LoanPurpose::business_capital);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_approval_on_acceptable_dti", "[banking][tier5]") {
     // DTI at threshold boundary should be approved.
-    bool approved = BankingModule::evaluate_loan_application(
-        0.60f, 0.40f, LoanPurpose::business_capital);
+    bool approved =
+        BankingModule::evaluate_loan_application(0.60f, 0.40f, LoanPurpose::business_capital);
     REQUIRE(approved == true);
 }
 
 TEST_CASE("test_loan_approval_on_low_dti", "[banking][tier5]") {
-    bool approved = BankingModule::evaluate_loan_application(
-        0.60f, 0.10f, LoanPurpose::business_capital);
+    bool approved =
+        BankingModule::evaluate_loan_application(0.60f, 0.10f, LoanPurpose::business_capital);
     REQUIRE(approved == true);
 }
 
@@ -214,29 +208,28 @@ TEST_CASE("test_loan_approval_on_low_dti", "[banking][tier5]") {
 
 TEST_CASE("test_loan_denial_on_low_credit_score_business", "[banking][tier5]") {
     // Business capital requires 0.35; credit score 0.30 should fail.
-    bool approved = BankingModule::evaluate_loan_application(
-        0.30f, 0.10f, LoanPurpose::business_capital);
+    bool approved =
+        BankingModule::evaluate_loan_application(0.30f, 0.10f, LoanPurpose::business_capital);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_denial_on_low_credit_score_property", "[banking][tier5]") {
     // Property purchase requires 0.45; credit score 0.40 should fail.
-    bool approved = BankingModule::evaluate_loan_application(
-        0.40f, 0.10f, LoanPurpose::property_purchase);
+    bool approved =
+        BankingModule::evaluate_loan_application(0.40f, 0.10f, LoanPurpose::property_purchase);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_denial_on_low_credit_score_personal", "[banking][tier5]") {
     // Personal requires 0.25; credit score 0.20 should fail.
-    bool approved = BankingModule::evaluate_loan_application(
-        0.20f, 0.10f, LoanPurpose::personal);
+    bool approved = BankingModule::evaluate_loan_application(0.20f, 0.10f, LoanPurpose::personal);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_approval_at_exact_minimum_credit_score", "[banking][tier5]") {
     // Exactly at threshold should pass.
-    bool approved = BankingModule::evaluate_loan_application(
-        0.35f, 0.10f, LoanPurpose::business_capital);
+    bool approved =
+        BankingModule::evaluate_loan_application(0.35f, 0.10f, LoanPurpose::business_capital);
     REQUIRE(approved == true);
 }
 
@@ -296,8 +289,7 @@ TEST_CASE("test_criminal_informal_default_no_credit_impact", "[banking][tier5]")
     }
 
     // Credit score should remain unchanged (criminal_informal skips credit impact).
-    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score,
-                 WithinAbs(0.60f, 0.001f));
+    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score, WithinAbs(0.60f, 0.001f));
 
     // Loan should be in default.
     REQUIRE(module.active_loans()[0].in_default == true);
@@ -354,8 +346,8 @@ TEST_CASE("test_loan_maturity_retires_paid_loan", "[banking][tier5]") {
     BankingModule module;
 
     LoanRecord loan = make_test_loan(1, 100, 200);
-    loan.outstanding_balance = 0.0f;   // fully paid
-    loan.maturity_tick = 500;          // maturity reached
+    loan.outstanding_balance = 0.0f;  // fully paid
+    loan.maturity_tick = 500;         // maturity reached
     module.active_loans().push_back(loan);
 
     // Add a second loan that is NOT matured.
@@ -560,12 +552,10 @@ TEST_CASE("test_partial_payment_when_insufficient_funds", "[banking][tier5]") {
     REQUIRE(module.borrower_credits()[0].consecutive_misses == 1);
 
     // Credit score should have decreased by miss penalty.
-    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score,
-                 WithinAbs(0.59f, 0.001f));
+    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score, WithinAbs(0.59f, 0.001f));
 
     // Outstanding balance should remain unchanged.
-    REQUIRE_THAT(module.active_loans()[0].outstanding_balance,
-                 WithinAbs(10000.0f, 0.01f));
+    REQUIRE_THAT(module.active_loans()[0].outstanding_balance, WithinAbs(10000.0f, 0.01f));
 }
 
 // ===========================================================================
@@ -669,9 +659,8 @@ TEST_CASE("test_secured_loan_default_triggers_collateral_seizure", "[banking][ti
     module.borrower_credits().push_back(bc);
 
     // Secured loan with collateral.
-    LoanRecord loan = make_test_loan(1, 100, 200, LoanPurpose::business_capital,
-                                      10000.0f, 10000.0f, 0.000050f, 30.0f,
-                                      0, 500, 42);  // collateral_id = 42
+    LoanRecord loan = make_test_loan(1, 100, 200, LoanPurpose::business_capital, 10000.0f, 10000.0f,
+                                     0.000050f, 30.0f, 0, 500, 42);  // collateral_id = 42
     module.active_loans().push_back(loan);
 
     DeltaBuffer delta{};
@@ -772,8 +761,7 @@ TEST_CASE("test_defaulted_loan_not_reprocessed", "[banking][tier5]") {
     module.execute(state, delta);
 
     // Balance should not have changed (loan skipped during repayment processing).
-    REQUIRE_THAT(module.active_loans()[0].outstanding_balance,
-                 WithinAbs(10000.0f, 0.01f));
+    REQUIRE_THAT(module.active_loans()[0].outstanding_balance, WithinAbs(10000.0f, 0.01f));
 
     // No NPC deltas should have been generated for this loan.
     REQUIRE(delta.npc_deltas.empty());
@@ -804,8 +792,7 @@ TEST_CASE("test_borrower_credit_auto_created", "[banking][tier5]") {
     REQUIRE(module.borrower_credits()[0].borrower_id == 100);
 
     // Default starting score is 0.5, plus payment gain of 0.002.
-    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score,
-                 WithinAbs(0.502f, 0.001f));
+    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score, WithinAbs(0.502f, 0.001f));
 }
 
 // ===========================================================================
@@ -840,23 +827,16 @@ TEST_CASE("test_successful_payment_resets_consecutive_misses", "[banking][tier5]
 // ===========================================================================
 
 TEST_CASE("test_banking_constants", "[banking][tier5]") {
-    REQUIRE_THAT(BankingModule::Constants::base_interest_rate,
-                 WithinAbs(0.000027f, 0.000001f));
-    REQUIRE_THAT(BankingModule::Constants::credit_risk_spread,
-                 WithinAbs(0.000082f, 0.000001f));
+    REQUIRE_THAT(BankingModule::Constants::base_interest_rate, WithinAbs(0.000027f, 0.000001f));
+    REQUIRE_THAT(BankingModule::Constants::credit_risk_spread, WithinAbs(0.000082f, 0.000001f));
     REQUIRE_THAT(BankingModule::Constants::collateral_rate_discount,
                  WithinAbs(0.000014f, 0.000001f));
     REQUIRE(BankingModule::Constants::default_grace_ticks == 3);
-    REQUIRE_THAT(BankingModule::Constants::credit_score_payment_gain,
-                 WithinAbs(0.002f, 0.0001f));
-    REQUIRE_THAT(BankingModule::Constants::credit_score_miss_penalty,
-                 WithinAbs(0.01f, 0.0001f));
-    REQUIRE_THAT(BankingModule::Constants::denial_dti_threshold,
-                 WithinAbs(0.40f, 0.001f));
-    REQUIRE_THAT(BankingModule::Constants::max_loan_multiple_of_income,
-                 WithinAbs(36.0f, 0.1f));
-    REQUIRE_THAT(BankingModule::Constants::criminal_conviction_penalty,
-                 WithinAbs(0.20f, 0.001f));
+    REQUIRE_THAT(BankingModule::Constants::credit_score_payment_gain, WithinAbs(0.002f, 0.0001f));
+    REQUIRE_THAT(BankingModule::Constants::credit_score_miss_penalty, WithinAbs(0.01f, 0.0001f));
+    REQUIRE_THAT(BankingModule::Constants::denial_dti_threshold, WithinAbs(0.40f, 0.001f));
+    REQUIRE_THAT(BankingModule::Constants::max_loan_multiple_of_income, WithinAbs(36.0f, 0.1f));
+    REQUIRE_THAT(BankingModule::Constants::criminal_conviction_penalty, WithinAbs(0.20f, 0.001f));
 }
 
 // ===========================================================================
@@ -892,13 +872,11 @@ TEST_CASE("test_multiple_borrowers_processed_independently", "[banking][tier5]")
     module.execute(state, delta);
 
     // Borrower 100 made payment: credit improved.
-    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score,
-                 WithinAbs(0.502f, 0.001f));
+    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score, WithinAbs(0.502f, 0.001f));
     REQUIRE(module.borrower_credits()[0].consecutive_misses == 0);
 
     // Borrower 200 missed payment: credit decreased.
-    REQUIRE_THAT(module.borrower_credits()[1].profile.credit_score,
-                 WithinAbs(0.49f, 0.001f));
+    REQUIRE_THAT(module.borrower_credits()[1].profile.credit_score, WithinAbs(0.49f, 0.001f));
     REQUIRE(module.borrower_credits()[1].consecutive_misses == 1);
 }
 
@@ -929,8 +907,7 @@ TEST_CASE("test_zero_balance_loan_skipped", "[banking][tier5]") {
     REQUIRE(delta.npc_deltas.empty());
 
     // Credit score unchanged.
-    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score,
-                 WithinAbs(0.50f, 0.001f));
+    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score, WithinAbs(0.50f, 0.001f));
 }
 
 // ===========================================================================
@@ -1045,8 +1022,7 @@ TEST_CASE("test_player_insufficient_wealth_triggers_miss", "[banking][tier5]") {
 
     // Should be a missed payment.
     REQUIRE(module.borrower_credits()[0].consecutive_misses == 1);
-    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score,
-                 WithinAbs(0.59f, 0.001f));
+    REQUIRE_THAT(module.borrower_credits()[0].profile.credit_score, WithinAbs(0.59f, 0.001f));
 
     // No wealth delta should have been applied.
     REQUIRE_FALSE(delta.player_delta.wealth_delta.has_value());

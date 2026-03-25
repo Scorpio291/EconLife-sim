@@ -13,8 +13,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "core/world_state/world_state.h"
 #include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/commodity_trading/commodity_trading_module.h"
 #include "modules/commodity_trading/commodity_trading_types.h"
 #include "modules/economy/financial_types.h"
@@ -44,8 +44,8 @@ WorldState make_test_world_state() {
 }
 
 // Create a RegionalMarket with specified parameters.
-RegionalMarket make_test_market(uint32_t good_id, uint32_t province_id,
-                                 float supply, float spot_price) {
+RegionalMarket make_test_market(uint32_t good_id, uint32_t province_id, float supply,
+                                float spot_price) {
     RegionalMarket market{};
     market.good_id = good_id;
     market.province_id = province_id;
@@ -60,10 +60,9 @@ RegionalMarket make_test_market(uint32_t good_id, uint32_t province_id,
 }
 
 // Create a CommodityPosition with sensible defaults.
-CommodityPosition make_test_position(uint32_t id, uint32_t actor_id,
-                                      uint32_t good_id, uint32_t province_id,
-                                      PositionType type, float quantity,
-                                      float entry_price, uint32_t opened_tick) {
+CommodityPosition make_test_position(uint32_t id, uint32_t actor_id, uint32_t good_id,
+                                     uint32_t province_id, PositionType type, float quantity,
+                                     float entry_price, uint32_t opened_tick) {
     CommodityPosition pos{};
     pos.id = id;
     pos.actor_id = actor_id;
@@ -88,8 +87,8 @@ CommodityPosition make_test_position(uint32_t id, uint32_t actor_id,
 TEST_CASE("test_long_position_pnl_price_rises_profit", "[commodity_trading][tier4]") {
     // Long position: buy at 50, sell at 70, quantity 100.
     // P&L = (70 - 50) * 100 = 2000.
-    float pnl = CommodityTradingModule::compute_pnl(
-        PositionType::long_position, 50.0f, 70.0f, 100.0f);
+    float pnl =
+        CommodityTradingModule::compute_pnl(PositionType::long_position, 50.0f, 70.0f, 100.0f);
     REQUIRE_THAT(pnl, WithinAbs(2000.0f, 0.001f));
 }
 
@@ -100,8 +99,8 @@ TEST_CASE("test_long_position_pnl_price_rises_profit", "[commodity_trading][tier
 TEST_CASE("test_long_position_pnl_price_falls_loss", "[commodity_trading][tier4]") {
     // Long position: buy at 50, sell at 30, quantity 100.
     // P&L = (30 - 50) * 100 = -2000.
-    float pnl = CommodityTradingModule::compute_pnl(
-        PositionType::long_position, 50.0f, 30.0f, 100.0f);
+    float pnl =
+        CommodityTradingModule::compute_pnl(PositionType::long_position, 50.0f, 30.0f, 100.0f);
     REQUIRE_THAT(pnl, WithinAbs(-2000.0f, 0.001f));
 }
 
@@ -112,8 +111,8 @@ TEST_CASE("test_long_position_pnl_price_falls_loss", "[commodity_trading][tier4]
 TEST_CASE("test_short_position_pnl_price_falls_profit", "[commodity_trading][tier4]") {
     // Short position: sell at 100, buy back at 80, quantity 50.
     // P&L = (100 - 80) * 50 = 1000.
-    float pnl = CommodityTradingModule::compute_pnl(
-        PositionType::short_position, 100.0f, 80.0f, 50.0f);
+    float pnl =
+        CommodityTradingModule::compute_pnl(PositionType::short_position, 100.0f, 80.0f, 50.0f);
     REQUIRE_THAT(pnl, WithinAbs(1000.0f, 0.001f));
 }
 
@@ -124,8 +123,8 @@ TEST_CASE("test_short_position_pnl_price_falls_profit", "[commodity_trading][tie
 TEST_CASE("test_short_position_pnl_price_rises_loss", "[commodity_trading][tier4]") {
     // Short position: sell at 100, buy back at 120, quantity 50.
     // P&L = (100 - 120) * 50 = -1000.
-    float pnl = CommodityTradingModule::compute_pnl(
-        PositionType::short_position, 100.0f, 120.0f, 50.0f);
+    float pnl =
+        CommodityTradingModule::compute_pnl(PositionType::short_position, 100.0f, 120.0f, 50.0f);
     REQUIRE_THAT(pnl, WithinAbs(-1000.0f, 0.001f));
 }
 
@@ -136,8 +135,7 @@ TEST_CASE("test_short_position_pnl_price_rises_loss", "[commodity_trading][tier4
 TEST_CASE("test_exit_tick_lifecycle", "[commodity_trading][tier4]") {
     CommodityTradingModule module;
 
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
     module.open_position(pos);
 
     // While open, exit_tick must be 0.
@@ -164,8 +162,7 @@ TEST_CASE("test_market_impact_large_position", "[commodity_trading][tier4]") {
     // Excess = 200 - (1000 * 0.05) = 200 - 50 = 150.
     // Impact magnitude = 0.01 * 150 = 1.5.
     // Long position => demand_impact = 1.5, supply_impact = 0.
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 200.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 200.0f, 50.0f, 10);
 
     MarketImpact impact = CommodityTradingModule::compute_market_impact(pos, 1000.0f);
     REQUIRE(impact.good_id_hash == 5);
@@ -181,8 +178,7 @@ TEST_CASE("test_no_market_impact_small_position", "[commodity_trading][tier4]") 
     // Position quantity = 40, market supply = 1000.
     // Fraction = 40/1000 = 0.04 (below threshold of 0.05).
     // No impact expected.
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 40.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 40.0f, 50.0f, 10);
 
     MarketImpact impact = CommodityTradingModule::compute_market_impact(pos, 1000.0f);
     REQUIRE_THAT(impact.demand_impact, WithinAbs(0.0f, 0.001f));
@@ -196,8 +192,7 @@ TEST_CASE("test_no_market_impact_small_position", "[commodity_trading][tier4]") 
 TEST_CASE("test_capital_gains_tax_on_profit", "[commodity_trading][tier4]") {
     CommodityTradingModule module;
 
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
     module.open_position(pos);
 
     // Close at 70 => P&L = (70 - 50) * 100 = 2000 (profit).
@@ -215,8 +210,7 @@ TEST_CASE("test_capital_gains_tax_on_profit", "[commodity_trading][tier4]") {
 TEST_CASE("test_no_capital_gains_tax_on_loss", "[commodity_trading][tier4]") {
     CommodityTradingModule module;
 
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
     module.open_position(pos);
 
     // Close at 30 => P&L = (30 - 50) * 100 = -2000 (loss).
@@ -235,8 +229,7 @@ TEST_CASE("test_open_close_position_lifecycle", "[commodity_trading][tier4]") {
     CommodityTradingModule module;
 
     // Open a long position.
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
     module.open_position(pos);
 
     REQUIRE(module.positions().size() == 1);
@@ -293,10 +286,8 @@ TEST_CASE("test_multiple_positions_same_good", "[commodity_trading][tier4]") {
     CommodityTradingModule module;
 
     // Open two long positions for the same good (id=5, province=0).
-    auto pos1 = make_test_position(1, 10, 5, 0,
-                                    PositionType::long_position, 100.0f, 50.0f, 10);
-    auto pos2 = make_test_position(2, 20, 5, 0,
-                                    PositionType::short_position, 80.0f, 60.0f, 15);
+    auto pos1 = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos2 = make_test_position(2, 20, 5, 0, PositionType::short_position, 80.0f, 60.0f, 15);
     module.open_position(pos1);
     module.open_position(pos2);
 
@@ -333,8 +324,7 @@ TEST_CASE("test_market_impact_short_position_supply_pressure", "[commodity_tradi
     // Short position with large quantity => supply impact.
     // Quantity = 150, supply = 1000. Fraction = 0.15 (above 0.05 threshold).
     // Excess = 150 - 50 = 100. Impact = 0.01 * 100 = 1.0.
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::short_position, 150.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::short_position, 150.0f, 50.0f, 10);
 
     MarketImpact impact = CommodityTradingModule::compute_market_impact(pos, 1000.0f);
     REQUIRE_THAT(impact.supply_impact, WithinAbs(1.0f, 0.001f));
@@ -358,8 +348,7 @@ TEST_CASE("test_execute_emits_market_deltas_for_large_positions", "[commodity_tr
     state.regional_markets.push_back(make_test_market(5, 0, 1000.0f, 50.0f));
 
     // Open a large long position (200 units = 20% of supply, above 5% threshold).
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 200.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 200.0f, 50.0f, 10);
     module.open_position(pos);
 
     DeltaBuffer delta{};
@@ -388,8 +377,7 @@ TEST_CASE("test_execute_skips_closed_positions", "[commodity_trading][tier4]") {
     state.regional_markets.push_back(make_test_market(5, 0, 1000.0f, 50.0f));
 
     // Open and immediately close a large position.
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 200.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 200.0f, 50.0f, 10);
     module.open_position(pos);
     module.close_position(1, 70.0f, 50);
 
@@ -416,8 +404,7 @@ TEST_CASE("test_execute_updates_current_value", "[commodity_trading][tier4]") {
     state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 75.0f));
 
     // Open a small position (below impact threshold to avoid market delta noise).
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 10.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 10.0f, 50.0f, 10);
     module.open_position(pos);
 
     DeltaBuffer delta{};
@@ -459,8 +446,7 @@ TEST_CASE("test_execute_emits_npc_delta_for_settlement", "[commodity_trading][ti
     state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
 
     // Open a position, then close it at the current tick.
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
     module.open_position(pos);
 
     // Close at tick 100 (matches state.current_tick) with exit price 70.
@@ -496,8 +482,7 @@ TEST_CASE("test_execute_no_npc_delta_for_old_settlement", "[commodity_trading][t
     state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
 
     // Open and close at tick 150 (not current tick 200).
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
     module.open_position(pos);
     module.close_position(1, 70.0f, 150);
 
@@ -527,8 +512,7 @@ TEST_CASE("test_execute_garbage_collects_old_positions", "[commodity_trading][ti
     state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
 
     // Open and close a position at tick 100 (100 ticks ago, well past 30-tick GC window).
-    auto pos = make_test_position(1, 10, 5, 0,
-                                   PositionType::long_position, 100.0f, 50.0f, 10);
+    auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 100.0f, 50.0f, 10);
     module.open_position(pos);
     module.close_position(1, 70.0f, 100);
 
@@ -542,10 +526,7 @@ TEST_CASE("test_execute_garbage_collects_old_positions", "[commodity_trading][ti
 }
 
 TEST_CASE("test_commodity_trading_constants", "[commodity_trading][tier4]") {
-    REQUIRE_THAT(CommodityTradingConstants::market_impact_threshold,
-                 WithinAbs(0.05f, 0.0001f));
-    REQUIRE_THAT(CommodityTradingConstants::market_impact_coefficient,
-                 WithinAbs(0.01f, 0.0001f));
-    REQUIRE_THAT(CommodityTradingConstants::capital_gains_tax_rate,
-                 WithinAbs(0.15f, 0.0001f));
+    REQUIRE_THAT(CommodityTradingConstants::market_impact_threshold, WithinAbs(0.05f, 0.0001f));
+    REQUIRE_THAT(CommodityTradingConstants::market_impact_coefficient, WithinAbs(0.01f, 0.0001f));
+    REQUIRE_THAT(CommodityTradingConstants::capital_gains_tax_rate, WithinAbs(0.15f, 0.0001f));
 }

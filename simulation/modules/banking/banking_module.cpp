@@ -9,12 +9,13 @@
 //   4. Update derived credit fields for all borrowers.
 
 #include "modules/banking/banking_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"  // PlayerCharacter complete type
 
 #include <algorithm>
 #include <cmath>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"  // PlayerCharacter complete type
+#include "core/world_state/world_state.h"
 
 namespace econlife {
 
@@ -25,9 +26,9 @@ namespace econlife {
 float BankingModule::compute_interest_rate(float credit_score, bool has_collateral) {
     // rate = base_interest_rate + (1.0 - credit_score) * credit_risk_spread
     //        - (has_collateral ? collateral_rate_discount : 0)
-    float rate = Constants::base_interest_rate
-               + (1.0f - credit_score) * Constants::credit_risk_spread
-               - (has_collateral ? Constants::collateral_rate_discount : 0.0f);
+    float rate = Constants::base_interest_rate +
+                 (1.0f - credit_score) * Constants::credit_risk_spread -
+                 (has_collateral ? Constants::collateral_rate_discount : 0.0f);
 
     // Clamp to non-negative.
     if (rate < 0.0f) {
@@ -42,7 +43,7 @@ float BankingModule::compute_max_loan_amount(float revenue_per_tick) {
 }
 
 bool BankingModule::evaluate_loan_application(float credit_score, float dti_ratio,
-                                               LoanPurpose purpose) {
+                                              LoanPurpose purpose) {
     // Deny if credit_score below minimum for purpose.
     if (credit_score < min_credit_score_for_purpose(purpose)) {
         return false;
@@ -57,7 +58,7 @@ bool BankingModule::evaluate_loan_application(float credit_score, float dti_rati
 }
 
 float BankingModule::compute_repayment_per_tick(float principal, float interest_rate,
-                                                 uint32_t duration_ticks) {
+                                                uint32_t duration_ticks) {
     if (duration_ticks == 0) {
         return principal;  // immediate repayment
     }
@@ -70,11 +71,16 @@ float BankingModule::compute_repayment_per_tick(float principal, float interest_
 
 float BankingModule::min_credit_score_for_purpose(LoanPurpose purpose) {
     switch (purpose) {
-        case LoanPurpose::business_capital:   return 0.35f;
-        case LoanPurpose::property_purchase:  return 0.45f;
-        case LoanPurpose::personal:           return 0.25f;
-        case LoanPurpose::criminal_informal:  return 0.0f;   // no credit check
-        default:                              return 1.0f;    // deny unknown purposes
+        case LoanPurpose::business_capital:
+            return 0.35f;
+        case LoanPurpose::property_purchase:
+            return 0.45f;
+        case LoanPurpose::personal:
+            return 0.25f;
+        case LoanPurpose::criminal_informal:
+            return 0.0f;  // no credit check
+        default:
+            return 1.0f;  // deny unknown purposes
     }
 }
 
@@ -92,7 +98,7 @@ BankingModule::BorrowerCredit* BankingModule::find_borrower_credit(uint32_t borr
 }
 
 void BankingModule::process_loan_repayment(LoanRecord& loan, const WorldState& state,
-                                            DeltaBuffer& delta) {
+                                           DeltaBuffer& delta) {
     // Skip defaulted or fully repaid loans.
     if (loan.in_default || loan.outstanding_balance <= 0.0f) {
         return;
@@ -222,17 +228,15 @@ void BankingModule::process_loan_default(LoanRecord& loan, DeltaBuffer& delta) {
 }
 
 void BankingModule::retire_matured_loans(uint32_t current_tick) {
-    active_loans_.erase(
-        std::remove_if(active_loans_.begin(), active_loans_.end(),
-                        [current_tick](const LoanRecord& loan) {
-                            return current_tick >= loan.maturity_tick
-                                && loan.outstanding_balance <= 0.0f;
-                        }),
-        active_loans_.end());
+    active_loans_.erase(std::remove_if(active_loans_.begin(), active_loans_.end(),
+                                       [current_tick](const LoanRecord& loan) {
+                                           return current_tick >= loan.maturity_tick &&
+                                                  loan.outstanding_balance <= 0.0f;
+                                       }),
+                        active_loans_.end());
 }
 
-void BankingModule::update_derived_credit_fields(BorrowerCredit& credit,
-                                                   float revenue_per_tick) {
+void BankingModule::update_derived_credit_fields(BorrowerCredit& credit, float revenue_per_tick) {
     float total_debt = 0.0f;
     float debt_service = 0.0f;
 
@@ -248,8 +252,8 @@ void BankingModule::update_derived_credit_fields(BorrowerCredit& credit,
 
     // DTI = total_debt / annual_revenue (revenue_per_tick * 365)
     float annual_revenue = revenue_per_tick * 365.0f;
-    credit.profile.debt_to_income_ratio = (total_debt > 0.0f && annual_revenue > 0.0f)
-        ? total_debt / annual_revenue : 0.0f;
+    credit.profile.debt_to_income_ratio =
+        (total_debt > 0.0f && annual_revenue > 0.0f) ? total_debt / annual_revenue : 0.0f;
 }
 
 // ===========================================================================
@@ -269,9 +273,7 @@ void BankingModule::process_loan_origination(const WorldState& state, DeltaBuffe
         sorted_businesses.push_back(&biz);
     }
     std::sort(sorted_businesses.begin(), sorted_businesses.end(),
-              [](const NPCBusiness* a, const NPCBusiness* b) {
-                  return a->id < b->id;
-              });
+              [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
 
     for (const NPCBusiness* biz : sorted_businesses) {
         // Only consider businesses with revenue that need capital.
@@ -297,8 +299,7 @@ void BankingModule::process_loan_origination(const WorldState& state, DeltaBuffe
         }
 
         // Compute DTI: debt_service_per_tick / max(1.0, revenue_per_tick)
-        float dti = credit->profile.debt_service_per_tick
-                  / std::max(1.0f, biz->revenue_per_tick);
+        float dti = credit->profile.debt_service_per_tick / std::max(1.0f, biz->revenue_per_tick);
 
         if (!evaluate_loan_application(credit->profile.credit_score, dti,
                                        LoanPurpose::business_capital)) {
@@ -310,36 +311,35 @@ void BankingModule::process_loan_origination(const WorldState& state, DeltaBuffe
                                      biz->revenue_per_tick * 180.0f);
         float interest_rate = compute_interest_rate(credit->profile.credit_score, false);
         constexpr uint32_t duration_ticks = 365;
-        float repayment = compute_repayment_per_tick(loan_amount, interest_rate,
-                                                     duration_ticks);
+        float repayment = compute_repayment_per_tick(loan_amount, interest_rate, duration_ticks);
 
         // Create the loan record.
         LoanRecord loan{};
-        loan.id                = next_loan_id_++;
-        loan.borrower_id       = biz->owner_id;
-        loan.lender_id         = 0;  // institutional lender (no NPC bank entity in V1)
-        loan.purpose           = LoanPurpose::business_capital;
-        loan.principal         = loan_amount;
+        loan.id = next_loan_id_++;
+        loan.borrower_id = biz->owner_id;
+        loan.lender_id = 0;  // institutional lender (no NPC bank entity in V1)
+        loan.purpose = LoanPurpose::business_capital;
+        loan.principal = loan_amount;
         loan.outstanding_balance = loan_amount;
-        loan.interest_rate     = interest_rate;
+        loan.interest_rate = interest_rate;
         loan.repayment_per_tick = repayment;
-        loan.originated_tick   = state.current_tick;
-        loan.maturity_tick     = state.current_tick + duration_ticks;
-        loan.in_default        = false;
-        loan.collateral_id     = 0;
+        loan.originated_tick = state.current_tick;
+        loan.maturity_tick = state.current_tick + duration_ticks;
+        loan.in_default = false;
+        loan.collateral_id = 0;
 
         active_loans_.push_back(loan);
 
         // Credit the loan proceeds to the business owner's capital.
         NPCDelta npc_delta{};
-        npc_delta.npc_id       = biz->owner_id;
+        npc_delta.npc_id = biz->owner_id;
         npc_delta.capital_delta = loan_amount;
         delta.npc_deltas.push_back(npc_delta);
 
         // Also credit the business cash directly.
         BusinessDelta biz_delta{};
         biz_delta.business_id = biz->id;
-        biz_delta.cash_delta   = loan_amount;
+        biz_delta.cash_delta = loan_amount;
         delta.business_deltas.push_back(biz_delta);
     }
 }
@@ -354,9 +354,7 @@ void BankingModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
     // Ensure loans are sorted by id ascending for deterministic processing.
     std::sort(active_loans_.begin(), active_loans_.end(),
-              [](const LoanRecord& a, const LoanRecord& b) {
-                  return a.id < b.id;
-              });
+              [](const LoanRecord& a, const LoanRecord& b) { return a.id < b.id; });
 
     // Step 1: Process loan repayments for all active loans.
     for (auto& loan : active_loans_) {

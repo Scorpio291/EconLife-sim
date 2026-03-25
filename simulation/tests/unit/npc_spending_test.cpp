@@ -1,13 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "modules/npc_spending/npc_spending_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/delta_buffer.h"
-#include "core/world_state/player.h"
-
 #include <cmath>
 #include <vector>
+
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+#include "modules/npc_spending/npc_spending_module.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace econlife;
@@ -39,8 +38,8 @@ TEST_CASE("test_income_factor_clamped_at_max", "[npc_spending][tier6]") {
 
 TEST_CASE("test_compute_price_factor_basic", "[npc_spending][tier6]") {
     // spot_price == base_price -> price_factor == 1.0 for any buyer type
-    float f = NpcSpendingModule::compute_price_factor(10.0f, 10.0f, -1.0f,
-                                                       BuyerType::brand_loyal, 0.05f);
+    float f =
+        NpcSpendingModule::compute_price_factor(10.0f, 10.0f, -1.0f, BuyerType::brand_loyal, 0.05f);
     REQUIRE_THAT(f, WithinAbs(1.0f, 0.001f));
 }
 
@@ -48,7 +47,7 @@ TEST_CASE("test_price_factor_floored_at_min", "[npc_spending][tier6]") {
     // spot_price = 10000x base -> extremely high price, factor drops toward 0
     // but must be >= min_price_factor (0.05)
     float f = NpcSpendingModule::compute_price_factor(10.0f, 100000.0f, -1.0f,
-                                                       BuyerType::price_sensitive, 0.05f);
+                                                      BuyerType::price_sensitive, 0.05f);
     REQUIRE(f >= 0.05f);
 }
 
@@ -101,19 +100,19 @@ TEST_CASE("test_price_sensitive_buyer_high_elasticity", "[npc_spending][tier6]")
     float price_sensitive_f = NpcSpendingModule::compute_price_factor(
         10.0f, 20.0f, -1.0f, BuyerType::price_sensitive, 0.05f);
     // brand_loyal faces same 2x price: elasticity * 0.8 modulator
-    float brand_loyal_f = NpcSpendingModule::compute_price_factor(
-        10.0f, 20.0f, -1.0f, BuyerType::brand_loyal, 0.05f);
+    float brand_loyal_f =
+        NpcSpendingModule::compute_price_factor(10.0f, 20.0f, -1.0f, BuyerType::brand_loyal, 0.05f);
     // price_sensitive should have lower price_factor (more demand reduction)
     REQUIRE(price_sensitive_f < brand_loyal_f);
 }
 
 TEST_CASE("test_necessity_buyer_inelastic", "[npc_spending][tier6]") {
     // necessity_buyer at 5x price: elasticity * 0.1 modulator -> barely affected
-    float necessity_f = NpcSpendingModule::compute_price_factor(
-        10.0f, 50.0f, -1.0f, BuyerType::necessity_buyer, 0.05f);
+    float necessity_f = NpcSpendingModule::compute_price_factor(10.0f, 50.0f, -1.0f,
+                                                                BuyerType::necessity_buyer, 0.05f);
     // price_sensitive at same price: much more affected
-    float sensitive_f = NpcSpendingModule::compute_price_factor(
-        10.0f, 50.0f, -1.0f, BuyerType::price_sensitive, 0.05f);
+    float sensitive_f = NpcSpendingModule::compute_price_factor(10.0f, 50.0f, -1.0f,
+                                                                BuyerType::price_sensitive, 0.05f);
     REQUIRE(necessity_f > sensitive_f);
     // necessity_buyer factor should still be close to 1.0
     REQUIRE(necessity_f > 0.5f);
@@ -121,10 +120,8 @@ TEST_CASE("test_necessity_buyer_inelastic", "[npc_spending][tier6]") {
 
 TEST_CASE("test_income_elasticity_scales_demand", "[npc_spending][tier6]") {
     // Higher income -> higher demand for normal good (income_elasticity > 0)
-    float low_income_f = NpcSpendingModule::compute_income_factor(
-        500.0f, 1000.0f, 1.0f, 5.0f);
-    float high_income_f = NpcSpendingModule::compute_income_factor(
-        3000.0f, 1000.0f, 1.0f, 5.0f);
+    float low_income_f = NpcSpendingModule::compute_income_factor(500.0f, 1000.0f, 1.0f, 5.0f);
+    float high_income_f = NpcSpendingModule::compute_income_factor(3000.0f, 1000.0f, 1.0f, 5.0f);
     REQUIRE(high_income_f > low_income_f);
 }
 

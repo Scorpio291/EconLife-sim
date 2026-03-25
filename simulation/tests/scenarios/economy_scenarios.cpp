@@ -9,9 +9,9 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdint>
 
-#include "core/world_state/world_state.h"
-#include "core/world_state/apply_deltas.h"
 #include "core/tick/drain_deferred_work.h"
+#include "core/world_state/apply_deltas.h"
+#include "core/world_state/world_state.h"
 #include "tests/test_world_factory.h"
 
 using namespace econlife;
@@ -34,8 +34,7 @@ TEST_CASE("business produces output when inputs available", "[scenario][economy]
     delta.market_deltas.push_back(md);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.regional_markets[0].supply,
-                 WithinAbs(initial_supply + 50.0f, 0.01));
+    REQUIRE_THAT(world.regional_markets[0].supply, WithinAbs(initial_supply + 50.0f, 0.01));
 }
 
 TEST_CASE("business halts production when missing inputs", "[scenario][economy][production]") {
@@ -59,18 +58,21 @@ TEST_CASE("worker count affects throughput not ratio", "[scenario][economy][prod
     // Business B: 5 workers produces 12.8 units (8 * 1.6 worker multiplier)
     DeltaBuffer delta{};
     MarketDelta md_a{};
-    md_a.good_id = 0; md_a.region_id = 0; md_a.supply_delta = 23.5f;
+    md_a.good_id = 0;
+    md_a.region_id = 0;
+    md_a.supply_delta = 23.5f;
     delta.market_deltas.push_back(md_a);
 
     MarketDelta md_b{};
-    md_b.good_id = 0; md_b.region_id = 0; md_b.supply_delta = 12.8f;
+    md_b.good_id = 0;
+    md_b.region_id = 0;
+    md_b.supply_delta = 12.8f;
     delta.market_deltas.push_back(md_b);
 
     float initial_supply = world.regional_markets[0].supply;
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.regional_markets[0].supply,
-                 WithinAbs(initial_supply + 36.3f, 0.01));
+    REQUIRE_THAT(world.regional_markets[0].supply, WithinAbs(initial_supply + 36.3f, 0.01));
 }
 
 // ── Supply chain scenarios ──────────────────────────────────────────────────
@@ -120,8 +122,7 @@ TEST_CASE("inter-province trade creates transit shipment", "[scenario][economy][
     world.current_tick = 5;
     float supply_before = world.regional_markets[0].supply;
     apply_cross_province_deltas(world);
-    REQUIRE_THAT(world.regional_markets[0].supply,
-                 WithinAbs(supply_before + 25.0f, 0.01));
+    REQUIRE_THAT(world.regional_markets[0].supply, WithinAbs(supply_before + 25.0f, 0.01));
 }
 
 // ── Price engine scenarios ──────────────────────────────────────────────────
@@ -141,8 +142,7 @@ TEST_CASE("price rises when demand exceeds supply", "[scenario][economy][price_e
     apply_deltas(world, delta);
 
     REQUIRE(world.regional_markets[0].spot_price > initial_price);
-    REQUIRE_THAT(world.regional_markets[0].spot_price,
-                 WithinAbs(initial_price * 1.15f, 0.01));
+    REQUIRE_THAT(world.regional_markets[0].spot_price, WithinAbs(initial_price * 1.15f, 0.01));
 }
 
 TEST_CASE("price falls when supply exceeds demand", "[scenario][economy][price_engine]") {
@@ -161,7 +161,8 @@ TEST_CASE("price falls when supply exceeds demand", "[scenario][economy][price_e
     REQUIRE(world.regional_markets[0].spot_price < initial_price);
 }
 
-TEST_CASE("government price ceiling prevents price above cap", "[scenario][economy][price_engine]") {
+TEST_CASE("government price ceiling prevents price above cap",
+          "[scenario][economy][price_engine]") {
     // Test: Price override clamped by apply_deltas floor (0.001).
     auto world = create_test_world(42, 10, 1, 5);
 
@@ -177,13 +178,13 @@ TEST_CASE("government price ceiling prevents price above cap", "[scenario][econo
     delta.market_deltas.push_back(md);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.regional_markets[0].spot_price,
-                 WithinAbs(ceiling, 0.01));
+    REQUIRE_THAT(world.regional_markets[0].spot_price, WithinAbs(ceiling, 0.01));
 }
 
 // ── Financial distribution scenarios ────────────────────────────────────────
 
-TEST_CASE("employees receive wages before dividends distributed", "[scenario][economy][financial]") {
+TEST_CASE("employees receive wages before dividends distributed",
+          "[scenario][economy][financial]") {
     // Test: NPC capital increases from salary payment via NPCDelta.
     auto world = create_test_world(42, 10, 1, 5);
     float initial_capital = world.significant_npcs[0].capital;
@@ -195,8 +196,7 @@ TEST_CASE("employees receive wages before dividends distributed", "[scenario][ec
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.significant_npcs[0].capital,
-                 WithinAbs(initial_capital + 500.0f, 0.01));
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(initial_capital + 500.0f, 0.01));
 }
 
 TEST_CASE("negative net income reduces business cash", "[scenario][economy][financial]") {
@@ -211,8 +211,7 @@ TEST_CASE("negative net income reduces business cash", "[scenario][economy][fina
     delta.business_deltas.push_back(bd);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.npc_businesses[0].cash,
-                 WithinAbs(initial_cash - 200.0f, 0.01));
+    REQUIRE_THAT(world.npc_businesses[0].cash, WithinAbs(initial_cash - 200.0f, 0.01));
 }
 
 TEST_CASE("tax withholding reduces net payment", "[scenario][economy][financial]") {
@@ -230,8 +229,7 @@ TEST_CASE("tax withholding reduces net payment", "[scenario][economy][financial]
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.significant_npcs[0].capital,
-                 WithinAbs(initial_capital + net_salary, 0.01));
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(initial_capital + net_salary, 0.01));
 }
 
 // ── Labor market scenarios ──────────────────────────────────────────────────
@@ -250,7 +248,8 @@ TEST_CASE("hiring increases business cost", "[scenario][economy][labor]") {
     REQUIRE_THAT(world.npc_businesses[0].cost_per_tick, WithinAbs(600.0f, 0.01));
 }
 
-TEST_CASE("wage payment reduces business cash and increases NPC capital", "[scenario][economy][labor]") {
+TEST_CASE("wage payment reduces business cash and increases NPC capital",
+          "[scenario][economy][labor]") {
     auto world = create_test_world(42, 10, 1, 5);
     float biz_cash = world.npc_businesses[0].cash;
     float npc_capital = world.significant_npcs[0].capital;
@@ -288,10 +287,7 @@ TEST_CASE("evidence decays over time via DWQ", "[scenario][economy][evidence]") 
     token.is_active = true;
     world.evidence_pool.push_back(token);
 
-    world.deferred_work_queue.push({
-        7, WorkType::evidence_decay_batch, 1,
-        EvidenceDecayPayload{1}
-    });
+    world.deferred_work_queue.push({7, WorkType::evidence_decay_batch, 1, EvidenceDecayPayload{1}});
 
     DeltaBuffer delta{};
     drain_deferred_work(world, delta);
@@ -315,11 +311,9 @@ TEST_CASE("relationship trust decays over time via DWQ", "[scenario][economy][np
     rel.recovery_ceiling = 1.0f;
     world.significant_npcs[0].relationships.push_back(rel);
 
-    world.deferred_work_queue.push({
-        30, WorkType::npc_relationship_decay,
-        world.significant_npcs[0].id,
-        NPCRelationshipDecayPayload{world.significant_npcs[0].id}
-    });
+    world.deferred_work_queue.push({30, WorkType::npc_relationship_decay,
+                                    world.significant_npcs[0].id,
+                                    NPCRelationshipDecayPayload{world.significant_npcs[0].id}});
 
     DeltaBuffer delta{};
     drain_deferred_work(world, delta);
@@ -344,8 +338,7 @@ TEST_CASE("multiple supply deltas accumulate correctly", "[scenario][economy][ac
     }
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.regional_markets[0].supply,
-                 WithinAbs(initial_supply + 50.0f, 0.01));
+    REQUIRE_THAT(world.regional_markets[0].supply, WithinAbs(initial_supply + 50.0f, 0.01));
 }
 
 TEST_CASE("NaN delta treated as zero in scenario context", "[scenario][economy][safety]") {
@@ -359,8 +352,7 @@ TEST_CASE("NaN delta treated as zero in scenario context", "[scenario][economy][
     delta.npc_deltas.push_back(nd);
     apply_deltas(world, delta);
 
-    REQUIRE_THAT(world.significant_npcs[0].capital,
-                 WithinAbs(initial_capital, 0.01));
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(initial_capital, 0.01));
 }
 
 TEST_CASE("delta buffer cleared after application", "[scenario][economy][safety]") {

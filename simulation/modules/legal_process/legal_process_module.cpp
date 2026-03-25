@@ -1,20 +1,23 @@
 #include "legal_process_module.h"
-#include "core/world_state/world_state.h"
-#include "core/world_state/player.h"
+
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
+
 namespace econlife {
 
-float LegalProcessModule::compute_conviction_probability(
-    float evidence_weight, float defense_quality, float judge_bias, float witness_reliability)
-{
-    float prob = evidence_weight * (1.0f - defense_quality * DEFENSE_QUALITY_FACTOR)
-                 * judge_bias * witness_reliability;
+float LegalProcessModule::compute_conviction_probability(float evidence_weight,
+                                                         float defense_quality, float judge_bias,
+                                                         float witness_reliability) {
+    float prob = evidence_weight * (1.0f - defense_quality * DEFENSE_QUALITY_FACTOR) * judge_bias *
+                 witness_reliability;
     return std::clamp(prob, 0.0f, 1.0f);
 }
 
-uint32_t LegalProcessModule::compute_sentence_ticks(CaseSeverity severity, uint32_t ticks_per_level) {
+uint32_t LegalProcessModule::compute_sentence_ticks(CaseSeverity severity,
+                                                    uint32_t ticks_per_level) {
     return (static_cast<uint32_t>(severity) + 1) * ticks_per_level;
 }
 
@@ -24,14 +27,20 @@ bool LegalProcessModule::is_double_jeopardy_active(uint32_t current_tick, uint32
 
 LegalCaseStage LegalProcessModule::advance_stage(LegalCaseStage current, bool conviction) {
     switch (current) {
-        case LegalCaseStage::investigation: return LegalCaseStage::arrested;
-        case LegalCaseStage::arrested:      return LegalCaseStage::charged;
-        case LegalCaseStage::charged:       return LegalCaseStage::trial;
+        case LegalCaseStage::investigation:
+            return LegalCaseStage::arrested;
+        case LegalCaseStage::arrested:
+            return LegalCaseStage::charged;
+        case LegalCaseStage::charged:
+            return LegalCaseStage::trial;
         case LegalCaseStage::trial:
             return conviction ? LegalCaseStage::convicted : LegalCaseStage::acquitted;
-        case LegalCaseStage::convicted:     return LegalCaseStage::imprisoned;
-        case LegalCaseStage::imprisoned:    return LegalCaseStage::paroled;
-        default: return current;
+        case LegalCaseStage::convicted:
+            return LegalCaseStage::imprisoned;
+        case LegalCaseStage::imprisoned:
+            return LegalCaseStage::paroled;
+        default:
+            return current;
     }
 }
 
@@ -48,8 +57,8 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
               [](const LegalCase& a, const LegalCase& b) { return a.id < b.id; });
 
     for (auto& lcase : cases_) {
-        if (lcase.stage == LegalCaseStage::acquitted ||
-            lcase.stage == LegalCaseStage::pardoned) continue;
+        if (lcase.stage == LegalCaseStage::acquitted || lcase.stage == LegalCaseStage::pardoned)
+            continue;
 
         if (lcase.stage == LegalCaseStage::trial) {
             lcase.conviction_probability = compute_conviction_probability(
@@ -61,14 +70,17 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             for (const auto& token : state.evidence_pool) {
                 if (token.is_active && token.target_npc_id == lcase.defendant_npc_id) {
                     EvidenceDelta presented_ev;
-                    presented_ev.retired_token_id   = token.id;  // retire from active pool
+                    presented_ev.retired_token_id = token.id;  // retire from active pool
                     // Also emit a documentary token representing the court record
-                    presented_ev.new_token = EvidenceToken{
-                        0, EvidenceType::documentary,
-                        lcase.prosecutor_npc_id, lcase.defendant_npc_id,
-                        token.actionability, 0.0f,  // court record does not decay
-                        state.current_tick, token.province_id, true
-                    };
+                    presented_ev.new_token = EvidenceToken{0,
+                                                           EvidenceType::documentary,
+                                                           lcase.prosecutor_npc_id,
+                                                           lcase.defendant_npc_id,
+                                                           token.actionability,
+                                                           0.0f,  // court record does not decay
+                                                           state.current_tick,
+                                                           token.province_id,
+                                                           true};
                     delta.evidence_deltas.push_back(presented_ev);
                 }
             }
@@ -94,8 +106,7 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
         }
 
-        if (lcase.stage == LegalCaseStage::imprisoned &&
-            state.current_tick >= lcase.release_tick) {
+        if (lcase.stage == LegalCaseStage::imprisoned && state.current_tick >= lcase.release_tick) {
             lcase.stage = LegalCaseStage::paroled;
             if (lcase.defendant_npc_id > 0) {
                 NPCDelta npc_delta;

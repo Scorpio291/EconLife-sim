@@ -10,6 +10,7 @@
 //   6. Compare byte-for-byte.
 
 #include <catch2/catch_test_macros.hpp>
+
 #include "../test_world_factory.h"
 #include "core/world_state/apply_deltas.h"
 
@@ -93,7 +94,7 @@ TEST_CASE("canonical sort order prevents float drift", "[determinism][float]") {
 
     // Generate deterministic delta values
     DeterministicRNG rng(12345);
-    std::vector<std::pair<uint32_t, float>> deltas; // (good_id * 1000 + province_id, value)
+    std::vector<std::pair<uint32_t, float>> deltas;  // (good_id * 1000 + province_id, value)
     for (uint32_t g = 0; g < GOODS; ++g) {
         for (uint32_t p = 0; p < PROVINCES; ++p) {
             float val = rng.next_float() * 100.0f - 50.0f;
@@ -135,7 +136,7 @@ TEST_CASE("test world factory produces valid state", "[determinism][factory]") {
     REQUIRE(world.region_groups.size() == 6);
     REQUIRE(world.significant_npcs.size() == 200);
     REQUIRE(world.regional_markets.size() == 6 * 15);
-    REQUIRE(world.npc_businesses.size() == 40); // 200 / 5
+    REQUIRE(world.npc_businesses.size() == 40);  // 200 / 5
 
     // All NPCs are active
     for (const auto& npc : world.significant_npcs) {
@@ -146,7 +147,8 @@ TEST_CASE("test world factory produces valid state", "[determinism][factory]") {
     // All motivation vectors sum to ~1.0
     for (const auto& npc : world.significant_npcs) {
         float sum = 0.0f;
-        for (float w : npc.motivations.weights) sum += w;
+        for (float w : npc.motivations.weights)
+            sum += w;
         REQUIRE(std::abs(sum - 1.0f) < 0.01f);
     }
 
