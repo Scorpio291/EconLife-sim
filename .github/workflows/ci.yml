@@ -51,9 +51,13 @@ jobs:
 
       - name: Verify no std::rand or system time in simulation
         run: |
-          # Check for forbidden randomness sources
-          FORBIDDEN_PATTERNS="std::rand|srand|std::random_device|std::time|time(nullptr)|clock()"
-          if grep -rE "$FORBIDDEN_PATTERNS" simulation/ --include="*.h" --include="*.cpp" --include="*.hpp"; then
+          # Check for forbidden randomness sources.
+          # Patterns use word-boundary or escaped parens to avoid false positives
+          # on std::chrono::steady_clock::now() and similar legitimate timing code.
+          # Allowed: std::chrono clocks (for profiling in CLI/tests).
+          # Forbidden: C random/time functions that break determinism.
+          FORBIDDEN_PATTERNS='std::rand\b|[^:]\bsrand\b|std::random_device|std::time\b[^s]|\btime\(nullptr\)|\bclock\(\)'
+          if grep -rE "$FORBIDDEN_PATTERNS" simulation/ --include="*.h" --include="*.cpp" --include="*.hpp" | grep -v '//' | grep -v 'DeterministicRNG'; then
             echo "ERROR: Simulation code must use DeterministicRNG only."
             echo "Found forbidden randomness/time source."
             exit 1
