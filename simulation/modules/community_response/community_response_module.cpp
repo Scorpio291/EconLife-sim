@@ -239,12 +239,14 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
         RegionDelta rd;
         rd.region_id = province.id;
         rd.cohesion_delta = cohesion - province.community.cohesion;
-        // Fold resource_access improvement into stability_delta: a more resource-capable
-        // community is more stable; a declining one is less stable.
-        rd.stability_delta = resource_access - province.community.resource_access;
+        rd.resource_access_delta = resource_access - province.community.resource_access;
         rd.grievance_delta = (grievance - province.community.grievance_level)
                              + stage_grievance_bonus;
         rd.institutional_trust_delta = inst_trust - province.community.institutional_trust;
+        // Write response stage if it changed.
+        if (static_cast<uint8_t>(new_stage) != current_stage) {
+            rd.response_stage_replacement = static_cast<uint8_t>(new_stage);
+        }
         delta.region_deltas.push_back(rd);
     }
 }

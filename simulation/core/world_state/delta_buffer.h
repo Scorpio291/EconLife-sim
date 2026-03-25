@@ -93,6 +93,8 @@ struct RegionDelta {
     std::optional<float> cohesion_delta;               // additive
     std::optional<float> grievance_delta;              // additive
     std::optional<float> institutional_trust_delta;    // additive
+    std::optional<float> resource_access_delta;        // additive; applied to community.resource_access
+    std::optional<uint8_t> response_stage_replacement; // replacement; new community response stage (0-6)
     std::optional<float> infrastructure_rating_delta;  // additive; applied to province infrastructure_rating
 };
 

@@ -41,7 +41,7 @@ static void cleanup_temp_dir(const std::string& dir) {
 // GoodsCatalog Tests
 // ===========================================================================
 
-TEST_CASE("GoodsCatalog — loads CSV file correctly", "[world_gen][goods_catalog]") {
+TEST_CASE("GoodsCatalog  - loads CSV file correctly", "[world_gen][goods_catalog]") {
     std::string tmp_dir = "test_goods_tmp_" + std::to_string(std::hash<std::string>{}("catalog_test"));
 
     std::string csv_content =
@@ -85,7 +85,7 @@ TEST_CASE("GoodsCatalog — loads CSV file correctly", "[world_gen][goods_catalo
     cleanup_temp_dir(tmp_dir);
 }
 
-TEST_CASE("GoodsCatalog — filters by era and tier", "[world_gen][goods_catalog]") {
+TEST_CASE("GoodsCatalog  - filters by era and tier", "[world_gen][goods_catalog]") {
     std::string tmp_dir = "test_goods_tmp_filter";
 
     std::string csv_content =
@@ -114,7 +114,7 @@ TEST_CASE("GoodsCatalog — filters by era and tier", "[world_gen][goods_catalog
     cleanup_temp_dir(tmp_dir);
 }
 
-TEST_CASE("GoodsCatalog — numeric IDs are sequential", "[world_gen][goods_catalog]") {
+TEST_CASE("GoodsCatalog  - numeric IDs are sequential", "[world_gen][goods_catalog]") {
     std::string tmp_dir = "test_goods_tmp_ids";
 
     std::string csv1 =
@@ -143,12 +143,12 @@ TEST_CASE("GoodsCatalog — numeric IDs are sequential", "[world_gen][goods_cata
 // WorldGenerator Tests
 // ===========================================================================
 
-TEST_CASE("WorldGenerator — generates valid WorldState", "[world_gen][generator]") {
+TEST_CASE("WorldGenerator  - generates valid WorldState", "[world_gen][generator]") {
     WorldGeneratorConfig config{};
     config.seed = 12345;
     config.province_count = 6;
     config.npc_count = 200;
-    // No goods directory — will use fallback goods.
+    // No goods directory  - will use fallback goods.
 
     auto world = WorldGenerator::generate(config);
 
@@ -162,7 +162,7 @@ TEST_CASE("WorldGenerator — generates valid WorldState", "[world_gen][generato
     CHECK_FALSE(world.regional_markets.empty());
 }
 
-TEST_CASE("WorldGenerator — deterministic: same seed produces same world", "[world_gen][determinism]") {
+TEST_CASE("WorldGenerator  - deterministic: same seed produces same world", "[world_gen][determinism]") {
     WorldGeneratorConfig config{};
     config.seed = 99999;
     config.province_count = 4;
@@ -194,7 +194,7 @@ TEST_CASE("WorldGenerator — deterministic: same seed produces same world", "[w
     }
 }
 
-TEST_CASE("WorldGenerator — different seeds produce different worlds", "[world_gen][determinism]") {
+TEST_CASE("WorldGenerator  - different seeds produce different worlds", "[world_gen][determinism]") {
     WorldGeneratorConfig config1{};
     config1.seed = 111;
     config1.province_count = 3;
@@ -217,7 +217,7 @@ TEST_CASE("WorldGenerator — different seeds produce different worlds", "[world
     CHECK(any_name_differs);
 }
 
-TEST_CASE("WorldGenerator — provinces have diverse geography", "[world_gen][provinces]") {
+TEST_CASE("WorldGenerator  - provinces have diverse geography", "[world_gen][provinces]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -248,7 +248,7 @@ TEST_CASE("WorldGenerator — provinces have diverse geography", "[world_gen][pr
     }
 }
 
-TEST_CASE("WorldGenerator — provinces have resource deposits", "[world_gen][resources]") {
+TEST_CASE("WorldGenerator  - provinces have resource deposits", "[world_gen][resources]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -276,7 +276,7 @@ TEST_CASE("WorldGenerator — provinces have resource deposits", "[world_gen][re
     CHECK(max_deposits > min_deposits); // variation exists
 }
 
-TEST_CASE("WorldGenerator — NPCs distributed proportionally to population", "[world_gen][npcs]") {
+TEST_CASE("WorldGenerator  - NPCs distributed proportionally to population", "[world_gen][npcs]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -313,7 +313,7 @@ TEST_CASE("WorldGenerator — NPCs distributed proportionally to population", "[
     }
 }
 
-TEST_CASE("WorldGenerator — NPC roles have diversity", "[world_gen][npcs]") {
+TEST_CASE("WorldGenerator  - NPC roles have diversity", "[world_gen][npcs]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 3;
@@ -336,7 +336,7 @@ TEST_CASE("WorldGenerator — NPC roles have diversity", "[world_gen][npcs]") {
     CHECK(worker_count > world.significant_npcs.size() / 5); // at least 20%
 }
 
-TEST_CASE("WorldGenerator — NPC motivation vectors normalized", "[world_gen][npcs]") {
+TEST_CASE("WorldGenerator  - NPC motivation vectors normalized", "[world_gen][npcs]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 2;
@@ -355,7 +355,7 @@ TEST_CASE("WorldGenerator — NPC motivation vectors normalized", "[world_gen][n
     }
 }
 
-TEST_CASE("WorldGenerator — businesses have diverse sectors", "[world_gen][businesses]") {
+TEST_CASE("WorldGenerator  - businesses have diverse sectors", "[world_gen][businesses]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -378,12 +378,12 @@ TEST_CASE("WorldGenerator — businesses have diverse sectors", "[world_gen][bus
     CHECK(observed_sectors.size() >= 4); // reasonable sector diversity
 }
 
-TEST_CASE("WorldGenerator — markets created with fallback goods", "[world_gen][markets]") {
+TEST_CASE("WorldGenerator  - markets created with fallback goods", "[world_gen][markets]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 3;
     config.npc_count = 50;
-    // No goods directory — fallback goods.
+    // No goods directory  - fallback goods.
 
     auto world = WorldGenerator::generate(config);
 
@@ -401,7 +401,7 @@ TEST_CASE("WorldGenerator — markets created with fallback goods", "[world_gen]
     }
 }
 
-TEST_CASE("WorldGenerator — markets created from CSV goods catalog", "[world_gen][markets][csv]") {
+TEST_CASE("WorldGenerator  - markets created from CSV goods catalog", "[world_gen][markets][csv]") {
     std::string tmp_dir = "test_goods_tmp_markets";
 
     std::string csv_content =
@@ -432,7 +432,7 @@ TEST_CASE("WorldGenerator — markets created from CSV goods catalog", "[world_g
     cleanup_temp_dir(tmp_dir);
 }
 
-TEST_CASE("WorldGenerator — generate_with_player creates player", "[world_gen][player]") {
+TEST_CASE("WorldGenerator  - generate_with_player creates player", "[world_gen][player]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 3;
@@ -446,7 +446,7 @@ TEST_CASE("WorldGenerator — generate_with_player creates player", "[world_gen]
     CHECK(result.world.provinces.size() == 3);
 }
 
-TEST_CASE("WorldGenerator — province community state initialized correctly", "[world_gen][community]") {
+TEST_CASE("WorldGenerator  - province community state initialized correctly", "[world_gen][community]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -482,7 +482,7 @@ TEST_CASE("WorldGenerator — province community state initialized correctly", "
     }
 }
 
-TEST_CASE("WorldGenerator — nation structure valid", "[world_gen][nation]") {
+TEST_CASE("WorldGenerator  - nation structure valid", "[world_gen][nation]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -501,7 +501,7 @@ TEST_CASE("WorldGenerator — nation structure valid", "[world_gen][nation]") {
     CHECK(nation.income_tax_rate_top_bracket > 0.0f);
 }
 
-TEST_CASE("WorldGenerator — province links form connected graph", "[world_gen][links]") {
+TEST_CASE("WorldGenerator  - province links form connected graph", "[world_gen][links]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -532,7 +532,7 @@ TEST_CASE("WorldGenerator — province links form connected graph", "[world_gen]
     CHECK(visited.size() == world.provinces.size());
 }
 
-TEST_CASE("WorldGenerator — single province world works", "[world_gen][edge]") {
+TEST_CASE("WorldGenerator  - single province world works", "[world_gen][edge]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 1;
@@ -545,7 +545,7 @@ TEST_CASE("WorldGenerator — single province world works", "[world_gen][edge]")
     CHECK_FALSE(world.regional_markets.empty());
 }
 
-TEST_CASE("WorldGenerator — large world generation", "[world_gen][scale]") {
+TEST_CASE("WorldGenerator  - large world generation", "[world_gen][scale]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;

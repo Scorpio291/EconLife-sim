@@ -316,6 +316,15 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         safe_add(prov.community.institutional_trust,
                                  *d.institutional_trust_delta));
                 }
+                if (d.resource_access_delta.has_value()) {
+                    prov.community.resource_access = clamp01(
+                        safe_add(prov.community.resource_access,
+                                 *d.resource_access_delta));
+                }
+                if (d.response_stage_replacement.has_value()) {
+                    prov.community.response_stage = std::min(
+                        *d.response_stage_replacement, static_cast<uint8_t>(6));
+                }
                 if (d.infrastructure_rating_delta.has_value()) {
                     prov.infrastructure_rating = clamp01(
                         safe_add(prov.infrastructure_rating,
