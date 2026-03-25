@@ -1,43 +1,48 @@
-// EconLife CLI — standalone executable for live simulation testing.
-// Creates a test world, registers all 43 base game modules, and runs
-// the full tick loop with per-tick metric output.
+// EconLife CLI — standalone executable for live simulation.
+// Creates a world using WorldGenerator (data-driven from CSV goods catalog),
+// registers all 43 base game modules, and runs the full tick loop with
+// per-tick metric output.
 
 #include "core/world_state/world_state.h"
 #include "core/world_state/player.h"
+#include "core/world_gen/world_generator.h"
 #include "core/tick/tick_orchestrator.h"
 #include "core/tick/thread_pool.h"
 #include "modules/register_base_game_modules.h"
-#include "tests/test_world_factory.h"
 
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 
 using namespace econlife;
-using namespace econlife::test;
 
 struct CliArgs {
-    uint64_t seed           = 42;
-    uint32_t npc_count      = 100;
-    uint32_t province_count = 3;
-    uint32_t goods_count    = 10;
-    uint32_t ticks          = 365;
-    uint32_t threads        = 1;
-    uint32_t report_every   = 30;   // print metrics every N ticks
-    bool     verbose        = false;
+    uint64_t    seed           = 42;
+    uint32_t    npc_count      = 2000;
+    uint32_t    province_count = 6;
+    uint32_t    ticks          = 365;
+    uint32_t    threads        = 1;
+    uint32_t    report_every   = 30;   // print metrics every N ticks
+    uint8_t     max_good_tier  = 1;    // tier 0-1 at game start
+    bool        verbose        = false;
+    bool        use_test_world = false; // fallback to test_world_factory
+    std::string goods_dir;             // path to goods CSVs
 };
 
 static void print_usage(const char* prog) {
     std::printf("Usage: %s [options]\n", prog);
     std::printf("  --seed N          World seed (default: 42)\n");
-    std::printf("  --npcs N          NPC count (default: 100)\n");
-    std::printf("  --provinces N     Province count (default: 3)\n");
-    std::printf("  --goods N         Goods per province (default: 10)\n");
+    std::printf("  --npcs N          NPC count (default: 2000)\n");
+    std::printf("  --provinces N     Province count (default: 6)\n");
     std::printf("  --ticks N         Ticks to simulate (default: 365)\n");
     std::printf("  --threads N       Thread pool size (default: 1)\n");
     std::printf("  --report-every N  Print metrics every N ticks (default: 30)\n");
+    std::printf("  --max-tier N      Max good tier at start (default: 1)\n");
+    std::printf("  --goods-dir PATH  Path to goods CSV directory\n");
+    std::printf("  --test-world      Use minimal test world factory instead\n");
     std::printf("  --verbose         Print per-tick timing\n");
     std::printf("  --help            Show this message\n");
 }
@@ -54,19 +59,41 @@ static CliArgs parse_args(int argc, char* argv[]) {
             args.npc_count = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argv[i], "--provinces") == 0 && i + 1 < argc) {
             args.province_count = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
-        } else if (std::strcmp(argv[i], "--goods") == 0 && i + 1 < argc) {
-            args.goods_count = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argv[i], "--ticks") == 0 && i + 1 < argc) {
             args.ticks = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argv[i], "--threads") == 0 && i + 1 < argc) {
             args.threads = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argv[i], "--report-every") == 0 && i + 1 < argc) {
             args.report_every = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
+        } else if (std::strcmp(argv[i], "--max-tier") == 0 && i + 1 < argc) {
+            args.max_good_tier = static_cast<uint8_t>(std::strtoul(argv[++i], nullptr, 10));
+        } else if (std::strcmp(argv[i], "--goods-dir") == 0 && i + 1 < argc) {
+            args.goods_dir = argv[++i];
+        } else if (std::strcmp(argv[i], "--test-world") == 0) {
+            args.use_test_world = true;
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
             args.verbose = true;
         }
     }
     return args;
+}
+
+// Auto-detect goods directory by searching upward from executable location.
+static std::string find_goods_directory() {
+    namespace fs = std::filesystem;
+    // Try common relative paths from working directory.
+    static const char* candidates[] = {
+        "packages/base_game/goods",
+        "../packages/base_game/goods",
+        "../../packages/base_game/goods",
+        "../../../packages/base_game/goods",
+    };
+    for (const auto* candidate : candidates) {
+        if (fs::exists(candidate) && fs::is_directory(candidate)) {
+            return fs::canonical(candidate).string();
+        }
+    }
+    return "";
 }
 
 static void print_header() {
@@ -134,30 +161,49 @@ static bool check_nan_contamination(const WorldState& world) {
 int main(int argc, char* argv[]) {
     CliArgs args = parse_args(argc, argv);
 
-    std::printf("EconLife CLI — seed=%llu, npcs=%u, provinces=%u, goods=%u, ticks=%u, threads=%u\n\n",
+    std::printf("EconLife CLI — seed=%llu, npcs=%u, provinces=%u, ticks=%u, threads=%u\n",
                 static_cast<unsigned long long>(args.seed),
-                args.npc_count, args.province_count, args.goods_count,
+                args.npc_count, args.province_count,
                 args.ticks, args.threads);
 
-    // 1. Create world
-    auto world = create_test_world(args.seed, args.npc_count,
-                                    args.province_count, args.goods_count);
+    // 1. Create world using WorldGenerator
+    WorldGeneratorConfig gen_config{};
+    gen_config.seed = args.seed;
+    gen_config.province_count = args.province_count;
+    gen_config.npc_count = args.npc_count;
+    gen_config.max_good_tier = args.max_good_tier;
 
-    // 2. Wire player into world
-    PlayerCharacter player = create_test_player(0);
+    // Resolve goods directory.
+    if (!args.goods_dir.empty()) {
+        gen_config.goods_directory = args.goods_dir;
+    } else {
+        gen_config.goods_directory = find_goods_directory();
+    }
+
+    if (!gen_config.goods_directory.empty()) {
+        std::printf("Goods directory: %s\n", gen_config.goods_directory.c_str());
+    } else {
+        std::printf("Goods directory: not found (using fallback goods)\n");
+    }
+
+    auto [world, player] = WorldGenerator::generate_with_player(gen_config);
     world.player = &player;
 
-    // 3. Set up orchestrator
+    std::printf("World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets\n\n",
+                world.provinces.size(), world.significant_npcs.size(),
+                world.npc_businesses.size(), world.regional_markets.size());
+
+    // 2. Set up orchestrator
     TickOrchestrator orchestrator;
     register_base_game_modules(orchestrator);
     orchestrator.finalize_registration();
     std::printf("Registered %zu modules, topological sort OK.\n\n",
                 orchestrator.modules().size());
 
-    // 4. Create thread pool
+    // 3. Create thread pool
     ThreadPool pool(args.threads);
 
-    // 5. Run ticks
+    // 4. Run ticks
     print_header();
     print_metrics(world);  // tick 0 baseline
 
@@ -204,6 +250,19 @@ int main(int argc, char* argv[]) {
     std::printf("Markets:      %zu\n", world.regional_markets.size());
     std::printf("Evidence:     %zu\n", world.evidence_pool.size());
     std::printf("Obligations:  %zu\n", world.obligation_network.size());
+
+    // Province summary
+    std::printf("\n--- Provinces ---\n");
+    for (const auto& p : world.provinces) {
+        std::printf("  [%u] %-20s pop=%u infra=%.2f agri=%.2f deposits=%zu markets=%zu npcs=%zu\n",
+                    p.id, p.fictional_name.c_str(),
+                    p.demographics.total_population,
+                    p.infrastructure_rating,
+                    p.agricultural_productivity,
+                    p.deposits.size(),
+                    p.market_ids.size(),
+                    p.significant_npc_ids.size());
+    }
 
     return 0;
 }

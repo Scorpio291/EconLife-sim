@@ -49,6 +49,7 @@ add_executable(econlife_unit_tests
     persistence_test.cpp
     apply_deltas_test.cpp
     drain_deferred_work_test.cpp
+    world_generator_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE

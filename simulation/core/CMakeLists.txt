@@ -7,6 +7,8 @@ add_library(econlife_core STATIC
     tick/drain_deferred_work.cpp
     world_state/cross_province_delta_buffer.cpp
     world_state/apply_deltas.cpp
+    world_gen/goods_catalog.cpp
+    world_gen/world_generator.cpp
 )
 
 target_include_directories(econlife_core PUBLIC
