@@ -276,10 +276,12 @@ struct RegionConditions {
 // ---------------------------------------------------------------------------
 struct Province {
     // Identity
-    H3Index h3_index;  // canonical spatial identifier (H3 res 4); external-stable
-                       // across saves and used by WorldGen pipeline; O(1) neighbor/
-                       // parent queries. Distinct from id: id is the runtime array
-                       // index in WorldState.provinces for O(1) in-simulation lookups.
+    H3Index h3_index;    // canonical spatial identifier (H3 res 4); external-stable
+                         // across saves and used by WorldGen pipeline; O(1) neighbor/
+                         // parent queries. Distinct from id: id is the runtime array
+                         // index in WorldState.provinces for O(1) in-simulation lookups.
+    bool    is_pentagon    = false;  // true for H3's 12 fixed pentagons (5 neighbors, not 6)
+    uint8_t neighbor_count = 6;      // 5 for pentagons, 6 for regular hexagons
     uint32_t id;
     std::string fictional_name;
     std::string real_world_reference;  // pipeline internal; in world.json; not shown in UI

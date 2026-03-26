@@ -6,7 +6,7 @@ Manages the registration, topological sorting, and sequential/parallel execution
 ## Inputs (from WorldState)
 - `current_tick` — tick counter for scheduling
 - `provinces` — province list for parallel dispatch sizing
-- `deferred_work_queue` — drained at Step 2
+- `deferred_work_queue` — drained in the pre-step before modules run (see note below)
 - `cross_province_delta_buffer` — flushed at tick start
 
 ## Outputs (to DeltaBuffer)
@@ -42,6 +42,13 @@ Manages the registration, topological sorting, and sequential/parallel execution
 
 ## Dependencies
 - This IS the orchestrator — no runs_after/runs_before.
+
+## Notes
+- **Deferred work queue drain position:** Items scheduled in tick N fire at the start of tick N+1,
+  before any module runs. The TDD §6 labels this "Step 2" (within the module loop), but the
+  implementation drains the queue before the loop begins. The behavior is equivalent — consequences
+  are visible to all modules in tick N+1. The GDD §21 step count discrepancy (27 vs 28 steps) is an
+  open documentation ambiguity; do not change drain position without explicit design approval.
 
 ## Test Scenarios
 - `tick_executes_in_topological_order`: Register 3 modules with A→B→C dependency. Verify execution order.

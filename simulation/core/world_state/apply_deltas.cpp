@@ -284,9 +284,13 @@ static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceD
                 }
             }
         }
-        if (d.actionability_delta.has_value()) {
-            // Applied to the most recently created token (convention)
-            // Modules should use retired_token_id for targeted updates
+        if (d.updated_token_id.has_value() && d.updated_actionability.has_value()) {
+            for (auto& t : world.evidence_pool) {
+                if (t.id == *d.updated_token_id) {
+                    t.actionability = *d.updated_actionability;
+                    break;
+                }
+            }
         }
     }
 }

@@ -12,6 +12,8 @@ add_library(econlife_core STATIC
     world_gen/facility_type_catalog.cpp
     world_gen/technology_catalog.cpp
     world_gen/world_generator.cpp
+    world_gen/h3_utils.cpp
+    config/package_config.cpp
 )
 
 target_include_directories(econlife_core PUBLIC
@@ -20,3 +22,9 @@ target_include_directories(econlife_core PUBLIC
 )
 
 target_compile_features(econlife_core PUBLIC cxx_std_20)
+
+target_link_libraries(econlife_core PUBLIC
+    h3
+    nlohmann_json::nlohmann_json
+    lz4_static
+)

@@ -74,11 +74,11 @@
 
 namespace econlife {
 
-void register_base_game_modules(TickOrchestrator& orchestrator) {
+void register_base_game_modules(TickOrchestrator& orchestrator, const PackageConfig& config) {
     // Tier 1
     orchestrator.register_module(std::make_unique<CalendarModule>());
     orchestrator.register_module(std::make_unique<TechnologyModule>());
-    orchestrator.register_module(std::make_unique<ProductionModule>());
+    orchestrator.register_module(std::make_unique<ProductionModule>(config.production));
     orchestrator.register_module(std::make_unique<SceneCardsModule>());
     orchestrator.register_module(std::make_unique<RandomEventsModule>());
 
@@ -88,7 +88,7 @@ void register_base_game_modules(TickOrchestrator& orchestrator) {
     orchestrator.register_module(std::make_unique<SeasonalAgricultureModule>());
 
     // Tier 3
-    orchestrator.register_module(std::make_unique<PriceEngineModule>());
+    orchestrator.register_module(std::make_unique<PriceEngineModule>(config.price_model));
     orchestrator.register_module(std::make_unique<TradeInfrastructureModule>());
 
     // Tier 4
@@ -98,16 +98,17 @@ void register_base_game_modules(TickOrchestrator& orchestrator) {
     orchestrator.register_module(std::make_unique<RealEstateModule>());
 
     // Tier 5
-    orchestrator.register_module(std::make_unique<NpcBehaviorModule>());
-    orchestrator.register_module(std::make_unique<BankingModule>());
+    orchestrator.register_module(std::make_unique<NpcBehaviorModule>(config.npc_behavior));
+    orchestrator.register_module(std::make_unique<BankingModule>(config.banking));
     orchestrator.register_module(std::make_unique<GovernmentBudgetModule>());
     orchestrator.register_module(std::make_unique<HealthcareModule>());
 
     // Tier 6
     orchestrator.register_module(std::make_unique<NpcSpendingModule>());
-    orchestrator.register_module(std::make_unique<EvidenceModule>());
+    orchestrator.register_module(std::make_unique<EvidenceModule>(config.evidence));
     orchestrator.register_module(std::make_unique<ObligationNetworkModule>());
-    orchestrator.register_module(std::make_unique<CommunityResponseModule>());
+    orchestrator.register_module(
+        std::make_unique<CommunityResponseModule>(config.consequence_delays));
 
     // Tier 7
     orchestrator.register_module(std::make_unique<FacilitySignalsModule>());
@@ -123,8 +124,8 @@ void register_base_game_modules(TickOrchestrator& orchestrator) {
     orchestrator.register_module(std::make_unique<ProtectionRacketsModule>());
 
     // Tier 9
-    orchestrator.register_module(std::make_unique<LegalProcessModule>());
-    orchestrator.register_module(std::make_unique<InformantSystemModule>());
+    orchestrator.register_module(std::make_unique<LegalProcessModule>(config.legal_process));
+    orchestrator.register_module(std::make_unique<InformantSystemModule>(config.informant));
     orchestrator.register_module(std::make_unique<AlternativeIdentityModule>());
     orchestrator.register_module(std::make_unique<DesignerDrugModule>());
 

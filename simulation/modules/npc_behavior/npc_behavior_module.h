@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "core/world_state/npc.h"  // NPC, MemoryType, MemoryEntry, Relationship, MotivationVector
 #include "modules/npc_behavior/npc_behavior_types.h"
@@ -27,6 +28,8 @@ struct ActionOutcome;
 // ---------------------------------------------------------------------------
 class NpcBehaviorModule : public ITickModule {
    public:
+    explicit NpcBehaviorModule(const NpcBehaviorConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "npc_behavior"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -103,6 +106,9 @@ class NpcBehaviorModule : public ITickModule {
         static constexpr float motivation_shift_rate = 0.001f;
         static constexpr float recovery_ceiling_minimum = 0.15f;
     };
+
+   private:
+    NpcBehaviorConfig cfg_;
 };
 
 }  // namespace econlife

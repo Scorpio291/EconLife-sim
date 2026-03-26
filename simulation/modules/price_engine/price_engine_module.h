@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/price_engine/price_engine_types.h"
 
@@ -26,6 +27,8 @@ struct GlobalCommodityPriceIndex;
 // ---------------------------------------------------------------------------
 class PriceEngineModule : public ITickModule {
    public:
+    explicit PriceEngineModule(const PriceModelConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "price_engine"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -56,6 +59,9 @@ class PriceEngineModule : public ITickModule {
 
     // Step 3: Apply LOD 2 modifier (returns 1.0 if no modifier found).
     static float get_lod2_modifier(uint32_t good_id, const GlobalCommodityPriceIndex* index);
+
+   private:
+    PriceModelConfig cfg_;
 };
 
 }  // namespace econlife

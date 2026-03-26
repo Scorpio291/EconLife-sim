@@ -10,6 +10,7 @@
 #include <cstring>
 #include <filesystem>
 
+#include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
 #include "core/world_gen/world_generator.h"
@@ -30,6 +31,7 @@ struct CliArgs {
     bool verbose = false;
     bool use_test_world = false;  // fallback to test_world_factory
     std::string goods_dir;        // path to goods CSVs
+    std::string config_dir;       // optional override for config JSON directory
 };
 
 static void print_usage(const char* prog) {
@@ -42,6 +44,7 @@ static void print_usage(const char* prog) {
     std::printf("  --report-every N  Print metrics every N ticks (default: 30)\n");
     std::printf("  --max-tier N      Max good tier at start (default: 1)\n");
     std::printf("  --goods-dir PATH  Path to goods CSV directory\n");
+    std::printf("  --config-dir PATH Path to JSON config directory (default: auto-detect)\n");
     std::printf("  --test-world      Use minimal test world factory instead\n");
     std::printf("  --verbose         Print per-tick timing\n");
     std::printf("  --help            Show this message\n");
@@ -69,6 +72,8 @@ static CliArgs parse_args(int argc, char* argv[]) {
             args.max_good_tier = static_cast<uint8_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argv[i], "--goods-dir") == 0 && i + 1 < argc) {
             args.goods_dir = argv[++i];
+        } else if (std::strcmp(argv[i], "--config-dir") == 0 && i + 1 < argc) {
+            args.config_dir = argv[++i];
         } else if (std::strcmp(argv[i], "--test-world") == 0) {
             args.use_test_world = true;
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
@@ -98,6 +103,10 @@ static std::string find_base_game_path(const char* subpath) {
 
 static std::string find_goods_directory() {
     return find_base_game_path("goods");
+}
+
+static std::string find_config_directory() {
+    return find_base_game_path("config");
 }
 
 static std::string find_recipes_directory() {
@@ -231,16 +240,25 @@ int main(int argc, char* argv[]) {
         world.provinces.size(), world.significant_npcs.size(), world.npc_businesses.size(),
         world.regional_markets.size(), world.facilities.size(), world.loaded_recipes.size());
 
-    // 2. Set up orchestrator
+    // 2. Load config (auto-detect or use override path).
+    std::string config_dir = args.config_dir.empty() ? find_config_directory() : args.config_dir;
+    PackageConfig pkg_config = load_package_config(config_dir);
+    if (!config_dir.empty()) {
+        std::printf("Config directory: %s\n", config_dir.c_str());
+    } else {
+        std::printf("Config directory: not found (using spec defaults)\n");
+    }
+
+    // 3. Set up orchestrator
     TickOrchestrator orchestrator;
-    register_base_game_modules(orchestrator);
+    register_base_game_modules(orchestrator, pkg_config);
     orchestrator.finalize_registration();
     std::printf("Registered %zu modules, topological sort OK.\n\n", orchestrator.modules().size());
 
-    // 3. Create thread pool
+    // 4. Create thread pool
     ThreadPool pool(args.threads);
 
-    // 4. Run ticks
+    // 5. Run ticks
     print_header();
     print_metrics(world);  // tick 0 baseline
 

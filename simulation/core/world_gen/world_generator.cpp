@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_gen/h3_utils.h"
+
 namespace econlife {
 
 // ===========================================================================
@@ -392,10 +394,22 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
 
 void WorldGenerator::create_provinces(WorldState& world, DeterministicRNG& rng,
                                       const WorldGeneratorConfig& config) {
+    // Derive a deterministic center lat/lng from the world seed.
+    // Range: [-60, 60] lat, [-180, 180] lng — avoids polar edge cases.
+    double center_lat = (static_cast<double>(rng.next_uint(12000)) / 100.0) - 60.0;
+    double center_lng = (static_cast<double>(rng.next_uint(36000)) / 100.0) - 180.0;
+    H3Index center_cell = h3_utils::lat_lng_to_cell(center_lat, center_lng, 4);
+
+    // Get a contiguous group of province_count cells via BFS (sorted for determinism).
+    auto h3_cells = h3_utils::grid_compact_group(center_cell, config.province_count);
+
     for (uint32_t p = 0; p < config.province_count; ++p) {
         Province province{};
         province.id = p;
-        province.h3_index = static_cast<H3Index>(0x840000000ULL + p);
+        province.h3_index      = h3_cells[p];
+        province.is_pentagon   = h3_utils::is_pentagon(h3_cells[p]);
+        province.neighbor_count = province.is_pentagon ? 5 : 6;
+        world.h3_province_map[h3_cells[p]] = p;
         province.region_id = p;
         province.nation_id = 0;
         province.lod_level = SimulationLOD::full;
@@ -508,66 +522,46 @@ void WorldGenerator::seed_resource_deposits(Province& province, ProvinceArchetyp
 // Province links — adjacency graph
 // ===========================================================================
 
+// Determine link type from province geography.
+static LinkType assign_link_type(const Province& a, const Province& b, float border_km) {
+    if (border_km == 0.0f) {
+        // No shared land border — maritime if either has coastal access.
+        if (!a.geography.is_landlocked || !b.geography.is_landlocked) {
+            return LinkType::Maritime;
+        }
+    }
+    if (a.geography.river_access > 0.5f && b.geography.river_access > 0.5f) {
+        return LinkType::River;
+    }
+    return LinkType::Land;
+}
+
 void WorldGenerator::create_province_links(WorldState& world) {
-    const uint32_t n = static_cast<uint32_t>(world.provinces.size());
-    if (n <= 1)
+    if (world.provinces.size() <= 1)
         return;
 
-    // Create a ring topology: each province connects to its neighbors.
-    // Plus cross-links for provinces > 4 to create a richer graph.
-    for (uint32_t p = 0; p < n; ++p) {
-        auto add_link = [&](uint32_t neighbor_idx, LinkType type) {
+    for (uint32_t p = 0; p < static_cast<uint32_t>(world.provinces.size()); ++p) {
+        auto& prov = world.provinces[p];
+        prov.links.clear();
+
+        auto neighbors = h3_utils::grid_neighbors(prov.h3_index);
+        for (H3Index neighbor_cell : neighbors) {
+            auto it = world.h3_province_map.find(neighbor_cell);
+            if (it == world.h3_province_map.end()) continue;
+
+            uint32_t neighbor_idx = it->second;
+            const auto& neighbor_prov = world.provinces[neighbor_idx];
+
+            float border_km = h3_utils::shared_border_km(prov.h3_index, neighbor_cell);
+
             ProvinceLink link{};
-            link.neighbor_h3 = world.provinces[neighbor_idx].h3_index;
-            link.type = type;
-            link.shared_border_km =
-                (type == LinkType::Maritime) ? 0.0f : 40.0f + static_cast<float>(p) * 5.0f;
-            link.transit_terrain_cost =
-                0.2f + world.provinces[p].geography.terrain_roughness * 0.3f;
-            link.infrastructure_bonus =
-                std::min(world.provinces[p].infrastructure_rating,
-                         world.provinces[neighbor_idx].infrastructure_rating);
-            world.provinces[p].links.push_back(link);
-        };
-
-        // Forward neighbor (ring).
-        uint32_t next = (p + 1) % n;
-        bool either_coastal = !world.provinces[p].geography.is_landlocked ||
-                              !world.provinces[next].geography.is_landlocked;
-        LinkType link_type = (world.provinces[p].geography.is_landlocked &&
-                              world.provinces[next].geography.is_landlocked)
-                                 ? LinkType::Land
-                                 : LinkType::Land;
-        add_link(next, link_type);
-
-        // Backward neighbor (ring).
-        uint32_t prev = (p + n - 1) % n;
-        add_link(prev, LinkType::Land);
-
-        // Cross-links for larger maps: connect p to p+2 if maritime route exists.
-        if (n > 4 && !world.provinces[p].geography.is_landlocked) {
-            uint32_t cross = (p + 2) % n;
-            if (!world.provinces[cross].geography.is_landlocked) {
-                add_link(cross, LinkType::Maritime);
-            }
-        }
-
-        // River links for provinces with high river access.
-        if (n > 3 && world.provinces[p].geography.river_access > 0.5f) {
-            uint32_t river_neighbor = (p + (n / 2)) % n;
-            if (world.provinces[river_neighbor].geography.river_access > 0.4f) {
-                // Only add if not already linked.
-                bool already_linked = false;
-                for (const auto& existing : world.provinces[p].links) {
-                    if (existing.neighbor_h3 == world.provinces[river_neighbor].h3_index) {
-                        already_linked = true;
-                        break;
-                    }
-                }
-                if (!already_linked) {
-                    add_link(river_neighbor, LinkType::River);
-                }
-            }
+            link.neighbor_h3           = neighbor_cell;
+            link.type                  = assign_link_type(prov, neighbor_prov, border_km);
+            link.shared_border_km      = border_km;
+            link.transit_terrain_cost  = 0.2f + prov.geography.terrain_roughness * 0.3f;
+            link.infrastructure_bonus  =
+                std::min(prov.infrastructure_rating, neighbor_prov.infrastructure_rating);
+            prov.links.push_back(link);
         }
     }
 }

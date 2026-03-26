@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/evidence/evidence_types.h"
 
@@ -27,6 +28,8 @@ struct NPCBusiness;
 // ---------------------------------------------------------------------------
 class EvidenceModule : public ITickModule {
    public:
+    explicit EvidenceModule(const EvidenceConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "evidence"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -86,6 +89,7 @@ class EvidenceModule : public ITickModule {
     };
 
    private:
+    EvidenceConfig cfg_;
     uint32_t next_token_id_ = 1000;  // start above any pre-seeded tokens
 
     // Process actionability decay for tokens due this tick.
