@@ -57,7 +57,8 @@ struct WorldState {
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)
     std::vector<NPCBusiness> npc_businesses;
-    std::vector<Facility> facilities;  // all production facilities; indexed by facility.id
+    std::vector<Facility> facilities;    // all production facilities; indexed by facility.id
+    std::vector<Recipe> loaded_recipes;  // recipes loaded from CSV; immutable reference data
 
     // --- Evidence ---
     std::vector<EvidenceToken> evidence_pool;  // all active tokens in the world

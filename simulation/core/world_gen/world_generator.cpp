@@ -82,6 +82,9 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
         create_facilities(world, rng, recipe_catalog, facility_type_catalog, config);
     }
 
+    // Store loaded recipes in WorldState for production module access.
+    world.loaded_recipes = recipe_catalog.all();
+
     return world;
 }
 

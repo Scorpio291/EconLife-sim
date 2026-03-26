@@ -78,22 +78,34 @@ static CliArgs parse_args(int argc, char* argv[]) {
     return args;
 }
 
-// Auto-detect goods directory by searching upward from executable location.
-static std::string find_goods_directory() {
+// Auto-detect a base_game subdirectory by searching upward.
+static std::string find_base_game_path(const char* subpath) {
     namespace fs = std::filesystem;
-    // Try common relative paths from working directory.
-    static const char* candidates[] = {
-        "packages/base_game/goods",
-        "../packages/base_game/goods",
-        "../../packages/base_game/goods",
-        "../../../packages/base_game/goods",
+    static const char* prefixes[] = {
+        "packages/base_game",
+        "../packages/base_game",
+        "../../packages/base_game",
+        "../../../packages/base_game",
     };
-    for (const auto* candidate : candidates) {
-        if (fs::exists(candidate) && fs::is_directory(candidate)) {
-            return fs::canonical(candidate).string();
+    for (const auto* prefix : prefixes) {
+        auto path = fs::path(prefix) / subpath;
+        if (fs::exists(path)) {
+            return fs::canonical(path).string();
         }
     }
     return "";
+}
+
+static std::string find_goods_directory() {
+    return find_base_game_path("goods");
+}
+
+static std::string find_recipes_directory() {
+    return find_base_game_path("recipes");
+}
+
+static std::string find_facility_types_filepath() {
+    return find_base_game_path("facility_types/facility_types.csv");
 }
 
 static void print_header() {
@@ -187,18 +199,29 @@ int main(int argc, char* argv[]) {
         gen_config.goods_directory = find_goods_directory();
     }
 
+    gen_config.recipes_directory = find_recipes_directory();
+    gen_config.facility_types_filepath = find_facility_types_filepath();
+
     if (!gen_config.goods_directory.empty()) {
         std::printf("Goods directory: %s\n", gen_config.goods_directory.c_str());
     } else {
         std::printf("Goods directory: not found (using fallback goods)\n");
     }
+    if (!gen_config.recipes_directory.empty()) {
+        std::printf("Recipes directory: %s\n", gen_config.recipes_directory.c_str());
+    }
+    if (!gen_config.facility_types_filepath.empty()) {
+        std::printf("Facility types: %s\n", gen_config.facility_types_filepath.c_str());
+    }
 
     auto [world, player] = WorldGenerator::generate_with_player(gen_config);
     world.player = &player;
 
-    std::printf("World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets\n\n",
-                world.provinces.size(), world.significant_npcs.size(), world.npc_businesses.size(),
-                world.regional_markets.size());
+    std::printf(
+        "World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets, "
+        "%zu facilities, %zu recipes\n\n",
+        world.provinces.size(), world.significant_npcs.size(), world.npc_businesses.size(),
+        world.regional_markets.size(), world.facilities.size(), world.loaded_recipes.size());
 
     // 2. Set up orchestrator
     TickOrchestrator orchestrator;

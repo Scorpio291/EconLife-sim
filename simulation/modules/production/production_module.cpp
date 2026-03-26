@@ -51,6 +51,10 @@ const std::vector<Facility>* FacilityRegistry::find_by_business(uint32_t busines
 // ===========================================================================
 
 void ProductionModule::init_from_world_state(const WorldState& state) {
+    // Populate recipe registry from WorldState.loaded_recipes.
+    for (const auto& recipe : state.loaded_recipes) {
+        recipe_registry_.register_recipe(recipe);
+    }
     // Populate facility registry from WorldState.facilities.
     for (const auto& facility : state.facilities) {
         facility_registry_.register_facility(facility);
@@ -77,6 +81,12 @@ uint32_t ProductionModule::good_id_from_string(const std::string& good_id_str) {
 
 void ProductionModule::execute_province(uint32_t province_idx, const WorldState& state,
                                         DeltaBuffer& province_delta) {
+    // Lazy-init: populate registries from WorldState on first execution.
+    if (!initialized_) {
+        init_from_world_state(state);
+        initialized_ = true;
+    }
+
     // Fork RNG with province_id for deterministic province-parallel work.
     DeterministicRNG rng = DeterministicRNG(state.world_seed).fork(province_idx);
 
