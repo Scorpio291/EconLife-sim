@@ -17,6 +17,7 @@
 #include "core/world_gen/facility_type_catalog.h"
 #include "core/world_gen/goods_catalog.h"
 #include "core/world_gen/recipe_catalog.h"
+#include "core/world_gen/technology_catalog.h"
 #include "core/world_state/geography.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -39,6 +40,7 @@ struct WorldGeneratorConfig {
     std::string recipes_directory;     // path to packages/base_game/recipes/
     std::string
         facility_types_filepath;  // path to packages/base_game/facility_types/facility_types.csv
+    std::string technology_directory;  // path to packages/base_game/technology/
 };
 
 // ---------------------------------------------------------------------------
@@ -90,6 +92,9 @@ class WorldGenerator {
                                 DeterministicRNG& rng, const WorldGeneratorConfig& config);
     static void seed_resource_deposits(Province& province, ProvinceArchetype archetype,
                                        DeterministicRNG& rng, float richness);
+    static void seed_technology(WorldState& world, DeterministicRNG& rng,
+                                const TechnologyCatalog& tech_catalog,
+                                const WorldGeneratorConfig& config);
 };
 
 }  // namespace econlife

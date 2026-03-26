@@ -9,6 +9,7 @@
 #include "modules/production/production_module.h"
 #include "modules/random_events/random_events_module.h"
 #include "modules/scene_cards/scene_cards_module.h"
+#include "modules/technology/technology_module.h"
 
 // Tier 2: Depends on production
 #include "modules/labor_market/labor_market_module.h"
@@ -76,6 +77,7 @@ namespace econlife {
 void register_base_game_modules(TickOrchestrator& orchestrator) {
     // Tier 1
     orchestrator.register_module(std::make_unique<CalendarModule>());
+    orchestrator.register_module(std::make_unique<TechnologyModule>());
     orchestrator.register_module(std::make_unique<ProductionModule>());
     orchestrator.register_module(std::make_unique<SceneCardsModule>());
     orchestrator.register_module(std::make_unique<RandomEventsModule>());

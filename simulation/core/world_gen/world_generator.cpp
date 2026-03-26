@@ -85,6 +85,16 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Store loaded recipes in WorldState for production module access.
     world.loaded_recipes = recipe_catalog.all();
 
+    // Step 8: Technology — load catalog and seed initial holdings.
+    TechnologyCatalog tech_catalog;
+    if (!config.technology_directory.empty()) {
+        std::string nodes_path = config.technology_directory + "/technology_nodes.csv";
+        std::string ceilings_path = config.technology_directory + "/maturation_ceilings.csv";
+        tech_catalog.load_nodes_csv(nodes_path);
+        tech_catalog.load_ceilings_csv(ceilings_path);
+    }
+    seed_technology(world, rng, tech_catalog, config);
+
     return world;
 }
 
@@ -1044,6 +1054,126 @@ void WorldGenerator::create_facilities(WorldState& world, DeterministicRNG& rng,
             facility.is_operational = true;
 
             world.facilities.push_back(std::move(facility));
+        }
+    }
+}
+
+// ===========================================================================
+// Technology seeding — assign baseline tech holdings to businesses
+// ===========================================================================
+
+void WorldGenerator::seed_technology(WorldState& world, DeterministicRNG& rng,
+                                     const TechnologyCatalog& tech_catalog,
+                                     const WorldGeneratorConfig& config) {
+    // Initialize GlobalTechnologyState.
+    world.technology.current_era = SimulationEra::era_1_turn_of_millennium;
+    world.technology.era_started_tick = 0;
+    world.technology.base_year = 2000;
+
+    // Seed initial domain knowledge from config defaults.
+    TechnologyConfig tech_config;
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
+        world.technology.domain_knowledge[i] = tech_config.era1_domain_knowledge[i];
+    }
+
+    // Get baseline technology nodes (available at game start).
+    auto baseline = tech_catalog.baseline_nodes();
+    if (baseline.empty()) return;
+
+    // Sector-to-relevant-domain mapping for seeding.
+    // Businesses get baseline tech holdings in their relevant domains.
+    auto domains_for_sector = [](BusinessSector sector) -> std::vector<std::string> {
+        switch (sector) {
+            case BusinessSector::manufacturing:
+                return {"mechanical_engineering", "materials_science"};
+            case BusinessSector::food_beverage:
+                return {"biotechnology", "chemical_synthesis"};
+            case BusinessSector::agriculture:
+                return {"biotechnology"};
+            case BusinessSector::energy:
+                return {"energy_systems"};
+            case BusinessSector::technology:
+                return {"semiconductor_physics", "software_systems"};
+            case BusinessSector::research:
+                return {"semiconductor_physics", "software_systems", "biotechnology"};
+            case BusinessSector::transport_logistics:
+                return {"mechanical_engineering"};
+            case BusinessSector::criminal:
+                return {"illicit_chemistry", "chemical_synthesis"};
+            default:
+                return {"materials_science"};
+        }
+    };
+
+    for (auto& biz : world.npc_businesses) {
+        auto relevant_domains = domains_for_sector(biz.sector);
+
+        // Give each business holdings in baseline nodes matching their sector domains.
+        for (const TechnologyNode* node : baseline) {
+            bool relevant = false;
+            for (const auto& domain : relevant_domains) {
+                if (node->domain == domain) {
+                    relevant = true;
+                    break;
+                }
+            }
+            if (!relevant) continue;
+
+            TechHolding holding;
+            holding.node_key = node->node_key;
+            holding.holder_id = biz.id;
+            holding.stage = TechStage::commercialized;  // baseline tech is fully commercialized
+            holding.researched_tick = 0;
+            holding.commercialized_tick = 0;
+            holding.has_patent = false;
+            holding.internal_use_only = false;
+
+            // Maturation: baseline tech is mature (0.7-0.95 range, randomized).
+            float ceiling = tech_catalog.ceiling_for(node->node_key, config.starting_era);
+            if (ceiling < 0.0f) ceiling = 1.0f;  // fallback if no ceiling data
+            holding.maturation_ceiling = ceiling;
+            holding.maturation_level =
+                std::min(ceiling, 0.7f + rng.next_float() * 0.25f);
+
+            biz.actor_tech_state.holdings[node->node_key] = std::move(holding);
+        }
+
+        // Also give a few non-baseline Era 1 techs to a fraction of businesses
+        // (simulating early R&D investment that existed before year 2000).
+        auto era1_nodes = tech_catalog.nodes_available_at(1);
+        for (const TechnologyNode* node : era1_nodes) {
+            if (node->is_baseline) continue;
+
+            // Check domain relevance.
+            bool relevant = false;
+            for (const auto& domain : relevant_domains) {
+                if (node->domain == domain) {
+                    relevant = true;
+                    break;
+                }
+            }
+            if (!relevant) continue;
+
+            // ~20% chance of having started early research.
+            if (rng.next_float() > 0.20f) continue;
+
+            TechHolding holding;
+            holding.node_key = node->node_key;
+            holding.holder_id = biz.id;
+            holding.stage = TechStage::researched;  // early research, not yet commercialized
+            holding.researched_tick = 0;
+            holding.commercialized_tick = 0;
+            holding.has_patent = (node->patentable && rng.next_float() < 0.3f);
+            holding.internal_use_only = false;
+
+            float ceiling = tech_catalog.ceiling_for(node->node_key, config.starting_era);
+            if (ceiling < 0.0f) ceiling = 0.3f;  // low ceiling for early-era tech
+            holding.maturation_ceiling = ceiling;
+            // Early research: low maturation (0.05-0.25).
+            holding.maturation_level =
+                std::min(ceiling, 0.05f + rng.next_float() * 0.20f);
+
+            biz.actor_tech_state.holdings[node->node_key] = std::move(holding);
         }
     }
 }

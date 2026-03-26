@@ -10,6 +10,7 @@ add_subdirectory(production)
 add_subdirectory(calendar)
 add_subdirectory(scene_cards)
 add_subdirectory(random_events)
+add_subdirectory(technology)
 
 # Tier 2: Depends on production
 add_subdirectory(supply_chain)
@@ -87,6 +88,7 @@ target_link_libraries(econlife_modules PUBLIC
     econlife_core
     econlife_calendar
     econlife_production
+    econlife_technology
     econlife_scene_cards
     econlife_random_events
     econlife_supply_chain

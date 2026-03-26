@@ -108,6 +108,10 @@ static std::string find_facility_types_filepath() {
     return find_base_game_path("facility_types/facility_types.csv");
 }
 
+static std::string find_technology_directory() {
+    return find_base_game_path("technology");
+}
+
 static void print_header() {
     std::printf("%-6s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n", "Tick",
                 "AvgCapital", "AvgPrice", "Stability", "Crime", "Grievance", "Cohesion", "BizCash");
@@ -201,6 +205,7 @@ int main(int argc, char* argv[]) {
 
     gen_config.recipes_directory = find_recipes_directory();
     gen_config.facility_types_filepath = find_facility_types_filepath();
+    gen_config.technology_directory = find_technology_directory();
 
     if (!gen_config.goods_directory.empty()) {
         std::printf("Goods directory: %s\n", gen_config.goods_directory.c_str());
@@ -212,6 +217,9 @@ int main(int argc, char* argv[]) {
     }
     if (!gen_config.facility_types_filepath.empty()) {
         std::printf("Facility types: %s\n", gen_config.facility_types_filepath.c_str());
+    }
+    if (!gen_config.technology_directory.empty()) {
+        std::printf("Technology data: %s\n", gen_config.technology_directory.c_str());
     }
 
     auto [world, player] = WorldGenerator::generate_with_player(gen_config);

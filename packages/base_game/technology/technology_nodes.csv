@@ -1,0 +1,102 @@
+node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline
+# Baseline technologies (available at game start, year 2000)
+basic_extraction,materials_science,Basic Extraction Methods,1,0.0,0,,baseline,,,mine,1
+basic_agriculture,biotechnology,Basic Agriculture,1,0.0,0,,baseline,,,,1
+basic_steel_processing,materials_science,Basic Steel Processing,1,0.0,0,,baseline,,steel_smelting,,1
+basic_petroleum_refining,chemical_synthesis,Basic Petroleum Refining,1,0.0,0,,baseline,,petroleum_refining,,1
+basic_chemical_processing,chemical_synthesis,Basic Chemical Processing,1,0.0,0,,baseline,,,,1
+basic_manufacturing,mechanical_engineering,Basic Manufacturing,1,0.0,0,,baseline,,,,1
+basic_semiconductor_130nm,semiconductor_physics,130nm Process Node,1,0.0,0,,baseline,,,,1
+basic_consumer_electronics,semiconductor_physics,Basic Consumer Electronics,1,0.0,0,,baseline,,,,1
+basic_pharmaceuticals,biotechnology,Basic Pharmaceuticals,1,0.0,0,,baseline,,,,1
+basic_nuclear_fission,energy_systems,Gen II/III Nuclear Reactors,1,0.0,0,,baseline,,,,1
+basic_telecommunications,software_systems,Basic Telecommunications,1,0.0,0,,baseline,,,,1
+basic_computing,software_systems,Desktop and Laptop Computing,1,0.0,0,,baseline,,,,1
+# Energy Systems — Conventional Energy
+hydraulic_fracturing,energy_systems,Hydraulic Fracturing Improvements,1,1.0,1,,product_unlock,hydraulic_fracturing,shale_oil_extraction,,0
+directional_drilling,energy_systems,Directional Drilling Optimization,1,0.8,0,hydraulic_fracturing,process_improvement,directional_drilling,,,0
+heavy_oil_processing,energy_systems,Heavy Oil Processing,2,1.2,0,hydraulic_fracturing,process_improvement,heavy_oil_processing,,,0
+enhanced_oil_recovery,energy_systems,Enhanced Oil Recovery CO2 Injection,3,1.5,0,hydraulic_fracturing,process_improvement,enhanced_oil_recovery,,,0
+arctic_offshore_drilling,energy_systems,Arctic Offshore Drilling,3,2.0,0,hydraulic_fracturing,facility_unlock,arctic_offshore_drilling,,arctic_offshore_platform,0
+# Energy Systems — Lithium-Ion Battery Chain
+liion_cell_chemistry,energy_systems,Li-Ion Cell Chemistry Optimization,1,1.5,1,,product_unlock,liion_cell_chemistry,battery_cell_liion,,0
+battery_management_system,energy_systems,Battery Management System,2,1.0,0,liion_cell_chemistry,product_unlock,battery_management_system,battery_management_system,,0
+ev_powertrain,mechanical_engineering,EV Powertrain Integration,2,2.0,1,battery_management_system,product_unlock,ev_powertrain,ev_drivetrain,,0
+electric_vehicle,mechanical_engineering,Electric Vehicle,2,3.0,1,ev_powertrain,product_unlock,electric_vehicle,electric_vehicle,,0
+fast_charging,energy_systems,Fast Charging Infrastructure,3,1.5,1,electric_vehicle,product_unlock,fast_charging,ev_charging_station,,0
+grid_battery_storage,energy_systems,Grid-Scale Battery Storage,3,4.0,1,fast_charging,product_unlock,grid_battery_storage,grid_battery_array,,0
+solid_state_battery,energy_systems,Solid-State Battery Research,3,3.0,1,,product_unlock,solid_state_battery,,,0
+solid_state_battery_cell,energy_systems,Solid-State Battery Cell,4,5.0,1,solid_state_battery,product_unlock,solid_state_battery_cell,battery_cell_solid_state,,0
+# Energy Systems — Solar
+pv_cell_efficiency,energy_systems,Photovoltaic Cell Efficiency,1,1.0,0,,product_unlock,pv_cell_efficiency,,,0
+cost_competitive_solar,energy_systems,Cost-Competitive Solar Panel,2,2.0,1,pv_cell_efficiency,product_unlock,cost_competitive_solar,solar_panel,,0
+solar_farm,energy_systems,Solar Farm Development,2,1.5,0,cost_competitive_solar,facility_unlock,solar_farm,,solar_farm,0
+grid_scale_solar,energy_systems,Grid-Scale Solar,3,2.0,0,solar_farm,process_improvement,grid_scale_solar,,,0
+perovskite_solar,energy_systems,Perovskite Solar Cells,4,3.0,1,grid_scale_solar,process_improvement,perovskite_solar,,,0
+# Energy Systems — Wind
+wind_blade_efficiency,energy_systems,Wind Turbine Blade Efficiency,1,1.0,0,,product_unlock,wind_blade_efficiency,,,0
+offshore_wind,energy_systems,Offshore Wind Platform,2,2.5,1,wind_blade_efficiency,facility_unlock,offshore_wind,,offshore_wind_farm,0
+grid_scale_wind,energy_systems,Grid-Scale Wind,3,2.0,0,offshore_wind,process_improvement,grid_scale_wind,,,0
+# Energy Systems — Hydrogen
+green_hydrogen,energy_systems,Green Hydrogen Electrolysis,3,2.0,1,,product_unlock,green_hydrogen,green_hydrogen,,0
+hydrogen_fuel_cell,energy_systems,Hydrogen Fuel Cell Industrial,4,3.0,1,green_hydrogen,product_unlock,hydrogen_fuel_cell,industrial_fuel_cell,,0
+# Energy Systems — Carbon Capture
+carbon_capture_industrial,climate_and_environment,Carbon Capture and Storage,3,2.0,1,,process_improvement,carbon_capture_industrial,,,0
+direct_air_capture,climate_and_environment,Direct Air Capture Prototype,4,4.0,1,carbon_capture_industrial,product_unlock,direct_air_capture,direct_air_capture_unit,,0
+# Semiconductor Physics — Process Nodes
+process_90nm,semiconductor_physics,90nm Process Node,1,3.0,1,basic_semiconductor_130nm,tech_tier_advance,process_90nm,,,0
+process_65nm,semiconductor_physics,65nm Process Node,2,4.0,1,process_90nm,tech_tier_advance,process_65nm,,,0
+process_45nm,semiconductor_physics,45nm Process Node,2,5.0,1,process_65nm,tech_tier_advance,process_45nm,,,0
+process_22nm,semiconductor_physics,22nm Process Node,3,6.0,1,process_45nm,tech_tier_advance,process_22nm,,,0
+process_7nm,semiconductor_physics,7nm Process Node,4,8.0,1,process_22nm,tech_tier_advance,process_7nm,,,0
+process_5nm,semiconductor_physics,5nm Process Node,4,9.0,1,process_7nm,tech_tier_advance,process_5nm,,,0
+process_3nm,semiconductor_physics,3nm Angstrom Era,5,10.0,1,process_5nm,tech_tier_advance,process_3nm,,,0
+# Semiconductor Physics — Power Electronics
+gan_power_electronics,semiconductor_physics,GaN Power Electronics,3,2.0,1,,product_unlock,gan_power_electronics,gan_power_chip,,0
+sic_power_electronics,semiconductor_physics,SiC Power Electronics,4,2.5,1,gan_power_electronics,product_unlock,sic_power_electronics,,,0
+# Semiconductor Physics — Advanced Architectures
+chip_3d_stacking,semiconductor_physics,3D Chip Stacking TSV,3,3.0,1,,process_improvement,chip_3d_stacking,,,0
+monolithic_3d,semiconductor_physics,Monolithic 3D Integration,4,5.0,1,chip_3d_stacking,process_improvement,monolithic_3d,,,0
+# Software Systems
+smartphone_os,software_systems,Smartphone Operating System,2,2.0,1,basic_computing,product_unlock,smartphone_os,smartphone,,0
+app_platform,software_systems,App Platform Ecosystem,2,1.5,0,smartphone_os,product_unlock,app_platform,,,0
+cloud_computing,software_systems,Cloud Computing Platform,2,2.5,1,basic_computing,product_unlock,cloud_computing,cloud_services,,0
+machine_learning_commercial,software_systems,Machine Learning Commercial,3,3.0,1,cloud_computing,product_unlock,machine_learning_commercial,ml_service,,0
+generative_ai,software_systems,Generative AI Models,4,5.0,1,machine_learning_commercial,product_unlock,generative_ai,genai_service,,0
+ai_integration,software_systems,AI Integration Platform,5,3.0,0,generative_ai,process_improvement,ai_integration,,,0
+# Social Media
+social_media_platform,social_media_platforms,Social Media Platform,2,1.5,0,,product_unlock,social_media_platform,social_media_service,,0
+mobile_social,social_media_platforms,Mobile Social Media,2,1.0,0,social_media_platform;smartphone_os,product_unlock,mobile_social,,,0
+content_algorithm,social_media_platforms,Content Recommendation Algorithm,3,2.0,1,mobile_social,process_improvement,content_algorithm,,,0
+# Biotechnology
+genome_sequencing,biotechnology,Genome Sequencing Advances,1,2.0,1,basic_pharmaceuticals,product_unlock,genome_sequencing,,,0
+biologic_drugs,biotechnology,Biologic Drug Development,2,3.0,1,genome_sequencing,product_unlock,biologic_drugs,biologic_drug,,0
+gene_therapy,biotechnology,Gene Therapy Research,3,4.0,1,biologic_drugs,product_unlock,gene_therapy,gene_therapy_treatment,,0
+mrna_platform,biotechnology,mRNA Therapeutics Platform,4,3.5,1,biologic_drugs,product_unlock,mrna_platform,mrna_vaccine,,0
+synthetic_biology_early,biotechnology,Early Synthetic Biology,5,4.0,1,mrna_platform,product_unlock,synthetic_biology_early,,,0
+# Chemical Synthesis
+advanced_polymers,chemical_synthesis,Advanced Polymer Science,1,1.5,1,basic_chemical_processing,product_unlock,advanced_polymers,advanced_polymer,,0
+catalytic_process_optimization,chemical_synthesis,Catalytic Process Optimization,2,2.0,1,basic_chemical_processing,process_improvement,catalytic_process_optimization,,,0
+green_chemistry,chemical_synthesis,Green Chemistry Methods,3,2.5,0,catalytic_process_optimization,process_improvement,green_chemistry,,,0
+# Materials Science
+advanced_steel_alloys,materials_science,Advanced Steel Alloys,1,1.5,1,basic_steel_processing,product_unlock,advanced_steel_alloys,advanced_steel,,0
+carbon_fiber_composite,materials_science,Carbon Fiber Composite,2,2.5,1,advanced_polymers,product_unlock,carbon_fiber_composite,carbon_fiber,,0
+graphene_production,materials_science,Graphene Production Methods,3,3.0,1,carbon_fiber_composite,product_unlock,graphene_production,graphene,,0
+# Mechanical Engineering
+precision_robotics,mechanical_engineering,Precision Robotics,2,2.0,1,basic_manufacturing,product_unlock,precision_robotics,industrial_robot,,0
+advanced_cnc,mechanical_engineering,Advanced CNC Machining,2,1.5,0,basic_manufacturing,process_improvement,advanced_cnc,,,0
+additive_manufacturing,mechanical_engineering,Additive Manufacturing (3D Printing),3,2.5,1,,product_unlock,additive_manufacturing,3d_printer,,0
+autonomous_vehicle,mechanical_engineering,Autonomous Vehicle Systems,4,5.0,1,machine_learning_commercial;electric_vehicle,product_unlock,autonomous_vehicle,,,0
+# Information Security
+advanced_encryption,information_security,Advanced Encryption Standards,1,1.0,0,,product_unlock,advanced_encryption,,,0
+network_security_platform,information_security,Network Security Platform,2,2.0,1,advanced_encryption,product_unlock,network_security_platform,cybersecurity_service,,0
+exploit_development,information_security,Exploit Development Framework,3,2.5,0,network_security_platform,product_unlock,exploit_development,,,0
+# Financial Instruments
+electronic_trading,financial_instruments,Electronic Trading Platform,1,1.5,0,,product_unlock,electronic_trading,,,0
+structured_derivatives,financial_instruments,Structured Derivatives,2,2.0,1,electronic_trading,product_unlock,structured_derivatives,,,0
+digital_assets,financial_instruments,Digital Asset Framework,3,2.5,0,structured_derivatives,product_unlock,digital_assets,,,0
+defi_platform,financial_instruments,DeFi Platform,4,3.0,0,digital_assets,product_unlock,defi_platform,,,0
+# Illicit Chemistry
+designer_drug_synthesis,illicit_chemistry,Designer Drug Synthesis,1,1.5,0,,product_unlock,designer_drug_synthesis,designer_drug,,0
+synthetic_opioid_advanced,illicit_chemistry,Advanced Synthetic Opioids,3,2.0,0,designer_drug_synthesis,product_unlock,synthetic_opioid_advanced,synthetic_opioid,,0
+novel_psychoactive,illicit_chemistry,Novel Psychoactive Substances,4,2.5,0,synthetic_opioid_advanced,product_unlock,novel_psychoactive,,,0

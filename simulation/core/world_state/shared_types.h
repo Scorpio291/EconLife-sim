@@ -10,6 +10,7 @@
 // circular dependencies between core and module headers.
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -101,14 +102,56 @@ struct InfluenceNetworkHealth {
 };
 
 // ---------------------------------------------------------------------------
-// ActorTechnologyState — per-actor technology portfolio
+// TechStage — lifecycle stage of a technology holding.
+// ---------------------------------------------------------------------------
+enum class TechStage : uint8_t {
+    researched = 0,      // actor has capability; internal production only
+    commercialized = 1,  // product on open market; observable by competitors
+};
+
+// ---------------------------------------------------------------------------
+// TechHolding — per-actor ownership of a technology node.
+// Each business that has researched or acquired a node holds one.
+// ---------------------------------------------------------------------------
+struct TechHolding {
+    std::string node_key;
+    uint32_t holder_id = 0;         // business_id
+    TechStage stage = TechStage::researched;
+    float maturation_level = 0.0f;  // 0.0-1.0; rises with continued investment
+    float maturation_ceiling = 0.0f;  // era-gated max; recomputed each tick
+    uint32_t researched_tick = 0;
+    uint32_t commercialized_tick = 0;  // 0 if still Stage 1
+    bool has_patent = false;
+    bool internal_use_only = false;  // true = no market listing despite commercialized
+};
+
+// ---------------------------------------------------------------------------
+// ActorTechnologyState — per-actor technology portfolio.
 // Used in NPCBusiness. See R&D and Technology doc Part 3.5.
-// Will be expanded during R&D/technology module implementation.
 // ---------------------------------------------------------------------------
 struct ActorTechnologyState {
-    float effective_tech_tier;  // derived; max over active facilities
-    // MaturationProject tracking, research_investment, unlocked nodes
-    // will be added during R&D module implementation
+    float effective_tech_tier = 0.0f;  // derived; max over active facilities
+
+    // Per-node technology holdings. Key = node_key.
+    std::map<std::string, TechHolding> holdings;
+
+    // Query methods (inline for header-only availability).
+    bool has_researched(const std::string& node_key) const {
+        return holdings.count(node_key) > 0;
+    }
+
+    bool has_commercialized(const std::string& node_key) const {
+        auto it = holdings.find(node_key);
+        if (it == holdings.end()) return false;
+        return it->second.stage == TechStage::commercialized;
+    }
+
+    // Returns maturation_level for the given node, or 0.0 if not held.
+    float maturation_of(const std::string& node_key) const {
+        auto it = holdings.find(node_key);
+        if (it == holdings.end()) return 0.0f;
+        return it->second.maturation_level;
+    }
 };
 
 // ---------------------------------------------------------------------------

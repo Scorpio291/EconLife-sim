@@ -272,12 +272,21 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         config_.tech_quality_ceiling_step * static_cast<float>(effective_tier_diff);
 
     // For technology-intensive recipes, cap by maturation level.
-    // ActorTechnologyState stub does not yet have maturation_of();
-    // when the R&D module is implemented, this will call:
-    //   float maturation = biz.actor_tech_state.maturation_of(recipe->key_technology_node);
-    //   quality_ceiling = std::min(quality_ceiling, maturation);
-    // This preserves the interface contract shape; the R&D module will
-    // supply the real maturation value.
+    // If the recipe has a key_technology_node, the actor's maturation level
+    // for that node caps the quality ceiling.
+    if (!recipe->key_technology_node.empty()) {
+        float maturation = biz.actor_tech_state.maturation_of(recipe->key_technology_node);
+        if (maturation > 0.0f) {
+            quality_ceiling = std::min(quality_ceiling, maturation);
+        } else {
+            // Actor has no maturation for required tech node.
+            // Per spec: maturation_of() returns 0.0 if not held → quality is capped at 0.
+            // However, for baseline recipes (no tech required), this path isn't reached.
+            // For non-baseline recipes requiring tech the actor doesn't have,
+            // quality is severely limited but production still occurs (low quality output).
+            quality_ceiling = std::min(quality_ceiling, 0.1f);
+        }
+    }
 
     // Clamp quality ceiling to valid range.
     quality_ceiling = std::max(0.0f, std::min(1.0f, quality_ceiling));

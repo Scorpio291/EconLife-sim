@@ -17,6 +17,7 @@
 #include "modules/trade_infrastructure/trade_types.h"  // TariffSchedule, NationalTradeOffer,
                                                        //   Lod1NationStats, RouteProfile
 #include "modules/currency_exchange/currency_exchange_types.h"  // CurrencyRecord
+#include "modules/technology/technology_types.h"               // GlobalTechnologyState
 
 namespace econlife {
 
@@ -89,6 +90,9 @@ struct WorldState {
     std::map<uint32_t, Lod1NationStats> lod1_national_stats;
     std::map<std::pair<uint32_t, uint32_t>, std::array<RouteProfile, 5>>
         province_route_table;  // precomputed at load
+
+    // --- Technology & R&D ---
+    GlobalTechnologyState technology;  // era tracking, domain knowledge, research/maturation projects
 
     // --- Schema ---
     uint32_t current_schema_version;
