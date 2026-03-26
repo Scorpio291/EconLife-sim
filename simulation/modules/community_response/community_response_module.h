@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/community_response/community_response_types.h"
 
@@ -27,6 +28,8 @@ enum class MemoryType : uint8_t;
 // ---------------------------------------------------------------------------
 class CommunityResponseModule : public ITickModule {
    public:
+    explicit CommunityResponseModule(const ConsequenceDelayConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "community_response"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -102,6 +105,7 @@ class CommunityResponseModule : public ITickModule {
     };
 
    private:
+    ConsequenceDelayConfig cfg_;
     std::vector<ProvinceOppositionState> province_states_;
 };
 

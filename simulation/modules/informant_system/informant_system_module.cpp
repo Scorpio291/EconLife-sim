@@ -3,40 +3,53 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
 namespace econlife {
 
-float InformantSystemModule::compute_risk_factor(float risk_tolerance) {
-    return (1.0f - risk_tolerance) * RISK_FACTOR_SCALE;
+float InformantSystemModule::compute_risk_factor(float risk_tolerance, float risk_factor_scale) {
+    return (1.0f - risk_tolerance) * risk_factor_scale;
 }
 
-float InformantSystemModule::compute_trust_factor(float trust) {
-    return (1.0f - trust) * TRUST_FACTOR_SCALE;
+float InformantSystemModule::compute_trust_factor(float trust, float trust_factor_scale) {
+    return (1.0f - trust) * trust_factor_scale;
 }
 
-float InformantSystemModule::compute_incrimination_suppression(uint32_t obligation_count) {
-    return static_cast<float>(obligation_count) * INCRIMINATION_SUPPRESSION;
+float InformantSystemModule::compute_incrimination_suppression(uint32_t obligation_count,
+                                                               float incrimination_suppression) {
+    return static_cast<float>(obligation_count) * incrimination_suppression;
 }
 
-float InformantSystemModule::compute_compartmentalization_bonus(uint32_t level) {
-    return static_cast<float>(level) * COMPARTMENT_BONUS_PER_LEVEL;
+float InformantSystemModule::compute_compartmentalization_bonus(uint32_t level,
+                                                                float compartment_bonus) {
+    return static_cast<float>(level) * compartment_bonus;
 }
 
 float InformantSystemModule::compute_flip_probability(float base_flip_rate, float risk_tolerance,
                                                       float trust,
                                                       uint32_t mutual_incrimination_count,
-                                                      uint32_t compartmentalization_level) {
-    float risk = compute_risk_factor(risk_tolerance);
-    float trust_f = compute_trust_factor(trust);
-    float incrim = compute_incrimination_suppression(mutual_incrimination_count);
-    float compart = compute_compartmentalization_bonus(compartmentalization_level);
+                                                      uint32_t compartmentalization_level,
+                                                      float max_flip_probability,
+                                                      float risk_factor_scale,
+                                                      float trust_factor_scale,
+                                                      float incrimination_suppression,
+                                                      float compartment_bonus_per_level) {
+    float risk = compute_risk_factor(risk_tolerance, risk_factor_scale);
+    float trust_f = compute_trust_factor(trust, trust_factor_scale);
+    float incrim = compute_incrimination_suppression(mutual_incrimination_count,
+                                                     incrimination_suppression);
+    float compart = compute_compartmentalization_bonus(compartmentalization_level,
+                                                       compartment_bonus_per_level);
     float prob = base_flip_rate + risk + trust_f - incrim - compart;
-    return std::clamp(prob, 0.0f, MAX_FLIP_PROBABILITY);
+    return std::clamp(prob, 0.0f, max_flip_probability);
 }
 
 void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Tick-level RNG seed: world_seed mixed with current tick, then forked per-NPC.
+    DeterministicRNG tick_rng(state.world_seed ^ static_cast<uint64_t>(state.current_tick));
+
     std::sort(
         records_.begin(), records_.end(),
         [](const InformantRecord& a, const InformantRecord& b) { return a.npc_id < b.npc_id; });
@@ -46,7 +59,7 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
         if (rec.status == InformantStatus::cooperating) {
             NPCDelta ongoing_delta;
             ongoing_delta.npc_id = rec.npc_id;
-            ongoing_delta.capital_delta = -PAY_SILENCE_COST * 0.001f;  // tiny per-tick cost
+            ongoing_delta.capital_delta = -cfg_.pay_silence_cost * 0.001f;  // tiny per-tick cost
             delta.npc_deltas.push_back(ongoing_delta);
             continue;
         }
@@ -80,11 +93,15 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
             }
         }
 
-        rec.flip_probability =
-            compute_flip_probability(rec.base_flip_rate, npc->risk_tolerance, trust, mutual_count,
-                                     rec.compartmentalization_level);
+        rec.flip_probability = compute_flip_probability(
+            cfg_.base_flip_rate, npc->risk_tolerance, trust, mutual_count,
+            rec.compartmentalization_level,
+            cfg_.max_flip_probability, cfg_.risk_factor_scale, cfg_.trust_factor_scale,
+            cfg_.incrimination_suppression, cfg_.compartment_bonus_per_level);
 
-        if (rec.flip_probability >= MAX_FLIP_PROBABILITY * 0.8f) {
+        // Probabilistic flip decision — RNG forked per-NPC for determinism.
+        DeterministicRNG npc_rng = tick_rng.fork(rec.npc_id);
+        if (npc_rng.next_float() < rec.flip_probability) {
             rec.status = InformantStatus::cooperating;
             rec.cooperation_start_tick = state.current_tick;
 
@@ -107,7 +124,7 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
             // (legal fees, witness protection costs, relocation expenses proxy)
             NPCDelta reliability_delta;
             reliability_delta.npc_id = rec.npc_id;
-            reliability_delta.capital_delta = -PAY_SILENCE_COST * 0.10f;  // 10% of silence cost
+            reliability_delta.capital_delta = -cfg_.pay_silence_cost * 0.10f;  // 10% of silence cost
             delta.npc_deltas.push_back(reliability_delta);
         }
     }

@@ -7,7 +7,7 @@ if(POLICY CMP0135)
 endif()
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum policy version for FetchContent deps")
 
-project(EconLife VERSION 0.1.0 LANGUAGES CXX)
+project(EconLife VERSION 0.1.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,6 +43,25 @@ FetchContent_Declare(
     SOURCE_SUBDIR  build/cmake
 )
 FetchContent_MakeAvailable(lz4)
+
+# H3 — hexagonal spatial indexing (uber/h3 v4.4.1)
+set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(ENABLE_DOCS    OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    h3
+    GIT_REPOSITORY https://github.com/uber/h3.git
+    GIT_TAG        v4.4.1
+)
+FetchContent_MakeAvailable(h3)
+
+# nlohmann/json — JSON config loading (header-only)
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
 
 # Protocol Buffers — serialization
 find_package(Protobuf QUIET)

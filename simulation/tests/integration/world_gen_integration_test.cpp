@@ -16,6 +16,8 @@
 #include <filesystem>
 #include <set>
 
+#include <h3/h3api.h>
+
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
 #include "core/world_gen/goods_catalog.h"
@@ -345,6 +347,42 @@ TEST_CASE("GoodsCatalog loads all tier 0-4 goods from base_game CSVs",
     CHECK(catalog.find("iron_ore") != nullptr);
     CHECK(catalog.find("wheat") != nullptr);
     CHECK(catalog.find("steel") != nullptr);
+}
+
+// ===========================================================================
+// H3 grid properties survive full tick run
+// ===========================================================================
+
+TEST_CASE("WorldGenerator H3: valid cells and province map survive 365 ticks",
+          "[integration][world_gen][h3]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 100;
+
+    auto [world, player] = WorldGenerator::generate_with_player(config);
+    world.player = &player;
+
+    // Pre-run H3 invariants.
+    REQUIRE(world.h3_province_map.size() == world.provinces.size());
+    for (const auto& p : world.provinces) {
+        REQUIRE(p.h3_index != 0);
+        REQUIRE(H3_IS_VALID(p.h3_index));
+        REQUIRE(getResolution(p.h3_index) == 4);
+        REQUIRE(p.neighbor_count == (p.is_pentagon ? 5 : 6));
+        for (const auto& link : p.links) {
+            REQUIRE(world.h3_province_map.count(link.neighbor_h3) > 0);
+        }
+    }
+
+    run_orchestrated_ticks(world, 365);
+
+    // H3 map and province cells must be unchanged after 365 ticks.
+    REQUIRE(world.h3_province_map.size() == world.provinces.size());
+    for (size_t i = 0; i < world.provinces.size(); ++i) {
+        CHECK(world.provinces[i].h3_index != 0);
+        CHECK(getResolution(world.provinces[i].h3_index) == 4);
+    }
 }
 
 // ===========================================================================

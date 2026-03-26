@@ -69,7 +69,7 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
         uint32_t ticks_since_creation = state.current_tick - token.created_tick;
         if (ticks_since_creation == 0)
             continue;
-        if (ticks_since_creation % Constants::batch_interval != 0)
+        if (ticks_since_creation % cfg_.batch_interval != 0)
             continue;
 
         // Evaluate holder credibility using social_capital as proxy.
@@ -78,28 +78,25 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
             if (npc.id == token.source_npc_id) {
                 float credibility = std::min(npc.social_capital / 100.0f, 1.0f);
                 is_credible =
-                    evaluate_holder_credibility(credibility, Constants::credibility_threshold);
+                    evaluate_holder_credibility(credibility, cfg_.credibility_threshold);
                 break;
             }
         }
 
         float decay =
-            compute_decay_amount(Constants::base_decay_rate, is_credible,
-                                 Constants::discredit_decay_multiplier, Constants::batch_interval);
+            compute_decay_amount(cfg_.base_decay_rate, is_credible,
+                                 Constants::discredit_decay_multiplier, cfg_.batch_interval);
 
         float new_actionability =
-            apply_actionability_decay(token.actionability, decay, Constants::actionability_floor);
+            apply_actionability_decay(token.actionability, decay, cfg_.actionability_floor);
 
-        // If token falls to floor, retire it.
-        if (new_actionability <= Constants::actionability_floor + 0.001f) {
-            EvidenceDelta ed;
-            ed.retired_token_id = token.id;
-            delta.evidence_deltas.push_back(ed);
-        }
-        // Note: actionability_delta is not applied by apply_deltas (no token ID targeting).
-        // Decay is handled by retiring tokens once they hit floor. Tokens that haven't
-        // reached floor yet keep their original actionability — the batch interval
-        // ensures they're checked every 7 ticks and retired when expired.
+        // Emit actionability replacement. Tokens are clamped to actionability_floor, never
+        // retired solely due to decay — only explicit case closure (acquittal, conviction)
+        // retires tokens. This preserves evidence for ongoing or future investigations.
+        EvidenceDelta ed;
+        ed.updated_token_id      = token.id;
+        ed.updated_actionability = new_actionability;
+        delta.evidence_deltas.push_back(ed);
     }
 }
 
@@ -122,7 +119,7 @@ void EvidenceModule::create_evidence_from_businesses(const WorldState& state, De
             new_token.source_npc_id = biz->owner_id;
             new_token.target_npc_id = biz->owner_id;
             new_token.actionability = Constants::criminal_evidence_actionability;
-            new_token.decay_rate = Constants::base_decay_rate;
+            new_token.decay_rate = cfg_.base_decay_rate;
             new_token.created_tick = state.current_tick;
             new_token.province_id = biz->province_id;
             new_token.is_active = true;
@@ -154,7 +151,7 @@ void EvidenceModule::create_evidence_from_businesses(const WorldState& state, De
             new_token.target_npc_id = biz->owner_id;
             new_token.actionability =
                 Constants::violation_evidence_actionability * biz->regulatory_violation_severity;
-            new_token.decay_rate = Constants::base_decay_rate;
+            new_token.decay_rate = cfg_.base_decay_rate;
             new_token.created_tick = state.current_tick;
             new_token.province_id = biz->province_id;
             new_token.is_active = true;

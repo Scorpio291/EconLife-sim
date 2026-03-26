@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/banking/banking_types.h"
 
@@ -23,6 +24,8 @@ struct DeltaBuffer;
 // ---------------------------------------------------------------------------
 class BankingModule : public ITickModule {
    public:
+    explicit BankingModule(const BankingConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "banking"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -93,6 +96,8 @@ class BankingModule : public ITickModule {
     std::vector<LoanRecord> active_loans_;
     std::vector<BorrowerCredit> borrower_credits_;
     uint32_t next_loan_id_ = 1;
+
+    BankingConfig cfg_;
 
     // Find or create a BorrowerCredit entry for the given borrower.
     BorrowerCredit* find_borrower_credit(uint32_t borrower_id);

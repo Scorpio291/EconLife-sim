@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -10,8 +11,9 @@ namespace econlife {
 
 float LegalProcessModule::compute_conviction_probability(float evidence_weight,
                                                          float defense_quality, float judge_bias,
-                                                         float witness_reliability) {
-    float prob = evidence_weight * (1.0f - defense_quality * DEFENSE_QUALITY_FACTOR) * judge_bias *
+                                                         float witness_reliability,
+                                                         float defense_quality_factor) {
+    float prob = evidence_weight * (1.0f - defense_quality * defense_quality_factor) * judge_bias *
                  witness_reliability;
     return std::clamp(prob, 0.0f, 1.0f);
 }
@@ -53,6 +55,9 @@ float LegalProcessModule::compute_evidence_weight(const std::vector<float>& toke
 }
 
 void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Tick-level RNG seed: world_seed mixed with current tick, forked per case.
+    DeterministicRNG tick_rng(state.world_seed ^ static_cast<uint64_t>(state.current_tick));
+
     std::sort(cases_.begin(), cases_.end(),
               [](const LegalCase& a, const LegalCase& b) { return a.id < b.id; });
 
@@ -62,7 +67,8 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
         if (lcase.stage == LegalCaseStage::trial) {
             lcase.conviction_probability = compute_conviction_probability(
-                lcase.evidence_weight, lcase.defense_quality, 1.0f, 1.0f);
+                lcase.evidence_weight, lcase.defense_quality, 1.0f, 1.0f,
+                cfg_.defense_quality_factor);
 
             // EvidenceDelta: evidence is presented at trial — each active token
             // associated with this case is flagged as presented (actionability reduced
@@ -85,13 +91,16 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 }
             }
 
-            bool convicted = lcase.conviction_probability >= CONVICTION_THRESHOLD;
+            // Probabilistic conviction — RNG forked per case for determinism.
+            DeterministicRNG case_rng = tick_rng.fork(lcase.id);
+            bool convicted = case_rng.next_float() < lcase.conviction_probability;
             lcase.stage = advance_stage(lcase.stage, convicted);
 
             if (convicted) {
-                lcase.sentence_ticks = compute_sentence_ticks(lcase.severity, TICKS_PER_SEVERITY);
+                lcase.sentence_ticks =
+                    compute_sentence_ticks(lcase.severity, cfg_.ticks_per_severity);
                 lcase.release_tick = state.current_tick + lcase.sentence_ticks;
-                lcase.double_jeopardy_until = lcase.release_tick + DOUBLE_JEOPARDY_COOLDOWN;
+                lcase.double_jeopardy_until = lcase.release_tick + cfg_.double_jeopardy_cooldown;
 
                 if (lcase.defendant_npc_id > 0) {
                     NPCDelta npc_delta;

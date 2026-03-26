@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/production/production_types.h"
 
@@ -52,6 +53,8 @@ class FacilityRegistry {
 // ---------------------------------------------------------------------------
 class ProductionModule : public ITickModule {
    public:
+    explicit ProductionModule(const ProductionConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "production"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -103,6 +106,8 @@ class ProductionModule : public ITickModule {
 
     float get_price_for_business(const NPCBusiness& biz, uint32_t good_id,
                                  const WorldState& state) const;
+
+    ProductionConfig cfg_;
 };
 
 }  // namespace econlife

@@ -56,9 +56,10 @@ struct MarketDelta {
 };
 
 struct EvidenceDelta {
-    std::optional<EvidenceToken> new_token;    // appended to evidence_pool
-    std::optional<uint32_t> retired_token_id;  // removed from active pool
-    std::optional<float> actionability_delta;  // additive to existing token
+    std::optional<EvidenceToken> new_token;         // appended to evidence_pool
+    std::optional<uint32_t> retired_token_id;       // set is_active = false
+    std::optional<uint32_t> updated_token_id;       // token whose actionability to replace
+    std::optional<float>    updated_actionability;  // replacement actionability (with updated_token_id)
 };
 
 struct ConsequenceDelta {

@@ -13,6 +13,8 @@
 #include <set>
 #include <string>
 
+#include <h3/h3api.h>
+
 #include "core/world_gen/goods_catalog.h"
 
 using namespace econlife;
@@ -539,6 +541,54 @@ TEST_CASE("WorldGenerator  - province links form connected graph", "[world_gen][
     }
 
     CHECK(visited.size() == world.provinces.size());
+}
+
+TEST_CASE("WorldGenerator  - H3 indices are valid resolution 4 cells", "[world_gen][h3]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // All provinces must have non-zero H3 indices at resolution 4.
+    std::set<H3Index> seen_cells;
+    for (const auto& p : world.provinces) {
+        CHECK(p.h3_index != 0);
+        CHECK(H3_IS_VALID(p.h3_index));
+        CHECK(getResolution(p.h3_index) == 4);
+        CHECK(seen_cells.find(p.h3_index) == seen_cells.end());  // no duplicates
+        seen_cells.insert(p.h3_index);
+
+        // neighbor_count must agree with is_pentagon.
+        CHECK(p.neighbor_count == (p.is_pentagon ? 5 : 6));
+    }
+
+    // All ProvinceLink.neighbor_h3 values must resolve in h3_province_map.
+    for (const auto& p : world.provinces) {
+        for (const auto& link : p.links) {
+            CHECK(world.h3_province_map.count(link.neighbor_h3) > 0);
+        }
+    }
+
+    // h3_province_map must have one entry per province.
+    CHECK(world.h3_province_map.size() == world.provinces.size());
+}
+
+TEST_CASE("WorldGenerator  - H3 determinism: same seed produces same cells", "[world_gen][h3]") {
+    WorldGeneratorConfig config{};
+    config.seed = 99999;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].h3_index == world2.provinces[i].h3_index);
+        CHECK(world1.provinces[i].is_pentagon == world2.provinces[i].is_pentagon);
+        CHECK(world1.provinces[i].neighbor_count == world2.provinces[i].neighbor_count);
+    }
 }
 
 TEST_CASE("WorldGenerator  - single province world works", "[world_gen][edge]") {

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -46,6 +47,7 @@ struct WorldState {
     std::vector<Nation> nations;        // V1: exactly 1 nation
     std::vector<Province> provinces;    // see §12
     std::vector<Region> region_groups;  // thin grouping layer
+    std::unordered_map<H3Index, uint32_t> h3_province_map;  // H3Index → province array index
 
     // --- NPC Population ---
     std::vector<NPC> significant_npcs;       // full model; see §4

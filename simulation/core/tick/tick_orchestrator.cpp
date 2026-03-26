@@ -142,7 +142,11 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
         m.demand_buffer = 0.0f;
     }
 
-    // Step 1: Drain deferred work queue — process all items due at current_tick.
+    // Pre-step: Drain deferred work queue — process all items due at current_tick.
+    // Items scheduled in tick N fire at the START of tick N+1 (before any module runs).
+    // This matches the TDD §6 intent ("Step 2: drain queue") even though it runs before
+    // the module loop. The GDD §21 step-count discrepancy (27 vs 28 steps) is an open
+    // documentation ambiguity; do not change the drain position without design approval.
     {
         DeltaBuffer dwq_delta;
         drain_deferred_work(state, dwq_delta);
