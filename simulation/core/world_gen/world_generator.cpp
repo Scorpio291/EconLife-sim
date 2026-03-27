@@ -68,25 +68,25 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Scales elevation from terrain_roughness and applies elevation lapse rate to
     // temperature. MUST run before detect_terrain_flags so mountain pass detection
     // uses physically consistent elevation values.
-    refine_province_geography(world);
+    refine_province_geography(world, config);
 
     // Step 3c: Stage 2 derived — Terrain flag detection (WorldGen v0.18).
     // Detects mountain passes (chokepoints) and island isolation.
     // Runs after refine_province_geography() so corrected elevation is used.
-    detect_terrain_flags(world);
+    detect_terrain_flags(world, config);
 
     // Step 3d: Stage 5+6 — Soils and Biomes (WorldGen v0.18).
     // Adjusts agricultural_productivity from geology_type + climate soil fertility model.
     // Refines forest_coverage, drought/flood vulnerability from KoppenZone.
     // Runs after generate_plates() (geology_type available) and apply_archetype()
     // (KoppenZone and baseline agricultural_productivity set).
-    derive_soils_and_biomes(world, rng);
+    derive_soils_and_biomes(world, rng, config);
 
     // Step 3e: Stage 7 — Special terrain features (WorldGen v0.18).
     // Sets has_permafrost, has_fjord. Locks CrudeOil/NaturalGas accessibility for
     // permafrost provinces. Applies fjord transit cost to Maritime links.
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
-    detect_special_features(world);
+    detect_special_features(world, config);
 
     // Step 4: Markets from goods catalog
     GoodsCatalog catalog;
@@ -122,12 +122,12 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // coastal_trade sets it). Refines wildfire_vulnerability from KoppenZone. Adjusts
     // formal_employment_rate for infrastructure and corruption. MUST run after
     // detect_special_features() so island_isolation flag is available.
-    seed_economic_geography(world);
+    seed_economic_geography(world, config);
 
     // Step 7b: Stage 9 — Population attractiveness (WorldGen v0.18).
     // Adjusts total_population from geology/climate attractiveness score (bounded ±40%).
     // Runs after detect_special_features() so permafrost and island flags are set.
-    seed_population_attractiveness(world, rng);
+    seed_population_attractiveness(world, rng, config);
 
     // Step 7c: Stage 10 — World commentary (WorldGen v0.18).
     // Generates province_lore strings from tectonic context, climate, and archetype.
@@ -1533,7 +1533,9 @@ void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG
 // Stage 2 derived — Terrain flag detection
 // ===========================================================================
 
-void WorldGenerator::detect_terrain_flags(WorldState& world) {
+void WorldGenerator::detect_terrain_flags(WorldState& world,
+                                          const WorldGeneratorConfig& config) {
+    const auto& t = config.terrain;
     for (auto& prov : world.provinces) {
         // Island isolation: no land or river links.
         if (!prov.links.empty()) {
@@ -1549,8 +1551,8 @@ void WorldGenerator::detect_terrain_flags(WorldState& world) {
 
         // Mountain pass detection: high-terrain province flanked by lower provinces on
         // multiple sides. Creates transit chokepoints as specified in WorldGen v0.18 §ProvinceLink.
-        if (prov.geography.terrain_roughness > 0.65f &&
-            prov.geography.elevation_avg_m > 350.0f) {
+        if (prov.geography.terrain_roughness > t.pass_roughness_min &&
+            prov.geography.elevation_avg_m > t.pass_elevation_min_m) {
             float my_elev = prov.geography.elevation_avg_m;
             uint32_t low_neighbor_count = 0;
 
@@ -1558,24 +1560,21 @@ void WorldGenerator::detect_terrain_flags(WorldState& world) {
                 auto it = world.h3_province_map.find(link.neighbor_h3);
                 if (it == world.h3_province_map.end()) continue;
                 const auto& nb = world.provinces[it->second];
-                // "Low" neighbor: elevation < 60% of this province's elevation.
-                if (nb.geography.elevation_avg_m < my_elev * 0.60f) {
+                if (nb.geography.elevation_avg_m < my_elev * t.pass_low_neighbor_fraction) {
                     ++low_neighbor_count;
                 }
             }
 
-            // A mountain pass connects at least 2 different lower areas.
             if (low_neighbor_count >= 2) {
                 prov.is_mountain_pass = true;
-                // Reduce transit cost on pass routes by 40% relative to the full mountain cost.
-                // Pass routes are still expensive (mountain terrain), just less so than
-                // going through the range at a non-pass point.
                 for (auto& link : prov.links) {
                     auto it = world.h3_province_map.find(link.neighbor_h3);
                     if (it == world.h3_province_map.end()) continue;
                     const auto& nb = world.provinces[it->second];
-                    if (nb.geography.elevation_avg_m < my_elev * 0.60f) {
-                        link.transit_terrain_cost = std::max(0.10f, link.transit_terrain_cost * 0.60f);
+                    if (nb.geography.elevation_avg_m < my_elev * t.pass_low_neighbor_fraction) {
+                        link.transit_terrain_cost =
+                            std::max(t.pass_transit_cost_floor,
+                                     link.transit_terrain_cost * t.pass_transit_cost_factor);
                     }
                 }
             }
@@ -1587,27 +1586,23 @@ void WorldGenerator::detect_terrain_flags(WorldState& world) {
 // Stage 4a — Province geography refinement (elevation + temperature lapse rate)
 // ===========================================================================
 
-void WorldGenerator::refine_province_geography(WorldState& world) {
+void WorldGenerator::refine_province_geography(WorldState& world,
+                                               const WorldGeneratorConfig& config) {
+    const auto& t = config.terrain;
+    // Environmental lapse rate: ~6.5 °C / 1 000 m. Physical constant; not in config.
+    static constexpr float kLapseRateCPerM = 0.0065f;
+
     for (auto& prov : world.provinces) {
         // ---- Elevation-roughness correlation ----
-        // apply_archetype seeds a random elevation in [50, 850] m uniformly.
-        // Mountainous provinces (high terrain_roughness) should realistically be much
-        // higher. Scale the archetype-set value by a roughness-driven factor so the
-        // distribution becomes physically plausible.
-        //
-        //   roughness 0.00 → factor 0.30  (coastal flat; 50-850 → 15-255 m)
-        //   roughness 0.30 → factor 0.75  (rolling; 50-850 → 38-638 m)
-        //   roughness 0.50 → factor 1.05  (hilly; roughly unchanged)
-        //   roughness 0.65 → factor 1.28  (high terrain; 50-850 → 64-1085 m)
-        //   roughness 1.00 → factor 1.80  (alpine; 50-850 → 90-1530 m)
-        float roughness_factor = 0.30f + prov.geography.terrain_roughness * 1.50f;
+        // Scale the archetype-set value by a roughness-driven factor.
+        // Final factor = elev_roughness_base + roughness * elev_roughness_range.
+        float roughness_factor =
+            t.elev_roughness_base + prov.geography.terrain_roughness * t.elev_roughness_range;
         prov.geography.elevation_avg_m =
-            std::max(5.0f, prov.geography.elevation_avg_m * roughness_factor);
+            std::max(t.elev_floor_m, prov.geography.elevation_avg_m * roughness_factor);
 
         // ---- Elevation lapse rate on temperature ----
-        // Environmental lapse rate: ~6.5 °C per 1 000 m. Apply uniformly to all three
-        // temperature fields. Uses the corrected elevation computed above.
-        float lapse_c = prov.geography.elevation_avg_m * 0.0065f;
+        float lapse_c = prov.geography.elevation_avg_m * kLapseRateCPerM;
         prov.climate.temperature_avg_c -= lapse_c;
         prov.climate.temperature_min_c -= lapse_c;
         prov.climate.temperature_max_c -= lapse_c;
@@ -1628,56 +1623,41 @@ void WorldGenerator::refine_province_geography(WorldState& world) {
 // Stage 4b — Economic geography seeding (trade openness, wildfire, employment)
 // ===========================================================================
 
-void WorldGenerator::seed_economic_geography(WorldState& world) {
+void WorldGenerator::seed_economic_geography(WorldState& world,
+                                             const WorldGeneratorConfig& config) {
+    const auto& e = config.economy;
     for (auto& prov : world.provinces) {
         // ---- Trade openness from geography ----
-        // Only coastal_trade archetype sets trade_openness in apply_archetype; all
-        // other archetypes leave it at 0.0 (zero-initialised Province). Fix this by
-        // computing a geography-driven baseline and blending with any existing value.
-        //
-        // Drivers:
-        //   Port capacity   — primary gateway for international goods flow
-        //   River access    — inland waterway corridors
-        //   Infrastructure  — road/rail density reduces border friction
-        //   Landlocked      — geographic trade barrier
-        //   Island isolation — extra logistics cost
-        float geo_openness = prov.geography.port_capacity * 0.50f
-                           + prov.geography.river_access   * 0.15f
-                           + prov.infrastructure_rating    * 0.10f;
-        if (prov.geography.is_landlocked) geo_openness -= 0.10f;
-        if (prov.island_isolation)        geo_openness -= 0.05f;
+        float geo_openness = prov.geography.port_capacity * e.trade_port_weight
+                           + prov.geography.river_access   * e.trade_river_weight
+                           + prov.infrastructure_rating    * e.trade_infra_weight;
+        if (prov.geography.is_landlocked) geo_openness -= e.trade_landlocked_penalty;
+        if (prov.island_isolation)        geo_openness -= e.trade_island_penalty;
         geo_openness = std::max(0.08f, std::min(0.85f, geo_openness));
 
         if (prov.trade_openness < 0.01f) {
-            // Not yet set by archetype — use the geography-derived value directly.
             prov.trade_openness = geo_openness;
         } else {
-            // coastal_trade (and possibly others) already set a value; blend to keep
-            // archetype flavour while anchoring to physical geography.
             prov.trade_openness = std::max(0.10f, std::min(0.95f,
-                prov.trade_openness * 0.65f + geo_openness * 0.35f));
+                prov.trade_openness * e.trade_existing_blend +
+                geo_openness        * e.trade_geo_blend));
         }
 
         // ---- Wildfire vulnerability from climate zone ----
-        // apply_archetype sets a generic 0.05–0.25 regardless of climate. Override
-        // with a climate-zone-informed value and amplify by drought vulnerability.
         float base_wildfire;
         switch (prov.climate.koppen_zone) {
             case KoppenZone::Csa:
             case KoppenZone::Csb:
-                // Mediterranean: long dry summer + dry scrub = highest wildfire risk.
-                base_wildfire = 0.50f;
+                base_wildfire = e.wildfire_mediterranean;
                 break;
             case KoppenZone::BSh:
             case KoppenZone::BSk:
             case KoppenZone::Aw:
-                // Steppe / tropical dry: grass fires; moderate-high.
-                base_wildfire = 0.35f;
+                base_wildfire = e.wildfire_steppe_savanna;
                 break;
             case KoppenZone::BWh:
             case KoppenZone::BWk:
-                // Desert: very dry but almost no fuel → moderate despite aridity.
-                base_wildfire = 0.20f;
+                base_wildfire = e.wildfire_desert;
                 break;
             case KoppenZone::Cfa:
             case KoppenZone::Cfb:
@@ -1685,39 +1665,32 @@ void WorldGenerator::seed_economic_geography(WorldState& world) {
             case KoppenZone::Cwa:
             case KoppenZone::Dfa:
             case KoppenZone::Dfb:
-                // Humid temperate / continental: occasional; wet season limits spread.
-                base_wildfire = 0.15f;
+                base_wildfire = e.wildfire_temperate;
                 break;
             case KoppenZone::Dfc:
             case KoppenZone::Dfd:
-                // Subarctic boreal: sporadic but large when they occur.
-                base_wildfire = 0.20f;
+                base_wildfire = e.wildfire_boreal;
                 break;
             case KoppenZone::Af:
             case KoppenZone::Am:
-                // Wet tropical: very high moisture; rarely dries enough to burn.
-                base_wildfire = 0.06f;
+                base_wildfire = e.wildfire_wet_tropical;
                 break;
             case KoppenZone::ET:
             case KoppenZone::EF:
-                // Polar: no combustible vegetation.
-                base_wildfire = 0.02f;
+                base_wildfire = e.wildfire_polar;
                 break;
             default:
-                base_wildfire = 0.15f;
+                base_wildfire = e.wildfire_temperate;
                 break;
         }
-        // Drought amplifies fire risk: double drought_vulnerability → +50% wildfire.
-        float drought_amp = 1.0f + prov.climate.drought_vulnerability * 0.50f;
+        float drought_amp = 1.0f + prov.climate.drought_vulnerability * e.wildfire_drought_amp;
         prov.climate.wildfire_vulnerability =
             std::max(0.01f, std::min(0.95f, base_wildfire * drought_amp));
 
         // ---- Formal employment rate from infrastructure and governance ----
-        // apply_archetype sets 0.6–0.85 generically. Adjust downward for high
-        // corruption and inequality; upward for strong infrastructure.
-        float infra_bonus       = (prov.infrastructure_rating   - 0.50f) * 0.15f;
-        float corruption_penalty = prov.political.corruption_index      * 0.18f;
-        float inequality_penalty = prov.conditions.inequality_index     * 0.10f;
+        float infra_bonus        = (prov.infrastructure_rating  - 0.50f) * e.employment_infra_scale;
+        float corruption_penalty = prov.political.corruption_index       * e.employment_corruption_scale;
+        float inequality_penalty = prov.conditions.inequality_index      * e.employment_inequality_scale;
         prov.conditions.formal_employment_rate =
             std::max(0.20f, std::min(0.95f,
                 prov.conditions.formal_employment_rate
@@ -1729,7 +1702,9 @@ void WorldGenerator::seed_economic_geography(WorldState& world) {
 // Stage 5+6 — Soils and Biomes (simplified WorldGen v0.18 pass)
 // ===========================================================================
 
-void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG& rng) {
+void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG& rng,
+                                              const WorldGeneratorConfig& config) {
+    const auto& s = config.soils;
     for (auto& prov : world.provinces) {
         // ---- Stage 5: Soil fertility from geology_type ----
         // Volcanic and alluvial soils are most productive; ancient shields are leached and thin.
@@ -1810,9 +1785,9 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
                 break;
         }
 
-        // Apply soil fertility to agricultural_productivity (bounded to [0.02, 1.0]).
+        // Apply soil fertility to agricultural_productivity (bounded by config).
         prov.agricultural_productivity =
-            std::max(0.02f, std::min(1.0f,
+            std::max(s.ag_min, std::min(s.ag_max,
                 prov.agricultural_productivity * soil_multiplier * climate_soil_mod));
 
         // ---- Stage 6: Biomes — forest coverage from climate zone ----
@@ -1862,10 +1837,11 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
                 expected_forest = 0.25f + rng.next_float() * 0.20f;
                 break;
         }
-        // Blend: 60% archetype, 40% climate expectation.
+        // Blend: archetype_blend% archetype, climate_blend% climate expectation.
         prov.geography.forest_coverage =
             std::max(0.0f, std::min(1.0f,
-                prov.geography.forest_coverage * 0.60f + expected_forest * 0.40f));
+                prov.geography.forest_coverage * s.forest_archetype_blend +
+                expected_forest                * s.forest_climate_blend));
 
         // ---- Stage 6: Refine drought/flood vulnerability from climate zone ----
         // Override only if the archetype set a generic value; clamp to reasonable range.
@@ -1919,13 +1895,15 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
                 climate_flood   = prov.climate.flood_vulnerability;
                 break;
         }
-        // Blend 50/50 with existing archetype values to preserve scenario tuning.
+        // Blend archetype_vuln_blend : climate_vuln_blend with existing values.
         prov.climate.drought_vulnerability =
             std::max(0.0f, std::min(1.0f,
-                prov.climate.drought_vulnerability * 0.50f + climate_drought * 0.50f));
+                prov.climate.drought_vulnerability * s.archetype_vuln_blend +
+                climate_drought                    * s.climate_vuln_blend));
         prov.climate.flood_vulnerability =
             std::max(0.0f, std::min(1.0f,
-                prov.climate.flood_vulnerability * 0.50f + climate_flood * 0.50f));
+                prov.climate.flood_vulnerability * s.archetype_vuln_blend +
+                climate_flood                    * s.climate_vuln_blend));
     }
 }
 
@@ -1933,15 +1911,16 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
 // Stage 7 — Special terrain features (complete WorldGen v0.18 pass)
 // ===========================================================================
 
-void WorldGenerator::detect_special_features(WorldState& world) {
+void WorldGenerator::detect_special_features(WorldState& world,
+                                             const WorldGeneratorConfig& config) {
+    const auto& t = config.terrain;
     for (auto& prov : world.provinces) {
         const float lat = prov.geography.latitude;
         const KoppenZone kz = prov.climate.koppen_zone;
 
         // ---- Permafrost ----
-        // Arctic Circle threshold (66.5°) or polar Koppen zones.
         bool permafrost_condition =
-            (lat > 66.5f) ||
+            (lat > t.permafrost_latitude_min) ||
             (kz == KoppenZone::ET) ||
             (kz == KoppenZone::EF);
 
@@ -1949,8 +1928,6 @@ void WorldGenerator::detect_special_features(WorldState& world) {
             prov.has_permafrost = true;
 
             // Lock CrudeOil and NaturalGas accessibility until arctic_drilling tech + thaw.
-            // This implements the ResourceDeposit::accessibility override described in the
-            // ResourceDeposit comment in geography.h.
             for (auto& deposit : prov.deposits) {
                 if (deposit.type == ResourceType::CrudeOil ||
                     deposit.type == ResourceType::NaturalGas) {
@@ -1960,32 +1937,29 @@ void WorldGenerator::detect_special_features(WorldState& world) {
 
             // Permafrost severely limits agriculture (frozen ground, short growing season).
             prov.agricultural_productivity =
-                std::max(0.02f, prov.agricultural_productivity * 0.40f);
+                std::max(t.permafrost_ag_floor,
+                         prov.agricultural_productivity * t.permafrost_ag_factor);
         }
 
         // ---- Fjord ----
-        // High-relief glacially-carved coastline: requires coastal access, significant
-        // roughness, and northern latitude (glacial origin).
         bool fjord_condition =
             !prov.geography.is_landlocked &&
-            (prov.geography.coastal_length_km > 100.0f) &&
-            (prov.geography.terrain_roughness > 0.55f) &&
-            (lat > 50.0f);
+            (prov.geography.coastal_length_km > t.fjord_min_coastal_km) &&
+            (prov.geography.terrain_roughness > t.fjord_min_roughness) &&
+            (lat > t.fjord_min_latitude);
 
         if (fjord_condition) {
             prov.has_fjord = true;
 
-            // Fjord channels are scenic but navigable only with care: raise Maritime link cost.
             for (auto& link : prov.links) {
                 if (link.type == LinkType::Maritime) {
                     link.transit_terrain_cost =
-                        std::min(1.0f, link.transit_terrain_cost + 0.15f);
+                        std::min(1.0f, link.transit_terrain_cost + t.fjord_maritime_cost_add);
                 }
             }
         }
 
         // ---- Permafrost precludes karst ----
-        // Permafrost seals surface drainage; karst dissolution requires liquid water.
         if (prov.has_permafrost) {
             prov.has_karst = false;
         }
@@ -1996,56 +1970,29 @@ void WorldGenerator::detect_special_features(WorldState& world) {
 // Stage 9 — Population attractiveness (simplified WorldGen v0.18 pass)
 // ===========================================================================
 
-void WorldGenerator::seed_population_attractiveness(WorldState& world, DeterministicRNG& rng) {
+void WorldGenerator::seed_population_attractiveness(WorldState& world, DeterministicRNG& rng,
+                                                    const WorldGeneratorConfig& config) {
+    const auto& p = config.population;
     for (auto& prov : world.provinces) {
-        // Compute an attractiveness score in [0, 1].
-        // Baseline 0.5 = no change. Above 0.5 = population bonus; below = penalty.
+        // Baseline 0.5 = multiplier 1.0 (no change from archetype). Contributions add/subtract.
         float score = 0.50f;
+        score += prov.agricultural_productivity             * p.ag_productivity_weight;
+        score += prov.infrastructure_rating                 * p.infrastructure_weight;
+        score += prov.geography.river_access                * p.river_access_weight;
+        score += prov.geography.arable_land_fraction        * p.arable_land_weight;
+        score -= prov.tectonic_stress                       * p.tectonic_stress_penalty;
+        score -= prov.climate.drought_vulnerability         * p.drought_penalty;
+        if (prov.has_permafrost)    score -= p.permafrost_penalty;
+        if (prov.island_isolation)  score -= p.island_penalty;
 
-        // Fertile soils and arable land attract farmers and settlers.
-        score += prov.agricultural_productivity * 0.12f;
-
-        // High infrastructure already signals a developed, attractive province.
-        score += prov.infrastructure_rating * 0.12f;
-
-        // River access: historically the primary settlement driver.
-        score += prov.geography.river_access * 0.08f;
-
-        // Arable fraction: direct land availability.
-        score += prov.geography.arable_land_fraction * 0.06f;
-
-        // Active tectonic hazards (earthquakes, eruptions) deter dense settlement.
-        score -= prov.tectonic_stress * 0.12f;
-
-        // Drought vulnerability: arid regions hold fewer people sustainably.
-        score -= prov.climate.drought_vulnerability * 0.10f;
-
-        // Permafrost: very hostile to settlement; small populations in resource outposts only.
-        if (prov.has_permafrost) {
-            score -= 0.20f;
-        }
-
-        // Island isolation: historically isolated; limited carrying capacity.
-        if (prov.island_isolation) {
-            score -= 0.08f;
-        }
-
-        // Clamp score to a valid range.
         score = std::max(0.10f, std::min(0.90f, score));
 
-        // Map score to a population multiplier centered on 1.0 at score = 0.5.
-        // score 0.5 → multiplier 1.0 (no change from archetype baseline)
-        // score 0.1 → multiplier 0.68
-        // score 0.9 → multiplier 1.32
-        float multiplier = 0.60f + score * 0.80f;
+        float multiplier = p.multiplier_base + score * p.multiplier_range;
+        multiplier *= (p.rng_variation_base + rng.next_float() * p.rng_variation_range);
 
-        // Add small RNG variation (±5%) so identical-archetype provinces diverge slightly.
-        multiplier *= (0.95f + rng.next_float() * 0.10f);
-
-        // Apply, keeping population in a meaningful range.
         uint32_t new_pop = static_cast<uint32_t>(
             static_cast<float>(prov.demographics.total_population) * multiplier + 0.5f);
-        prov.demographics.total_population = std::max(10000u, new_pop);
+        prov.demographics.total_population = std::max(p.population_floor, new_pop);
     }
 }
 
