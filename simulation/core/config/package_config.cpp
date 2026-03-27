@@ -27,7 +27,7 @@ PackageConfig load_package_config(const std::string& config_dir) {
     {
         auto j = load_json(config_dir + "/economy.json");
 
-        auto& pm = j.value("price_model", nlohmann::json::object());
+        const auto pm = j.value("price_model", nlohmann::json::object());
         cfg.price_model.adjustment_rate_default       = pm.value("adjustment_rate_default",       cfg.price_model.adjustment_rate_default);
         cfg.price_model.adjustment_rate_min           = pm.value("adjustment_rate_min",           cfg.price_model.adjustment_rate_min);
         cfg.price_model.adjustment_rate_max           = pm.value("adjustment_rate_max",           cfg.price_model.adjustment_rate_max);
@@ -39,13 +39,13 @@ PackageConfig load_package_config(const std::string& config_dir) {
         cfg.price_model.volatility_dampening          = pm.value("volatility_dampening",          cfg.price_model.volatility_dampening);
         cfg.price_model.spot_price_update_step        = pm.value("spot_price_update_step",        cfg.price_model.spot_price_update_step);
 
-        auto& sc = j.value("supply_chain", nlohmann::json::object());
+        const auto sc = j.value("supply_chain", nlohmann::json::object());
         cfg.supply_chain.shortage_propagation_delay_ticks = sc.value("shortage_propagation_delay_ticks", cfg.supply_chain.shortage_propagation_delay_ticks);
         cfg.supply_chain.surplus_decay_rate               = sc.value("surplus_decay_rate_per_tick",       cfg.supply_chain.surplus_decay_rate);
         cfg.supply_chain.bottleneck_output_penalty        = sc.value("bottleneck_output_penalty",         cfg.supply_chain.bottleneck_output_penalty);
         cfg.supply_chain.max_depth                        = sc.value("max_supply_chain_depth",            cfg.supply_chain.max_depth);
 
-        auto& lm = j.value("labor_market", nlohmann::json::object());
+        const auto lm = j.value("labor_market", nlohmann::json::object());
         cfg.labor_market.wage_update_frequency_ticks   = lm.value("wage_update_frequency_ticks",    cfg.labor_market.wage_update_frequency_ticks);
         cfg.labor_market.minimum_wage_default          = lm.value("minimum_wage_default",            cfg.labor_market.minimum_wage_default);
         cfg.labor_market.wage_elasticity               = lm.value("wage_elasticity",                 cfg.labor_market.wage_elasticity);
@@ -53,18 +53,18 @@ PackageConfig load_package_config(const std::string& config_dir) {
         cfg.labor_market.skill_rust_rate               = lm.value("skill_rust_rate_per_tick",        cfg.labor_market.skill_rust_rate);
         cfg.labor_market.skill_gain_rate               = lm.value("skill_gain_rate_per_tick",        cfg.labor_market.skill_gain_rate);
 
-        auto& fin = j.value("financial", nlohmann::json::object());
+        const auto fin = j.value("financial", nlohmann::json::object());
         cfg.banking.base_interest_rate = fin.value("interest_rate_base_percent", 5.0f) / 100.0f;
         cfg.banking.inflation_target   = fin.value("inflation_target_percent",   2.0f) / 100.0f;
 
-        auto& nb = j.value("npc_business", nlohmann::json::object());
+        const auto nb = j.value("npc_business", nlohmann::json::object());
         cfg.npc_business_economy.quarterly_decision_interval_ticks = nb.value("quarterly_decision_interval_ticks",  cfg.npc_business_economy.quarterly_decision_interval_ticks);
         cfg.npc_business_economy.bankruptcy_threshold              = nb.value("bankruptcy_threshold_capital",        cfg.npc_business_economy.bankruptcy_threshold);
         cfg.npc_business_economy.consolidation_check_interval      = nb.value("consolidation_check_interval_ticks", cfg.npc_business_economy.consolidation_check_interval);
         cfg.npc_business_economy.startup_failure_rate_year1        = nb.value("startup_failure_rate_year1",          cfg.npc_business_economy.startup_failure_rate_year1);
         cfg.npc_business_economy.max_businesses_per_province       = nb.value("max_businesses_per_province",         cfg.npc_business_economy.max_businesses_per_province);
 
-        auto& tr = j.value("trade", nlohmann::json::object());
+        const auto tr = j.value("trade", nlohmann::json::object());
         cfg.trade.lod1_offer_refresh_ticks          = tr.value("lod1_trade_offer_refresh_ticks",    cfg.trade.lod1_offer_refresh_ticks);
         cfg.trade.lod2_price_index_refresh_ticks    = tr.value("lod2_price_index_refresh_ticks",    cfg.trade.lod2_price_index_refresh_ticks);
         cfg.trade.tariff_base_rate                  = tr.value("tariff_base_rate_percent",          5.0f) / 100.0f;
@@ -78,8 +78,8 @@ PackageConfig load_package_config(const std::string& config_dir) {
     {
         auto j = load_json(config_dir + "/npc.json");
 
-        auto& nb = j.value("npc_behavior", nlohmann::json::object());
-        auto& mw = nb.value("motivation_weights", nlohmann::json::object());
+        const auto nb = j.value("npc_behavior", nlohmann::json::object());
+        const auto mw = nb.value("motivation_weights", nlohmann::json::object());
         cfg.npc_behavior.motivation_financial_security  = mw.value("financial_security",  cfg.npc_behavior.motivation_financial_security);
         cfg.npc_behavior.motivation_social_standing     = mw.value("social_standing",     cfg.npc_behavior.motivation_social_standing);
         cfg.npc_behavior.motivation_personal_safety     = mw.value("personal_safety",     cfg.npc_behavior.motivation_personal_safety);
@@ -91,7 +91,7 @@ PackageConfig load_package_config(const std::string& config_dir) {
         cfg.npc_behavior.risk_tolerance_default         = nb.value("risk_tolerance_default",     cfg.npc_behavior.risk_tolerance_default);
         cfg.npc_behavior.memory_log_cap                 = nb.value("memory_log_cap",             cfg.npc_behavior.memory_log_cap);
 
-        auto& rel = j.value("relationships", nlohmann::json::object());
+        const auto rel = j.value("relationships", nlohmann::json::object());
         cfg.relationships.decay_rate_per_30_ticks = rel.value("decay_rate_per_30_ticks",   cfg.relationships.decay_rate_per_30_ticks);
         cfg.relationships.max_per_npc             = rel.value("max_relationships_per_npc", cfg.relationships.max_per_npc);
     }
@@ -130,42 +130,42 @@ PackageConfig load_package_config(const std::string& config_dir) {
     // -----------------------------------------------------------------
     {
         auto j = load_json(config_dir + "/consequence_delays.json");
-        auto& cd = j.value("consequence_delays", nlohmann::json::object());
+        const auto cd = j.value("consequence_delays", nlohmann::json::object());
 
-        auto& wb  = cd.value("whistleblower_emergence",       nlohmann::json::object());
+        const auto wb  = cd.value("whistleblower_emergence",       nlohmann::json::object());
         cfg.consequence_delays.whistleblower_min = wb.value("base_delay_min", cfg.consequence_delays.whistleblower_min);
         cfg.consequence_delays.whistleblower_max = wb.value("base_delay_max", cfg.consequence_delays.whistleblower_max);
 
-        auto& ji  = cd.value("journalist_investigation_start", nlohmann::json::object());
+        const auto ji  = cd.value("journalist_investigation_start", nlohmann::json::object());
         cfg.consequence_delays.journalist_invest_min = ji.value("base_delay_min", cfg.consequence_delays.journalist_invest_min);
         cfg.consequence_delays.journalist_invest_max = ji.value("base_delay_max", cfg.consequence_delays.journalist_invest_max);
 
-        auto& ri  = cd.value("regulator_investigation_start",  nlohmann::json::object());
+        const auto ri  = cd.value("regulator_investigation_start",  nlohmann::json::object());
         cfg.consequence_delays.regulator_invest_min = ri.value("base_delay_min", cfg.consequence_delays.regulator_invest_min);
         cfg.consequence_delays.regulator_invest_max = ri.value("base_delay_max", cfg.consequence_delays.regulator_invest_max);
 
-        auto& le  = cd.value("law_enforcement_response",       nlohmann::json::object());
+        const auto le  = cd.value("law_enforcement_response",       nlohmann::json::object());
         cfg.consequence_delays.law_enforcement_min = le.value("base_delay_min", cfg.consequence_delays.law_enforcement_min);
         cfg.consequence_delays.law_enforcement_max = le.value("base_delay_max", cfg.consequence_delays.law_enforcement_max);
 
-        auto& oe  = cd.value("obligation_escalation",          nlohmann::json::object());
+        const auto oe  = cd.value("obligation_escalation",          nlohmann::json::object());
         cfg.consequence_delays.obligation_escalation_min = oe.value("base_delay_min", cfg.consequence_delays.obligation_escalation_min);
         cfg.consequence_delays.obligation_escalation_max = oe.value("base_delay_max", cfg.consequence_delays.obligation_escalation_max);
 
-        auto& ed  = cd.value("evidence_decay",                 nlohmann::json::object());
+        const auto ed  = cd.value("evidence_decay",                 nlohmann::json::object());
         cfg.consequence_delays.evidence_decay_interval = ed.value("base_delay", cfg.consequence_delays.evidence_decay_interval);
 
-        auto& rd  = cd.value("relationship_decay",             nlohmann::json::object());
+        const auto rd  = cd.value("relationship_decay",             nlohmann::json::object());
         cfg.consequence_delays.relationship_decay_interval = rd.value("base_delay", cfg.consequence_delays.relationship_decay_interval);
 
-        auto& bd  = cd.value("npc_business_decision",          nlohmann::json::object());
+        const auto bd  = cd.value("npc_business_decision",          nlohmann::json::object());
         cfg.consequence_delays.npc_business_decision = bd.value("base_delay", cfg.consequence_delays.npc_business_decision);
 
-        auto& ct  = cd.value("legal_process_charge_to_trial",  nlohmann::json::object());
+        const auto ct  = cd.value("legal_process_charge_to_trial",  nlohmann::json::object());
         cfg.consequence_delays.charge_to_trial_min = ct.value("base_delay_min", cfg.consequence_delays.charge_to_trial_min);
         cfg.consequence_delays.charge_to_trial_max = ct.value("base_delay_max", cfg.consequence_delays.charge_to_trial_max);
 
-        auto& cr  = cd.value("community_response_stage_advance", nlohmann::json::object());
+        const auto cr  = cd.value("community_response_stage_advance", nlohmann::json::object());
         cfg.consequence_delays.community_response_stage_min = cr.value("base_delay_min", cfg.consequence_delays.community_response_stage_min);
         cfg.consequence_delays.community_response_stage_max = cr.value("base_delay_max", cfg.consequence_delays.community_response_stage_max);
     }

@@ -480,10 +480,10 @@ TEST_CASE("cross-province delta buffer one-tick delay", "[integration][cross_pro
 
 // ── Full Orchestrator Integration ───────────────────────────────────────────
 
-TEST_CASE("43 modules register and finalize without cycle", "[integration][orchestrator]") {
+TEST_CASE("modules register and finalize without cycle", "[integration][orchestrator]") {
     TickOrchestrator orchestrator;
     register_base_game_modules(orchestrator);
-    REQUIRE(orchestrator.modules().size() == 43);
+    REQUIRE(orchestrator.modules().size() >= 43);  // count grows as modules are added
     orchestrator.finalize_registration();
     REQUIRE(orchestrator.is_finalized());
 }

@@ -82,6 +82,55 @@ struct WorldLoadParameters {
 };
 
 // ---------------------------------------------------------------------------
+// TectonicContext — WorldGen v0.18 Stage 1
+// ---------------------------------------------------------------------------
+// Assigned at world generation time from plate boundary classification.
+// Drives terrain, resources, hazards, and geology type.
+enum class TectonicContext : uint8_t {
+    Subduction = 0,        // oceanic under continental; Andes/Japan analog
+                           // → porphyry copper, gold, sulfur; earthquake/eruption hazard
+    ContinentalCollision,  // continent meets continent; Himalayas/Alps analog
+                           // → marble, gems, limestone; landslide hazard
+    RiftZone,              // plates pulling apart; East Africa analog
+                           // → lithium, soda ash, rare earths, geothermal
+    TransformFault,        // plates sliding laterally; San Andreas analog
+                           // → minimal resources; frequent earthquakes
+    HotSpot,               // mantle plume; Hawaii/Iceland analog
+                           // → basalt, geothermal, sulfur; eruption risk
+    PassiveMargin,         // old rifted edge; US East Coast analog
+                           // → offshore oil/gas, phosphate, fishing
+    CratonInterior,        // ancient stable shield; Canadian Shield analog
+                           // → iron ore, gold, uranium, diamonds
+    SedimentaryBasin,      // subsided interior; Permian Basin analog
+                           // → coal, crude oil, natural gas, potash
+};
+
+// ---------------------------------------------------------------------------
+// RockType — WorldGen v0.18 Stage 1
+// ---------------------------------------------------------------------------
+enum class RockType : uint8_t {
+    Igneous = 0,    // volcanic arcs and hot spots; weathers slowly into fertile soil
+    Sedimentary,    // basins and margins; hosts petroleum, coal, evaporites
+    Metamorphic,    // collision zones; hosts gems, garnet, kyanite
+    Mixed,          // transition provinces; blend of adjacent types
+};
+
+// ---------------------------------------------------------------------------
+// GeologyType — WorldGen v0.18 Stage 1
+// ---------------------------------------------------------------------------
+// More specific than RockType; drives deposit grade probability weights.
+enum class GeologyType : uint8_t {
+    VolcanicArc = 0,       // subduction-associated; porphyry copper and gold systems
+    GraniteShield,         // craton core; gold, uranium, iron ore
+    GreenstoneBelt,        // ancient craton margins; gold, nickel, chromite
+    SedimentarySequence,   // layered basins; coal, oil, gas, evaporites
+    CarbonateSequence,     // limestone/dolomite; karst potential, marble
+    MetamorphicCore,       // deep collision zones; gems, garnet, structural stones
+    BasalticPlateau,       // flood basalt and hot spots; geothermal, sulfur
+    AlluvialFill,          // river/lake sediment; sand, gravel, placer gold
+};
+
+// ---------------------------------------------------------------------------
 // ResourceType / ResourceDeposit
 // ---------------------------------------------------------------------------
 enum class ResourceType : uint8_t {
@@ -100,7 +149,12 @@ enum class ResourceType : uint8_t {
     Timber,
     Fish,
     SolarPotential,
-    WindPotential
+    WindPotential,
+    // Added in WorldGen v0.18 Stage 1 (tectonic-driven deposits)
+    Gold,       // porphyry/craton; high-value; low quantity
+    Geothermal, // rift zones and hot spots; renewable energy
+    Uranium,    // craton shields; high-value; low quantity
+    Potash,     // evaporite basins; agricultural fertilizer input
     // [EX] full deposit list from GDD Section 8.3 expanded in later passes
 };
 
@@ -309,6 +363,46 @@ struct Province {
     // NPCs (LOD 0 only; empty at LOD 1/2)
     std::vector<uint32_t> significant_npc_ids;
     RegionCohortStats* cohort_stats;  // aggregated; all LOD levels (forward-declared)
+
+    // Tectonic geology (Stage 1 — WorldGen v0.18; static after world generation)
+    TectonicContext tectonic_context = TectonicContext::CratonInterior;
+    RockType        rock_type        = RockType::Mixed;
+    GeologyType     geology_type     = GeologyType::GraniteShield;
+    float           tectonic_stress  = 0.1f;  // 0.0-1.0; active boundary intensity;
+                                               // drives hazard probability in random_events module
+    float           plate_age        = 2.5f;  // geological age proxy (1.0 = young, 4.5 = ancient);
+                                               // older crust: more eroded, fewer hydrothermal deposits
+
+    // Terrain flags (Stage 2 derived — WorldGen v0.18; static after world generation)
+    bool is_mountain_pass = false;  // high-terrain chokepoint connecting lower-elevation provinces;
+                                    // ProvinceLinks to flanking low provinces get reduced
+                                    // transit_terrain_cost; creates strategic chokepoint mechanic
+    bool island_isolation = false;  // all ProvinceLinks are Maritime; no land neighbors;
+                                    // affects trade_infrastructure transit cost model
+
+    // Special terrain features (Stage 7 — WorldGen v0.18; static after world generation)
+    bool has_permafrost = false;  // KoppenZone ET/EF or latitude > 66.5°; perennially frozen
+                                  // ground that severely limits agriculture and locks subsurface
+                                  // resource accessibility. CrudeOil and NaturalGas deposits in
+                                  // this province have accessibility = 0.0 until BOTH conditions
+                                  // hold: (1) arctic_drilling tech researched, AND (2)
+                                  // climate_stress_current > permafrost_thaw_threshold (0.40).
+                                  // agricultural_productivity reduced by ~60% at world gen.
+    bool has_fjord      = false;  // high-relief glacially-carved coastline; requires
+                                  // !is_landlocked, coastal_length_km > 100, terrain_roughness
+                                  // > 0.55, latitude > 50°. Maritime ProvinceLinks gain
+                                  // +0.15 transit_terrain_cost (difficult navigation in
+                                  // confined fjord channels). Scenic appeal; tourism bonus.
+
+    // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
+    std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;
+                                // displayed in province detail panel and loading screens
+
+    // Archetype index (WorldGenerator internal; stable for UI/modding access)
+    // Maps to WorldGenerator::ProvinceArchetype enum:
+    //   0=industrial_hub, 1=agricultural, 2=resource_rich,
+    //   3=coastal_trade, 4=financial_center, 5=mixed_economy
+    uint8_t province_archetype_index = 5;
 
     // Terrain modifiers (set by GIS pipeline from world.json at load; static at runtime)
     bool has_karst;  // true = province contains karst terrain (cave systems,

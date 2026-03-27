@@ -109,11 +109,11 @@ float shared_border_km(H3Index a, H3Index b) {
     // Average edge length at resolution 4 is approximately 43.3 km.
     // H3 provides exactEdgeLengthKm for directed edges.
     H3Index edge = 0;
-    err = getDirectedEdge(a, b, &edge);
+    err = cellsToDirectedEdge(a, b, &edge);
     if (err != E_SUCCESS) return 43.3f;  // fallback to res-4 average
 
     double len_km = 0.0;
-    err = exactEdgeLengthKm(edge, &len_km);
+    err = edgeLengthKm(edge, &len_km);
     if (err != E_SUCCESS) return 43.3f;
 
     return static_cast<float>(len_km);

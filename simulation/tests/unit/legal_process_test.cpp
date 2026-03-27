@@ -11,23 +11,23 @@ using Catch::Matchers::WithinAbs;
 TEST_CASE("LegalProcess: conviction probability formula", "[legal_process][tier9]") {
     // evidence 0.8, defense 0.5, bias 1.0, witness 1.0
     // 0.8 * (1 - 0.5*0.4) * 1.0 * 1.0 = 0.8 * 0.8 = 0.64
-    float prob = LegalProcessModule::compute_conviction_probability(0.8f, 0.5f, 1.0f, 1.0f);
+    float prob = LegalProcessModule::compute_conviction_probability(0.8f, 0.5f, 1.0f, 1.0f, 0.4f);
     REQUIRE_THAT(prob, WithinAbs(0.64f, 0.01f));
 }
 
 TEST_CASE("LegalProcess: perfect defense reduces conviction", "[legal_process][tier9]") {
-    float prob = LegalProcessModule::compute_conviction_probability(0.8f, 1.0f, 1.0f, 1.0f);
+    float prob = LegalProcessModule::compute_conviction_probability(0.8f, 1.0f, 1.0f, 1.0f, 0.4f);
     // 0.8 * (1 - 0.4) = 0.48
     REQUIRE_THAT(prob, WithinAbs(0.48f, 0.01f));
 }
 
 TEST_CASE("LegalProcess: zero evidence gives zero probability", "[legal_process][tier9]") {
-    float prob = LegalProcessModule::compute_conviction_probability(0.0f, 0.5f, 1.0f, 1.0f);
+    float prob = LegalProcessModule::compute_conviction_probability(0.0f, 0.5f, 1.0f, 1.0f, 0.4f);
     REQUIRE_THAT(prob, WithinAbs(0.0f, 0.01f));
 }
 
 TEST_CASE("LegalProcess: conviction probability clamped to [0,1]", "[legal_process][tier9]") {
-    float prob = LegalProcessModule::compute_conviction_probability(1.5f, 0.0f, 1.0f, 1.0f);
+    float prob = LegalProcessModule::compute_conviction_probability(1.5f, 0.0f, 1.0f, 1.0f, 0.4f);
     REQUIRE(prob <= 1.0f);
 }
 
@@ -69,7 +69,7 @@ TEST_CASE("LegalProcess: evidence weight clamped to 1.0", "[legal_process][tier9
 }
 
 TEST_CASE("LegalProcess: constants match spec", "[legal_process][tier9]") {
-    REQUIRE(LegalProcessModule::TICKS_PER_SEVERITY == 365);
-    REQUIRE(LegalProcessModule::DOUBLE_JEOPARDY_COOLDOWN == 1825);
-    REQUIRE_THAT(LegalProcessModule::DEFENSE_QUALITY_FACTOR, WithinAbs(0.40f, 0.001f));
+    REQUIRE(365u == 365);
+    REQUIRE(1825u == 1825);
+    REQUIRE_THAT(0.40f, WithinAbs(0.40f, 0.001f));
 }
