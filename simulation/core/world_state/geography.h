@@ -380,6 +380,20 @@ struct Province {
     bool island_isolation = false;  // all ProvinceLinks are Maritime; no land neighbors;
                                     // affects trade_infrastructure transit cost model
 
+    // Special terrain features (Stage 7 — WorldGen v0.18; static after world generation)
+    bool has_permafrost = false;  // KoppenZone ET/EF or latitude > 66.5°; perennially frozen
+                                  // ground that severely limits agriculture and locks subsurface
+                                  // resource accessibility. CrudeOil and NaturalGas deposits in
+                                  // this province have accessibility = 0.0 until BOTH conditions
+                                  // hold: (1) arctic_drilling tech researched, AND (2)
+                                  // climate_stress_current > permafrost_thaw_threshold (0.40).
+                                  // agricultural_productivity reduced by ~60% at world gen.
+    bool has_fjord      = false;  // high-relief glacially-carved coastline; requires
+                                  // !is_landlocked, coastal_length_km > 100, terrain_roughness
+                                  // > 0.55, latitude > 50°. Maritime ProvinceLinks gain
+                                  // +0.15 transit_terrain_cost (difficult navigation in
+                                  // confined fjord channels). Scenic appeal; tourism bonus.
+
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;
                                 // displayed in province detail panel and loading screens

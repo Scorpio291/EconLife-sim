@@ -70,6 +70,19 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // (uses elevation which is set in apply_archetype).
     detect_terrain_flags(world);
 
+    // Step 3d: Stage 5+6 — Soils and Biomes (WorldGen v0.18).
+    // Adjusts agricultural_productivity from geology_type + climate soil fertility model.
+    // Refines forest_coverage, drought/flood vulnerability from KoppenZone.
+    // Runs after generate_plates() (geology_type available) and apply_archetype()
+    // (KoppenZone and baseline agricultural_productivity set).
+    derive_soils_and_biomes(world, rng);
+
+    // Step 3e: Stage 7 — Special terrain features (WorldGen v0.18).
+    // Sets has_permafrost, has_fjord. Locks CrudeOil/NaturalGas accessibility for
+    // permafrost provinces. Applies fjord transit cost to Maritime links.
+    // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
+    detect_special_features(world);
+
     // Step 4: Markets from goods catalog
     GoodsCatalog catalog;
     if (!config.goods_directory.empty()) {
@@ -99,7 +112,12 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Store loaded recipes in WorldState for production module access.
     world.loaded_recipes = recipe_catalog.all();
 
-    // Step 7b: Stage 10 — World commentary (WorldGen v0.18).
+    // Step 7b: Stage 9 — Population attractiveness (WorldGen v0.18).
+    // Adjusts total_population from geology/climate attractiveness score (bounded ±40%).
+    // Runs after detect_special_features() so permafrost and island flags are set.
+    seed_population_attractiveness(world, rng);
+
+    // Step 7c: Stage 10 — World commentary (WorldGen v0.18).
     // Generates province_lore strings from tectonic context, climate, and archetype.
     // Runs last so all province fields are populated.
     generate_commentary(world, rng);
@@ -1550,6 +1568,330 @@ void WorldGenerator::detect_terrain_flags(WorldState& world) {
                 }
             }
         }
+    }
+}
+
+// ===========================================================================
+// Stage 5+6 — Soils and Biomes (simplified WorldGen v0.18 pass)
+// ===========================================================================
+
+void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG& rng) {
+    for (auto& prov : world.provinces) {
+        // ---- Stage 5: Soil fertility from geology_type ----
+        // Volcanic and alluvial soils are most productive; ancient shields are leached and thin.
+        float soil_multiplier;
+        switch (prov.geology_type) {
+            case GeologyType::VolcanicArc:
+                // Young volcanic (andisols): highest natural fertility; great CEC, mineralogy.
+                soil_multiplier = 1.10f + rng.next_float() * 0.20f;  // 1.10–1.30
+                break;
+            case GeologyType::AlluvialFill:
+                // River/lake sediment (fluvisols/mollisols): excellent; deep, water-retaining.
+                soil_multiplier = 1.15f + rng.next_float() * 0.20f;  // 1.15–1.35
+                break;
+            case GeologyType::BasalticPlateau:
+                // Flood basalt weathering (vertisols): moderate-good fertility; shrink-swell clays.
+                soil_multiplier = 1.00f + rng.next_float() * 0.15f;  // 1.00–1.15
+                break;
+            case GeologyType::CarbonateSequence:
+                // Terra rossa / rendzinas on limestone: moderate; drought-prone in dry climates.
+                soil_multiplier = 0.95f + rng.next_float() * 0.15f;  // 0.95–1.10
+                break;
+            case GeologyType::SedimentarySequence:
+                // Layered sediments (cambisols/luvisols): moderate, varies with grain size.
+                soil_multiplier = 0.90f + rng.next_float() * 0.15f;  // 0.90–1.05
+                break;
+            case GeologyType::MetamorphicCore:
+                // Thin regolith on hard metamorphics (leptosols): poor; low depth, low water.
+                soil_multiplier = 0.70f + rng.next_float() * 0.15f;  // 0.70–0.85
+                break;
+            case GeologyType::GraniteShield:
+                // Ancient granites (acrisols/podzols): nutrient-leached, acidic; poor.
+                soil_multiplier = 0.65f + rng.next_float() * 0.20f;  // 0.65–0.85
+                break;
+            case GeologyType::GreenstoneBelt:
+                // Archean greenstone (ultramafics): variable; nickel-toxic in places, moderate avg.
+                soil_multiplier = 0.75f + rng.next_float() * 0.20f;  // 0.75–0.95
+                break;
+        }
+
+        // Climate modifier on soil: arid zones dry out soils; tropical zones leach nutrients.
+        // Temperate humid zones are optimal.
+        float climate_soil_mod = 1.0f;
+        switch (prov.climate.koppen_zone) {
+            case KoppenZone::Cfb:
+            case KoppenZone::Cfa:
+            case KoppenZone::Dfb:
+            case KoppenZone::Dfa:
+                climate_soil_mod = 1.05f;  // temperate humid = best for agriculture
+                break;
+            case KoppenZone::Am:
+            case KoppenZone::Cfc:
+            case KoppenZone::Dfc:
+                climate_soil_mod = 0.95f;  // excess moisture leaches moderately
+                break;
+            case KoppenZone::Af:
+                climate_soil_mod = 0.85f;  // tropical forest: leached oxisols despite lush cover
+                break;
+            case KoppenZone::Aw:
+            case KoppenZone::BSh:
+            case KoppenZone::BSk:
+            case KoppenZone::Csa:
+            case KoppenZone::Csb:
+                climate_soil_mod = 0.90f;  // seasonal dryness limits nutrient cycling
+                break;
+            case KoppenZone::BWh:
+            case KoppenZone::BWk:
+                climate_soil_mod = 0.60f;  // desert: shallow, saline, minimal organic matter
+                break;
+            case KoppenZone::Dfd:
+            case KoppenZone::ET:
+                climate_soil_mod = 0.55f;  // very cold: slow decomposition, thin active layer
+                break;
+            case KoppenZone::EF:
+                climate_soil_mod = 0.30f;  // ice cap / permanent snow: no agriculture
+                break;
+            default:
+                climate_soil_mod = 1.0f;
+                break;
+        }
+
+        // Apply soil fertility to agricultural_productivity (bounded to [0.02, 1.0]).
+        prov.agricultural_productivity =
+            std::max(0.02f, std::min(1.0f,
+                prov.agricultural_productivity * soil_multiplier * climate_soil_mod));
+
+        // ---- Stage 6: Biomes — forest coverage from climate zone ----
+        // Adjust forest_coverage toward the climate-expected value. Use a blend: 40% climate
+        // expectation, 60% archetype baseline, so archetypes still dominate but geology/climate
+        // add meaningful variation.
+        float expected_forest;
+        switch (prov.climate.koppen_zone) {
+            case KoppenZone::Af:
+            case KoppenZone::Am:
+                expected_forest = 0.75f + rng.next_float() * 0.20f;  // tropical rainforest
+                break;
+            case KoppenZone::Aw:
+                expected_forest = 0.30f + rng.next_float() * 0.20f;  // tropical savanna
+                break;
+            case KoppenZone::BWh:
+            case KoppenZone::BWk:
+                expected_forest = 0.02f + rng.next_float() * 0.05f;  // desert
+                break;
+            case KoppenZone::BSh:
+            case KoppenZone::BSk:
+                expected_forest = 0.05f + rng.next_float() * 0.10f;  // steppe
+                break;
+            case KoppenZone::Csa:
+            case KoppenZone::Csb:
+                expected_forest = 0.20f + rng.next_float() * 0.20f;  // Mediterranean scrub
+                break;
+            case KoppenZone::Cfa:
+            case KoppenZone::Cfb:
+            case KoppenZone::Cwa:
+            case KoppenZone::Cfc:
+                expected_forest = 0.35f + rng.next_float() * 0.25f;  // temperate broadleaf
+                break;
+            case KoppenZone::Dfa:
+            case KoppenZone::Dfb:
+            case KoppenZone::Dfc:
+            case KoppenZone::Dfd:
+                expected_forest = 0.45f + rng.next_float() * 0.30f;  // boreal/continental
+                break;
+            case KoppenZone::ET:
+                expected_forest = 0.05f + rng.next_float() * 0.10f;  // tundra
+                break;
+            case KoppenZone::EF:
+                expected_forest = 0.0f;  // ice cap
+                break;
+            default:
+                expected_forest = 0.25f + rng.next_float() * 0.20f;
+                break;
+        }
+        // Blend: 60% archetype, 40% climate expectation.
+        prov.geography.forest_coverage =
+            std::max(0.0f, std::min(1.0f,
+                prov.geography.forest_coverage * 0.60f + expected_forest * 0.40f));
+
+        // ---- Stage 6: Refine drought/flood vulnerability from climate zone ----
+        // Override only if the archetype set a generic value; clamp to reasonable range.
+        float climate_drought;
+        float climate_flood;
+        switch (prov.climate.koppen_zone) {
+            case KoppenZone::BWh:
+                climate_drought = 0.75f + rng.next_float() * 0.20f;
+                climate_flood   = 0.02f + rng.next_float() * 0.05f;
+                break;
+            case KoppenZone::BWk:
+                climate_drought = 0.65f + rng.next_float() * 0.20f;
+                climate_flood   = 0.02f + rng.next_float() * 0.05f;
+                break;
+            case KoppenZone::BSh:
+            case KoppenZone::BSk:
+                climate_drought = 0.40f + rng.next_float() * 0.25f;
+                climate_flood   = 0.05f + rng.next_float() * 0.10f;
+                break;
+            case KoppenZone::Csa:
+            case KoppenZone::Csb:
+                climate_drought = 0.30f + rng.next_float() * 0.20f;
+                climate_flood   = 0.08f + rng.next_float() * 0.10f;
+                break;
+            case KoppenZone::Af:
+            case KoppenZone::Am:
+                climate_drought = 0.05f + rng.next_float() * 0.08f;
+                climate_flood   = 0.50f + rng.next_float() * 0.25f;
+                break;
+            case KoppenZone::Aw:
+                climate_drought = 0.25f + rng.next_float() * 0.20f;
+                climate_flood   = 0.20f + rng.next_float() * 0.20f;
+                break;
+            case KoppenZone::Dfa:
+            case KoppenZone::Dfb:
+                climate_drought = 0.15f + rng.next_float() * 0.15f;
+                climate_flood   = 0.15f + rng.next_float() * 0.15f;
+                break;
+            case KoppenZone::Dfc:
+            case KoppenZone::Dfd:
+            case KoppenZone::ET:
+                climate_drought = 0.08f + rng.next_float() * 0.10f;
+                climate_flood   = 0.10f + rng.next_float() * 0.12f;
+                break;
+            case KoppenZone::EF:
+                climate_drought = 0.02f;
+                climate_flood   = 0.02f;
+                break;
+            default:
+                climate_drought = prov.climate.drought_vulnerability;
+                climate_flood   = prov.climate.flood_vulnerability;
+                break;
+        }
+        // Blend 50/50 with existing archetype values to preserve scenario tuning.
+        prov.climate.drought_vulnerability =
+            std::max(0.0f, std::min(1.0f,
+                prov.climate.drought_vulnerability * 0.50f + climate_drought * 0.50f));
+        prov.climate.flood_vulnerability =
+            std::max(0.0f, std::min(1.0f,
+                prov.climate.flood_vulnerability * 0.50f + climate_flood * 0.50f));
+    }
+}
+
+// ===========================================================================
+// Stage 7 — Special terrain features (complete WorldGen v0.18 pass)
+// ===========================================================================
+
+void WorldGenerator::detect_special_features(WorldState& world) {
+    for (auto& prov : world.provinces) {
+        const float lat = prov.geography.latitude;
+        const KoppenZone kz = prov.climate.koppen_zone;
+
+        // ---- Permafrost ----
+        // Arctic Circle threshold (66.5°) or polar Koppen zones.
+        bool permafrost_condition =
+            (lat > 66.5f) ||
+            (kz == KoppenZone::ET) ||
+            (kz == KoppenZone::EF);
+
+        if (permafrost_condition) {
+            prov.has_permafrost = true;
+
+            // Lock CrudeOil and NaturalGas accessibility until arctic_drilling tech + thaw.
+            // This implements the ResourceDeposit::accessibility override described in the
+            // ResourceDeposit comment in geography.h.
+            for (auto& deposit : prov.deposits) {
+                if (deposit.type == ResourceType::CrudeOil ||
+                    deposit.type == ResourceType::NaturalGas) {
+                    deposit.accessibility = 0.0f;
+                }
+            }
+
+            // Permafrost severely limits agriculture (frozen ground, short growing season).
+            prov.agricultural_productivity =
+                std::max(0.02f, prov.agricultural_productivity * 0.40f);
+        }
+
+        // ---- Fjord ----
+        // High-relief glacially-carved coastline: requires coastal access, significant
+        // roughness, and northern latitude (glacial origin).
+        bool fjord_condition =
+            !prov.geography.is_landlocked &&
+            (prov.geography.coastal_length_km > 100.0f) &&
+            (prov.geography.terrain_roughness > 0.55f) &&
+            (lat > 50.0f);
+
+        if (fjord_condition) {
+            prov.has_fjord = true;
+
+            // Fjord channels are scenic but navigable only with care: raise Maritime link cost.
+            for (auto& link : prov.links) {
+                if (link.type == LinkType::Maritime) {
+                    link.transit_terrain_cost =
+                        std::min(1.0f, link.transit_terrain_cost + 0.15f);
+                }
+            }
+        }
+
+        // ---- Permafrost precludes karst ----
+        // Permafrost seals surface drainage; karst dissolution requires liquid water.
+        if (prov.has_permafrost) {
+            prov.has_karst = false;
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 9 — Population attractiveness (simplified WorldGen v0.18 pass)
+// ===========================================================================
+
+void WorldGenerator::seed_population_attractiveness(WorldState& world, DeterministicRNG& rng) {
+    for (auto& prov : world.provinces) {
+        // Compute an attractiveness score in [0, 1].
+        // Baseline 0.5 = no change. Above 0.5 = population bonus; below = penalty.
+        float score = 0.50f;
+
+        // Fertile soils and arable land attract farmers and settlers.
+        score += prov.agricultural_productivity * 0.12f;
+
+        // High infrastructure already signals a developed, attractive province.
+        score += prov.infrastructure_rating * 0.12f;
+
+        // River access: historically the primary settlement driver.
+        score += prov.geography.river_access * 0.08f;
+
+        // Arable fraction: direct land availability.
+        score += prov.geography.arable_land_fraction * 0.06f;
+
+        // Active tectonic hazards (earthquakes, eruptions) deter dense settlement.
+        score -= prov.tectonic_stress * 0.12f;
+
+        // Drought vulnerability: arid regions hold fewer people sustainably.
+        score -= prov.climate.drought_vulnerability * 0.10f;
+
+        // Permafrost: very hostile to settlement; small populations in resource outposts only.
+        if (prov.has_permafrost) {
+            score -= 0.20f;
+        }
+
+        // Island isolation: historically isolated; limited carrying capacity.
+        if (prov.island_isolation) {
+            score -= 0.08f;
+        }
+
+        // Clamp score to a valid range.
+        score = std::max(0.10f, std::min(0.90f, score));
+
+        // Map score to a population multiplier centered on 1.0 at score = 0.5.
+        // score 0.5 → multiplier 1.0 (no change from archetype baseline)
+        // score 0.1 → multiplier 0.68
+        // score 0.9 → multiplier 1.32
+        float multiplier = 0.60f + score * 0.80f;
+
+        // Add small RNG variation (±5%) so identical-archetype provinces diverge slightly.
+        multiplier *= (0.95f + rng.next_float() * 0.10f);
+
+        // Apply, keeping population in a meaningful range.
+        uint32_t new_pop = static_cast<uint32_t>(
+            static_cast<float>(prov.demographics.total_population) * multiplier + 0.5f);
+        prov.demographics.total_population = std::max(10000u, new_pop);
     }
 }
 

@@ -115,6 +115,26 @@ class WorldGenerator {
     // Must run after create_province_links() so ProvinceLink vectors are populated.
     static void detect_terrain_flags(WorldState& world);
 
+    // Stage 5+6 — Soils and Biomes (WorldGen v0.18; simplified pass).
+    // Adjusts agricultural_productivity from geology_type + KoppenZone soil fertility model.
+    // Refines forest_coverage, drought_vulnerability, flood_vulnerability from climate zone.
+    // Must run after generate_plates() (reads geology_type) and apply_archetype() (reads
+    // koppen_zone and initializes agricultural_productivity / forest_coverage baselines).
+    static void derive_soils_and_biomes(WorldState& world, DeterministicRNG& rng);
+
+    // Stage 7 — Special terrain features (WorldGen v0.18; complete pass).
+    // Sets has_permafrost (latitude > 66.5 or ET/EF koppen) and has_fjord (coastal high-relief
+    // high-latitude). Applies permafrost accessibility lock to CrudeOil / NaturalGas deposits.
+    // Must run after derive_soils_and_biomes() and create_province_links().
+    static void detect_special_features(WorldState& world);
+
+    // Stage 9 — Population attractiveness (WorldGen v0.18; simplified pass).
+    // Re-weights total_population from a settlement attractiveness score derived from soil
+    // fertility, infrastructure, climate stress, and hazard factors. Bounded ±40% of archetype
+    // baseline so archetypes remain dominant while geology/climate add meaningful variation.
+    // Must run after detect_special_features() (reads has_permafrost).
+    static void seed_population_attractiveness(WorldState& world, DeterministicRNG& rng);
+
     // Stage 10 — World commentary (WorldGen v0.18).
     // Generates province_lore strings from tectonic context, climate, and archetype.
     // Must run after generate_plates() and create_provinces() (reads all province fields).
