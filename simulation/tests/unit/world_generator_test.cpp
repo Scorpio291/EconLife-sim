@@ -14,6 +14,7 @@
 #include <string>
 
 #include <h3api.h>
+#include <nlohmann/json.hpp>
 
 #include "core/world_gen/goods_catalog.h"
 
@@ -1177,4 +1178,235 @@ TEST_CASE("WorldGenerator - economic geography is deterministic",
         CHECK(w1.provinces[i].conditions.formal_employment_rate ==
               w2.provinces[i].conditions.formal_employment_rate);
     }
+}
+
+// ===========================================================================
+// Stage 8 — era_unlock field on ResourceDeposit
+// ===========================================================================
+
+TEST_CASE("WorldGenerator - all V1 deposits have era_unlock == 1",
+          "[world_gen][era_unlock]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    uint32_t total_deposits = 0;
+    for (const auto& prov : world.provinces) {
+        for (const auto& d : prov.deposits) {
+            CHECK(d.era_unlock == 1);
+            ++total_deposits;
+        }
+    }
+    // Sanity: every province has at least a few deposits.
+    CHECK(total_deposits >= world.provinces.size() * 3);
+}
+
+TEST_CASE("WorldGenerator - era_unlock field is preserved across seeds",
+          "[world_gen][era_unlock][determinism]") {
+    for (uint64_t seed : {100u, 200u, 300u}) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto w1 = WorldGenerator::generate(config);
+        auto w2 = WorldGenerator::generate(config);
+
+        REQUIRE(w1.provinces.size() == w2.provinces.size());
+        for (size_t i = 0; i < w1.provinces.size(); ++i) {
+            REQUIRE(w1.provinces[i].deposits.size() == w2.provinces[i].deposits.size());
+            for (size_t d = 0; d < w1.provinces[i].deposits.size(); ++d) {
+                CHECK(w1.provinces[i].deposits[d].era_unlock ==
+                      w2.provinces[i].deposits[d].era_unlock);
+            }
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 11 — World JSON output
+// ===========================================================================
+
+TEST_CASE("WorldGenerator - to_world_json produces valid JSON with all provinces",
+          "[world_gen][json_output]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto j = WorldGenerator::to_world_json(world);
+
+    // Top-level keys.
+    CHECK(j.contains("schema_version"));
+    CHECK(j.contains("world_seed"));
+    CHECK(j.contains("current_tick"));
+    CHECK(j.contains("nations"));
+    CHECK(j.contains("provinces"));
+    CHECK(j.contains("regions"));
+
+    CHECK(j["world_seed"].get<uint64_t>() == 42);
+    CHECK(j["current_tick"].get<uint32_t>() == 0);
+
+    // Province count matches.
+    REQUIRE(j["provinces"].is_array());
+    CHECK(j["provinces"].size() == world.provinces.size());
+}
+
+TEST_CASE("WorldGenerator - JSON province has all required fields",
+          "[world_gen][json_output]") {
+    WorldGeneratorConfig config{};
+    config.seed = 77;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto j = WorldGenerator::to_world_json(world);
+    REQUIRE(!j["provinces"].empty());
+
+    const auto& p = j["provinces"][0];
+    // Identity
+    CHECK(p.contains("id"));
+    CHECK(p.contains("h3_index"));
+    CHECK(p.contains("fictional_name"));
+    CHECK(p.contains("archetype"));
+    CHECK(p.contains("lod_level"));
+
+    // Geography sub-object
+    REQUIRE(p.contains("geography"));
+    CHECK(p["geography"].contains("latitude"));
+    CHECK(p["geography"].contains("longitude"));
+    CHECK(p["geography"].contains("elevation_avg_m"));
+    CHECK(p["geography"].contains("terrain_roughness"));
+    CHECK(p["geography"].contains("area_km2"));
+
+    // Climate sub-object
+    REQUIRE(p.contains("climate"));
+    CHECK(p["climate"].contains("koppen_zone"));
+    CHECK(p["climate"].contains("temperature_avg_c"));
+    CHECK(p["climate"].contains("precipitation_mm"));
+
+    // Tectonic sub-object
+    REQUIRE(p.contains("tectonic"));
+    CHECK(p["tectonic"].contains("tectonic_context"));
+    CHECK(p["tectonic"].contains("geology_type"));
+    CHECK(p["tectonic"].contains("tectonic_stress"));
+
+    // Deposits array
+    REQUIRE(p.contains("deposits"));
+    REQUIRE(p["deposits"].is_array());
+    if (!p["deposits"].empty()) {
+        const auto& d = p["deposits"][0];
+        CHECK(d.contains("type"));
+        CHECK(d.contains("quantity"));
+        CHECK(d.contains("era_unlock"));
+    }
+
+    // Demographics, economy, community, political, conditions
+    CHECK(p.contains("demographics"));
+    CHECK(p.contains("infrastructure_rating"));
+    CHECK(p.contains("trade_openness"));
+    CHECK(p.contains("community"));
+    CHECK(p.contains("political"));
+    CHECK(p.contains("conditions"));
+    CHECK(p.contains("links"));
+
+    // Terrain flags
+    CHECK(p.contains("is_mountain_pass"));
+    CHECK(p.contains("island_isolation"));
+    CHECK(p.contains("has_permafrost"));
+    CHECK(p.contains("has_fjord"));
+    CHECK(p.contains("has_karst"));
+}
+
+TEST_CASE("WorldGenerator - write_world_json creates file on disk",
+          "[world_gen][json_output]") {
+    WorldGeneratorConfig config{};
+    config.seed = 99;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    std::string tmp_path = "/tmp/econlife_test_world_" +
+                           std::to_string(config.seed) + ".json";
+    WorldGenerator::write_world_json(world, tmp_path);
+
+    // File should exist and be valid JSON.
+    std::ifstream in(tmp_path);
+    REQUIRE(in.is_open());
+    auto loaded = nlohmann::json::parse(in);
+    in.close();
+
+    CHECK(loaded["world_seed"].get<uint64_t>() == 99);
+    CHECK(loaded["provinces"].size() == world.provinces.size());
+
+    // Cleanup.
+    fs::remove(tmp_path);
+}
+
+TEST_CASE("WorldGenerator - JSON output is deterministic",
+          "[world_gen][json_output][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 55555;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto w1 = WorldGenerator::generate(config);
+    auto w2 = WorldGenerator::generate(config);
+
+    auto j1 = WorldGenerator::to_world_json(w1);
+    auto j2 = WorldGenerator::to_world_json(w2);
+
+    // Serialized JSON should be byte-identical.
+    CHECK(j1.dump() == j2.dump());
+}
+
+TEST_CASE("WorldGenerator - JSON nation fields are present",
+          "[world_gen][json_output]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto j = WorldGenerator::to_world_json(world);
+
+    REQUIRE(j["nations"].is_array());
+    REQUIRE(!j["nations"].empty());
+
+    const auto& n = j["nations"][0];
+    CHECK(n.contains("id"));
+    CHECK(n.contains("name"));
+    CHECK(n.contains("government_type"));
+    CHECK(n.contains("province_ids"));
+    CHECK(n.contains("political_cycle"));
+}
+
+TEST_CASE("WorldGenerator - output_world_file config writes during generate",
+          "[world_gen][json_output]") {
+    std::string tmp_path = "/tmp/econlife_test_auto_output.json";
+    fs::remove(tmp_path);  // clean up any prior run
+
+    WorldGeneratorConfig config{};
+    config.seed = 12345;
+    config.province_count = 6;
+    config.npc_count = 50;
+    config.output_world_file = tmp_path;
+
+    auto world = WorldGenerator::generate(config);
+
+    // File should have been created automatically.
+    std::ifstream in(tmp_path);
+    REQUIRE(in.is_open());
+    auto loaded = nlohmann::json::parse(in);
+    in.close();
+
+    CHECK(loaded["world_seed"].get<uint64_t>() == 12345);
+    CHECK(loaded["provinces"].size() == world.provinces.size());
+
+    fs::remove(tmp_path);
 }

@@ -9,6 +9,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+
+#include <nlohmann/json.hpp>
 
 #include "core/world_gen/h3_utils.h"
 
@@ -143,6 +146,11 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
         tech_catalog.load_ceilings_csv(ceilings_path);
     }
     seed_technology(world, rng, tech_catalog, config);
+
+    // Step 9: Stage 11 — Output world.json if path configured.
+    if (!config.output_world_file.empty()) {
+        write_world_json(world, config.output_world_file);
+    }
 
     return world;
 }
@@ -487,7 +495,8 @@ void WorldGenerator::seed_resource_deposits(Province& province, ProvinceArchetyp
                                             DeterministicRNG& rng, float richness) {
     uint32_t deposit_id_base = province.id * 100;
 
-    auto add_deposit = [&](ResourceType type, float qty_base, float quality_base) {
+    auto add_deposit = [&](ResourceType type, float qty_base, float quality_base,
+                            uint8_t era = 1) {
         ResourceDeposit d{};
         d.id = deposit_id_base++;
         d.type = type;
@@ -497,6 +506,7 @@ void WorldGenerator::seed_resource_deposits(Province& province, ProvinceArchetyp
         d.accessibility = 0.3f + rng.next_float() * 0.5f;
         d.depletion_rate = 0.0001f + rng.next_float() * 0.0002f;
         d.quantity_remaining = d.quantity;
+        d.era_unlock = era;
         province.deposits.push_back(d);
     };
 
@@ -1445,7 +1455,8 @@ void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG
                                              float richness) {
     uint32_t deposit_id_base = province.id * 100 + 50;  // offset to avoid collision with archetype IDs
 
-    auto add = [&](ResourceType type, float qty_base, float quality_base) {
+    auto add = [&](ResourceType type, float qty_base, float quality_base,
+                    uint8_t era = 1) {
         ResourceDeposit d{};
         d.id = deposit_id_base++;
         d.type = type;
@@ -1455,6 +1466,7 @@ void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG
         d.accessibility = 0.3f + rng.next_float() * 0.5f;
         d.depletion_rate = 0.0001f + rng.next_float() * 0.0002f;
         d.quantity_remaining = d.quantity;
+        d.era_unlock = era;
         province.deposits.push_back(d);
     };
 
@@ -2159,6 +2171,341 @@ void WorldGenerator::generate_commentary(WorldState& world, DeterministicRNG& rn
 
         prov.province_lore = std::string(geo) + " " + climate + " " + econ;
     }
+}
+
+// ===========================================================================
+// Stage 11 — World JSON output (world.json serialization)
+// ===========================================================================
+
+// Enum-to-string helpers (inline anonymous namespace).
+namespace {
+
+static const char* tectonic_context_str(TectonicContext tc) {
+    switch (tc) {
+        case TectonicContext::Subduction:          return "Subduction";
+        case TectonicContext::ContinentalCollision: return "ContinentalCollision";
+        case TectonicContext::RiftZone:            return "RiftZone";
+        case TectonicContext::TransformFault:      return "TransformFault";
+        case TectonicContext::HotSpot:             return "HotSpot";
+        case TectonicContext::PassiveMargin:       return "PassiveMargin";
+        case TectonicContext::CratonInterior:      return "CratonInterior";
+        case TectonicContext::SedimentaryBasin:    return "SedimentaryBasin";
+    }
+    return "Unknown";
+}
+
+static const char* rock_type_str(RockType rt) {
+    switch (rt) {
+        case RockType::Igneous:     return "Igneous";
+        case RockType::Sedimentary: return "Sedimentary";
+        case RockType::Metamorphic: return "Metamorphic";
+        case RockType::Mixed:       return "Mixed";
+    }
+    return "Unknown";
+}
+
+static const char* geology_type_str(GeologyType gt) {
+    switch (gt) {
+        case GeologyType::VolcanicArc:        return "VolcanicArc";
+        case GeologyType::GraniteShield:      return "GraniteShield";
+        case GeologyType::GreenstoneBelt:     return "GreenstoneBelt";
+        case GeologyType::SedimentarySequence: return "SedimentarySequence";
+        case GeologyType::CarbonateSequence:  return "CarbonateSequence";
+        case GeologyType::MetamorphicCore:    return "MetamorphicCore";
+        case GeologyType::BasalticPlateau:    return "BasalticPlateau";
+        case GeologyType::AlluvialFill:       return "AlluvialFill";
+    }
+    return "Unknown";
+}
+
+static const char* koppen_zone_str(KoppenZone kz) {
+    switch (kz) {
+        case KoppenZone::Af:  return "Af";
+        case KoppenZone::Am:  return "Am";
+        case KoppenZone::Aw:  return "Aw";
+        case KoppenZone::BWh: return "BWh";
+        case KoppenZone::BWk: return "BWk";
+        case KoppenZone::BSh: return "BSh";
+        case KoppenZone::BSk: return "BSk";
+        case KoppenZone::Cfa: return "Cfa";
+        case KoppenZone::Cfb: return "Cfb";
+        case KoppenZone::Cfc: return "Cfc";
+        case KoppenZone::Csa: return "Csa";
+        case KoppenZone::Csb: return "Csb";
+        case KoppenZone::Cwa: return "Cwa";
+        case KoppenZone::Dfa: return "Dfa";
+        case KoppenZone::Dfb: return "Dfb";
+        case KoppenZone::Dfc: return "Dfc";
+        case KoppenZone::Dfd: return "Dfd";
+        case KoppenZone::ET:  return "ET";
+        case KoppenZone::EF:  return "EF";
+    }
+    return "Unknown";
+}
+
+static const char* resource_type_str(ResourceType rt) {
+    switch (rt) {
+        case ResourceType::IronOre:        return "IronOre";
+        case ResourceType::Copper:         return "Copper";
+        case ResourceType::Bauxite:        return "Bauxite";
+        case ResourceType::Lithium:        return "Lithium";
+        case ResourceType::Coal:           return "Coal";
+        case ResourceType::CrudeOil:       return "CrudeOil";
+        case ResourceType::NaturalGas:     return "NaturalGas";
+        case ResourceType::LimestoneSilica: return "LimestoneSilica";
+        case ResourceType::Wheat:          return "Wheat";
+        case ResourceType::Corn:           return "Corn";
+        case ResourceType::Soybeans:       return "Soybeans";
+        case ResourceType::Cotton:         return "Cotton";
+        case ResourceType::Timber:         return "Timber";
+        case ResourceType::Fish:           return "Fish";
+        case ResourceType::SolarPotential: return "SolarPotential";
+        case ResourceType::WindPotential:  return "WindPotential";
+        case ResourceType::Gold:           return "Gold";
+        case ResourceType::Geothermal:     return "Geothermal";
+        case ResourceType::Uranium:        return "Uranium";
+        case ResourceType::Potash:         return "Potash";
+    }
+    return "Unknown";
+}
+
+static const char* link_type_str(LinkType lt) {
+    switch (lt) {
+        case LinkType::Land:     return "Land";
+        case LinkType::Maritime: return "Maritime";
+        case LinkType::River:    return "River";
+    }
+    return "Unknown";
+}
+
+static const char* lod_str(SimulationLOD lod) {
+    switch (lod) {
+        case SimulationLOD::full:        return "full";
+        case SimulationLOD::simplified:  return "simplified";
+        case SimulationLOD::statistical: return "statistical";
+    }
+    return "unknown";
+}
+
+static const char* government_type_str(GovernmentType gt) {
+    switch (gt) {
+        case GovernmentType::Democracy:    return "Democracy";
+        case GovernmentType::Autocracy:    return "Autocracy";
+        case GovernmentType::Federation:   return "Federation";
+        case GovernmentType::FailedState:  return "FailedState";
+    }
+    return "Unknown";
+}
+
+static const char* archetype_str(uint8_t idx) {
+    static const char* names[] = {
+        "industrial_hub", "agricultural", "resource_rich",
+        "coastal_trade", "financial_center", "mixed_economy",
+    };
+    return idx < 6 ? names[idx] : "mixed_economy";
+}
+
+}  // anonymous namespace
+
+nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
+    using json = nlohmann::json;
+    json root;
+
+    root["schema_version"] = world.current_schema_version;
+    root["world_seed"] = world.world_seed;
+    root["current_tick"] = world.current_tick;
+
+    // --- Nations ---
+    json nations_arr = json::array();
+    for (const auto& nation : world.nations) {
+        json n;
+        n["id"] = nation.id;
+        n["name"] = nation.name;
+        n["currency_code"] = nation.currency_code;
+        n["government_type"] = government_type_str(nation.government_type);
+        n["province_ids"] = nation.province_ids;
+        n["corporate_tax_rate"] = nation.corporate_tax_rate;
+        n["income_tax_rate_top_bracket"] = nation.income_tax_rate_top_bracket;
+        n["trade_balance_fraction"] = nation.trade_balance_fraction;
+        n["inflation_rate"] = nation.inflation_rate;
+        n["credit_rating"] = nation.credit_rating;
+        n["political_cycle"] = {
+            {"current_administration_tick", nation.political_cycle.current_administration_tick},
+            {"national_approval", nation.political_cycle.national_approval},
+            {"election_campaign_active", nation.political_cycle.election_campaign_active},
+            {"next_election_tick", nation.political_cycle.next_election_tick},
+        };
+        nations_arr.push_back(std::move(n));
+    }
+    root["nations"] = std::move(nations_arr);
+
+    // --- Provinces ---
+    json provinces_arr = json::array();
+    for (const auto& prov : world.provinces) {
+        json p;
+        p["id"] = prov.id;
+        p["h3_index"] = prov.h3_index;
+        p["is_pentagon"] = prov.is_pentagon;
+        p["neighbor_count"] = prov.neighbor_count;
+        p["fictional_name"] = prov.fictional_name;
+        p["archetype"] = archetype_str(prov.province_archetype_index);
+        p["province_archetype_index"] = prov.province_archetype_index;
+        p["region_id"] = prov.region_id;
+        p["nation_id"] = prov.nation_id;
+        p["lod_level"] = lod_str(prov.lod_level);
+
+        // Geography
+        p["geography"] = {
+            {"latitude", prov.geography.latitude},
+            {"longitude", prov.geography.longitude},
+            {"elevation_avg_m", prov.geography.elevation_avg_m},
+            {"terrain_roughness", prov.geography.terrain_roughness},
+            {"forest_coverage", prov.geography.forest_coverage},
+            {"arable_land_fraction", prov.geography.arable_land_fraction},
+            {"coastal_length_km", prov.geography.coastal_length_km},
+            {"is_landlocked", prov.geography.is_landlocked},
+            {"port_capacity", prov.geography.port_capacity},
+            {"river_access", prov.geography.river_access},
+            {"area_km2", prov.geography.area_km2},
+        };
+
+        // Climate
+        p["climate"] = {
+            {"koppen_zone", koppen_zone_str(prov.climate.koppen_zone)},
+            {"temperature_avg_c", prov.climate.temperature_avg_c},
+            {"temperature_min_c", prov.climate.temperature_min_c},
+            {"temperature_max_c", prov.climate.temperature_max_c},
+            {"precipitation_mm", prov.climate.precipitation_mm},
+            {"precipitation_seasonality", prov.climate.precipitation_seasonality},
+            {"drought_vulnerability", prov.climate.drought_vulnerability},
+            {"flood_vulnerability", prov.climate.flood_vulnerability},
+            {"wildfire_vulnerability", prov.climate.wildfire_vulnerability},
+            {"climate_stress_current", prov.climate.climate_stress_current},
+        };
+
+        // Tectonic geology
+        p["tectonic"] = {
+            {"tectonic_context", tectonic_context_str(prov.tectonic_context)},
+            {"rock_type", rock_type_str(prov.rock_type)},
+            {"geology_type", geology_type_str(prov.geology_type)},
+            {"tectonic_stress", prov.tectonic_stress},
+            {"plate_age", prov.plate_age},
+        };
+
+        // Terrain flags and special features
+        p["is_mountain_pass"] = prov.is_mountain_pass;
+        p["island_isolation"] = prov.island_isolation;
+        p["has_permafrost"] = prov.has_permafrost;
+        p["has_fjord"] = prov.has_fjord;
+        p["has_karst"] = prov.has_karst;
+
+        // Resource deposits
+        json deposits_arr = json::array();
+        for (const auto& d : prov.deposits) {
+            deposits_arr.push_back({
+                {"id", d.id},
+                {"type", resource_type_str(d.type)},
+                {"quantity", d.quantity},
+                {"quality", d.quality},
+                {"depth", d.depth},
+                {"accessibility", d.accessibility},
+                {"depletion_rate", d.depletion_rate},
+                {"quantity_remaining", d.quantity_remaining},
+                {"era_unlock", d.era_unlock},
+            });
+        }
+        p["deposits"] = std::move(deposits_arr);
+
+        // Demographics
+        p["demographics"] = {
+            {"total_population", prov.demographics.total_population},
+            {"median_age", prov.demographics.median_age},
+            {"education_level", prov.demographics.education_level},
+            {"income_low_fraction", prov.demographics.income_low_fraction},
+            {"income_middle_fraction", prov.demographics.income_middle_fraction},
+            {"income_high_fraction", prov.demographics.income_high_fraction},
+            {"political_lean", prov.demographics.political_lean},
+        };
+
+        // Economy
+        p["infrastructure_rating"] = prov.infrastructure_rating;
+        p["agricultural_productivity"] = prov.agricultural_productivity;
+        p["energy_cost_baseline"] = prov.energy_cost_baseline;
+        p["trade_openness"] = prov.trade_openness;
+        p["historical_trauma_index"] = prov.historical_trauma_index;
+
+        // Community
+        p["community"] = {
+            {"cohesion", prov.community.cohesion},
+            {"grievance_level", prov.community.grievance_level},
+            {"institutional_trust", prov.community.institutional_trust},
+            {"resource_access", prov.community.resource_access},
+            {"response_stage", prov.community.response_stage},
+        };
+
+        // Political
+        p["political"] = {
+            {"governing_office_id", prov.political.governing_office_id},
+            {"approval_rating", prov.political.approval_rating},
+            {"election_due_tick", prov.political.election_due_tick},
+            {"corruption_index", prov.political.corruption_index},
+        };
+
+        // Conditions
+        p["conditions"] = {
+            {"stability_score", prov.conditions.stability_score},
+            {"inequality_index", prov.conditions.inequality_index},
+            {"crime_rate", prov.conditions.crime_rate},
+            {"addiction_rate", prov.conditions.addiction_rate},
+            {"criminal_dominance_index", prov.conditions.criminal_dominance_index},
+            {"formal_employment_rate", prov.conditions.formal_employment_rate},
+            {"regulatory_compliance_index", prov.conditions.regulatory_compliance_index},
+            {"drought_modifier", prov.conditions.drought_modifier},
+            {"flood_modifier", prov.conditions.flood_modifier},
+        };
+
+        // Province links
+        json links_arr = json::array();
+        for (const auto& link : prov.links) {
+            links_arr.push_back({
+                {"neighbor_h3", link.neighbor_h3},
+                {"type", link_type_str(link.type)},
+                {"shared_border_km", link.shared_border_km},
+                {"transit_terrain_cost", link.transit_terrain_cost},
+                {"infrastructure_bonus", link.infrastructure_bonus},
+            });
+        }
+        p["links"] = std::move(links_arr);
+
+        // Commentary
+        if (!prov.province_lore.empty()) {
+            p["province_lore"] = prov.province_lore;
+        }
+
+        provinces_arr.push_back(std::move(p));
+    }
+    root["provinces"] = std::move(provinces_arr);
+
+    // --- Regions ---
+    json regions_arr = json::array();
+    for (const auto& region : world.region_groups) {
+        regions_arr.push_back({
+            {"id", region.id},
+            {"fictional_name", region.fictional_name},
+            {"nation_id", region.nation_id},
+            {"province_ids", region.province_ids},
+        });
+    }
+    root["regions"] = std::move(regions_arr);
+
+    return root;
+}
+
+void WorldGenerator::write_world_json(const WorldState& world, const std::string& path) {
+    auto j = to_world_json(world);
+    std::ofstream out(path);
+    if (!out.is_open()) return;
+    out << j.dump(2);
 }
 
 }  // namespace econlife
