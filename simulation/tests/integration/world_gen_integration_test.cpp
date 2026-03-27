@@ -16,7 +16,7 @@
 #include <filesystem>
 #include <set>
 
-#include <h3/h3api.h>
+#include <h3api.h>
 
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
@@ -367,7 +367,7 @@ TEST_CASE("WorldGenerator H3: valid cells and province map survive 365 ticks",
     REQUIRE(world.h3_province_map.size() == world.provinces.size());
     for (const auto& p : world.provinces) {
         REQUIRE(p.h3_index != 0);
-        REQUIRE(H3_IS_VALID(p.h3_index));
+        REQUIRE(isValidCell(p.h3_index) != 0);
         REQUIRE(getResolution(p.h3_index) == 4);
         REQUIRE(p.neighbor_count == (p.is_pentagon ? 5 : 6));
         for (const auto& link : p.links) {

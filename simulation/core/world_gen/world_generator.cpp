@@ -58,6 +58,18 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Step 3: Province links (adjacency graph)
     create_province_links(world);
 
+    // Step 3b: Stage 1 — Tectonic context (WorldGen v0.18).
+    // Runs after province geography is set so lat/lng/elevation are available.
+    // Assigns tectonic_context, rock_type, geology_type, tectonic_stress, plate_age,
+    // and seeds tectonic-context-specific resource deposits.
+    generate_plates(world, rng, config);
+
+    // Step 3c: Stage 2 derived — Terrain flag detection (WorldGen v0.18).
+    // Detects mountain passes (chokepoints) and island isolation.
+    // Runs after province links are created AND tectonic context is assigned
+    // (uses elevation which is set in apply_archetype).
+    detect_terrain_flags(world);
+
     // Step 4: Markets from goods catalog
     GoodsCatalog catalog;
     if (!config.goods_directory.empty()) {
@@ -86,6 +98,11 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
 
     // Store loaded recipes in WorldState for production module access.
     world.loaded_recipes = recipe_catalog.all();
+
+    // Step 7b: Stage 10 — World commentary (WorldGen v0.18).
+    // Generates province_lore strings from tectonic context, climate, and archetype.
+    // Runs last so all province fields are populated.
+    generate_commentary(world, rng);
 
     // Step 8: Technology — load catalog and seed initial holdings.
     TechnologyCatalog tech_catalog;
@@ -416,6 +433,7 @@ void WorldGenerator::create_provinces(WorldState& world, DeterministicRNG& rng,
         province.cohort_stats = nullptr;
 
         ProvinceArchetype archetype = assign_archetype(rng, p, config.province_count);
+        province.province_archetype_index = static_cast<uint8_t>(archetype);
 
         // Generate fictional name.
         uint32_t suffix_idx = rng.next_uint(static_cast<uint32_t>(
@@ -1169,6 +1187,534 @@ void WorldGenerator::seed_technology(WorldState& world, DeterministicRNG& rng,
 
             biz.actor_tech_state.holdings[node->node_key] = std::move(holding);
         }
+    }
+}
+
+// ===========================================================================
+// Stage 1 — Tectonic plate generation and context classification
+// ===========================================================================
+
+void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
+                                     const WorldGeneratorConfig& config) {
+    if (world.provinces.empty()) return;
+
+    // Plate count: 3 for V1 (6 provinces → ~2 per plate); scale for larger worlds.
+    const uint32_t plate_count =
+        std::max(2u, std::min(5u, static_cast<uint32_t>(world.provinces.size()) / 2u));
+
+    struct TectonicPlate {
+        float center_lat;
+        float center_lng;
+        bool is_oceanic;
+        float age;  // 1.0 (young crust) to 4.5 (ancient shield)
+    };
+
+    // Find province lat/lng extent to spread plates across the world region.
+    float min_lat = 90.0f, max_lat = -90.0f;
+    float min_lng = 180.0f, max_lng = -180.0f;
+    for (const auto& p : world.provinces) {
+        min_lat = std::min(min_lat, p.geography.latitude);
+        max_lat = std::max(max_lat, p.geography.latitude);
+        min_lng = std::min(min_lng, p.geography.longitude);
+        max_lng = std::max(max_lng, p.geography.longitude);
+    }
+    float lat_span = std::max(max_lat - min_lat, 8.0f);
+    float lng_span = std::max(max_lng - min_lng, 8.0f);
+
+    std::vector<TectonicPlate> plates;
+    plates.reserve(plate_count);
+    for (uint32_t i = 0; i < plate_count; ++i) {
+        TectonicPlate pl;
+        // Distribute centers across the lat range with random lng placement.
+        float lat_fraction = (static_cast<float>(i) + 0.5f) / static_cast<float>(plate_count);
+        pl.center_lat = min_lat + lat_span * lat_fraction +
+                        (rng.next_float() - 0.5f) * lat_span * 0.25f;
+        pl.center_lng = min_lng + lng_span * rng.next_float();
+        pl.is_oceanic = (rng.next_uint(4) == 0);  // 25% oceanic; most land provinces are continental
+        pl.age = 1.0f + rng.next_float() * 3.5f;  // 1.0–4.5 Gyr
+        plates.push_back(pl);
+    }
+
+    // Assign each province to its nearest plate (Voronoi).
+    std::vector<uint32_t> province_plate(world.provinces.size(), 0);
+    for (uint32_t p = 0; p < static_cast<uint32_t>(world.provinces.size()); ++p) {
+        float best_dist_sq = std::numeric_limits<float>::max();
+        for (uint32_t pl = 0; pl < plate_count; ++pl) {
+            float dlat = world.provinces[p].geography.latitude - plates[pl].center_lat;
+            float dlng = world.provinces[p].geography.longitude - plates[pl].center_lng;
+            float dist_sq = dlat * dlat + dlng * dlng;
+            if (dist_sq < best_dist_sq) {
+                best_dist_sq = dist_sq;
+                province_plate[p] = pl;
+            }
+        }
+    }
+
+    // Classify tectonic context for each province.
+    for (uint32_t p = 0; p < static_cast<uint32_t>(world.provinces.size()); ++p) {
+        auto& prov = world.provinces[p];
+        uint32_t my_plate = province_plate[p];
+        bool assigned = false;
+
+        for (const auto& link : prov.links) {
+            auto it = world.h3_province_map.find(link.neighbor_h3);
+            if (it == world.h3_province_map.end()) continue;
+            uint32_t nb_idx = it->second;
+            if (province_plate[nb_idx] == my_plate) continue;
+
+            // This province is on a plate boundary.
+            bool i_am_oceanic = plates[my_plate].is_oceanic;
+            bool nb_is_oceanic = plates[province_plate[nb_idx]].is_oceanic;
+
+            if (i_am_oceanic && !nb_is_oceanic) {
+                // I'm the subducting oceanic plate.
+                prov.tectonic_context = TectonicContext::Subduction;
+            } else if (!i_am_oceanic && nb_is_oceanic) {
+                // I'm the overriding continental plate above the subduction zone.
+                prov.tectonic_context = TectonicContext::Subduction;
+            } else if (!i_am_oceanic && !nb_is_oceanic) {
+                // Continental-continental boundary.
+                float age_diff =
+                    std::abs(plates[my_plate].age - plates[province_plate[nb_idx]].age);
+                if (age_diff > 1.5f) {
+                    // Very different ages → collision (one plate much older)
+                    prov.tectonic_context = TectonicContext::ContinentalCollision;
+                } else if (rng.next_uint(4) == 0) {
+                    prov.tectonic_context = TectonicContext::TransformFault;
+                } else {
+                    prov.tectonic_context = TectonicContext::ContinentalCollision;
+                }
+            } else {
+                // Oceanic-oceanic boundary.
+                prov.tectonic_context = rng.next_uint(3) == 0 ? TectonicContext::HotSpot
+                                                               : TectonicContext::TransformFault;
+            }
+            assigned = true;
+            break;  // First cross-plate neighbor determines context.
+        }
+
+        if (!assigned) {
+            // Interior province (no cross-plate neighbor within adjacency graph).
+            if (plates[my_plate].is_oceanic) {
+                prov.tectonic_context = TectonicContext::PassiveMargin;
+            } else if (plates[my_plate].age > 3.0f) {
+                // Ancient stable continental interior.
+                prov.tectonic_context = rng.next_uint(4) == 0 ? TectonicContext::SedimentaryBasin
+                                                               : TectonicContext::CratonInterior;
+            } else {
+                // Younger continental interior — often sedimentary basin.
+                prov.tectonic_context = rng.next_uint(3) == 0 ? TectonicContext::CratonInterior
+                                                               : TectonicContext::SedimentaryBasin;
+            }
+        }
+
+        // Rift zones are rare: override some TransformFault or SedimentaryBasin provinces.
+        if (!assigned && rng.next_uint(6) == 0) {
+            prov.tectonic_context = TectonicContext::RiftZone;
+        } else if (assigned && prov.tectonic_context == TectonicContext::TransformFault &&
+                   rng.next_uint(5) == 0) {
+            prov.tectonic_context = TectonicContext::RiftZone;
+        }
+
+        // Derive rock_type.
+        switch (prov.tectonic_context) {
+            case TectonicContext::Subduction:
+            case TectonicContext::HotSpot:
+                prov.rock_type = RockType::Igneous;
+                break;
+            case TectonicContext::ContinentalCollision:
+                prov.rock_type = RockType::Metamorphic;
+                break;
+            case TectonicContext::SedimentaryBasin:
+            case TectonicContext::PassiveMargin:
+                prov.rock_type = RockType::Sedimentary;
+                break;
+            default:
+                prov.rock_type = RockType::Mixed;
+                break;
+        }
+
+        // Derive geology_type.
+        switch (prov.tectonic_context) {
+            case TectonicContext::Subduction:
+                prov.geology_type = GeologyType::VolcanicArc;
+                break;
+            case TectonicContext::ContinentalCollision:
+                prov.geology_type = rng.next_uint(2) == 0 ? GeologyType::MetamorphicCore
+                                                           : GeologyType::CarbonateSequence;
+                break;
+            case TectonicContext::RiftZone:
+            case TectonicContext::HotSpot:
+                prov.geology_type = GeologyType::BasalticPlateau;
+                break;
+            case TectonicContext::TransformFault:
+                prov.geology_type = GeologyType::AlluvialFill;
+                break;
+            case TectonicContext::PassiveMargin:
+            case TectonicContext::SedimentaryBasin:
+                prov.geology_type = rng.next_uint(3) == 0 ? GeologyType::CarbonateSequence
+                                                           : GeologyType::SedimentarySequence;
+                break;
+            case TectonicContext::CratonInterior:
+                prov.geology_type = rng.next_uint(3) == 0 ? GeologyType::GreenstoneBelt
+                                                           : GeologyType::GraniteShield;
+                break;
+        }
+
+        // tectonic_stress: active boundaries are high; stable interiors are low.
+        switch (prov.tectonic_context) {
+            case TectonicContext::Subduction:
+                prov.tectonic_stress = 0.5f + rng.next_float() * 0.4f;
+                break;
+            case TectonicContext::ContinentalCollision:
+            case TectonicContext::RiftZone:
+                prov.tectonic_stress = 0.4f + rng.next_float() * 0.4f;
+                break;
+            case TectonicContext::TransformFault:
+                prov.tectonic_stress = 0.3f + rng.next_float() * 0.4f;
+                break;
+            case TectonicContext::HotSpot:
+                prov.tectonic_stress = 0.35f + rng.next_float() * 0.3f;
+                break;
+            case TectonicContext::PassiveMargin:
+                prov.tectonic_stress = 0.05f + rng.next_float() * 0.10f;
+                break;
+            case TectonicContext::CratonInterior:
+                prov.tectonic_stress = 0.02f + rng.next_float() * 0.08f;
+                break;
+            case TectonicContext::SedimentaryBasin:
+                prov.tectonic_stress = 0.04f + rng.next_float() * 0.12f;
+                break;
+        }
+
+        prov.plate_age = plates[my_plate].age;
+
+        // Karst is primarily a CarbonateSequence / SedimentarySequence feature.
+        // Override the archetype-based karst assignment with geological logic.
+        if (prov.geology_type == GeologyType::CarbonateSequence) {
+            prov.has_karst = (rng.next_uint(3) != 0);  // 67%
+        } else if (prov.geology_type == GeologyType::SedimentarySequence) {
+            prov.has_karst = (rng.next_uint(5) == 0);  // 20%
+        } else if (prov.geology_type == GeologyType::MetamorphicCore) {
+            prov.has_karst = false;  // metamorphic rock does not form karst
+        }
+        // Other geology types: keep value from archetype seeding.
+    }
+
+    // Seed tectonic-context deposits on top of archetype deposits.
+    for (auto& prov : world.provinces) {
+        seed_tectonic_deposits(prov, rng, config.resource_richness);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// seed_tectonic_deposits — adds geology-driven deposits (called from generate_plates)
+// ---------------------------------------------------------------------------
+
+void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG& rng,
+                                             float richness) {
+    uint32_t deposit_id_base = province.id * 100 + 50;  // offset to avoid collision with archetype IDs
+
+    auto add = [&](ResourceType type, float qty_base, float quality_base) {
+        ResourceDeposit d{};
+        d.id = deposit_id_base++;
+        d.type = type;
+        d.quantity = qty_base * richness * (0.7f + rng.next_float() * 0.6f);
+        d.quality = std::min(1.0f, quality_base + rng.next_float() * 0.25f);
+        d.depth = 0.2f + rng.next_float() * 0.6f;
+        d.accessibility = 0.3f + rng.next_float() * 0.5f;
+        d.depletion_rate = 0.0001f + rng.next_float() * 0.0002f;
+        d.quantity_remaining = d.quantity;
+        province.deposits.push_back(d);
+    };
+
+    switch (province.tectonic_context) {
+        case TectonicContext::Subduction:
+            // Porphyry copper and epithermal gold from magmatic arc fluids.
+            add(ResourceType::Copper, 1200.0f, 0.55f);
+            add(ResourceType::Gold, 80.0f, 0.65f);
+            if (rng.next_uint(3) == 0) {
+                add(ResourceType::Lithium, 150.0f, 0.45f);  // arc-associated pegmatites
+            }
+            break;
+
+        case TectonicContext::CratonInterior:
+            // Iron formation, orogenic gold, uranium from ancient shield.
+            add(ResourceType::IronOre, 1500.0f, 0.65f);
+            add(ResourceType::Gold, 60.0f, 0.60f);
+            if (rng.next_uint(3) == 0) {
+                add(ResourceType::Uranium, 40.0f, 0.55f);
+            }
+            if (rng.next_uint(4) == 0) {
+                add(ResourceType::Copper, 300.0f, 0.45f);  // greenstone belt copper
+            }
+            break;
+
+        case TectonicContext::SedimentaryBasin:
+            // Coal from ancient swamps; oil and gas from source rock; evaporite potash.
+            add(ResourceType::Coal, 2000.0f, 0.65f);
+            add(ResourceType::CrudeOil, 1800.0f, 0.60f);
+            add(ResourceType::NaturalGas, 1200.0f, 0.55f);
+            if (rng.next_uint(2) == 0) {
+                add(ResourceType::Potash, 400.0f, 0.50f);
+            }
+            break;
+
+        case TectonicContext::RiftZone:
+            // Lithium brines; geothermal; rift-associated volcanic gas.
+            add(ResourceType::Lithium, 600.0f, 0.60f);
+            add(ResourceType::Geothermal, 800.0f, 0.70f);
+            if (rng.next_uint(3) == 0) {
+                add(ResourceType::NaturalGas, 500.0f, 0.40f);
+            }
+            break;
+
+        case TectonicContext::PassiveMargin:
+            // Offshore petroleum from continental shelf; phosphate; rich fishery.
+            add(ResourceType::CrudeOil, 1000.0f, 0.55f);
+            add(ResourceType::NaturalGas, 800.0f, 0.50f);
+            add(ResourceType::Fish, 2000.0f, 0.70f);
+            break;
+
+        case TectonicContext::HotSpot:
+            // Geothermal; bauxite from deep basalt weathering.
+            add(ResourceType::Geothermal, 1200.0f, 0.80f);
+            add(ResourceType::Bauxite, 400.0f, 0.50f);
+            break;
+
+        case TectonicContext::ContinentalCollision:
+            // Marble and construction limestone; karst aquifer potential.
+            add(ResourceType::LimestoneSilica, 1500.0f, 0.70f);
+            if (rng.next_uint(3) == 0) {
+                add(ResourceType::Copper, 200.0f, 0.40f);  // skarn deposits at marble contact
+            }
+            break;
+
+        case TectonicContext::TransformFault:
+            // Fault-valley alluvial gold; otherwise resource-poor.
+            if (rng.next_uint(3) == 0) {
+                add(ResourceType::Gold, 30.0f, 0.40f);  // placer gold in pull-apart basins
+            }
+            break;
+    }
+}
+
+// ===========================================================================
+// Stage 2 derived — Terrain flag detection
+// ===========================================================================
+
+void WorldGenerator::detect_terrain_flags(WorldState& world) {
+    for (auto& prov : world.provinces) {
+        // Island isolation: no land or river links.
+        if (!prov.links.empty()) {
+            bool has_land_link = false;
+            for (const auto& link : prov.links) {
+                if (link.type == LinkType::Land || link.type == LinkType::River) {
+                    has_land_link = true;
+                    break;
+                }
+            }
+            prov.island_isolation = !has_land_link;
+        }
+
+        // Mountain pass detection: high-terrain province flanked by lower provinces on
+        // multiple sides. Creates transit chokepoints as specified in WorldGen v0.18 §ProvinceLink.
+        if (prov.geography.terrain_roughness > 0.65f &&
+            prov.geography.elevation_avg_m > 350.0f) {
+            float my_elev = prov.geography.elevation_avg_m;
+            uint32_t low_neighbor_count = 0;
+
+            for (const auto& link : prov.links) {
+                auto it = world.h3_province_map.find(link.neighbor_h3);
+                if (it == world.h3_province_map.end()) continue;
+                const auto& nb = world.provinces[it->second];
+                // "Low" neighbor: elevation < 60% of this province's elevation.
+                if (nb.geography.elevation_avg_m < my_elev * 0.60f) {
+                    ++low_neighbor_count;
+                }
+            }
+
+            // A mountain pass connects at least 2 different lower areas.
+            if (low_neighbor_count >= 2) {
+                prov.is_mountain_pass = true;
+                // Reduce transit cost on pass routes by 40% relative to the full mountain cost.
+                // Pass routes are still expensive (mountain terrain), just less so than
+                // going through the range at a non-pass point.
+                for (auto& link : prov.links) {
+                    auto it = world.h3_province_map.find(link.neighbor_h3);
+                    if (it == world.h3_province_map.end()) continue;
+                    const auto& nb = world.provinces[it->second];
+                    if (nb.geography.elevation_avg_m < my_elev * 0.60f) {
+                        link.transit_terrain_cost = std::max(0.10f, link.transit_terrain_cost * 0.60f);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 10 — World commentary generation
+// ===========================================================================
+
+void WorldGenerator::generate_commentary(WorldState& world, DeterministicRNG& rng) {
+    // Geological origin sentences indexed by TectonicContext (2 variants for variety).
+    static const char* geo_sentences[][2] = {
+        // Subduction (0)
+        {"Formed at a convergent plate margin where oceanic crust plunges beneath the "
+         "continent, this province sits on volcanic arc terrain studded with porphyry "
+         "copper and epithermal gold systems that drew prospectors inland for centuries.",
+         "Millennia of volcanic activity along a subduction zone have built rugged terrain "
+         "and deposited the metal-rich hydrothermal veins that first attracted settlement "
+         "to the highland mineral districts."},
+        // ContinentalCollision (1)
+        {"Ancient continental collision has folded and buckled this province into a series "
+         "of limestone ridges and metamorphic massifs, their peaks still rising slowly under "
+         "ongoing tectonic compression.",
+         "Where two continents collided over two hundred million years ago, the resulting "
+         "mountain belt left behind marble outcrops, gem-bearing schists, and terrain that "
+         "challenged every infrastructure project attempted here."},
+        // RiftZone (2)
+        {"The province occupies an active rift valley where the crust is slowly pulling "
+         "apart, allowing deep geothermal heat to rise toward the surface through networks "
+         "of fault-controlled volcanic vents and mineral springs.",
+         "Sitting astride a continental rift system, this province's elongated valley floor "
+         "and escarpment walls are the surface expression of crust being stretched toward "
+         "eventual separation by diverging plate motion."},
+        // TransformFault (3)
+        {"A major transform fault runs through this province, its linear valleys and offset "
+         "ridgelines recording millions of years of crustal blocks sliding past one another "
+         "in a geology that prioritizes seismic preparation over architectural ambition.",
+         "The province lies along an active strike-slip fault zone whose frequent earthquakes "
+         "have shaped both the terrain and the strict building standards that govern every "
+         "major structure constructed here."},
+        // HotSpot (4)
+        {"A mantle hot spot has driven repeated volcanic episodes through this province, "
+         "building a basaltic plateau whose geothermal heat potential remains largely "
+         "untapped by modern energy infrastructure.",
+         "The province owes its landforms to a plume of upwelling mantle material that "
+         "punched through the overlying plate, leaving a trail of volcanic landforms, "
+         "sulfur deposits, and geothermal fields."},
+        // PassiveMargin (5)
+        {"Occupying an ancient passive margin far removed from any active plate boundary, "
+         "the province's gently shelving coastal plain and wide continental shelf have "
+         "accumulated thick sedimentary sequences over hundreds of millions of years.",
+         "This province sits on old rifted crust that has cooled and subsided over geological "
+         "time, its sedimentary layers now hosting the offshore petroleum and natural gas "
+         "deposits that underpin the regional energy sector."},
+        // CratonInterior (6)
+        {"This province rests on one of the region's most ancient geological formations — "
+         "shield rock of granites and gneisses that has resisted major deformation for "
+         "billions of years while surrounding territories were repeatedly folded and faulted.",
+         "The ancient crystalline basement beneath this province has remained largely stable "
+         "since the Precambrian, its exposed outcrops and thin soils testifying to immense "
+         "erosive time operating on terrain that was once a towering mountain range."},
+        // SedimentaryBasin (7)
+        {"A broad interior sedimentary basin underlies the province, its flat terrain the "
+         "product of millions of years of river and lacustrine deposition above a slowly "
+         "subsiding crustal foundation.",
+         "The province occupies a subsided interior basin where ancient swamp environments "
+         "left behind thick coal seams and source rock for the petroleum deposits that later "
+         "exploration confirmed at depth across the region."},
+    };
+
+    // Climate context sentences by Köppen zone.
+    auto climate_sentence = [](KoppenZone z) -> const char* {
+        switch (z) {
+            case KoppenZone::Af:
+            case KoppenZone::Am:
+            case KoppenZone::Aw:
+                return "A tropical climate sustains dense natural vegetation and intensive "
+                       "year-round agriculture, though seasonal flooding and waterborne disease "
+                       "remain persistent challenges for provincial health infrastructure.";
+            case KoppenZone::BWh:
+            case KoppenZone::BWk:
+                return "Hyperarid conditions concentrate settlement and agriculture around the "
+                       "few reliable water sources, making water infrastructure the single most "
+                       "consequential investment in provincial development.";
+            case KoppenZone::BSh:
+            case KoppenZone::BSk:
+                return "Semi-arid conditions limit reliable agriculture to drought-tolerant "
+                       "crops and irrigated river valleys, while pastoralism and extractive "
+                       "industries have historically dominated the provincial economy.";
+            case KoppenZone::Cfa:
+            case KoppenZone::Cwa:
+                return "A humid subtropical climate with warm summers and mild winters has "
+                       "historically supported productive mixed farming and a dense rural "
+                       "population, though summer heat waves present ongoing challenges.";
+            case KoppenZone::Cfb:
+            case KoppenZone::Cfc:
+                return "The temperate oceanic climate — mild, reliable, and well-watered "
+                       "year-round — has proven one of the most hospitable environments for "
+                       "agriculture, dense settlement, and sustained industrial development.";
+            case KoppenZone::Csa:
+            case KoppenZone::Csb:
+                return "A Mediterranean climate with dry summers and mild wet winters "
+                       "historically supported olive cultivation, viticulture, and maritime "
+                       "commerce, attracting early settlement to the coastal lowlands.";
+            case KoppenZone::Dfa:
+            case KoppenZone::Dfb:
+                return "Continental summers warm enough for grain cultivation alternate with "
+                       "long winters that have historically directed capital toward "
+                       "cold-climate industries and heated infrastructure.";
+            case KoppenZone::Dfc:
+            case KoppenZone::Dfd:
+                return "Subarctic conditions limit agriculture to a brief summer window and "
+                       "concentrate economic activity in extractive industries tolerant of "
+                       "extreme winter operating conditions.";
+            case KoppenZone::ET:
+            case KoppenZone::EF:
+                return "Polar conditions restrict agricultural activity almost entirely, "
+                       "making the province structurally dependent on resource extraction "
+                       "industries and external food supply chains.";
+            default:
+                return "The temperate climate supports moderate agricultural productivity "
+                       "and year-round habitability for the provincial population.";
+        }
+    };
+
+    // Economic character sentences indexed by province_archetype_index.
+    static const char* econ_sentences[] = {
+        // 0: industrial_hub
+        "Today the province is the nation's manufacturing heartland, its industrial "
+        "districts converting raw material inputs into finished goods for both domestic "
+        "consumption and export markets.",
+        // 1: agricultural
+        "The province has long been the agricultural breadbasket of the nation, its deep "
+        "soils and reliable rainfall sustaining grain, oilseed, and livestock operations "
+        "at a scale that feeds neighboring urban provinces.",
+        // 2: resource_rich
+        "Extraction industries define the provincial economy, with mining and energy "
+        "operations providing the raw material flows that feed the nation's industrial "
+        "capacity and generating substantial royalties for the provincial government.",
+        // 3: coastal_trade
+        "Maritime commerce has defined the province for generations, its port facilities "
+        "and warehousing districts connecting regional producers to international shipping "
+        "lanes and serving as the nation's principal import entry point.",
+        // 4: financial_center
+        "The province has evolved into the nation's financial and professional services "
+        "hub, its educated workforce, deep capital markets, and established legal "
+        "institutions attracting corporate headquarters and investment from across the country.",
+        // 5: mixed_economy
+        "A diversified provincial economy balancing manufacturing, agriculture, and "
+        "services has given the region resilience against commodity price cycles and "
+        "positioned it as a reliable supplier across multiple sectors.",
+    };
+
+    for (auto& prov : world.provinces) {
+        uint8_t ctx_idx =
+            static_cast<uint8_t>(prov.tectonic_context) < 8
+                ? static_cast<uint8_t>(prov.tectonic_context)
+                : 6;  // fallback to CratonInterior
+        uint8_t variant = rng.next_uint(2);
+
+        const char* geo    = geo_sentences[ctx_idx][variant];
+        const char* climate = climate_sentence(prov.climate.koppen_zone);
+        const char* econ   = econ_sentences[prov.province_archetype_index < 6
+                                                ? prov.province_archetype_index
+                                                : 5];
+
+        prov.province_lore = std::string(geo) + " " + climate + " " + econ;
     }
 }
 

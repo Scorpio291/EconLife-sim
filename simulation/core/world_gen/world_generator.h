@@ -95,6 +95,30 @@ class WorldGenerator {
     static void seed_technology(WorldState& world, DeterministicRNG& rng,
                                 const TechnologyCatalog& tech_catalog,
                                 const WorldGeneratorConfig& config);
+
+    // Stage 1 — Tectonic context (WorldGen v0.18).
+    // Generates a small set of tectonic plates, assigns each province a tectonic
+    // context based on plate boundary proximity, and derives rock_type / geology_type /
+    // tectonic_stress / plate_age. Must run after create_provinces() so province
+    // geography fields (lat/lng, elevation) are available.
+    static void generate_plates(WorldState& world, DeterministicRNG& rng,
+                                const WorldGeneratorConfig& config);
+
+    // Called from generate_plates(). Seeds additional resource deposits driven by
+    // tectonic context (copper/gold from subduction, coal/oil from sedimentary basin,
+    // etc.), layered on top of the archetype-driven deposits from create_provinces().
+    static void seed_tectonic_deposits(Province& province, DeterministicRNG& rng,
+                                       float richness);
+
+    // Stage 2 derived — Terrain flag detection (WorldGen v0.18).
+    // Detects mountain passes (high-terrain chokepoints) and island isolation.
+    // Must run after create_province_links() so ProvinceLink vectors are populated.
+    static void detect_terrain_flags(WorldState& world);
+
+    // Stage 10 — World commentary (WorldGen v0.18).
+    // Generates province_lore strings from tectonic context, climate, and archetype.
+    // Must run after generate_plates() and create_provinces() (reads all province fields).
+    static void generate_commentary(WorldState& world, DeterministicRNG& rng);
 };
 
 }  // namespace econlife

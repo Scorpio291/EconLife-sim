@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include <h3/h3api.h>
+#include <h3api.h>
 
 #include "core/world_state/geography.h"  // for H3Index typedef
 

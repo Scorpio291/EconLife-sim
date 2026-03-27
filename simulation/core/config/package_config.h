@@ -23,7 +23,7 @@ struct PriceModelConfig {
     uint32_t spot_price_update_step        = 5;
 };
 
-struct SupplyChainConfig {
+struct SupplyChainEconConfig {
     uint32_t shortage_propagation_delay_ticks = 1;
     float    surplus_decay_rate               = 0.02f;
     float    bottleneck_output_penalty        = 0.5f;
@@ -152,7 +152,7 @@ struct ConsequenceDelayConfig {
 
 struct PackageConfig {
     PriceModelConfig           price_model;
-    SupplyChainConfig          supply_chain;
+    SupplyChainEconConfig supply_chain;
     LaborMarketConfig          labor_market;
     NpcBusinessEconomyConfig   npc_business_economy;
     TradeConfig                trade;
