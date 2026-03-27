@@ -13,6 +13,8 @@
 
 #include <string>
 
+#include <nlohmann/json_fwd.hpp>
+
 #include "core/rng/deterministic_rng.h"
 #include "core/world_gen/facility_type_catalog.h"
 #include "core/world_gen/goods_catalog.h"
@@ -41,6 +43,7 @@ struct WorldGeneratorConfig {
     std::string
         facility_types_filepath;  // path to packages/base_game/facility_types/facility_types.csv
     std::string technology_directory;  // path to packages/base_game/technology/
+    std::string output_world_file;   // if non-empty, write world.json to this path after generation
 
     // -----------------------------------------------------------------------
     // TerrainParams — thresholds for terrain detection and physical refinement
@@ -177,6 +180,13 @@ class WorldGenerator {
         PlayerCharacter player;
     };
     static WorldWithPlayer generate_with_player(const WorldGeneratorConfig& config);
+
+    // Stage 11 — Serialize WorldState to JSON (world.json format).
+    // Returns the JSON object; also writes to config.output_world_file if non-empty.
+    static nlohmann::json to_world_json(const WorldState& world);
+
+    // Write a WorldState to disk as world.json.
+    static void write_world_json(const WorldState& world, const std::string& path);
 
    private:
     // Province archetypes for economic diversity.

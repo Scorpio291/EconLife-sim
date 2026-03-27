@@ -181,6 +181,12 @@ struct ResourceDeposit {
                         //     scale arctic_latitude_threshold  = 66.5  // degrees; Arctic Circle
     float depletion_rate;  // fraction depleted per tick at full production
     float quantity_remaining;
+    uint8_t era_unlock = 1;  // era required before deposit appears on the map.
+                             // V1: all base deposits are era 1 (year 2000).
+                             // Higher eras gate shale (2), oil sands (2),
+                             // arctic offshore (3), deep sea minerals (3).
+                             // Production module skips deposits where
+                             // world.technology.current_era < era_unlock.
 };
 
 // ---------------------------------------------------------------------------
