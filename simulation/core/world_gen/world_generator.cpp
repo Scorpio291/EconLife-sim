@@ -64,10 +64,15 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // and seeds tectonic-context-specific resource deposits.
     generate_plates(world, rng, config);
 
+    // Step 3b2: Stage 4a — Province geography refinement (WorldGen v0.18).
+    // Scales elevation from terrain_roughness and applies elevation lapse rate to
+    // temperature. MUST run before detect_terrain_flags so mountain pass detection
+    // uses physically consistent elevation values.
+    refine_province_geography(world);
+
     // Step 3c: Stage 2 derived — Terrain flag detection (WorldGen v0.18).
     // Detects mountain passes (chokepoints) and island isolation.
-    // Runs after province links are created AND tectonic context is assigned
-    // (uses elevation which is set in apply_archetype).
+    // Runs after refine_province_geography() so corrected elevation is used.
     detect_terrain_flags(world);
 
     // Step 3d: Stage 5+6 — Soils and Biomes (WorldGen v0.18).
@@ -111,6 +116,13 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
 
     // Store loaded recipes in WorldState for production module access.
     world.loaded_recipes = recipe_catalog.all();
+
+    // Step 3f: Stage 4b — Economic geography seeding (WorldGen v0.18).
+    // Derives trade_openness for all province archetypes (fixes the bug where only
+    // coastal_trade sets it). Refines wildfire_vulnerability from KoppenZone. Adjusts
+    // formal_employment_rate for infrastructure and corruption. MUST run after
+    // detect_special_features() so island_isolation flag is available.
+    seed_economic_geography(world);
 
     // Step 7b: Stage 9 — Population attractiveness (WorldGen v0.18).
     // Adjusts total_population from geology/climate attractiveness score (bounded ±40%).
@@ -1568,6 +1580,148 @@ void WorldGenerator::detect_terrain_flags(WorldState& world) {
                 }
             }
         }
+    }
+}
+
+// ===========================================================================
+// Stage 4a — Province geography refinement (elevation + temperature lapse rate)
+// ===========================================================================
+
+void WorldGenerator::refine_province_geography(WorldState& world) {
+    for (auto& prov : world.provinces) {
+        // ---- Elevation-roughness correlation ----
+        // apply_archetype seeds a random elevation in [50, 850] m uniformly.
+        // Mountainous provinces (high terrain_roughness) should realistically be much
+        // higher. Scale the archetype-set value by a roughness-driven factor so the
+        // distribution becomes physically plausible.
+        //
+        //   roughness 0.00 → factor 0.30  (coastal flat; 50-850 → 15-255 m)
+        //   roughness 0.30 → factor 0.75  (rolling; 50-850 → 38-638 m)
+        //   roughness 0.50 → factor 1.05  (hilly; roughly unchanged)
+        //   roughness 0.65 → factor 1.28  (high terrain; 50-850 → 64-1085 m)
+        //   roughness 1.00 → factor 1.80  (alpine; 50-850 → 90-1530 m)
+        float roughness_factor = 0.30f + prov.geography.terrain_roughness * 1.50f;
+        prov.geography.elevation_avg_m =
+            std::max(5.0f, prov.geography.elevation_avg_m * roughness_factor);
+
+        // ---- Elevation lapse rate on temperature ----
+        // Environmental lapse rate: ~6.5 °C per 1 000 m. Apply uniformly to all three
+        // temperature fields. Uses the corrected elevation computed above.
+        float lapse_c = prov.geography.elevation_avg_m * 0.0065f;
+        prov.climate.temperature_avg_c -= lapse_c;
+        prov.climate.temperature_min_c -= lapse_c;
+        prov.climate.temperature_max_c -= lapse_c;
+
+        // Clamp to physically plausible global extremes.
+        prov.climate.temperature_avg_c =
+            std::max(-50.0f, std::min(50.0f, prov.climate.temperature_avg_c));
+        prov.climate.temperature_min_c =
+            std::max(-65.0f, std::min(prov.climate.temperature_avg_c,
+                                      prov.climate.temperature_min_c));
+        prov.climate.temperature_max_c =
+            std::max(prov.climate.temperature_avg_c,
+                     std::min(60.0f, prov.climate.temperature_max_c));
+    }
+}
+
+// ===========================================================================
+// Stage 4b — Economic geography seeding (trade openness, wildfire, employment)
+// ===========================================================================
+
+void WorldGenerator::seed_economic_geography(WorldState& world) {
+    for (auto& prov : world.provinces) {
+        // ---- Trade openness from geography ----
+        // Only coastal_trade archetype sets trade_openness in apply_archetype; all
+        // other archetypes leave it at 0.0 (zero-initialised Province). Fix this by
+        // computing a geography-driven baseline and blending with any existing value.
+        //
+        // Drivers:
+        //   Port capacity   — primary gateway for international goods flow
+        //   River access    — inland waterway corridors
+        //   Infrastructure  — road/rail density reduces border friction
+        //   Landlocked      — geographic trade barrier
+        //   Island isolation — extra logistics cost
+        float geo_openness = prov.geography.port_capacity * 0.50f
+                           + prov.geography.river_access   * 0.15f
+                           + prov.infrastructure_rating    * 0.10f;
+        if (prov.geography.is_landlocked) geo_openness -= 0.10f;
+        if (prov.island_isolation)        geo_openness -= 0.05f;
+        geo_openness = std::max(0.08f, std::min(0.85f, geo_openness));
+
+        if (prov.trade_openness < 0.01f) {
+            // Not yet set by archetype — use the geography-derived value directly.
+            prov.trade_openness = geo_openness;
+        } else {
+            // coastal_trade (and possibly others) already set a value; blend to keep
+            // archetype flavour while anchoring to physical geography.
+            prov.trade_openness = std::max(0.10f, std::min(0.95f,
+                prov.trade_openness * 0.65f + geo_openness * 0.35f));
+        }
+
+        // ---- Wildfire vulnerability from climate zone ----
+        // apply_archetype sets a generic 0.05–0.25 regardless of climate. Override
+        // with a climate-zone-informed value and amplify by drought vulnerability.
+        float base_wildfire;
+        switch (prov.climate.koppen_zone) {
+            case KoppenZone::Csa:
+            case KoppenZone::Csb:
+                // Mediterranean: long dry summer + dry scrub = highest wildfire risk.
+                base_wildfire = 0.50f;
+                break;
+            case KoppenZone::BSh:
+            case KoppenZone::BSk:
+            case KoppenZone::Aw:
+                // Steppe / tropical dry: grass fires; moderate-high.
+                base_wildfire = 0.35f;
+                break;
+            case KoppenZone::BWh:
+            case KoppenZone::BWk:
+                // Desert: very dry but almost no fuel → moderate despite aridity.
+                base_wildfire = 0.20f;
+                break;
+            case KoppenZone::Cfa:
+            case KoppenZone::Cfb:
+            case KoppenZone::Cfc:
+            case KoppenZone::Cwa:
+            case KoppenZone::Dfa:
+            case KoppenZone::Dfb:
+                // Humid temperate / continental: occasional; wet season limits spread.
+                base_wildfire = 0.15f;
+                break;
+            case KoppenZone::Dfc:
+            case KoppenZone::Dfd:
+                // Subarctic boreal: sporadic but large when they occur.
+                base_wildfire = 0.20f;
+                break;
+            case KoppenZone::Af:
+            case KoppenZone::Am:
+                // Wet tropical: very high moisture; rarely dries enough to burn.
+                base_wildfire = 0.06f;
+                break;
+            case KoppenZone::ET:
+            case KoppenZone::EF:
+                // Polar: no combustible vegetation.
+                base_wildfire = 0.02f;
+                break;
+            default:
+                base_wildfire = 0.15f;
+                break;
+        }
+        // Drought amplifies fire risk: double drought_vulnerability → +50% wildfire.
+        float drought_amp = 1.0f + prov.climate.drought_vulnerability * 0.50f;
+        prov.climate.wildfire_vulnerability =
+            std::max(0.01f, std::min(0.95f, base_wildfire * drought_amp));
+
+        // ---- Formal employment rate from infrastructure and governance ----
+        // apply_archetype sets 0.6–0.85 generically. Adjust downward for high
+        // corruption and inequality; upward for strong infrastructure.
+        float infra_bonus       = (prov.infrastructure_rating   - 0.50f) * 0.15f;
+        float corruption_penalty = prov.political.corruption_index      * 0.18f;
+        float inequality_penalty = prov.conditions.inequality_index     * 0.10f;
+        prov.conditions.formal_employment_rate =
+            std::max(0.20f, std::min(0.95f,
+                prov.conditions.formal_employment_rate
+                    + infra_bonus - corruption_penalty - inequality_penalty));
     }
 }
 

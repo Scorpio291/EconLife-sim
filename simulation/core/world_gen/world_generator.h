@@ -115,6 +115,23 @@ class WorldGenerator {
     // Must run after create_province_links() so ProvinceLink vectors are populated.
     static void detect_terrain_flags(WorldState& world);
 
+    // Stage 4a — Province geography refinement (WorldGen v0.18; simplified pass).
+    // Applies terrain_roughness → elevation correlation so mountainous provinces have
+    // physically consistent altitude. Applies elevation lapse rate to all three
+    // temperature fields (6.5 °C / 1 000 m environmental lapse rate).
+    // Must run BEFORE detect_terrain_flags() so mountain pass detection uses corrected
+    // elevation. No RNG needed — fully deterministic from already-set Province fields.
+    static void refine_province_geography(WorldState& world);
+
+    // Stage 4b — Economic geography seeding (WorldGen v0.18; simplified pass).
+    // Derives trade_openness from port_capacity + river_access + landlocked/island status,
+    // fixing the V1 archetype bug where only coastal_trade sets trade_openness (others 0.0).
+    // Refines wildfire_vulnerability from KoppenZone + drought_vulnerability.
+    // Adjusts formal_employment_rate for infrastructure richness and corruption.
+    // Must run AFTER detect_special_features() so island_isolation and has_permafrost
+    // flags are available. No RNG needed.
+    static void seed_economic_geography(WorldState& world);
+
     // Stage 5+6 — Soils and Biomes (WorldGen v0.18; simplified pass).
     // Adjusts agricultural_productivity from geology_type + KoppenZone soil fertility model.
     // Refines forest_coverage, drought_vulnerability, flood_vulnerability from climate zone.

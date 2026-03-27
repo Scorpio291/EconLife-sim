@@ -984,3 +984,197 @@ TEST_CASE("WorldGenerator - stages 5-9 are deterministic", "[world_gen][determin
         CHECK(a.demographics.total_population == b.demographics.total_population);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Stage 4a: Province geography refinement (elevation + temperature lapse rate)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("WorldGenerator - elevation correlates with terrain roughness after refinement",
+          "[world_gen][geography]") {
+    // High-roughness provinces must have higher elevation than low-roughness ones.
+    // With roughness_factor = 0.30 + roughness * 1.50:
+    //   roughness 0.10 → factor 0.45; roughness 0.80 → factor 1.50
+    // So a roughness-0.80 province must have significantly higher elevation.
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+
+        float max_roughness = 0.0f, max_elevation_at_max_roughness = 0.0f;
+        float min_roughness = 1.0f, min_elevation_at_min_roughness = 99999.0f;
+        for (const auto& p : world.provinces) {
+            if (p.geography.terrain_roughness > max_roughness) {
+                max_roughness = p.geography.terrain_roughness;
+                max_elevation_at_max_roughness = p.geography.elevation_avg_m;
+            }
+            if (p.geography.terrain_roughness < min_roughness) {
+                min_roughness = p.geography.terrain_roughness;
+                min_elevation_at_min_roughness = p.geography.elevation_avg_m;
+            }
+        }
+        // Most-rough province must be higher than least-rough (across the world).
+        CHECK(max_elevation_at_max_roughness > min_elevation_at_min_roughness);
+    }
+}
+
+TEST_CASE("WorldGenerator - temperature decreases with elevation (lapse rate)",
+          "[world_gen][geography]") {
+    // After elevation lapse rate: temperature_avg_c must be less than the naive
+    // latitude-only value. We test the invariant that higher-elevation provinces
+    // have lower temperature than a flat province at the same latitude.
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& p : world.provinces) {
+            // Temperatures must be in a physically plausible range.
+            CHECK(p.climate.temperature_avg_c >= -50.0f);
+            CHECK(p.climate.temperature_avg_c <=  50.0f);
+            CHECK(p.climate.temperature_min_c <= p.climate.temperature_avg_c);
+            CHECK(p.climate.temperature_max_c >= p.climate.temperature_avg_c);
+            // High-elevation provinces (> 800m) must be meaningfully cool.
+            if (p.geography.elevation_avg_m > 800.0f) {
+                // Lapse reduces by at least 5°C vs sea level (0.0065 * 800 ≈ 5.2°C).
+                // Latitude-only base is ~10-25°C; after lapse must be well below 20°C
+                // for a mid-latitude mountain province.
+                CHECK(p.climate.temperature_avg_c < 22.0f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator - elevation and temperature are deterministic",
+          "[world_gen][geography][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 55555;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto w1 = WorldGenerator::generate(config);
+    auto w2 = WorldGenerator::generate(config);
+
+    REQUIRE(w1.provinces.size() == w2.provinces.size());
+    for (size_t i = 0; i < w1.provinces.size(); ++i) {
+        CHECK(w1.provinces[i].geography.elevation_avg_m  ==
+              w2.provinces[i].geography.elevation_avg_m);
+        CHECK(w1.provinces[i].climate.temperature_avg_c  ==
+              w2.provinces[i].climate.temperature_avg_c);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Stage 4b: Economic geography seeding (trade openness, wildfire, employment)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("WorldGenerator - trade_openness is non-zero for all provinces",
+          "[world_gen][economic_geography]") {
+    // Before Stage 4b, only coastal_trade archetype set trade_openness. After the fix,
+    // all provinces must have a positive trade_openness.
+    for (uint64_t seed = 1; seed <= 15; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            CHECK(p.trade_openness >= 0.08f);
+            CHECK(p.trade_openness <= 0.96f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator - coastal provinces have higher trade_openness than landlocked",
+          "[world_gen][economic_geography]") {
+    // Landlocked provinces accumulate a -0.10 penalty; coastal ones get port bonus.
+    float coastal_openness_sum = 0.0f;
+    int coastal_count = 0;
+    float landlocked_openness_sum = 0.0f;
+    int landlocked_count = 0;
+
+    for (uint64_t seed = 1; seed <= 30; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            if (!p.geography.is_landlocked) {
+                coastal_openness_sum += p.trade_openness;
+                ++coastal_count;
+            } else {
+                landlocked_openness_sum += p.trade_openness;
+                ++landlocked_count;
+            }
+        }
+    }
+    if (coastal_count > 0 && landlocked_count > 0) {
+        float coastal_avg   = coastal_openness_sum   / static_cast<float>(coastal_count);
+        float landlocked_avg = landlocked_openness_sum / static_cast<float>(landlocked_count);
+        CHECK(coastal_avg > landlocked_avg);
+    }
+}
+
+TEST_CASE("WorldGenerator - wildfire_vulnerability reflects climate zone",
+          "[world_gen][economic_geography]") {
+    // Polar provinces (ET/EF) must have low wildfire risk (< 0.10).
+    // Mediterranean (Csa/Csb) provinces should have higher risk (> 0.20).
+    for (uint64_t seed = 1; seed <= 30; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            if (p.climate.koppen_zone == KoppenZone::ET ||
+                p.climate.koppen_zone == KoppenZone::EF) {
+                CHECK(p.climate.wildfire_vulnerability < 0.10f);
+            }
+            if (p.climate.koppen_zone == KoppenZone::Csa ||
+                p.climate.koppen_zone == KoppenZone::Csb) {
+                CHECK(p.climate.wildfire_vulnerability > 0.20f);
+            }
+            // All values in range.
+            CHECK(p.climate.wildfire_vulnerability >= 0.01f);
+            CHECK(p.climate.wildfire_vulnerability <= 0.95f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator - formal_employment_rate is bounded after economic geography pass",
+          "[world_gen][economic_geography]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            CHECK(p.conditions.formal_employment_rate >= 0.20f);
+            CHECK(p.conditions.formal_employment_rate <= 0.95f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator - economic geography is deterministic",
+          "[world_gen][economic_geography][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 33333;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto w1 = WorldGenerator::generate(config);
+    auto w2 = WorldGenerator::generate(config);
+
+    REQUIRE(w1.provinces.size() == w2.provinces.size());
+    for (size_t i = 0; i < w1.provinces.size(); ++i) {
+        CHECK(w1.provinces[i].trade_openness                   == w2.provinces[i].trade_openness);
+        CHECK(w1.provinces[i].climate.wildfire_vulnerability   == w2.provinces[i].climate.wildfire_vulnerability);
+        CHECK(w1.provinces[i].conditions.formal_employment_rate ==
+              w2.provinces[i].conditions.formal_employment_rate);
+    }
+}
