@@ -2029,3 +2029,115 @@ TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjo
         }
     }
 }
+
+// ===========================================================================
+// Stage 9 — Population & Infrastructure Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - population: settlement_attractiveness bounded [0, 1]",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.settlement_attractiveness >= 0.0f);
+            CHECK(prov.settlement_attractiveness <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: disease_burden bounded [0, 1]",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.disease_burden >= 0.0f);
+            CHECK(prov.disease_burden <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: infrastructure_rating bounded [0, 1]",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.infrastructure_rating >= 0.0f);
+            CHECK(prov.infrastructure_rating <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: deterministic settlement and disease",
+          "[world_gen][population]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].settlement_attractiveness ==
+              world2.provinces[i].settlement_attractiveness);
+        CHECK(world1.provinces[i].disease_burden ==
+              world2.provinces[i].disease_burden);
+        CHECK(world1.provinces[i].infrastructure_rating ==
+              world2.provinces[i].infrastructure_rating);
+        CHECK(world1.provinces[i].demographics.total_population ==
+              world2.provinces[i].demographics.total_population);
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: all provinces above population floor",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.demographics.total_population >= config.population.population_floor);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: JSON includes settlement fields",
+          "[world_gen][population][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("settlement_attractiveness"));
+    CHECK(p0.contains("disease_burden"));
+}

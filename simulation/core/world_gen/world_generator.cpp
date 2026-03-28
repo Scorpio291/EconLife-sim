@@ -3102,26 +3102,119 @@ void WorldGenerator::detect_special_features(WorldState& world,
 }
 
 // ===========================================================================
-// Stage 9 — Population attractiveness (simplified WorldGen v0.18 pass)
+// Stage 9 — Population and Infrastructure Seeding (WorldGen v0.18 §9)
 // ===========================================================================
 
 void WorldGenerator::seed_population_attractiveness(WorldState& world, DeterministicRNG& rng,
                                                     const WorldGeneratorConfig& config) {
     const auto& p = config.population;
+
     for (auto& prov : world.provinces) {
-        // Baseline 0.5 = multiplier 1.0 (no change from archetype). Contributions add/subtract.
-        float score = 0.50f;
-        score += prov.agricultural_productivity             * p.ag_productivity_weight;
-        score += prov.infrastructure_rating                 * p.infrastructure_weight;
-        score += prov.geography.river_access                * p.river_access_weight;
-        score += prov.geography.arable_land_fraction        * p.arable_land_weight;
-        score -= prov.tectonic_stress                       * p.tectonic_stress_penalty;
-        score -= prov.climate.drought_vulnerability         * p.drought_penalty;
-        if (prov.has_permafrost)    score -= p.permafrost_penalty;
-        if (prov.island_isolation)  score -= p.island_penalty;
+        // -----------------------------------------------------------------
+        // §9.2 — Disease burden from climate zone + standing water + elevation.
+        // -----------------------------------------------------------------
+        float burden = 0.0f;
+        KoppenZone kz = prov.climate.koppen_zone;
 
-        score = std::max(0.10f, std::min(0.90f, score));
+        if (kz == KoppenZone::Af || kz == KoppenZone::Am) {
+            burden += 0.55f;  // hyperendemic tropical rainforest
+        } else if (kz == KoppenZone::Aw || kz == KoppenZone::BSh) {
+            burden += 0.35f;  // tropical savanna/steppe; seasonal
+        } else if (kz == KoppenZone::Cfa || kz == KoppenZone::Cwa) {
+            burden += 0.15f;  // humid subtropical
+        }
 
+        // Standing water amplifies vector habitat.
+        if (prov.climate.flood_vulnerability > 0.6f) {
+            burden += 0.15f;
+        }
+
+        // Elevation reduces disease (malaria vector altitude limit ~2,000m).
+        if (prov.geography.elevation_avg_m > 2000.0f) {
+            burden *= 0.10f;
+        } else if (prov.geography.elevation_avg_m > 1500.0f) {
+            burden *= 0.35f;
+        } else if (prov.geography.elevation_avg_m > 1000.0f) {
+            burden *= 0.65f;
+        }
+
+        prov.disease_burden = std::min(1.0f, std::max(0.0f, burden));
+
+        // -----------------------------------------------------------------
+        // §9.1 — Settlement attractiveness formula.
+        // -----------------------------------------------------------------
+
+        // Check for geothermal deposit.
+        bool has_geothermal = false;
+        for (const auto& d : prov.deposits) {
+            if (d.type == ResourceType::Geothermal) {
+                has_geothermal = true;
+                break;
+            }
+        }
+
+        float base =
+            prov.agricultural_productivity                * p.w_ag_productivity
+          + prov.geography.port_capacity                  * p.w_port_capacity
+          + prov.geography.river_access                   * p.w_river_access
+          + (1.0f - prov.geography.terrain_roughness)     * p.w_terrain_flatness
+          + (prov.soil_type == SoilType::Alluvial ? 1.0f : 0.0f) * p.w_alluvial_soil
+          + (has_geothermal ? 1.0f : 0.0f)                * p.w_geothermal
+          + (prov.soil_type == SoilType::Andisol ? 1.0f : 0.0f) * p.w_volcanic_soil;
+
+        // Altitude ceiling — hard physiological limits.
+        if (prov.geography.elevation_avg_m > 4500.0f) {
+            base *= p.alt_4500m_mult;
+        } else if (prov.geography.elevation_avg_m > 3500.0f) {
+            base *= p.alt_3500m_mult;
+        } else if (prov.geography.elevation_avg_m > 2500.0f) {
+            base *= p.alt_2500m_mult;
+        } else if (prov.geography.elevation_avg_m > 1500.0f) {
+            base *= p.alt_1500m_mult;
+        }
+
+        // Disease burden penalty (§9.2).
+        base *= (1.0f - prov.disease_burden * p.disease_max_penalty);
+
+        // Environmental penalties — genuine uninhabitability.
+        if (kz == KoppenZone::BWh || kz == KoppenZone::BWk) {
+            base *= p.desert_mult;
+        }
+        if (kz == KoppenZone::EF) {
+            base *= p.ice_cap_mult;
+        }
+        if (kz == KoppenZone::ET) {
+            base *= p.tundra_mult;
+        }
+        if (prov.geography.terrain_roughness > 0.85f) {
+            base *= p.extreme_terrain_mult;
+        }
+        if (prov.island_isolation) {
+            base *= p.island_isolation_mult;
+        }
+        if (prov.has_permafrost) {
+            base *= p.continuous_permafrost_mult;
+        }
+
+        float score = std::max(0.0f, std::min(1.0f, base));
+        prov.settlement_attractiveness = score;
+
+        // -----------------------------------------------------------------
+        // §9.3 — Infrastructure derivation from attractiveness.
+        // Flood vulnerability reduces infrastructure (costlier construction)
+        // without reducing population attractiveness.
+        // -----------------------------------------------------------------
+        float infra = score * p.infra_attract_scale
+                    - prov.climate.flood_vulnerability * p.infra_flood_penalty
+                    + (rng.next_float() - 0.5f) * 2.0f * p.infra_variance_sigma;
+        infra = std::max(0.0f, std::min(1.0f, infra));
+
+        // Blend with archetype infrastructure (50/50) to maintain diversity.
+        prov.infrastructure_rating = prov.infrastructure_rating * 0.50f + infra * 0.50f;
+
+        // -----------------------------------------------------------------
+        // §9.4 — Population adjustment from attractiveness.
+        // -----------------------------------------------------------------
         float multiplier = p.multiplier_base + score * p.multiplier_range;
         multiplier *= (p.rng_variation_base + rng.next_float() * p.rng_variation_range);
 
@@ -3605,6 +3698,10 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         p["irrigation_cost_index"] = prov.irrigation_cost_index;
         p["salinisation_risk"] = prov.salinisation_risk;
         p["water_availability"] = prov.water_availability;
+
+        // Settlement (Stage 9)
+        p["settlement_attractiveness"] = prov.settlement_attractiveness;
+        p["disease_burden"] = prov.disease_burden;
 
         // Resource deposits
         json deposits_arr = json::array();

@@ -472,6 +472,11 @@ struct Province {
     float salinisation_risk      = 0.0f;  // 0.0-1.0; probability of salt buildup per decade
     float water_availability     = 0.0f;  // 0.0-1.0; composite of river + groundwater + spring
 
+    // Settlement attractiveness fields (Stage 9 — WorldGen v0.18)
+    float settlement_attractiveness = 0.0f;  // 0.0-1.0; pre-population attractiveness score
+    float disease_burden            = 0.0f;  // 0.0-1.0; vector-borne disease load; reducible by
+                                              // sanitation/drainage/medical infrastructure at runtime
+
     // Archetype index (WorldGenerator internal; stable for UI/modding access)
     // Maps to WorldGenerator::ProvinceArchetype enum:
     //   0=industrial_hub, 1=agricultural, 2=resource_rich,

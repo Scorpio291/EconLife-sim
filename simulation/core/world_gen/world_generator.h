@@ -131,19 +131,39 @@ struct WorldGeneratorConfig {
     // PopulationParams — weights for settlement attractiveness (Stage 9)
     // -----------------------------------------------------------------------
     struct PopulationParams {
-        // Attractiveness score contributions (baseline = 0.5 → multiplier = 1.0).
-        float ag_productivity_weight  = 0.12f;  // positive
-        float infrastructure_weight   = 0.12f;  // positive
-        float river_access_weight     = 0.08f;  // positive
-        float arable_land_weight      = 0.06f;  // positive
-        float tectonic_stress_penalty = 0.12f;  // subtracted
-        float drought_penalty         = 0.10f;  // subtracted
-        float permafrost_penalty      = 0.20f;  // subtracted if has_permafrost
-        float island_penalty          = 0.08f;  // subtracted if island_isolation
+        // §9.1 — Settlement attractiveness weights (sum to 1.0).
+        float w_ag_productivity   = 0.35f;  // agricultural_productivity
+        float w_port_capacity     = 0.20f;  // port_capacity (coastal trade access)
+        float w_river_access      = 0.20f;  // river_access (navigation + irrigation)
+        float w_terrain_flatness  = 0.10f;  // (1.0 - terrain_roughness)
+        float w_alluvial_soil     = 0.08f;  // soil_type == Alluvial bonus
+        float w_geothermal        = 0.02f;  // has geothermal deposit
+        float w_volcanic_soil     = 0.05f;  // soil_type == Andisol bonus
+
+        // §9.1 — Altitude ceiling multipliers.
+        float alt_1500m_mult  = 0.80f;
+        float alt_2500m_mult  = 0.45f;
+        float alt_3500m_mult  = 0.15f;
+        float alt_4500m_mult  = 0.03f;
+
+        // §9.1 — Environmental penalties (multiplicative).
+        float desert_mult             = 0.12f;  // BWh, BWk
+        float ice_cap_mult            = 0.02f;  // EF
+        float tundra_mult             = 0.15f;  // ET
+        float extreme_terrain_mult    = 0.25f;  // terrain_roughness > 0.85
+        float island_isolation_mult   = 0.60f;  // island_isolation
+        float continuous_permafrost_mult = 0.05f;  // has_permafrost
+
+        // §9.2 — Disease burden.
+        float disease_max_penalty = 0.50f;  // base *= (1 - disease_burden * this)
+
+        // §9.3 — Infrastructure derivation from attractiveness.
+        float infra_attract_scale    = 0.70f;  // infra = attractiveness * this
+        float infra_flood_penalty    = 0.15f;  // - flood_vulnerability * this
+        float infra_variance_sigma   = 0.12f;  // random variance magnitude
 
         // Population multiplier from score:
         //   multiplier = multiplier_base + score * multiplier_range
-        // At default values: score 0.5 → 1.0x; score 0 → 0.60x; score 1 → 1.40x.
         float multiplier_base   = 0.60f;
         float multiplier_range  = 0.80f;
 
