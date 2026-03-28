@@ -155,6 +155,52 @@ struct WorldGeneratorConfig {
     } population{};
 
     // -----------------------------------------------------------------------
+    // AtmosphereParams — thresholds for Stage 4 atmosphere pass
+    // -----------------------------------------------------------------------
+    struct AtmosphereParams {
+        // Base temperature from latitude: T = temp_equator - |lat| * temp_lat_rate
+        float temp_equator_c          = 30.0f;
+        float temp_lat_rate           = 0.70f;  // °C per degree latitude
+
+        // Continentality: 1.0 - 1.0/(1.0 + distance_proxy * cont_decay)
+        float cont_decay              = 0.005f; // decay rate for distance-to-coast proxy
+        float cont_precip_base_mm     = 1200.0f; // precipitation at continentality=0
+        float cont_precip_min_mm      = 300.0f;  // precipitation at continentality=1
+
+        // Rain shadow
+        float rain_shadow_lift_coeff  = 0.80f;  // mountain moisture extraction efficiency
+        float rain_shadow_precip_eff  = 0.60f;  // fraction of lifted moisture deposited as rain
+        float rain_shadow_evap_return = 0.10f;  // vegetation-recycled moisture per province
+        float rain_shadow_max_depletion = 0.70f; // maximum moisture reduction from shadow
+
+        // Monsoon
+        float monsoon_lat_min         = 10.0f;
+        float monsoon_lat_max         = 25.0f;
+        float monsoon_precip_bonus    = 0.40f;  // fractional precipitation increase
+        float monsoon_seasonality     = 0.75f;  // base seasonality for monsoon provinces
+        float monsoon_flood_bonus     = 0.15f;  // added to flood_vulnerability
+
+        // Cold current
+        float cold_current_temp_drop  = 3.0f;   // °C temperature reduction
+        float cold_current_precip_suppression = 0.35f; // multiply precipitation by this
+        float cold_current_lat_min    = 15.0f;
+        float cold_current_lat_max    = 35.0f;
+
+        // Warm current
+        float warm_current_temp_boost = 4.0f;   // °C temperature increase
+        float warm_current_precip_boost = 0.20f; // fractional precipitation increase
+        float warm_current_lat_min    = 40.0f;
+        float warm_current_lat_max    = 65.0f;
+
+        // ENSO
+        float enso_strength           = 0.70f;  // Earth analog; 0.05-1.50
+
+        // ITCZ convective precipitation (0-8° latitude)
+        float itcz_lat_max            = 8.0f;
+        float itcz_precip_mm          = 2000.0f; // base precipitation in ITCZ zone
+    } atmosphere{};
+
+    // -----------------------------------------------------------------------
     // HydrologyParams — thresholds for Stage 3 hydrology pass
     // -----------------------------------------------------------------------
     struct HydrologyParams {
@@ -304,6 +350,14 @@ class WorldGenerator {
     // etc.), layered on top of the archetype-driven deposits from create_provinces().
     static void seed_tectonic_deposits(Province& province, DeterministicRNG& rng,
                                        float richness);
+
+    // Stage 4 — Atmosphere (WorldGen v0.18; simplified province-level pass).
+    // Derives temperature, precipitation, rain shadow, monsoon, ocean currents,
+    // ENSO susceptibility, continentality, geographic vulnerability, and
+    // re-derives Köppen zones from physics. Must run after generate_plates()
+    // and create_province_links() (reads adjacency for wind propagation).
+    static void simulate_atmosphere(WorldState& world, DeterministicRNG& rng,
+                                    const WorldGeneratorConfig& config);
 
     // Stage 3 — Hydrology (WorldGen v0.18).
     // Computes drainage basins, river networks, snowpack, snowmelt propagation,

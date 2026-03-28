@@ -67,17 +67,24 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // and seeds tectonic-context-specific resource deposits.
     generate_plates(world, rng, config);
 
-    // Step 3b2: Stage 3 — Hydrology (WorldGen v0.18).
+    // Step 3b2: Stage 4 — Atmosphere (WorldGen v0.18).
+    // Derives temperature/precipitation from latitude + altitude + Hadley cells,
+    // computes rain shadow, monsoon, ocean currents, ENSO susceptibility,
+    // continentality, geographic vulnerability, and re-derives Köppen zones.
+    // Runs after generate_plates() and create_province_links().
+    simulate_atmosphere(world, rng, config);
+
+    // Step 3b3: Stage 3 — Hydrology (WorldGen v0.18).
     // Computes drainage basins, river networks, snowpack, snowmelt propagation,
     // groundwater, springs, alluvial fans, deltas, endorheic basins, port capacity.
-    // Runs after generate_plates() (reads geology_type for groundwater) and
-    // create_province_links() (reads adjacency for drainage flow).
+    // Runs after simulate_atmosphere() (reads precipitation for snowpack/groundwater)
+    // and generate_plates() (reads geology_type for groundwater).
     calculate_hydrology(world, rng, config);
 
-    // Step 3b3: Stage 4a — Province geography refinement (WorldGen v0.18).
-    // Scales elevation from terrain_roughness and applies elevation lapse rate to
-    // temperature. MUST run before detect_terrain_flags so mountain pass detection
-    // uses physically consistent elevation values.
+    // Step 3b4: Stage 4a — Province geography refinement (WorldGen v0.18).
+    // Scales elevation from terrain_roughness. Temperature lapse rate is now
+    // handled in simulate_atmosphere(), but elevation scaling must run before
+    // detect_terrain_flags() so mountain pass detection uses corrected elevation.
     refine_province_geography(world, config);
 
     // Step 3c: Stage 2 derived — Terrain flag detection (WorldGen v0.18).
@@ -1549,6 +1556,439 @@ void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG
 }
 
 // ===========================================================================
+// Stage 4 — Atmosphere: temperature, precipitation, rain shadow, monsoon,
+//           ocean currents, ENSO, continentality, Köppen re-derivation
+// ===========================================================================
+
+void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rng,
+                                         const WorldGeneratorConfig& config) {
+    if (world.provinces.empty()) return;
+
+    const auto& a = config.atmosphere;
+    const uint32_t n = static_cast<uint32_t>(world.provinces.size());
+
+    // -----------------------------------------------------------------------
+    // Pass 1: Continentality — proxy for distance to coast.
+    // Uses coastal_length_km and landlocked status as proxy since we don't
+    // have a full distance-to-coast raster. Landlocked provinces with no
+    // coastal neighbors are more continental.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        if (!prov.geography.is_landlocked && prov.geography.coastal_length_km > 0.0f) {
+            // Coastal province: low continentality.
+            prov.climate.continentality = std::max(0.0f,
+                0.10f - prov.geography.coastal_length_km * 0.0005f);
+        } else {
+            // Approximate distance-to-coast via neighbor chain depth.
+            // Count hops to nearest coastal province (BFS, max 3 hops).
+            float min_dist_proxy = 999.0f;
+            for (const auto& link : prov.links) {
+                auto it = world.h3_province_map.find(link.neighbor_h3);
+                if (it == world.h3_province_map.end()) continue;
+                const auto& nb = world.provinces[it->second];
+                if (!nb.geography.is_landlocked && nb.geography.coastal_length_km > 0.0f) {
+                    // Direct neighbor is coastal.
+                    float dist = std::sqrt(nb.geography.area_km2);
+                    if (dist < min_dist_proxy) min_dist_proxy = dist;
+                } else {
+                    // Check 2nd-hop neighbors.
+                    for (const auto& link2 : nb.links) {
+                        auto it2 = world.h3_province_map.find(link2.neighbor_h3);
+                        if (it2 == world.h3_province_map.end()) continue;
+                        const auto& nb2 = world.provinces[it2->second];
+                        if (!nb2.geography.is_landlocked && nb2.geography.coastal_length_km > 0.0f) {
+                            float dist = std::sqrt(nb.geography.area_km2) +
+                                         std::sqrt(nb2.geography.area_km2);
+                            if (dist < min_dist_proxy) min_dist_proxy = dist;
+                        }
+                    }
+                }
+            }
+            if (min_dist_proxy > 500.0f) min_dist_proxy = 500.0f;
+            prov.climate.continentality = 1.0f - 1.0f / (1.0f + min_dist_proxy * a.cont_decay);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 2: Base temperature from latitude + altitude.
+    // Replaces/refines the archetype-set temperature values with physically
+    // derived ones. Blends 60% physics + 40% archetype to maintain archetype
+    // character while adding geographic realism.
+    // -----------------------------------------------------------------------
+    static constexpr float kLapseRateCPerM = 0.0065f;
+    for (auto& prov : world.provinces) {
+        float base_temp = a.temp_equator_c -
+                          std::abs(prov.geography.latitude) * a.temp_lat_rate;
+        float lapse = prov.geography.elevation_avg_m * kLapseRateCPerM;
+        float phys_temp = base_temp - lapse;
+
+        // Blend with archetype.
+        float arch_temp = prov.climate.temperature_avg_c;
+        prov.climate.temperature_avg_c = arch_temp * 0.40f + phys_temp * 0.60f;
+
+        // Derive min/max from average with seasonal amplitude.
+        float lat_amplitude = std::abs(prov.geography.latitude) * 0.25f;  // higher lat = more seasons
+        float continent_amp = prov.climate.continentality * 8.0f;         // interior = bigger swings
+        float amplitude = std::max(5.0f, lat_amplitude + continent_amp);
+
+        prov.climate.temperature_min_c = prov.climate.temperature_avg_c - amplitude * 0.6f;
+        prov.climate.temperature_max_c = prov.climate.temperature_avg_c + amplitude * 0.4f;
+
+        // Clamp to physically plausible extremes.
+        prov.climate.temperature_avg_c = std::max(-50.0f, std::min(50.0f, prov.climate.temperature_avg_c));
+        prov.climate.temperature_min_c = std::max(-65.0f, std::min(prov.climate.temperature_avg_c,
+                                                                     prov.climate.temperature_min_c));
+        prov.climate.temperature_max_c = std::max(prov.climate.temperature_avg_c,
+                                                   std::min(60.0f, prov.climate.temperature_max_c));
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 3: Base precipitation from Hadley cell model + continentality.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        float abs_lat = std::abs(prov.geography.latitude);
+        float hadley_base;
+
+        if (abs_lat < a.itcz_lat_max) {
+            // ITCZ: high convective precipitation.
+            hadley_base = a.itcz_precip_mm;
+        } else if (abs_lat < 30.0f) {
+            // Hadley descent zone: subtropical dry belt.
+            float frac = (abs_lat - a.itcz_lat_max) / (30.0f - a.itcz_lat_max);
+            hadley_base = a.itcz_precip_mm * (1.0f - frac * 0.75f);  // drops to ~500mm
+        } else if (abs_lat < 60.0f) {
+            // Ferrel / Westerlies: moderate, variable.
+            float frac = (abs_lat - 30.0f) / 30.0f;
+            hadley_base = 500.0f + 400.0f * (1.0f - frac);  // 500-900mm
+        } else {
+            // Polar: cold desert.
+            hadley_base = 200.0f + (90.0f - abs_lat) * 10.0f;  // 200-500mm
+        }
+
+        // Continentality reduces precipitation (interior = drier).
+        float cont_factor = 1.0f - prov.climate.continentality * 0.50f;
+        float phys_precip = hadley_base * cont_factor;
+
+        // Blend with archetype (50/50; precipitation is less archetype-bound).
+        float arch_precip = prov.climate.precipitation_mm;
+        if (arch_precip < 1.0f) arch_precip = phys_precip;  // unset archetype
+        prov.climate.precipitation_mm = arch_precip * 0.50f + phys_precip * 0.50f;
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 4: Rain shadow — simplified province-level implementation.
+    // For each province with high terrain_roughness, reduce precipitation
+    // of downwind neighbors based on wind direction for latitude band.
+    // -----------------------------------------------------------------------
+    // Determine prevailing wind dx for each province's latitude band.
+    auto wind_direction = [](float latitude) -> int {
+        float abs_lat = std::abs(latitude);
+        if (abs_lat < 8.0f)  return 0;   // ITCZ: no persistent direction
+        if (abs_lat < 30.0f) return -1;   // Trade winds: E→W (moisture moves west)
+        if (abs_lat < 60.0f) return 1;    // Westerlies: W→E
+        return -1;                         // Polar easterlies
+    };
+
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        if (prov.geography.terrain_roughness < 0.40f) continue;  // no significant orographic lift
+
+        int wind_dx = wind_direction(prov.geography.latitude);
+        if (wind_dx == 0) continue;  // ITCZ: convective, no shadow
+
+        float lift = prov.geography.terrain_roughness * a.rain_shadow_lift_coeff;
+        float shadow_strength = lift * a.rain_shadow_precip_eff;
+        shadow_strength = std::min(shadow_strength, a.rain_shadow_max_depletion);
+
+        // Windward side gets orographic enhancement; leeward gets shadow.
+        for (const auto& link : prov.links) {
+            auto it = world.h3_province_map.find(link.neighbor_h3);
+            if (it == world.h3_province_map.end()) continue;
+            auto& nb = world.provinces[it->second];
+
+            // Determine if neighbor is downwind (leeward).
+            float lng_diff = nb.geography.longitude - prov.geography.longitude;
+            bool is_leeward = (wind_dx > 0 && lng_diff > 0.0f) ||
+                              (wind_dx < 0 && lng_diff < 0.0f);
+
+            if (is_leeward && nb.geography.elevation_avg_m < prov.geography.elevation_avg_m) {
+                // Rain shadow: reduce precipitation.
+                nb.climate.precipitation_mm *= (1.0f - shadow_strength);
+                nb.climate.precipitation_mm = std::max(50.0f, nb.climate.precipitation_mm);
+            } else if (!is_leeward && nb.geography.elevation_avg_m < prov.geography.elevation_avg_m) {
+                // Windward enhancement: moisture is lifted and deposited.
+                float windward_bonus = shadow_strength * 0.40f;
+                prov.climate.precipitation_mm *= (1.0f + windward_bonus);
+                prov.climate.precipitation_mm = std::min(4000.0f, prov.climate.precipitation_mm);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 5: Ocean currents — cold upwelling and warm poleward.
+    // Simplified: assign based on latitude band + coastal + archetype hints.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        if (prov.geography.is_landlocked || prov.geography.coastal_length_km < 20.0f) continue;
+
+        float abs_lat = std::abs(prov.geography.latitude);
+
+        // Cold upwelling currents: subtropical western ocean margins (15-35°).
+        // In simplified model: coastal provinces in subtropical dry belt with low precip.
+        if (abs_lat >= a.cold_current_lat_min && abs_lat <= a.cold_current_lat_max) {
+            // Probability based on how dry this coastal area already is (dry coast = likely upwelling).
+            float dryness = 1.0f - std::min(1.0f, prov.climate.precipitation_mm / 800.0f);
+            if (dryness > 0.40f && rng.next_float() < dryness * 0.50f) {
+                prov.climate.cold_current_adjacent = true;
+                prov.climate.temperature_avg_c -= a.cold_current_temp_drop;
+                prov.climate.temperature_min_c -= a.cold_current_temp_drop;
+                prov.climate.temperature_max_c -= a.cold_current_temp_drop;
+                prov.climate.precipitation_mm *= a.cold_current_precip_suppression;
+                prov.climate.precipitation_mm = std::max(20.0f, prov.climate.precipitation_mm);
+            }
+        }
+
+        // Warm currents: poleward eastern ocean margins (40-65°).
+        if (abs_lat >= a.warm_current_lat_min && abs_lat <= a.warm_current_lat_max) {
+            // Probability: coastal provinces at high latitude are likely warm-current influenced.
+            if (rng.next_float() < 0.30f) {
+                prov.climate.temperature_avg_c += a.warm_current_temp_boost;
+                prov.climate.temperature_min_c += a.warm_current_temp_boost * 0.80f;
+                prov.climate.temperature_max_c += a.warm_current_temp_boost * 0.40f;
+                prov.climate.precipitation_mm *= (1.0f + a.warm_current_precip_boost);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 6: Monsoon detection and modification.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        float abs_lat = std::abs(prov.geography.latitude);
+        if (abs_lat < a.monsoon_lat_min || abs_lat > a.monsoon_lat_max) continue;
+        if (prov.geography.is_landlocked) continue;  // need ocean adjacency
+        if (prov.climate.cold_current_adjacent) continue;  // cold current suppresses monsoon
+
+        // Coastal or near-coastal provinces in monsoon belt.
+        bool near_coast = !prov.geography.is_landlocked &&
+                          (prov.geography.coastal_length_km > 0.0f || prov.climate.continentality < 0.40f);
+        if (!near_coast) continue;
+
+        prov.climate.is_monsoon = true;
+        prov.climate.precipitation_mm *= (1.0f + a.monsoon_precip_bonus);
+        prov.climate.precipitation_seasonality =
+            std::max(prov.climate.precipitation_seasonality, a.monsoon_seasonality);
+        prov.climate.flood_vulnerability =
+            std::min(1.0f, prov.climate.flood_vulnerability + a.monsoon_flood_bonus);
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 7: ENSO susceptibility per province.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        float abs_lat = std::abs(prov.geography.latitude);
+        float base;
+
+        if (abs_lat < 10.0f) {
+            base = 0.90f;
+        } else if (abs_lat < 25.0f) {
+            base = 0.80f;
+        } else if (abs_lat < 40.0f) {
+            base = 0.50f;
+        } else if (abs_lat < 60.0f) {
+            base = 0.25f;
+        } else {
+            base = 0.05f;
+        }
+
+        // Continentality dampens ENSO signal.
+        prov.climate.enso_susceptibility = base * (1.0f - prov.climate.continentality * 0.40f);
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 8: Precipitation seasonality for non-monsoon provinces.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        if (prov.climate.is_monsoon) continue;  // already set in monsoon pass
+
+        float abs_lat = std::abs(prov.geography.latitude);
+        if (abs_lat < 10.0f) {
+            // Equatorial: relatively even year-round.
+            prov.climate.precipitation_seasonality = 0.10f + rng.next_float() * 0.10f;
+        } else if (abs_lat < 30.0f) {
+            // Subtropical: dry season + wet season.
+            prov.climate.precipitation_seasonality = 0.30f + rng.next_float() * 0.25f;
+        } else if (abs_lat < 60.0f) {
+            // Temperate/oceanic: moderate seasonality.
+            float cont_effect = prov.climate.continentality * 0.15f;
+            prov.climate.precipitation_seasonality = 0.15f + cont_effect + rng.next_float() * 0.10f;
+        } else {
+            // Polar: low precipitation, concentrated in warmer months.
+            prov.climate.precipitation_seasonality = 0.25f + rng.next_float() * 0.15f;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 9: Re-derive Köppen zone from physics.
+    // Uses {temperature_avg_c, precipitation_mm, precipitation_seasonality}
+    // to classify. Blends with archetype: 70% physics / 30% archetype (keep
+    // archetype if physics is ambiguous within the same major group).
+    // -----------------------------------------------------------------------
+    auto classify_koppen = [](float temp_avg, float precip_mm, float seasonality) -> KoppenZone {
+        // Polar
+        if (temp_avg < -10.0f) return KoppenZone::EF;
+        if (temp_avg < 0.0f)   return KoppenZone::ET;
+
+        // Hot desert / steppe
+        if (precip_mm < 250.0f) {
+            return temp_avg > 18.0f ? KoppenZone::BWh : KoppenZone::BWk;
+        }
+        if (precip_mm < 500.0f) {
+            return temp_avg > 18.0f ? KoppenZone::BSh : KoppenZone::BSk;
+        }
+
+        // Tropical (warm year-round + wet)
+        if (temp_avg > 22.0f && precip_mm > 1500.0f) {
+            if (seasonality < 0.30f) return KoppenZone::Af;
+            if (seasonality < 0.60f) return KoppenZone::Am;
+            return KoppenZone::Aw;
+        }
+        if (temp_avg > 20.0f && precip_mm > 1000.0f) {
+            return seasonality > 0.50f ? KoppenZone::Aw : KoppenZone::Am;
+        }
+
+        // Continental (cold winters)
+        if (temp_avg < 5.0f) {
+            if (precip_mm < 400.0f) return KoppenZone::Dfd;
+            return temp_avg < -5.0f ? KoppenZone::Dfc : KoppenZone::Dfb;
+        }
+
+        // Temperate
+        if (seasonality > 0.55f) {
+            // Dry summer = Mediterranean.
+            return temp_avg > 16.0f ? KoppenZone::Csa : KoppenZone::Csb;
+        }
+        if (seasonality > 0.40f && temp_avg > 18.0f) {
+            return KoppenZone::Cwa;  // subtropical monsoon
+        }
+        if (temp_avg > 14.0f) {
+            return precip_mm > 1000.0f ? KoppenZone::Cfa : KoppenZone::Cfb;
+        }
+        if (temp_avg > 8.0f) return KoppenZone::Cfb;
+        if (temp_avg > 3.0f) return KoppenZone::Cfc;
+
+        // Continental fallback.
+        return temp_avg > 10.0f ? KoppenZone::Dfa : KoppenZone::Dfb;
+    };
+
+    // Helper: same major group?
+    auto major_group = [](KoppenZone kz) -> uint8_t {
+        uint8_t v = static_cast<uint8_t>(kz);
+        if (v <= 2) return 0;   // Tropical
+        if (v <= 6) return 1;   // Arid
+        if (v <= 12) return 2;  // Temperate
+        if (v <= 16) return 3;  // Continental
+        return 4;               // Polar
+    };
+
+    for (auto& prov : world.provinces) {
+        KoppenZone physics_kz = classify_koppen(
+            prov.climate.temperature_avg_c,
+            prov.climate.precipitation_mm,
+            prov.climate.precipitation_seasonality);
+
+        KoppenZone archetype_kz = prov.climate.koppen_zone;
+
+        // If physics and archetype agree on major group, keep archetype (finer detail).
+        // If they disagree, physics wins.
+        if (major_group(physics_kz) == major_group(archetype_kz)) {
+            // Keep archetype — finer detail within same group.
+        } else {
+            prov.climate.koppen_zone = physics_kz;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 10: Geographic vulnerability derivation.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        KoppenZone kz = prov.climate.koppen_zone;
+        float abs_lat = std::abs(prov.geography.latitude);
+        float base_vuln;
+
+        // Polar/alpine
+        if (kz == KoppenZone::EF || kz == KoppenZone::ET ||
+            prov.geography.elevation_avg_m > 3000.0f) {
+            base_vuln = 0.85f + rng.next_float() * 0.15f;
+        }
+        // Tropical coastal
+        else if ((kz == KoppenZone::Af || kz == KoppenZone::Am) &&
+                 prov.geography.coastal_length_km > 50.0f) {
+            base_vuln = 0.80f + rng.next_float() * 0.15f;
+        }
+        // Hot arid
+        else if (kz == KoppenZone::BWh || kz == KoppenZone::BSh) {
+            base_vuln = 0.65f + rng.next_float() * 0.15f;
+        }
+        // Subtropical / tropical savanna
+        else if (kz == KoppenZone::Cfa || kz == KoppenZone::Cwa || kz == KoppenZone::Aw) {
+            base_vuln = 0.45f + rng.next_float() * 0.20f;
+        }
+        // Continental warm
+        else if (kz == KoppenZone::Dfa || kz == KoppenZone::Dfb) {
+            base_vuln = 0.30f + rng.next_float() * 0.15f;
+        }
+        // Subarctic non-coastal
+        else if ((kz == KoppenZone::Dfc || kz == KoppenZone::Dfd) &&
+                 prov.geography.is_landlocked) {
+            base_vuln = 0.25f + rng.next_float() * 0.15f;
+        }
+        // Temperate oceanic
+        else if (kz == KoppenZone::Cfb || kz == KoppenZone::Cfc) {
+            base_vuln = 0.20f + rng.next_float() * 0.15f;
+        }
+        // Default
+        else {
+            base_vuln = 0.35f + rng.next_float() * 0.20f;
+        }
+
+        // Tectonic stress adds vulnerability (earthquake/eruption risk).
+        base_vuln += prov.tectonic_stress * 0.10f;
+
+        prov.climate.geographic_vulnerability = std::min(1.0f, std::max(0.0f, base_vuln));
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 11: Drought vulnerability refinement from atmosphere physics.
+    // Blend the archetype-set value with a physics-derived estimate.
+    // -----------------------------------------------------------------------
+    for (auto& prov : world.provinces) {
+        float phys_drought = 0.0f;
+        KoppenZone kz = prov.climate.koppen_zone;
+
+        if (kz == KoppenZone::BWh || kz == KoppenZone::BWk) {
+            phys_drought = 0.70f + rng.next_float() * 0.20f;
+        } else if (kz == KoppenZone::BSh || kz == KoppenZone::BSk) {
+            phys_drought = 0.50f + rng.next_float() * 0.20f;
+        } else if (kz == KoppenZone::Csa || kz == KoppenZone::Csb) {
+            phys_drought = 0.35f + rng.next_float() * 0.15f;  // dry summers
+        } else if (kz == KoppenZone::Aw) {
+            phys_drought = 0.30f + rng.next_float() * 0.15f;  // dry season
+        } else if (kz == KoppenZone::Af || kz == KoppenZone::Am) {
+            phys_drought = 0.05f + rng.next_float() * 0.10f;  // wet tropics
+        } else if (kz == KoppenZone::Cfb || kz == KoppenZone::Cfc) {
+            phys_drought = 0.10f + rng.next_float() * 0.10f;
+        } else {
+            phys_drought = 0.20f + rng.next_float() * 0.15f;
+        }
+
+        // Blend 50% physics, 50% archetype.
+        prov.climate.drought_vulnerability =
+            prov.climate.drought_vulnerability * 0.50f + phys_drought * 0.50f;
+    }
+}
+
+// ===========================================================================
 // Stage 3 — Hydrology: drainage basins, rivers, snowpack, springs, ports
 // ===========================================================================
 
@@ -2033,8 +2473,6 @@ void WorldGenerator::detect_terrain_flags(WorldState& world,
 void WorldGenerator::refine_province_geography(WorldState& world,
                                                const WorldGeneratorConfig& config) {
     const auto& t = config.terrain;
-    // Environmental lapse rate: ~6.5 °C / 1 000 m. Physical constant; not in config.
-    static constexpr float kLapseRateCPerM = 0.0065f;
 
     for (auto& prov : world.provinces) {
         // ---- Elevation-roughness correlation ----
@@ -2045,21 +2483,8 @@ void WorldGenerator::refine_province_geography(WorldState& world,
         prov.geography.elevation_avg_m =
             std::max(t.elev_floor_m, prov.geography.elevation_avg_m * roughness_factor);
 
-        // ---- Elevation lapse rate on temperature ----
-        float lapse_c = prov.geography.elevation_avg_m * kLapseRateCPerM;
-        prov.climate.temperature_avg_c -= lapse_c;
-        prov.climate.temperature_min_c -= lapse_c;
-        prov.climate.temperature_max_c -= lapse_c;
-
-        // Clamp to physically plausible global extremes.
-        prov.climate.temperature_avg_c =
-            std::max(-50.0f, std::min(50.0f, prov.climate.temperature_avg_c));
-        prov.climate.temperature_min_c =
-            std::max(-65.0f, std::min(prov.climate.temperature_avg_c,
-                                      prov.climate.temperature_min_c));
-        prov.climate.temperature_max_c =
-            std::max(prov.climate.temperature_avg_c,
-                     std::min(60.0f, prov.climate.temperature_max_c));
+        // Note: temperature lapse rate from elevation is now handled in
+        // simulate_atmosphere() (Stage 4). This function only scales elevation.
     }
 }
 
@@ -2401,6 +2826,14 @@ void WorldGenerator::detect_special_features(WorldState& world,
                         std::min(1.0f, link.transit_terrain_cost + t.fjord_maritime_cost_add);
                 }
             }
+        }
+
+        // ---- Delta flood floor re-enforcement ----
+        // Hydrology set delta flood_vulnerability but soils/biomes blending may
+        // have reduced it. Re-enforce the physical constraint: deltas flood.
+        if (prov.geography.is_delta) {
+            prov.climate.flood_vulnerability = std::max(prov.climate.flood_vulnerability,
+                config.hydrology.delta_flood_floor);
         }
 
         // ---- Estuary ----
@@ -2916,6 +3349,12 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
             {"flood_vulnerability", prov.climate.flood_vulnerability},
             {"wildfire_vulnerability", prov.climate.wildfire_vulnerability},
             {"climate_stress_current", prov.climate.climate_stress_current},
+            // Atmosphere (Stage 4)
+            {"continentality", prov.climate.continentality},
+            {"enso_susceptibility", prov.climate.enso_susceptibility},
+            {"geographic_vulnerability", prov.climate.geographic_vulnerability},
+            {"cold_current_adjacent", prov.climate.cold_current_adjacent},
+            {"is_monsoon", prov.climate.is_monsoon},
         };
 
         // Tectonic geology

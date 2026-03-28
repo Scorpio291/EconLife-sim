@@ -283,6 +283,14 @@ struct ClimateProfile {
                                    // downstream effects (agricultural_productivity,
                                    // community_state) batched every 7 ticks via DeferredWorkQueue
                                    // (WorkType::climate_downstream_batch)
+
+    // Atmosphere fields (Stage 4 — WorldGen v0.18; static after world generation)
+    float continentality           = 0.0f;  // 0.0 (fully oceanic) to 1.0 (deep continental interior);
+                                             // derived from distance-to-coast proxy; drives precip baseline
+    float enso_susceptibility      = 0.0f;  // 0.0-1.0; how much ENSO shifts this province's precipitation
+    float geographic_vulnerability = 0.0f;  // 0.0-1.0; climate stress exposure; derived from koppen/coast/elev
+    bool  cold_current_adjacent    = false; // coastal + cold upwelling current; fish bonus + precip suppression
+    bool  is_monsoon               = false; // province in monsoon belt; high seasonality + flood bonus
 };
 
 // ---------------------------------------------------------------------------

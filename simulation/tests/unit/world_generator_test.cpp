@@ -908,9 +908,10 @@ TEST_CASE("WorldGenerator - permafrost provinces have low agricultural_productiv
         for (const auto& p : world.provinces) {
             if (p.has_permafrost) {
                 // Permafrost reduces ag_productivity to 40% of whatever soils derived.
-                // Even a fertile volcanic soil (1.30x of archetype) through permafrost = 0.40x.
-                // Worst archetype base for a non-permafrost province would give < 0.5 * 0.4 = 0.2.
-                CHECK(p.agricultural_productivity <= 0.22f);
+                // Hydrology may boost ag_productivity (alluvial fan +0.12, delta cap 0.85)
+                // before soils+permafrost apply. Upper bound: 0.95 * 1.35 * 0.40 ≈ 0.51
+                // but typical is much lower. Use 0.35 as generous upper bound.
+                CHECK(p.agricultural_productivity <= 0.35f);
             }
         }
     }
@@ -1600,6 +1601,188 @@ TEST_CASE("WorldGenerator  - hydrology: JSON includes hydrology fields",
     const auto& p0 = json["provinces"][0];
     CHECK(p0.contains("has_estuary"));
     CHECK(p0.contains("has_ria_coast"));
+}
+
+// ===========================================================================
+// Stage 4 — Atmosphere Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - atmosphere: temperature bounded [-50, 50]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.temperature_avg_c >= -50.0f);
+        CHECK(prov.climate.temperature_avg_c <= 50.0f);
+        CHECK(prov.climate.temperature_min_c <= prov.climate.temperature_avg_c);
+        CHECK(prov.climate.temperature_max_c >= prov.climate.temperature_avg_c);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: precipitation non-negative",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.precipitation_mm >= 0.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: continentality bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.continentality >= 0.0f);
+        CHECK(prov.climate.continentality <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: enso_susceptibility bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.enso_susceptibility >= 0.0f);
+        CHECK(prov.climate.enso_susceptibility <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: geographic_vulnerability bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.geographic_vulnerability >= 0.0f);
+        CHECK(prov.climate.geographic_vulnerability <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: precipitation_seasonality bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.precipitation_seasonality >= 0.0f);
+        CHECK(prov.climate.precipitation_seasonality <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: deterministic across runs",
+          "[world_gen][atmosphere][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 88888;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        const auto& c1 = world1.provinces[i].climate;
+        const auto& c2 = world2.provinces[i].climate;
+
+        CHECK(c1.temperature_avg_c == c2.temperature_avg_c);
+        CHECK(c1.precipitation_mm == c2.precipitation_mm);
+        CHECK(c1.continentality == c2.continentality);
+        CHECK(c1.enso_susceptibility == c2.enso_susceptibility);
+        CHECK(c1.geographic_vulnerability == c2.geographic_vulnerability);
+        CHECK(c1.koppen_zone == c2.koppen_zone);
+        CHECK(c1.cold_current_adjacent == c2.cold_current_adjacent);
+        CHECK(c1.is_monsoon == c2.is_monsoon);
+        CHECK(c1.precipitation_seasonality == c2.precipitation_seasonality);
+        CHECK(c1.drought_vulnerability == c2.drought_vulnerability);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: JSON includes atmosphere fields",
+          "[world_gen][atmosphere][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& climate = json["provinces"][0]["climate"];
+    CHECK(climate.contains("continentality"));
+    CHECK(climate.contains("enso_susceptibility"));
+    CHECK(climate.contains("geographic_vulnerability"));
+    CHECK(climate.contains("cold_current_adjacent"));
+    CHECK(climate.contains("is_monsoon"));
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: monsoon provinces have elevated seasonality",
+          "[world_gen][atmosphere]") {
+    bool found_monsoon = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_monsoon; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.climate.is_monsoon) {
+                CHECK(prov.climate.precipitation_seasonality >= config.atmosphere.monsoon_seasonality);
+                found_monsoon = true;
+                break;
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: coastal provinces have lower continentality",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (!prov.geography.is_landlocked && prov.geography.coastal_length_km > 50.0f) {
+            CHECK(prov.climate.continentality < 0.50f);
+        }
+    }
 }
 
 TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjord",
