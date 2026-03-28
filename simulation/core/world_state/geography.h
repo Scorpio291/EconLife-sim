@@ -155,6 +155,9 @@ enum class ResourceType : uint8_t {
     Geothermal, // rift zones and hot spots; renewable energy
     Uranium,    // craton shields; high-value; low quantity
     Potash,     // evaporite basins; agricultural fertilizer input
+    // Added in WorldGen v0.18 Stage 8 (deterministic seeding)
+    Sand,       // marine/river-deposited; construction material; every province needs it
+    Aggregate,  // quarry rock (crushed stone, gravel); construction material
     // [EX] full deposit list from GDD Section 8.3 expanded in later passes
 };
 
@@ -457,6 +460,9 @@ struct Province {
                                   // > 0.55, latitude > 50°. Maritime ProvinceLinks gain
                                   // +0.15 transit_terrain_cost (difficult navigation in
                                   // confined fjord channels). Scenic appeal; tourism bonus.
+    bool is_atoll       = false;  // subsided volcanic island with coral reef ring; HotSpot +
+                                  // low elevation + tropical. Zero ag_productivity; elevated
+                                  // fish biomass; moderate lagoon port; very low infrastructure.
 
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;

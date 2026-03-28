@@ -381,6 +381,12 @@ class WorldGenerator {
     static void apply_age_modifiers(WorldState& world, DeterministicRNG& rng,
                                     const WorldGeneratorConfig& config);
 
+    // Stage 8 — Deterministic resource seeding (WorldGen v0.18).
+    // Sand, aggregate, solar potential, wind potential. Derived from geology,
+    // climate, and geography rather than tectonic probability table.
+    static void seed_deterministic_resources(WorldState& world, DeterministicRNG& rng,
+                                             const WorldGeneratorConfig& config);
+
     // Stage 4 — Atmosphere (WorldGen v0.18; simplified province-level pass).
     // Derives temperature, precipitation, rain shadow, monsoon, ocean currents,
     // ENSO susceptibility, continentality, geographic vulnerability, and

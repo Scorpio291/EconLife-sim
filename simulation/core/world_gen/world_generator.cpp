@@ -140,6 +140,11 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Runs after soils/biomes (needs soil_type) and after all deposit seeding.
     apply_age_modifiers(world, rng, config);
 
+    // Step 3f2: Stage 8 — Deterministic resource seeding (WorldGen v0.18).
+    // Sand, aggregate, solar potential, wind potential — derived from geology,
+    // climate, and geography rather than tectonic probability table.
+    seed_deterministic_resources(world, rng, config);
+
     // Step 3g: Stage 4b — Economic geography seeding (WorldGen v0.18).
     // Derives trade_openness for all province archetypes (fixes the bug where only
     // coastal_trade sets it). Refines wildfire_vulnerability from KoppenZone. Adjusts
@@ -1671,6 +1676,221 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
 }
 
 // ===========================================================================
+// Stage 8 — Deterministic resource seeding: sand, aggregate, solar, wind
+// ===========================================================================
+
+void WorldGenerator::seed_deterministic_resources(WorldState& world, DeterministicRNG& rng,
+                                                  const WorldGeneratorConfig& config) {
+    // Track next deposit ID.
+    uint32_t next_deposit_id = 0;
+    for (const auto& prov : world.provinces) {
+        for (const auto& d : prov.deposits) {
+            if (d.id >= next_deposit_id) next_deposit_id = d.id + 1;
+        }
+    }
+
+    for (auto& prov : world.provinces) {
+        // Remove pre-existing archetype-seeded SolarPotential and WindPotential
+        // deposits — we'll replace them with physics-derived values.
+        prov.deposits.erase(
+            std::remove_if(prov.deposits.begin(), prov.deposits.end(),
+                           [](const ResourceDeposit& d) {
+                               return d.type == ResourceType::SolarPotential ||
+                                      d.type == ResourceType::WindPotential;
+                           }),
+            prov.deposits.end());
+
+        // -----------------------------------------------------------------
+        // Sand: marine/river-deposited; highest-volume extracted material.
+        // -----------------------------------------------------------------
+        float sand_qty = 0.0f;
+
+        // Coastal sand (marine deposition).
+        if (prov.geography.coastal_length_km > 50.0f) {
+            sand_qty += prov.geography.coastal_length_km * 0.003f;  // COASTAL_SAND_SCALE
+        }
+
+        // River/floodplain sand.
+        if (prov.soil_type == SoilType::Alluvial || prov.soil_type == SoilType::Entisol) {
+            sand_qty += prov.geography.river_access * 0.40f;  // RIVER_SAND_SCALE
+        }
+
+        // Desert sand is abundant but mostly unusable for construction (too fine/rounded).
+        KoppenZone kz = prov.climate.koppen_zone;
+        float sand_quality = 0.85f;  // river/marine sand: angular, suitable for concrete
+        if (kz == KoppenZone::BWh || kz == KoppenZone::BWk) {
+            sand_qty += 0.90f;
+            sand_quality = 0.05f;  // erg sand too rounded for construction
+        }
+
+        if (sand_qty > 0.01f) {
+            ResourceDeposit sand{};
+            sand.id = next_deposit_id++;
+            sand.type = ResourceType::Sand;
+            sand.quantity = std::min(1.0f, sand_qty);
+            sand.quality = sand_quality;
+            sand.depth = 0.0f;
+            sand.accessibility = 0.90f + rng.next_float() * 0.10f;
+            sand.depletion_rate = 0.0001f;  // very slow depletion
+            sand.quantity_remaining = sand.quantity;
+            sand.era_unlock = 1;
+            prov.deposits.push_back(std::move(sand));
+        }
+
+        // -----------------------------------------------------------------
+        // Aggregate: quarry rock (crushed stone, gravel).
+        // -----------------------------------------------------------------
+        float agg_qty = 0.0f;
+
+        if (prov.rock_type == RockType::Igneous || prov.rock_type == RockType::Metamorphic) {
+            agg_qty += 0.80f;  // granite, basalt, gneiss: excellent aggregate
+        } else if (prov.rock_type == RockType::Sedimentary) {
+            if (prov.geology_type == GeologyType::CarbonateSequence) {
+                agg_qty += 0.70f;  // limestone: common road base + cement feedstock
+            } else {
+                agg_qty += 0.40f;  // softer sedimentary; lower quality
+            }
+        } else {
+            // Mixed rock type.
+            agg_qty += 0.55f;
+        }
+
+        if (agg_qty > 0.01f) {
+            ResourceDeposit agg{};
+            agg.id = next_deposit_id++;
+            agg.type = ResourceType::Aggregate;
+            agg.quantity = std::min(1.0f, agg_qty);
+            agg.quality = std::min(1.0f, agg_qty);  // quality tracks hardness
+            agg.depth = 0.05f + rng.next_float() * 0.10f;
+            agg.accessibility = 0.85f + rng.next_float() * 0.10f;
+            agg.depletion_rate = 0.0001f;
+            agg.quantity_remaining = agg.quantity;
+            agg.era_unlock = 1;
+            prov.deposits.push_back(std::move(agg));
+        }
+
+        // -----------------------------------------------------------------
+        // SolarPotential: deterministic capacity index from latitude + cloud.
+        // -----------------------------------------------------------------
+        float abs_lat = std::abs(prov.geography.latitude);
+        float lat_solar;
+        if (abs_lat < 15.0f) {
+            lat_solar = 0.90f;
+        } else if (abs_lat < 35.0f) {
+            lat_solar = 1.00f;  // subtropical desert belt: global optimum
+        } else if (abs_lat < 55.0f) {
+            lat_solar = 0.70f;
+        } else if (abs_lat < 70.0f) {
+            lat_solar = 0.40f;
+        } else {
+            lat_solar = 0.10f;
+        }
+
+        // Cloud cover penalty by Köppen zone.
+        float cloud_penalty = 0.25f;  // default
+        switch (kz) {
+            case KoppenZone::Af:  cloud_penalty = 0.35f; break;
+            case KoppenZone::Am:  cloud_penalty = 0.40f; break;
+            case KoppenZone::Aw:  cloud_penalty = 0.15f; break;
+            case KoppenZone::BWh: cloud_penalty = 0.05f; break;
+            case KoppenZone::BWk: cloud_penalty = 0.08f; break;
+            case KoppenZone::BSh: cloud_penalty = 0.10f; break;
+            case KoppenZone::BSk: cloud_penalty = 0.15f; break;
+            case KoppenZone::Cfa: cloud_penalty = 0.25f; break;
+            case KoppenZone::Cfb: cloud_penalty = 0.35f; break;
+            case KoppenZone::Cfc: cloud_penalty = 0.45f; break;
+            case KoppenZone::Csa: cloud_penalty = 0.10f; break;
+            case KoppenZone::Csb: cloud_penalty = 0.12f; break;
+            case KoppenZone::Cwa: cloud_penalty = 0.20f; break;
+            case KoppenZone::Dfa: cloud_penalty = 0.20f; break;
+            case KoppenZone::Dfb: cloud_penalty = 0.25f; break;
+            case KoppenZone::Dfc: cloud_penalty = 0.35f; break;
+            case KoppenZone::Dfd: cloud_penalty = 0.40f; break;
+            case KoppenZone::ET:  cloud_penalty = 0.30f; break;
+            case KoppenZone::EF:  cloud_penalty = 0.25f; break;
+        }
+
+        float solar_potential = std::max(0.0f, std::min(1.0f,
+            lat_solar - cloud_penalty));
+
+        if (solar_potential >= 0.05f) {
+            ResourceDeposit solar{};
+            solar.id = next_deposit_id++;
+            solar.type = ResourceType::SolarPotential;
+            solar.quantity = solar_potential;
+            solar.quality = solar_potential;
+            solar.depth = 0.0f;
+            solar.accessibility = 1.0f;
+            solar.depletion_rate = 0.0f;  // renewable: does not deplete
+            solar.quantity_remaining = solar_potential;
+            solar.era_unlock = 2;  // utility-scale solar is Era 2
+            prov.deposits.push_back(std::move(solar));
+        }
+
+        // -----------------------------------------------------------------
+        // WindPotential: deterministic capacity index from latitude + terrain.
+        // -----------------------------------------------------------------
+        float lat_wind;
+        if (abs_lat < 10.0f) {
+            lat_wind = 0.25f;  // ITCZ calm zone
+        } else if (abs_lat < 30.0f) {
+            lat_wind = 0.55f;  // trade winds
+        } else if (abs_lat < 60.0f) {
+            lat_wind = 0.80f;  // westerlies: strongest surface winds
+        } else {
+            lat_wind = 0.60f;  // polar easterlies
+        }
+
+        // Coastal bonus.
+        float coastal_wind = (prov.geography.coastal_length_km > 30.0f) ? 0.20f : 0.0f;
+
+        // Terrain factor: use roughness as proxy (low roughness = open/exposed).
+        float terrain_wind;
+        if (prov.geography.terrain_roughness < 0.15f) {
+            terrain_wind = 1.00f;  // flat open land
+        } else if (prov.geography.terrain_roughness < 0.30f) {
+            terrain_wind = 0.90f;  // rolling hills
+        } else if (prov.geography.terrain_roughness < 0.50f) {
+            terrain_wind = 0.80f;  // moderate terrain
+        } else if (prov.geography.terrain_roughness < 0.70f) {
+            terrain_wind = 0.70f;  // mountainous (summits viable, valleys sheltered)
+        } else {
+            terrain_wind = 0.50f;  // extreme terrain
+        }
+
+        // Elevation bonus: plateaus above boundary layer.
+        if (prov.geography.elevation_avg_m > 1500.0f &&
+            prov.geography.terrain_roughness < 0.35f) {
+            terrain_wind = 1.25f;  // plateau: elevated + flat = excellent
+        }
+
+        // Forest canopy drag.
+        if (kz == KoppenZone::Af || kz == KoppenZone::Am) {
+            terrain_wind *= 0.30f;  // dense rainforest canopy blocks wind
+        }
+
+        float continent_wind_penalty = prov.climate.continentality * 0.20f;
+
+        float wind_potential = std::max(0.0f, std::min(1.0f,
+            (lat_wind + coastal_wind) * terrain_wind - continent_wind_penalty));
+
+        if (wind_potential >= 0.10f) {
+            ResourceDeposit wind{};
+            wind.id = next_deposit_id++;
+            wind.type = ResourceType::WindPotential;
+            wind.quantity = wind_potential;
+            wind.quality = wind_potential;
+            wind.depth = 0.0f;
+            wind.accessibility = 1.0f;
+            wind.depletion_rate = 0.0f;  // renewable
+            wind.quantity_remaining = wind_potential;
+            wind.era_unlock = 2;
+            prov.deposits.push_back(std::move(wind));
+        }
+    }
+}
+
+// ===========================================================================
 // Stage 4 — Atmosphere: temperature, precipitation, rain shadow, monsoon,
 //           ocean currents, ENSO, continentality, Köppen re-derivation
 // ===========================================================================
@@ -3094,6 +3314,24 @@ void WorldGenerator::detect_special_features(WorldState& world,
                                                      std::min(0.95f, fjord_port));
         }
 
+        // ---- Atoll ----
+        // Subsided HotSpot volcanic island with coral: tropical, low elevation, small.
+        bool atoll_condition =
+            prov.island_isolation &&
+            (prov.tectonic_context == TectonicContext::HotSpot ||
+             prov.tectonic_context == TectonicContext::PassiveMargin) &&
+            prov.geography.elevation_avg_m < 50.0f &&
+            std::abs(lat) < 30.0f &&  // coral grows in warm water
+            !prov.geography.is_landlocked;
+
+        if (atoll_condition) {
+            prov.is_atoll = true;
+            prov.agricultural_productivity = 0.0f;  // no arable land
+            prov.infrastructure_rating = std::min(prov.infrastructure_rating, 0.15f);
+            // Lagoon provides moderate natural harbour.
+            prov.geography.port_capacity = std::max(prov.geography.port_capacity, 0.45f);
+        }
+
         // ---- Permafrost precludes karst ----
         if (prov.has_permafrost) {
             prov.has_karst = false;
@@ -3511,6 +3749,8 @@ static const char* resource_type_str(ResourceType rt) {
         case ResourceType::Geothermal:     return "Geothermal";
         case ResourceType::Uranium:        return "Uranium";
         case ResourceType::Potash:         return "Potash";
+        case ResourceType::Sand:           return "Sand";
+        case ResourceType::Aggregate:      return "Aggregate";
     }
     return "Unknown";
 }
@@ -3691,6 +3931,7 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         p["has_karst"] = prov.has_karst;
         p["has_estuary"] = prov.has_estuary;
         p["has_ria_coast"] = prov.has_ria_coast;
+        p["is_atoll"] = prov.is_atoll;
 
         // Soil & irrigation (Stage 5)
         p["soil_type"] = soil_type_str(prov.soil_type);

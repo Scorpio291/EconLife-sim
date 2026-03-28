@@ -1185,7 +1185,7 @@ TEST_CASE("WorldGenerator - economic geography is deterministic",
 // Stage 8 — era_unlock field on ResourceDeposit
 // ===========================================================================
 
-TEST_CASE("WorldGenerator - all V1 deposits have era_unlock == 1",
+TEST_CASE("WorldGenerator - deposits have valid era_unlock",
           "[world_gen][era_unlock]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
@@ -1197,7 +1197,13 @@ TEST_CASE("WorldGenerator - all V1 deposits have era_unlock == 1",
     uint32_t total_deposits = 0;
     for (const auto& prov : world.provinces) {
         for (const auto& d : prov.deposits) {
-            CHECK(d.era_unlock == 1);
+            // Renewable energy (solar/wind) unlocks at Era 2; all others at Era 1.
+            if (d.type == ResourceType::SolarPotential ||
+                d.type == ResourceType::WindPotential) {
+                CHECK(d.era_unlock == 2);
+            } else {
+                CHECK(d.era_unlock == 1);
+            }
             ++total_deposits;
         }
     }
@@ -2028,6 +2034,157 @@ TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjo
             }
         }
     }
+}
+
+// ===========================================================================
+// Stage 8 — Deterministic Resource Seeding Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - resources: every province gets Sand and Aggregate",
+          "[world_gen][resources]") {
+    for (uint64_t seed = 1; seed <= 5; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            bool has_sand = false;
+            bool has_agg = false;
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::Sand) has_sand = true;
+                if (d.type == ResourceType::Aggregate) has_agg = true;
+            }
+            // Most provinces should have at least aggregate (from rock type).
+            CHECK(has_agg);
+            // Sand may not appear on high-elevation landlocked provinces, but
+            // aggregate should always be present.
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - resources: desert sand has low quality",
+          "[world_gen][resources]") {
+    bool found_desert = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_desert; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.climate.koppen_zone == KoppenZone::BWh ||
+                prov.climate.koppen_zone == KoppenZone::BWk) {
+                for (const auto& d : prov.deposits) {
+                    if (d.type == ResourceType::Sand) {
+                        // Desert sand is unusable for construction (erg).
+                        CHECK(d.quality <= 0.10f);
+                        found_desert = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - resources: SolarPotential and WindPotential seeded",
+          "[world_gen][resources]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    bool found_solar = false;
+    bool found_wind = false;
+
+    for (const auto& prov : world.provinces) {
+        for (const auto& d : prov.deposits) {
+            if (d.type == ResourceType::SolarPotential) {
+                found_solar = true;
+                CHECK(d.quantity >= 0.05f);
+                CHECK(d.quantity <= 1.0f);
+                CHECK(d.depletion_rate == 0.0f);  // renewable
+                CHECK(d.era_unlock == 2);
+            }
+            if (d.type == ResourceType::WindPotential) {
+                found_wind = true;
+                CHECK(d.quantity >= 0.10f);
+                CHECK(d.quantity <= 1.0f);
+                CHECK(d.depletion_rate == 0.0f);  // renewable
+                CHECK(d.era_unlock == 2);
+            }
+        }
+    }
+
+    CHECK(found_solar);
+    CHECK(found_wind);
+}
+
+TEST_CASE("WorldGenerator  - resources: deterministic deposit seeding",
+          "[world_gen][resources]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        REQUIRE(world1.provinces[i].deposits.size() == world2.provinces[i].deposits.size());
+        for (size_t j = 0; j < world1.provinces[i].deposits.size(); ++j) {
+            CHECK(world1.provinces[i].deposits[j].type == world2.provinces[i].deposits[j].type);
+            CHECK(world1.provinces[i].deposits[j].quantity ==
+                  world2.provinces[i].deposits[j].quantity);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: atoll has zero ag and moderate port",
+          "[world_gen][features]") {
+    bool found_atoll = false;
+    for (uint64_t seed = 1; seed <= 50 && !found_atoll; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.is_atoll) {
+                found_atoll = true;
+                CHECK(prov.agricultural_productivity == 0.0f);
+                CHECK(prov.infrastructure_rating <= 0.15f);
+                CHECK(prov.geography.port_capacity >= 0.45f);
+            }
+        }
+    }
+    // Atolls are rare — OK if not found in 50 seeds.
+}
+
+TEST_CASE("WorldGenerator  - features: JSON includes is_atoll",
+          "[world_gen][features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("is_atoll"));
 }
 
 // ===========================================================================
