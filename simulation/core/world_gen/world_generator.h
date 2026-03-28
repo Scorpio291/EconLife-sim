@@ -74,6 +74,21 @@ struct WorldGeneratorConfig {
         float fjord_min_roughness       = 0.55f;  // terrain_roughness threshold
         float fjord_min_latitude        = 50.0f;  // latitude threshold (glacial origin)
         float fjord_maritime_cost_add   = 0.15f;  // added to Maritime link transit_terrain_cost
+
+        // Estuary special feature (Stage 7).
+        float estuary_min_river_access  = 0.40f;  // river_access threshold for estuary
+        float estuary_min_coastal_km    = 20.0f;   // coastal_length_km threshold
+        float estuary_max_roughness     = 0.45f;   // terrain must be moderate or lower
+        float estuary_port_min          = 0.55f;   // port_capacity range for estuaries
+        float estuary_port_max          = 0.75f;
+
+        // Ria coast special feature (Stage 7).
+        float ria_min_roughness         = 0.30f;   // moderate terrain (drowned valleys)
+        float ria_max_roughness         = 0.55f;   // but not extreme (that's fjord territory)
+        float ria_max_latitude          = 50.0f;   // below glacial threshold (non-glacial origin)
+        float ria_min_coastal_km        = 50.0f;   // needs significant coastline
+        float ria_port_min              = 0.70f;   // port_capacity range for rias
+        float ria_port_max              = 0.90f;
     } terrain{};
 
     // -----------------------------------------------------------------------
@@ -138,6 +153,59 @@ struct WorldGeneratorConfig {
 
         uint32_t population_floor = 10000u;  // minimum total_population after adjustment
     } population{};
+
+    // -----------------------------------------------------------------------
+    // HydrologyParams — thresholds for Stage 3 hydrology pass
+    // -----------------------------------------------------------------------
+    struct HydrologyParams {
+        // Snowline derivation: snowline_m = max(0, snowline_base - |lat| * snowline_lat_rate)
+        float snowline_base_m       = 5000.0f;  // snowline at equator (tropical glaciers)
+        float snowline_lat_rate     = 75.0f;    // drop per degree latitude
+        float snowpack_retention    = 0.70f;    // fraction of high-altitude precip held as snow
+        float snowmelt_river_scale  = 0.0005f;  // snowpack → river_access conversion
+        float melt_decay_km         = 500.0f;   // exponential decay distance for snowmelt propagation
+
+        // Drainage basin: river_access from catchment area
+        float catchment_river_scale = 0.15f;    // catchment_area_fraction → river_access weight
+        float precip_river_scale    = 0.0008f;  // precipitation_mm → river_access weight
+
+        // Groundwater
+        float alluvial_gw_bonus     = 0.30f;    // groundwater_reserve bonus for alluvial fill
+        float sedimentary_gw_bonus  = 0.20f;    // groundwater_reserve bonus for sedimentary
+        float floodplain_gw_bonus   = 0.15f;    // extra groundwater for high river_access + flat terrain
+        float gw_precip_scale       = 0.0004f;  // precipitation contribution to groundwater
+
+        // Alluvial fan detection
+        float fan_roughness_min     = 0.55f;    // neighbor terrain_roughness threshold
+        float fan_elev_drop_m       = 300.0f;   // elevation drop from neighbor to qualify
+        float fan_ag_bonus          = 0.12f;    // agricultural_productivity boost
+        float fan_gw_bonus          = 0.15f;    // groundwater_reserve boost
+
+        // Delta detection
+        float delta_catchment_min   = 0.40f;    // minimum upstream fraction to qualify as major delta
+        float delta_ag_cap          = 0.85f;    // agricultural_productivity cap for deltas
+        float delta_flood_floor     = 0.40f;    // minimum flood_vulnerability for deltas
+        float delta_port_min        = 0.35f;    // port_capacity range for deltas (min)
+        float delta_port_max        = 0.55f;    // port_capacity range for deltas (max)
+
+        // Spring/oasis detection
+        float spring_gw_min         = 0.35f;    // minimum groundwater_reserve for spring detection
+        float spring_elev_diff_m    = 200.0f;   // recharge zone must be this much higher
+        float spring_precip_min_mm  = 400.0f;   // recharge neighbor must have this precipitation
+        float artesian_flow_scale   = 0.50f;    // scaling for spring_flow_index
+        float spring_attract_weight = 0.25f;    // spring contribution to settlement attractiveness
+        float oasis_bonus           = 0.15f;    // extra attractiveness for oasis provinces
+
+        // Port capacity baseline
+        float port_coast_norm_km    = 150.0f;   // coastal_length_km normalisation reference
+        float port_roughness_penalty = 0.50f;   // terrain_roughness penalty factor
+        float port_elev_cap_m       = 2000.0f;  // elevation for max penalty
+        float port_elev_max_penalty = 0.50f;    // maximum elevation penalty
+        float port_river_mouth_bonus = 0.25f;   // river_access contribution at coast
+
+        // Endorheic basin
+        float endorheic_lithium_chance = 0.40f; // probability of lithium brine in endorheic basin
+    } hydrology{};
 
     // -----------------------------------------------------------------------
     // SoilsParams — blending ratios for Stage 5+6 soil and biome pass
@@ -236,6 +304,14 @@ class WorldGenerator {
     // etc.), layered on top of the archetype-driven deposits from create_provinces().
     static void seed_tectonic_deposits(Province& province, DeterministicRNG& rng,
                                        float richness);
+
+    // Stage 3 — Hydrology (WorldGen v0.18).
+    // Computes drainage basins, river networks, snowpack, snowmelt propagation,
+    // groundwater, springs, alluvial fans, deltas, endorheic basins, and port
+    // capacity baseline. Refines archetype-set river_access with physically
+    // derived values. Must run after generate_plates() and create_province_links().
+    static void calculate_hydrology(WorldState& world, DeterministicRNG& rng,
+                                    const WorldGeneratorConfig& config);
 
     // Stage 2 derived — Terrain flag detection (WorldGen v0.18).
     // Detects mountain passes (high-terrain chokepoints) and island isolation.

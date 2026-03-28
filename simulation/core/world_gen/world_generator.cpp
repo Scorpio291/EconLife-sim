@@ -67,7 +67,14 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // and seeds tectonic-context-specific resource deposits.
     generate_plates(world, rng, config);
 
-    // Step 3b2: Stage 4a — Province geography refinement (WorldGen v0.18).
+    // Step 3b2: Stage 3 — Hydrology (WorldGen v0.18).
+    // Computes drainage basins, river networks, snowpack, snowmelt propagation,
+    // groundwater, springs, alluvial fans, deltas, endorheic basins, port capacity.
+    // Runs after generate_plates() (reads geology_type for groundwater) and
+    // create_province_links() (reads adjacency for drainage flow).
+    calculate_hydrology(world, rng, config);
+
+    // Step 3b3: Stage 4a — Province geography refinement (WorldGen v0.18).
     // Scales elevation from terrain_roughness and applies elevation lapse rate to
     // temperature. MUST run before detect_terrain_flags so mountain pass detection
     // uses physically consistent elevation values.
@@ -1542,6 +1549,431 @@ void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG
 }
 
 // ===========================================================================
+// Stage 3 — Hydrology: drainage basins, rivers, snowpack, springs, ports
+// ===========================================================================
+
+void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rng,
+                                         const WorldGeneratorConfig& config) {
+    if (world.provinces.empty()) return;
+
+    const auto& h = config.hydrology;
+    const uint32_t n = static_cast<uint32_t>(world.provinces.size());
+
+    // -----------------------------------------------------------------------
+    // Pass 1: Drainage direction — each province drains to its lowest neighbor.
+    // Coastal provinces drain to ocean (sentinel -1). Provinces lower than all
+    // neighbors are local minima (endorheic basin seeds).
+    // -----------------------------------------------------------------------
+    std::vector<int32_t> drain_target(n, -1);  // -1 = drains to ocean / is local minimum
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+
+        // Coastal provinces drain to ocean.
+        if (prov.geography.coastal_length_km > 0.0f && !prov.geography.is_landlocked) {
+            drain_target[i] = -1;
+            continue;
+        }
+
+        float my_elev = prov.geography.elevation_avg_m;
+        float lowest_elev = my_elev;
+        int32_t lowest_idx = -1;
+
+        for (const auto& link : prov.links) {
+            auto it = world.h3_province_map.find(link.neighbor_h3);
+            if (it == world.h3_province_map.end()) continue;
+            uint32_t nb_idx = it->second;
+            float nb_elev = world.provinces[nb_idx].geography.elevation_avg_m;
+            if (nb_elev < lowest_elev) {
+                lowest_elev = nb_elev;
+                lowest_idx = static_cast<int32_t>(nb_idx);
+            }
+        }
+        drain_target[i] = lowest_idx;  // -1 if this is a local minimum
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 2: Compute topological order (headwaters first, mouths last).
+    // Count upstream dependencies, then process in BFS order from sources.
+    // -----------------------------------------------------------------------
+    std::vector<uint32_t> upstream_count(n, 0);
+    for (uint32_t i = 0; i < n; ++i) {
+        if (drain_target[i] >= 0) {
+            upstream_count[static_cast<uint32_t>(drain_target[i])]++;
+        }
+    }
+
+    std::vector<uint32_t> topo_order;
+    topo_order.reserve(n);
+    // Seeds: provinces with no upstream tributaries.
+    for (uint32_t i = 0; i < n; ++i) {
+        if (upstream_count[i] == 0) {
+            topo_order.push_back(i);
+        }
+    }
+
+    // BFS drain (Kahn's algorithm on drainage DAG).
+    std::vector<uint32_t> working_upstream = upstream_count;
+    for (size_t head = 0; head < topo_order.size(); ++head) {
+        uint32_t idx = topo_order[head];
+        int32_t target = drain_target[idx];
+        if (target >= 0) {
+            uint32_t t = static_cast<uint32_t>(target);
+            working_upstream[t]--;
+            if (working_upstream[t] == 0) {
+                topo_order.push_back(t);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 3: Catchment area accumulation (headwaters → mouths).
+    // Each province starts with area 1.0 (itself) and accumulates from upstream.
+    // -----------------------------------------------------------------------
+    std::vector<float> catchment_area(n, 1.0f);
+    for (uint32_t idx : topo_order) {
+        int32_t target = drain_target[idx];
+        if (target >= 0) {
+            catchment_area[static_cast<uint32_t>(target)] += catchment_area[idx];
+        }
+    }
+
+    // Max catchment for normalisation.
+    float max_catchment = 1.0f;
+    for (float ca : catchment_area) {
+        if (ca > max_catchment) max_catchment = ca;
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 4: Derive river_access from catchment + precipitation.
+    // Blends with archetype-set value (archetype 60%, hydrology 40%).
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        float catch_frac = catchment_area[i] / max_catchment;
+        float precip_contrib = prov.climate.precipitation_mm * h.precip_river_scale;
+        float hydro_river = std::min(1.0f, catch_frac * h.catchment_river_scale * max_catchment
+                                            + precip_contrib);
+
+        // Blend: keep archetype influence (stability) while adding hydrology signal.
+        float archetype_river = prov.geography.river_access;
+        prov.geography.river_access = std::min(1.0f,
+            archetype_river * 0.60f + hydro_river * 0.40f);
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 5: Endorheic basin detection.
+    // Local minima (drain_target == -1 AND landlocked) are endorheic seeds.
+    // Propagate flag upstream through drainage graph.
+    // -----------------------------------------------------------------------
+    std::vector<bool> is_endorheic_basin(n, false);
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        if (drain_target[i] == -1 && prov.geography.is_landlocked) {
+            is_endorheic_basin[i] = true;
+        }
+    }
+
+    // Propagate endorheic flag upstream (reverse topo order = mouths → headwaters).
+    for (auto it = topo_order.rbegin(); it != topo_order.rend(); ++it) {
+        uint32_t idx = *it;
+        int32_t target = drain_target[idx];
+        if (target >= 0 && is_endorheic_basin[static_cast<uint32_t>(target)]) {
+            is_endorheic_basin[idx] = true;
+        }
+    }
+
+    for (uint32_t i = 0; i < n; ++i) {
+        world.provinces[i].geography.is_endorheic = is_endorheic_basin[i];
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 6: Snowpack computation and downstream snowmelt propagation.
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        float snowline = std::max(0.0f,
+            h.snowline_base_m - std::abs(prov.geography.latitude) * h.snowline_lat_rate);
+
+        if (prov.geography.elevation_avg_m < snowline) {
+            prov.geography.snowpack_contribution = 0.0f;
+            continue;
+        }
+
+        float snow_fraction = std::min(1.0f,
+            (prov.geography.elevation_avg_m - snowline) / 1000.0f);
+
+        prov.geography.snowpack_contribution =
+            snow_fraction * prov.climate.precipitation_mm * h.snowpack_retention;
+
+        // Local snowpack feeds local rivers.
+        prov.geography.river_access = std::min(1.0f,
+            prov.geography.river_access +
+            prov.geography.snowpack_contribution * h.snowmelt_river_scale);
+    }
+
+    // Propagate snowmelt downstream through drainage graph (topo order).
+    for (uint32_t idx : topo_order) {
+        auto& prov = world.provinces[idx];
+        if (prov.geography.snowpack_contribution <= 0.0f) continue;
+
+        float melt_volume = prov.geography.snowpack_contribution * prov.geography.area_km2;
+
+        // Walk downstream chain, applying distance decay.
+        int32_t current = drain_target[idx];
+        float distance_km = 0.0f;
+
+        while (current >= 0) {
+            auto& downstream = world.provinces[static_cast<uint32_t>(current)];
+
+            // Approximate distance as area-based step (~sqrt(area)).
+            distance_km += std::sqrt(downstream.geography.area_km2);
+            float decay = std::exp(-distance_km / h.melt_decay_km);
+
+            if (decay < 0.01f) break;  // negligible contribution
+
+            float contribution = (melt_volume * decay / std::max(1.0f, downstream.geography.area_km2))
+                                 * h.snowmelt_river_scale;
+            downstream.geography.river_access = std::min(1.0f,
+                downstream.geography.river_access + contribution);
+            downstream.geography.snowmelt_fed = true;
+
+            current = drain_target[static_cast<uint32_t>(current)];
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 7: River flow regime classification.
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+
+        if (prov.geography.river_access < 0.05f) {
+            prov.geography.river_flow_regime = RiverFlowRegime::None;
+        } else if (prov.geography.snowpack_contribution > 100.0f &&
+                   prov.geography.elevation_avg_m > 3000.0f) {
+            prov.geography.river_flow_regime = RiverFlowRegime::Glacierfed;
+        } else if (prov.geography.snowmelt_fed ||
+                   prov.geography.snowpack_contribution > 50.0f) {
+            // Perennial if precipitation supports year-round base flow.
+            if (prov.climate.precipitation_mm > 400.0f) {
+                prov.geography.river_flow_regime = RiverFlowRegime::SnowmeltPerennial;
+            } else {
+                prov.geography.river_flow_regime = RiverFlowRegime::SnowmeltEphemeral;
+            }
+        } else if (prov.climate.precipitation_mm > 600.0f) {
+            prov.geography.river_flow_regime = RiverFlowRegime::RainfedPerennial;
+        } else if (prov.climate.precipitation_mm > 200.0f) {
+            prov.geography.river_flow_regime = RiverFlowRegime::RainfedEphemeral;
+        } else {
+            prov.geography.river_flow_regime = RiverFlowRegime::None;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 8: Groundwater reserve derivation.
+    // Driven by geology (alluvial fill, sedimentary → porous) + precipitation.
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        float gw = 0.10f;  // baseline
+
+        // Geology contribution.
+        if (prov.geology_type == GeologyType::AlluvialFill) {
+            gw += h.alluvial_gw_bonus;
+        } else if (prov.geology_type == GeologyType::SedimentarySequence ||
+                   prov.geology_type == GeologyType::CarbonateSequence) {
+            gw += h.sedimentary_gw_bonus;
+        }
+
+        // Precipitation recharge.
+        gw += prov.climate.precipitation_mm * h.gw_precip_scale;
+
+        // Floodplain bonus: high river access + flat terrain = saturated alluvium.
+        if (prov.geography.river_access > 0.4f && prov.geography.terrain_roughness < 0.25f) {
+            gw += h.floodplain_gw_bonus;
+        }
+
+        // RNG variation (±10%).
+        gw *= (0.90f + rng.next_float() * 0.20f);
+
+        prov.geography.groundwater_reserve = std::min(1.0f, std::max(0.0f, gw));
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 9: Alluvial fan detection.
+    // Province at foot of steep neighbor where elevation drops significantly.
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        if (prov.geography.terrain_roughness > 0.40f) continue;  // fans form on flat terrain
+
+        for (const auto& link : prov.links) {
+            auto it = world.h3_province_map.find(link.neighbor_h3);
+            if (it == world.h3_province_map.end()) continue;
+            const auto& nb = world.provinces[it->second];
+
+            if (nb.geography.terrain_roughness > h.fan_roughness_min &&
+                (nb.geography.elevation_avg_m - prov.geography.elevation_avg_m) > h.fan_elev_drop_m) {
+                prov.geography.has_alluvial_fan = true;
+                prov.agricultural_productivity = std::min(1.0f,
+                    prov.agricultural_productivity + h.fan_ag_bonus);
+                prov.geography.groundwater_reserve = std::min(1.0f,
+                    prov.geography.groundwater_reserve + h.fan_gw_bonus);
+                break;  // one fan is enough
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 10: River delta detection.
+    // Coastal province with large upstream catchment area.
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        if (prov.geography.is_landlocked) continue;
+        if (prov.geography.coastal_length_km < 10.0f) continue;
+
+        float catch_frac = catchment_area[i] / max_catchment;
+        if (catch_frac < h.delta_catchment_min) continue;
+
+        prov.geography.is_delta = true;
+
+        // Delta effects: high ag (natural fertilisation), high flood, moderate port.
+        prov.agricultural_productivity = std::max(prov.agricultural_productivity, h.delta_ag_cap);
+        prov.climate.flood_vulnerability = std::max(prov.climate.flood_vulnerability,
+                                                     h.delta_flood_floor);
+
+        // Delta ports are shallow (shifting channels, requires dredging).
+        float delta_port = h.delta_port_min + rng.next_float() * (h.delta_port_max - h.delta_port_min);
+        prov.geography.port_capacity = std::min(prov.geography.port_capacity, delta_port);
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 11: Artesian spring and oasis detection.
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        if (prov.geography.groundwater_reserve < h.spring_gw_min) continue;
+
+        // Check for high-elevation, wet recharge neighbors with permeable rock.
+        bool has_recharge_neighbor = false;
+        float recharge_precip_sum = 0.0f;
+        uint32_t recharge_count = 0;
+
+        for (const auto& link : prov.links) {
+            auto it = world.h3_province_map.find(link.neighbor_h3);
+            if (it == world.h3_province_map.end()) continue;
+            const auto& nb = world.provinces[it->second];
+
+            if (nb.geography.elevation_avg_m >
+                    prov.geography.elevation_avg_m + h.spring_elev_diff_m &&
+                nb.climate.precipitation_mm > h.spring_precip_min_mm &&
+                (nb.rock_type == RockType::Sedimentary || nb.rock_type == RockType::Mixed)) {
+                has_recharge_neighbor = true;
+                recharge_precip_sum += nb.climate.precipitation_mm;
+                recharge_count++;
+            }
+        }
+
+        if (!has_recharge_neighbor) continue;
+
+        // Granite shield has no confining layer — water disperses.
+        if (prov.rock_type == RockType::Igneous &&
+            prov.geology_type == GeologyType::GraniteShield) {
+            continue;
+        }
+
+        prov.geography.has_artesian_spring = true;
+        float mean_recharge_precip = recharge_precip_sum / static_cast<float>(recharge_count);
+        prov.geography.spring_flow_index = std::min(1.0f,
+            prov.geography.groundwater_reserve
+            * (mean_recharge_precip / 1000.0f)
+            * h.artesian_flow_scale);
+
+        // Oasis: desert province with spring.
+        KoppenZone kz = prov.climate.koppen_zone;
+        if (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
+            kz == KoppenZone::BSh || kz == KoppenZone::BSk) {
+            prov.geography.is_oasis = true;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 12: Port capacity baseline (pre-Stage 7 override).
+    // Replaces archetype-set port_capacity with physically derived values
+    // for non-landlocked provinces. Blends with archetype (50/50) to maintain
+    // archetype influence while adding geographic realism.
+    // -----------------------------------------------------------------------
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        if (prov.geography.is_landlocked || prov.geography.coastal_length_km <= 0.0f) {
+            prov.geography.port_capacity = 0.0f;
+            continue;
+        }
+
+        float coast_factor = std::min(1.0f,
+            prov.geography.coastal_length_km / h.port_coast_norm_km);
+        float terrain_factor = 1.0f - prov.geography.terrain_roughness * h.port_roughness_penalty;
+        float elev_factor = 1.0f - std::min(h.port_elev_max_penalty,
+            prov.geography.elevation_avg_m / h.port_elev_cap_m);
+        float river_mouth_bonus = prov.geography.river_access * h.port_river_mouth_bonus;
+
+        float geo_port = std::min(1.0f, std::max(0.0f,
+            coast_factor * terrain_factor * elev_factor + river_mouth_bonus));
+
+        // Blend with archetype value.
+        float archetype_port = prov.geography.port_capacity;
+        prov.geography.port_capacity = std::min(1.0f,
+            archetype_port * 0.50f + geo_port * 0.50f);
+
+        // Island isolation minimum: island must be accessible.
+        if (prov.island_isolation && prov.geography.port_capacity < 0.50f) {
+            prov.geography.port_capacity = 0.50f;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 13: Seed lithium in endorheic basins (brine deposits).
+    // -----------------------------------------------------------------------
+    uint32_t next_deposit_id = 0;
+    for (auto& prov : world.provinces) {
+        for (const auto& d : prov.deposits) {
+            if (d.id >= next_deposit_id) next_deposit_id = d.id + 1;
+        }
+    }
+
+    for (uint32_t i = 0; i < n; ++i) {
+        auto& prov = world.provinces[i];
+        if (!prov.geography.is_endorheic) continue;
+
+        // Check if province already has lithium.
+        bool has_lithium = false;
+        for (const auto& d : prov.deposits) {
+            if (d.type == ResourceType::Lithium) {
+                has_lithium = true;
+                break;
+            }
+        }
+        if (has_lithium) continue;
+
+        // Probabilistic lithium brine deposit.
+        if (rng.next_float() < h.endorheic_lithium_chance) {
+            ResourceDeposit deposit{};
+            deposit.id = next_deposit_id++;
+            deposit.type = ResourceType::Lithium;
+            deposit.quantity = 500.0f + rng.next_float() * 1500.0f;
+            deposit.quality = 0.5f + rng.next_float() * 0.3f;
+            deposit.depth = 0.1f + rng.next_float() * 0.3f;  // shallow brine
+            deposit.accessibility = 0.5f + rng.next_float() * 0.3f;
+            deposit.depletion_rate = 0.0001f;
+            deposit.quantity_remaining = deposit.quantity;
+            deposit.era_unlock = 1;
+            prov.deposits.push_back(std::move(deposit));
+        }
+    }
+}
+
+// ===========================================================================
 // Stage 2 derived — Terrain flag detection
 // ===========================================================================
 
@@ -1971,6 +2403,56 @@ void WorldGenerator::detect_special_features(WorldState& world,
             }
         }
 
+        // ---- Estuary ----
+        // Tidal mixing zone where river meets sea; sheltered water; good port.
+        bool estuary_condition =
+            !prov.geography.is_landlocked &&
+            (prov.geography.river_access > t.estuary_min_river_access) &&
+            (prov.geography.coastal_length_km > t.estuary_min_coastal_km) &&
+            (prov.geography.terrain_roughness < t.estuary_max_roughness) &&
+            !prov.geography.is_delta &&  // deltas and estuaries are distinct
+            !prov.has_fjord;
+
+        if (estuary_condition) {
+            prov.has_estuary = true;
+            // Override port capacity with estuary values.
+            float estuary_port = t.estuary_port_min +
+                (prov.geography.river_access - t.estuary_min_river_access) *
+                (t.estuary_port_max - t.estuary_port_min);
+            prov.geography.port_capacity = std::max(prov.geography.port_capacity,
+                                                     std::min(t.estuary_port_max, estuary_port));
+        }
+
+        // ---- Ria coast ----
+        // Drowned river valleys (non-glacial); natural harbours; multiple inlets.
+        bool ria_condition =
+            !prov.geography.is_landlocked &&
+            (prov.geography.coastal_length_km > t.ria_min_coastal_km) &&
+            (prov.geography.terrain_roughness >= t.ria_min_roughness) &&
+            (prov.geography.terrain_roughness <= t.ria_max_roughness) &&
+            (lat < t.ria_max_latitude) &&  // below glacial line (glacial = fjord instead)
+            !prov.has_fjord &&
+            !prov.has_estuary;
+
+        if (ria_condition) {
+            prov.has_ria_coast = true;
+            // Override port capacity with ria values (excellent natural harbours).
+            float ria_port = t.ria_port_min +
+                (prov.geography.terrain_roughness - t.ria_min_roughness) *
+                (t.ria_port_max - t.ria_port_min) / (t.ria_max_roughness - t.ria_min_roughness);
+            prov.geography.port_capacity = std::max(prov.geography.port_capacity,
+                                                     std::min(t.ria_port_max, ria_port));
+        }
+
+        // ---- Fjord port override ----
+        // Fjords have excellent deep-water natural harbours.
+        if (prov.has_fjord) {
+            float fjord_port = 0.85f + (prov.geography.terrain_roughness - t.fjord_min_roughness)
+                               * 0.10f / (1.0f - t.fjord_min_roughness);
+            prov.geography.port_capacity = std::max(prov.geography.port_capacity,
+                                                     std::min(0.95f, fjord_port));
+        }
+
         // ---- Permafrost precludes karst ----
         if (prov.has_permafrost) {
             prov.has_karst = false;
@@ -2169,7 +2651,37 @@ void WorldGenerator::generate_commentary(WorldState& world, DeterministicRNG& rn
                                                 ? prov.province_archetype_index
                                                 : 5];
 
-        prov.province_lore = std::string(geo) + " " + climate + " " + econ;
+        std::string lore = std::string(geo) + " " + climate + " " + econ;
+
+        // Hydrology commentary (Stage 3 features).
+        if (prov.geography.is_delta) {
+            lore += " The province encompasses a major river delta whose fertile alluvial "
+                    "soils and extensive waterway network have supported dense agricultural "
+                    "settlement since antiquity, though seasonal flooding remains a constant "
+                    "challenge for infrastructure.";
+        } else if (prov.geography.is_oasis) {
+            lore += " In an otherwise inhospitable desert landscape, artesian springs "
+                    "sustain a cluster of settlements whose existence depends entirely on "
+                    "ancient groundwater reserves recharged by distant mountain precipitation.";
+        } else if (prov.geography.snowmelt_fed) {
+            lore += " The province's rivers are sustained by snowmelt from distant mountain "
+                    "ranges, providing reliable irrigation water through the growing season "
+                    "even as local rainfall remains sparse.";
+        } else if (prov.geography.is_endorheic) {
+            lore += " Situated in a closed drainage basin with no outlet to the sea, the "
+                    "province's inland waters have concentrated mineral salts over millennia, "
+                    "creating economically significant brine deposits.";
+        }
+
+        if (prov.has_estuary) {
+            lore += " A sheltered estuary where river meets tide provides natural harbour "
+                    "conditions and productive fisheries.";
+        } else if (prov.has_ria_coast) {
+            lore += " Drowned river valleys along the coast create a series of natural "
+                    "deep-water harbours ideal for maritime commerce.";
+        }
+
+        prov.province_lore = std::move(lore);
     }
 }
 
@@ -2265,6 +2777,18 @@ static const char* resource_type_str(ResourceType rt) {
         case ResourceType::Geothermal:     return "Geothermal";
         case ResourceType::Uranium:        return "Uranium";
         case ResourceType::Potash:         return "Potash";
+    }
+    return "Unknown";
+}
+
+static const char* river_flow_regime_str(RiverFlowRegime rfr) {
+    switch (rfr) {
+        case RiverFlowRegime::RainfedPerennial:   return "RainfedPerennial";
+        case RiverFlowRegime::SnowmeltPerennial:  return "SnowmeltPerennial";
+        case RiverFlowRegime::SnowmeltEphemeral:  return "SnowmeltEphemeral";
+        case RiverFlowRegime::RainfedEphemeral:   return "RainfedEphemeral";
+        case RiverFlowRegime::Glacierfed:         return "Glacierfed";
+        case RiverFlowRegime::None:               return "None";
     }
     return "Unknown";
 }
@@ -2367,6 +2891,17 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
             {"port_capacity", prov.geography.port_capacity},
             {"river_access", prov.geography.river_access},
             {"area_km2", prov.geography.area_km2},
+            // Hydrology (Stage 3)
+            {"is_endorheic", prov.geography.is_endorheic},
+            {"is_delta", prov.geography.is_delta},
+            {"snowmelt_fed", prov.geography.snowmelt_fed},
+            {"has_alluvial_fan", prov.geography.has_alluvial_fan},
+            {"has_artesian_spring", prov.geography.has_artesian_spring},
+            {"is_oasis", prov.geography.is_oasis},
+            {"groundwater_reserve", prov.geography.groundwater_reserve},
+            {"snowpack_contribution", prov.geography.snowpack_contribution},
+            {"spring_flow_index", prov.geography.spring_flow_index},
+            {"river_flow_regime", river_flow_regime_str(prov.geography.river_flow_regime)},
         };
 
         // Climate
@@ -2398,6 +2933,8 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         p["has_permafrost"] = prov.has_permafrost;
         p["has_fjord"] = prov.has_fjord;
         p["has_karst"] = prov.has_karst;
+        p["has_estuary"] = prov.has_estuary;
+        p["has_ria_coast"] = prov.has_ria_coast;
 
         // Resource deposits
         json deposits_arr = json::array();

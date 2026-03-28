@@ -1410,3 +1410,216 @@ TEST_CASE("WorldGenerator - output_world_file config writes during generate",
 
     fs::remove(tmp_path);
 }
+
+// ===========================================================================
+// Stage 3 — Hydrology Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - hydrology: river_access is bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.river_access >= 0.0f);
+        CHECK(prov.geography.river_access <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: groundwater_reserve is bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.groundwater_reserve >= 0.0f);
+        CHECK(prov.geography.groundwater_reserve <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: port_capacity is 0 for landlocked provinces",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.geography.is_landlocked) {
+            CHECK(prov.geography.port_capacity == 0.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: port_capacity bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.port_capacity >= 0.0f);
+        CHECK(prov.geography.port_capacity <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: every province has a river_flow_regime",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        auto regime = prov.geography.river_flow_regime;
+        CHECK(static_cast<uint8_t>(regime) <= static_cast<uint8_t>(RiverFlowRegime::None));
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: deterministic across runs",
+          "[world_gen][hydrology][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 77777;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        const auto& g1 = world1.provinces[i].geography;
+        const auto& g2 = world2.provinces[i].geography;
+
+        CHECK(g1.river_access == g2.river_access);
+        CHECK(g1.groundwater_reserve == g2.groundwater_reserve);
+        CHECK(g1.port_capacity == g2.port_capacity);
+        CHECK(g1.snowpack_contribution == g2.snowpack_contribution);
+        CHECK(g1.is_endorheic == g2.is_endorheic);
+        CHECK(g1.is_delta == g2.is_delta);
+        CHECK(g1.snowmelt_fed == g2.snowmelt_fed);
+        CHECK(g1.has_alluvial_fan == g2.has_alluvial_fan);
+        CHECK(g1.has_artesian_spring == g2.has_artesian_spring);
+        CHECK(g1.is_oasis == g2.is_oasis);
+        CHECK(g1.spring_flow_index == g2.spring_flow_index);
+        CHECK(g1.river_flow_regime == g2.river_flow_regime);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: delta provinces have elevated flood_vulnerability",
+          "[world_gen][hydrology]") {
+    bool found_delta = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_delta; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.geography.is_delta) {
+                CHECK(prov.climate.flood_vulnerability >= config.hydrology.delta_flood_floor);
+                found_delta = true;
+                break;
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: snowpack_contribution non-negative",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.snowpack_contribution >= 0.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: spring_flow_index bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.spring_flow_index >= 0.0f);
+        CHECK(prov.geography.spring_flow_index <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: JSON includes hydrology fields",
+          "[world_gen][hydrology][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& geo = json["provinces"][0]["geography"];
+    CHECK(geo.contains("is_endorheic"));
+    CHECK(geo.contains("is_delta"));
+    CHECK(geo.contains("snowmelt_fed"));
+    CHECK(geo.contains("has_alluvial_fan"));
+    CHECK(geo.contains("has_artesian_spring"));
+    CHECK(geo.contains("is_oasis"));
+    CHECK(geo.contains("groundwater_reserve"));
+    CHECK(geo.contains("snowpack_contribution"));
+    CHECK(geo.contains("spring_flow_index"));
+    CHECK(geo.contains("river_flow_regime"));
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("has_estuary"));
+    CHECK(p0.contains("has_ria_coast"));
+}
+
+TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjord",
+          "[world_gen][hydrology]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_fjord) {
+                CHECK_FALSE(prov.has_estuary);
+                CHECK_FALSE(prov.has_ria_coast);
+            }
+            if (prov.has_estuary) {
+                CHECK_FALSE(prov.has_ria_coast);
+            }
+        }
+    }
+}

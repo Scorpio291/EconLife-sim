@@ -215,6 +215,20 @@ enum class KoppenZone : uint8_t {
 };
 
 // ---------------------------------------------------------------------------
+// RiverFlowRegime — WorldGen v0.18 Stage 3
+// ---------------------------------------------------------------------------
+// Seasonal timing of river flow in a province; determines agricultural
+// irrigation timing, flood peak season, and drought buffering.
+enum class RiverFlowRegime : uint8_t {
+    RainfedPerennial = 0,    // flow tracks local rainfall; peaks in wet season
+    SnowmeltPerennial,       // sustained by snowmelt; peaks late spring; may drop in autumn
+    SnowmeltEphemeral,       // only flows during melt season; dry rest of year
+    RainfedEphemeral,        // only flows during local wet season; wadi/arroyo analog
+    Glacierfed,              // sustained by glacier melt; stable through summer; declining long-term
+    None,                    // no significant river flow (arid interior, small island)
+};
+
+// ---------------------------------------------------------------------------
 // SimulationLOD
 // ---------------------------------------------------------------------------
 enum class SimulationLOD : uint8_t {
@@ -238,6 +252,18 @@ struct GeographyProfile {
     float port_capacity;  // 0.0 (none) to 1.0 (major port)
     float river_access;   // 0.0-1.0; navigable river density
     float area_km2;
+
+    // Hydrology fields (Stage 3 — WorldGen v0.18; static after world generation)
+    bool  is_endorheic       = false;  // closed drainage basin; no ocean outlet; salt flats/inland lakes
+    bool  is_delta           = false;  // major river delta at coast; high ag, high flood, moderate port
+    bool  snowmelt_fed       = false;  // river_access includes significant snowmelt from upstream mountains
+    bool  has_alluvial_fan   = false;  // sediment deposit at mountain-plain transition; groundwater + ag bonus
+    bool  has_artesian_spring = false; // pressurised aquifer vents to surface; oasis mechanism
+    bool  is_oasis           = false;  // desert province with spring-fed settlement
+    float groundwater_reserve = 0.0f;  // 0.0-1.0; aquifer potential; alluvial fans and floodplains highest
+    float snowpack_contribution = 0.0f; // mm water equivalent held as seasonal snowpack; 0 below snowline
+    float spring_flow_index  = 0.0f;   // 0.0-1.0; artesian spring output; enables oasis settlement
+    RiverFlowRegime river_flow_regime = RiverFlowRegime::None;
 };
 
 // ---------------------------------------------------------------------------
@@ -394,6 +420,12 @@ struct Province {
                                   // hold: (1) arctic_drilling tech researched, AND (2)
                                   // climate_stress_current > permafrost_thaw_threshold (0.40).
                                   // agricultural_productivity reduced by ~60% at world gen.
+    bool has_estuary    = false;  // tidal mixing zone where river meets sea; sheltered water;
+                                  // elevated port_capacity (0.55–0.75); fisheries bonus.
+                                  // Detected: coastal + high river_access + moderate terrain.
+    bool has_ria_coast  = false;  // drowned river valleys creating natural harbours; requires
+                                  // coastal + moderate roughness + low latitude (non-glacial).
+                                  // Elevated port_capacity (0.70–0.90); multiple sheltered inlets.
     bool has_fjord      = false;  // high-relief glacially-carved coastline; requires
                                   // !is_landlocked, coastal_length_km > 100, terrain_roughness
                                   // > 0.55, latitude > 50°. Maritime ProvinceLinks gain
