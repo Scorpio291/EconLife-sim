@@ -351,6 +351,16 @@ class WorldGenerator {
     static void seed_tectonic_deposits(Province& province, DeterministicRNG& rng,
                                        float richness);
 
+    // Stage 8 — Age-dependent resource modifiers (WorldGen v0.18).
+    // Applies radiogenic decay/accumulation modifiers to deposits based on
+    // plate_age. Uranium/Thorium quantities decrease with age; Lead quantities
+    // increase; NaturalGas helium_fraction increases; Geothermal decreases.
+    // Also seeds Peat on Histosol provinces and cobalt_fraction on Nickel/Copper.
+    // Must run after derive_soils_and_biomes() (reads soil_type for peat) and
+    // after all deposit seeding (modifies existing deposits).
+    static void apply_age_modifiers(WorldState& world, DeterministicRNG& rng,
+                                    const WorldGeneratorConfig& config);
+
     // Stage 4 — Atmosphere (WorldGen v0.18; simplified province-level pass).
     // Derives temperature, precipitation, rain shadow, monsoon, ocean currents,
     // ENSO susceptibility, continentality, geographic vulnerability, and

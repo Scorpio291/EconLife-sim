@@ -134,7 +134,13 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Store loaded recipes in WorldState for production module access.
     world.loaded_recipes = recipe_catalog.all();
 
-    // Step 3f: Stage 4b — Economic geography seeding (WorldGen v0.18).
+    // Step 3f: Stage 8 — Age-dependent resource modifiers (WorldGen v0.18).
+    // Applies radiogenic decay to Uranium, Geothermal; helium accumulation on
+    // NaturalGas; cobalt fraction on Copper; peat on Histosol provinces.
+    // Runs after soils/biomes (needs soil_type) and after all deposit seeding.
+    apply_age_modifiers(world, rng, config);
+
+    // Step 3g: Stage 4b — Economic geography seeding (WorldGen v0.18).
     // Derives trade_openness for all province archetypes (fixes the bug where only
     // coastal_trade sets it). Refines wildfire_vulnerability from KoppenZone. Adjusts
     // formal_employment_rate for infrastructure and corruption. MUST run after
@@ -1556,6 +1562,115 @@ void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG
 }
 
 // ===========================================================================
+// Stage 8 — Age-dependent resource modifiers
+// ===========================================================================
+
+void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rng,
+                                         const WorldGeneratorConfig& config) {
+    // -----------------------------------------------------------------------
+    // Radiogenic decay formulas from design spec §8.2.
+    // Uses plate_age as proxy for geological age (per-province).
+    // -----------------------------------------------------------------------
+    auto u238_remaining = [](float age) -> float {
+        return std::pow(0.5f, age / 4.47f);
+    };
+    auto u235_remaining = [](float age) -> float {
+        return std::pow(0.5f, age / 0.704f);
+    };
+    auto uranium_age_modifier = [&](float age) -> float {
+        float num = 0.993f * u238_remaining(age) + 0.007f * u235_remaining(age);
+        float den = 0.993f * 1.0f + 0.007f * 1.0f;  // at age 0
+        return num / den;
+    };
+    auto thorium_age_modifier = [](float age) -> float {
+        return std::pow(0.5f, age / 14.05f);
+    };
+    auto geothermal_age_modifier = [](float age) -> float {
+        // Mantle heat decays; blend of primordial and radiogenic.
+        float primordial = std::exp(-age * 0.15f);
+        float radiogenic = std::pow(0.5f, age / 4.47f) * 0.50f +
+                           std::pow(0.5f, age / 14.05f) * 0.30f +
+                           std::pow(0.5f, age / 1.25f) * 0.20f;
+        return primordial * 0.60f + radiogenic * 0.40f;
+    };
+    auto he4_accumulation = [&](float age) -> float {
+        return 8.0f * (1.0f - u238_remaining(age)) +
+               7.0f * (1.0f - u235_remaining(age)) +
+               6.0f * (1.0f - thorium_age_modifier(age));
+    };
+
+    // Track next deposit ID for new deposits (peat).
+    uint32_t next_deposit_id = 0;
+    for (const auto& prov : world.provinces) {
+        for (const auto& d : prov.deposits) {
+            if (d.id >= next_deposit_id) next_deposit_id = d.id + 1;
+        }
+    }
+
+    for (auto& prov : world.provinces) {
+        float age = prov.plate_age;
+
+        // ---- Apply age modifiers to existing deposits ----
+        for (auto& deposit : prov.deposits) {
+            switch (deposit.type) {
+                case ResourceType::Uranium:
+                    deposit.quantity *= uranium_age_modifier(age);
+                    deposit.quantity_remaining = deposit.quantity;
+                    break;
+                case ResourceType::Geothermal:
+                    deposit.quantity *= geothermal_age_modifier(age);
+                    deposit.quantity_remaining = deposit.quantity;
+                    break;
+                case ResourceType::NaturalGas: {
+                    // Helium fraction increases with age (alpha decay accumulation).
+                    // Store as quality modifier: higher quality = more helium content.
+                    float he_frac = he4_accumulation(age) / 21.0f;  // normalise to ~1.0 at max
+                    deposit.quality = std::min(1.0f,
+                        deposit.quality + he_frac * 0.10f);  // helium upgrades gas quality
+                    break;
+                }
+                case ResourceType::Copper:
+                    // Cobalt fraction on copper deposits.
+                    if (prov.tectonic_context == TectonicContext::CratonInterior ||
+                        prov.tectonic_context == TectonicContext::SedimentaryBasin) {
+                        // Sediment-hosted copper (Central African Copperbelt analog).
+                        deposit.quality = std::min(1.0f,
+                            deposit.quality + 0.05f + rng.next_float() * 0.15f);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // ---- Seed peat on Histosol provinces ----
+        if (prov.soil_type == SoilType::Histosol) {
+            bool has_peat = false;
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::Coal) {  // peat → coal precursor; use Coal type
+                    has_peat = true;
+                    break;
+                }
+            }
+            // Peat is slow-burning fuel; use Coal type with low quality (lignite-grade).
+            if (!has_peat) {
+                ResourceDeposit peat{};
+                peat.id = next_deposit_id++;
+                peat.type = ResourceType::Coal;
+                peat.quantity = 200.0f + rng.next_float() * 800.0f;
+                peat.quality = 0.15f + rng.next_float() * 0.15f;  // low-grade (peat, not coal)
+                peat.depth = 0.05f + rng.next_float() * 0.10f;    // very shallow
+                peat.accessibility = 0.70f + rng.next_float() * 0.20f;  // easy surface extraction
+                peat.depletion_rate = 0.0002f;
+                peat.quantity_remaining = peat.quantity;
+                peat.era_unlock = 1;
+                prov.deposits.push_back(std::move(peat));
+            }
+        }
+    }
+}
+
+// ===========================================================================
 // Stage 4 — Atmosphere: temperature, precipitation, rain shadow, monsoon,
 //           ocean currents, ENSO, continentality, Köppen re-derivation
 // ===========================================================================
@@ -2575,7 +2690,48 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
                                               const WorldGeneratorConfig& config) {
     const auto& s = config.soils;
     for (auto& prov : world.provinces) {
-        // ---- Stage 5: Soil fertility from geology_type ----
+        // ---- Stage 5a: Soil type classification ----
+        // Derived from geology + climate + terrain + hydrology per design spec §5.
+        KoppenZone kz = prov.climate.koppen_zone;
+        bool is_volcanic = (prov.tectonic_context == TectonicContext::HotSpot ||
+                            prov.tectonic_context == TectonicContext::Subduction);
+
+        if (prov.has_permafrost || kz == KoppenZone::ET || kz == KoppenZone::EF) {
+            prov.soil_type = SoilType::Cryosol;
+        } else if (prov.geography.is_delta || prov.geography.has_alluvial_fan) {
+            prov.soil_type = SoilType::Alluvial;
+        } else if (is_volcanic && prov.plate_age < 2.0f) {
+            prov.soil_type = SoilType::Andisol;
+        } else if (kz == KoppenZone::BWh || kz == KoppenZone::BWk) {
+            prov.soil_type = SoilType::Aridisol;
+        } else if (kz == KoppenZone::Af || kz == KoppenZone::Am) {
+            if (prov.plate_age > 2.5f) {
+                prov.soil_type = SoilType::Oxisol;  // old tropical surface
+            } else {
+                prov.soil_type = SoilType::Entisol;  // young tropical
+            }
+        } else if ((kz == KoppenZone::Aw || kz == KoppenZone::BSh) &&
+                   (prov.geology_type == GeologyType::BasalticPlateau ||
+                    prov.geology_type == GeologyType::AlluvialFill)) {
+            prov.soil_type = SoilType::Vertisol;  // seasonal wet/dry clay
+        } else if (kz == KoppenZone::Dfc || kz == KoppenZone::Dfd) {
+            prov.soil_type = SoilType::Spodosol;  // boreal acidic
+        } else if (prov.geography.groundwater_reserve > 0.60f &&
+                   prov.geography.river_access > 0.50f &&
+                   prov.geography.terrain_roughness < 0.20f) {
+            prov.soil_type = SoilType::Histosol;  // waterlogged peat
+        } else if ((kz == KoppenZone::Dfa || kz == KoppenZone::Dfb) &&
+                   prov.geography.arable_land_fraction > 0.40f) {
+            prov.soil_type = SoilType::Mollisol;  // temperate grassland black soils
+        } else if (is_volcanic) {
+            prov.soil_type = SoilType::Andisol;  // older volcanic
+        } else if (prov.geology_type == GeologyType::AlluvialFill) {
+            prov.soil_type = SoilType::Alluvial;
+        } else {
+            prov.soil_type = SoilType::Entisol;  // default young/undeveloped
+        }
+
+        // ---- Stage 5b: Soil fertility from geology_type ----
         // Volcanic and alluvial soils are most productive; ancient shields are leached and thin.
         float soil_multiplier;
         switch (prov.geology_type) {
@@ -2773,6 +2929,66 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
             std::max(0.0f, std::min(1.0f,
                 prov.climate.flood_vulnerability * s.archetype_vuln_blend +
                 climate_flood                    * s.climate_vuln_blend));
+
+        // ---- Stage 5c: Irrigation fields ----
+        // Water availability composite.
+        prov.water_availability =
+            prov.geography.river_access          * 0.50f +
+            prov.geography.groundwater_reserve   * 0.35f +
+            prov.geography.spring_flow_index     * 0.15f;
+
+        // Irrigation potential: maximum ag_productivity achievable with full irrigation.
+        float temp_suit = std::max(0.0f, std::min(1.0f,
+            (prov.climate.temperature_avg_c - 5.0f) / 25.0f));
+
+        switch (prov.soil_type) {
+            case SoilType::Aridisol:
+                prov.irrigation_potential = 0.75f * temp_suit;
+                break;
+            case SoilType::Vertisol:
+                prov.irrigation_potential = 0.85f * temp_suit;
+                break;
+            case SoilType::Alluvial:
+                prov.irrigation_potential = 0.90f;
+                break;
+            case SoilType::Oxisol:
+            case SoilType::Spodosol:
+                prov.irrigation_potential = 0.30f;
+                break;
+            case SoilType::Cryosol:
+                prov.irrigation_potential = 0.0f;
+                break;
+            default:
+                prov.irrigation_potential = std::min(1.0f,
+                    prov.agricultural_productivity * 1.15f);
+                break;
+        }
+
+        // No water = no irrigation.
+        if (prov.water_availability < 0.10f) {
+            prov.irrigation_potential = 0.0f;
+        }
+
+        // Irrigation cost index: terrain × water lift × scarcity.
+        float terrain_cost = 1.0f + prov.geography.terrain_roughness * 1.5f;
+        float water_lift_cost = 1.0f;
+        if (prov.geography.groundwater_reserve > 0.0f) {
+            // Deeper water table = higher pump cost.
+            float depth_proxy = 1.0f - prov.geography.groundwater_reserve;
+            water_lift_cost = 1.0f + depth_proxy * 2.0f;
+        }
+        float scarcity = 1.0f + std::max(0.0f, 0.50f - prov.water_availability) * 4.0f;
+        prov.irrigation_cost_index = std::max(0.5f, std::min(5.0f,
+            terrain_cost * water_lift_cost * scarcity * 0.30f));
+
+        // Salinisation risk: endorheic basins + arid climate + poor drainage.
+        float salin = 0.0f;
+        if (prov.geography.is_endorheic) salin += 0.30f;
+        if (prov.soil_type == SoilType::Aridisol) salin += 0.25f;
+        if (prov.soil_type == SoilType::Vertisol) salin += 0.10f;
+        if (prov.climate.precipitation_mm < 400.0f) salin += 0.15f;
+        if (prov.geography.terrain_roughness < 0.15f) salin += 0.10f;  // flat = poor drainage
+        prov.salinisation_risk = std::min(1.0f, salin);
     }
 }
 
@@ -3206,6 +3422,22 @@ static const char* resource_type_str(ResourceType rt) {
     return "Unknown";
 }
 
+static const char* soil_type_str(SoilType st) {
+    switch (st) {
+        case SoilType::Mollisol:  return "Mollisol";
+        case SoilType::Oxisol:    return "Oxisol";
+        case SoilType::Aridisol:  return "Aridisol";
+        case SoilType::Vertisol:  return "Vertisol";
+        case SoilType::Spodosol:  return "Spodosol";
+        case SoilType::Histosol:  return "Histosol";
+        case SoilType::Alluvial:  return "Alluvial";
+        case SoilType::Andisol:   return "Andisol";
+        case SoilType::Cryosol:   return "Cryosol";
+        case SoilType::Entisol:   return "Entisol";
+    }
+    return "Unknown";
+}
+
 static const char* river_flow_regime_str(RiverFlowRegime rfr) {
     switch (rfr) {
         case RiverFlowRegime::RainfedPerennial:   return "RainfedPerennial";
@@ -3366,6 +3598,13 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         p["has_karst"] = prov.has_karst;
         p["has_estuary"] = prov.has_estuary;
         p["has_ria_coast"] = prov.has_ria_coast;
+
+        // Soil & irrigation (Stage 5)
+        p["soil_type"] = soil_type_str(prov.soil_type);
+        p["irrigation_potential"] = prov.irrigation_potential;
+        p["irrigation_cost_index"] = prov.irrigation_cost_index;
+        p["salinisation_risk"] = prov.salinisation_risk;
+        p["water_availability"] = prov.water_availability;
 
         // Resource deposits
         json deposits_arr = json::array();

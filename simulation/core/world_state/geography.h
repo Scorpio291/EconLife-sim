@@ -215,6 +215,24 @@ enum class KoppenZone : uint8_t {
 };
 
 // ---------------------------------------------------------------------------
+// SoilType — WorldGen v0.18 Stage 5
+// ---------------------------------------------------------------------------
+// Classifies soil from geology + climate + time. Drives agricultural
+// productivity multipliers and irrigation behaviour.
+enum class SoilType : uint8_t {
+    Mollisol = 0,  // temperate grassland; continental; the black soils — Ukraine/Kansas/Pampas
+    Oxisol,        // tropical; old surface; nutrients in biomass not soil; bauxite forms here
+    Aridisol,      // desert; minimal weathering; can be productive with irrigation
+    Vertisol,      // seasonally wet/dry shrink-crack clay; cotton soils of India/Sudan
+    Spodosol,      // cool boreal; acidic; pine forest; poor for crops; good for timber
+    Histosol,      // waterlogged; peat; massive carbon store; draining releases CO2
+    Alluvial,      // river floodplain/delta; replenished by flooding; best land per area
+    Andisol,       // volcanic ash weathering; extremely fertile; Java/Central America
+    Cryosol,       // permafrost-affected; thin active layer; construction extremely difficult
+    Entisol,       // young soil; little development; sand dunes, recent volcanic flows
+};
+
+// ---------------------------------------------------------------------------
 // RiverFlowRegime — WorldGen v0.18 Stage 3
 // ---------------------------------------------------------------------------
 // Seasonal timing of river flow in a province; determines agricultural
@@ -443,6 +461,16 @@ struct Province {
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;
                                 // displayed in province detail panel and loading screens
+
+    // Soil classification (Stage 5 — WorldGen v0.18; static after world generation)
+    SoilType soil_type = SoilType::Entisol;
+
+    // Irrigation fields (Stage 5 — WorldGen v0.18; irrigation_potential static,
+    // water_availability may change at runtime as groundwater depletes)
+    float irrigation_potential   = 0.0f;  // 0.0-1.0; max ag_productivity achievable with full irrigation
+    float irrigation_cost_index  = 1.0f;  // 0.5-5.0; cost multiplier for irrigated area
+    float salinisation_risk      = 0.0f;  // 0.0-1.0; probability of salt buildup per decade
+    float water_availability     = 0.0f;  // 0.0-1.0; composite of river + groundwater + spring
 
     // Archetype index (WorldGenerator internal; stable for UI/modding access)
     // Maps to WorldGenerator::ProvinceArchetype enum:

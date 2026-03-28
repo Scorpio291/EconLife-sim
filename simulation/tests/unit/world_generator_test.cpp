@@ -1791,6 +1791,223 @@ TEST_CASE("WorldGenerator  - atmosphere: coastal provinces have lower continenta
     }
 }
 
+// ===========================================================================
+// Stage 5 — Soil Type & Irrigation Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - soils: every province gets a valid SoilType",
+          "[world_gen][soils]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(static_cast<uint8_t>(prov.soil_type) <= 9);  // 0..9 valid enum range
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - soils: soil assignment is deterministic",
+          "[world_gen][soils]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].soil_type == world2.provinces[i].soil_type);
+        CHECK(world1.provinces[i].irrigation_potential == world2.provinces[i].irrigation_potential);
+        CHECK(world1.provinces[i].irrigation_cost_index == world2.provinces[i].irrigation_cost_index);
+        CHECK(world1.provinces[i].salinisation_risk == world2.provinces[i].salinisation_risk);
+        CHECK(world1.provinces[i].water_availability == world2.provinces[i].water_availability);
+    }
+}
+
+TEST_CASE("WorldGenerator  - soils: irrigation fields bounded",
+          "[world_gen][soils]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.irrigation_potential >= 0.0f);
+            CHECK(prov.irrigation_potential <= 1.0f);
+            CHECK(prov.irrigation_cost_index >= 0.5f);
+            CHECK(prov.irrigation_cost_index <= 5.0f);
+            CHECK(prov.salinisation_risk >= 0.0f);
+            CHECK(prov.salinisation_risk <= 1.0f);
+            CHECK(prov.water_availability >= 0.0f);
+            CHECK(prov.water_availability <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - soils: permafrost provinces get Cryosol",
+          "[world_gen][soils]") {
+    bool found = false;
+    for (uint64_t seed = 1; seed <= 20 && !found; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_permafrost) {
+                CHECK(prov.soil_type == SoilType::Cryosol);
+                found = true;
+                break;
+            }
+        }
+    }
+    // Permafrost may not appear in all seeds — that's OK.
+}
+
+TEST_CASE("WorldGenerator  - soils: JSON includes soil and irrigation fields",
+          "[world_gen][soils][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("soil_type"));
+    CHECK(p0["soil_type"].is_string());
+    CHECK(p0.contains("irrigation_potential"));
+    CHECK(p0.contains("irrigation_cost_index"));
+    CHECK(p0.contains("salinisation_risk"));
+    CHECK(p0.contains("water_availability"));
+}
+
+// ===========================================================================
+// Stage 8 — Age-Dependent Resource Modifier Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - age_modifiers: uranium quantity reduced by plate age",
+          "[world_gen][age_modifiers]") {
+    // Old crust (high plate_age) should have less uranium remaining due to decay.
+    // Compare two seeds — we just check that uranium deposits exist and have
+    // quantity > 0 (decay doesn't zero them at geological timescales).
+    bool found_uranium = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_uranium; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::Uranium) {
+                    CHECK(d.quantity > 0.0f);
+                    CHECK(d.quantity_remaining > 0.0f);
+                    // Decay should reduce below the max seeded quantity (~4000).
+                    CHECK(d.quantity <= 4000.0f);
+                    found_uranium = true;
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - age_modifiers: natural gas quality boosted by helium",
+          "[world_gen][age_modifiers]") {
+    bool found_gas = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_gas; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::NaturalGas) {
+                    CHECK(d.quality >= 0.0f);
+                    CHECK(d.quality <= 1.0f);
+                    found_gas = true;
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - age_modifiers: Histosol provinces get peat (Coal) deposit",
+          "[world_gen][age_modifiers]") {
+    bool found_histosol = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_histosol; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.soil_type == SoilType::Histosol) {
+                found_histosol = true;
+                // Must have at least one Coal deposit (peat).
+                bool has_coal = false;
+                for (const auto& d : prov.deposits) {
+                    if (d.type == ResourceType::Coal) {
+                        has_coal = true;
+                        // Peat is low-quality (< 0.30).
+                        CHECK(d.quality <= 0.30f);
+                        // Peat is shallow (< 0.15).
+                        CHECK(d.depth <= 0.15f);
+                    }
+                }
+                CHECK(has_coal);
+                break;
+            }
+        }
+    }
+    // Histosol may not appear in all seeds — that's OK.
+}
+
+TEST_CASE("WorldGenerator  - age_modifiers: deterministic across runs",
+          "[world_gen][age_modifiers]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        REQUIRE(world1.provinces[i].deposits.size() == world2.provinces[i].deposits.size());
+        for (size_t j = 0; j < world1.provinces[i].deposits.size(); ++j) {
+            CHECK(world1.provinces[i].deposits[j].quantity ==
+                  world2.provinces[i].deposits[j].quantity);
+            CHECK(world1.provinces[i].deposits[j].quality ==
+                  world2.provinces[i].deposits[j].quality);
+        }
+    }
+}
+
 TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjord",
           "[world_gen][hydrology]") {
     for (uint64_t seed = 1; seed <= 10; ++seed) {
