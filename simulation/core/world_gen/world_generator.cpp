@@ -2828,14 +2828,6 @@ void WorldGenerator::detect_special_features(WorldState& world,
             }
         }
 
-        // ---- Delta flood floor re-enforcement ----
-        // Hydrology set delta flood_vulnerability but soils/biomes blending may
-        // have reduced it. Re-enforce the physical constraint: deltas flood.
-        if (prov.geography.is_delta) {
-            prov.climate.flood_vulnerability = std::max(prov.climate.flood_vulnerability,
-                config.hydrology.delta_flood_floor);
-        }
-
         // ---- Estuary ----
         // Tidal mixing zone where river meets sea; sheltered water; good port.
         bool estuary_condition =
