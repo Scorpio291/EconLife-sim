@@ -178,19 +178,44 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Selects highest settlement_attractiveness province per nation as capital.
     seed_nation_capitals(world, config);
 
-    // Step 7c: Stage 10.1 — Named feature detection (WorldGen v0.18).
-    // Detects mountains, rivers, deserts, craters, etc. from province fields.
-    detect_named_features(world, rng, config);
+    // Step 7c: Stage 10 — World commentary pipeline (WorldGen v0.18).
+    // commentary_depth controls how much text is generated:
+    //   "none"    → skip Stage 10 entirely
+    //   "minimal" → sidebar facts + current_character only
+    //   "full"    → complete history, features, pre-game events
+    if (config.commentary_depth != CommentaryDepth::none) {
+        // Stage 10.1 — Named feature detection.
+        detect_named_features(world, rng, config);
 
-    // Step 7c2: Stage 10.2 — Province history generation (WorldGen v0.18).
-    // Reads simulation data backwards to explain infrastructure anomalies.
-    // Also classifies 24-archetype taxonomy and computes historical_trauma_index.
-    generate_province_histories(world, rng, config);
+        if (config.commentary_depth == CommentaryDepth::full) {
+            // Stage 10.2 — Province history generation (full only).
+            generate_province_histories(world, rng, config);
 
-    // Step 7c3: Stage 10 — World commentary (WorldGen v0.18).
-    // Generates province_lore strings from tectonic context, climate, and archetype.
-    // Runs last so all province fields are populated.
-    generate_commentary(world, rng);
+            // Stage 10.3 — Pre-game event extraction (full only).
+            seed_pre_game_events(world, rng, config);
+        } else {
+            // Minimal: classify archetype and current_character only.
+            for (auto& prov : world.provinces) {
+                prov.history.province_archetype_label = classify_province_archetype(prov);
+                prov.history.current_character =
+                    "A " + prov.history.province_archetype_label +
+                    " province defined by its " +
+                    (prov.infrastructure_rating > 0.60f
+                         ? "developed infrastructure"
+                         : "natural landscape") +
+                    " and " +
+                    (prov.agricultural_productivity > 0.50f
+                         ? "productive agricultural base."
+                         : "extractive or service economy.");
+            }
+        }
+
+        // Stage 10.4 — Loading commentary (always for non-none).
+        generate_loading_commentary(world, rng, config);
+
+        // Stage 10 legacy — Province lore strings.
+        generate_commentary(world, rng);
+    }
 
     // Step 8: Technology — load catalog and seed initial holdings.
     TechnologyCatalog tech_catalog;
@@ -205,6 +230,12 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Step 9: Stage 11 — Output world.json if path configured.
     if (!config.output_world_file.empty()) {
         write_world_json(world, config.output_world_file);
+    }
+
+    // Stage 10.5 — Encyclopedia JSON output (UI layer only).
+    if (!config.output_encyclopedia_file.empty() &&
+        config.commentary_depth != CommentaryDepth::none) {
+        write_encyclopedia_json(world, config, config.output_encyclopedia_file);
     }
 
     return world;
@@ -5142,6 +5173,637 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
                                        ? "productive agricultural base."
                                        : "extractive or service economy.");
     }
+}
+
+// ===========================================================================
+// Stage 10.3 — Pre-game event extraction
+// ===========================================================================
+
+void WorldGenerator::seed_pre_game_events(WorldState& world, DeterministicRNG& rng,
+                                            const WorldGeneratorConfig& /*config*/) {
+    world.pre_game_events.clear();
+
+    // Scan all province histories for events within 40 years of game start.
+    // years_before_game_start is stored as negative, so within-40 means > -40.
+    for (const auto& prov : world.provinces) {
+        for (const auto& e : prov.history.events) {
+            if (e.years_before_game_start >= -40 && e.years_before_game_start < 0) {
+                PreGameEvent pge{};
+                pge.type = e.type;
+                pge.years_before_start = -e.years_before_game_start;  // positive 1–40
+                pge.epicenter_province = prov.h3_index;
+                pge.affected_provinces.push_back(prov.h3_index);
+                pge.magnitude = e.magnitude;
+                pge.description = e.description;
+
+                // Derive active economic effects from event type and magnitude.
+                switch (e.type) {
+                    case HistoricalEventType::InfrastructureDestruction:
+                    case HistoricalEventType::EnvironmentalDisaster:
+                    case HistoricalEventType::FloodEvent:
+                    case HistoricalEventType::VolcanicEvent: {
+                        // Infrastructure damage decays: residual = magnitude * (years / 40)
+                        float decay = 1.0f - static_cast<float>(pge.years_before_start) / 50.0f;
+                        pge.infrastructure_damage = std::clamp(
+                            e.magnitude * std::max(0.0f, decay), 0.0f, 1.0f);
+                        break;
+                    }
+                    case HistoricalEventType::PopulationCollapse:
+                    case HistoricalEventType::ForcedRelocation:
+                    case HistoricalEventType::Famine: {
+                        float recovery = 1.0f - static_cast<float>(pge.years_before_start) / 60.0f;
+                        pge.population_displacement = std::clamp(
+                            e.magnitude * 0.5f * std::max(0.0f, recovery), 0.0f, 1.0f);
+                        break;
+                    }
+                    case HistoricalEventType::BorderChange:
+                    case HistoricalEventType::IndependenceEvent:
+                    case HistoricalEventType::OccupationHistory:
+                        pge.has_active_claim = (pge.years_before_start <= 30 &&
+                                                e.magnitude > 0.40f);
+                        break;
+                    default:
+                        break;
+                }
+
+                // Living witnesses: events within 40 years always have them.
+                pge.has_living_witnesses = true;
+
+                // Add affected neighbors for high-magnitude events.
+                if (e.magnitude > 0.60f) {
+                    for (const auto& link : prov.links) {
+                        pge.affected_provinces.push_back(link.neighbor_h3);
+                    }
+                }
+
+                world.pre_game_events.push_back(std::move(pge));
+            }
+        }
+    }
+
+    // Sort by years_before_start descending (oldest first).
+    std::sort(world.pre_game_events.begin(), world.pre_game_events.end(),
+              [](const PreGameEvent& a, const PreGameEvent& b) {
+                  return a.years_before_start > b.years_before_start;
+              });
+}
+
+// ===========================================================================
+// Stage 10.4 — Loading screen commentary
+// ===========================================================================
+
+// Helper: find the named feature with the highest significance of a given type.
+static const NamedFeature* find_best_feature(const WorldState& world, FeatureType type) {
+    const NamedFeature* best = nullptr;
+    for (const auto& f : world.named_features) {
+        if (f.type == type && (!best || f.significance > best->significance)) {
+            best = &f;
+        }
+    }
+    return best;
+}
+
+void WorldGenerator::generate_loading_commentary(WorldState& world, DeterministicRNG& rng,
+                                                   const WorldGeneratorConfig& /*config*/) {
+    LoadingCommentary& lc = world.loading_commentary;
+
+    const uint32_t prov_count = static_cast<uint32_t>(world.provinces.size());
+
+    // --- Stage texts: world-specific, not generic ---
+
+    // Stage 1 — Tectonics
+    {
+        uint32_t subduction_count = 0;
+        for (const auto& p : world.provinces) {
+            if (p.tectonic_context == TectonicContext::Subduction) ++subduction_count;
+        }
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "The continental plates are settling. %u of %u provinces sit on active "
+            "subduction zones where new mountains are still being built.",
+            subduction_count, prov_count);
+        lc.stage_1_text = buf;
+    }
+
+    // Stage 2 — Erosion
+    {
+        const NamedFeature* river = find_best_feature(world, FeatureType::River);
+        if (river) {
+            lc.stage_2_text = "The " + river->name + " is cutting through the landscape. "
+                "By the time civilisation arrives, the valley will define trade routes "
+                "for centuries.";
+        } else {
+            lc.stage_2_text = "Wind and water are shaping the terrain. Valleys deepen, "
+                "plateaus erode, and the landscape takes its final form.";
+        }
+    }
+
+    // Stage 3 — Hydrology
+    {
+        uint32_t river_count = 0;
+        for (const auto& f : world.named_features) {
+            if (f.type == FeatureType::River) ++river_count;
+        }
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "%u named river systems are establishing their courses. "
+            "Where they reach the sea, deltas and estuaries form.",
+            river_count);
+        lc.stage_3_text = buf;
+    }
+
+    // Stage 4 — Atmosphere
+    {
+        uint32_t monsoon_count = 0;
+        for (const auto& p : world.provinces) {
+            if (p.climate.is_monsoon) ++monsoon_count;
+        }
+        if (monsoon_count > 0) {
+            char buf[256];
+            std::snprintf(buf, sizeof(buf),
+                "Monsoon patterns are emerging across %u provinces. "
+                "Seasonal rains will define agriculture and flood risk.",
+                monsoon_count);
+            lc.stage_4_text = buf;
+        } else {
+            lc.stage_4_text = "The atmosphere is stabilising. Rain shadows form behind "
+                "mountain ranges, and ocean currents begin to shape coastal climates.";
+        }
+    }
+
+    // Stage 5 — Soils
+    {
+        uint32_t fertile = 0;
+        for (const auto& p : world.provinces) {
+            if (p.agricultural_productivity > 0.60f) ++fertile;
+        }
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "%u provinces develop fertile soils capable of sustaining large populations. "
+            "The rest will depend on trade, industry, or the sea.",
+            fertile);
+        lc.stage_5_text = buf;
+    }
+
+    // Stage 6 — Biomes
+    {
+        uint32_t forested = 0;
+        for (const auto& p : world.provinces) {
+            if (p.geography.forest_coverage > 0.50f) ++forested;
+        }
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "Forest covers %u provinces. Grasslands and savannas fill the gaps "
+            "between the treeline and the deserts.",
+            forested);
+        lc.stage_6_text = buf;
+    }
+
+    // Stage 7 — Features
+    {
+        const NamedFeature* mtn = find_best_feature(world, FeatureType::MountainRange);
+        if (mtn && mtn->peak_elevation_m > 0.0f) {
+            char buf[256];
+            std::snprintf(buf, sizeof(buf),
+                "The %s rise to %.0f metres, dividing climates and cultures. "
+                "Passes through the range will become strategic chokepoints.",
+                mtn->name.c_str(), mtn->peak_elevation_m);
+            lc.stage_7_text = buf;
+        } else {
+            lc.stage_7_text = "Special geographic features are forming: karst caves, "
+                "fjords, atolls, and impact craters, each with unique economic potential.";
+        }
+    }
+
+    // Stage 8 — Resources
+    {
+        uint32_t deposit_count = 0;
+        for (const auto& p : world.provinces) {
+            deposit_count += static_cast<uint32_t>(p.deposits.size());
+        }
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "%u resource deposits are embedded in the geology. "
+            "Some will be found early. Others will wait for the technology to reach them.",
+            deposit_count);
+        lc.stage_8_text = buf;
+    }
+
+    // Stage 9 — Population
+    {
+        // Find the highest-attractiveness province.
+        const Province* best = &world.provinces[0];
+        for (const auto& p : world.provinces) {
+            if (p.settlement_attractiveness > best->settlement_attractiveness) best = &p;
+        }
+        lc.stage_9_text = best->fictional_name + " emerges as the most attractive "
+            "settlement site. Early communities cluster around fresh water, arable "
+            "land, and defensible terrain.";
+    }
+
+    // Stage 10 — History
+    {
+        if (!world.pre_game_events.empty()) {
+            const auto& pge = world.pre_game_events[0];
+            char buf[256];
+            std::snprintf(buf, sizeof(buf),
+                "%u events within living memory will shape the world at game start. "
+                "The oldest occurred %d years before the present.",
+                static_cast<uint32_t>(world.pre_game_events.size()),
+                pge.years_before_start);
+            lc.stage_10_text = buf;
+        } else {
+            lc.stage_10_text = "The pre-game period was remarkably stable. No major "
+                "disruptions within living memory.";
+        }
+    }
+
+    // Stage 11 — Final
+    lc.stage_11_text = "The world is ready.";
+
+    // --- Sidebar facts: 8–15 short, true-to-this-world statements ---
+    lc.sidebar_facts.clear();
+
+    // Facts from named features.
+    for (const auto& f : world.named_features) {
+        if (lc.sidebar_facts.size() >= 15) break;
+        char buf[256];
+        switch (f.type) {
+            case FeatureType::River:
+                if (f.length_km > 0.0f) {
+                    std::snprintf(buf, sizeof(buf),
+                        "The %s stretches %.0f km. %s",
+                        f.name.c_str(), f.length_km,
+                        f.is_navigable ? "It is navigable by barge."
+                                       : "Its rapids prevent navigation.");
+                    lc.sidebar_facts.emplace_back(buf);
+                }
+                break;
+            case FeatureType::MountainRange:
+                if (f.peak_elevation_m > 0.0f) {
+                    std::snprintf(buf, sizeof(buf),
+                        "The %s reach %.0f metres at their highest point.",
+                        f.name.c_str(), f.peak_elevation_m);
+                    lc.sidebar_facts.emplace_back(buf);
+                }
+                break;
+            case FeatureType::Desert:
+                if (f.area_km2 > 0.0f) {
+                    std::snprintf(buf, sizeof(buf),
+                        "The %s covers %.0f km\u00B2 of arid terrain.",
+                        f.name.c_str(), f.area_km2);
+                    lc.sidebar_facts.emplace_back(buf);
+                }
+                break;
+            case FeatureType::Lake:
+                std::snprintf(buf, sizeof(buf),
+                    "The %s has no outlet to the sea. Its waters grow more saline "
+                    "with each passing century.",
+                    f.name.c_str());
+                lc.sidebar_facts.emplace_back(buf);
+                break;
+            case FeatureType::Crater:
+                std::snprintf(buf, sizeof(buf),
+                    "The %s is the remnant of an asteroid strike. "
+                    "Platinum group metals concentrate in its rim.",
+                    f.name.c_str());
+                lc.sidebar_facts.emplace_back(buf);
+                break;
+            default:
+                if (f.significance > 0.60f) {
+                    std::snprintf(buf, sizeof(buf),
+                        "The %s is a significant geographic feature of this world.",
+                        f.name.c_str());
+                    lc.sidebar_facts.emplace_back(buf);
+                }
+                break;
+        }
+    }
+
+    // Facts from province data.
+    for (const auto& p : world.provinces) {
+        if (lc.sidebar_facts.size() >= 15) break;
+        if (p.has_permafrost) {
+            lc.sidebar_facts.emplace_back(
+                p.fictional_name + " is locked in permafrost. Oil and gas deposits "
+                "here cannot be accessed until thawing technology arrives.");
+            break;  // One permafrost fact is enough.
+        }
+    }
+    for (const auto& p : world.provinces) {
+        if (lc.sidebar_facts.size() >= 15) break;
+        if (p.geography.is_oasis) {
+            lc.sidebar_facts.emplace_back(
+                p.fictional_name + " exists because of a single underground spring. "
+                "Without it, this would be empty desert.");
+            break;
+        }
+    }
+    for (const auto& p : world.provinces) {
+        if (lc.sidebar_facts.size() >= 15) break;
+        if (p.is_nation_capital && p.settlement_attractiveness > 0.60f) {
+            char buf[256];
+            std::snprintf(buf, sizeof(buf),
+                "%s was chosen as a national capital for its strategic position "
+                "and natural advantages.",
+                p.fictional_name.c_str());
+            lc.sidebar_facts.emplace_back(buf);
+            break;
+        }
+    }
+
+    // Pad to minimum 8 with general world stats.
+    {
+        char buf[256];
+        if (lc.sidebar_facts.size() < 8) {
+            uint32_t nation_count = static_cast<uint32_t>(world.nations.size());
+            std::snprintf(buf, sizeof(buf),
+                "This world contains %u nations across %u provinces.",
+                nation_count, prov_count);
+            lc.sidebar_facts.emplace_back(buf);
+        }
+        if (lc.sidebar_facts.size() < 8) {
+            uint32_t total_pop = 0;
+            for (const auto& p : world.provinces) {
+                total_pop += p.demographics.total_population;
+            }
+            std::snprintf(buf, sizeof(buf),
+                "The total population is approximately %u.", total_pop);
+            lc.sidebar_facts.emplace_back(buf);
+        }
+        if (lc.sidebar_facts.size() < 8) {
+            uint32_t feature_count = static_cast<uint32_t>(world.named_features.size());
+            std::snprintf(buf, sizeof(buf),
+                "%u geographic features have been named.", feature_count);
+            lc.sidebar_facts.emplace_back(buf);
+        }
+        if (lc.sidebar_facts.size() < 8) {
+            uint32_t deposit_count = 0;
+            for (const auto& p : world.provinces) {
+                deposit_count += static_cast<uint32_t>(p.deposits.size());
+            }
+            std::snprintf(buf, sizeof(buf),
+                "Geologists have mapped %u resource deposits across the world.",
+                deposit_count);
+            lc.sidebar_facts.emplace_back(buf);
+        }
+        if (lc.sidebar_facts.size() < 8) {
+            uint32_t coastal = 0;
+            for (const auto& p : world.provinces) {
+                if (p.geography.coastal_length_km > 10.0f) ++coastal;
+            }
+            std::snprintf(buf, sizeof(buf),
+                "%u provinces have significant coastline.", coastal);
+            lc.sidebar_facts.emplace_back(buf);
+        }
+        if (lc.sidebar_facts.size() < 8) {
+            uint32_t landlocked = 0;
+            for (const auto& p : world.provinces) {
+                if (p.geography.is_landlocked) ++landlocked;
+            }
+            std::snprintf(buf, sizeof(buf),
+                "%u provinces are landlocked, dependent on overland trade.",
+                landlocked);
+            lc.sidebar_facts.emplace_back(buf);
+        }
+        if (lc.sidebar_facts.size() < 8) {
+            std::snprintf(buf, sizeof(buf),
+                "World seed: %lu. Same seed, same world, every time.",
+                static_cast<unsigned long>(world.world_seed));
+            lc.sidebar_facts.emplace_back(buf);
+        }
+        if (lc.sidebar_facts.size() < 8) {
+            lc.sidebar_facts.emplace_back(
+                "Every province has a unique geological history.");
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 10.5 — Encyclopedia JSON output
+// ===========================================================================
+
+static const char* pre_game_event_type_str(HistoricalEventType t) {
+    return historical_event_type_str(t);
+}
+
+nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
+                                                     const WorldGeneratorConfig& config) {
+    using json = nlohmann::json;
+    json root;
+
+    root["schema_version"] = "1.0";
+    root["world_seed"] = world.world_seed;
+    root["generated_at"] = "2000-01-01T00:00:00Z";  // game start date
+    root["planet_name"] = world.nations.empty() ? "Unknown" : "World-" +
+                          std::to_string(world.world_seed);
+
+    // --- Provinces ---
+    json provinces_obj = json::object();
+    for (const auto& prov : world.provinces) {
+        json p;
+        p["province_id"] = prov.h3_index;
+        p["province_name"] = prov.fictional_name;
+        p["archetype"] = prov.history.province_archetype_label;
+        p["current_character"] = prov.history.current_character;
+
+        if (config.commentary_depth == CommentaryDepth::full) {
+            p["summary"] = prov.history.summary;
+
+            json hist;
+            json events_arr = json::array();
+            for (const auto& e : prov.history.events) {
+                events_arr.push_back({
+                    {"type", historical_event_type_str(e.type)},
+                    {"years_before_game_start", e.years_before_game_start},
+                    {"headline", e.headline},
+                    {"description", e.description},
+                    {"magnitude", e.magnitude},
+                    {"lasting_effect", e.lasting_effect},
+                    {"has_living_memory", e.has_living_memory},
+                });
+            }
+            hist["events"] = std::move(events_arr);
+            hist["historical_trauma_index"] = prov.historical_trauma_index;
+            p["history"] = std::move(hist);
+        }
+
+        // Sidebar facts per province (1–3).
+        json sidebar = json::array();
+        if (prov.has_impact_crater) {
+            char buf[128];
+            std::snprintf(buf, sizeof(buf),
+                "A %d km impact crater dominates the terrain.",
+                static_cast<int>(prov.impact_crater_diameter_km));
+            sidebar.push_back(buf);
+        }
+        if (prov.geography.is_oasis) {
+            sidebar.push_back("An underground spring sustains life in this arid region.");
+        }
+        if (prov.is_nation_capital) {
+            sidebar.push_back("This province serves as a national capital.");
+        }
+        if (sidebar.empty()) {
+            sidebar.push_back("A " + prov.history.province_archetype_label + " province.");
+        }
+        p["sidebar_facts"] = std::move(sidebar);
+
+        provinces_obj[std::to_string(prov.h3_index)] = std::move(p);
+    }
+    root["provinces"] = std::move(provinces_obj);
+
+    // --- Named features ---
+    json features_arr = json::array();
+    for (const auto& f : world.named_features) {
+        json fj;
+        fj["feature_id"] = std::to_string(f.id);
+        fj["type"] = feature_type_str(f.type);
+        fj["name"] = f.name;
+
+        json provinces_list = json::array();
+        for (auto h : f.extent) provinces_list.push_back(h);
+        fj["provinces"] = std::move(provinces_list);
+
+        // Headline fact.
+        char buf[256];
+        if (f.type == FeatureType::River && f.length_km > 0.0f) {
+            std::snprintf(buf, sizeof(buf),
+                "The %s stretches %.0f km through the region.",
+                f.name.c_str(), f.length_km);
+        } else if (f.type == FeatureType::MountainRange && f.peak_elevation_m > 0.0f) {
+            std::snprintf(buf, sizeof(buf),
+                "The %s reach %.0f metres at their highest.",
+                f.name.c_str(), f.peak_elevation_m);
+        } else {
+            std::snprintf(buf, sizeof(buf),
+                "The %s is a notable %s.",
+                f.name.c_str(), feature_type_str(f.type));
+        }
+        fj["headline_fact"] = buf;
+        fj["description"] = std::string("A ") + feature_type_str(f.type) +
+                             " spanning " + std::to_string(f.extent.size()) +
+                             " province(s).";
+        fj["is_disputed"] = f.is_disputed;
+        if (f.is_disputed) {
+            fj["diplomatic_context_entry"] = {
+                {"present", true},
+                {"summary", "This feature spans a national border with competing claims."},
+            };
+        } else {
+            fj["diplomatic_context_entry"] = {{"present", false}, {"summary", nullptr}};
+        }
+        features_arr.push_back(std::move(fj));
+    }
+    root["named_features"] = std::move(features_arr);
+
+    // --- Pre-game events ---
+    json pge_arr = json::array();
+    for (size_t i = 0; i < world.pre_game_events.size(); ++i) {
+        const auto& pge = world.pre_game_events[i];
+        json ej;
+        ej["event_id"] = std::to_string(world.world_seed) + "_pge_" + std::to_string(i);
+        ej["type"] = pre_game_event_type_str(pge.type);
+        ej["years_before_start"] = pge.years_before_start;
+        ej["epicenter_province"] = pge.epicenter_province;
+        json affected = json::array();
+        for (auto h : pge.affected_provinces) affected.push_back(h);
+        ej["affected_provinces"] = std::move(affected);
+        ej["magnitude"] = pge.magnitude;
+        ej["description"] = pge.description;
+        ej["infrastructure_damage"] = pge.infrastructure_damage;
+        ej["population_displacement"] = pge.population_displacement;
+        ej["has_active_claim"] = pge.has_active_claim;
+        ej["has_living_witnesses"] = pge.has_living_witnesses;
+        pge_arr.push_back(std::move(ej));
+    }
+    root["pre_game_events"] = std::move(pge_arr);
+
+    // --- Loading commentary ---
+    {
+        const auto& lc = world.loading_commentary;
+        json lcj;
+        lcj["stage_texts"] = {
+            {"stage_1", lc.stage_1_text},
+            {"stage_2", lc.stage_2_text},
+            {"stage_3", lc.stage_3_text},
+            {"stage_4", lc.stage_4_text},
+            {"stage_5", lc.stage_5_text},
+            {"stage_6", lc.stage_6_text},
+            {"stage_7", lc.stage_7_text},
+            {"stage_8", lc.stage_8_text},
+            {"stage_9", lc.stage_9_text},
+            {"stage_10", lc.stage_10_text},
+            {"stage_11", lc.stage_11_text},
+        };
+        json facts = json::array();
+        for (const auto& f : lc.sidebar_facts) facts.push_back(f);
+        lcj["sidebar_facts"] = std::move(facts);
+        root["loading_commentary"] = std::move(lcj);
+    }
+
+    // --- World statistics ---
+    {
+        json stats;
+        stats["total_province_count"] = static_cast<int>(world.provinces.size());
+
+        uint32_t habitable = 0, ocean = 0;
+        float highest_trauma = 0.0f;
+        H3Index highest_trauma_h3 = 0;
+        std::unordered_map<std::string, uint32_t> archetype_counts;
+
+        for (const auto& p : world.provinces) {
+            if (p.settlement_attractiveness > 0.15f) ++habitable;
+            if (p.geography.coastal_length_km > 100.0f &&
+                p.geography.is_landlocked == false &&
+                p.settlement_attractiveness < 0.05f) {
+                ++ocean;
+            }
+            if (p.historical_trauma_index > highest_trauma) {
+                highest_trauma = p.historical_trauma_index;
+                highest_trauma_h3 = p.h3_index;
+            }
+            archetype_counts[p.history.province_archetype_label]++;
+        }
+
+        stats["habitable_province_count"] = habitable;
+        stats["ocean_province_count"] = ocean;
+        stats["total_named_features"] = static_cast<int>(world.named_features.size());
+        stats["total_pre_game_events"] = static_cast<int>(world.pre_game_events.size());
+
+        // Most common archetype.
+        std::string most_common;
+        uint32_t max_count = 0;
+        for (const auto& [label, count] : archetype_counts) {
+            if (count > max_count) { max_count = count; most_common = label; }
+        }
+        stats["most_common_archetype"] = most_common;
+        stats["highest_trauma_province"] = highest_trauma_h3;
+
+        // Largest river and desert.
+        float largest_river = 0.0f;
+        float largest_desert = 0.0f;
+        for (const auto& f : world.named_features) {
+            if (f.type == FeatureType::River && f.length_km > largest_river)
+                largest_river = f.length_km;
+            if (f.type == FeatureType::Desert && f.area_km2 > largest_desert)
+                largest_desert = f.area_km2;
+        }
+        stats["largest_named_river_length_km"] = largest_river;
+        stats["largest_named_desert_area_km2"] = largest_desert;
+
+        root["world_statistics"] = std::move(stats);
+    }
+
+    return root;
+}
+
+void WorldGenerator::write_encyclopedia_json(const WorldState& world,
+                                               const WorldGeneratorConfig& config,
+                                               const std::string& path) {
+    auto j = to_encyclopedia_json(world, config);
+    std::ofstream out(path);
+    if (!out.is_open()) return;
+    out << j.dump(2);
 }
 
 // ===========================================================================

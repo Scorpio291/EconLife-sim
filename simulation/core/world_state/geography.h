@@ -370,6 +370,55 @@ struct ProvinceHistory {
 };
 
 // ---------------------------------------------------------------------------
+// PreGameEvent — WorldGen v0.18 Stage 10.3
+// ---------------------------------------------------------------------------
+// Events within 40 years of game start that have living memory and active
+// economic consequences. Seeded from HistoricalEvents that qualify.
+struct PreGameEvent {
+    HistoricalEventType type;
+    int32_t  years_before_start = 0;     // 1–40 years before January 2000
+    H3Index  epicenter_province = 0;
+    std::vector<H3Index> affected_provinces;
+    float    magnitude          = 0.5f;
+    std::string description;
+
+    // Active economic effects at game start:
+    float  infrastructure_damage   = 0.0f;  // 0.0–1.0 reduction still present
+    float  population_displacement = 0.0f;  // fraction displaced or lost
+    bool   has_active_claim        = false;  // territorial claim still contested
+    bool   has_living_witnesses    = false;  // NPC memory entries seeded
+};
+
+// ---------------------------------------------------------------------------
+// LoadingCommentary — WorldGen v0.18 Stage 10.4
+// ---------------------------------------------------------------------------
+// World-specific loading screen text generated from actual simulation data.
+struct LoadingCommentary {
+    std::string stage_1_text;   // tectonics
+    std::string stage_2_text;   // erosion
+    std::string stage_3_text;   // hydrology
+    std::string stage_4_text;   // atmosphere
+    std::string stage_5_text;   // soils
+    std::string stage_6_text;   // biomes
+    std::string stage_7_text;   // features
+    std::string stage_8_text;   // resources
+    std::string stage_9_text;   // population
+    std::string stage_10_text;  // history
+    std::string stage_11_text;  // final
+
+    std::vector<std::string> sidebar_facts;  // 8–15 short facts
+};
+
+// ---------------------------------------------------------------------------
+// CommentaryDepth — WorldGen v0.18 Stage 10.6
+// ---------------------------------------------------------------------------
+enum class CommentaryDepth : uint8_t {
+    none    = 0,  // skip Stage 10 entirely
+    minimal = 1,  // sidebar facts + current_character only
+    full    = 2,  // complete ProvinceHistory, PreGameEvent, NamedFeature
+};
+
+// ---------------------------------------------------------------------------
 // SimulationLOD
 // ---------------------------------------------------------------------------
 enum class SimulationLOD : uint8_t {

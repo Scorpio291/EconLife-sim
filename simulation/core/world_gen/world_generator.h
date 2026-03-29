@@ -44,6 +44,8 @@ struct WorldGeneratorConfig {
         facility_types_filepath;  // path to packages/base_game/facility_types/facility_types.csv
     std::string technology_directory;  // path to packages/base_game/technology/
     std::string output_world_file;   // if non-empty, write world.json to this path after generation
+    std::string output_encyclopedia_file;  // if non-empty, write world_encyclopedia.json
+    CommentaryDepth commentary_depth = CommentaryDepth::full;  // §10.6: "full" | "minimal" | "none"
 
     // -----------------------------------------------------------------------
     // TerrainParams — thresholds for terrain detection and physical refinement
@@ -357,6 +359,14 @@ class WorldGenerator {
     // Write a WorldState to disk as world.json.
     static void write_world_json(const WorldState& world, const std::string& path);
 
+    // Stage 10.5 — Encyclopedia JSON output (WorldGen v0.18).
+    // Produces world_encyclopedia.json for the UI layer. Simulation never reads this.
+    static nlohmann::json to_encyclopedia_json(const WorldState& world,
+                                                const WorldGeneratorConfig& config);
+    static void write_encyclopedia_json(const WorldState& world,
+                                         const WorldGeneratorConfig& config,
+                                         const std::string& path);
+
    private:
     // Province archetypes for economic diversity.
     enum class ProvinceArchetype : uint8_t {
@@ -516,6 +526,17 @@ class WorldGenerator {
     // Reads simulation data backwards to generate historical events that
     // explain infrastructure anomalies, resource context, and geopolitical status.
     static void generate_province_histories(WorldState& world, DeterministicRNG& rng,
+                                             const WorldGeneratorConfig& config);
+
+    // Stage 10.3 — Pre-game event extraction (WorldGen v0.18).
+    // Extracts HistoricalEvents within 40 years of game start as PreGameEvent records
+    // with active economic effects. Seeds living-witness flags.
+    static void seed_pre_game_events(WorldState& world, DeterministicRNG& rng,
+                                      const WorldGeneratorConfig& config);
+
+    // Stage 10.4 — Loading screen commentary (WorldGen v0.18).
+    // Generates world-specific stage commentary and sidebar facts from simulation data.
+    static void generate_loading_commentary(WorldState& world, DeterministicRNG& rng,
                                              const WorldGeneratorConfig& config);
 
     // Stage 10 — World commentary (WorldGen v0.18).
