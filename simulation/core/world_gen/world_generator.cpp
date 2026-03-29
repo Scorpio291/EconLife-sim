@@ -3494,6 +3494,82 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
         if (prov.has_permafrost) {
             prov.has_karst = false;
         }
+
+        // ---- Karst concealment bonus ----
+        if (prov.has_karst) {
+            prov.facility_concealment_bonus = std::min(1.0f,
+                prov.facility_concealment_bonus + 0.25f);
+        }
+
+        // ---- Salt flat ----
+        // Endorheic basin in arid climate: evaporite surface (Bonneville, Salar de Uyuni).
+        if (prov.geography.is_endorheic &&
+            (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
+             kz == KoppenZone::BSh || kz == KoppenZone::BSk)) {
+            prov.is_salt_flat = true;
+        }
+
+        // ---- Fisheries ----
+        // Schaefer surplus production model seeding.
+        {
+            auto& f = prov.fisheries;
+
+            if (prov.geography.coastal_length_km < 1.0f &&
+                prov.geography.river_access < 0.15f) {
+                f.access_type = FishingAccessType::NoAccess;
+            } else if (prov.geography.coastal_length_km < 1.0f) {
+                // Inland freshwater fisheries.
+                f.access_type = FishingAccessType::Freshwater;
+                f.carrying_capacity = prov.geography.river_access * 0.20f;
+                // Glacial-scoured provinces: thousands of lakes boost freshwater fisheries.
+                if (prov.is_glacial_scoured) {
+                    f.carrying_capacity = std::min(1.0f, f.carrying_capacity + 0.15f);
+                }
+            } else if (prov.climate.cold_current_adjacent) {
+                // Upwelling: highest yield (Humboldt, Benguela, Canary currents).
+                f.access_type = FishingAccessType::Upwelling;
+                f.carrying_capacity = 0.70f + rng.next_float() * 0.15f;
+            } else if (prov.is_atoll || prov.geography.port_capacity > 0.70f) {
+                f.access_type = FishingAccessType::Inshore;
+                f.carrying_capacity = 0.45f + rng.next_float() * 0.20f;
+            } else if (prov.geography.coastal_length_km > 200.0f) {
+                f.access_type = FishingAccessType::Offshore;
+                f.carrying_capacity = 0.30f + rng.next_float() * 0.15f;
+            } else {
+                // Moderate coast — default inshore.
+                f.access_type = FishingAccessType::Inshore;
+                f.carrying_capacity = 0.25f + rng.next_float() * 0.20f;
+            }
+
+            if (f.access_type != FishingAccessType::NoAccess) {
+                // Growth rate by access type.
+                switch (f.access_type) {
+                    case FishingAccessType::Upwelling:   f.intrinsic_growth_rate = 0.60f; break;
+                    case FishingAccessType::Inshore:     f.intrinsic_growth_rate = 0.40f; break;
+                    case FishingAccessType::Offshore:    f.intrinsic_growth_rate = 0.25f; break;
+                    case FishingAccessType::Pelagic:     f.intrinsic_growth_rate = 0.55f; break;
+                    case FishingAccessType::Freshwater:  f.intrinsic_growth_rate = 0.35f; break;
+                    default: break;
+                }
+
+                // MSY = 0.5 * r * K (Schaefer model).
+                f.max_sustainable_yield = 0.5f * f.intrinsic_growth_rate * f.carrying_capacity;
+
+                // Seasonal closure from ice and spawning.
+                if (kz == KoppenZone::ET || kz == KoppenZone::EF ||
+                    prov.geography.elevation_avg_m > 3000.0f) {
+                    f.seasonal_closure = 0.50f;
+                } else if (kz == KoppenZone::Dfc || kz == KoppenZone::Dfd) {
+                    f.seasonal_closure = 0.25f;
+                } else {
+                    f.seasonal_closure = 0.05f;
+                }
+
+                f.current_stock = f.carrying_capacity * 0.85f;
+                f.is_migratory = (f.access_type == FishingAccessType::Pelagic ||
+                                  f.access_type == FishingAccessType::Offshore);
+            }
+        }
     }
 }
 
@@ -3942,6 +4018,18 @@ static const char* resource_type_str(ResourceType rt) {
     return "Unknown";
 }
 
+static const char* fishing_access_str(FishingAccessType fa) {
+    switch (fa) {
+        case FishingAccessType::NoAccess:   return "None";
+        case FishingAccessType::Inshore:    return "Inshore";
+        case FishingAccessType::Offshore:   return "Offshore";
+        case FishingAccessType::Pelagic:    return "Pelagic";
+        case FishingAccessType::Freshwater: return "Freshwater";
+        case FishingAccessType::Upwelling:  return "Upwelling";
+    }
+    return "Unknown";
+}
+
 static const char* soil_type_str(SoilType st) {
     switch (st) {
         case SoilType::Mollisol:  return "Mollisol";
@@ -4128,6 +4216,20 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         }
         p["has_loess"] = prov.has_loess;
         p["is_glacial_scoured"] = prov.is_glacial_scoured;
+        p["is_salt_flat"] = prov.is_salt_flat;
+
+        // Fisheries (Stage 6)
+        if (prov.fisheries.access_type != FishingAccessType::NoAccess) {
+            p["fisheries"] = {
+                {"access_type", fishing_access_str(prov.fisheries.access_type)},
+                {"carrying_capacity", prov.fisheries.carrying_capacity},
+                {"current_stock", prov.fisheries.current_stock},
+                {"max_sustainable_yield", prov.fisheries.max_sustainable_yield},
+                {"intrinsic_growth_rate", prov.fisheries.intrinsic_growth_rate},
+                {"seasonal_closure", prov.fisheries.seasonal_closure},
+                {"is_migratory", prov.fisheries.is_migratory},
+            };
+        }
 
         // Soil & irrigation (Stage 5)
         p["soil_type"] = soil_type_str(prov.soil_type);

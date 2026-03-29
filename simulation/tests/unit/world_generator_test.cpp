@@ -2201,6 +2201,186 @@ TEST_CASE("WorldGenerator  - features: JSON includes crater and glacial fields",
 }
 
 // ===========================================================================
+// Stage 6/7 — Fisheries, Salt Flats, Karst Concealment
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - fisheries: coastal provinces have fisheries",
+          "[world_gen][fisheries]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.geography.coastal_length_km > 10.0f && !prov.geography.is_landlocked) {
+            CHECK(prov.fisheries.access_type != FishingAccessType::NoAccess);
+            CHECK(prov.fisheries.carrying_capacity > 0.0f);
+            CHECK(prov.fisheries.carrying_capacity <= 1.0f);
+            CHECK(prov.fisheries.current_stock > 0.0f);
+            CHECK(prov.fisheries.current_stock <= prov.fisheries.carrying_capacity);
+            CHECK(prov.fisheries.max_sustainable_yield > 0.0f);
+            CHECK(prov.fisheries.intrinsic_growth_rate > 0.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: upwelling has highest carrying capacity",
+          "[world_gen][fisheries]") {
+    bool found_upwelling = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_upwelling; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.fisheries.access_type == FishingAccessType::Upwelling) {
+                found_upwelling = true;
+                CHECK(prov.fisheries.carrying_capacity >= 0.70f);
+                CHECK(prov.fisheries.intrinsic_growth_rate == 0.60f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: freshwater from rivers",
+          "[world_gen][fisheries]") {
+    bool found_freshwater = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_freshwater; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.fisheries.access_type == FishingAccessType::Freshwater) {
+                found_freshwater = true;
+                CHECK(prov.fisheries.carrying_capacity > 0.0f);
+                CHECK(prov.fisheries.intrinsic_growth_rate == 0.35f);
+                CHECK(prov.geography.river_access >= 0.15f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: deterministic",
+          "[world_gen][fisheries]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].fisheries.access_type ==
+              world2.provinces[i].fisheries.access_type);
+        CHECK(world1.provinces[i].fisheries.carrying_capacity ==
+              world2.provinces[i].fisheries.carrying_capacity);
+        CHECK(world1.provinces[i].fisheries.current_stock ==
+              world2.provinces[i].fisheries.current_stock);
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: JSON includes fisheries block",
+          "[world_gen][fisheries][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    bool found_fisheries = false;
+    for (const auto& p : json["provinces"]) {
+        if (p.contains("fisheries")) {
+            found_fisheries = true;
+            CHECK(p["fisheries"].contains("access_type"));
+            CHECK(p["fisheries"].contains("carrying_capacity"));
+            CHECK(p["fisheries"].contains("current_stock"));
+            CHECK(p["fisheries"].contains("max_sustainable_yield"));
+            CHECK(p["fisheries"].contains("intrinsic_growth_rate"));
+            CHECK(p["fisheries"].contains("seasonal_closure"));
+            CHECK(p["fisheries"].contains("is_migratory"));
+            break;
+        }
+    }
+    CHECK(found_fisheries);
+}
+
+TEST_CASE("WorldGenerator  - features: salt flat on endorheic arid provinces",
+          "[world_gen][features]") {
+    bool found_salt_flat = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_salt_flat; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.is_salt_flat) {
+                found_salt_flat = true;
+                CHECK(prov.geography.is_endorheic);
+                // Must be in arid zone.
+                KoppenZone kz = prov.climate.koppen_zone;
+                CHECK((kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
+                       kz == KoppenZone::BSh || kz == KoppenZone::BSk));
+            }
+        }
+    }
+    // Salt flats require endorheic + arid — may not appear.
+}
+
+TEST_CASE("WorldGenerator  - features: karst provinces get concealment bonus",
+          "[world_gen][features]") {
+    bool found_karst = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_karst; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_karst && !prov.has_permafrost) {
+                found_karst = true;
+                CHECK(prov.facility_concealment_bonus >= 0.25f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: JSON includes salt flat and fisheries fields",
+          "[world_gen][features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("is_salt_flat"));
+}
+
+// ===========================================================================
 // Stage 8 — Deterministic Resource Seeding Tests
 // ===========================================================================
 

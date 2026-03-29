@@ -252,6 +252,35 @@ enum class RiverFlowRegime : uint8_t {
 };
 
 // ---------------------------------------------------------------------------
+// FishingAccessType — WorldGen v0.18 Stage 6
+// ---------------------------------------------------------------------------
+// Classifies fisheries access from coastal/river geography. Drives carrying
+// capacity and Schaefer surplus production dynamics at runtime.
+enum class FishingAccessType : uint8_t {
+    NoAccess = 0,    // landlocked; no fishing
+    Inshore,         // coastal shelf <=200m depth; small boats; high yield/km2; easily overexploited
+    Offshore,        // open ocean; industrial trawlers required; lower yield/km2 but vast area
+    Pelagic,         // open ocean surface schools (tuna, sardines); highly migratory
+    Freshwater,      // rivers and lakes; limited yield; important for inland provinces
+    Upwelling,       // cold current upwelling zones; highest yield on Earth (Humboldt/Benguela)
+};
+
+// ---------------------------------------------------------------------------
+// FisheriesProfile — WorldGen v0.18 Stage 6
+// ---------------------------------------------------------------------------
+// Schaefer surplus production model for fish stocks. Seeded at world
+// generation; updated each tick by extraction module.
+struct FisheriesProfile {
+    FishingAccessType access_type = FishingAccessType::NoAccess;
+    float carrying_capacity     = 0.0f;  // max sustainable fish stock; 0.0-1.0 normalized
+    float current_stock         = 0.0f;  // starts at carrying_capacity * 0.85
+    float max_sustainable_yield = 0.0f;  // MSY = 0.5 * intrinsic_growth_rate * carrying_capacity
+    float intrinsic_growth_rate = 0.0f;  // r; species-dependent; derived from access_type
+    float seasonal_closure      = 0.05f; // fraction of year fishing impossible (ice, spawning)
+    bool  is_migratory          = false; // stock moves between provinces; shared-access problem
+};
+
+// ---------------------------------------------------------------------------
 // SimulationLOD
 // ---------------------------------------------------------------------------
 enum class SimulationLOD : uint8_t {
@@ -481,6 +510,10 @@ struct Province {
     bool  has_loess         = false;  // windblown silt from glacial grinding; ag bonus
     bool  is_glacial_scoured = false;  // continental ice sheet scoured terrain; many lakes,
                                        // thin soils, exposed ancient minerals (Canadian Shield)
+    bool  is_salt_flat       = false;  // endorheic + arid; evaporite surface; lithium/potash/salt
+
+    // Fisheries (Stage 6 — WorldGen v0.18; current_stock updated at runtime)
+    FisheriesProfile fisheries;
 
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;
