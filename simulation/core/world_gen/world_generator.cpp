@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 
 #include <nlohmann/json.hpp>
@@ -103,7 +104,7 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Sets has_permafrost, has_fjord. Locks CrudeOil/NaturalGas accessibility for
     // permafrost provinces. Applies fjord transit cost to Maritime links.
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
-    detect_special_features(world, config);
+    detect_special_features(world, rng, config);
 
     // Step 4: Markets from goods catalog
     GoodsCatalog catalog;
@@ -1672,6 +1673,33 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
                 prov.deposits.push_back(std::move(peat));
             }
         }
+
+        // ---- Seed PGMs on impact crater provinces ----
+        // Impact hydrothermal systems concentrate platinum group metals and nickel.
+        // Sudbury (Ontario) and Bushveld (South Africa) are real-world analogs.
+        if (prov.has_impact_crater && prov.impact_mineral_signal > 0.30f) {
+            bool has_pgm = false;
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::PlatinumGroupMetals) {
+                    has_pgm = true;
+                    break;
+                }
+            }
+            if (!has_pgm) {
+                ResourceDeposit pgm{};
+                pgm.id = next_deposit_id++;
+                pgm.type = ResourceType::PlatinumGroupMetals;
+                pgm.quantity = prov.impact_mineral_signal *
+                               (200.0f + rng.next_float() * 600.0f);
+                pgm.quality = 0.40f + prov.impact_mineral_signal * 0.40f;
+                pgm.depth = 0.20f + rng.next_float() * 0.30f;
+                pgm.accessibility = 0.30f + rng.next_float() * 0.30f;  // hard to extract
+                pgm.depletion_rate = 0.0005f;
+                pgm.quantity_remaining = pgm.quantity;
+                pgm.era_unlock = 1;
+                prov.deposits.push_back(std::move(pgm));
+            }
+        }
     }
 }
 
@@ -3216,7 +3244,7 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
 // Stage 7 — Special terrain features (complete WorldGen v0.18 pass)
 // ===========================================================================
 
-void WorldGenerator::detect_special_features(WorldState& world,
+void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG& rng,
                                              const WorldGeneratorConfig& config) {
     const auto& t = config.terrain;
     for (auto& prov : world.provinces) {
@@ -3312,6 +3340,136 @@ void WorldGenerator::detect_special_features(WorldState& world,
                                * 0.10f / (1.0f - t.fjord_min_roughness);
             prov.geography.port_capacity = std::max(prov.geography.port_capacity,
                                                      std::min(0.95f, fjord_port));
+        }
+
+        // ---- Badlands ----
+        // Eroded soft sedimentary rock in arid climate; spectacular ravine networks.
+        bool badlands_condition =
+            (prov.rock_type == RockType::Sedimentary) &&
+            (prov.geology_type == GeologyType::SedimentarySequence ||
+             prov.geology_type == GeologyType::CarbonateSequence) &&
+            (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
+             kz == KoppenZone::BSh || kz == KoppenZone::BSk) &&
+            (prov.geography.terrain_roughness > 0.55f) &&
+            (prov.geography.elevation_avg_m < 2000.0f);
+
+        if (badlands_condition) {
+            prov.has_badlands = true;
+            prov.geography.arable_land_fraction = 0.0f;
+            prov.facility_concealment_bonus = std::max(prov.facility_concealment_bonus, 0.30f);
+        }
+
+        // ---- Impact crater ----
+        // Probability based on tectonic stability and plate age.
+        // Craton interiors preserve craters; young/active crust recycles them.
+        // At V1 scale (6 provinces), ~1 in 6 provinces might have a significant crater.
+        {
+            float preservation = 0.0f;
+            if (prov.tectonic_context == TectonicContext::CratonInterior) {
+                preservation += 0.80f;  // stable shield preserves craters
+            } else if (prov.tectonic_context == TectonicContext::SedimentaryBasin) {
+                preservation += 0.40f;  // buried but detectable
+            } else if (prov.tectonic_context == TectonicContext::PassiveMargin) {
+                preservation += 0.30f;
+            } else {
+                preservation += 0.10f;  // active tectonics erase craters
+            }
+
+            // Old crust had more time to accumulate impacts.
+            preservation *= std::min(1.0f, prov.plate_age / 3.0f);
+
+            // Erosion reduces preservation (wet climates erase faster).
+            float erosion_rate = prov.climate.precipitation_mm / 3000.0f;
+            preservation *= (1.0f - erosion_rate * 0.50f);
+
+            // Probability of a preserved crater existing.
+            float crater_probability = preservation * 0.25f;  // base ~25% for perfect craton
+
+            if (rng.next_float() < crater_probability) {
+                prov.has_impact_crater = true;
+
+                // Diameter: log-distributed (many small, few large).
+                float size_roll = rng.next_float();
+                if (size_roll < 0.60f) {
+                    prov.impact_crater_diameter_km = 5.0f + rng.next_float() * 25.0f;  // 5-30 km
+                } else if (size_roll < 0.90f) {
+                    prov.impact_crater_diameter_km = 30.0f + rng.next_float() * 70.0f;  // 30-100 km
+                } else {
+                    prov.impact_crater_diameter_km = 100.0f + rng.next_float() * 200.0f;  // 100-300 km
+                }
+
+                // Mineral alteration from impact hydrothermal system.
+                // Larger craters = more alteration; young = better preserved signal.
+                float size_factor = std::min(1.0f, prov.impact_crater_diameter_km / 100.0f);
+                prov.impact_mineral_signal = std::min(1.0f,
+                    size_factor * preservation * (0.50f + rng.next_float() * 0.50f));
+            }
+        }
+
+        // ---- Glacial history ----
+        // Provinces at high latitude or high elevation with old crust were glaciated.
+        {
+            float abs_lat = std::abs(lat);
+
+            // Glaciation line: latitude-dependent (lower at higher latitudes).
+            // Continental ice sheets reached ~40°N in Pleistocene (Great Lakes, Scandinavia).
+            bool was_glaciated = false;
+            if (abs_lat > 55.0f) {
+                was_glaciated = true;  // always glaciated at polar latitudes
+            } else if (abs_lat > 40.0f && prov.geography.elevation_avg_m > 500.0f) {
+                was_glaciated = true;  // Pleistocene ice sheets
+            } else if (prov.geography.elevation_avg_m > 2500.0f && abs_lat > 25.0f) {
+                was_glaciated = true;  // mountain glaciation
+            }
+
+            // Glacial scour: flat craton at high latitude → Canadian Shield / Scandinavia.
+            if (was_glaciated &&
+                (prov.tectonic_context == TectonicContext::CratonInterior ||
+                 prov.tectonic_context == TectonicContext::SedimentaryBasin) &&
+                prov.geography.terrain_roughness < 0.35f) {
+                prov.is_glacial_scoured = true;
+                // Thin soils from ice scour.
+                prov.agricultural_productivity = std::min(prov.agricultural_productivity, 0.25f);
+                // Many lakes (fishing, freshwater).
+                prov.geography.river_access = std::min(1.0f,
+                    prov.geography.river_access + 0.15f);
+            }
+
+            // Loess: windblown silt deposited downwind of glaciated regions.
+            // Loess accumulates at 30-55° latitude, on flat terrain adjacent to
+            // glaciated regions. It creates incredibly fertile soil (Midwest, Pampas,
+            // Chinese Loess Plateau, Ukraine Chernozem).
+            bool loess_condition =
+                !was_glaciated &&  // loess deposits DOWNWIND, not under the ice
+                abs_lat > 30.0f && abs_lat < 55.0f &&
+                prov.geography.terrain_roughness < 0.30f &&
+                (prov.climate.precipitation_mm > 400.0f &&
+                 prov.climate.precipitation_mm < 1200.0f);  // not too wet (would wash away)
+
+            // Check if any neighbor was glaciated (loess source).
+            if (loess_condition) {
+                bool has_glacial_neighbor = false;
+                for (const auto& link : prov.links) {
+                    auto it = world.h3_province_map.find(link.neighbor_h3);
+                    if (it == world.h3_province_map.end()) continue;
+                    const auto& nb = world.provinces[it->second];
+                    float nb_abs_lat = std::abs(nb.geography.latitude);
+                    if (nb_abs_lat > 55.0f ||
+                        (nb_abs_lat > 40.0f && nb.geography.elevation_avg_m > 500.0f) ||
+                        nb.is_glacial_scoured) {
+                        has_glacial_neighbor = true;
+                        break;
+                    }
+                }
+                // Also allow loess if in continental interior at right latitude
+                // (loess can travel hundreds of km on wind).
+                if (has_glacial_neighbor || (prov.climate.continentality > 0.40f && abs_lat > 38.0f)) {
+                    prov.has_loess = true;
+                    // Loess is extremely fertile — ag_productivity bonus.
+                    prov.agricultural_productivity = std::min(1.0f,
+                        prov.agricultural_productivity + 0.15f);
+                }
+            }
         }
 
         // ---- Atoll ----
@@ -3653,6 +3811,34 @@ void WorldGenerator::generate_commentary(WorldState& world, DeterministicRNG& rn
                     "deep-water harbours ideal for maritime commerce.";
         }
 
+        if (prov.has_impact_crater) {
+            char buf[256];
+            std::snprintf(buf, sizeof(buf),
+                " A circular geological formation %d km across marks the site of an ancient "
+                "asteroid impact whose hydrothermal aftermath concentrated platinum group metals "
+                "and nickel sulfides in the surrounding rock.",
+                static_cast<int>(prov.impact_crater_diameter_km));
+            lore += buf;
+        }
+
+        if (prov.has_badlands) {
+            lore += " Arid erosion has carved the soft sedimentary rock into a spectacular "
+                    "network of ravines, hoodoos, and exposed geological strata — terrain of "
+                    "scientific and archaeological interest but near-zero agricultural value.";
+        }
+
+        if (prov.has_loess) {
+            lore += " Windblown glacial silt deposited over millennia has created deep loess "
+                    "soils of exceptional fertility, the foundation of the province's "
+                    "agricultural abundance.";
+        }
+
+        if (prov.is_glacial_scoured) {
+            lore += " Ancient ice sheets stripped the bedrock clean, leaving a landscape of "
+                    "thin soils dotted with thousands of lakes — poor for farming but rich in "
+                    "freshwater, timber, and exposed ancient mineral formations.";
+        }
+
         prov.province_lore = std::move(lore);
     }
 }
@@ -3751,6 +3937,7 @@ static const char* resource_type_str(ResourceType rt) {
         case ResourceType::Potash:         return "Potash";
         case ResourceType::Sand:           return "Sand";
         case ResourceType::Aggregate:      return "Aggregate";
+        case ResourceType::PlatinumGroupMetals: return "PlatinumGroupMetals";
     }
     return "Unknown";
 }
@@ -3932,6 +4119,15 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         p["has_estuary"] = prov.has_estuary;
         p["has_ria_coast"] = prov.has_ria_coast;
         p["is_atoll"] = prov.is_atoll;
+        p["has_badlands"] = prov.has_badlands;
+        p["facility_concealment_bonus"] = prov.facility_concealment_bonus;
+        p["has_impact_crater"] = prov.has_impact_crater;
+        if (prov.has_impact_crater) {
+            p["impact_crater_diameter_km"] = prov.impact_crater_diameter_km;
+            p["impact_mineral_signal"] = prov.impact_mineral_signal;
+        }
+        p["has_loess"] = prov.has_loess;
+        p["is_glacial_scoured"] = prov.is_glacial_scoured;
 
         // Soil & irrigation (Stage 5)
         p["soil_type"] = soil_type_str(prov.soil_type);

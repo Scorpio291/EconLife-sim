@@ -158,6 +158,8 @@ enum class ResourceType : uint8_t {
     // Added in WorldGen v0.18 Stage 8 (deterministic seeding)
     Sand,       // marine/river-deposited; construction material; every province needs it
     Aggregate,  // quarry rock (crushed stone, gravel); construction material
+    // Added in WorldGen v0.18 Stage 7/8 (impact crater + glacial)
+    PlatinumGroupMetals,  // impact-concentrated; also craton ultramafic intrusions (Bushveld/Sudbury)
     // [EX] full deposit list from GDD Section 8.3 expanded in later passes
 };
 
@@ -463,6 +465,22 @@ struct Province {
     bool is_atoll       = false;  // subsided volcanic island with coral reef ring; HotSpot +
                                   // low elevation + tropical. Zero ag_productivity; elevated
                                   // fish biomass; moderate lagoon port; very low infrastructure.
+
+    // Badlands (Stage 7 — WorldGen v0.18)
+    bool has_badlands   = false;  // eroded soft sedimentary rock in arid climate; zero arable
+                                  // land; elevated concealment; archaeological/fossil value.
+    float facility_concealment_bonus = 0.0f;  // 0.0-1.0; additive to facility concealment checks;
+                                              // badlands = 0.30, karst adds separately.
+
+    // Impact craters (Stage 7 — WorldGen v0.18)
+    bool  has_impact_crater     = false;  // province contains a preserved impact structure
+    float impact_crater_diameter_km = 0.0f;  // 0 if no crater; otherwise 1-300 km
+    float impact_mineral_signal = 0.0f;  // 0.0-1.0; boosts PGM/nickel seeding probability
+
+    // Glacial history (Stage 7 — WorldGen v0.18)
+    bool  has_loess         = false;  // windblown silt from glacial grinding; ag bonus
+    bool  is_glacial_scoured = false;  // continental ice sheet scoured terrain; many lakes,
+                                       // thin soils, exposed ancient minerals (Canadian Shield)
 
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;

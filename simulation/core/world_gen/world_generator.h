@@ -437,7 +437,8 @@ class WorldGenerator {
     // Sets has_permafrost (latitude > 66.5 or ET/EF koppen) and has_fjord (coastal high-relief
     // high-latitude). Applies permafrost accessibility lock to CrudeOil / NaturalGas deposits.
     // Must run after derive_soils_and_biomes() and create_province_links().
-    static void detect_special_features(WorldState& world, const WorldGeneratorConfig& config);
+    static void detect_special_features(WorldState& world, DeterministicRNG& rng,
+                                        const WorldGeneratorConfig& config);
 
     // Stage 9 — Population attractiveness (WorldGen v0.18; simplified pass).
     // Re-weights total_population from a settlement attractiveness score derived from soil

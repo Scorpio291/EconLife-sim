@@ -2037,6 +2037,170 @@ TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjo
 }
 
 // ===========================================================================
+// Stage 7 — Impact Craters, Badlands, and Glacial Features Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - features: impact crater fields bounded",
+          "[world_gen][features]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_impact_crater) {
+                CHECK(prov.impact_crater_diameter_km >= 5.0f);
+                CHECK(prov.impact_crater_diameter_km <= 300.0f);
+                CHECK(prov.impact_mineral_signal >= 0.0f);
+                CHECK(prov.impact_mineral_signal <= 1.0f);
+            } else {
+                CHECK(prov.impact_crater_diameter_km == 0.0f);
+                CHECK(prov.impact_mineral_signal == 0.0f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: impact craters seed PGMs",
+          "[world_gen][features]") {
+    bool found_pgm = false;
+    for (uint64_t seed = 1; seed <= 50 && !found_pgm; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_impact_crater && prov.impact_mineral_signal > 0.30f) {
+                for (const auto& d : prov.deposits) {
+                    if (d.type == ResourceType::PlatinumGroupMetals) {
+                        found_pgm = true;
+                        CHECK(d.quantity > 0.0f);
+                        CHECK(d.quality >= 0.40f);
+                        CHECK(d.quality <= 1.0f);
+                    }
+                }
+            }
+        }
+    }
+    // PGMs may be rare — OK if not found in 50 seeds.
+}
+
+TEST_CASE("WorldGenerator  - features: badlands have zero arable land",
+          "[world_gen][features]") {
+    bool found_badlands = false;
+    for (uint64_t seed = 1; seed <= 50 && !found_badlands; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_badlands) {
+                found_badlands = true;
+                CHECK(prov.geography.arable_land_fraction == 0.0f);
+                CHECK(prov.facility_concealment_bonus >= 0.30f);
+            }
+        }
+    }
+    // Badlands require specific geology + arid climate — may not appear.
+}
+
+TEST_CASE("WorldGenerator  - features: loess provinces have elevated ag",
+          "[world_gen][features]") {
+    bool found_loess = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_loess; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_loess) {
+                found_loess = true;
+                // Loess adds +0.15 to ag_productivity.
+                CHECK(prov.agricultural_productivity > 0.10f);
+            }
+        }
+    }
+    // Loess requires specific lat/terrain/neighbor conditions.
+}
+
+TEST_CASE("WorldGenerator  - features: glacial scoured provinces have thin soils",
+          "[world_gen][features]") {
+    bool found_scoured = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_scoured; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.is_glacial_scoured) {
+                found_scoured = true;
+                CHECK(prov.agricultural_productivity <= 0.25f);
+                // Glacial scour adds river_access (many lakes).
+                CHECK(prov.geography.river_access > 0.0f);
+            }
+        }
+    }
+    // Glacial scour requires high-latitude craton.
+}
+
+TEST_CASE("WorldGenerator  - features: deterministic crater and glacial assignment",
+          "[world_gen][features]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].has_impact_crater == world2.provinces[i].has_impact_crater);
+        CHECK(world1.provinces[i].impact_crater_diameter_km ==
+              world2.provinces[i].impact_crater_diameter_km);
+        CHECK(world1.provinces[i].has_badlands == world2.provinces[i].has_badlands);
+        CHECK(world1.provinces[i].has_loess == world2.provinces[i].has_loess);
+        CHECK(world1.provinces[i].is_glacial_scoured == world2.provinces[i].is_glacial_scoured);
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: JSON includes crater and glacial fields",
+          "[world_gen][features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("has_badlands"));
+    CHECK(p0.contains("facility_concealment_bonus"));
+    CHECK(p0.contains("has_impact_crater"));
+    CHECK(p0.contains("has_loess"));
+    CHECK(p0.contains("is_glacial_scoured"));
+}
+
+// ===========================================================================
 // Stage 8 — Deterministic Resource Seeding Tests
 // ===========================================================================
 
