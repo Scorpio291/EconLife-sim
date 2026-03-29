@@ -11,6 +11,9 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <queue>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <nlohmann/json.hpp>
 
@@ -53,7 +56,10 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     world.lod2_price_index = nullptr;
     world.player = nullptr;
 
-    // Step 1: Nation
+    // Step 1: Placeholder nation (replaced by form_nations after Stage 9.1).
+    // create_nation creates a single nation and regions so early pipeline stages
+    // that reference nation_id/region_id have valid data. form_nations() later
+    // replaces these with physics-derived multi-nation assignment.
     create_nation(world, config.province_count);
 
     // Step 2: Provinces with varied geography
@@ -157,6 +163,20 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Adjusts total_population from geology/climate attractiveness score (bounded ±40%).
     // Runs after detect_special_features() so permafrost and island flags are set.
     seed_population_attractiveness(world, rng, config);
+
+    // Step 7b2: Stage 9.5 — Nation formation (WorldGen v0.18).
+    // Replaces the single placeholder nation with physics-derived multi-nation assignment.
+    // Seeds nation territories via Voronoi growth, language families, border changes.
+    // Runs after seed_population_attractiveness() (reads settlement_attractiveness).
+    form_nations(world, rng, config);
+
+    // Step 7b3: Stage 9.6 — Nomadic population (WorldGen v0.18).
+    // Seeds pastoral_carrying_capacity and nomadic_population_fraction from climate.
+    seed_nomadic_population(world, rng, config);
+
+    // Step 7b4: Stage 9.7 — Nation capital seeding (WorldGen v0.18).
+    // Selects highest settlement_attractiveness province per nation as capital.
+    seed_nation_capitals(world, config);
 
     // Step 7c: Stage 10 — World commentary (WorldGen v0.18).
     // Generates province_lore strings from tectonic context, climate, and archetype.
@@ -3697,6 +3717,639 @@ void WorldGenerator::seed_population_attractiveness(WorldState& world, Determini
 }
 
 // ===========================================================================
+// Stage 9.5 — Nation formation (WorldGen v0.18 §9.5)
+// ===========================================================================
+
+// Helper: compute terrain resistance for crossing a province link.
+// Mountains, rivers, and maritime crossings raise resistance; open flatland is cheap.
+static float compute_terrain_resistance(const ProvinceLink& link, const Province& neighbor) {
+    float resistance = 1.0f;
+
+    // Maritime crossing: ocean is slower than land conquest
+    if (link.type == LinkType::Maritime) {
+        resistance += 0.50f;
+    }
+
+    // Elevation change proxy: high transit_terrain_cost means steep terrain
+    if (link.transit_terrain_cost > 0.50f) {
+        resistance *= (1.0f + link.transit_terrain_cost);
+    }
+
+    // River crossing barrier (river links represent major navigable rivers)
+    if (link.type == LinkType::River) {
+        resistance *= 1.30f;
+    }
+
+    // Uninhabitable provinces are expensive to cross (deserts, ice caps)
+    if (neighbor.settlement_attractiveness < 0.05f) {
+        resistance *= 3.0f;
+    }
+
+    return resistance;
+}
+
+// Helper: classify nation size from province count.
+static NationSize classify_nation_size(size_t province_count) {
+    if (province_count <= 3) return NationSize::Microstate;
+    if (province_count <= 12) return NationSize::Small;
+    if (province_count <= 40) return NationSize::Medium;
+    if (province_count <= 120) return NationSize::Large;
+    return NationSize::Continental;
+}
+
+// Helper: NationSize to string for JSON serialization.
+static const char* nation_size_str(NationSize s) {
+    switch (s) {
+        case NationSize::Microstate:   return "microstate";
+        case NationSize::Small:        return "small";
+        case NationSize::Medium:       return "medium";
+        case NationSize::Large:        return "large";
+        case NationSize::Continental:  return "continental";
+    }
+    return "small";
+}
+
+// Language families for V1 world generation. On non-Earth worlds all families
+// get equal geographic affinity weight — the list provides naming diversity.
+static const char* v1_language_families[] = {
+    "germanic", "romance", "slavic", "sinitic", "arabic",
+    "turkic",   "indic",   "bantu",  "austronesian", "quechuan",
+};
+static constexpr size_t v1_language_family_count = 10;
+
+void WorldGenerator::form_nations(WorldState& world, DeterministicRNG& rng,
+                                  const WorldGeneratorConfig& config) {
+    const auto& provinces = world.provinces;
+    const uint32_t prov_count = static_cast<uint32_t>(provinces.size());
+    if (prov_count == 0) return;
+
+    // -----------------------------------------------------------------------
+    // §9.5.1 — Nation Seed Placement
+    // -----------------------------------------------------------------------
+    // Collect habitable provinces (attractiveness > 0.10, not ice cap / tundra waste).
+    std::vector<uint32_t> habitable;
+    habitable.reserve(prov_count);
+    for (uint32_t i = 0; i < prov_count; ++i) {
+        const auto& p = provinces[i];
+        if (p.settlement_attractiveness > 0.10f &&
+            p.climate.koppen_zone != KoppenZone::EF) {
+            habitable.push_back(i);
+        }
+    }
+    if (habitable.empty()) {
+        // Fallback: all provinces are habitable for nation assignment.
+        for (uint32_t i = 0; i < prov_count; ++i) habitable.push_back(i);
+    }
+
+    // Target nation count: sqrt(habitable) * 1.8, clamped [2, min(400, habitable_count)].
+    // V1 with 6 provinces → ~4 nations. Minimum of 2 so there's geopolitical tension.
+    uint32_t target_count = static_cast<uint32_t>(
+        std::sqrt(static_cast<float>(habitable.size())) * 1.8f);
+    target_count = std::max(2u, std::min(target_count,
+                                          static_cast<uint32_t>(habitable.size())));
+    target_count = std::min(target_count, 400u);
+
+    // Build attractiveness² weights for seed selection bias.
+    std::vector<float> weights(habitable.size());
+    for (size_t i = 0; i < habitable.size(); ++i) {
+        float a = provinces[habitable[i]].settlement_attractiveness;
+        weights[i] = a * a;
+    }
+
+    // Weighted sampling without replacement; enforce minimum separation.
+    // With V1's small province count, separation = 1 link (adjacent seeds OK but not same).
+    // For larger worlds this would be 3 grid-disks.
+    const uint32_t min_separation = (prov_count > 20) ? 2 : 0;
+
+    std::vector<uint32_t> seed_province_ids;
+    std::unordered_set<uint32_t> seed_set;
+    std::unordered_set<uint32_t> excluded;
+
+    // Repeatedly pick weighted random from remaining candidates.
+    for (uint32_t attempt = 0;
+         seed_province_ids.size() < target_count && attempt < habitable.size() * 3;
+         ++attempt) {
+        // Compute remaining weight sum.
+        float total_weight = 0.0f;
+        for (size_t i = 0; i < habitable.size(); ++i) {
+            if (excluded.find(habitable[i]) == excluded.end() &&
+                seed_set.find(habitable[i]) == seed_set.end()) {
+                total_weight += weights[i];
+            }
+        }
+        if (total_weight <= 0.0f) break;
+
+        float roll = rng.next_float() * total_weight;
+        float cumulative = 0.0f;
+        uint32_t chosen = habitable[0];
+        for (size_t i = 0; i < habitable.size(); ++i) {
+            uint32_t pid = habitable[i];
+            if (excluded.find(pid) != excluded.end() ||
+                seed_set.find(pid) != seed_set.end()) continue;
+            cumulative += weights[i];
+            if (cumulative >= roll) {
+                chosen = pid;
+                break;
+            }
+        }
+
+        if (seed_set.find(chosen) != seed_set.end()) continue;
+
+        seed_province_ids.push_back(chosen);
+        seed_set.insert(chosen);
+
+        // Exclude neighbors within min_separation (BFS).
+        if (min_separation > 0) {
+            std::queue<std::pair<uint32_t, uint32_t>> bfs;
+            bfs.push({chosen, 0});
+            while (!bfs.empty()) {
+                auto [cur, dist] = bfs.front();
+                bfs.pop();
+                if (dist >= min_separation) continue;
+                for (const auto& link : provinces[cur].links) {
+                    // Province links use h3_index for neighbor identification.
+                    // Find province id from h3_index.
+                    uint32_t nid = 0;
+                    for (uint32_t pi = 0; pi < prov_count; ++pi) {
+                        if (provinces[pi].h3_index == link.neighbor_h3) {
+                            nid = pi;
+                            break;
+                        }
+                    }
+                    if (excluded.find(nid) == excluded.end() &&
+                        seed_set.find(nid) == seed_set.end()) {
+                        excluded.insert(nid);
+                        bfs.push({nid, dist + 1});
+                    }
+                }
+            }
+        }
+    }
+
+    // If we got no seeds (degenerate), make province 0 the sole seed.
+    if (seed_province_ids.empty()) {
+        seed_province_ids.push_back(0);
+    }
+
+    const uint32_t nation_count = static_cast<uint32_t>(seed_province_ids.size());
+
+    // -----------------------------------------------------------------------
+    // §9.5.2 — Voronoi Growth with Terrain Resistance
+    // -----------------------------------------------------------------------
+    // Build province index lookup from h3_index for neighbor resolution.
+    std::unordered_map<H3Index, uint32_t> h3_to_idx;
+    for (uint32_t i = 0; i < prov_count; ++i) {
+        h3_to_idx[provinces[i].h3_index] = i;
+    }
+
+    // Dijkstra-style priority queue: (cost, province_id, nation_index).
+    using PQEntry = std::tuple<float, uint32_t, uint32_t>;
+    std::priority_queue<PQEntry, std::vector<PQEntry>, std::greater<PQEntry>> pq;
+
+    std::vector<float> best_cost(prov_count, std::numeric_limits<float>::max());
+    std::vector<int32_t> assignment(prov_count, -1);  // -1 = unassigned
+
+    // Initialize seeds.
+    for (uint32_t ni = 0; ni < nation_count; ++ni) {
+        uint32_t pid = seed_province_ids[ni];
+        best_cost[pid] = 0.0f;
+        assignment[pid] = static_cast<int32_t>(ni);
+        pq.push({0.0f, pid, ni});
+    }
+
+    while (!pq.empty()) {
+        auto [cost, current, nation_idx] = pq.top();
+        pq.pop();
+
+        // Skip if already assigned via a cheaper path.
+        if (cost > best_cost[current]) continue;
+
+        for (const auto& link : provinces[current].links) {
+            auto it = h3_to_idx.find(link.neighbor_h3);
+            if (it == h3_to_idx.end()) continue;
+            uint32_t neighbor_id = it->second;
+
+            if (assignment[neighbor_id] >= 0 &&
+                best_cost[neighbor_id] <= cost) continue;
+
+            float resistance = compute_terrain_resistance(link, provinces[neighbor_id]);
+            float new_cost = cost + resistance;
+
+            if (new_cost < best_cost[neighbor_id]) {
+                best_cost[neighbor_id] = new_cost;
+                assignment[neighbor_id] = static_cast<int32_t>(nation_idx);
+                pq.push({new_cost, neighbor_id, nation_idx});
+            }
+        }
+    }
+
+    // Assign any remaining unassigned provinces (isolated, no links) to nearest nation.
+    for (uint32_t i = 0; i < prov_count; ++i) {
+        if (assignment[i] < 0) {
+            assignment[i] = 0;  // fallback to first nation
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Build Nation objects
+    // -----------------------------------------------------------------------
+    // Clear existing hardcoded nation.
+    world.nations.clear();
+    world.region_groups.clear();
+
+    // Nation name generation (simple seed-derived names for V1).
+    static const char* nation_prefixes[] = {
+        "Republic of ", "Kingdom of ", "Federation of ", "Commonwealth of ",
+        "State of ", "Dominion of ", "Principality of ", "Union of ",
+    };
+    static const char* nation_roots[] = {
+        "Avalon",   "Corvana",  "Delvoria", "Estmarch",  "Fenwick",
+        "Galdria",  "Haldane",  "Irindel",  "Jastova",   "Keldara",
+        "Lorantia", "Morvaine", "Narthia",  "Ostenveld",  "Pelluria",
+        "Quentara", "Rhedania", "Sylvarna", "Torvalis",   "Ulmendia",
+    };
+
+    for (uint32_t ni = 0; ni < nation_count; ++ni) {
+        Nation nation{};
+        nation.id = ni;
+
+        // Deterministic name from nation index + seed.
+        uint32_t prefix_idx = static_cast<uint32_t>(rng.next_float() * 8) % 8;
+        uint32_t root_idx = ni % 20;
+        nation.name = std::string(nation_prefixes[prefix_idx]) + nation_roots[root_idx];
+        nation.currency_code = std::string(nation_roots[root_idx]).substr(0, 3);
+
+        // Government type: weighted by nation infrastructure.
+        float gov_roll = rng.next_float();
+        if (gov_roll < 0.50f) nation.government_type = GovernmentType::Democracy;
+        else if (gov_roll < 0.75f) nation.government_type = GovernmentType::Federation;
+        else if (gov_roll < 0.95f) nation.government_type = GovernmentType::Autocracy;
+        else nation.government_type = GovernmentType::FailedState;
+
+        nation.political_cycle = {0, 0.50f + rng.next_float() * 0.20f, false,
+                                   365 * (3 + static_cast<uint32_t>(rng.next_float() * 3))};
+        nation.corporate_tax_rate = 0.15f + rng.next_float() * 0.20f;
+        nation.income_tax_rate_top_bracket = 0.20f + rng.next_float() * 0.30f;
+        nation.trade_balance_fraction = 0.0f;
+        nation.inflation_rate = 0.01f + rng.next_float() * 0.05f;
+        nation.credit_rating = 0.40f + rng.next_float() * 0.50f;
+        nation.tariff_schedule = nullptr;
+
+        // First nation (player's home) is LOD 0; others are LOD 1.
+        if (ni == 0) {
+            nation.lod1_profile = std::nullopt;
+        } else {
+            Lod1NationProfile lod1{};
+            lod1.export_margin = 0.10f + rng.next_float() * 0.15f;
+            lod1.import_premium = 0.05f + rng.next_float() * 0.10f;
+            lod1.trade_openness = 0.30f + rng.next_float() * 0.40f;
+            lod1.tech_tier_modifier = 0.80f + rng.next_float() * 0.40f;
+            lod1.population_modifier = 0.70f + rng.next_float() * 0.60f;
+            lod1.research_investment = 0.0f;
+            lod1.current_tier = 1;
+            nation.lod1_profile = lod1;
+        }
+
+        // Collect member provinces.
+        for (uint32_t pi = 0; pi < prov_count; ++pi) {
+            if (assignment[pi] == static_cast<int32_t>(ni)) {
+                nation.province_ids.push_back(pi);
+            }
+        }
+
+        nation.size_class = classify_nation_size(nation.province_ids.size());
+
+        world.nations.push_back(std::move(nation));
+    }
+
+    // Assign nation_id on each province.
+    for (uint32_t i = 0; i < prov_count; ++i) {
+        world.provinces[i].nation_id = static_cast<uint32_t>(assignment[i]);
+    }
+
+    // Create one region per province (V1 simplification).
+    for (uint32_t r = 0; r < prov_count; ++r) {
+        Region region{};
+        region.id = r;
+        region.fictional_name = "Region_" + std::to_string(r);
+        region.nation_id = world.provinces[r].nation_id;
+        region.province_ids.push_back(r);
+        world.region_groups.push_back(std::move(region));
+    }
+
+    // -----------------------------------------------------------------------
+    // §9.5.3 — Language Family Assignment
+    // -----------------------------------------------------------------------
+    // Two-pass: initial geographic assignment, then neighbor propagation.
+
+    // Pass 1: each nation's seed province gets a language family by geographic affinity.
+    // Simplified for V1: latitude-based affinity.
+    for (auto& nation : world.nations) {
+        if (nation.province_ids.empty()) continue;
+        uint32_t seed_pid = nation.province_ids[0];
+        const auto& seed_prov = provinces[seed_pid];
+        float abs_lat = std::fabs(seed_prov.geography.latitude);
+
+        // Build affinity weights for each family.
+        float family_weights[v1_language_family_count];
+        for (size_t fi = 0; fi < v1_language_family_count; ++fi) {
+            // Default: neutral weight.
+            family_weights[fi] = 1.0f;
+        }
+        // Germanic: mid-high latitude, wetter
+        if (abs_lat > 45.0f && abs_lat < 65.0f) family_weights[0] = 1.5f;
+        // Romance: mid latitude
+        if (abs_lat > 25.0f && abs_lat < 50.0f) family_weights[1] = 1.4f;
+        // Slavic: continental mid-high latitude
+        if (abs_lat > 40.0f && abs_lat < 65.0f) family_weights[2] = 1.3f;
+        // Sinitic: mid latitude
+        if (abs_lat > 20.0f && abs_lat < 45.0f) family_weights[3] = 1.3f;
+        // Arabic: low-mid latitude, arid
+        if (abs_lat < 35.0f) family_weights[4] = 1.4f;
+        // Turkic: continental steppe
+        if (abs_lat > 30.0f && abs_lat < 55.0f) family_weights[5] = 1.2f;
+        // Indic: tropical-subtropical
+        if (abs_lat < 30.0f) family_weights[6] = 1.3f;
+        // Bantu: tropical
+        if (abs_lat < 25.0f) family_weights[7] = 1.4f;
+        // Austronesian: coastal tropical
+        if (abs_lat < 20.0f && seed_prov.geography.coastal_length_km > 20.0f)
+            family_weights[8] = 1.5f;
+        // Quechuan: highland
+        if (seed_prov.geography.elevation_avg_m > 2000.0f) family_weights[9] = 1.5f;
+
+        float total = 0.0f;
+        for (size_t fi = 0; fi < v1_language_family_count; ++fi) total += family_weights[fi];
+        float roll = rng.next_float() * total;
+        float cum = 0.0f;
+        size_t chosen_fi = 0;
+        for (size_t fi = 0; fi < v1_language_family_count; ++fi) {
+            cum += family_weights[fi];
+            if (cum >= roll) {
+                chosen_fi = fi;
+                break;
+            }
+        }
+        nation.language_family_id = v1_language_families[chosen_fi];
+    }
+
+    // Pass 2: neighbor propagation — 60% chance to inherit largest neighbor's language.
+    // Process largest nations first (they set regional tone).
+    std::vector<uint32_t> nation_order(nation_count);
+    for (uint32_t ni = 0; ni < nation_count; ++ni) nation_order[ni] = ni;
+    std::sort(nation_order.begin(), nation_order.end(),
+              [&](uint32_t a, uint32_t b) {
+                  return world.nations[a].province_ids.size() >
+                         world.nations[b].province_ids.size();
+              });
+
+    // Build nation adjacency from province links.
+    std::unordered_map<uint32_t, std::unordered_set<uint32_t>> nation_adj;
+    for (uint32_t pi = 0; pi < prov_count; ++pi) {
+        for (const auto& link : provinces[pi].links) {
+            auto it = h3_to_idx.find(link.neighbor_h3);
+            if (it == h3_to_idx.end()) continue;
+            uint32_t ni_a = world.provinces[pi].nation_id;
+            uint32_t ni_b = world.provinces[it->second].nation_id;
+            if (ni_a != ni_b) {
+                nation_adj[ni_a].insert(ni_b);
+                nation_adj[ni_b].insert(ni_a);
+            }
+        }
+    }
+
+    for (uint32_t ni : nation_order) {
+        auto adj_it = nation_adj.find(ni);
+        if (adj_it == nation_adj.end() || adj_it->second.empty()) continue;
+
+        // Find largest neighbor.
+        uint32_t largest_neighbor = *adj_it->second.begin();
+        for (uint32_t nj : adj_it->second) {
+            if (world.nations[nj].province_ids.size() >
+                world.nations[largest_neighbor].province_ids.size()) {
+                largest_neighbor = nj;
+            }
+        }
+
+        if (rng.next_float() < 0.60f) {
+            world.nations[ni].language_family_id =
+                world.nations[largest_neighbor].language_family_id;
+        }
+
+        // Secondary language: most common different-language neighbor.
+        std::unordered_map<std::string, uint32_t> diff_lang_counts;
+        for (uint32_t nj : adj_it->second) {
+            if (world.nations[nj].language_family_id !=
+                world.nations[ni].language_family_id) {
+                diff_lang_counts[world.nations[nj].language_family_id]++;
+            }
+        }
+        if (!diff_lang_counts.empty()) {
+            auto best = std::max_element(
+                diff_lang_counts.begin(), diff_lang_counts.end(),
+                [](const auto& a, const auto& b) { return a.second < b.second; });
+            world.nations[ni].secondary_language_id = best->first;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // §9.5.4 — Border Change Seeding
+    // -----------------------------------------------------------------------
+    // Build a notable resource threshold: 75th percentile of all deposit quantities.
+    std::vector<float> all_quantities;
+    for (const auto& prov : world.provinces) {
+        for (const auto& dep : prov.deposits) {
+            all_quantities.push_back(dep.quantity);
+        }
+    }
+    float notable_threshold = 0.50f;
+    if (!all_quantities.empty()) {
+        std::sort(all_quantities.begin(), all_quantities.end());
+        notable_threshold = all_quantities[all_quantities.size() * 3 / 4];
+    }
+
+    for (auto& prov : world.provinces) {
+        float instability = 0.0f;
+
+        // Border location: frontier provinces are contested.
+        bool is_border = false;
+        for (const auto& link : prov.links) {
+            auto it = h3_to_idx.find(link.neighbor_h3);
+            if (it == h3_to_idx.end()) continue;
+            if (link.type == LinkType::Land || link.type == LinkType::River) {
+                if (world.provinces[it->second].nation_id != prov.nation_id) {
+                    is_border = true;
+                    break;
+                }
+            }
+        }
+        if (is_border) instability += 0.30f;
+
+        // Strategic value: notable resources.
+        for (const auto& dep : prov.deposits) {
+            if (dep.quantity > notable_threshold) {
+                instability += 0.25f;
+                break;
+            }
+        }
+
+        // High settlement attractiveness attracts conquest.
+        if (prov.settlement_attractiveness > 0.70f) instability += 0.15f;
+
+        // Mountain passes and plateaus are contested.
+        if (prov.is_mountain_pass) instability += 0.15f;
+
+        // Infra gap: predicted vs actual infrastructure.
+        float predicted_infra = prov.settlement_attractiveness * 0.70f;
+        prov.infra_gap = prov.infrastructure_rating - predicted_infra;
+
+        // Colonial signature: infra_gap > 0.20 suggests external development.
+        if (prov.infra_gap > 0.20f) instability += 0.20f;
+
+        // Poisson draw: instability → expected count → actual count.
+        float expected = instability * 2.5f;
+        // Simple Poisson approximation via DeterministicRNG:
+        // Generate count by summing exponential inter-arrivals.
+        int32_t count = 0;
+        float remaining = expected;
+        while (remaining > 0.0f && count < 6) {
+            float u = rng.next_float();
+            if (u < 0.001f) u = 0.001f;
+            remaining += std::log(u);  // log(u) is negative; subtracts from remaining
+            if (remaining > 0.0f) ++count;
+        }
+        prov.border_change_count = std::max(0, std::min(count, 6));
+
+        // Colonial development flag.
+        prov.has_colonial_development_event = (
+            prov.infra_gap > 0.20f &&
+            prov.border_change_count > 0 &&
+            prov.infrastructure_rating > 0.50f);
+    }
+
+    // -----------------------------------------------------------------------
+    // Aggregate nation-level fields
+    // -----------------------------------------------------------------------
+    for (auto& nation : world.nations) {
+        if (nation.province_ids.empty()) continue;
+
+        // GDP index: mean settlement_attractiveness of member provinces.
+        float sum_attract = 0.0f;
+        float sum_infra = 0.0f;
+        for (uint32_t pid : nation.province_ids) {
+            sum_attract += world.provinces[pid].settlement_attractiveness;
+            sum_infra += world.provinces[pid].infrastructure_rating;
+        }
+        float n = static_cast<float>(nation.province_ids.size());
+        nation.gdp_index = std::clamp(sum_attract / n, 0.0f, 1.0f);
+        float mean_infra = sum_infra / n;
+        nation.governance_quality = std::clamp(
+            mean_infra + (rng.next_float() - 0.5f) * 0.20f, 0.0f, 1.0f);
+
+        // Colonial power flag: any province with colonial development event.
+        for (uint32_t pid : nation.province_ids) {
+            if (world.provinces[pid].has_colonial_development_event) {
+                nation.is_colonial_power = true;
+                break;
+            }
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 9.6 — Nomadic population (WorldGen v0.18 §9.6)
+// ===========================================================================
+
+void WorldGenerator::seed_nomadic_population(WorldState& world, DeterministicRNG& rng,
+                                              const WorldGeneratorConfig& /*config*/) {
+    for (auto& prov : world.provinces) {
+        float pastoral_cap = 0.0f;
+
+        // Pastoral carrying capacity from Köppen zone.
+        switch (prov.climate.koppen_zone) {
+            case KoppenZone::BSk:
+            case KoppenZone::BSh:
+                pastoral_cap = 0.65f;  // steppe: classic pastoral zone
+                break;
+            case KoppenZone::BWh:
+            case KoppenZone::BWk:
+                pastoral_cap = 0.20f;  // desert: sparse; oases anchor movement
+                break;
+            case KoppenZone::Aw:
+                pastoral_cap = 0.45f;  // savanna: seasonal transhumance
+                break;
+            case KoppenZone::ET:
+                pastoral_cap = 0.30f;  // tundra: reindeer pastoralism
+                break;
+            case KoppenZone::Dfc:
+            case KoppenZone::Dfd:
+                pastoral_cap = 0.15f;  // taiga fringe; limited
+                break;
+            default:
+                pastoral_cap = 0.0f;
+                break;
+        }
+
+        // Reduce by terrain roughness (mountains break up grazing range).
+        pastoral_cap *= (1.0f - prov.geography.terrain_roughness * 0.50f);
+
+        // Reduce where agricultural productivity already supports dense settlement.
+        pastoral_cap *= std::max(0.0f, 1.0f - prov.agricultural_productivity * 1.5f);
+
+        prov.pastoral_carrying_capacity = std::clamp(pastoral_cap, 0.0f, 1.0f);
+
+        // Nomadic fraction: highest where pastoral capacity is high and settled capacity low.
+        if (pastoral_cap > 0.10f) {
+            prov.nomadic_population_fraction = pastoral_cap * 0.60f;
+        } else {
+            prov.nomadic_population_fraction = 0.0f;
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 9.7 — Nation capital seeding (WorldGen v0.18 §9.7)
+// ===========================================================================
+
+void WorldGenerator::seed_nation_capitals(WorldState& world,
+                                           const WorldGeneratorConfig& /*config*/) {
+    for (auto& nation : world.nations) {
+        if (nation.province_ids.empty()) continue;
+
+        // Filter eligible provinces: no continuous permafrost, elevation < 4000m,
+        // not badlands/tundra/glacial terrain.
+        std::vector<uint32_t> eligible;
+        for (uint32_t pid : nation.province_ids) {
+            const auto& p = world.provinces[pid];
+            if (p.has_permafrost &&
+                p.climate.koppen_zone == KoppenZone::EF) continue;
+            if (p.geography.elevation_avg_m >= 4000.0f) continue;
+            if (p.has_badlands) continue;
+            if (p.is_glacial_scoured &&
+                p.agricultural_productivity < 0.10f) continue;
+            eligible.push_back(pid);
+        }
+        if (eligible.empty()) {
+            eligible = nation.province_ids;  // fallback: no constraint
+        }
+
+        // Select highest settlement_attractiveness province.
+        uint32_t capital_pid = eligible[0];
+        float best_attract = world.provinces[capital_pid].settlement_attractiveness;
+        for (uint32_t pid : eligible) {
+            float a = world.provinces[pid].settlement_attractiveness;
+            if (a > best_attract) {
+                best_attract = a;
+                capital_pid = pid;
+            }
+        }
+
+        world.provinces[capital_pid].is_nation_capital = true;
+        nation.capital_province_id = capital_pid;
+    }
+}
+
+// ===========================================================================
 // Stage 10 — World commentary generation
 // ===========================================================================
 
@@ -4124,6 +4777,17 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
             {"election_campaign_active", nation.political_cycle.election_campaign_active},
             {"next_election_tick", nation.political_cycle.next_election_tick},
         };
+        // WorldGen v0.18 §9.5 fields
+        n["capital_province_id"] = nation.capital_province_id;
+        n["language_family_id"] = nation.language_family_id;
+        if (!nation.secondary_language_id.empty()) {
+            n["secondary_language_id"] = nation.secondary_language_id;
+        }
+        n["gdp_index"] = nation.gdp_index;
+        n["governance_quality"] = nation.governance_quality;
+        n["size_class"] = nation_size_str(nation.size_class);
+        n["is_colonial_power"] = nation.is_colonial_power;
+
         nations_arr.push_back(std::move(n));
     }
     root["nations"] = std::move(nations_arr);
@@ -4241,6 +4905,18 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         // Settlement (Stage 9)
         p["settlement_attractiveness"] = prov.settlement_attractiveness;
         p["disease_burden"] = prov.disease_burden;
+
+        // Nation formation (Stage 9.5)
+        p["border_change_count"] = prov.border_change_count;
+        p["infra_gap"] = prov.infra_gap;
+        p["has_colonial_development_event"] = prov.has_colonial_development_event;
+
+        // Nomadic population (Stage 9.6)
+        p["nomadic_population_fraction"] = prov.nomadic_population_fraction;
+        p["pastoral_carrying_capacity"] = prov.pastoral_carrying_capacity;
+
+        // Capital (Stage 9.7)
+        p["is_nation_capital"] = prov.is_nation_capital;
 
         // Resource deposits
         json deposits_arr = json::array();

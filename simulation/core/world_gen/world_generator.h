@@ -448,6 +448,24 @@ class WorldGenerator {
     static void seed_population_attractiveness(WorldState& world, DeterministicRNG& rng,
                                                const WorldGeneratorConfig& config);
 
+    // Stage 9.5 — Nation formation (WorldGen v0.18).
+    // Replaces single hardcoded nation with multiple nations via Voronoi growth.
+    // Seeds nation territories, language families, border changes, infra_gap.
+    // Must run after seed_population_attractiveness() (reads settlement_attractiveness).
+    static void form_nations(WorldState& world, DeterministicRNG& rng,
+                             const WorldGeneratorConfig& config);
+
+    // Stage 9.6 — Nomadic population (WorldGen v0.18).
+    // Seeds pastoral_carrying_capacity and nomadic_population_fraction from climate.
+    // Does not depend on nation_id. Runs after seed_population_attractiveness().
+    static void seed_nomadic_population(WorldState& world, DeterministicRNG& rng,
+                                        const WorldGeneratorConfig& config);
+
+    // Stage 9.7 — Nation capital seeding (WorldGen v0.18).
+    // Selects highest settlement_attractiveness province per nation as capital.
+    // Must run after form_nations() (requires nation_id assignment).
+    static void seed_nation_capitals(WorldState& world, const WorldGeneratorConfig& config);
+
     // Stage 10 — World commentary (WorldGen v0.18).
     // Generates province_lore strings from tectonic context, climate, and archetype.
     // Must run after generate_plates() and create_provinces() (reads all province fields).

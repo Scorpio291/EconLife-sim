@@ -515,6 +515,23 @@ struct Province {
     // Fisheries (Stage 6 — WorldGen v0.18; current_stock updated at runtime)
     FisheriesProfile fisheries;
 
+    // Nation formation fields (Stage 9.5 — WorldGen v0.18; static after world generation)
+    int32_t  border_change_count = 0;            // times province changed nation in pre-game 150-year
+                                                  // window; 0 = stable core; max 6; drives Stage 10.2
+                                                  // border history event generation
+    float    infra_gap           = 0.0f;          // infrastructure_rating − predicted_from_attractiveness;
+                                                  // positive = colonial legacy (better than geography);
+                                                  // negative = suppressed by instability
+    bool     has_colonial_development_event = false;  // infra_gap > 0.20 + border_change > 0 +
+                                                       // infrastructure > 0.50; Stage 10.2 reads this
+
+    // Nomadic population (Stage 9.6 — WorldGen v0.18; static at V1)
+    float nomadic_population_fraction  = 0.0f;   // 0.0-1.0; fraction of pop that is mobile pastoral
+    float pastoral_carrying_capacity   = 0.0f;   // 0.0-1.0; biome support for mobile grazing
+
+    // Nation capital (Stage 9.7 — WorldGen v0.18; static after world generation)
+    bool is_nation_capital = false;               // highest settlement_attractiveness in nation
+
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;
                                 // displayed in province detail panel and loading screens
@@ -605,6 +622,17 @@ enum class GovernmentType : uint8_t {
 };
 
 // ---------------------------------------------------------------------------
+// NationSize — WorldGen v0.18 §9.5
+// ---------------------------------------------------------------------------
+enum class NationSize : uint8_t {
+    Microstate = 0,    // 1–3 provinces; city-states, small island nations
+    Small,             // 4–12 provinces
+    Medium,            // 13–40 provinces
+    Large,             // 41–120 provinces
+    Continental,       // > 120 provinces; superstates; rare
+};
+
+// ---------------------------------------------------------------------------
 // NationPoliticalCycleState
 // ---------------------------------------------------------------------------
 struct NationPoliticalCycleState {
@@ -683,6 +711,15 @@ struct Nation {
     std::optional<Lod1NationProfile> lod1_profile;   // nullopt -> LOD 0 (player's home nation,
                                                      // full simulation); populated -> LOD 1
                                                      // (simplified monthly update; see Section 20)
+
+    // --- WorldGen v0.18 §9.5 nation formation fields ---
+    uint32_t capital_province_id = 0;          // set in §9.7; highest attractiveness province
+    std::string language_family_id;            // set in §9.5.3; references language family
+    std::string secondary_language_id;         // optional; bilingual border nations; "" if none
+    float gdp_index           = 0.5f;          // 0.0-1.0; aggregated from province fields
+    float governance_quality  = 0.5f;          // 0.0-1.0; seeded from mean infrastructure ± variance
+    NationSize size_class     = NationSize::Small;  // derived from province_ids.size()
+    bool is_colonial_power    = false;         // true if ≥1 province has colonial development event
 };
 
 }  // namespace econlife

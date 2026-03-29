@@ -159,7 +159,7 @@ TEST_CASE("WorldGenerator  - generates valid WorldState", "[world_gen][generator
     CHECK(world.current_tick == 0);
     CHECK(world.world_seed == 12345);
     CHECK(world.provinces.size() == 6);
-    CHECK(world.nations.size() == 1);
+    CHECK(world.nations.size() >= 2);  // form_nations creates multiple nations
     CHECK(world.region_groups.size() == 6);
     CHECK_FALSE(world.significant_npcs.empty());
     CHECK_FALSE(world.npc_businesses.empty());
@@ -502,15 +502,20 @@ TEST_CASE("WorldGenerator  - nation structure valid", "[world_gen][nation]") {
 
     auto world = WorldGenerator::generate(config);
 
-    REQUIRE(world.nations.size() == 1);
+    REQUIRE(world.nations.size() >= 2);  // form_nations creates multiple nations
     const auto& nation = world.nations[0];
     CHECK(nation.id == 0);
     CHECK_FALSE(nation.name.empty());
-    CHECK(nation.government_type == GovernmentType::Democracy);
-    CHECK(nation.province_ids.size() == 6);
-    CHECK(nation.lod1_profile == std::nullopt);  // LOD 0
+    CHECK(nation.lod1_profile == std::nullopt);  // LOD 0 (player's home nation)
     CHECK(nation.corporate_tax_rate > 0.0f);
     CHECK(nation.income_tax_rate_top_bracket > 0.0f);
+
+    // Total province count across all nations should equal province_count.
+    uint32_t total_provinces = 0;
+    for (const auto& n : world.nations) {
+        total_provinces += static_cast<uint32_t>(n.province_ids.size());
+    }
+    CHECK(total_provinces == 6);
 }
 
 TEST_CASE("WorldGenerator  - province links form connected graph", "[world_gen][links]") {
@@ -2641,4 +2646,255 @@ TEST_CASE("WorldGenerator  - population: JSON includes settlement fields",
     const auto& p0 = json["provinces"][0];
     CHECK(p0.contains("settlement_attractiveness"));
     CHECK(p0.contains("disease_burden"));
+}
+
+// ===========================================================================
+// Stage 9.5 — Nation formation tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - nations: multiple nations formed from 6 provinces",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // With 6 provinces, expect at least 2 nations (spec minimum for geopolitical tension).
+    CHECK(world.nations.size() >= 2);
+    // Should not exceed province count.
+    CHECK(world.nations.size() <= 6);
+}
+
+TEST_CASE("WorldGenerator  - nations: every province assigned to a nation",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.nation_id < world.nations.size());
+    }
+
+    // Every nation's province_ids should reference valid provinces.
+    for (const auto& nation : world.nations) {
+        CHECK(!nation.province_ids.empty());
+        for (uint32_t pid : nation.province_ids) {
+            CHECK(pid < world.provinces.size());
+            CHECK(world.provinces[pid].nation_id == nation.id);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: nation struct fields populated",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& nation : world.nations) {
+        CHECK(!nation.name.empty());
+        CHECK(!nation.currency_code.empty());
+        CHECK(!nation.language_family_id.empty());
+        CHECK(nation.gdp_index >= 0.0f);
+        CHECK(nation.gdp_index <= 1.0f);
+        CHECK(nation.governance_quality >= 0.0f);
+        CHECK(nation.governance_quality <= 1.0f);
+        CHECK(nation.capital_province_id < world.provinces.size());
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: capitals are valid and unique per nation",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    std::set<uint32_t> capital_ids;
+    for (const auto& nation : world.nations) {
+        // Capital must be a member province.
+        CHECK(std::find(nation.province_ids.begin(), nation.province_ids.end(),
+                        nation.capital_province_id) != nation.province_ids.end());
+        // Capital province must have is_nation_capital flag.
+        CHECK(world.provinces[nation.capital_province_id].is_nation_capital);
+        capital_ids.insert(nation.capital_province_id);
+    }
+    // Each nation has a distinct capital.
+    CHECK(capital_ids.size() == world.nations.size());
+}
+
+TEST_CASE("WorldGenerator  - nations: border_change_count bounds",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.border_change_count >= 0);
+        CHECK(prov.border_change_count <= 6);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: infra_gap computed for all provinces",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // infra_gap = infrastructure_rating - settlement_attractiveness * 0.70.
+    for (const auto& prov : world.provinces) {
+        float expected = prov.infrastructure_rating -
+                         prov.settlement_attractiveness * 0.70f;
+        CHECK_THAT(prov.infra_gap,
+                   Catch::Matchers::WithinAbs(expected, 0.01));
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: nation formation is deterministic",
+          "[world_gen][nations][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 777;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.nations.size() == world2.nations.size());
+    for (size_t i = 0; i < world1.nations.size(); ++i) {
+        CHECK(world1.nations[i].name == world2.nations[i].name);
+        CHECK(world1.nations[i].language_family_id ==
+              world2.nations[i].language_family_id);
+        CHECK(world1.nations[i].capital_province_id ==
+              world2.nations[i].capital_province_id);
+        CHECK(world1.nations[i].province_ids == world2.nations[i].province_ids);
+    }
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].nation_id == world2.provinces[i].nation_id);
+        CHECK(world1.provinces[i].border_change_count ==
+              world2.provinces[i].border_change_count);
+        CHECK(world1.provinces[i].is_nation_capital ==
+              world2.provinces[i].is_nation_capital);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: JSON includes nation formation fields",
+          "[world_gen][nations][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("nations"));
+    REQUIRE(!json["nations"].empty());
+
+    const auto& n0 = json["nations"][0];
+    CHECK(n0.contains("capital_province_id"));
+    CHECK(n0.contains("language_family_id"));
+    CHECK(n0.contains("gdp_index"));
+    CHECK(n0.contains("governance_quality"));
+    CHECK(n0.contains("size_class"));
+    CHECK(n0.contains("is_colonial_power"));
+
+    REQUIRE(json.contains("provinces"));
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("border_change_count"));
+    CHECK(p0.contains("infra_gap"));
+    CHECK(p0.contains("has_colonial_development_event"));
+    CHECK(p0.contains("is_nation_capital"));
+}
+
+// ===========================================================================
+// Stage 9.6 — Nomadic population tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - nomadic: pastoral_carrying_capacity bounds",
+          "[world_gen][nomadic]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.pastoral_carrying_capacity >= 0.0f);
+        CHECK(prov.pastoral_carrying_capacity <= 1.0f);
+        CHECK(prov.nomadic_population_fraction >= 0.0f);
+        CHECK(prov.nomadic_population_fraction <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nomadic: steppe/savanna provinces have pastoral capacity",
+          "[world_gen][nomadic]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // At least check that the function ran — provinces with BSk/BSh/Aw climate
+    // should have nonzero pastoral capacity if ag_productivity is not too high.
+    for (const auto& prov : world.provinces) {
+        if ((prov.climate.koppen_zone == KoppenZone::BSk ||
+             prov.climate.koppen_zone == KoppenZone::BSh ||
+             prov.climate.koppen_zone == KoppenZone::Aw) &&
+            prov.agricultural_productivity < 0.50f) {
+            CHECK(prov.pastoral_carrying_capacity > 0.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - nomadic: deterministic",
+          "[world_gen][nomadic][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].pastoral_carrying_capacity ==
+              world2.provinces[i].pastoral_carrying_capacity);
+        CHECK(world1.provinces[i].nomadic_population_fraction ==
+              world2.provinces[i].nomadic_population_fraction);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nomadic: JSON includes nomadic fields",
+          "[world_gen][nomadic][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("nomadic_population_fraction"));
+    CHECK(p0.contains("pastoral_carrying_capacity"));
 }
