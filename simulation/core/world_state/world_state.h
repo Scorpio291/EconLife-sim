@@ -48,6 +48,8 @@ struct WorldState {
     std::vector<Province> provinces;    // see §12
     std::vector<Region> region_groups;  // thin grouping layer
     std::vector<NamedFeature> named_features;  // Stage 10.1; geographic features (UI/encyclopedia only)
+    std::vector<PreGameEvent> pre_game_events; // Stage 10.3; living-memory events (NPC seeding)
+    LoadingCommentary loading_commentary;       // Stage 10.4; world-specific loading screen text
     std::unordered_map<H3Index, uint32_t> h3_province_map;  // H3Index → province array index
 
     // --- NPC Population ---

@@ -3398,3 +3398,315 @@ TEST_CASE("WorldGenerator  - history: JSON includes history block",
     CHECK(e0.contains("headline"));
     CHECK(e0.contains("magnitude"));
 }
+
+// ===========================================================================
+// Stage 10.3 — Pre-game events
+// ===========================================================================
+
+TEST_CASE("WorldGenerator: pre_game_events are extracted from province histories",
+          "[world_gen][pre_game_events]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10030;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    // Pre-game events vector should be populated (or empty if no events qualify).
+    // The extraction is data-driven; we check structural validity.
+    for (const auto& pge : world.pre_game_events) {
+        CHECK(pge.years_before_start >= 1);
+        CHECK(pge.years_before_start <= 40);
+        CHECK(pge.epicenter_province != 0);
+        CHECK(!pge.affected_provinces.empty());
+        CHECK(pge.magnitude >= 0.0f);
+        CHECK(pge.magnitude <= 1.0f);
+        CHECK(pge.infrastructure_damage >= 0.0f);
+        CHECK(pge.infrastructure_damage <= 1.0f);
+        CHECK(pge.population_displacement >= 0.0f);
+        CHECK(pge.population_displacement <= 1.0f);
+        CHECK(pge.has_living_witnesses == true);
+    }
+}
+
+TEST_CASE("WorldGenerator: pre_game_events sorted oldest first",
+          "[world_gen][pre_game_events]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10031;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    for (size_t i = 1; i < world.pre_game_events.size(); ++i) {
+        CHECK(world.pre_game_events[i].years_before_start <=
+              world.pre_game_events[i - 1].years_before_start);
+    }
+}
+
+TEST_CASE("WorldGenerator: pre_game_events deterministic",
+          "[world_gen][pre_game_events]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10032;
+    config.province_count = 6;
+
+    auto w1 = WorldGenerator::generate(config);
+    auto w2 = WorldGenerator::generate(config);
+
+    REQUIRE(w1.pre_game_events.size() == w2.pre_game_events.size());
+    for (size_t i = 0; i < w1.pre_game_events.size(); ++i) {
+        CHECK(w1.pre_game_events[i].type == w2.pre_game_events[i].type);
+        CHECK(w1.pre_game_events[i].years_before_start ==
+              w2.pre_game_events[i].years_before_start);
+        CHECK(w1.pre_game_events[i].epicenter_province ==
+              w2.pre_game_events[i].epicenter_province);
+        CHECK(w1.pre_game_events[i].magnitude == w2.pre_game_events[i].magnitude);
+    }
+}
+
+TEST_CASE("WorldGenerator: pre_game_events epicenter matches a real province",
+          "[world_gen][pre_game_events]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10033;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    std::set<H3Index> province_h3s;
+    for (const auto& p : world.provinces) province_h3s.insert(p.h3_index);
+
+    for (const auto& pge : world.pre_game_events) {
+        CHECK(province_h3s.count(pge.epicenter_province) == 1);
+    }
+}
+
+// ===========================================================================
+// Stage 10.4 — Loading screen commentary
+// ===========================================================================
+
+TEST_CASE("WorldGenerator: loading_commentary stage texts populated",
+          "[world_gen][loading_commentary]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10040;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    const auto& lc = world.loading_commentary;
+    CHECK(!lc.stage_1_text.empty());
+    CHECK(!lc.stage_2_text.empty());
+    CHECK(!lc.stage_3_text.empty());
+    CHECK(!lc.stage_4_text.empty());
+    CHECK(!lc.stage_5_text.empty());
+    CHECK(!lc.stage_6_text.empty());
+    CHECK(!lc.stage_7_text.empty());
+    CHECK(!lc.stage_8_text.empty());
+    CHECK(!lc.stage_9_text.empty());
+    CHECK(!lc.stage_10_text.empty());
+    CHECK(lc.stage_11_text == "The world is ready.");
+}
+
+TEST_CASE("WorldGenerator: loading_commentary sidebar_facts >= 8",
+          "[world_gen][loading_commentary]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10041;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    CHECK(world.loading_commentary.sidebar_facts.size() >= 8);
+    CHECK(world.loading_commentary.sidebar_facts.size() <= 15);
+
+    for (const auto& fact : world.loading_commentary.sidebar_facts) {
+        CHECK(!fact.empty());
+    }
+}
+
+TEST_CASE("WorldGenerator: loading_commentary deterministic",
+          "[world_gen][loading_commentary]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10042;
+    config.province_count = 6;
+
+    auto w1 = WorldGenerator::generate(config);
+    auto w2 = WorldGenerator::generate(config);
+
+    CHECK(w1.loading_commentary.stage_1_text == w2.loading_commentary.stage_1_text);
+    CHECK(w1.loading_commentary.stage_9_text == w2.loading_commentary.stage_9_text);
+    REQUIRE(w1.loading_commentary.sidebar_facts.size() ==
+            w2.loading_commentary.sidebar_facts.size());
+    for (size_t i = 0; i < w1.loading_commentary.sidebar_facts.size(); ++i) {
+        CHECK(w1.loading_commentary.sidebar_facts[i] ==
+              w2.loading_commentary.sidebar_facts[i]);
+    }
+}
+
+// ===========================================================================
+// Stage 10.5 — Encyclopedia JSON
+// ===========================================================================
+
+TEST_CASE("WorldGenerator: encyclopedia JSON has required top-level keys",
+          "[world_gen][encyclopedia]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10050;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    auto j = WorldGenerator::to_encyclopedia_json(world, config);
+
+    CHECK(j.contains("schema_version"));
+    CHECK(j.contains("world_seed"));
+    CHECK(j.contains("provinces"));
+    CHECK(j.contains("named_features"));
+    CHECK(j.contains("pre_game_events"));
+    CHECK(j.contains("loading_commentary"));
+    CHECK(j.contains("world_statistics"));
+}
+
+TEST_CASE("WorldGenerator: encyclopedia provinces keyed by h3_index",
+          "[world_gen][encyclopedia]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10051;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    auto j = WorldGenerator::to_encyclopedia_json(world, config);
+    const auto& provinces = j["provinces"];
+
+    CHECK(provinces.is_object());
+    CHECK(provinces.size() == world.provinces.size());
+
+    for (const auto& prov : world.provinces) {
+        std::string key = std::to_string(prov.h3_index);
+        REQUIRE(provinces.contains(key));
+        CHECK(provinces[key].contains("province_name"));
+        CHECK(provinces[key].contains("archetype"));
+        CHECK(provinces[key].contains("current_character"));
+        CHECK(provinces[key].contains("sidebar_facts"));
+        CHECK(provinces[key]["sidebar_facts"].is_array());
+        CHECK(!provinces[key]["sidebar_facts"].empty());
+    }
+}
+
+TEST_CASE("WorldGenerator: encyclopedia full depth includes history",
+          "[world_gen][encyclopedia]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10052;
+    config.province_count = 6;
+    config.commentary_depth = CommentaryDepth::full;
+    auto world = WorldGenerator::generate(config);
+
+    auto j = WorldGenerator::to_encyclopedia_json(world, config);
+    const auto& provinces = j["provinces"];
+
+    for (const auto& [key, prov] : provinces.items()) {
+        CHECK(prov.contains("summary"));
+        CHECK(prov.contains("history"));
+        CHECK(prov["history"].contains("events"));
+        CHECK(prov["history"].contains("historical_trauma_index"));
+    }
+}
+
+TEST_CASE("WorldGenerator: encyclopedia loading_commentary has stage_texts",
+          "[world_gen][encyclopedia]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10053;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    auto j = WorldGenerator::to_encyclopedia_json(world, config);
+    const auto& lc = j["loading_commentary"];
+
+    CHECK(lc.contains("stage_texts"));
+    CHECK(lc["stage_texts"].contains("stage_1"));
+    CHECK(lc["stage_texts"].contains("stage_11"));
+    CHECK(lc.contains("sidebar_facts"));
+    CHECK(lc["sidebar_facts"].is_array());
+}
+
+TEST_CASE("WorldGenerator: encyclopedia world_statistics populated",
+          "[world_gen][encyclopedia]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10054;
+    config.province_count = 6;
+    auto world = WorldGenerator::generate(config);
+
+    auto j = WorldGenerator::to_encyclopedia_json(world, config);
+    const auto& stats = j["world_statistics"];
+
+    CHECK(stats.contains("total_province_count"));
+    CHECK(stats["total_province_count"].get<int>() == 6);
+    CHECK(stats.contains("habitable_province_count"));
+    CHECK(stats.contains("total_named_features"));
+    CHECK(stats.contains("total_pre_game_events"));
+    CHECK(stats.contains("most_common_archetype"));
+    CHECK(stats.contains("highest_trauma_province"));
+}
+
+// ===========================================================================
+// Commentary depth control
+// ===========================================================================
+
+TEST_CASE("WorldGenerator: commentary_depth none skips Stage 10",
+          "[world_gen][commentary_depth]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10060;
+    config.province_count = 6;
+    config.commentary_depth = CommentaryDepth::none;
+    auto world = WorldGenerator::generate(config);
+
+    // Named features and pre-game events should be empty.
+    CHECK(world.named_features.empty());
+    CHECK(world.pre_game_events.empty());
+    CHECK(world.loading_commentary.stage_11_text.empty());
+
+    // Province history should be unset.
+    for (const auto& p : world.provinces) {
+        CHECK(p.history.events.empty());
+        CHECK(p.history.province_archetype_label.empty());
+    }
+}
+
+TEST_CASE("WorldGenerator: commentary_depth minimal generates archetypes but no full history",
+          "[world_gen][commentary_depth]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10061;
+    config.province_count = 6;
+    config.commentary_depth = CommentaryDepth::minimal;
+    auto world = WorldGenerator::generate(config);
+
+    // Archetypes and current_character should be set.
+    for (const auto& p : world.provinces) {
+        CHECK(!p.history.province_archetype_label.empty());
+        CHECK(!p.history.current_character.empty());
+    }
+
+    // Full history events should be empty (minimal skips generate_province_histories).
+    for (const auto& p : world.provinces) {
+        CHECK(p.history.events.empty());
+    }
+
+    // Pre-game events should be empty (minimal skips seed_pre_game_events).
+    CHECK(world.pre_game_events.empty());
+
+    // Named features should still be detected.
+    // (Named features are detected for all non-none depths.)
+
+    // Loading commentary should be populated.
+    CHECK(!world.loading_commentary.stage_11_text.empty());
+    CHECK(world.loading_commentary.stage_11_text == "The world is ready.");
+}
+
+TEST_CASE("WorldGenerator: encyclopedia minimal depth omits history block",
+          "[world_gen][encyclopedia][commentary_depth]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10062;
+    config.province_count = 6;
+    config.commentary_depth = CommentaryDepth::minimal;
+    auto world = WorldGenerator::generate(config);
+
+    auto j = WorldGenerator::to_encyclopedia_json(world, config);
+    const auto& provinces = j["provinces"];
+
+    for (const auto& [key, prov] : provinces.items()) {
+        // Minimal: no summary or history block.
+        CHECK(!prov.contains("summary"));
+        CHECK(!prov.contains("history"));
+        // But archetype and current_character should still be present.
+        CHECK(prov.contains("archetype"));
+        CHECK(prov.contains("current_character"));
+    }
+}
