@@ -281,6 +281,95 @@ struct FisheriesProfile {
 };
 
 // ---------------------------------------------------------------------------
+// FeatureType — WorldGen v0.18 Stage 10.1
+// ---------------------------------------------------------------------------
+// Geographic feature types for the named feature pipeline. Each province can
+// host multiple features; features can span multiple provinces.
+enum class FeatureType : uint8_t {
+    MountainRange = 0, River, Lake, Desert, Basin,
+    Strait, Bay, Island, Plateau, Cape, Crater,
+    Plain, Forest, Peninsula, Archipelago,
+};
+
+// ---------------------------------------------------------------------------
+// NamedFeature — WorldGen v0.18 Stage 10.1
+// ---------------------------------------------------------------------------
+// A named geographic feature detected from province fields. Stored in
+// WorldState.named_features; referenced by world_encyclopedia.json.
+// The simulation tick never reads this — it is UI/encyclopedia data only.
+struct NamedFeature {
+    uint64_t     id;
+    FeatureType  type;
+    std::string  name;                // primary name; language of the dominant nation
+    std::string  local_name;          // secondary name if feature crosses language boundary; else ""
+    std::string  language_family_id;  // which family generated the primary name
+    float        significance = 0.5f; // 0.0-1.0; how often NPCs and news reference this
+    std::vector<H3Index> extent;      // res-4 cells this feature spans
+
+    float  length_km       = 0.0f;   // rivers, coastlines, mountain ranges
+    float  area_km2        = 0.0f;   // basins, deserts, lakes, plains
+    float  peak_elevation_m = 0.0f;  // mountain ranges; 0.0 for others
+    bool   is_navigable    = false;  // rivers: can goods travel by barge?
+    bool   is_disputed     = false;  // spans a national border; diplomatic context
+    bool   is_chokepoint   = false;  // straits: high trade significance
+};
+
+// ---------------------------------------------------------------------------
+// HistoricalEventType — WorldGen v0.18 Stage 10.2
+// ---------------------------------------------------------------------------
+enum class HistoricalEventType : uint16_t {
+    // Settlement and growth
+    FoundingEvent = 0,
+    TradeRouteEstablished,
+    ResourceDiscovery,
+    PortDevelopment,
+    ColonialDevelopment,
+    MigrationInflux,
+    // Disruption and decline
+    PopulationCollapse,
+    InfrastructureDestruction,
+    ResourceDepletion,
+    EnvironmentalDisaster,
+    EconomicCollapse,
+    ForcedRelocation,
+    Famine,
+    // Geopolitical
+    BorderChange,
+    OccupationHistory,
+    IndependenceEvent,
+    CivilConflict,
+    TreatyProvision,
+    // Geological and environmental
+    ImpactEvent,
+    VolcanicEvent,
+    FloodEvent,
+    ClimateShift,
+};
+
+// ---------------------------------------------------------------------------
+// HistoricalEvent — WorldGen v0.18 Stage 10.2
+// ---------------------------------------------------------------------------
+struct HistoricalEvent {
+    HistoricalEventType type;
+    int32_t years_before_game_start = 0;  // negative = years before 2000
+    std::string headline;                  // one sentence: what happened
+    std::string description;               // 2-4 sentences: context and detail
+    float magnitude          = 0.5f;       // 0.0-1.0; scale of the event
+    std::string lasting_effect;            // one sentence: what this explains about now
+    bool has_living_memory   = false;      // within ~80 years; NPC memory can carry this
+};
+
+// ---------------------------------------------------------------------------
+// ProvinceHistory — WorldGen v0.18 Stage 10.2
+// ---------------------------------------------------------------------------
+struct ProvinceHistory {
+    std::vector<HistoricalEvent> events;  // chronological; 2-8 per province
+    std::string summary;                   // 3-5 sentences; shown in Geographic Encyclopedia
+    std::string current_character;         // one sentence; the feel of the place right now
+    std::string province_archetype_label;  // one of 24 archetype labels per §10.0 taxonomy
+};
+
+// ---------------------------------------------------------------------------
 // SimulationLOD
 // ---------------------------------------------------------------------------
 enum class SimulationLOD : uint8_t {
@@ -531,6 +620,9 @@ struct Province {
 
     // Nation capital (Stage 9.7 — WorldGen v0.18; static after world generation)
     bool is_nation_capital = false;               // highest settlement_attractiveness in nation
+
+    // Province history (Stage 10.2 — WorldGen v0.18; static after world generation)
+    ProvinceHistory history;  // archetype classification, historical events, current character
 
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;

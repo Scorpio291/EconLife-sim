@@ -501,6 +501,23 @@ class WorldGenerator {
     // Must run after form_nations() (requires nation_id assignment).
     static void seed_nation_capitals(WorldState& world, const WorldGeneratorConfig& config);
 
+    // Stage 10.0 — Province archetype classification (WorldGen v0.18).
+    // Assigns one of 24 archetype labels per the §10.0 taxonomy. Used by
+    // history generation and current_character text selection.
+    static std::string classify_province_archetype(const Province& prov);
+
+    // Stage 10.1 — Named feature detection (WorldGen v0.18).
+    // Detects geographic features (mountains, rivers, deserts, etc.) from
+    // province fields and links. Produces NamedFeature records.
+    static void detect_named_features(WorldState& world, DeterministicRNG& rng,
+                                       const WorldGeneratorConfig& config);
+
+    // Stage 10.2 — Province history generation (WorldGen v0.18).
+    // Reads simulation data backwards to generate historical events that
+    // explain infrastructure anomalies, resource context, and geopolitical status.
+    static void generate_province_histories(WorldState& world, DeterministicRNG& rng,
+                                             const WorldGeneratorConfig& config);
+
     // Stage 10 — World commentary (WorldGen v0.18).
     // Generates province_lore strings from tectonic context, climate, and archetype.
     // Must run after generate_plates() and create_provinces() (reads all province fields).

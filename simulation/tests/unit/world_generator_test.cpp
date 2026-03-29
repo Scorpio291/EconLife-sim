@@ -3126,3 +3126,275 @@ TEST_CASE("WorldGenerator  - nations: border_change_count responds to instabilit
         CHECK(border_avg >= interior_avg);
     }
 }
+
+// ===========================================================================
+// Stage 10.0 — Province archetype classification tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - archetype: every province gets a valid archetype label",
+          "[world_gen][archetype]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    const std::set<std::string> valid_archetypes = {
+        "war_scar", "hollow_land", "oil_capital", "oil_frontier",
+        "gold_rush", "mining_district", "uranium_territory", "plantation_economy",
+        "major_port", "island_enclave", "fishing_port",
+        "breadbasket", "agrarian_interior", "dryland_farm",
+        "high_plateau", "lake_district", "true_desert", "oasis_settlement",
+        "pastoral_steppe", "industrial_heartland", "colonial_remnant",
+        "resource_frontier", "marginal_periphery", "ordinary_interior",
+    };
+
+    for (const auto& prov : world.provinces) {
+        CHECK(!prov.history.province_archetype_label.empty());
+        CHECK(valid_archetypes.count(prov.history.province_archetype_label) == 1);
+    }
+}
+
+TEST_CASE("WorldGenerator  - archetype: classification is deterministic",
+          "[world_gen][archetype][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].history.province_archetype_label ==
+              world2.provinces[i].history.province_archetype_label);
+    }
+}
+
+// ===========================================================================
+// Stage 10.1 — Named feature detection tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - named_features: features detected from province data",
+          "[world_gen][named_features]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // Should detect at least some features from 6 varied provinces.
+    CHECK(!world.named_features.empty());
+
+    for (const auto& f : world.named_features) {
+        CHECK(f.id > 0);
+        CHECK(!f.name.empty());
+        CHECK(!f.extent.empty());
+        CHECK(f.significance >= 0.0f);
+        CHECK(f.significance <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - named_features: feature types are valid",
+          "[world_gen][named_features]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& f : world.named_features) {
+        CHECK(static_cast<uint8_t>(f.type) <= static_cast<uint8_t>(FeatureType::Archipelago));
+    }
+}
+
+TEST_CASE("WorldGenerator  - named_features: deterministic",
+          "[world_gen][named_features][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.named_features.size() == world2.named_features.size());
+    for (size_t i = 0; i < world1.named_features.size(); ++i) {
+        CHECK(world1.named_features[i].name == world2.named_features[i].name);
+        CHECK(world1.named_features[i].type == world2.named_features[i].type);
+    }
+}
+
+TEST_CASE("WorldGenerator  - named_features: JSON includes named_features array",
+          "[world_gen][named_features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("named_features"));
+    CHECK(json["named_features"].is_array());
+
+    if (!json["named_features"].empty()) {
+        const auto& f0 = json["named_features"][0];
+        CHECK(f0.contains("id"));
+        CHECK(f0.contains("type"));
+        CHECK(f0.contains("name"));
+        CHECK(f0.contains("extent"));
+        CHECK(f0.contains("significance"));
+    }
+}
+
+// ===========================================================================
+// Stage 10.2 — Province history tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - history: every province has events",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        // Every province gets at least a FoundingEvent.
+        CHECK(!prov.history.events.empty());
+        CHECK(!prov.history.summary.empty());
+        CHECK(!prov.history.current_character.empty());
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: events are chronologically sorted",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        for (size_t i = 1; i < prov.history.events.size(); ++i) {
+            CHECK(prov.history.events[i].years_before_game_start >=
+                  prov.history.events[i - 1].years_before_game_start);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: historical_trauma_index bounds",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.historical_trauma_index >= 0.0f);
+        CHECK(prov.historical_trauma_index <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: deterministic",
+          "[world_gen][history][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].history.events.size() ==
+              world2.provinces[i].history.events.size());
+        CHECK(world1.provinces[i].historical_trauma_index ==
+              world2.provinces[i].historical_trauma_index);
+        CHECK(world1.provinces[i].history.current_character ==
+              world2.provinces[i].history.current_character);
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: impact craters generate ImpactEvent",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.has_impact_crater) {
+            bool has_impact_event = false;
+            for (const auto& e : prov.history.events) {
+                if (e.type == HistoricalEventType::ImpactEvent) {
+                    has_impact_event = true;
+                    break;
+                }
+            }
+            CHECK(has_impact_event);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: border changes generate BorderChange event",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.border_change_count > 0) {
+            bool has_border_event = false;
+            for (const auto& e : prov.history.events) {
+                if (e.type == HistoricalEventType::BorderChange) {
+                    has_border_event = true;
+                    break;
+                }
+            }
+            CHECK(has_border_event);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: JSON includes history block",
+          "[world_gen][history][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    const auto& p0 = json["provinces"][0];
+    REQUIRE(p0.contains("history"));
+
+    const auto& hist = p0["history"];
+    CHECK(hist.contains("province_archetype_label"));
+    CHECK(hist.contains("current_character"));
+    CHECK(hist.contains("summary"));
+    CHECK(hist.contains("events"));
+    CHECK(hist["events"].is_array());
+    CHECK(!hist["events"].empty());
+
+    const auto& e0 = hist["events"][0];
+    CHECK(e0.contains("type"));
+    CHECK(e0.contains("years_before_game_start"));
+    CHECK(e0.contains("headline"));
+    CHECK(e0.contains("magnitude"));
+}
