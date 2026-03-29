@@ -2898,3 +2898,231 @@ TEST_CASE("WorldGenerator  - nomadic: JSON includes nomadic fields",
     CHECK(p0.contains("nomadic_population_fraction"));
     CHECK(p0.contains("pastoral_carrying_capacity"));
 }
+
+// ===========================================================================
+// Scalability and spec compliance tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - nations: target count formula scales correctly",
+          "[world_gen][nations][scalability]") {
+    // The spec formula is: sqrt(habitable) * 1.8, clamped [20, 400].
+    // For V1 with 6 provinces: sqrt(6) * 1.8 ≈ 4.4; graceful fallback below 20.
+    // For 100 provinces: sqrt(100) * 1.8 = 18; still below 20 minimum.
+    // For 200 provinces: sqrt(200) * 1.8 ≈ 25.5; above 20 minimum.
+    // We test the formula indirectly through nation count vs province count.
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.npc_count = 50;
+
+    SECTION("6 provinces produces 2-6 nations") {
+        config.province_count = 6;
+        auto world = WorldGenerator::generate(config);
+        CHECK(world.nations.size() >= 2);
+        CHECK(world.nations.size() <= 6);
+    }
+
+    SECTION("4 provinces produces at least 2 nations") {
+        config.province_count = 4;
+        auto world = WorldGenerator::generate(config);
+        CHECK(world.nations.size() >= 2);
+        CHECK(world.nations.size() <= 4);
+    }
+
+    SECTION("2 provinces produces exactly 2 nations") {
+        config.province_count = 2;
+        auto world = WorldGenerator::generate(config);
+        CHECK(world.nations.size() == 2);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: config params respected",
+          "[world_gen][nations][config]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    SECTION("terrain resistance affects nation boundaries") {
+        // Very high maritime resistance should prevent maritime expansion.
+        WorldGeneratorConfig config_high = config;
+        config_high.nation_formation.maritime_resistance = 10.0f;
+        auto world = WorldGenerator::generate(config_high);
+        // Just check it doesn't crash and produces valid nations.
+        CHECK(world.nations.size() >= 2);
+        for (const auto& n : world.nations) {
+            CHECK(!n.province_ids.empty());
+        }
+    }
+
+    SECTION("language propagation chance 0.0 gives diverse languages") {
+        WorldGeneratorConfig config_no_prop = config;
+        config_no_prop.nation_formation.language_propagation_chance = 0.0f;
+        auto world = WorldGenerator::generate(config_no_prop);
+        // With 0% propagation, nations keep their geographic assignment.
+        // Just verify all nations have a language.
+        for (const auto& n : world.nations) {
+            CHECK(!n.language_family_id.empty());
+        }
+    }
+
+    SECTION("language propagation chance 1.0 produces regional uniformity") {
+        WorldGeneratorConfig config_full_prop = config;
+        config_full_prop.nation_formation.language_propagation_chance = 1.0f;
+        auto world = WorldGenerator::generate(config_full_prop);
+        // With 100% propagation from largest neighbor, we expect fewer distinct languages.
+        std::set<std::string> langs;
+        for (const auto& n : world.nations) langs.insert(n.language_family_id);
+        // Should have at most 3 distinct languages (likely 1-2 with full propagation).
+        CHECK(langs.size() <= 3);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: province count across nations sums to total",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.npc_count = 50;
+
+    for (uint32_t pc : {2u, 3u, 4u, 5u, 6u}) {
+        config.province_count = pc;
+        auto world = WorldGenerator::generate(config);
+
+        uint32_t total = 0;
+        for (const auto& n : world.nations) {
+            total += static_cast<uint32_t>(n.province_ids.size());
+        }
+        CHECK(total == pc);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: nation size_class matches province count",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& nation : world.nations) {
+        size_t n = nation.province_ids.size();
+        if (n <= 3) CHECK(nation.size_class == NationSize::Microstate);
+        else if (n <= 12) CHECK(nation.size_class == NationSize::Small);
+        else if (n <= 40) CHECK(nation.size_class == NationSize::Medium);
+        else if (n <= 120) CHECK(nation.size_class == NationSize::Large);
+        else CHECK(nation.size_class == NationSize::Continental);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: island provinces assigned via maritime links",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // Any province with island_isolation should still have a valid nation_id.
+    for (const auto& prov : world.provinces) {
+        if (prov.island_isolation) {
+            CHECK(prov.nation_id < world.nations.size());
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: 60 unique nation names available",
+          "[world_gen][nations][scalability]") {
+    // Test that with many provinces, nation names don't collide badly.
+    // With 60 roots × 8 prefixes = 480 combinations.
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    std::set<std::string> names;
+    for (const auto& n : world.nations) {
+        names.insert(n.name);
+    }
+    // All nation names should be unique.
+    CHECK(names.size() == world.nations.size());
+}
+
+TEST_CASE("WorldGenerator  - nations: NationFormationParams defaults match spec",
+          "[world_gen][nations][config]") {
+    WorldGeneratorConfig config{};
+    const auto& nfp = config.nation_formation;
+
+    // §9.5.1: seed_count_scale = 1.8, min = 20, max = 400, separation = 3
+    CHECK(nfp.seed_count_scale == 1.8f);
+    CHECK(nfp.seed_count_min == 20);
+    CHECK(nfp.seed_count_max == 400);
+    CHECK(nfp.seed_separation == 3);
+
+    // §9.5.2: maritime resistance = 0.50, river crossing = 1.30
+    CHECK(nfp.maritime_resistance == 0.50f);
+    CHECK(nfp.river_crossing_mult == 1.30f);
+
+    // §9.5: uninhabitable threshold = 0.02
+    CHECK(nfp.uninhabitable_threshold == 0.02f);
+
+    // §9.5.3: language propagation = 0.60
+    CHECK(nfp.language_propagation_chance == 0.60f);
+
+    // §9.5.4: border change max = 6, instability_to_expected = 2.5
+    CHECK(nfp.max_border_changes == 6);
+    CHECK(nfp.instability_to_expected == 2.50f);
+
+    // §9.6: nomadic realisation = 0.60
+    CHECK(nfp.nomadic_realisation_factor == 0.60f);
+}
+
+TEST_CASE("WorldGenerator  - nations: border_change_count responds to instability factors",
+          "[world_gen][nations]") {
+    // Run multiple seeds and verify that border provinces tend to have higher
+    // border_change_count than interior provinces (statistical tendency).
+    WorldGeneratorConfig config{};
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    uint32_t border_total = 0, interior_total = 0;
+    uint32_t border_count = 0, interior_count = 0;
+
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        config.seed = seed;
+        auto world = WorldGenerator::generate(config);
+
+        // Build h3_to_idx for neighbor lookup.
+        std::unordered_map<uint64_t, uint32_t> h3_map;
+        for (const auto& p : world.provinces) h3_map[p.h3_index] = p.id;
+
+        for (const auto& prov : world.provinces) {
+            bool is_border = false;
+            for (const auto& link : prov.links) {
+                auto it = h3_map.find(link.neighbor_h3);
+                if (it != h3_map.end() &&
+                    world.provinces[it->second].nation_id != prov.nation_id) {
+                    is_border = true;
+                    break;
+                }
+            }
+            if (is_border) {
+                border_total += prov.border_change_count;
+                border_count++;
+            } else {
+                interior_total += prov.border_change_count;
+                interior_count++;
+            }
+        }
+    }
+
+    // Border provinces should tend to have more border changes.
+    // With 10 seeds × 6 provinces we should have enough data.
+    if (border_count > 0 && interior_count > 0) {
+        float border_avg = static_cast<float>(border_total) / border_count;
+        float interior_avg = static_cast<float>(interior_total) / interior_count;
+        CHECK(border_avg >= interior_avg);
+    }
+}

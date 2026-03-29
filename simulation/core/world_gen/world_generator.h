@@ -294,6 +294,41 @@ struct WorldGeneratorConfig {
         float ag_min = 0.02f;
         float ag_max = 1.00f;
     } soils{};
+
+    // -----------------------------------------------------------------------
+    // NationFormationParams — tuning knobs for Stage 9.5 nation formation
+    // -----------------------------------------------------------------------
+    struct NationFormationParams {
+        // §9.5.1 — Seed placement.
+        float seed_count_scale    = 1.8f;   // target = sqrt(habitable) × this
+        uint32_t seed_count_min   = 20;     // minimum nation count (Earth-scale worlds)
+        uint32_t seed_count_max   = 400;    // maximum nation count (huge worlds)
+        uint32_t seed_separation  = 3;      // min H3 grid-disk distance between seed provinces
+
+        // §9.5.2 — Voronoi growth terrain resistance multipliers.
+        float maritime_resistance     = 0.50f;  // added cost for maritime link crossing
+        float steep_terrain_threshold = 0.50f;  // transit_terrain_cost above this triggers scaling
+        float river_crossing_mult     = 1.30f;  // multiplier for river link crossing
+        float uninhabitable_mult      = 3.00f;  // multiplier for provinces with attractiveness < 0.05
+
+        // §9.5 — Uninhabitable threshold: provinces below this are unclaimed territory.
+        float uninhabitable_threshold = 0.02f;  // settlement_attractiveness below this → no nation
+
+        // §9.5.3 — Language family neighbor propagation probability.
+        float language_propagation_chance = 0.60f;
+
+        // §9.5.4 — Border change seeding.
+        float border_instability        = 0.30f;
+        float resource_instability      = 0.25f;
+        float attractiveness_instability = 0.15f;
+        float chokepoint_instability    = 0.15f;
+        float colonial_instability      = 0.20f;
+        float instability_to_expected   = 2.50f;  // instability × this = Poisson expected count
+        int32_t max_border_changes      = 6;
+
+        // §9.6 — Nomadic population.
+        float nomadic_realisation_factor = 0.60f;  // pastoral_cap × this = nomadic fraction
+    } nation_formation{};
 };
 
 
