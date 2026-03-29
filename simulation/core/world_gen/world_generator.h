@@ -74,6 +74,21 @@ struct WorldGeneratorConfig {
         float fjord_min_roughness       = 0.55f;  // terrain_roughness threshold
         float fjord_min_latitude        = 50.0f;  // latitude threshold (glacial origin)
         float fjord_maritime_cost_add   = 0.15f;  // added to Maritime link transit_terrain_cost
+
+        // Estuary special feature (Stage 7).
+        float estuary_min_river_access  = 0.40f;  // river_access threshold for estuary
+        float estuary_min_coastal_km    = 20.0f;   // coastal_length_km threshold
+        float estuary_max_roughness     = 0.45f;   // terrain must be moderate or lower
+        float estuary_port_min          = 0.55f;   // port_capacity range for estuaries
+        float estuary_port_max          = 0.75f;
+
+        // Ria coast special feature (Stage 7).
+        float ria_min_roughness         = 0.30f;   // moderate terrain (drowned valleys)
+        float ria_max_roughness         = 0.55f;   // but not extreme (that's fjord territory)
+        float ria_max_latitude          = 50.0f;   // below glacial threshold (non-glacial origin)
+        float ria_min_coastal_km        = 50.0f;   // needs significant coastline
+        float ria_port_min              = 0.70f;   // port_capacity range for rias
+        float ria_port_max              = 0.90f;
     } terrain{};
 
     // -----------------------------------------------------------------------
@@ -116,19 +131,39 @@ struct WorldGeneratorConfig {
     // PopulationParams — weights for settlement attractiveness (Stage 9)
     // -----------------------------------------------------------------------
     struct PopulationParams {
-        // Attractiveness score contributions (baseline = 0.5 → multiplier = 1.0).
-        float ag_productivity_weight  = 0.12f;  // positive
-        float infrastructure_weight   = 0.12f;  // positive
-        float river_access_weight     = 0.08f;  // positive
-        float arable_land_weight      = 0.06f;  // positive
-        float tectonic_stress_penalty = 0.12f;  // subtracted
-        float drought_penalty         = 0.10f;  // subtracted
-        float permafrost_penalty      = 0.20f;  // subtracted if has_permafrost
-        float island_penalty          = 0.08f;  // subtracted if island_isolation
+        // §9.1 — Settlement attractiveness weights (sum to 1.0).
+        float w_ag_productivity   = 0.35f;  // agricultural_productivity
+        float w_port_capacity     = 0.20f;  // port_capacity (coastal trade access)
+        float w_river_access      = 0.20f;  // river_access (navigation + irrigation)
+        float w_terrain_flatness  = 0.10f;  // (1.0 - terrain_roughness)
+        float w_alluvial_soil     = 0.08f;  // soil_type == Alluvial bonus
+        float w_geothermal        = 0.02f;  // has geothermal deposit
+        float w_volcanic_soil     = 0.05f;  // soil_type == Andisol bonus
+
+        // §9.1 — Altitude ceiling multipliers.
+        float alt_1500m_mult  = 0.80f;
+        float alt_2500m_mult  = 0.45f;
+        float alt_3500m_mult  = 0.15f;
+        float alt_4500m_mult  = 0.03f;
+
+        // §9.1 — Environmental penalties (multiplicative).
+        float desert_mult             = 0.12f;  // BWh, BWk
+        float ice_cap_mult            = 0.02f;  // EF
+        float tundra_mult             = 0.15f;  // ET
+        float extreme_terrain_mult    = 0.25f;  // terrain_roughness > 0.85
+        float island_isolation_mult   = 0.60f;  // island_isolation
+        float continuous_permafrost_mult = 0.05f;  // has_permafrost
+
+        // §9.2 — Disease burden.
+        float disease_max_penalty = 0.50f;  // base *= (1 - disease_burden * this)
+
+        // §9.3 — Infrastructure derivation from attractiveness.
+        float infra_attract_scale    = 0.70f;  // infra = attractiveness * this
+        float infra_flood_penalty    = 0.15f;  // - flood_vulnerability * this
+        float infra_variance_sigma   = 0.12f;  // random variance magnitude
 
         // Population multiplier from score:
         //   multiplier = multiplier_base + score * multiplier_range
-        // At default values: score 0.5 → 1.0x; score 0 → 0.60x; score 1 → 1.40x.
         float multiplier_base   = 0.60f;
         float multiplier_range  = 0.80f;
 
@@ -138,6 +173,105 @@ struct WorldGeneratorConfig {
 
         uint32_t population_floor = 10000u;  // minimum total_population after adjustment
     } population{};
+
+    // -----------------------------------------------------------------------
+    // AtmosphereParams — thresholds for Stage 4 atmosphere pass
+    // -----------------------------------------------------------------------
+    struct AtmosphereParams {
+        // Base temperature from latitude: T = temp_equator - |lat| * temp_lat_rate
+        float temp_equator_c          = 30.0f;
+        float temp_lat_rate           = 0.70f;  // °C per degree latitude
+
+        // Continentality: 1.0 - 1.0/(1.0 + distance_proxy * cont_decay)
+        float cont_decay              = 0.005f; // decay rate for distance-to-coast proxy
+        float cont_precip_base_mm     = 1200.0f; // precipitation at continentality=0
+        float cont_precip_min_mm      = 300.0f;  // precipitation at continentality=1
+
+        // Rain shadow
+        float rain_shadow_lift_coeff  = 0.80f;  // mountain moisture extraction efficiency
+        float rain_shadow_precip_eff  = 0.60f;  // fraction of lifted moisture deposited as rain
+        float rain_shadow_evap_return = 0.10f;  // vegetation-recycled moisture per province
+        float rain_shadow_max_depletion = 0.70f; // maximum moisture reduction from shadow
+
+        // Monsoon
+        float monsoon_lat_min         = 10.0f;
+        float monsoon_lat_max         = 25.0f;
+        float monsoon_precip_bonus    = 0.40f;  // fractional precipitation increase
+        float monsoon_seasonality     = 0.75f;  // base seasonality for monsoon provinces
+        float monsoon_flood_bonus     = 0.15f;  // added to flood_vulnerability
+
+        // Cold current
+        float cold_current_temp_drop  = 3.0f;   // °C temperature reduction
+        float cold_current_precip_suppression = 0.35f; // multiply precipitation by this
+        float cold_current_lat_min    = 15.0f;
+        float cold_current_lat_max    = 35.0f;
+
+        // Warm current
+        float warm_current_temp_boost = 4.0f;   // °C temperature increase
+        float warm_current_precip_boost = 0.20f; // fractional precipitation increase
+        float warm_current_lat_min    = 40.0f;
+        float warm_current_lat_max    = 65.0f;
+
+        // ENSO
+        float enso_strength           = 0.70f;  // Earth analog; 0.05-1.50
+
+        // ITCZ convective precipitation (0-8° latitude)
+        float itcz_lat_max            = 8.0f;
+        float itcz_precip_mm          = 2000.0f; // base precipitation in ITCZ zone
+    } atmosphere{};
+
+    // -----------------------------------------------------------------------
+    // HydrologyParams — thresholds for Stage 3 hydrology pass
+    // -----------------------------------------------------------------------
+    struct HydrologyParams {
+        // Snowline derivation: snowline_m = max(0, snowline_base - |lat| * snowline_lat_rate)
+        float snowline_base_m       = 5000.0f;  // snowline at equator (tropical glaciers)
+        float snowline_lat_rate     = 75.0f;    // drop per degree latitude
+        float snowpack_retention    = 0.70f;    // fraction of high-altitude precip held as snow
+        float snowmelt_river_scale  = 0.0005f;  // snowpack → river_access conversion
+        float melt_decay_km         = 500.0f;   // exponential decay distance for snowmelt propagation
+
+        // Drainage basin: river_access from catchment area
+        float catchment_river_scale = 0.15f;    // catchment_area_fraction → river_access weight
+        float precip_river_scale    = 0.0008f;  // precipitation_mm → river_access weight
+
+        // Groundwater
+        float alluvial_gw_bonus     = 0.30f;    // groundwater_reserve bonus for alluvial fill
+        float sedimentary_gw_bonus  = 0.20f;    // groundwater_reserve bonus for sedimentary
+        float floodplain_gw_bonus   = 0.15f;    // extra groundwater for high river_access + flat terrain
+        float gw_precip_scale       = 0.0004f;  // precipitation contribution to groundwater
+
+        // Alluvial fan detection
+        float fan_roughness_min     = 0.55f;    // neighbor terrain_roughness threshold
+        float fan_elev_drop_m       = 300.0f;   // elevation drop from neighbor to qualify
+        float fan_ag_bonus          = 0.12f;    // agricultural_productivity boost
+        float fan_gw_bonus          = 0.15f;    // groundwater_reserve boost
+
+        // Delta detection
+        float delta_catchment_min   = 0.40f;    // minimum upstream fraction to qualify as major delta
+        float delta_ag_cap          = 0.85f;    // agricultural_productivity cap for deltas
+        float delta_flood_floor     = 0.40f;    // minimum flood_vulnerability for deltas
+        float delta_port_min        = 0.35f;    // port_capacity range for deltas (min)
+        float delta_port_max        = 0.55f;    // port_capacity range for deltas (max)
+
+        // Spring/oasis detection
+        float spring_gw_min         = 0.35f;    // minimum groundwater_reserve for spring detection
+        float spring_elev_diff_m    = 200.0f;   // recharge zone must be this much higher
+        float spring_precip_min_mm  = 400.0f;   // recharge neighbor must have this precipitation
+        float artesian_flow_scale   = 0.50f;    // scaling for spring_flow_index
+        float spring_attract_weight = 0.25f;    // spring contribution to settlement attractiveness
+        float oasis_bonus           = 0.15f;    // extra attractiveness for oasis provinces
+
+        // Port capacity baseline
+        float port_coast_norm_km    = 150.0f;   // coastal_length_km normalisation reference
+        float port_roughness_penalty = 0.50f;   // terrain_roughness penalty factor
+        float port_elev_cap_m       = 2000.0f;  // elevation for max penalty
+        float port_elev_max_penalty = 0.50f;    // maximum elevation penalty
+        float port_river_mouth_bonus = 0.25f;   // river_access contribution at coast
+
+        // Endorheic basin
+        float endorheic_lithium_chance = 0.40f; // probability of lithium brine in endorheic basin
+    } hydrology{};
 
     // -----------------------------------------------------------------------
     // SoilsParams — blending ratios for Stage 5+6 soil and biome pass
@@ -160,6 +294,41 @@ struct WorldGeneratorConfig {
         float ag_min = 0.02f;
         float ag_max = 1.00f;
     } soils{};
+
+    // -----------------------------------------------------------------------
+    // NationFormationParams — tuning knobs for Stage 9.5 nation formation
+    // -----------------------------------------------------------------------
+    struct NationFormationParams {
+        // §9.5.1 — Seed placement.
+        float seed_count_scale    = 1.8f;   // target = sqrt(habitable) × this
+        uint32_t seed_count_min   = 20;     // minimum nation count (Earth-scale worlds)
+        uint32_t seed_count_max   = 400;    // maximum nation count (huge worlds)
+        uint32_t seed_separation  = 3;      // min H3 grid-disk distance between seed provinces
+
+        // §9.5.2 — Voronoi growth terrain resistance multipliers.
+        float maritime_resistance     = 0.50f;  // added cost for maritime link crossing
+        float steep_terrain_threshold = 0.50f;  // transit_terrain_cost above this triggers scaling
+        float river_crossing_mult     = 1.30f;  // multiplier for river link crossing
+        float uninhabitable_mult      = 3.00f;  // multiplier for provinces with attractiveness < 0.05
+
+        // §9.5 — Uninhabitable threshold: provinces below this are unclaimed territory.
+        float uninhabitable_threshold = 0.02f;  // settlement_attractiveness below this → no nation
+
+        // §9.5.3 — Language family neighbor propagation probability.
+        float language_propagation_chance = 0.60f;
+
+        // §9.5.4 — Border change seeding.
+        float border_instability        = 0.30f;
+        float resource_instability      = 0.25f;
+        float attractiveness_instability = 0.15f;
+        float chokepoint_instability    = 0.15f;
+        float colonial_instability      = 0.20f;
+        float instability_to_expected   = 2.50f;  // instability × this = Poisson expected count
+        int32_t max_border_changes      = 6;
+
+        // §9.6 — Nomadic population.
+        float nomadic_realisation_factor = 0.60f;  // pastoral_cap × this = nomadic fraction
+    } nation_formation{};
 };
 
 
@@ -237,6 +406,38 @@ class WorldGenerator {
     static void seed_tectonic_deposits(Province& province, DeterministicRNG& rng,
                                        float richness);
 
+    // Stage 8 — Age-dependent resource modifiers (WorldGen v0.18).
+    // Applies radiogenic decay/accumulation modifiers to deposits based on
+    // plate_age. Uranium/Thorium quantities decrease with age; Lead quantities
+    // increase; NaturalGas helium_fraction increases; Geothermal decreases.
+    // Also seeds Peat on Histosol provinces and cobalt_fraction on Nickel/Copper.
+    // Must run after derive_soils_and_biomes() (reads soil_type for peat) and
+    // after all deposit seeding (modifies existing deposits).
+    static void apply_age_modifiers(WorldState& world, DeterministicRNG& rng,
+                                    const WorldGeneratorConfig& config);
+
+    // Stage 8 — Deterministic resource seeding (WorldGen v0.18).
+    // Sand, aggregate, solar potential, wind potential. Derived from geology,
+    // climate, and geography rather than tectonic probability table.
+    static void seed_deterministic_resources(WorldState& world, DeterministicRNG& rng,
+                                             const WorldGeneratorConfig& config);
+
+    // Stage 4 — Atmosphere (WorldGen v0.18; simplified province-level pass).
+    // Derives temperature, precipitation, rain shadow, monsoon, ocean currents,
+    // ENSO susceptibility, continentality, geographic vulnerability, and
+    // re-derives Köppen zones from physics. Must run after generate_plates()
+    // and create_province_links() (reads adjacency for wind propagation).
+    static void simulate_atmosphere(WorldState& world, DeterministicRNG& rng,
+                                    const WorldGeneratorConfig& config);
+
+    // Stage 3 — Hydrology (WorldGen v0.18).
+    // Computes drainage basins, river networks, snowpack, snowmelt propagation,
+    // groundwater, springs, alluvial fans, deltas, endorheic basins, and port
+    // capacity baseline. Refines archetype-set river_access with physically
+    // derived values. Must run after generate_plates() and create_province_links().
+    static void calculate_hydrology(WorldState& world, DeterministicRNG& rng,
+                                    const WorldGeneratorConfig& config);
+
     // Stage 2 derived — Terrain flag detection (WorldGen v0.18).
     // Detects mountain passes (high-terrain chokepoints) and island isolation.
     // Must run after create_province_links() so ProvinceLink vectors are populated.
@@ -271,7 +472,8 @@ class WorldGenerator {
     // Sets has_permafrost (latitude > 66.5 or ET/EF koppen) and has_fjord (coastal high-relief
     // high-latitude). Applies permafrost accessibility lock to CrudeOil / NaturalGas deposits.
     // Must run after derive_soils_and_biomes() and create_province_links().
-    static void detect_special_features(WorldState& world, const WorldGeneratorConfig& config);
+    static void detect_special_features(WorldState& world, DeterministicRNG& rng,
+                                        const WorldGeneratorConfig& config);
 
     // Stage 9 — Population attractiveness (WorldGen v0.18; simplified pass).
     // Re-weights total_population from a settlement attractiveness score derived from soil
@@ -280,6 +482,41 @@ class WorldGenerator {
     // Must run after detect_special_features() (reads has_permafrost).
     static void seed_population_attractiveness(WorldState& world, DeterministicRNG& rng,
                                                const WorldGeneratorConfig& config);
+
+    // Stage 9.5 — Nation formation (WorldGen v0.18).
+    // Replaces single hardcoded nation with multiple nations via Voronoi growth.
+    // Seeds nation territories, language families, border changes, infra_gap.
+    // Must run after seed_population_attractiveness() (reads settlement_attractiveness).
+    static void form_nations(WorldState& world, DeterministicRNG& rng,
+                             const WorldGeneratorConfig& config);
+
+    // Stage 9.6 — Nomadic population (WorldGen v0.18).
+    // Seeds pastoral_carrying_capacity and nomadic_population_fraction from climate.
+    // Does not depend on nation_id. Runs after seed_population_attractiveness().
+    static void seed_nomadic_population(WorldState& world, DeterministicRNG& rng,
+                                        const WorldGeneratorConfig& config);
+
+    // Stage 9.7 — Nation capital seeding (WorldGen v0.18).
+    // Selects highest settlement_attractiveness province per nation as capital.
+    // Must run after form_nations() (requires nation_id assignment).
+    static void seed_nation_capitals(WorldState& world, const WorldGeneratorConfig& config);
+
+    // Stage 10.0 — Province archetype classification (WorldGen v0.18).
+    // Assigns one of 24 archetype labels per the §10.0 taxonomy. Used by
+    // history generation and current_character text selection.
+    static std::string classify_province_archetype(const Province& prov);
+
+    // Stage 10.1 — Named feature detection (WorldGen v0.18).
+    // Detects geographic features (mountains, rivers, deserts, etc.) from
+    // province fields and links. Produces NamedFeature records.
+    static void detect_named_features(WorldState& world, DeterministicRNG& rng,
+                                       const WorldGeneratorConfig& config);
+
+    // Stage 10.2 — Province history generation (WorldGen v0.18).
+    // Reads simulation data backwards to generate historical events that
+    // explain infrastructure anomalies, resource context, and geopolitical status.
+    static void generate_province_histories(WorldState& world, DeterministicRNG& rng,
+                                             const WorldGeneratorConfig& config);
 
     // Stage 10 — World commentary (WorldGen v0.18).
     // Generates province_lore strings from tectonic context, climate, and archetype.

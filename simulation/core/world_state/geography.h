@@ -155,6 +155,11 @@ enum class ResourceType : uint8_t {
     Geothermal, // rift zones and hot spots; renewable energy
     Uranium,    // craton shields; high-value; low quantity
     Potash,     // evaporite basins; agricultural fertilizer input
+    // Added in WorldGen v0.18 Stage 8 (deterministic seeding)
+    Sand,       // marine/river-deposited; construction material; every province needs it
+    Aggregate,  // quarry rock (crushed stone, gravel); construction material
+    // Added in WorldGen v0.18 Stage 7/8 (impact crater + glacial)
+    PlatinumGroupMetals,  // impact-concentrated; also craton ultramafic intrusions (Bushveld/Sudbury)
     // [EX] full deposit list from GDD Section 8.3 expanded in later passes
 };
 
@@ -215,6 +220,156 @@ enum class KoppenZone : uint8_t {
 };
 
 // ---------------------------------------------------------------------------
+// SoilType — WorldGen v0.18 Stage 5
+// ---------------------------------------------------------------------------
+// Classifies soil from geology + climate + time. Drives agricultural
+// productivity multipliers and irrigation behaviour.
+enum class SoilType : uint8_t {
+    Mollisol = 0,  // temperate grassland; continental; the black soils — Ukraine/Kansas/Pampas
+    Oxisol,        // tropical; old surface; nutrients in biomass not soil; bauxite forms here
+    Aridisol,      // desert; minimal weathering; can be productive with irrigation
+    Vertisol,      // seasonally wet/dry shrink-crack clay; cotton soils of India/Sudan
+    Spodosol,      // cool boreal; acidic; pine forest; poor for crops; good for timber
+    Histosol,      // waterlogged; peat; massive carbon store; draining releases CO2
+    Alluvial,      // river floodplain/delta; replenished by flooding; best land per area
+    Andisol,       // volcanic ash weathering; extremely fertile; Java/Central America
+    Cryosol,       // permafrost-affected; thin active layer; construction extremely difficult
+    Entisol,       // young soil; little development; sand dunes, recent volcanic flows
+};
+
+// ---------------------------------------------------------------------------
+// RiverFlowRegime — WorldGen v0.18 Stage 3
+// ---------------------------------------------------------------------------
+// Seasonal timing of river flow in a province; determines agricultural
+// irrigation timing, flood peak season, and drought buffering.
+enum class RiverFlowRegime : uint8_t {
+    RainfedPerennial = 0,    // flow tracks local rainfall; peaks in wet season
+    SnowmeltPerennial,       // sustained by snowmelt; peaks late spring; may drop in autumn
+    SnowmeltEphemeral,       // only flows during melt season; dry rest of year
+    RainfedEphemeral,        // only flows during local wet season; wadi/arroyo analog
+    Glacierfed,              // sustained by glacier melt; stable through summer; declining long-term
+    None,                    // no significant river flow (arid interior, small island)
+};
+
+// ---------------------------------------------------------------------------
+// FishingAccessType — WorldGen v0.18 Stage 6
+// ---------------------------------------------------------------------------
+// Classifies fisheries access from coastal/river geography. Drives carrying
+// capacity and Schaefer surplus production dynamics at runtime.
+enum class FishingAccessType : uint8_t {
+    NoAccess = 0,    // landlocked; no fishing
+    Inshore,         // coastal shelf <=200m depth; small boats; high yield/km2; easily overexploited
+    Offshore,        // open ocean; industrial trawlers required; lower yield/km2 but vast area
+    Pelagic,         // open ocean surface schools (tuna, sardines); highly migratory
+    Freshwater,      // rivers and lakes; limited yield; important for inland provinces
+    Upwelling,       // cold current upwelling zones; highest yield on Earth (Humboldt/Benguela)
+};
+
+// ---------------------------------------------------------------------------
+// FisheriesProfile — WorldGen v0.18 Stage 6
+// ---------------------------------------------------------------------------
+// Schaefer surplus production model for fish stocks. Seeded at world
+// generation; updated each tick by extraction module.
+struct FisheriesProfile {
+    FishingAccessType access_type = FishingAccessType::NoAccess;
+    float carrying_capacity     = 0.0f;  // max sustainable fish stock; 0.0-1.0 normalized
+    float current_stock         = 0.0f;  // starts at carrying_capacity * 0.85
+    float max_sustainable_yield = 0.0f;  // MSY = 0.5 * intrinsic_growth_rate * carrying_capacity
+    float intrinsic_growth_rate = 0.0f;  // r; species-dependent; derived from access_type
+    float seasonal_closure      = 0.05f; // fraction of year fishing impossible (ice, spawning)
+    bool  is_migratory          = false; // stock moves between provinces; shared-access problem
+};
+
+// ---------------------------------------------------------------------------
+// FeatureType — WorldGen v0.18 Stage 10.1
+// ---------------------------------------------------------------------------
+// Geographic feature types for the named feature pipeline. Each province can
+// host multiple features; features can span multiple provinces.
+enum class FeatureType : uint8_t {
+    MountainRange = 0, River, Lake, Desert, Basin,
+    Strait, Bay, Island, Plateau, Cape, Crater,
+    Plain, Forest, Peninsula, Archipelago,
+};
+
+// ---------------------------------------------------------------------------
+// NamedFeature — WorldGen v0.18 Stage 10.1
+// ---------------------------------------------------------------------------
+// A named geographic feature detected from province fields. Stored in
+// WorldState.named_features; referenced by world_encyclopedia.json.
+// The simulation tick never reads this — it is UI/encyclopedia data only.
+struct NamedFeature {
+    uint64_t     id;
+    FeatureType  type;
+    std::string  name;                // primary name; language of the dominant nation
+    std::string  local_name;          // secondary name if feature crosses language boundary; else ""
+    std::string  language_family_id;  // which family generated the primary name
+    float        significance = 0.5f; // 0.0-1.0; how often NPCs and news reference this
+    std::vector<H3Index> extent;      // res-4 cells this feature spans
+
+    float  length_km       = 0.0f;   // rivers, coastlines, mountain ranges
+    float  area_km2        = 0.0f;   // basins, deserts, lakes, plains
+    float  peak_elevation_m = 0.0f;  // mountain ranges; 0.0 for others
+    bool   is_navigable    = false;  // rivers: can goods travel by barge?
+    bool   is_disputed     = false;  // spans a national border; diplomatic context
+    bool   is_chokepoint   = false;  // straits: high trade significance
+};
+
+// ---------------------------------------------------------------------------
+// HistoricalEventType — WorldGen v0.18 Stage 10.2
+// ---------------------------------------------------------------------------
+enum class HistoricalEventType : uint16_t {
+    // Settlement and growth
+    FoundingEvent = 0,
+    TradeRouteEstablished,
+    ResourceDiscovery,
+    PortDevelopment,
+    ColonialDevelopment,
+    MigrationInflux,
+    // Disruption and decline
+    PopulationCollapse,
+    InfrastructureDestruction,
+    ResourceDepletion,
+    EnvironmentalDisaster,
+    EconomicCollapse,
+    ForcedRelocation,
+    Famine,
+    // Geopolitical
+    BorderChange,
+    OccupationHistory,
+    IndependenceEvent,
+    CivilConflict,
+    TreatyProvision,
+    // Geological and environmental
+    ImpactEvent,
+    VolcanicEvent,
+    FloodEvent,
+    ClimateShift,
+};
+
+// ---------------------------------------------------------------------------
+// HistoricalEvent — WorldGen v0.18 Stage 10.2
+// ---------------------------------------------------------------------------
+struct HistoricalEvent {
+    HistoricalEventType type;
+    int32_t years_before_game_start = 0;  // negative = years before 2000
+    std::string headline;                  // one sentence: what happened
+    std::string description;               // 2-4 sentences: context and detail
+    float magnitude          = 0.5f;       // 0.0-1.0; scale of the event
+    std::string lasting_effect;            // one sentence: what this explains about now
+    bool has_living_memory   = false;      // within ~80 years; NPC memory can carry this
+};
+
+// ---------------------------------------------------------------------------
+// ProvinceHistory — WorldGen v0.18 Stage 10.2
+// ---------------------------------------------------------------------------
+struct ProvinceHistory {
+    std::vector<HistoricalEvent> events;  // chronological; 2-8 per province
+    std::string summary;                   // 3-5 sentences; shown in Geographic Encyclopedia
+    std::string current_character;         // one sentence; the feel of the place right now
+    std::string province_archetype_label;  // one of 24 archetype labels per §10.0 taxonomy
+};
+
+// ---------------------------------------------------------------------------
 // SimulationLOD
 // ---------------------------------------------------------------------------
 enum class SimulationLOD : uint8_t {
@@ -238,6 +393,18 @@ struct GeographyProfile {
     float port_capacity;  // 0.0 (none) to 1.0 (major port)
     float river_access;   // 0.0-1.0; navigable river density
     float area_km2;
+
+    // Hydrology fields (Stage 3 — WorldGen v0.18; static after world generation)
+    bool  is_endorheic       = false;  // closed drainage basin; no ocean outlet; salt flats/inland lakes
+    bool  is_delta           = false;  // major river delta at coast; high ag, high flood, moderate port
+    bool  snowmelt_fed       = false;  // river_access includes significant snowmelt from upstream mountains
+    bool  has_alluvial_fan   = false;  // sediment deposit at mountain-plain transition; groundwater + ag bonus
+    bool  has_artesian_spring = false; // pressurised aquifer vents to surface; oasis mechanism
+    bool  is_oasis           = false;  // desert province with spring-fed settlement
+    float groundwater_reserve = 0.0f;  // 0.0-1.0; aquifer potential; alluvial fans and floodplains highest
+    float snowpack_contribution = 0.0f; // mm water equivalent held as seasonal snowpack; 0 below snowline
+    float spring_flow_index  = 0.0f;   // 0.0-1.0; artesian spring output; enables oasis settlement
+    RiverFlowRegime river_flow_regime = RiverFlowRegime::None;
 };
 
 // ---------------------------------------------------------------------------
@@ -257,6 +424,14 @@ struct ClimateProfile {
                                    // downstream effects (agricultural_productivity,
                                    // community_state) batched every 7 ticks via DeferredWorkQueue
                                    // (WorkType::climate_downstream_batch)
+
+    // Atmosphere fields (Stage 4 — WorldGen v0.18; static after world generation)
+    float continentality           = 0.0f;  // 0.0 (fully oceanic) to 1.0 (deep continental interior);
+                                             // derived from distance-to-coast proxy; drives precip baseline
+    float enso_susceptibility      = 0.0f;  // 0.0-1.0; how much ENSO shifts this province's precipitation
+    float geographic_vulnerability = 0.0f;  // 0.0-1.0; climate stress exposure; derived from koppen/coast/elev
+    bool  cold_current_adjacent    = false; // coastal + cold upwelling current; fish bonus + precip suppression
+    bool  is_monsoon               = false; // province in monsoon belt; high seasonality + flood bonus
 };
 
 // ---------------------------------------------------------------------------
@@ -394,15 +569,79 @@ struct Province {
                                   // hold: (1) arctic_drilling tech researched, AND (2)
                                   // climate_stress_current > permafrost_thaw_threshold (0.40).
                                   // agricultural_productivity reduced by ~60% at world gen.
+    bool has_estuary    = false;  // tidal mixing zone where river meets sea; sheltered water;
+                                  // elevated port_capacity (0.55–0.75); fisheries bonus.
+                                  // Detected: coastal + high river_access + moderate terrain.
+    bool has_ria_coast  = false;  // drowned river valleys creating natural harbours; requires
+                                  // coastal + moderate roughness + low latitude (non-glacial).
+                                  // Elevated port_capacity (0.70–0.90); multiple sheltered inlets.
     bool has_fjord      = false;  // high-relief glacially-carved coastline; requires
                                   // !is_landlocked, coastal_length_km > 100, terrain_roughness
                                   // > 0.55, latitude > 50°. Maritime ProvinceLinks gain
                                   // +0.15 transit_terrain_cost (difficult navigation in
                                   // confined fjord channels). Scenic appeal; tourism bonus.
+    bool is_atoll       = false;  // subsided volcanic island with coral reef ring; HotSpot +
+                                  // low elevation + tropical. Zero ag_productivity; elevated
+                                  // fish biomass; moderate lagoon port; very low infrastructure.
+
+    // Badlands (Stage 7 — WorldGen v0.18)
+    bool has_badlands   = false;  // eroded soft sedimentary rock in arid climate; zero arable
+                                  // land; elevated concealment; archaeological/fossil value.
+    float facility_concealment_bonus = 0.0f;  // 0.0-1.0; additive to facility concealment checks;
+                                              // badlands = 0.30, karst adds separately.
+
+    // Impact craters (Stage 7 — WorldGen v0.18)
+    bool  has_impact_crater     = false;  // province contains a preserved impact structure
+    float impact_crater_diameter_km = 0.0f;  // 0 if no crater; otherwise 1-300 km
+    float impact_mineral_signal = 0.0f;  // 0.0-1.0; boosts PGM/nickel seeding probability
+
+    // Glacial history (Stage 7 — WorldGen v0.18)
+    bool  has_loess         = false;  // windblown silt from glacial grinding; ag bonus
+    bool  is_glacial_scoured = false;  // continental ice sheet scoured terrain; many lakes,
+                                       // thin soils, exposed ancient minerals (Canadian Shield)
+    bool  is_salt_flat       = false;  // endorheic + arid; evaporite surface; lithium/potash/salt
+
+    // Fisheries (Stage 6 — WorldGen v0.18; current_stock updated at runtime)
+    FisheriesProfile fisheries;
+
+    // Nation formation fields (Stage 9.5 — WorldGen v0.18; static after world generation)
+    int32_t  border_change_count = 0;            // times province changed nation in pre-game 150-year
+                                                  // window; 0 = stable core; max 6; drives Stage 10.2
+                                                  // border history event generation
+    float    infra_gap           = 0.0f;          // infrastructure_rating − predicted_from_attractiveness;
+                                                  // positive = colonial legacy (better than geography);
+                                                  // negative = suppressed by instability
+    bool     has_colonial_development_event = false;  // infra_gap > 0.20 + border_change > 0 +
+                                                       // infrastructure > 0.50; Stage 10.2 reads this
+
+    // Nomadic population (Stage 9.6 — WorldGen v0.18; static at V1)
+    float nomadic_population_fraction  = 0.0f;   // 0.0-1.0; fraction of pop that is mobile pastoral
+    float pastoral_carrying_capacity   = 0.0f;   // 0.0-1.0; biome support for mobile grazing
+
+    // Nation capital (Stage 9.7 — WorldGen v0.18; static after world generation)
+    bool is_nation_capital = false;               // highest settlement_attractiveness in nation
+
+    // Province history (Stage 10.2 — WorldGen v0.18; static after world generation)
+    ProvinceHistory history;  // archetype classification, historical events, current character
 
     // World Commentary (Stage 10 — WorldGen v0.18; static after world generation)
     std::string province_lore;  // 2–3 sentence fictional geological and historical narrative;
                                 // displayed in province detail panel and loading screens
+
+    // Soil classification (Stage 5 — WorldGen v0.18; static after world generation)
+    SoilType soil_type = SoilType::Entisol;
+
+    // Irrigation fields (Stage 5 — WorldGen v0.18; irrigation_potential static,
+    // water_availability may change at runtime as groundwater depletes)
+    float irrigation_potential   = 0.0f;  // 0.0-1.0; max ag_productivity achievable with full irrigation
+    float irrigation_cost_index  = 1.0f;  // 0.5-5.0; cost multiplier for irrigated area
+    float salinisation_risk      = 0.0f;  // 0.0-1.0; probability of salt buildup per decade
+    float water_availability     = 0.0f;  // 0.0-1.0; composite of river + groundwater + spring
+
+    // Settlement attractiveness fields (Stage 9 — WorldGen v0.18)
+    float settlement_attractiveness = 0.0f;  // 0.0-1.0; pre-population attractiveness score
+    float disease_burden            = 0.0f;  // 0.0-1.0; vector-borne disease load; reducible by
+                                              // sanitation/drainage/medical infrastructure at runtime
 
     // Archetype index (WorldGenerator internal; stable for UI/modding access)
     // Maps to WorldGenerator::ProvinceArchetype enum:
@@ -472,6 +711,17 @@ enum class GovernmentType : uint8_t {
     Autocracy = 1,
     Federation = 2,
     FailedState = 3
+};
+
+// ---------------------------------------------------------------------------
+// NationSize — WorldGen v0.18 §9.5
+// ---------------------------------------------------------------------------
+enum class NationSize : uint8_t {
+    Microstate = 0,    // 1–3 provinces; city-states, small island nations
+    Small,             // 4–12 provinces
+    Medium,            // 13–40 provinces
+    Large,             // 41–120 provinces
+    Continental,       // > 120 provinces; superstates; rare
 };
 
 // ---------------------------------------------------------------------------
@@ -553,6 +803,15 @@ struct Nation {
     std::optional<Lod1NationProfile> lod1_profile;   // nullopt -> LOD 0 (player's home nation,
                                                      // full simulation); populated -> LOD 1
                                                      // (simplified monthly update; see Section 20)
+
+    // --- WorldGen v0.18 §9.5 nation formation fields ---
+    uint32_t capital_province_id = 0;          // set in §9.7; highest attractiveness province
+    std::string language_family_id;            // set in §9.5.3; references language family
+    std::string secondary_language_id;         // optional; bilingual border nations; "" if none
+    float gdp_index           = 0.5f;          // 0.0-1.0; aggregated from province fields
+    float governance_quality  = 0.5f;          // 0.0-1.0; seeded from mean infrastructure ± variance
+    NationSize size_class     = NationSize::Small;  // derived from province_ids.size()
+    bool is_colonial_power    = false;         // true if ≥1 province has colonial development event
 };
 
 }  // namespace econlife

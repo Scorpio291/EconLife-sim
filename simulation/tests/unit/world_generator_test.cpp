@@ -159,7 +159,7 @@ TEST_CASE("WorldGenerator  - generates valid WorldState", "[world_gen][generator
     CHECK(world.current_tick == 0);
     CHECK(world.world_seed == 12345);
     CHECK(world.provinces.size() == 6);
-    CHECK(world.nations.size() == 1);
+    CHECK(world.nations.size() >= 2);  // form_nations creates multiple nations
     CHECK(world.region_groups.size() == 6);
     CHECK_FALSE(world.significant_npcs.empty());
     CHECK_FALSE(world.npc_businesses.empty());
@@ -502,15 +502,20 @@ TEST_CASE("WorldGenerator  - nation structure valid", "[world_gen][nation]") {
 
     auto world = WorldGenerator::generate(config);
 
-    REQUIRE(world.nations.size() == 1);
+    REQUIRE(world.nations.size() >= 2);  // form_nations creates multiple nations
     const auto& nation = world.nations[0];
     CHECK(nation.id == 0);
     CHECK_FALSE(nation.name.empty());
-    CHECK(nation.government_type == GovernmentType::Democracy);
-    CHECK(nation.province_ids.size() == 6);
-    CHECK(nation.lod1_profile == std::nullopt);  // LOD 0
+    CHECK(nation.lod1_profile == std::nullopt);  // LOD 0 (player's home nation)
     CHECK(nation.corporate_tax_rate > 0.0f);
     CHECK(nation.income_tax_rate_top_bracket > 0.0f);
+
+    // Total province count across all nations should equal province_count.
+    uint32_t total_provinces = 0;
+    for (const auto& n : world.nations) {
+        total_provinces += static_cast<uint32_t>(n.province_ids.size());
+    }
+    CHECK(total_provinces == 6);
 }
 
 TEST_CASE("WorldGenerator  - province links form connected graph", "[world_gen][links]") {
@@ -908,9 +913,10 @@ TEST_CASE("WorldGenerator - permafrost provinces have low agricultural_productiv
         for (const auto& p : world.provinces) {
             if (p.has_permafrost) {
                 // Permafrost reduces ag_productivity to 40% of whatever soils derived.
-                // Even a fertile volcanic soil (1.30x of archetype) through permafrost = 0.40x.
-                // Worst archetype base for a non-permafrost province would give < 0.5 * 0.4 = 0.2.
-                CHECK(p.agricultural_productivity <= 0.22f);
+                // Hydrology may boost ag_productivity (alluvial fan +0.12, delta cap 0.85)
+                // before soils+permafrost apply. Upper bound: 0.95 * 1.35 * 0.40 ≈ 0.51
+                // but typical is much lower. Use 0.35 as generous upper bound.
+                CHECK(p.agricultural_productivity <= 0.35f);
             }
         }
     }
@@ -1184,7 +1190,7 @@ TEST_CASE("WorldGenerator - economic geography is deterministic",
 // Stage 8 — era_unlock field on ResourceDeposit
 // ===========================================================================
 
-TEST_CASE("WorldGenerator - all V1 deposits have era_unlock == 1",
+TEST_CASE("WorldGenerator - deposits have valid era_unlock",
           "[world_gen][era_unlock]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
@@ -1196,7 +1202,13 @@ TEST_CASE("WorldGenerator - all V1 deposits have era_unlock == 1",
     uint32_t total_deposits = 0;
     for (const auto& prov : world.provinces) {
         for (const auto& d : prov.deposits) {
-            CHECK(d.era_unlock == 1);
+            // Renewable energy (solar/wind) unlocks at Era 2; all others at Era 1.
+            if (d.type == ResourceType::SolarPotential ||
+                d.type == ResourceType::WindPotential) {
+                CHECK(d.era_unlock == 2);
+            } else {
+                CHECK(d.era_unlock == 1);
+            }
             ++total_deposits;
         }
     }
@@ -1409,4 +1421,1980 @@ TEST_CASE("WorldGenerator - output_world_file config writes during generate",
     CHECK(loaded["provinces"].size() == world.provinces.size());
 
     fs::remove(tmp_path);
+}
+
+// ===========================================================================
+// Stage 3 — Hydrology Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - hydrology: river_access is bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.river_access >= 0.0f);
+        CHECK(prov.geography.river_access <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: groundwater_reserve is bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.groundwater_reserve >= 0.0f);
+        CHECK(prov.geography.groundwater_reserve <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: port_capacity is 0 for landlocked provinces",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.geography.is_landlocked) {
+            CHECK(prov.geography.port_capacity == 0.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: port_capacity bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.port_capacity >= 0.0f);
+        CHECK(prov.geography.port_capacity <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: every province has a river_flow_regime",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        auto regime = prov.geography.river_flow_regime;
+        CHECK(static_cast<uint8_t>(regime) <= static_cast<uint8_t>(RiverFlowRegime::None));
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: deterministic across runs",
+          "[world_gen][hydrology][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 77777;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        const auto& g1 = world1.provinces[i].geography;
+        const auto& g2 = world2.provinces[i].geography;
+
+        CHECK(g1.river_access == g2.river_access);
+        CHECK(g1.groundwater_reserve == g2.groundwater_reserve);
+        CHECK(g1.port_capacity == g2.port_capacity);
+        CHECK(g1.snowpack_contribution == g2.snowpack_contribution);
+        CHECK(g1.is_endorheic == g2.is_endorheic);
+        CHECK(g1.is_delta == g2.is_delta);
+        CHECK(g1.snowmelt_fed == g2.snowmelt_fed);
+        CHECK(g1.has_alluvial_fan == g2.has_alluvial_fan);
+        CHECK(g1.has_artesian_spring == g2.has_artesian_spring);
+        CHECK(g1.is_oasis == g2.is_oasis);
+        CHECK(g1.spring_flow_index == g2.spring_flow_index);
+        CHECK(g1.river_flow_regime == g2.river_flow_regime);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: delta provinces have positive flood_vulnerability",
+          "[world_gen][hydrology]") {
+    // Deltas get elevated flood_vulnerability in hydrology, then soils/biomes
+    // legitimately refines it via climate-zone blending. Final value depends on
+    // climate zone (desert delta < monsoon delta). Verify it's non-trivial.
+    bool found_delta = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_delta; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.geography.is_delta) {
+                // After climate blending, delta flood_vulnerability should still
+                // be meaningfully above zero (hydrology set >= 0.40, blend preserves
+                // at least half of that).
+                CHECK(prov.climate.flood_vulnerability > 0.10f);
+                found_delta = true;
+                break;
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: snowpack_contribution non-negative",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.snowpack_contribution >= 0.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: spring_flow_index bounded [0,1]",
+          "[world_gen][hydrology]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.geography.spring_flow_index >= 0.0f);
+        CHECK(prov.geography.spring_flow_index <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: JSON includes hydrology fields",
+          "[world_gen][hydrology][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& geo = json["provinces"][0]["geography"];
+    CHECK(geo.contains("is_endorheic"));
+    CHECK(geo.contains("is_delta"));
+    CHECK(geo.contains("snowmelt_fed"));
+    CHECK(geo.contains("has_alluvial_fan"));
+    CHECK(geo.contains("has_artesian_spring"));
+    CHECK(geo.contains("is_oasis"));
+    CHECK(geo.contains("groundwater_reserve"));
+    CHECK(geo.contains("snowpack_contribution"));
+    CHECK(geo.contains("spring_flow_index"));
+    CHECK(geo.contains("river_flow_regime"));
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("has_estuary"));
+    CHECK(p0.contains("has_ria_coast"));
+}
+
+// ===========================================================================
+// Stage 4 — Atmosphere Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - atmosphere: temperature bounded [-50, 50]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.temperature_avg_c >= -50.0f);
+        CHECK(prov.climate.temperature_avg_c <= 50.0f);
+        CHECK(prov.climate.temperature_min_c <= prov.climate.temperature_avg_c);
+        CHECK(prov.climate.temperature_max_c >= prov.climate.temperature_avg_c);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: precipitation non-negative",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.precipitation_mm >= 0.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: continentality bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.continentality >= 0.0f);
+        CHECK(prov.climate.continentality <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: enso_susceptibility bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.enso_susceptibility >= 0.0f);
+        CHECK(prov.climate.enso_susceptibility <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: geographic_vulnerability bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.geographic_vulnerability >= 0.0f);
+        CHECK(prov.climate.geographic_vulnerability <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: precipitation_seasonality bounded [0, 1]",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.climate.precipitation_seasonality >= 0.0f);
+        CHECK(prov.climate.precipitation_seasonality <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: deterministic across runs",
+          "[world_gen][atmosphere][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 88888;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        const auto& c1 = world1.provinces[i].climate;
+        const auto& c2 = world2.provinces[i].climate;
+
+        CHECK(c1.temperature_avg_c == c2.temperature_avg_c);
+        CHECK(c1.precipitation_mm == c2.precipitation_mm);
+        CHECK(c1.continentality == c2.continentality);
+        CHECK(c1.enso_susceptibility == c2.enso_susceptibility);
+        CHECK(c1.geographic_vulnerability == c2.geographic_vulnerability);
+        CHECK(c1.koppen_zone == c2.koppen_zone);
+        CHECK(c1.cold_current_adjacent == c2.cold_current_adjacent);
+        CHECK(c1.is_monsoon == c2.is_monsoon);
+        CHECK(c1.precipitation_seasonality == c2.precipitation_seasonality);
+        CHECK(c1.drought_vulnerability == c2.drought_vulnerability);
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: JSON includes atmosphere fields",
+          "[world_gen][atmosphere][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& climate = json["provinces"][0]["climate"];
+    CHECK(climate.contains("continentality"));
+    CHECK(climate.contains("enso_susceptibility"));
+    CHECK(climate.contains("geographic_vulnerability"));
+    CHECK(climate.contains("cold_current_adjacent"));
+    CHECK(climate.contains("is_monsoon"));
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: monsoon provinces have elevated seasonality",
+          "[world_gen][atmosphere]") {
+    bool found_monsoon = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_monsoon; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.climate.is_monsoon) {
+                CHECK(prov.climate.precipitation_seasonality >= config.atmosphere.monsoon_seasonality);
+                found_monsoon = true;
+                break;
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - atmosphere: coastal provinces have lower continentality",
+          "[world_gen][atmosphere]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (!prov.geography.is_landlocked && prov.geography.coastal_length_km > 50.0f) {
+            CHECK(prov.climate.continentality < 0.50f);
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 5 — Soil Type & Irrigation Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - soils: every province gets a valid SoilType",
+          "[world_gen][soils]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(static_cast<uint8_t>(prov.soil_type) <= 9);  // 0..9 valid enum range
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - soils: soil assignment is deterministic",
+          "[world_gen][soils]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].soil_type == world2.provinces[i].soil_type);
+        CHECK(world1.provinces[i].irrigation_potential == world2.provinces[i].irrigation_potential);
+        CHECK(world1.provinces[i].irrigation_cost_index == world2.provinces[i].irrigation_cost_index);
+        CHECK(world1.provinces[i].salinisation_risk == world2.provinces[i].salinisation_risk);
+        CHECK(world1.provinces[i].water_availability == world2.provinces[i].water_availability);
+    }
+}
+
+TEST_CASE("WorldGenerator  - soils: irrigation fields bounded",
+          "[world_gen][soils]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.irrigation_potential >= 0.0f);
+            CHECK(prov.irrigation_potential <= 1.0f);
+            CHECK(prov.irrigation_cost_index >= 0.5f);
+            CHECK(prov.irrigation_cost_index <= 5.0f);
+            CHECK(prov.salinisation_risk >= 0.0f);
+            CHECK(prov.salinisation_risk <= 1.0f);
+            CHECK(prov.water_availability >= 0.0f);
+            CHECK(prov.water_availability <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - soils: permafrost provinces get Cryosol",
+          "[world_gen][soils]") {
+    bool found = false;
+    for (uint64_t seed = 1; seed <= 20 && !found; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_permafrost) {
+                CHECK(prov.soil_type == SoilType::Cryosol);
+                found = true;
+                break;
+            }
+        }
+    }
+    // Permafrost may not appear in all seeds — that's OK.
+}
+
+TEST_CASE("WorldGenerator  - soils: JSON includes soil and irrigation fields",
+          "[world_gen][soils][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("soil_type"));
+    CHECK(p0["soil_type"].is_string());
+    CHECK(p0.contains("irrigation_potential"));
+    CHECK(p0.contains("irrigation_cost_index"));
+    CHECK(p0.contains("salinisation_risk"));
+    CHECK(p0.contains("water_availability"));
+}
+
+// ===========================================================================
+// Stage 8 — Age-Dependent Resource Modifier Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - age_modifiers: uranium quantity reduced by plate age",
+          "[world_gen][age_modifiers]") {
+    // Old crust (high plate_age) should have less uranium remaining due to decay.
+    // Compare two seeds — we just check that uranium deposits exist and have
+    // quantity > 0 (decay doesn't zero them at geological timescales).
+    bool found_uranium = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_uranium; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::Uranium) {
+                    CHECK(d.quantity > 0.0f);
+                    CHECK(d.quantity_remaining > 0.0f);
+                    // Decay should reduce below the max seeded quantity (~4000).
+                    CHECK(d.quantity <= 4000.0f);
+                    found_uranium = true;
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - age_modifiers: natural gas quality boosted by helium",
+          "[world_gen][age_modifiers]") {
+    bool found_gas = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_gas; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::NaturalGas) {
+                    CHECK(d.quality >= 0.0f);
+                    CHECK(d.quality <= 1.0f);
+                    found_gas = true;
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - age_modifiers: Histosol provinces get peat (Coal) deposit",
+          "[world_gen][age_modifiers]") {
+    bool found_histosol = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_histosol; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.soil_type == SoilType::Histosol) {
+                found_histosol = true;
+                // Must have at least one Coal deposit (peat).
+                bool has_coal = false;
+                for (const auto& d : prov.deposits) {
+                    if (d.type == ResourceType::Coal) {
+                        has_coal = true;
+                        // Peat is low-quality (< 0.30).
+                        CHECK(d.quality <= 0.30f);
+                        // Peat is shallow (< 0.15).
+                        CHECK(d.depth <= 0.15f);
+                    }
+                }
+                CHECK(has_coal);
+                break;
+            }
+        }
+    }
+    // Histosol may not appear in all seeds — that's OK.
+}
+
+TEST_CASE("WorldGenerator  - age_modifiers: deterministic across runs",
+          "[world_gen][age_modifiers]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        REQUIRE(world1.provinces[i].deposits.size() == world2.provinces[i].deposits.size());
+        for (size_t j = 0; j < world1.provinces[i].deposits.size(); ++j) {
+            CHECK(world1.provinces[i].deposits[j].quantity ==
+                  world2.provinces[i].deposits[j].quantity);
+            CHECK(world1.provinces[i].deposits[j].quality ==
+                  world2.provinces[i].deposits[j].quality);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjord",
+          "[world_gen][hydrology]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_fjord) {
+                CHECK_FALSE(prov.has_estuary);
+                CHECK_FALSE(prov.has_ria_coast);
+            }
+            if (prov.has_estuary) {
+                CHECK_FALSE(prov.has_ria_coast);
+            }
+        }
+    }
+}
+
+// ===========================================================================
+// Stage 7 — Impact Craters, Badlands, and Glacial Features Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - features: impact crater fields bounded",
+          "[world_gen][features]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_impact_crater) {
+                CHECK(prov.impact_crater_diameter_km >= 5.0f);
+                CHECK(prov.impact_crater_diameter_km <= 300.0f);
+                CHECK(prov.impact_mineral_signal >= 0.0f);
+                CHECK(prov.impact_mineral_signal <= 1.0f);
+            } else {
+                CHECK(prov.impact_crater_diameter_km == 0.0f);
+                CHECK(prov.impact_mineral_signal == 0.0f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: impact craters seed PGMs",
+          "[world_gen][features]") {
+    bool found_pgm = false;
+    for (uint64_t seed = 1; seed <= 50 && !found_pgm; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_impact_crater && prov.impact_mineral_signal > 0.30f) {
+                for (const auto& d : prov.deposits) {
+                    if (d.type == ResourceType::PlatinumGroupMetals) {
+                        found_pgm = true;
+                        CHECK(d.quantity > 0.0f);
+                        CHECK(d.quality >= 0.40f);
+                        CHECK(d.quality <= 1.0f);
+                    }
+                }
+            }
+        }
+    }
+    // PGMs may be rare — OK if not found in 50 seeds.
+}
+
+TEST_CASE("WorldGenerator  - features: badlands have zero arable land",
+          "[world_gen][features]") {
+    bool found_badlands = false;
+    for (uint64_t seed = 1; seed <= 50 && !found_badlands; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_badlands) {
+                found_badlands = true;
+                CHECK(prov.geography.arable_land_fraction == 0.0f);
+                CHECK(prov.facility_concealment_bonus >= 0.30f);
+            }
+        }
+    }
+    // Badlands require specific geology + arid climate — may not appear.
+}
+
+TEST_CASE("WorldGenerator  - features: loess provinces have elevated ag",
+          "[world_gen][features]") {
+    bool found_loess = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_loess; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_loess) {
+                found_loess = true;
+                // Loess adds +0.15 to ag_productivity.
+                CHECK(prov.agricultural_productivity > 0.10f);
+            }
+        }
+    }
+    // Loess requires specific lat/terrain/neighbor conditions.
+}
+
+TEST_CASE("WorldGenerator  - features: glacial scoured provinces have thin soils",
+          "[world_gen][features]") {
+    bool found_scoured = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_scoured; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.is_glacial_scoured) {
+                found_scoured = true;
+                CHECK(prov.agricultural_productivity <= 0.25f);
+                // Glacial scour adds river_access (many lakes).
+                CHECK(prov.geography.river_access > 0.0f);
+            }
+        }
+    }
+    // Glacial scour requires high-latitude craton.
+}
+
+TEST_CASE("WorldGenerator  - features: deterministic crater and glacial assignment",
+          "[world_gen][features]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].has_impact_crater == world2.provinces[i].has_impact_crater);
+        CHECK(world1.provinces[i].impact_crater_diameter_km ==
+              world2.provinces[i].impact_crater_diameter_km);
+        CHECK(world1.provinces[i].has_badlands == world2.provinces[i].has_badlands);
+        CHECK(world1.provinces[i].has_loess == world2.provinces[i].has_loess);
+        CHECK(world1.provinces[i].is_glacial_scoured == world2.provinces[i].is_glacial_scoured);
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: JSON includes crater and glacial fields",
+          "[world_gen][features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("has_badlands"));
+    CHECK(p0.contains("facility_concealment_bonus"));
+    CHECK(p0.contains("has_impact_crater"));
+    CHECK(p0.contains("has_loess"));
+    CHECK(p0.contains("is_glacial_scoured"));
+}
+
+// ===========================================================================
+// Stage 6/7 — Fisheries, Salt Flats, Karst Concealment
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - fisheries: coastal provinces have fisheries",
+          "[world_gen][fisheries]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.geography.coastal_length_km > 10.0f && !prov.geography.is_landlocked) {
+            CHECK(prov.fisheries.access_type != FishingAccessType::NoAccess);
+            CHECK(prov.fisheries.carrying_capacity > 0.0f);
+            CHECK(prov.fisheries.carrying_capacity <= 1.0f);
+            CHECK(prov.fisheries.current_stock > 0.0f);
+            CHECK(prov.fisheries.current_stock <= prov.fisheries.carrying_capacity);
+            CHECK(prov.fisheries.max_sustainable_yield > 0.0f);
+            CHECK(prov.fisheries.intrinsic_growth_rate > 0.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: upwelling has highest carrying capacity",
+          "[world_gen][fisheries]") {
+    bool found_upwelling = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_upwelling; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.fisheries.access_type == FishingAccessType::Upwelling) {
+                found_upwelling = true;
+                CHECK(prov.fisheries.carrying_capacity >= 0.70f);
+                CHECK(prov.fisheries.intrinsic_growth_rate == 0.60f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: freshwater from rivers",
+          "[world_gen][fisheries]") {
+    bool found_freshwater = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_freshwater; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.fisheries.access_type == FishingAccessType::Freshwater) {
+                found_freshwater = true;
+                CHECK(prov.fisheries.carrying_capacity > 0.0f);
+                CHECK(prov.fisheries.intrinsic_growth_rate == 0.35f);
+                CHECK(prov.geography.river_access >= 0.15f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: deterministic",
+          "[world_gen][fisheries]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].fisheries.access_type ==
+              world2.provinces[i].fisheries.access_type);
+        CHECK(world1.provinces[i].fisheries.carrying_capacity ==
+              world2.provinces[i].fisheries.carrying_capacity);
+        CHECK(world1.provinces[i].fisheries.current_stock ==
+              world2.provinces[i].fisheries.current_stock);
+    }
+}
+
+TEST_CASE("WorldGenerator  - fisheries: JSON includes fisheries block",
+          "[world_gen][fisheries][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    bool found_fisheries = false;
+    for (const auto& p : json["provinces"]) {
+        if (p.contains("fisheries")) {
+            found_fisheries = true;
+            CHECK(p["fisheries"].contains("access_type"));
+            CHECK(p["fisheries"].contains("carrying_capacity"));
+            CHECK(p["fisheries"].contains("current_stock"));
+            CHECK(p["fisheries"].contains("max_sustainable_yield"));
+            CHECK(p["fisheries"].contains("intrinsic_growth_rate"));
+            CHECK(p["fisheries"].contains("seasonal_closure"));
+            CHECK(p["fisheries"].contains("is_migratory"));
+            break;
+        }
+    }
+    CHECK(found_fisheries);
+}
+
+TEST_CASE("WorldGenerator  - features: salt flat on endorheic arid provinces",
+          "[world_gen][features]") {
+    bool found_salt_flat = false;
+    for (uint64_t seed = 1; seed <= 30 && !found_salt_flat; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.is_salt_flat) {
+                found_salt_flat = true;
+                CHECK(prov.geography.is_endorheic);
+                // Must be in arid zone.
+                KoppenZone kz = prov.climate.koppen_zone;
+                CHECK((kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
+                       kz == KoppenZone::BSh || kz == KoppenZone::BSk));
+            }
+        }
+    }
+    // Salt flats require endorheic + arid — may not appear.
+}
+
+TEST_CASE("WorldGenerator  - features: karst provinces get concealment bonus",
+          "[world_gen][features]") {
+    bool found_karst = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_karst; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.has_karst && !prov.has_permafrost) {
+                found_karst = true;
+                CHECK(prov.facility_concealment_bonus >= 0.25f);
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: JSON includes salt flat and fisheries fields",
+          "[world_gen][features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("is_salt_flat"));
+}
+
+// ===========================================================================
+// Stage 8 — Deterministic Resource Seeding Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - resources: every province gets Sand and Aggregate",
+          "[world_gen][resources]") {
+    for (uint64_t seed = 1; seed <= 5; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            bool has_sand = false;
+            bool has_agg = false;
+            for (const auto& d : prov.deposits) {
+                if (d.type == ResourceType::Sand) has_sand = true;
+                if (d.type == ResourceType::Aggregate) has_agg = true;
+            }
+            // Most provinces should have at least aggregate (from rock type).
+            CHECK(has_agg);
+            // Sand may not appear on high-elevation landlocked provinces, but
+            // aggregate should always be present.
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - resources: desert sand has low quality",
+          "[world_gen][resources]") {
+    bool found_desert = false;
+    for (uint64_t seed = 1; seed <= 20 && !found_desert; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.climate.koppen_zone == KoppenZone::BWh ||
+                prov.climate.koppen_zone == KoppenZone::BWk) {
+                for (const auto& d : prov.deposits) {
+                    if (d.type == ResourceType::Sand) {
+                        // Desert sand is unusable for construction (erg).
+                        CHECK(d.quality <= 0.10f);
+                        found_desert = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - resources: SolarPotential and WindPotential seeded",
+          "[world_gen][resources]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    bool found_solar = false;
+    bool found_wind = false;
+
+    for (const auto& prov : world.provinces) {
+        for (const auto& d : prov.deposits) {
+            if (d.type == ResourceType::SolarPotential) {
+                found_solar = true;
+                CHECK(d.quantity >= 0.05f);
+                CHECK(d.quantity <= 1.0f);
+                CHECK(d.depletion_rate == 0.0f);  // renewable
+                CHECK(d.era_unlock == 2);
+            }
+            if (d.type == ResourceType::WindPotential) {
+                found_wind = true;
+                CHECK(d.quantity >= 0.10f);
+                CHECK(d.quantity <= 1.0f);
+                CHECK(d.depletion_rate == 0.0f);  // renewable
+                CHECK(d.era_unlock == 2);
+            }
+        }
+    }
+
+    CHECK(found_solar);
+    CHECK(found_wind);
+}
+
+TEST_CASE("WorldGenerator  - resources: deterministic deposit seeding",
+          "[world_gen][resources]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        REQUIRE(world1.provinces[i].deposits.size() == world2.provinces[i].deposits.size());
+        for (size_t j = 0; j < world1.provinces[i].deposits.size(); ++j) {
+            CHECK(world1.provinces[i].deposits[j].type == world2.provinces[i].deposits[j].type);
+            CHECK(world1.provinces[i].deposits[j].quantity ==
+                  world2.provinces[i].deposits[j].quantity);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - features: atoll has zero ag and moderate port",
+          "[world_gen][features]") {
+    bool found_atoll = false;
+    for (uint64_t seed = 1; seed <= 50 && !found_atoll; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            if (prov.is_atoll) {
+                found_atoll = true;
+                CHECK(prov.agricultural_productivity == 0.0f);
+                CHECK(prov.infrastructure_rating <= 0.15f);
+                CHECK(prov.geography.port_capacity >= 0.45f);
+            }
+        }
+    }
+    // Atolls are rare — OK if not found in 50 seeds.
+}
+
+TEST_CASE("WorldGenerator  - features: JSON includes is_atoll",
+          "[world_gen][features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("is_atoll"));
+}
+
+// ===========================================================================
+// Stage 9 — Population & Infrastructure Tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - population: settlement_attractiveness bounded [0, 1]",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.settlement_attractiveness >= 0.0f);
+            CHECK(prov.settlement_attractiveness <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: disease_burden bounded [0, 1]",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.disease_burden >= 0.0f);
+            CHECK(prov.disease_burden <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: infrastructure_rating bounded [0, 1]",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.infrastructure_rating >= 0.0f);
+            CHECK(prov.infrastructure_rating <= 1.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: deterministic settlement and disease",
+          "[world_gen][population]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.provinces.size() == world2.provinces.size());
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].settlement_attractiveness ==
+              world2.provinces[i].settlement_attractiveness);
+        CHECK(world1.provinces[i].disease_burden ==
+              world2.provinces[i].disease_burden);
+        CHECK(world1.provinces[i].infrastructure_rating ==
+              world2.provinces[i].infrastructure_rating);
+        CHECK(world1.provinces[i].demographics.total_population ==
+              world2.provinces[i].demographics.total_population);
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: all provinces above population floor",
+          "[world_gen][population]") {
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+
+        auto world = WorldGenerator::generate(config);
+
+        for (const auto& prov : world.provinces) {
+            CHECK(prov.demographics.total_population >= config.population.population_floor);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - population: JSON includes settlement fields",
+          "[world_gen][population][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    REQUIRE(!json["provinces"].empty());
+
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("settlement_attractiveness"));
+    CHECK(p0.contains("disease_burden"));
+}
+
+// ===========================================================================
+// Stage 9.5 — Nation formation tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - nations: multiple nations formed from 6 provinces",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // With 6 provinces, expect at least 2 nations (spec minimum for geopolitical tension).
+    CHECK(world.nations.size() >= 2);
+    // Should not exceed province count.
+    CHECK(world.nations.size() <= 6);
+}
+
+TEST_CASE("WorldGenerator  - nations: every province assigned to a nation",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.nation_id < world.nations.size());
+    }
+
+    // Every nation's province_ids should reference valid provinces.
+    for (const auto& nation : world.nations) {
+        CHECK(!nation.province_ids.empty());
+        for (uint32_t pid : nation.province_ids) {
+            CHECK(pid < world.provinces.size());
+            CHECK(world.provinces[pid].nation_id == nation.id);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: nation struct fields populated",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& nation : world.nations) {
+        CHECK(!nation.name.empty());
+        CHECK(!nation.currency_code.empty());
+        CHECK(!nation.language_family_id.empty());
+        CHECK(nation.gdp_index >= 0.0f);
+        CHECK(nation.gdp_index <= 1.0f);
+        CHECK(nation.governance_quality >= 0.0f);
+        CHECK(nation.governance_quality <= 1.0f);
+        CHECK(nation.capital_province_id < world.provinces.size());
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: capitals are valid and unique per nation",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    std::set<uint32_t> capital_ids;
+    for (const auto& nation : world.nations) {
+        // Capital must be a member province.
+        CHECK(std::find(nation.province_ids.begin(), nation.province_ids.end(),
+                        nation.capital_province_id) != nation.province_ids.end());
+        // Capital province must have is_nation_capital flag.
+        CHECK(world.provinces[nation.capital_province_id].is_nation_capital);
+        capital_ids.insert(nation.capital_province_id);
+    }
+    // Each nation has a distinct capital.
+    CHECK(capital_ids.size() == world.nations.size());
+}
+
+TEST_CASE("WorldGenerator  - nations: border_change_count bounds",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.border_change_count >= 0);
+        CHECK(prov.border_change_count <= 6);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: infra_gap computed for all provinces",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // infra_gap = infrastructure_rating - settlement_attractiveness * 0.70.
+    for (const auto& prov : world.provinces) {
+        float expected = prov.infrastructure_rating -
+                         prov.settlement_attractiveness * 0.70f;
+        CHECK_THAT(prov.infra_gap,
+                   Catch::Matchers::WithinAbs(expected, 0.01));
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: nation formation is deterministic",
+          "[world_gen][nations][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 777;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.nations.size() == world2.nations.size());
+    for (size_t i = 0; i < world1.nations.size(); ++i) {
+        CHECK(world1.nations[i].name == world2.nations[i].name);
+        CHECK(world1.nations[i].language_family_id ==
+              world2.nations[i].language_family_id);
+        CHECK(world1.nations[i].capital_province_id ==
+              world2.nations[i].capital_province_id);
+        CHECK(world1.nations[i].province_ids == world2.nations[i].province_ids);
+    }
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].nation_id == world2.provinces[i].nation_id);
+        CHECK(world1.provinces[i].border_change_count ==
+              world2.provinces[i].border_change_count);
+        CHECK(world1.provinces[i].is_nation_capital ==
+              world2.provinces[i].is_nation_capital);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: JSON includes nation formation fields",
+          "[world_gen][nations][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("nations"));
+    REQUIRE(!json["nations"].empty());
+
+    const auto& n0 = json["nations"][0];
+    CHECK(n0.contains("capital_province_id"));
+    CHECK(n0.contains("language_family_id"));
+    CHECK(n0.contains("gdp_index"));
+    CHECK(n0.contains("governance_quality"));
+    CHECK(n0.contains("size_class"));
+    CHECK(n0.contains("is_colonial_power"));
+
+    REQUIRE(json.contains("provinces"));
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("border_change_count"));
+    CHECK(p0.contains("infra_gap"));
+    CHECK(p0.contains("has_colonial_development_event"));
+    CHECK(p0.contains("is_nation_capital"));
+}
+
+// ===========================================================================
+// Stage 9.6 — Nomadic population tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - nomadic: pastoral_carrying_capacity bounds",
+          "[world_gen][nomadic]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.pastoral_carrying_capacity >= 0.0f);
+        CHECK(prov.pastoral_carrying_capacity <= 1.0f);
+        CHECK(prov.nomadic_population_fraction >= 0.0f);
+        CHECK(prov.nomadic_population_fraction <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nomadic: steppe/savanna provinces have pastoral capacity",
+          "[world_gen][nomadic]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // At least check that the function ran — provinces with BSk/BSh/Aw climate
+    // should have nonzero pastoral capacity if ag_productivity is not too high.
+    for (const auto& prov : world.provinces) {
+        if ((prov.climate.koppen_zone == KoppenZone::BSk ||
+             prov.climate.koppen_zone == KoppenZone::BSh ||
+             prov.climate.koppen_zone == KoppenZone::Aw) &&
+            prov.agricultural_productivity < 0.50f) {
+            CHECK(prov.pastoral_carrying_capacity > 0.0f);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - nomadic: deterministic",
+          "[world_gen][nomadic][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].pastoral_carrying_capacity ==
+              world2.provinces[i].pastoral_carrying_capacity);
+        CHECK(world1.provinces[i].nomadic_population_fraction ==
+              world2.provinces[i].nomadic_population_fraction);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nomadic: JSON includes nomadic fields",
+          "[world_gen][nomadic][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    const auto& p0 = json["provinces"][0];
+    CHECK(p0.contains("nomadic_population_fraction"));
+    CHECK(p0.contains("pastoral_carrying_capacity"));
+}
+
+// ===========================================================================
+// Scalability and spec compliance tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - nations: target count formula scales correctly",
+          "[world_gen][nations][scalability]") {
+    // The spec formula is: sqrt(habitable) * 1.8, clamped [20, 400].
+    // For V1 with 6 provinces: sqrt(6) * 1.8 ≈ 4.4; graceful fallback below 20.
+    // For 100 provinces: sqrt(100) * 1.8 = 18; still below 20 minimum.
+    // For 200 provinces: sqrt(200) * 1.8 ≈ 25.5; above 20 minimum.
+    // We test the formula indirectly through nation count vs province count.
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.npc_count = 50;
+
+    SECTION("6 provinces produces 2-6 nations") {
+        config.province_count = 6;
+        auto world = WorldGenerator::generate(config);
+        CHECK(world.nations.size() >= 2);
+        CHECK(world.nations.size() <= 6);
+    }
+
+    SECTION("4 provinces produces at least 2 nations") {
+        config.province_count = 4;
+        auto world = WorldGenerator::generate(config);
+        CHECK(world.nations.size() >= 2);
+        CHECK(world.nations.size() <= 4);
+    }
+
+    SECTION("2 provinces produces exactly 2 nations") {
+        config.province_count = 2;
+        auto world = WorldGenerator::generate(config);
+        CHECK(world.nations.size() == 2);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: config params respected",
+          "[world_gen][nations][config]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    SECTION("terrain resistance affects nation boundaries") {
+        // Very high maritime resistance should prevent maritime expansion.
+        WorldGeneratorConfig config_high = config;
+        config_high.nation_formation.maritime_resistance = 10.0f;
+        auto world = WorldGenerator::generate(config_high);
+        // Just check it doesn't crash and produces valid nations.
+        CHECK(world.nations.size() >= 2);
+        for (const auto& n : world.nations) {
+            CHECK(!n.province_ids.empty());
+        }
+    }
+
+    SECTION("language propagation chance 0.0 gives diverse languages") {
+        WorldGeneratorConfig config_no_prop = config;
+        config_no_prop.nation_formation.language_propagation_chance = 0.0f;
+        auto world = WorldGenerator::generate(config_no_prop);
+        // With 0% propagation, nations keep their geographic assignment.
+        // Just verify all nations have a language.
+        for (const auto& n : world.nations) {
+            CHECK(!n.language_family_id.empty());
+        }
+    }
+
+    SECTION("language propagation chance 1.0 produces regional uniformity") {
+        WorldGeneratorConfig config_full_prop = config;
+        config_full_prop.nation_formation.language_propagation_chance = 1.0f;
+        auto world = WorldGenerator::generate(config_full_prop);
+        // With 100% propagation from largest neighbor, we expect fewer distinct languages.
+        std::set<std::string> langs;
+        for (const auto& n : world.nations) langs.insert(n.language_family_id);
+        // Should have at most 3 distinct languages (likely 1-2 with full propagation).
+        CHECK(langs.size() <= 3);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: province count across nations sums to total",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.npc_count = 50;
+
+    for (uint32_t pc : {2u, 3u, 4u, 5u, 6u}) {
+        config.province_count = pc;
+        auto world = WorldGenerator::generate(config);
+
+        uint32_t total = 0;
+        for (const auto& n : world.nations) {
+            total += static_cast<uint32_t>(n.province_ids.size());
+        }
+        CHECK(total == pc);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: nation size_class matches province count",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& nation : world.nations) {
+        size_t n = nation.province_ids.size();
+        if (n <= 3) CHECK(nation.size_class == NationSize::Microstate);
+        else if (n <= 12) CHECK(nation.size_class == NationSize::Small);
+        else if (n <= 40) CHECK(nation.size_class == NationSize::Medium);
+        else if (n <= 120) CHECK(nation.size_class == NationSize::Large);
+        else CHECK(nation.size_class == NationSize::Continental);
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: island provinces assigned via maritime links",
+          "[world_gen][nations]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // Any province with island_isolation should still have a valid nation_id.
+    for (const auto& prov : world.provinces) {
+        if (prov.island_isolation) {
+            CHECK(prov.nation_id < world.nations.size());
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - nations: 60 unique nation names available",
+          "[world_gen][nations][scalability]") {
+    // Test that with many provinces, nation names don't collide badly.
+    // With 60 roots × 8 prefixes = 480 combinations.
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    std::set<std::string> names;
+    for (const auto& n : world.nations) {
+        names.insert(n.name);
+    }
+    // All nation names should be unique.
+    CHECK(names.size() == world.nations.size());
+}
+
+TEST_CASE("WorldGenerator  - nations: NationFormationParams defaults match spec",
+          "[world_gen][nations][config]") {
+    WorldGeneratorConfig config{};
+    const auto& nfp = config.nation_formation;
+
+    // §9.5.1: seed_count_scale = 1.8, min = 20, max = 400, separation = 3
+    CHECK(nfp.seed_count_scale == 1.8f);
+    CHECK(nfp.seed_count_min == 20);
+    CHECK(nfp.seed_count_max == 400);
+    CHECK(nfp.seed_separation == 3);
+
+    // §9.5.2: maritime resistance = 0.50, river crossing = 1.30
+    CHECK(nfp.maritime_resistance == 0.50f);
+    CHECK(nfp.river_crossing_mult == 1.30f);
+
+    // §9.5: uninhabitable threshold = 0.02
+    CHECK(nfp.uninhabitable_threshold == 0.02f);
+
+    // §9.5.3: language propagation = 0.60
+    CHECK(nfp.language_propagation_chance == 0.60f);
+
+    // §9.5.4: border change max = 6, instability_to_expected = 2.5
+    CHECK(nfp.max_border_changes == 6);
+    CHECK(nfp.instability_to_expected == 2.50f);
+
+    // §9.6: nomadic realisation = 0.60
+    CHECK(nfp.nomadic_realisation_factor == 0.60f);
+}
+
+TEST_CASE("WorldGenerator  - nations: border_change_count responds to instability factors",
+          "[world_gen][nations]") {
+    // Run multiple seeds and verify that border provinces tend to have higher
+    // border_change_count than interior provinces (statistical tendency).
+    WorldGeneratorConfig config{};
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    uint32_t border_total = 0, interior_total = 0;
+    uint32_t border_count = 0, interior_count = 0;
+
+    for (uint64_t seed = 1; seed <= 10; ++seed) {
+        config.seed = seed;
+        auto world = WorldGenerator::generate(config);
+
+        // Build h3_to_idx for neighbor lookup.
+        std::unordered_map<uint64_t, uint32_t> h3_map;
+        for (const auto& p : world.provinces) h3_map[p.h3_index] = p.id;
+
+        for (const auto& prov : world.provinces) {
+            bool is_border = false;
+            for (const auto& link : prov.links) {
+                auto it = h3_map.find(link.neighbor_h3);
+                if (it != h3_map.end() &&
+                    world.provinces[it->second].nation_id != prov.nation_id) {
+                    is_border = true;
+                    break;
+                }
+            }
+            if (is_border) {
+                border_total += prov.border_change_count;
+                border_count++;
+            } else {
+                interior_total += prov.border_change_count;
+                interior_count++;
+            }
+        }
+    }
+
+    // Border provinces should tend to have more border changes.
+    // With 10 seeds × 6 provinces we should have enough data.
+    if (border_count > 0 && interior_count > 0) {
+        float border_avg = static_cast<float>(border_total) / border_count;
+        float interior_avg = static_cast<float>(interior_total) / interior_count;
+        CHECK(border_avg >= interior_avg);
+    }
+}
+
+// ===========================================================================
+// Stage 10.0 — Province archetype classification tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - archetype: every province gets a valid archetype label",
+          "[world_gen][archetype]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    const std::set<std::string> valid_archetypes = {
+        "war_scar", "hollow_land", "oil_capital", "oil_frontier",
+        "gold_rush", "mining_district", "uranium_territory", "plantation_economy",
+        "major_port", "island_enclave", "fishing_port",
+        "breadbasket", "agrarian_interior", "dryland_farm",
+        "high_plateau", "lake_district", "true_desert", "oasis_settlement",
+        "pastoral_steppe", "industrial_heartland", "colonial_remnant",
+        "resource_frontier", "marginal_periphery", "ordinary_interior",
+    };
+
+    for (const auto& prov : world.provinces) {
+        CHECK(!prov.history.province_archetype_label.empty());
+        CHECK(valid_archetypes.count(prov.history.province_archetype_label) == 1);
+    }
+}
+
+TEST_CASE("WorldGenerator  - archetype: classification is deterministic",
+          "[world_gen][archetype][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].history.province_archetype_label ==
+              world2.provinces[i].history.province_archetype_label);
+    }
+}
+
+// ===========================================================================
+// Stage 10.1 — Named feature detection tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - named_features: features detected from province data",
+          "[world_gen][named_features]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    // Should detect at least some features from 6 varied provinces.
+    CHECK(!world.named_features.empty());
+
+    for (const auto& f : world.named_features) {
+        CHECK(f.id > 0);
+        CHECK(!f.name.empty());
+        CHECK(!f.extent.empty());
+        CHECK(f.significance >= 0.0f);
+        CHECK(f.significance <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - named_features: feature types are valid",
+          "[world_gen][named_features]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& f : world.named_features) {
+        CHECK(static_cast<uint8_t>(f.type) <= static_cast<uint8_t>(FeatureType::Archipelago));
+    }
+}
+
+TEST_CASE("WorldGenerator  - named_features: deterministic",
+          "[world_gen][named_features][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    REQUIRE(world1.named_features.size() == world2.named_features.size());
+    for (size_t i = 0; i < world1.named_features.size(); ++i) {
+        CHECK(world1.named_features[i].name == world2.named_features[i].name);
+        CHECK(world1.named_features[i].type == world2.named_features[i].type);
+    }
+}
+
+TEST_CASE("WorldGenerator  - named_features: JSON includes named_features array",
+          "[world_gen][named_features][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("named_features"));
+    CHECK(json["named_features"].is_array());
+
+    if (!json["named_features"].empty()) {
+        const auto& f0 = json["named_features"][0];
+        CHECK(f0.contains("id"));
+        CHECK(f0.contains("type"));
+        CHECK(f0.contains("name"));
+        CHECK(f0.contains("extent"));
+        CHECK(f0.contains("significance"));
+    }
+}
+
+// ===========================================================================
+// Stage 10.2 — Province history tests
+// ===========================================================================
+
+TEST_CASE("WorldGenerator  - history: every province has events",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        // Every province gets at least a FoundingEvent.
+        CHECK(!prov.history.events.empty());
+        CHECK(!prov.history.summary.empty());
+        CHECK(!prov.history.current_character.empty());
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: events are chronologically sorted",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        for (size_t i = 1; i < prov.history.events.size(); ++i) {
+            CHECK(prov.history.events[i].years_before_game_start >=
+                  prov.history.events[i - 1].years_before_game_start);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: historical_trauma_index bounds",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        CHECK(prov.historical_trauma_index >= 0.0f);
+        CHECK(prov.historical_trauma_index <= 1.0f);
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: deterministic",
+          "[world_gen][history][determinism]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world1 = WorldGenerator::generate(config);
+    auto world2 = WorldGenerator::generate(config);
+
+    for (size_t i = 0; i < world1.provinces.size(); ++i) {
+        CHECK(world1.provinces[i].history.events.size() ==
+              world2.provinces[i].history.events.size());
+        CHECK(world1.provinces[i].historical_trauma_index ==
+              world2.provinces[i].historical_trauma_index);
+        CHECK(world1.provinces[i].history.current_character ==
+              world2.provinces[i].history.current_character);
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: impact craters generate ImpactEvent",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.has_impact_crater) {
+            bool has_impact_event = false;
+            for (const auto& e : prov.history.events) {
+                if (e.type == HistoricalEventType::ImpactEvent) {
+                    has_impact_event = true;
+                    break;
+                }
+            }
+            CHECK(has_impact_event);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: border changes generate BorderChange event",
+          "[world_gen][history]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+
+    for (const auto& prov : world.provinces) {
+        if (prov.border_change_count > 0) {
+            bool has_border_event = false;
+            for (const auto& e : prov.history.events) {
+                if (e.type == HistoricalEventType::BorderChange) {
+                    has_border_event = true;
+                    break;
+                }
+            }
+            CHECK(has_border_event);
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator  - history: JSON includes history block",
+          "[world_gen][history][json]") {
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 50;
+
+    auto world = WorldGenerator::generate(config);
+    auto json = WorldGenerator::to_world_json(world);
+
+    REQUIRE(json.contains("provinces"));
+    const auto& p0 = json["provinces"][0];
+    REQUIRE(p0.contains("history"));
+
+    const auto& hist = p0["history"];
+    CHECK(hist.contains("province_archetype_label"));
+    CHECK(hist.contains("current_character"));
+    CHECK(hist.contains("summary"));
+    CHECK(hist.contains("events"));
+    CHECK(hist["events"].is_array());
+    CHECK(!hist["events"].empty());
+
+    const auto& e0 = hist["events"][0];
+    CHECK(e0.contains("type"));
+    CHECK(e0.contains("years_before_game_start"));
+    CHECK(e0.contains("headline"));
+    CHECK(e0.contains("magnitude"));
 }

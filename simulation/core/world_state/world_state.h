@@ -47,6 +47,7 @@ struct WorldState {
     std::vector<Nation> nations;        // V1: exactly 1 nation
     std::vector<Province> provinces;    // see §12
     std::vector<Region> region_groups;  // thin grouping layer
+    std::vector<NamedFeature> named_features;  // Stage 10.1; geographic features (UI/encyclopedia only)
     std::unordered_map<H3Index, uint32_t> h3_province_map;  // H3Index → province array index
 
     // --- NPC Population ---
