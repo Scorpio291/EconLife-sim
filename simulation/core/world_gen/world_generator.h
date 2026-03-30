@@ -48,6 +48,31 @@ struct WorldGeneratorConfig {
     CommentaryDepth commentary_depth = CommentaryDepth::full;  // §10.6: "full" | "minimal" | "none"
 
     // -----------------------------------------------------------------------
+    // Scenario file parameters (§11) — high-level world gen controls.
+    // Loaded from scenario JSON; defaults produce Earth-analog V1 worlds.
+    // -----------------------------------------------------------------------
+    uint32_t tectonic_plate_count  = 6;       // number of tectonic plates
+    float landmass_fraction        = 0.35f;   // 0.0–1.0; fraction of provinces that are land
+    std::string climate_model      = "full_koppen"; // "full_koppen" | "simplified"
+    std::string prevailing_wind_direction = "westerly"; // wind model seed
+    float resource_abundance_scale = 1.0f;    // multiplier on all resource deposit quantities
+    float archipelago_probability  = 0.08f;   // chance of island chain generation per coastal zone
+    float mountain_coverage_target = 0.20f;   // fraction of land provinces with high roughness
+    float glaciation_intensity     = 1.0f;    // 0.0–2.0; scales glacial erosion and permafrost extent
+    float quantity_scale_factor    = 1.0f;    // global deposit quantity multiplier (stacks with richness)
+    int32_t raster_resolution_override = -1;  // -1 = default res-7; 6 = faster for huge worlds
+    std::string planetary_body_ref = "earth_analog"; // reference to planetary_bodies entry
+
+    // Planetary parameters for the generated world. V1 uses Earth-analog defaults.
+    // EX pipeline stages read from this struct instead of hardcoding Earth constants.
+    PlanetaryParameters planetary_params{};
+
+    // Load config from a scenario JSON file. Reads the "world_generation" and
+    // "planetary_bodies" sections. Fields not present in JSON keep defaults.
+    // Returns true on success, false if the file could not be opened.
+    static bool load_from_json(const std::string& path, WorldGeneratorConfig& out);
+
+    // -----------------------------------------------------------------------
     // TerrainParams — thresholds for terrain detection and physical refinement
     // -----------------------------------------------------------------------
     struct TerrainParams {

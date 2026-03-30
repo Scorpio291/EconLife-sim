@@ -43,6 +43,101 @@ static const char* province_name_suffixes[] = {
 };
 
 // ===========================================================================
+// Scenario file loading
+// ===========================================================================
+
+bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGeneratorConfig& out) {
+    std::ifstream file(path);
+    if (!file.is_open()) return false;
+
+    using json = nlohmann::json;
+    json root;
+    try {
+        file >> root;
+    } catch (...) {
+        return false;
+    }
+
+    // --- world_generation section ---
+    if (root.contains("world_generation")) {
+        const auto& wg = root["world_generation"];
+        if (wg.contains("seed")) out.seed = wg["seed"].get<uint64_t>();
+        if (wg.contains("province_count")) out.province_count = wg["province_count"].get<uint32_t>();
+        if (wg.contains("tectonic_plate_count")) out.tectonic_plate_count = wg["tectonic_plate_count"].get<uint32_t>();
+        if (wg.contains("landmass_fraction")) out.landmass_fraction = wg["landmass_fraction"].get<float>();
+        if (wg.contains("climate_model")) out.climate_model = wg["climate_model"].get<std::string>();
+        if (wg.contains("prevailing_wind_direction")) out.prevailing_wind_direction = wg["prevailing_wind_direction"].get<std::string>();
+        if (wg.contains("resource_abundance_scale")) out.resource_abundance_scale = wg["resource_abundance_scale"].get<float>();
+        if (wg.contains("archipelago_probability")) out.archipelago_probability = wg["archipelago_probability"].get<float>();
+        if (wg.contains("mountain_coverage_target")) out.mountain_coverage_target = wg["mountain_coverage_target"].get<float>();
+        if (wg.contains("glaciation_intensity")) out.glaciation_intensity = wg["glaciation_intensity"].get<float>();
+        if (wg.contains("quantity_scale_factor")) out.quantity_scale_factor = wg["quantity_scale_factor"].get<float>();
+        if (wg.contains("raster_resolution_override")) {
+            if (wg["raster_resolution_override"].is_null()) {
+                out.raster_resolution_override = -1;
+            } else {
+                out.raster_resolution_override = wg["raster_resolution_override"].get<int32_t>();
+            }
+        }
+        if (wg.contains("commentary_depth")) {
+            std::string depth = wg["commentary_depth"].get<std::string>();
+            if (depth == "none") out.commentary_depth = CommentaryDepth::none;
+            else if (depth == "minimal") out.commentary_depth = CommentaryDepth::minimal;
+            else out.commentary_depth = CommentaryDepth::full;
+        }
+        if (wg.contains("planetary_body")) out.planetary_body_ref = wg["planetary_body"].get<std::string>();
+    }
+
+    // --- planetary_bodies section ---
+    if (root.contains("planetary_bodies") && root["planetary_bodies"].is_array()) {
+        for (const auto& body : root["planetary_bodies"]) {
+            std::string body_id;
+            if (body.contains("id")) body_id = body["id"].get<std::string>();
+            // Match the referenced planetary body.
+            if (body_id != out.planetary_body_ref) continue;
+
+            auto& pp = out.planetary_params;
+            if (body.contains("body_name")) pp.body_name = body["body_name"].get<std::string>();
+            if (body.contains("body_type")) {
+                std::string bt = body["body_type"].get<std::string>();
+                if (bt == "IcyMoon") pp.body_type = BodyType::IcyMoon;
+                else if (bt == "Asteroid") pp.body_type = BodyType::Asteroid;
+                else if (bt == "SpaceStation") pp.body_type = BodyType::SpaceStation;
+                else pp.body_type = BodyType::Terrestrial;
+            }
+            if (body.contains("radius_km")) pp.radius_km = body["radius_km"].get<float>();
+            if (body.contains("surface_gravity_ms2")) pp.surface_gravity_ms2 = body["surface_gravity_ms2"].get<float>();
+            if (body.contains("surface_pressure_kpa")) pp.surface_pressure_kpa = body["surface_pressure_kpa"].get<float>();
+            if (body.contains("atmospheric_density_kgm3")) pp.atmospheric_density_kgm3 = body["atmospheric_density_kgm3"].get<float>();
+            if (body.contains("axial_tilt_degrees")) pp.axial_tilt_degrees = body["axial_tilt_degrees"].get<float>();
+            if (body.contains("rotation_period_hours")) pp.rotation_period_hours = body["rotation_period_hours"].get<float>();
+            if (body.contains("solar_distance_au")) pp.solar_distance_au = body["solar_distance_au"].get<float>();
+            if (body.contains("magnetic_field_strength")) pp.magnetic_field_strength = body["magnetic_field_strength"].get<float>();
+            if (body.contains("planet_age_gyr")) pp.planet_age_gyr = body["planet_age_gyr"].get<float>();
+            if (body.contains("crustal_thickness_km")) pp.crustal_thickness_km = body["crustal_thickness_km"].get<float>();
+
+            // Derive computed fields.
+            pp.escape_velocity_kms = std::sqrt(
+                2.0f * pp.surface_gravity_ms2 * pp.radius_km * 1000.0f) / 1000.0f;
+            pp.solar_constant_wm2 = 1361.0f / (pp.solar_distance_au * pp.solar_distance_au);
+
+            // Derive hydrology mode from pressure/gravity.
+            if (pp.surface_pressure_kpa > 10.0f) {
+                pp.hydrology_mode = HydrologyMode::Active;
+            } else if (pp.surface_pressure_kpa > 0.001f) {
+                pp.hydrology_mode = HydrologyMode::PalaeoActive;
+            } else {
+                pp.hydrology_mode = HydrologyMode::None;
+            }
+
+            break;  // Found the referenced body.
+        }
+    }
+
+    return true;
+}
+
+// ===========================================================================
 // WorldGenerator::generate — main entry point
 // ===========================================================================
 

@@ -3710,3 +3710,123 @@ TEST_CASE("WorldGenerator: encyclopedia minimal depth omits history block",
         CHECK(prov.contains("current_character"));
     }
 }
+
+// ===========================================================================
+// Scenario file loading and planetary parameters
+// ===========================================================================
+
+TEST_CASE("WorldGeneratorConfig: default planetary_params are Earth-analog",
+          "[world_gen][scenario]") {
+    WorldGeneratorConfig config{};
+
+    CHECK(config.planetary_params.body_name == "Earth-analog");
+    CHECK(config.planetary_params.body_type == BodyType::Terrestrial);
+    CHECK(config.planetary_params.surface_gravity_ms2 == 9.81f);
+    CHECK(config.planetary_params.radius_km == 6371.0f);
+    CHECK(config.planetary_params.surface_pressure_kpa == 101.3f);
+    CHECK(config.planetary_params.planet_age_gyr == 4.6f);
+    CHECK(config.planetary_params.solar_distance_au == 1.0f);
+    CHECK(config.planetary_params.hydrology_mode == HydrologyMode::Active);
+}
+
+TEST_CASE("WorldGeneratorConfig: default scenario params match spec §11",
+          "[world_gen][scenario]") {
+    WorldGeneratorConfig config{};
+
+    CHECK(config.tectonic_plate_count == 6);
+    CHECK(config.landmass_fraction == 0.35f);
+    CHECK(config.climate_model == "full_koppen");
+    CHECK(config.prevailing_wind_direction == "westerly");
+    CHECK(config.resource_abundance_scale == 1.0f);
+    CHECK(config.archipelago_probability == 0.08f);
+    CHECK(config.mountain_coverage_target == 0.20f);
+    CHECK(config.glaciation_intensity == 1.0f);
+    CHECK(config.quantity_scale_factor == 1.0f);
+    CHECK(config.raster_resolution_override == -1);
+    CHECK(config.planetary_body_ref == "earth_analog");
+}
+
+TEST_CASE("WorldGeneratorConfig: load_from_json reads scenario file",
+          "[world_gen][scenario]") {
+    // Write a temporary scenario file.
+    std::string path = "test_scenario.json";
+    {
+        std::ofstream out(path);
+        out << R"({
+  "world_generation": {
+    "seed": 12345,
+    "province_count": 12,
+    "tectonic_plate_count": 8,
+    "landmass_fraction": 0.40,
+    "commentary_depth": "minimal",
+    "planetary_body": "mars_analog"
+  },
+  "planetary_bodies": [
+    {
+      "id": "mars_analog",
+      "body_name": "Mars-analog",
+      "body_type": "Terrestrial",
+      "radius_km": 3389.5,
+      "surface_gravity_ms2": 3.72,
+      "surface_pressure_kpa": 0.6,
+      "atmospheric_density_kgm3": 0.020,
+      "axial_tilt_degrees": 25.2,
+      "rotation_period_hours": 24.6,
+      "solar_distance_au": 1.52,
+      "magnetic_field_strength": 0.0,
+      "planet_age_gyr": 4.6,
+      "crustal_thickness_km": 50.0
+    }
+  ]
+})";
+    }
+
+    WorldGeneratorConfig config{};
+    bool ok = WorldGeneratorConfig::load_from_json(path, config);
+    REQUIRE(ok);
+
+    CHECK(config.seed == 12345);
+    CHECK(config.province_count == 12);
+    CHECK(config.tectonic_plate_count == 8);
+    CHECK(config.landmass_fraction == 0.40f);
+    CHECK(config.commentary_depth == CommentaryDepth::minimal);
+    CHECK(config.planetary_body_ref == "mars_analog");
+
+    // Planetary parameters loaded from matched body.
+    CHECK(config.planetary_params.body_name == "Mars-analog");
+    CHECK(config.planetary_params.surface_gravity_ms2 == 3.72f);
+    CHECK(config.planetary_params.surface_pressure_kpa == 0.6f);
+    CHECK(config.planetary_params.solar_distance_au == 1.52f);
+    CHECK(config.planetary_params.planet_age_gyr == 4.6f);
+    CHECK(config.planetary_params.crustal_thickness_km == 50.0f);
+
+    // Derived fields.
+    CHECK_THAT(static_cast<double>(config.planetary_params.solar_constant_wm2),
+               Catch::Matchers::WithinAbs(1361.0 / (1.52 * 1.52), 1.0));
+    CHECK(config.planetary_params.hydrology_mode == HydrologyMode::PalaeoActive);
+
+    // Cleanup.
+    std::remove(path.c_str());
+}
+
+TEST_CASE("WorldGeneratorConfig: load_from_json returns false for missing file",
+          "[world_gen][scenario]") {
+    WorldGeneratorConfig config{};
+    bool ok = WorldGeneratorConfig::load_from_json("nonexistent_file.json", config);
+    CHECK_FALSE(ok);
+}
+
+TEST_CASE("WorldGenerator: planetary_params carried to generated world",
+          "[world_gen][scenario]") {
+    WorldGeneratorConfig config{};
+    config.seed = 10070;
+    config.province_count = 6;
+    // V1 always uses Earth-analog defaults, so just verify the pipeline
+    // doesn't crash with non-default params set.
+    config.planetary_params.planet_age_gyr = 3.0f;
+    config.planetary_params.surface_gravity_ms2 = 12.0f;  // super-Earth
+
+    auto world = WorldGenerator::generate(config);
+    CHECK(world.provinces.size() == 6);
+    CHECK(world.nations.size() >= 2);
+}
