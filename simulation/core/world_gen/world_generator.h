@@ -384,23 +384,12 @@ class WorldGenerator {
     static void create_province_links(WorldState& world);
     static void create_markets(WorldState& world, DeterministicRNG& rng,
                                const GoodsCatalog& catalog, const WorldGeneratorConfig& config);
-    static void create_npcs(WorldState& world, DeterministicRNG& rng,
-                            const WorldGeneratorConfig& config);
-    static void create_businesses(WorldState& world, DeterministicRNG& rng,
-                                  const WorldGeneratorConfig& config);
-    static void create_facilities(WorldState& world, DeterministicRNG& rng,
-                                  const RecipeCatalog& recipes,
-                                  const FacilityTypeCatalog& facility_types,
-                                  const WorldGeneratorConfig& config);
     static ProvinceArchetype assign_archetype(DeterministicRNG& rng, uint32_t province_idx,
                                               uint32_t province_count);
     static void apply_archetype(Province& province, ProvinceArchetype archetype,
                                 DeterministicRNG& rng, const WorldGeneratorConfig& config);
     static void seed_resource_deposits(Province& province, ProvinceArchetype archetype,
                                        DeterministicRNG& rng, float richness);
-    static void seed_technology(WorldState& world, DeterministicRNG& rng,
-                                const TechnologyCatalog& tech_catalog,
-                                const WorldGeneratorConfig& config);
 
     // Stage 1 — Tectonic context (WorldGen v0.18).
     // Generates a small set of tectonic plates, assigns each province a tectonic
@@ -484,32 +473,6 @@ class WorldGenerator {
     // Must run after derive_soils_and_biomes() and create_province_links().
     static void detect_special_features(WorldState& world, DeterministicRNG& rng,
                                         const WorldGeneratorConfig& config);
-
-    // Stage 9 — Population attractiveness (WorldGen v0.18; simplified pass).
-    // Re-weights total_population from a settlement attractiveness score derived from soil
-    // fertility, infrastructure, climate stress, and hazard factors. Bounded ±40% of archetype
-    // baseline so archetypes remain dominant while geology/climate add meaningful variation.
-    // Must run after detect_special_features() (reads has_permafrost).
-    static void seed_population_attractiveness(WorldState& world, DeterministicRNG& rng,
-                                               const WorldGeneratorConfig& config);
-
-    // Stage 9.5 — Nation formation (WorldGen v0.18).
-    // Replaces single hardcoded nation with multiple nations via Voronoi growth.
-    // Seeds nation territories, language families, border changes, infra_gap.
-    // Must run after seed_population_attractiveness() (reads settlement_attractiveness).
-    static void form_nations(WorldState& world, DeterministicRNG& rng,
-                             const WorldGeneratorConfig& config);
-
-    // Stage 9.6 — Nomadic population (WorldGen v0.18).
-    // Seeds pastoral_carrying_capacity and nomadic_population_fraction from climate.
-    // Does not depend on nation_id. Runs after seed_population_attractiveness().
-    static void seed_nomadic_population(WorldState& world, DeterministicRNG& rng,
-                                        const WorldGeneratorConfig& config);
-
-    // Stage 9.7 — Nation capital seeding (WorldGen v0.18).
-    // Selects highest settlement_attractiveness province per nation as capital.
-    // Must run after form_nations() (requires nation_id assignment).
-    static void seed_nation_capitals(WorldState& world, const WorldGeneratorConfig& config);
 
     // Stage 10.0 — Province archetype classification (WorldGen v0.18).
     // Assigns one of 24 archetype labels per the §10.0 taxonomy. Used by
