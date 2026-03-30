@@ -9,14 +9,14 @@
 // 4. Province diversity produces meaningful economic differentiation
 // 5. Edge cases: orphaned refs, extreme values, empty provinces
 
+#include <h3api.h>
+
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <filesystem>
 #include <set>
-
-#include <h3api.h>
 
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"

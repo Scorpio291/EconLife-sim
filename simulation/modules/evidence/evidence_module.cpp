@@ -77,8 +77,7 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
         for (const auto& npc : state.significant_npcs) {
             if (npc.id == token.source_npc_id) {
                 float credibility = std::min(npc.social_capital / 100.0f, 1.0f);
-                is_credible =
-                    evaluate_holder_credibility(credibility, cfg_.credibility_threshold);
+                is_credible = evaluate_holder_credibility(credibility, cfg_.credibility_threshold);
                 break;
             }
         }
@@ -94,7 +93,7 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
         // retired solely due to decay — only explicit case closure (acquittal, conviction)
         // retires tokens. This preserves evidence for ongoing or future investigations.
         EvidenceDelta ed;
-        ed.updated_token_id      = token.id;
+        ed.updated_token_id = token.id;
         ed.updated_actionability = new_actionability;
         delta.evidence_deltas.push_back(ed);
     }

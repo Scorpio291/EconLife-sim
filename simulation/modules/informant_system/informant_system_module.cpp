@@ -27,21 +27,16 @@ float InformantSystemModule::compute_compartmentalization_bonus(uint32_t level,
     return static_cast<float>(level) * compartment_bonus;
 }
 
-float InformantSystemModule::compute_flip_probability(float base_flip_rate, float risk_tolerance,
-                                                      float trust,
-                                                      uint32_t mutual_incrimination_count,
-                                                      uint32_t compartmentalization_level,
-                                                      float max_flip_probability,
-                                                      float risk_factor_scale,
-                                                      float trust_factor_scale,
-                                                      float incrimination_suppression,
-                                                      float compartment_bonus_per_level) {
+float InformantSystemModule::compute_flip_probability(
+    float base_flip_rate, float risk_tolerance, float trust, uint32_t mutual_incrimination_count,
+    uint32_t compartmentalization_level, float max_flip_probability, float risk_factor_scale,
+    float trust_factor_scale, float incrimination_suppression, float compartment_bonus_per_level) {
     float risk = compute_risk_factor(risk_tolerance, risk_factor_scale);
     float trust_f = compute_trust_factor(trust, trust_factor_scale);
-    float incrim = compute_incrimination_suppression(mutual_incrimination_count,
-                                                     incrimination_suppression);
-    float compart = compute_compartmentalization_bonus(compartmentalization_level,
-                                                       compartment_bonus_per_level);
+    float incrim =
+        compute_incrimination_suppression(mutual_incrimination_count, incrimination_suppression);
+    float compart =
+        compute_compartmentalization_bonus(compartmentalization_level, compartment_bonus_per_level);
     float prob = base_flip_rate + risk + trust_f - incrim - compart;
     return std::clamp(prob, 0.0f, max_flip_probability);
 }
@@ -95,9 +90,9 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
 
         rec.flip_probability = compute_flip_probability(
             cfg_.base_flip_rate, npc->risk_tolerance, trust, mutual_count,
-            rec.compartmentalization_level,
-            cfg_.max_flip_probability, cfg_.risk_factor_scale, cfg_.trust_factor_scale,
-            cfg_.incrimination_suppression, cfg_.compartment_bonus_per_level);
+            rec.compartmentalization_level, cfg_.max_flip_probability, cfg_.risk_factor_scale,
+            cfg_.trust_factor_scale, cfg_.incrimination_suppression,
+            cfg_.compartment_bonus_per_level);
 
         // Probabilistic flip decision — RNG forked per-NPC for determinism.
         DeterministicRNG npc_rng = tick_rng.fork(rec.npc_id);
@@ -124,7 +119,8 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
             // (legal fees, witness protection costs, relocation expenses proxy)
             NPCDelta reliability_delta;
             reliability_delta.npc_id = rec.npc_id;
-            reliability_delta.capital_delta = -cfg_.pay_silence_cost * 0.10f;  // 10% of silence cost
+            reliability_delta.capital_delta =
+                -cfg_.pay_silence_cost * 0.10f;  // 10% of silence cost
             delta.npc_deltas.push_back(reliability_delta);
         }
     }

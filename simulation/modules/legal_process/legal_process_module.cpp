@@ -66,9 +66,9 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             continue;
 
         if (lcase.stage == LegalCaseStage::trial) {
-            lcase.conviction_probability = compute_conviction_probability(
-                lcase.evidence_weight, lcase.defense_quality, 1.0f, 1.0f,
-                cfg_.defense_quality_factor);
+            lcase.conviction_probability =
+                compute_conviction_probability(lcase.evidence_weight, lcase.defense_quality, 1.0f,
+                                               1.0f, cfg_.defense_quality_factor);
 
             // EvidenceDelta: evidence is presented at trial — each active token
             // associated with this case is flagged as presented (actionability reduced

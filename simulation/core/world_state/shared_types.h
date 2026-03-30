@@ -115,9 +115,9 @@ enum class TechStage : uint8_t {
 // ---------------------------------------------------------------------------
 struct TechHolding {
     std::string node_key;
-    uint32_t holder_id = 0;         // business_id
+    uint32_t holder_id = 0;  // business_id
     TechStage stage = TechStage::researched;
-    float maturation_level = 0.0f;  // 0.0-1.0; rises with continued investment
+    float maturation_level = 0.0f;    // 0.0-1.0; rises with continued investment
     float maturation_ceiling = 0.0f;  // era-gated max; recomputed each tick
     uint32_t researched_tick = 0;
     uint32_t commercialized_tick = 0;  // 0 if still Stage 1
@@ -136,20 +136,20 @@ struct ActorTechnologyState {
     std::map<std::string, TechHolding> holdings;
 
     // Query methods (inline for header-only availability).
-    bool has_researched(const std::string& node_key) const {
-        return holdings.count(node_key) > 0;
-    }
+    bool has_researched(const std::string& node_key) const { return holdings.count(node_key) > 0; }
 
     bool has_commercialized(const std::string& node_key) const {
         auto it = holdings.find(node_key);
-        if (it == holdings.end()) return false;
+        if (it == holdings.end())
+            return false;
         return it->second.stage == TechStage::commercialized;
     }
 
     // Returns maturation_level for the given node, or 0.0 if not held.
     float maturation_of(const std::string& node_key) const {
         auto it = holdings.find(node_key);
-        if (it == holdings.end()) return 0.0f;
+        if (it == holdings.end())
+            return 0.0f;
         return it->second.maturation_level;
     }
 };

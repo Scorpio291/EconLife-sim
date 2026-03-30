@@ -4,11 +4,11 @@
 // All functions operate at resolution 4 (province scale, ~1,770 km²).
 // These are called only during world generation — never per-tick.
 
+#include <h3api.h>
+
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
-
-#include <h3api.h>
 
 #include "core/world_state/geography.h"  // for H3Index typedef
 

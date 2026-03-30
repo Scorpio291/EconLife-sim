@@ -76,17 +76,18 @@ constexpr uint8_t V1_RESEARCH_DOMAIN_COUNT = 12;
 // ---------------------------------------------------------------------------
 struct TechnologyNode {
     std::string node_key;
-    std::string domain;         // maps to ResearchDomain name
+    std::string domain;  // maps to ResearchDomain name
     std::string display_name;
     uint8_t era_available = 1;  // earliest era this can be researched
     float difficulty = 1.0f;    // effort points; 0.1=days, 1.0=months, 10.0=years
     bool patentable = false;
     std::vector<std::string> prerequisites;  // node_keys that must be held first
-    std::string outcome_type;   // "product_unlock", "process_improvement", "facility_unlock", "tech_tier_advance"
+    std::string outcome_type;         // "product_unlock", "process_improvement", "facility_unlock",
+                                      // "tech_tier_advance"
     std::string key_technology_node;  // node whose maturation caps quality (empty = no cap)
     std::string unlocks_recipe;       // recipe_key unlocked on research (empty = none)
     std::string unlocks_facility_type;  // facility_type_key unlocked (empty = none)
-    bool is_baseline = false;   // true = available at game start, no research needed
+    bool is_baseline = false;           // true = available at game start, no research needed
 };
 
 // ---------------------------------------------------------------------------
