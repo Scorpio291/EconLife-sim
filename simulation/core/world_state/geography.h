@@ -419,6 +419,62 @@ enum class CommentaryDepth : uint8_t {
 };
 
 // ---------------------------------------------------------------------------
+// BodyType — WorldGen v0.18 Planetary Parameters (EX data layout, V1 struct)
+// ---------------------------------------------------------------------------
+enum class BodyType : uint8_t {
+    Terrestrial,   // rocky; atmosphere possible; full pipeline applies
+    IcyMoon,       // ice shell over liquid ocean; limited pipeline; resource-focused
+    Asteroid,      // no atmosphere; no hydrology; resource-only body
+    SpaceStation,  // artificial; no world gen; infrastructure-only
+};
+
+// ---------------------------------------------------------------------------
+// HydrologyMode — WorldGen v0.18 Planetary Parameters
+// ---------------------------------------------------------------------------
+enum class HydrologyMode : uint8_t {
+    Active,        // liquid water present; full Stage 3 simulation
+    PalaeoActive,  // ancient channels only; dry now; trace channels, skip flow sim
+    Cryogenic,     // water as ice only; glacier flow; no liquid channels
+    None,          // airless body; Stage 3 skipped entirely
+};
+
+// ---------------------------------------------------------------------------
+// PlanetaryParameters — WorldGen v0.18 §Planetary Parameters
+// ---------------------------------------------------------------------------
+// All pipeline stages that currently hardcode Earth-specific constants read
+// from this struct instead. V1 uses Earth-analog defaults; EX extends to
+// Mars, super-Earths, moons. Costs nothing to carry in V1.
+struct PlanetaryParameters {
+    std::string  body_name    = "Earth-analog";
+    BodyType     body_type    = BodyType::Terrestrial;
+
+    // Gravity
+    float surface_gravity_ms2    = 9.81f;   // m/s²; Earth=9.81; Mars=3.72
+    float radius_km              = 6371.0f;
+    float escape_velocity_kms    = 11.2f;   // derived: sqrt(2 × g × r)
+
+    // Atmosphere
+    float surface_pressure_kpa       = 101.3f;  // Earth=101.3; Mars=0.6
+    float atmospheric_density_kgm3   = 1.225f;  // surface; Earth=1.225
+    float atmospheric_scale_height_km = 8.5f;   // derived: kT/(m_air×g)
+
+    // Climate drivers
+    float axial_tilt_degrees     = 23.4f;   // Earth=23.4; affects seasonality
+    float rotation_period_hours  = 24.0f;   // Earth=24.0; slow → weak Coriolis
+    float solar_distance_au      = 1.0f;    // Earth=1.0; Mars=1.52
+    float solar_constant_wm2     = 1361.0f; // derived: 1361 / distance²
+    float magnetic_field_strength = 1.0f;   // 0.0–1.0 normalized; Earth=1.0
+
+    // Geology
+    float planet_age_gyr         = 4.6f;    // SCENARIO INPUT; root of age-dependent physics
+    float mantle_heat_flux       = 0.065f;  // DERIVED at Stage 1 init from planet_age_gyr
+    float crustal_thickness_km   = 35.0f;   // thicker = less tectonic activity
+
+    // Pipeline control
+    HydrologyMode hydrology_mode = HydrologyMode::Active;
+};
+
+// ---------------------------------------------------------------------------
 // SimulationLOD
 // ---------------------------------------------------------------------------
 enum class SimulationLOD : uint8_t {
