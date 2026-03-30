@@ -12,8 +12,8 @@ namespace {
 
 void check(H3Error err, const char* context) {
     if (err != E_SUCCESS) {
-        throw std::runtime_error(std::string("H3 error in ") + context +
-                                 ": code " + std::to_string(static_cast<int>(err)));
+        throw std::runtime_error(std::string("H3 error in ") + context + ": code " +
+                                 std::to_string(static_cast<int>(err)));
     }
 }
 
@@ -50,7 +50,8 @@ std::vector<H3Index> grid_neighbors(H3Index cell) {
 }
 
 std::vector<H3Index> grid_compact_group(H3Index center, uint32_t count) {
-    if (count == 0) return {};
+    if (count == 0)
+        return {};
 
     // BFS from center, collecting cells in H3Index-sorted order per frontier ring.
     std::vector<H3Index> result;
@@ -76,15 +77,16 @@ std::vector<H3Index> grid_compact_group(H3Index center, uint32_t count) {
         // Sort next_frontier for determinism before adding.
         std::sort(next_frontier.begin(), next_frontier.end());
         for (H3Index c : next_frontier) {
-            if (result.size() >= count) break;
+            if (result.size() >= count)
+                break;
             result.push_back(c);
         }
         frontier = std::move(next_frontier);
     }
 
     if (result.size() < count) {
-        throw std::runtime_error("grid_compact_group: could not find " +
-                                 std::to_string(count) + " contiguous H3 cells");
+        throw std::runtime_error("grid_compact_group: could not find " + std::to_string(count) +
+                                 " contiguous H3 cells");
     }
 
     return result;
@@ -104,17 +106,20 @@ float shared_border_km(H3Index a, H3Index b) {
     // Check adjacency first.
     int adjacent = 0;
     H3Error err = areNeighborCells(a, b, &adjacent);
-    if (err != E_SUCCESS || !adjacent) return 0.0f;
+    if (err != E_SUCCESS || !adjacent)
+        return 0.0f;
 
     // Average edge length at resolution 4 is approximately 43.3 km.
     // H3 provides exactEdgeLengthKm for directed edges.
     H3Index edge = 0;
     err = cellsToDirectedEdge(a, b, &edge);
-    if (err != E_SUCCESS) return 43.3f;  // fallback to res-4 average
+    if (err != E_SUCCESS)
+        return 43.3f;  // fallback to res-4 average
 
     double len_km = 0.0;
     err = edgeLengthKm(edge, &len_km);
-    if (err != E_SUCCESS) return 43.3f;
+    if (err != E_SUCCESS)
+        return 43.3f;
 
     return static_cast<float>(len_km);
 }

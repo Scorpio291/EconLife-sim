@@ -28,10 +28,8 @@ class InformantSystemModule : public ITickModule {
     static float compute_flip_probability(float base_flip_rate, float risk_tolerance, float trust,
                                           uint32_t mutual_incrimination_count,
                                           uint32_t compartmentalization_level,
-                                          float max_flip_probability,
-                                          float risk_factor_scale,
-                                          float trust_factor_scale,
-                                          float incrimination_suppression,
+                                          float max_flip_probability, float risk_factor_scale,
+                                          float trust_factor_scale, float incrimination_suppression,
                                           float compartment_bonus_per_level);
     static float compute_risk_factor(float risk_tolerance, float risk_factor_scale);
     static float compute_trust_factor(float trust, float trust_factor_scale);

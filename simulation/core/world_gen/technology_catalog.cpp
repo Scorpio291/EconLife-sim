@@ -15,7 +15,8 @@ namespace econlife {
 
 static std::string trim(const std::string& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos) return "";
+    if (start == std::string::npos)
+        return "";
     size_t end = s.find_last_not_of(" \t\r\n");
     return s.substr(start, end - start + 1);
 }
@@ -32,7 +33,8 @@ static std::vector<std::string> split_csv_line(const std::string& line) {
 
 static std::vector<std::string> split_semicolons(const std::string& s) {
     std::vector<std::string> result;
-    if (s.empty()) return result;
+    if (s.empty())
+        return result;
     std::istringstream stream(s);
     std::string token;
     while (std::getline(stream, token, ';')) {
@@ -50,14 +52,16 @@ static std::vector<std::string> split_semicolons(const std::string& s) {
 
 bool TechnologyCatalog::load_nodes_csv(const std::string& filepath) {
     std::ifstream file(filepath);
-    if (!file.is_open()) return false;
+    if (!file.is_open())
+        return false;
 
     std::string line;
     bool header_skipped = false;
 
     while (std::getline(file, line)) {
         std::string trimmed = trim(line);
-        if (trimmed.empty() || trimmed[0] == '#') continue;
+        if (trimmed.empty() || trimmed[0] == '#')
+            continue;
 
         // Skip header row.
         if (!header_skipped) {
@@ -68,7 +72,8 @@ bool TechnologyCatalog::load_nodes_csv(const std::string& filepath) {
         }
 
         auto fields = split_csv_line(trimmed);
-        if (fields.size() < 12) continue;
+        if (fields.size() < 12)
+            continue;
 
         TechnologyNode node;
         node.node_key = fields[0];
@@ -97,14 +102,16 @@ bool TechnologyCatalog::load_nodes_csv(const std::string& filepath) {
 
 bool TechnologyCatalog::load_ceilings_csv(const std::string& filepath) {
     std::ifstream file(filepath);
-    if (!file.is_open()) return false;
+    if (!file.is_open())
+        return false;
 
     std::string line;
     bool header_skipped = false;
 
     while (std::getline(file, line)) {
         std::string trimmed = trim(line);
-        if (trimmed.empty() || trimmed[0] == '#') continue;
+        if (trimmed.empty() || trimmed[0] == '#')
+            continue;
 
         if (!header_skipped) {
             if (trimmed.find("node_key") != std::string::npos) {
@@ -115,7 +122,8 @@ bool TechnologyCatalog::load_ceilings_csv(const std::string& filepath) {
 
         auto fields = split_csv_line(trimmed);
         // node_key + 10 era columns = 11 minimum
-        if (fields.size() < 11) continue;
+        if (fields.size() < 11)
+            continue;
 
         MaturationCeilingEntry entry;
         entry.node_key = fields[0];
@@ -182,8 +190,10 @@ std::vector<const TechnologyNode*> TechnologyCatalog::nodes_in_domain(
 
 float TechnologyCatalog::ceiling_for(const std::string& node_key, uint8_t era) const {
     auto it = ceilings_.find(node_key);
-    if (it == ceilings_.end()) return 1.0f;  // no ceiling data = no restriction
-    if (era < 1 || era > MAX_ERA) return -1.0f;
+    if (it == ceilings_.end())
+        return 1.0f;  // no ceiling data = no restriction
+    if (era < 1 || era > MAX_ERA)
+        return -1.0f;
     return it->second.era_ceilings[era - 1];
 }
 

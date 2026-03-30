@@ -1,12 +1,13 @@
 // Technology catalog and module unit tests.
 
+#include "core/world_gen/technology_catalog.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 
-#include "core/world_gen/technology_catalog.h"
 #include "core/world_state/shared_types.h"
 #include "modules/technology/technology_types.h"
 
@@ -28,7 +29,8 @@ static std::string write_temp_csv(const std::string& filename, const std::string
 // ===========================================================================
 
 TEST_CASE("TechnologyCatalog loads nodes from CSV", "[technology][catalog]") {
-    std::string csv = R"(node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline
+    std::string csv =
+        R"(node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline
 basic_extraction,materials_science,Basic Extraction Methods,1,0.0,0,,baseline,,,mine,1
 hydraulic_fracturing,energy_systems,Hydraulic Fracturing,1,1.0,1,,product_unlock,hydraulic_fracturing,shale_oil_extraction,,0
 electric_vehicle,mechanical_engineering,Electric Vehicle,2,3.0,1,ev_powertrain,product_unlock,electric_vehicle,electric_vehicle,,0
@@ -95,7 +97,8 @@ electric_vehicle,mechanical_engineering,Electric Vehicle,2,3.0,1,ev_powertrain,p
 }
 
 TEST_CASE("TechnologyCatalog handles semicolon-separated prerequisites", "[technology][catalog]") {
-    std::string csv = R"(node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline
+    std::string csv =
+        R"(node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline
 autonomous_vehicle,mechanical_engineering,Autonomous Vehicle,4,5.0,1,machine_learning_commercial;electric_vehicle,product_unlock,autonomous_vehicle,,,0
 )";
     auto path = write_temp_csv("test_prereqs.csv", csv);
@@ -118,18 +121,19 @@ TEST_CASE("TechnologyCatalog handles empty/malformed CSV gracefully", "[technolo
     }
 
     SECTION("Header only") {
-        auto path = write_temp_csv("header_only.csv",
-            "node_key,domain,display_name,era_available,difficulty,patentable,"
-            "prerequisites,outcome_type,key_technology_node,unlocks_recipe,"
-            "unlocks_facility_type,is_baseline\n");
+        auto path =
+            write_temp_csv("header_only.csv",
+                           "node_key,domain,display_name,era_available,difficulty,patentable,"
+                           "prerequisites,outcome_type,key_technology_node,unlocks_recipe,"
+                           "unlocks_facility_type,is_baseline\n");
         TechnologyCatalog catalog;
         CHECK_FALSE(catalog.load_nodes_csv(path));
     }
 
     SECTION("Comments only") {
         auto path = write_temp_csv("comments_only.csv",
-            "# This is a comment\n"
-            "# Another comment\n");
+                                   "# This is a comment\n"
+                                   "# Another comment\n");
         TechnologyCatalog catalog;
         CHECK_FALSE(catalog.load_nodes_csv(path));
     }
@@ -250,18 +254,12 @@ TEST_CASE("GlobalTechnologyState defaults", "[technology][state]") {
 
 TEST_CASE("TechnologyConfig defaults match spec", "[technology][config]") {
     TechnologyConfig config;
-    CHECK_THAT(config.maturation_rate_coeff,
-               Catch::Matchers::WithinAbs(0.40f, 0.001f));
-    CHECK_THAT(config.maturation_difficulty_per_level,
-               Catch::Matchers::WithinAbs(2.0f, 0.001f));
-    CHECK_THAT(config.base_research_success_rate,
-               Catch::Matchers::WithinAbs(0.75f, 0.001f));
-    CHECK_THAT(config.era_transition_threshold,
-               Catch::Matchers::WithinAbs(0.70f, 0.001f));
-    CHECK_THAT(config.maturation_transfer_license,
-               Catch::Matchers::WithinAbs(0.80f, 0.001f));
-    CHECK_THAT(config.maturation_transfer_reverse_eng,
-               Catch::Matchers::WithinAbs(0.50f, 0.001f));
+    CHECK_THAT(config.maturation_rate_coeff, Catch::Matchers::WithinAbs(0.40f, 0.001f));
+    CHECK_THAT(config.maturation_difficulty_per_level, Catch::Matchers::WithinAbs(2.0f, 0.001f));
+    CHECK_THAT(config.base_research_success_rate, Catch::Matchers::WithinAbs(0.75f, 0.001f));
+    CHECK_THAT(config.era_transition_threshold, Catch::Matchers::WithinAbs(0.70f, 0.001f));
+    CHECK_THAT(config.maturation_transfer_license, Catch::Matchers::WithinAbs(0.80f, 0.001f));
+    CHECK_THAT(config.maturation_transfer_reverse_eng, Catch::Matchers::WithinAbs(0.50f, 0.001f));
     CHECK(config.patent_duration_ticks == 7300);
 }
 

@@ -18,7 +18,7 @@
 #include "modules/trade_infrastructure/trade_types.h"  // TariffSchedule, NationalTradeOffer,
                                                        //   Lod1NationStats, RouteProfile
 #include "modules/currency_exchange/currency_exchange_types.h"  // CurrencyRecord
-#include "modules/technology/technology_types.h"               // GlobalTechnologyState
+#include "modules/technology/technology_types.h"                // GlobalTechnologyState
 
 namespace econlife {
 
@@ -47,8 +47,9 @@ struct WorldState {
     std::vector<Nation> nations;        // V1: exactly 1 nation
     std::vector<Province> provinces;    // see §12
     std::vector<Region> region_groups;  // thin grouping layer
-    std::vector<NamedFeature> named_features;  // Stage 10.1; geographic features (UI/encyclopedia only)
-    std::vector<PreGameEvent> pre_game_events; // Stage 10.3; living-memory events (NPC seeding)
+    std::vector<NamedFeature>
+        named_features;  // Stage 10.1; geographic features (UI/encyclopedia only)
+    std::vector<PreGameEvent> pre_game_events;  // Stage 10.3; living-memory events (NPC seeding)
     LoadingCommentary loading_commentary;       // Stage 10.4; world-specific loading screen text
     std::unordered_map<H3Index, uint32_t> h3_province_map;  // H3Index → province array index
 
@@ -97,7 +98,8 @@ struct WorldState {
         province_route_table;  // precomputed at load
 
     // --- Technology & R&D ---
-    GlobalTechnologyState technology;  // era tracking, domain knowledge, research/maturation projects
+    GlobalTechnologyState
+        technology;  // era tracking, domain knowledge, research/maturation projects
 
     // --- Schema ---
     uint32_t current_schema_version;
