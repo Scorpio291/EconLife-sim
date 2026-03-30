@@ -322,6 +322,8 @@ void SupplyChainModule::dispatch_inter_province(uint32_t province_id, const Worl
 // ===========================================================================
 
 void SupplyChainModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Global post-pass: called by the orchestrator after all province-parallel
+    // execute_province() calls have been merged and applied.
     DeterministicRNG rng(state.world_seed + state.current_tick);
 
     // Step 1: Process transit arrivals from deferred work queue.
@@ -332,28 +334,6 @@ void SupplyChainModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
     // Step 3: Process LOD 1 import offers.
     process_lod1_imports(state, delta);
-
-    // Fallback: if not dispatched province-parallel, run all provinces.
-    // This path is used when the orchestrator calls execute() directly
-    // rather than dispatching through execute_province().
-    // Province-parallel modules normally only have execute_province() called;
-    // execute() is the sequential fallback.
-    for (uint32_t p = 0; p < static_cast<uint32_t>(state.provinces.size()); ++p) {
-        if (state.provinces[p].lod_level == SimulationLOD::full) {
-            DeltaBuffer province_delta{};
-            execute_province(p, state, province_delta);
-
-            // Merge province delta into main delta.
-            delta.market_deltas.insert(delta.market_deltas.end(),
-                                       province_delta.market_deltas.begin(),
-                                       province_delta.market_deltas.end());
-            delta.npc_deltas.insert(delta.npc_deltas.end(), province_delta.npc_deltas.begin(),
-                                    province_delta.npc_deltas.end());
-            delta.evidence_deltas.insert(delta.evidence_deltas.end(),
-                                         province_delta.evidence_deltas.begin(),
-                                         province_delta.evidence_deltas.end());
-        }
-    }
 }
 
 void SupplyChainModule::process_transit_arrivals(const WorldState& state,

@@ -39,9 +39,8 @@ class SupplyChainModule : public ITickModule {
 
     std::vector<std::string_view> runs_before() const override { return {"price_engine"}; }
 
-    // TODO(B5): should be true; blocked on orchestrator calling execute() after province pass
-    // for global transit arrivals, interception, and LOD1 imports.
-    bool is_province_parallel() const noexcept override { return false; }
+    bool is_province_parallel() const noexcept override { return true; }
+    bool has_global_post_pass() const noexcept override { return true; }
 
     // Per-province: local matching of sell offers to buy orders.
     void execute_province(uint32_t province_idx, const WorldState& state,

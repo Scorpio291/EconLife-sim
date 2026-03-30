@@ -33,9 +33,8 @@ class LaborMarketModule : public ITickModule {
 
     std::vector<std::string_view> runs_before() const override { return {"price_engine"}; }
 
-    // TODO(B6): should be true; blocked on orchestrator calling execute() after province pass
-    // for global wage update (update_regional_wages, monthly global step).
-    bool is_province_parallel() const noexcept override { return false; }
+    bool is_province_parallel() const noexcept override { return true; }
+    bool has_global_post_pass() const noexcept override { return true; }
 
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;

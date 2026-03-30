@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "modules/technology/technology_types.h"
 #include "player.h"
 #include "world_state.h"
 
@@ -395,6 +396,49 @@ static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
 }
 
 // ---------------------------------------------------------------------------
+// apply_technology_deltas
+// ---------------------------------------------------------------------------
+static void apply_technology_deltas(WorldState& world,
+                                     const std::vector<TechnologyDelta>& deltas) {
+    for (const auto& td : deltas) {
+        // Era transition (replacement, irreversible forward-only).
+        if (td.new_era.has_value()) {
+            uint8_t target = *td.new_era;
+            uint8_t current = static_cast<uint8_t>(world.technology.current_era);
+            if (target > current) {
+                world.technology.current_era = static_cast<SimulationEra>(target);
+                world.technology.era_started_tick = world.current_tick;
+            }
+        }
+
+        // Domain knowledge decay/adjustment (additive, clamped 0.0–1.0).
+        if (td.domain_index.has_value() && td.domain_knowledge_delta.has_value()) {
+            uint8_t idx = *td.domain_index;
+            if (idx < RESEARCH_DOMAIN_COUNT) {
+                float val = world.technology.domain_knowledge[idx];
+                val = safe_add(val, *td.domain_knowledge_delta);
+                world.technology.domain_knowledge[idx] = std::clamp(val, 0.0f, 1.0f);
+            }
+        }
+
+        // Per-business maturation level update (replacement).
+        if (td.business_id.has_value() && td.node_key.has_value() &&
+            td.maturation_level_update.has_value()) {
+            for (auto& biz : world.npc_businesses) {
+                if (biz.id == *td.business_id) {
+                    auto it = biz.actor_tech_state.holdings.find(*td.node_key);
+                    if (it != biz.actor_tech_state.holdings.end()) {
+                        it->second.maturation_level = std::min(
+                            *td.maturation_level_update, it->second.maturation_ceiling);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_deltas — main entry point
 // ---------------------------------------------------------------------------
 void apply_deltas(WorldState& world, DeltaBuffer& delta) {
@@ -405,6 +449,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     apply_evidence_deltas(world, delta.evidence_deltas);
     apply_region_deltas(world, delta.region_deltas);
     apply_currency_deltas(world, delta.currency_deltas);
+    apply_technology_deltas(world, delta.technology_deltas);
     apply_append_deltas(world, delta);
 
     // Clear the delta buffer for next step
@@ -416,6 +461,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     delta.business_deltas.clear();
     delta.region_deltas.clear();
     delta.currency_deltas.clear();
+    delta.technology_deltas.clear();
     delta.new_calendar_entries.clear();
     delta.new_scene_cards.clear();
     delta.new_obligation_nodes.clear();

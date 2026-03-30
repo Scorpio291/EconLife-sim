@@ -182,6 +182,12 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
                 delta.region_deltas.insert(delta.region_deltas.end(),
                                            province_delta.region_deltas.begin(),
                                            province_delta.region_deltas.end());
+                delta.currency_deltas.insert(delta.currency_deltas.end(),
+                                              province_delta.currency_deltas.begin(),
+                                              province_delta.currency_deltas.end());
+                delta.technology_deltas.insert(delta.technology_deltas.end(),
+                                                province_delta.technology_deltas.begin(),
+                                                province_delta.technology_deltas.end());
                 delta.new_calendar_entries.insert(delta.new_calendar_entries.end(),
                                                   province_delta.new_calendar_entries.begin(),
                                                   province_delta.new_calendar_entries.end());
@@ -192,14 +198,27 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
                                                   province_delta.new_obligation_nodes.begin(),
                                                   province_delta.new_obligation_nodes.end());
             }
+
+            // Apply province-parallel deltas before global post-pass so the
+            // post-pass sees the accumulated province effects.
+            apply_deltas(state, delta);
+
+            // Global post-pass: execute() runs after all province deltas are
+            // merged and applied, allowing global coordination (transit arrivals,
+            // wage equilibration, LOD 1 imports, etc.).
+            if (module->has_global_post_pass()) {
+                DeltaBuffer post_delta;
+                module->execute(state, post_delta);
+                apply_deltas(state, post_delta);
+            }
         } else {
             // Sequential execution on main thread.
             module->execute(state, delta);
-        }
 
-        // Apply this module's deltas to WorldState immediately.
-        // Each module sees the effects of all prior modules in this tick.
-        apply_deltas(state, delta);
+            // Apply this module's deltas to WorldState immediately.
+            // Each module sees the effects of all prior modules in this tick.
+            apply_deltas(state, delta);
+        }
     }
 
     // Garbage collect inactive evidence tokens to prevent unbounded pool growth.
