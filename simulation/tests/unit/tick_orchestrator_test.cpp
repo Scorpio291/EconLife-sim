@@ -250,10 +250,12 @@ TEST_CASE("mixed sequential and province-parallel-with-post-pass modules execute
     TestModule::reset_order();
     TickOrchestrator orch;
 
-    // "first" sequential, "middle" province-parallel with post-pass, "last" sequential after middle.
-    orch.register_module(std::make_unique<TestModule>("last", std::vector<std::string_view>{"middle"}));
-    orch.register_module(std::make_unique<TestModuleWithPostPass>("middle",
-                         std::vector<std::string_view>{"first"}));
+    // "first" sequential, "middle" province-parallel with post-pass, "last" sequential after
+    // middle.
+    orch.register_module(
+        std::make_unique<TestModule>("last", std::vector<std::string_view>{"middle"}));
+    orch.register_module(
+        std::make_unique<TestModuleWithPostPass>("middle", std::vector<std::string_view>{"first"}));
     orch.register_module(std::make_unique<TestModule>("first"));
     orch.finalize_registration();
 

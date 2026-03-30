@@ -109,10 +109,10 @@ enum class TectonicContext : uint8_t {
 // RockType — WorldGen v0.18 Stage 1
 // ---------------------------------------------------------------------------
 enum class RockType : uint8_t {
-    Igneous = 0,    // volcanic arcs and hot spots; weathers slowly into fertile soil
-    Sedimentary,    // basins and margins; hosts petroleum, coal, evaporites
-    Metamorphic,    // collision zones; hosts gems, garnet, kyanite
-    Mixed,          // transition provinces; blend of adjacent types
+    Igneous = 0,  // volcanic arcs and hot spots; weathers slowly into fertile soil
+    Sedimentary,  // basins and margins; hosts petroleum, coal, evaporites
+    Metamorphic,  // collision zones; hosts gems, garnet, kyanite
+    Mixed,        // transition provinces; blend of adjacent types
 };
 
 // ---------------------------------------------------------------------------
@@ -120,14 +120,14 @@ enum class RockType : uint8_t {
 // ---------------------------------------------------------------------------
 // More specific than RockType; drives deposit grade probability weights.
 enum class GeologyType : uint8_t {
-    VolcanicArc = 0,       // subduction-associated; porphyry copper and gold systems
-    GraniteShield,         // craton core; gold, uranium, iron ore
-    GreenstoneBelt,        // ancient craton margins; gold, nickel, chromite
-    SedimentarySequence,   // layered basins; coal, oil, gas, evaporites
-    CarbonateSequence,     // limestone/dolomite; karst potential, marble
-    MetamorphicCore,       // deep collision zones; gems, garnet, structural stones
-    BasalticPlateau,       // flood basalt and hot spots; geothermal, sulfur
-    AlluvialFill,          // river/lake sediment; sand, gravel, placer gold
+    VolcanicArc = 0,      // subduction-associated; porphyry copper and gold systems
+    GraniteShield,        // craton core; gold, uranium, iron ore
+    GreenstoneBelt,       // ancient craton margins; gold, nickel, chromite
+    SedimentarySequence,  // layered basins; coal, oil, gas, evaporites
+    CarbonateSequence,    // limestone/dolomite; karst potential, marble
+    MetamorphicCore,      // deep collision zones; gems, garnet, structural stones
+    BasalticPlateau,      // flood basalt and hot spots; geothermal, sulfur
+    AlluvialFill,         // river/lake sediment; sand, gravel, placer gold
 };
 
 // ---------------------------------------------------------------------------
@@ -151,15 +151,16 @@ enum class ResourceType : uint8_t {
     SolarPotential,
     WindPotential,
     // Added in WorldGen v0.18 Stage 1 (tectonic-driven deposits)
-    Gold,       // porphyry/craton; high-value; low quantity
-    Geothermal, // rift zones and hot spots; renewable energy
-    Uranium,    // craton shields; high-value; low quantity
-    Potash,     // evaporite basins; agricultural fertilizer input
+    Gold,        // porphyry/craton; high-value; low quantity
+    Geothermal,  // rift zones and hot spots; renewable energy
+    Uranium,     // craton shields; high-value; low quantity
+    Potash,      // evaporite basins; agricultural fertilizer input
     // Added in WorldGen v0.18 Stage 8 (deterministic seeding)
     Sand,       // marine/river-deposited; construction material; every province needs it
     Aggregate,  // quarry rock (crushed stone, gravel); construction material
     // Added in WorldGen v0.18 Stage 7/8 (impact crater + glacial)
-    PlatinumGroupMetals,  // impact-concentrated; also craton ultramafic intrusions (Bushveld/Sudbury)
+    PlatinumGroupMetals,  // impact-concentrated; also craton ultramafic intrusions
+                          // (Bushveld/Sudbury)
     // [EX] full deposit list from GDD Section 8.3 expanded in later passes
 };
 
@@ -243,12 +244,12 @@ enum class SoilType : uint8_t {
 // Seasonal timing of river flow in a province; determines agricultural
 // irrigation timing, flood peak season, and drought buffering.
 enum class RiverFlowRegime : uint8_t {
-    RainfedPerennial = 0,    // flow tracks local rainfall; peaks in wet season
-    SnowmeltPerennial,       // sustained by snowmelt; peaks late spring; may drop in autumn
-    SnowmeltEphemeral,       // only flows during melt season; dry rest of year
-    RainfedEphemeral,        // only flows during local wet season; wadi/arroyo analog
-    Glacierfed,              // sustained by glacier melt; stable through summer; declining long-term
-    None,                    // no significant river flow (arid interior, small island)
+    RainfedPerennial = 0,  // flow tracks local rainfall; peaks in wet season
+    SnowmeltPerennial,     // sustained by snowmelt; peaks late spring; may drop in autumn
+    SnowmeltEphemeral,     // only flows during melt season; dry rest of year
+    RainfedEphemeral,      // only flows during local wet season; wadi/arroyo analog
+    Glacierfed,            // sustained by glacier melt; stable through summer; declining long-term
+    None,                  // no significant river flow (arid interior, small island)
 };
 
 // ---------------------------------------------------------------------------
@@ -257,12 +258,12 @@ enum class RiverFlowRegime : uint8_t {
 // Classifies fisheries access from coastal/river geography. Drives carrying
 // capacity and Schaefer surplus production dynamics at runtime.
 enum class FishingAccessType : uint8_t {
-    NoAccess = 0,    // landlocked; no fishing
-    Inshore,         // coastal shelf <=200m depth; small boats; high yield/km2; easily overexploited
-    Offshore,        // open ocean; industrial trawlers required; lower yield/km2 but vast area
-    Pelagic,         // open ocean surface schools (tuna, sardines); highly migratory
-    Freshwater,      // rivers and lakes; limited yield; important for inland provinces
-    Upwelling,       // cold current upwelling zones; highest yield on Earth (Humboldt/Benguela)
+    NoAccess = 0,  // landlocked; no fishing
+    Inshore,       // coastal shelf <=200m depth; small boats; high yield/km2; easily overexploited
+    Offshore,      // open ocean; industrial trawlers required; lower yield/km2 but vast area
+    Pelagic,       // open ocean surface schools (tuna, sardines); highly migratory
+    Freshwater,    // rivers and lakes; limited yield; important for inland provinces
+    Upwelling,     // cold current upwelling zones; highest yield on Earth (Humboldt/Benguela)
 };
 
 // ---------------------------------------------------------------------------
@@ -272,12 +273,12 @@ enum class FishingAccessType : uint8_t {
 // generation; updated each tick by extraction module.
 struct FisheriesProfile {
     FishingAccessType access_type = FishingAccessType::NoAccess;
-    float carrying_capacity     = 0.0f;  // max sustainable fish stock; 0.0-1.0 normalized
-    float current_stock         = 0.0f;  // starts at carrying_capacity * 0.85
+    float carrying_capacity = 0.0f;      // max sustainable fish stock; 0.0-1.0 normalized
+    float current_stock = 0.0f;          // starts at carrying_capacity * 0.85
     float max_sustainable_yield = 0.0f;  // MSY = 0.5 * intrinsic_growth_rate * carrying_capacity
     float intrinsic_growth_rate = 0.0f;  // r; species-dependent; derived from access_type
-    float seasonal_closure      = 0.05f; // fraction of year fishing impossible (ice, spawning)
-    bool  is_migratory          = false; // stock moves between provinces; shared-access problem
+    float seasonal_closure = 0.05f;      // fraction of year fishing impossible (ice, spawning)
+    bool is_migratory = false;           // stock moves between provinces; shared-access problem
 };
 
 // ---------------------------------------------------------------------------
@@ -286,9 +287,21 @@ struct FisheriesProfile {
 // Geographic feature types for the named feature pipeline. Each province can
 // host multiple features; features can span multiple provinces.
 enum class FeatureType : uint8_t {
-    MountainRange = 0, River, Lake, Desert, Basin,
-    Strait, Bay, Island, Plateau, Cape, Crater,
-    Plain, Forest, Peninsula, Archipelago,
+    MountainRange = 0,
+    River,
+    Lake,
+    Desert,
+    Basin,
+    Strait,
+    Bay,
+    Island,
+    Plateau,
+    Cape,
+    Crater,
+    Plain,
+    Forest,
+    Peninsula,
+    Archipelago,
 };
 
 // ---------------------------------------------------------------------------
@@ -298,20 +311,20 @@ enum class FeatureType : uint8_t {
 // WorldState.named_features; referenced by world_encyclopedia.json.
 // The simulation tick never reads this — it is UI/encyclopedia data only.
 struct NamedFeature {
-    uint64_t     id;
-    FeatureType  type;
-    std::string  name;                // primary name; language of the dominant nation
-    std::string  local_name;          // secondary name if feature crosses language boundary; else ""
-    std::string  language_family_id;  // which family generated the primary name
-    float        significance = 0.5f; // 0.0-1.0; how often NPCs and news reference this
-    std::vector<H3Index> extent;      // res-4 cells this feature spans
+    uint64_t id;
+    FeatureType type;
+    std::string name;                // primary name; language of the dominant nation
+    std::string local_name;          // secondary name if feature crosses language boundary; else ""
+    std::string language_family_id;  // which family generated the primary name
+    float significance = 0.5f;       // 0.0-1.0; how often NPCs and news reference this
+    std::vector<H3Index> extent;     // res-4 cells this feature spans
 
-    float  length_km       = 0.0f;   // rivers, coastlines, mountain ranges
-    float  area_km2        = 0.0f;   // basins, deserts, lakes, plains
-    float  peak_elevation_m = 0.0f;  // mountain ranges; 0.0 for others
-    bool   is_navigable    = false;  // rivers: can goods travel by barge?
-    bool   is_disputed     = false;  // spans a national border; diplomatic context
-    bool   is_chokepoint   = false;  // straits: high trade significance
+    float length_km = 0.0f;         // rivers, coastlines, mountain ranges
+    float area_km2 = 0.0f;          // basins, deserts, lakes, plains
+    float peak_elevation_m = 0.0f;  // mountain ranges; 0.0 for others
+    bool is_navigable = false;      // rivers: can goods travel by barge?
+    bool is_disputed = false;       // spans a national border; diplomatic context
+    bool is_chokepoint = false;     // straits: high trade significance
 };
 
 // ---------------------------------------------------------------------------
@@ -352,18 +365,18 @@ enum class HistoricalEventType : uint16_t {
 struct HistoricalEvent {
     HistoricalEventType type;
     int32_t years_before_game_start = 0;  // negative = years before 2000
-    std::string headline;                  // one sentence: what happened
-    std::string description;               // 2-4 sentences: context and detail
-    float magnitude          = 0.5f;       // 0.0-1.0; scale of the event
-    std::string lasting_effect;            // one sentence: what this explains about now
-    bool has_living_memory   = false;      // within ~80 years; NPC memory can carry this
+    std::string headline;                 // one sentence: what happened
+    std::string description;              // 2-4 sentences: context and detail
+    float magnitude = 0.5f;               // 0.0-1.0; scale of the event
+    std::string lasting_effect;           // one sentence: what this explains about now
+    bool has_living_memory = false;       // within ~80 years; NPC memory can carry this
 };
 
 // ---------------------------------------------------------------------------
 // ProvinceHistory — WorldGen v0.18 Stage 10.2
 // ---------------------------------------------------------------------------
 struct ProvinceHistory {
-    std::vector<HistoricalEvent> events;  // chronological; 2-8 per province
+    std::vector<HistoricalEvent> events;   // chronological; 2-8 per province
     std::string summary;                   // 3-5 sentences; shown in Geographic Encyclopedia
     std::string current_character;         // one sentence; the feel of the place right now
     std::string province_archetype_label;  // one of 24 archetype labels per §10.0 taxonomy
@@ -376,17 +389,17 @@ struct ProvinceHistory {
 // economic consequences. Seeded from HistoricalEvents that qualify.
 struct PreGameEvent {
     HistoricalEventType type;
-    int32_t  years_before_start = 0;     // 1–40 years before January 2000
-    H3Index  epicenter_province = 0;
+    int32_t years_before_start = 0;  // 1–40 years before January 2000
+    H3Index epicenter_province = 0;
     std::vector<H3Index> affected_provinces;
-    float    magnitude          = 0.5f;
+    float magnitude = 0.5f;
     std::string description;
 
     // Active economic effects at game start:
-    float  infrastructure_damage   = 0.0f;  // 0.0–1.0 reduction still present
-    float  population_displacement = 0.0f;  // fraction displaced or lost
-    bool   has_active_claim        = false;  // territorial claim still contested
-    bool   has_living_witnesses    = false;  // NPC memory entries seeded
+    float infrastructure_damage = 0.0f;    // 0.0–1.0 reduction still present
+    float population_displacement = 0.0f;  // fraction displaced or lost
+    bool has_active_claim = false;         // territorial claim still contested
+    bool has_living_witnesses = false;     // NPC memory entries seeded
 };
 
 // ---------------------------------------------------------------------------
@@ -413,9 +426,9 @@ struct LoadingCommentary {
 // CommentaryDepth — WorldGen v0.18 Stage 10.6
 // ---------------------------------------------------------------------------
 enum class CommentaryDepth : uint8_t {
-    none    = 0,  // skip Stage 10 entirely
+    none = 0,     // skip Stage 10 entirely
     minimal = 1,  // sidebar facts + current_character only
-    full    = 2,  // complete ProvinceHistory, PreGameEvent, NamedFeature
+    full = 2,     // complete ProvinceHistory, PreGameEvent, NamedFeature
 };
 
 // ---------------------------------------------------------------------------
@@ -445,30 +458,30 @@ enum class HydrologyMode : uint8_t {
 // from this struct instead. V1 uses Earth-analog defaults; EX extends to
 // Mars, super-Earths, moons. Costs nothing to carry in V1.
 struct PlanetaryParameters {
-    std::string  body_name    = "Earth-analog";
-    BodyType     body_type    = BodyType::Terrestrial;
+    std::string body_name = "Earth-analog";
+    BodyType body_type = BodyType::Terrestrial;
 
     // Gravity
-    float surface_gravity_ms2    = 9.81f;   // m/s²; Earth=9.81; Mars=3.72
-    float radius_km              = 6371.0f;
-    float escape_velocity_kms    = 11.2f;   // derived: sqrt(2 × g × r)
+    float surface_gravity_ms2 = 9.81f;  // m/s²; Earth=9.81; Mars=3.72
+    float radius_km = 6371.0f;
+    float escape_velocity_kms = 11.2f;  // derived: sqrt(2 × g × r)
 
     // Atmosphere
-    float surface_pressure_kpa       = 101.3f;  // Earth=101.3; Mars=0.6
-    float atmospheric_density_kgm3   = 1.225f;  // surface; Earth=1.225
-    float atmospheric_scale_height_km = 8.5f;   // derived: kT/(m_air×g)
+    float surface_pressure_kpa = 101.3f;       // Earth=101.3; Mars=0.6
+    float atmospheric_density_kgm3 = 1.225f;   // surface; Earth=1.225
+    float atmospheric_scale_height_km = 8.5f;  // derived: kT/(m_air×g)
 
     // Climate drivers
-    float axial_tilt_degrees     = 23.4f;   // Earth=23.4; affects seasonality
-    float rotation_period_hours  = 24.0f;   // Earth=24.0; slow → weak Coriolis
-    float solar_distance_au      = 1.0f;    // Earth=1.0; Mars=1.52
-    float solar_constant_wm2     = 1361.0f; // derived: 1361 / distance²
-    float magnetic_field_strength = 1.0f;   // 0.0–1.0 normalized; Earth=1.0
+    float axial_tilt_degrees = 23.4f;      // Earth=23.4; affects seasonality
+    float rotation_period_hours = 24.0f;   // Earth=24.0; slow → weak Coriolis
+    float solar_distance_au = 1.0f;        // Earth=1.0; Mars=1.52
+    float solar_constant_wm2 = 1361.0f;    // derived: 1361 / distance²
+    float magnetic_field_strength = 1.0f;  // 0.0–1.0 normalized; Earth=1.0
 
     // Geology
-    float planet_age_gyr         = 4.6f;    // SCENARIO INPUT; root of age-dependent physics
-    float mantle_heat_flux       = 0.065f;  // DERIVED at Stage 1 init from planet_age_gyr
-    float crustal_thickness_km   = 35.0f;   // thicker = less tectonic activity
+    float planet_age_gyr = 4.6f;         // SCENARIO INPUT; root of age-dependent physics
+    float mantle_heat_flux = 0.065f;     // DERIVED at Stage 1 init from planet_age_gyr
+    float crustal_thickness_km = 35.0f;  // thicker = less tectonic activity
 
     // Pipeline control
     HydrologyMode hydrology_mode = HydrologyMode::Active;
@@ -500,15 +513,19 @@ struct GeographyProfile {
     float area_km2;
 
     // Hydrology fields (Stage 3 — WorldGen v0.18; static after world generation)
-    bool  is_endorheic       = false;  // closed drainage basin; no ocean outlet; salt flats/inland lakes
-    bool  is_delta           = false;  // major river delta at coast; high ag, high flood, moderate port
-    bool  snowmelt_fed       = false;  // river_access includes significant snowmelt from upstream mountains
-    bool  has_alluvial_fan   = false;  // sediment deposit at mountain-plain transition; groundwater + ag bonus
-    bool  has_artesian_spring = false; // pressurised aquifer vents to surface; oasis mechanism
-    bool  is_oasis           = false;  // desert province with spring-fed settlement
-    float groundwater_reserve = 0.0f;  // 0.0-1.0; aquifer potential; alluvial fans and floodplains highest
-    float snowpack_contribution = 0.0f; // mm water equivalent held as seasonal snowpack; 0 below snowline
-    float spring_flow_index  = 0.0f;   // 0.0-1.0; artesian spring output; enables oasis settlement
+    bool is_endorheic = false;  // closed drainage basin; no ocean outlet; salt flats/inland lakes
+    bool is_delta = false;      // major river delta at coast; high ag, high flood, moderate port
+    bool snowmelt_fed =
+        false;  // river_access includes significant snowmelt from upstream mountains
+    bool has_alluvial_fan =
+        false;  // sediment deposit at mountain-plain transition; groundwater + ag bonus
+    bool has_artesian_spring = false;  // pressurised aquifer vents to surface; oasis mechanism
+    bool is_oasis = false;             // desert province with spring-fed settlement
+    float groundwater_reserve =
+        0.0f;  // 0.0-1.0; aquifer potential; alluvial fans and floodplains highest
+    float snowpack_contribution =
+        0.0f;  // mm water equivalent held as seasonal snowpack; 0 below snowline
+    float spring_flow_index = 0.0f;  // 0.0-1.0; artesian spring output; enables oasis settlement
     RiverFlowRegime river_flow_regime = RiverFlowRegime::None;
 };
 
@@ -531,12 +548,15 @@ struct ClimateProfile {
                                    // (WorkType::climate_downstream_batch)
 
     // Atmosphere fields (Stage 4 — WorldGen v0.18; static after world generation)
-    float continentality           = 0.0f;  // 0.0 (fully oceanic) to 1.0 (deep continental interior);
-                                             // derived from distance-to-coast proxy; drives precip baseline
-    float enso_susceptibility      = 0.0f;  // 0.0-1.0; how much ENSO shifts this province's precipitation
-    float geographic_vulnerability = 0.0f;  // 0.0-1.0; climate stress exposure; derived from koppen/coast/elev
-    bool  cold_current_adjacent    = false; // coastal + cold upwelling current; fish bonus + precip suppression
-    bool  is_monsoon               = false; // province in monsoon belt; high seasonality + flood bonus
+    float continentality = 0.0f;  // 0.0 (fully oceanic) to 1.0 (deep continental interior);
+                                  // derived from distance-to-coast proxy; drives precip baseline
+    float enso_susceptibility =
+        0.0f;  // 0.0-1.0; how much ENSO shifts this province's precipitation
+    float geographic_vulnerability =
+        0.0f;  // 0.0-1.0; climate stress exposure; derived from koppen/coast/elev
+    bool cold_current_adjacent =
+        false;                // coastal + cold upwelling current; fish bonus + precip suppression
+    bool is_monsoon = false;  // province in monsoon belt; high seasonality + flood bonus
 };
 
 // ---------------------------------------------------------------------------
@@ -616,12 +636,12 @@ struct RegionConditions {
 // ---------------------------------------------------------------------------
 struct Province {
     // Identity
-    H3Index h3_index;    // canonical spatial identifier (H3 res 4); external-stable
-                         // across saves and used by WorldGen pipeline; O(1) neighbor/
-                         // parent queries. Distinct from id: id is the runtime array
-                         // index in WorldState.provinces for O(1) in-simulation lookups.
-    bool    is_pentagon    = false;  // true for H3's 12 fixed pentagons (5 neighbors, not 6)
-    uint8_t neighbor_count = 6;      // 5 for pentagons, 6 for regular hexagons
+    H3Index h3_index;            // canonical spatial identifier (H3 res 4); external-stable
+                                 // across saves and used by WorldGen pipeline; O(1) neighbor/
+                                 // parent queries. Distinct from id: id is the runtime array
+                                 // index in WorldState.provinces for O(1) in-simulation lookups.
+    bool is_pentagon = false;    // true for H3's 12 fixed pentagons (5 neighbors, not 6)
+    uint8_t neighbor_count = 6;  // 5 for pentagons, 6 for regular hexagons
     uint32_t id;
     std::string fictional_name;
     std::string real_world_reference;  // pipeline internal; in world.json; not shown in UI
@@ -652,12 +672,12 @@ struct Province {
 
     // Tectonic geology (Stage 1 — WorldGen v0.18; static after world generation)
     TectonicContext tectonic_context = TectonicContext::CratonInterior;
-    RockType        rock_type        = RockType::Mixed;
-    GeologyType     geology_type     = GeologyType::GraniteShield;
-    float           tectonic_stress  = 0.1f;  // 0.0-1.0; active boundary intensity;
-                                               // drives hazard probability in random_events module
-    float           plate_age        = 2.5f;  // geological age proxy (1.0 = young, 4.5 = ancient);
-                                               // older crust: more eroded, fewer hydrothermal deposits
+    RockType rock_type = RockType::Mixed;
+    GeologyType geology_type = GeologyType::GraniteShield;
+    float tectonic_stress = 0.1f;  // 0.0-1.0; active boundary intensity;
+                                   // drives hazard probability in random_events module
+    float plate_age = 2.5f;        // geological age proxy (1.0 = young, 4.5 = ancient);
+                                   // older crust: more eroded, fewer hydrothermal deposits
 
     // Terrain flags (Stage 2 derived — WorldGen v0.18; static after world generation)
     bool is_mountain_pass = false;  // high-terrain chokepoint connecting lower-elevation provinces;
@@ -674,57 +694,57 @@ struct Province {
                                   // hold: (1) arctic_drilling tech researched, AND (2)
                                   // climate_stress_current > permafrost_thaw_threshold (0.40).
                                   // agricultural_productivity reduced by ~60% at world gen.
-    bool has_estuary    = false;  // tidal mixing zone where river meets sea; sheltered water;
+    bool has_estuary = false;     // tidal mixing zone where river meets sea; sheltered water;
                                   // elevated port_capacity (0.55–0.75); fisheries bonus.
                                   // Detected: coastal + high river_access + moderate terrain.
-    bool has_ria_coast  = false;  // drowned river valleys creating natural harbours; requires
+    bool has_ria_coast = false;   // drowned river valleys creating natural harbours; requires
                                   // coastal + moderate roughness + low latitude (non-glacial).
-                                  // Elevated port_capacity (0.70–0.90); multiple sheltered inlets.
-    bool has_fjord      = false;  // high-relief glacially-carved coastline; requires
+                                  // Elevated port_capacity (0.70-0.90); multiple sheltered inlets.
+    bool has_fjord = false;       // high-relief glacially-carved coastline; requires
                                   // !is_landlocked, coastal_length_km > 100, terrain_roughness
                                   // > 0.55, latitude > 50°. Maritime ProvinceLinks gain
                                   // +0.15 transit_terrain_cost (difficult navigation in
                                   // confined fjord channels). Scenic appeal; tourism bonus.
-    bool is_atoll       = false;  // subsided volcanic island with coral reef ring; HotSpot +
+    bool is_atoll = false;        // subsided volcanic island with coral reef ring; HotSpot +
                                   // low elevation + tropical. Zero ag_productivity; elevated
                                   // fish biomass; moderate lagoon port; very low infrastructure.
 
     // Badlands (Stage 7 — WorldGen v0.18)
-    bool has_badlands   = false;  // eroded soft sedimentary rock in arid climate; zero arable
-                                  // land; elevated concealment; archaeological/fossil value.
+    bool has_badlands = false;  // eroded soft sedimentary rock in arid climate; zero arable
+                                // land; elevated concealment; archaeological/fossil value.
     float facility_concealment_bonus = 0.0f;  // 0.0-1.0; additive to facility concealment checks;
                                               // badlands = 0.30, karst adds separately.
 
     // Impact craters (Stage 7 — WorldGen v0.18)
-    bool  has_impact_crater     = false;  // province contains a preserved impact structure
+    bool has_impact_crater = false;          // province contains a preserved impact structure
     float impact_crater_diameter_km = 0.0f;  // 0 if no crater; otherwise 1-300 km
-    float impact_mineral_signal = 0.0f;  // 0.0-1.0; boosts PGM/nickel seeding probability
+    float impact_mineral_signal = 0.0f;      // 0.0-1.0; boosts PGM/nickel seeding probability
 
     // Glacial history (Stage 7 — WorldGen v0.18)
-    bool  has_loess         = false;  // windblown silt from glacial grinding; ag bonus
-    bool  is_glacial_scoured = false;  // continental ice sheet scoured terrain; many lakes,
-                                       // thin soils, exposed ancient minerals (Canadian Shield)
-    bool  is_salt_flat       = false;  // endorheic + arid; evaporite surface; lithium/potash/salt
+    bool has_loess = false;           // windblown silt from glacial grinding; ag bonus
+    bool is_glacial_scoured = false;  // continental ice sheet scoured terrain; many lakes,
+                                      // thin soils, exposed ancient minerals (Canadian Shield)
+    bool is_salt_flat = false;        // endorheic + arid; evaporite surface; lithium/potash/salt
 
     // Fisheries (Stage 6 — WorldGen v0.18; current_stock updated at runtime)
     FisheriesProfile fisheries;
 
     // Nation formation fields (Stage 9.5 — WorldGen v0.18; static after world generation)
-    int32_t  border_change_count = 0;            // times province changed nation in pre-game 150-year
-                                                  // window; 0 = stable core; max 6; drives Stage 10.2
-                                                  // border history event generation
-    float    infra_gap           = 0.0f;          // infrastructure_rating − predicted_from_attractiveness;
-                                                  // positive = colonial legacy (better than geography);
-                                                  // negative = suppressed by instability
-    bool     has_colonial_development_event = false;  // infra_gap > 0.20 + border_change > 0 +
-                                                       // infrastructure > 0.50; Stage 10.2 reads this
+    int32_t border_change_count = 0;  // times province changed nation in pre-game 150-year
+                                      // window; 0 = stable core; max 6; drives Stage 10.2
+                                      // border history event generation
+    float infra_gap = 0.0f;           // infrastructure_rating − predicted_from_attractiveness;
+                                      // positive = colonial legacy (better than geography);
+                                      // negative = suppressed by instability
+    bool has_colonial_development_event = false;  // infra_gap > 0.20 + border_change > 0 +
+                                                  // infrastructure > 0.50; Stage 10.2 reads this
 
     // Nomadic population (Stage 9.6 — WorldGen v0.18; static at V1)
-    float nomadic_population_fraction  = 0.0f;   // 0.0-1.0; fraction of pop that is mobile pastoral
-    float pastoral_carrying_capacity   = 0.0f;   // 0.0-1.0; biome support for mobile grazing
+    float nomadic_population_fraction = 0.0f;  // 0.0-1.0; fraction of pop that is mobile pastoral
+    float pastoral_carrying_capacity = 0.0f;   // 0.0-1.0; biome support for mobile grazing
 
     // Nation capital (Stage 9.7 — WorldGen v0.18; static after world generation)
-    bool is_nation_capital = false;               // highest settlement_attractiveness in nation
+    bool is_nation_capital = false;  // highest settlement_attractiveness in nation
 
     // Province history (Stage 10.2 — WorldGen v0.18; static after world generation)
     ProvinceHistory history;  // archetype classification, historical events, current character
@@ -738,15 +758,16 @@ struct Province {
 
     // Irrigation fields (Stage 5 — WorldGen v0.18; irrigation_potential static,
     // water_availability may change at runtime as groundwater depletes)
-    float irrigation_potential   = 0.0f;  // 0.0-1.0; max ag_productivity achievable with full irrigation
-    float irrigation_cost_index  = 1.0f;  // 0.5-5.0; cost multiplier for irrigated area
-    float salinisation_risk      = 0.0f;  // 0.0-1.0; probability of salt buildup per decade
-    float water_availability     = 0.0f;  // 0.0-1.0; composite of river + groundwater + spring
+    float irrigation_potential =
+        0.0f;  // 0.0-1.0; max ag_productivity achievable with full irrigation
+    float irrigation_cost_index = 1.0f;  // 0.5-5.0; cost multiplier for irrigated area
+    float salinisation_risk = 0.0f;      // 0.0-1.0; probability of salt buildup per decade
+    float water_availability = 0.0f;     // 0.0-1.0; composite of river + groundwater + spring
 
     // Settlement attractiveness fields (Stage 9 — WorldGen v0.18)
     float settlement_attractiveness = 0.0f;  // 0.0-1.0; pre-population attractiveness score
-    float disease_burden            = 0.0f;  // 0.0-1.0; vector-borne disease load; reducible by
-                                              // sanitation/drainage/medical infrastructure at runtime
+    float disease_burden = 0.0f;             // 0.0-1.0; vector-borne disease load; reducible by
+                                  // sanitation/drainage/medical infrastructure at runtime
 
     // Archetype index (WorldGenerator internal; stable for UI/modding access)
     // Maps to WorldGenerator::ProvinceArchetype enum:
@@ -822,11 +843,11 @@ enum class GovernmentType : uint8_t {
 // NationSize — WorldGen v0.18 §9.5
 // ---------------------------------------------------------------------------
 enum class NationSize : uint8_t {
-    Microstate = 0,    // 1–3 provinces; city-states, small island nations
-    Small,             // 4–12 provinces
-    Medium,            // 13–40 provinces
-    Large,             // 41–120 provinces
-    Continental,       // > 120 provinces; superstates; rare
+    Microstate = 0,  // 1–3 provinces; city-states, small island nations
+    Small,           // 4–12 provinces
+    Medium,          // 13–40 provinces
+    Large,           // 41–120 provinces
+    Continental,     // > 120 provinces; superstates; rare
 };
 
 // ---------------------------------------------------------------------------
@@ -910,13 +931,13 @@ struct Nation {
                                                      // (simplified monthly update; see Section 20)
 
     // --- WorldGen v0.18 §9.5 nation formation fields ---
-    uint32_t capital_province_id = 0;          // set in §9.7; highest attractiveness province
-    std::string language_family_id;            // set in §9.5.3; references language family
-    std::string secondary_language_id;         // optional; bilingual border nations; "" if none
-    float gdp_index           = 0.5f;          // 0.0-1.0; aggregated from province fields
-    float governance_quality  = 0.5f;          // 0.0-1.0; seeded from mean infrastructure ± variance
-    NationSize size_class     = NationSize::Small;  // derived from province_ids.size()
-    bool is_colonial_power    = false;         // true if ≥1 province has colonial development event
+    uint32_t capital_province_id = 0;   // set in §9.7; highest attractiveness province
+    std::string language_family_id;     // set in §9.5.3; references language family
+    std::string secondary_language_id;  // optional; bilingual border nations; "" if none
+    float gdp_index = 0.5f;             // 0.0-1.0; aggregated from province fields
+    float governance_quality = 0.5f;    // 0.0-1.0; seeded from mean infrastructure ± variance
+    NationSize size_class = NationSize::Small;  // derived from province_ids.size()
+    bool is_colonial_power = false;  // true if ≥1 province has colonial development event
 };
 
 }  // namespace econlife

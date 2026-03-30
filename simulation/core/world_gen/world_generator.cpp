@@ -11,11 +11,10 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
-
-#include <nlohmann/json.hpp>
 
 #include "core/world_gen/facility_generator.h"
 #include "core/world_gen/h3_utils.h"
@@ -48,7 +47,8 @@ static const char* province_name_suffixes[] = {
 
 bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGeneratorConfig& out) {
     std::ifstream file(path);
-    if (!file.is_open()) return false;
+    if (!file.is_open())
+        return false;
 
     using json = nlohmann::json;
     json root;
@@ -61,17 +61,28 @@ bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGenerato
     // --- world_generation section ---
     if (root.contains("world_generation")) {
         const auto& wg = root["world_generation"];
-        if (wg.contains("seed")) out.seed = wg["seed"].get<uint64_t>();
-        if (wg.contains("province_count")) out.province_count = wg["province_count"].get<uint32_t>();
-        if (wg.contains("tectonic_plate_count")) out.tectonic_plate_count = wg["tectonic_plate_count"].get<uint32_t>();
-        if (wg.contains("landmass_fraction")) out.landmass_fraction = wg["landmass_fraction"].get<float>();
-        if (wg.contains("climate_model")) out.climate_model = wg["climate_model"].get<std::string>();
-        if (wg.contains("prevailing_wind_direction")) out.prevailing_wind_direction = wg["prevailing_wind_direction"].get<std::string>();
-        if (wg.contains("resource_abundance_scale")) out.resource_abundance_scale = wg["resource_abundance_scale"].get<float>();
-        if (wg.contains("archipelago_probability")) out.archipelago_probability = wg["archipelago_probability"].get<float>();
-        if (wg.contains("mountain_coverage_target")) out.mountain_coverage_target = wg["mountain_coverage_target"].get<float>();
-        if (wg.contains("glaciation_intensity")) out.glaciation_intensity = wg["glaciation_intensity"].get<float>();
-        if (wg.contains("quantity_scale_factor")) out.quantity_scale_factor = wg["quantity_scale_factor"].get<float>();
+        if (wg.contains("seed"))
+            out.seed = wg["seed"].get<uint64_t>();
+        if (wg.contains("province_count"))
+            out.province_count = wg["province_count"].get<uint32_t>();
+        if (wg.contains("tectonic_plate_count"))
+            out.tectonic_plate_count = wg["tectonic_plate_count"].get<uint32_t>();
+        if (wg.contains("landmass_fraction"))
+            out.landmass_fraction = wg["landmass_fraction"].get<float>();
+        if (wg.contains("climate_model"))
+            out.climate_model = wg["climate_model"].get<std::string>();
+        if (wg.contains("prevailing_wind_direction"))
+            out.prevailing_wind_direction = wg["prevailing_wind_direction"].get<std::string>();
+        if (wg.contains("resource_abundance_scale"))
+            out.resource_abundance_scale = wg["resource_abundance_scale"].get<float>();
+        if (wg.contains("archipelago_probability"))
+            out.archipelago_probability = wg["archipelago_probability"].get<float>();
+        if (wg.contains("mountain_coverage_target"))
+            out.mountain_coverage_target = wg["mountain_coverage_target"].get<float>();
+        if (wg.contains("glaciation_intensity"))
+            out.glaciation_intensity = wg["glaciation_intensity"].get<float>();
+        if (wg.contains("quantity_scale_factor"))
+            out.quantity_scale_factor = wg["quantity_scale_factor"].get<float>();
         if (wg.contains("raster_resolution_override")) {
             if (wg["raster_resolution_override"].is_null()) {
                 out.raster_resolution_override = -1;
@@ -81,44 +92,65 @@ bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGenerato
         }
         if (wg.contains("commentary_depth")) {
             std::string depth = wg["commentary_depth"].get<std::string>();
-            if (depth == "none") out.commentary_depth = CommentaryDepth::none;
-            else if (depth == "minimal") out.commentary_depth = CommentaryDepth::minimal;
-            else out.commentary_depth = CommentaryDepth::full;
+            if (depth == "none")
+                out.commentary_depth = CommentaryDepth::none;
+            else if (depth == "minimal")
+                out.commentary_depth = CommentaryDepth::minimal;
+            else
+                out.commentary_depth = CommentaryDepth::full;
         }
-        if (wg.contains("planetary_body")) out.planetary_body_ref = wg["planetary_body"].get<std::string>();
+        if (wg.contains("planetary_body"))
+            out.planetary_body_ref = wg["planetary_body"].get<std::string>();
     }
 
     // --- planetary_bodies section ---
     if (root.contains("planetary_bodies") && root["planetary_bodies"].is_array()) {
         for (const auto& body : root["planetary_bodies"]) {
             std::string body_id;
-            if (body.contains("id")) body_id = body["id"].get<std::string>();
+            if (body.contains("id"))
+                body_id = body["id"].get<std::string>();
             // Match the referenced planetary body.
-            if (body_id != out.planetary_body_ref) continue;
+            if (body_id != out.planetary_body_ref)
+                continue;
 
             auto& pp = out.planetary_params;
-            if (body.contains("body_name")) pp.body_name = body["body_name"].get<std::string>();
+            if (body.contains("body_name"))
+                pp.body_name = body["body_name"].get<std::string>();
             if (body.contains("body_type")) {
                 std::string bt = body["body_type"].get<std::string>();
-                if (bt == "IcyMoon") pp.body_type = BodyType::IcyMoon;
-                else if (bt == "Asteroid") pp.body_type = BodyType::Asteroid;
-                else if (bt == "SpaceStation") pp.body_type = BodyType::SpaceStation;
-                else pp.body_type = BodyType::Terrestrial;
+                if (bt == "IcyMoon")
+                    pp.body_type = BodyType::IcyMoon;
+                else if (bt == "Asteroid")
+                    pp.body_type = BodyType::Asteroid;
+                else if (bt == "SpaceStation")
+                    pp.body_type = BodyType::SpaceStation;
+                else
+                    pp.body_type = BodyType::Terrestrial;
             }
-            if (body.contains("radius_km")) pp.radius_km = body["radius_km"].get<float>();
-            if (body.contains("surface_gravity_ms2")) pp.surface_gravity_ms2 = body["surface_gravity_ms2"].get<float>();
-            if (body.contains("surface_pressure_kpa")) pp.surface_pressure_kpa = body["surface_pressure_kpa"].get<float>();
-            if (body.contains("atmospheric_density_kgm3")) pp.atmospheric_density_kgm3 = body["atmospheric_density_kgm3"].get<float>();
-            if (body.contains("axial_tilt_degrees")) pp.axial_tilt_degrees = body["axial_tilt_degrees"].get<float>();
-            if (body.contains("rotation_period_hours")) pp.rotation_period_hours = body["rotation_period_hours"].get<float>();
-            if (body.contains("solar_distance_au")) pp.solar_distance_au = body["solar_distance_au"].get<float>();
-            if (body.contains("magnetic_field_strength")) pp.magnetic_field_strength = body["magnetic_field_strength"].get<float>();
-            if (body.contains("planet_age_gyr")) pp.planet_age_gyr = body["planet_age_gyr"].get<float>();
-            if (body.contains("crustal_thickness_km")) pp.crustal_thickness_km = body["crustal_thickness_km"].get<float>();
+            if (body.contains("radius_km"))
+                pp.radius_km = body["radius_km"].get<float>();
+            if (body.contains("surface_gravity_ms2"))
+                pp.surface_gravity_ms2 = body["surface_gravity_ms2"].get<float>();
+            if (body.contains("surface_pressure_kpa"))
+                pp.surface_pressure_kpa = body["surface_pressure_kpa"].get<float>();
+            if (body.contains("atmospheric_density_kgm3"))
+                pp.atmospheric_density_kgm3 = body["atmospheric_density_kgm3"].get<float>();
+            if (body.contains("axial_tilt_degrees"))
+                pp.axial_tilt_degrees = body["axial_tilt_degrees"].get<float>();
+            if (body.contains("rotation_period_hours"))
+                pp.rotation_period_hours = body["rotation_period_hours"].get<float>();
+            if (body.contains("solar_distance_au"))
+                pp.solar_distance_au = body["solar_distance_au"].get<float>();
+            if (body.contains("magnetic_field_strength"))
+                pp.magnetic_field_strength = body["magnetic_field_strength"].get<float>();
+            if (body.contains("planet_age_gyr"))
+                pp.planet_age_gyr = body["planet_age_gyr"].get<float>();
+            if (body.contains("crustal_thickness_km"))
+                pp.crustal_thickness_km = body["crustal_thickness_km"].get<float>();
 
             // Derive computed fields.
-            pp.escape_velocity_kms = std::sqrt(
-                2.0f * pp.surface_gravity_ms2 * pp.radius_km * 1000.0f) / 1000.0f;
+            pp.escape_velocity_kms =
+                std::sqrt(2.0f * pp.surface_gravity_ms2 * pp.radius_km * 1000.0f) / 1000.0f;
             pp.solar_constant_wm2 = 1361.0f / (pp.solar_distance_au * pp.solar_distance_au);
 
             // Derive hydrology mode from pressure/gravity.
@@ -233,7 +265,8 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
         facility_type_catalog.load_from_csv(config.facility_types_filepath);
     }
     if (recipe_catalog.size() > 0 && facility_type_catalog.size() > 0) {
-        FacilityGenerator::create_facilities(world, rng, recipe_catalog, facility_type_catalog, config);
+        FacilityGenerator::create_facilities(world, rng, recipe_catalog, facility_type_catalog,
+                                             config);
     }
 
     // Store loaded recipes in WorldState for production module access.
@@ -296,15 +329,12 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
             for (auto& prov : world.provinces) {
                 prov.history.province_archetype_label = classify_province_archetype(prov);
                 prov.history.current_character =
-                    "A " + prov.history.province_archetype_label +
-                    " province defined by its " +
-                    (prov.infrastructure_rating > 0.60f
-                         ? "developed infrastructure"
-                         : "natural landscape") +
+                    "A " + prov.history.province_archetype_label + " province defined by its " +
+                    (prov.infrastructure_rating > 0.60f ? "developed infrastructure"
+                                                        : "natural landscape") +
                     " and " +
-                    (prov.agricultural_productivity > 0.50f
-                         ? "productive agricultural base."
-                         : "extractive or service economy.");
+                    (prov.agricultural_productivity > 0.50f ? "productive agricultural base."
+                                                            : "extractive or service economy.");
             }
         }
 
@@ -645,8 +675,8 @@ void WorldGenerator::create_provinces(WorldState& world, DeterministicRNG& rng,
     for (uint32_t p = 0; p < config.province_count; ++p) {
         Province province{};
         province.id = p;
-        province.h3_index      = h3_cells[p];
-        province.is_pentagon   = h3_utils::is_pentagon(h3_cells[p]);
+        province.h3_index = h3_cells[p];
+        province.is_pentagon = h3_utils::is_pentagon(h3_cells[p]);
         province.neighbor_count = province.is_pentagon ? 5 : 6;
         world.h3_province_map[h3_cells[p]] = p;
         province.region_id = p;
@@ -679,8 +709,7 @@ void WorldGenerator::seed_resource_deposits(Province& province, ProvinceArchetyp
                                             DeterministicRNG& rng, float richness) {
     uint32_t deposit_id_base = province.id * 100;
 
-    auto add_deposit = [&](ResourceType type, float qty_base, float quality_base,
-                            uint8_t era = 1) {
+    auto add_deposit = [&](ResourceType type, float qty_base, float quality_base, uint8_t era = 1) {
         ResourceDeposit d{};
         d.id = deposit_id_base++;
         d.type = type;
@@ -789,7 +818,8 @@ void WorldGenerator::create_province_links(WorldState& world) {
         auto neighbors = h3_utils::grid_neighbors(prov.h3_index);
         for (H3Index neighbor_cell : neighbors) {
             auto it = world.h3_province_map.find(neighbor_cell);
-            if (it == world.h3_province_map.end()) continue;
+            if (it == world.h3_province_map.end())
+                continue;
 
             uint32_t neighbor_idx = it->second;
             const auto& neighbor_prov = world.provinces[neighbor_idx];
@@ -797,11 +827,11 @@ void WorldGenerator::create_province_links(WorldState& world) {
             float border_km = h3_utils::shared_border_km(prov.h3_index, neighbor_cell);
 
             ProvinceLink link{};
-            link.neighbor_h3           = neighbor_cell;
-            link.type                  = assign_link_type(prov, neighbor_prov, border_km);
-            link.shared_border_km      = border_km;
-            link.transit_terrain_cost  = 0.2f + prov.geography.terrain_roughness * 0.3f;
-            link.infrastructure_bonus  =
+            link.neighbor_h3 = neighbor_cell;
+            link.type = assign_link_type(prov, neighbor_prov, border_km);
+            link.shared_border_km = border_km;
+            link.transit_terrain_cost = 0.2f + prov.geography.terrain_roughness * 0.3f;
+            link.infrastructure_bonus =
                 std::min(prov.infrastructure_rating, neighbor_prov.infrastructure_rating);
             prov.links.push_back(link);
         }
@@ -897,7 +927,8 @@ void WorldGenerator::create_markets(WorldState& world, DeterministicRNG& rng,
 
 void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
                                      const WorldGeneratorConfig& config) {
-    if (world.provinces.empty()) return;
+    if (world.provinces.empty())
+        return;
 
     // Plate count: 3 for V1 (6 provinces → ~2 per plate); scale for larger worlds.
     const uint32_t plate_count =
@@ -928,10 +959,11 @@ void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
         TectonicPlate pl;
         // Distribute centers across the lat range with random lng placement.
         float lat_fraction = (static_cast<float>(i) + 0.5f) / static_cast<float>(plate_count);
-        pl.center_lat = min_lat + lat_span * lat_fraction +
-                        (rng.next_float() - 0.5f) * lat_span * 0.25f;
+        pl.center_lat =
+            min_lat + lat_span * lat_fraction + (rng.next_float() - 0.5f) * lat_span * 0.25f;
         pl.center_lng = min_lng + lng_span * rng.next_float();
-        pl.is_oceanic = (rng.next_uint(4) == 0);  // 25% oceanic; most land provinces are continental
+        pl.is_oceanic =
+            (rng.next_uint(4) == 0);  // 25% oceanic; most land provinces are continental
         pl.age = 1.0f + rng.next_float() * 3.5f;  // 1.0–4.5 Gyr
         plates.push_back(pl);
     }
@@ -959,9 +991,11 @@ void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
 
         for (const auto& link : prov.links) {
             auto it = world.h3_province_map.find(link.neighbor_h3);
-            if (it == world.h3_province_map.end()) continue;
+            if (it == world.h3_province_map.end())
+                continue;
             uint32_t nb_idx = it->second;
-            if (province_plate[nb_idx] == my_plate) continue;
+            if (province_plate[nb_idx] == my_plate)
+                continue;
 
             // This province is on a plate boundary.
             bool i_am_oceanic = plates[my_plate].is_oceanic;
@@ -988,7 +1022,7 @@ void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
             } else {
                 // Oceanic-oceanic boundary.
                 prov.tectonic_context = rng.next_uint(3) == 0 ? TectonicContext::HotSpot
-                                                               : TectonicContext::TransformFault;
+                                                              : TectonicContext::TransformFault;
             }
             assigned = true;
             break;  // First cross-plate neighbor determines context.
@@ -1001,11 +1035,11 @@ void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
             } else if (plates[my_plate].age > 3.0f) {
                 // Ancient stable continental interior.
                 prov.tectonic_context = rng.next_uint(4) == 0 ? TectonicContext::SedimentaryBasin
-                                                               : TectonicContext::CratonInterior;
+                                                              : TectonicContext::CratonInterior;
             } else {
                 // Younger continental interior — often sedimentary basin.
                 prov.tectonic_context = rng.next_uint(3) == 0 ? TectonicContext::CratonInterior
-                                                               : TectonicContext::SedimentaryBasin;
+                                                              : TectonicContext::SedimentaryBasin;
             }
         }
 
@@ -1042,7 +1076,7 @@ void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
                 break;
             case TectonicContext::ContinentalCollision:
                 prov.geology_type = rng.next_uint(2) == 0 ? GeologyType::MetamorphicCore
-                                                           : GeologyType::CarbonateSequence;
+                                                          : GeologyType::CarbonateSequence;
                 break;
             case TectonicContext::RiftZone:
             case TectonicContext::HotSpot:
@@ -1054,11 +1088,11 @@ void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
             case TectonicContext::PassiveMargin:
             case TectonicContext::SedimentaryBasin:
                 prov.geology_type = rng.next_uint(3) == 0 ? GeologyType::CarbonateSequence
-                                                           : GeologyType::SedimentarySequence;
+                                                          : GeologyType::SedimentarySequence;
                 break;
             case TectonicContext::CratonInterior:
                 prov.geology_type = rng.next_uint(3) == 0 ? GeologyType::GreenstoneBelt
-                                                           : GeologyType::GraniteShield;
+                                                          : GeologyType::GraniteShield;
                 break;
         }
 
@@ -1113,11 +1147,11 @@ void WorldGenerator::generate_plates(WorldState& world, DeterministicRNG& rng,
 // ---------------------------------------------------------------------------
 
 void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG& rng,
-                                             float richness) {
-    uint32_t deposit_id_base = province.id * 100 + 50;  // offset to avoid collision with archetype IDs
+                                            float richness) {
+    uint32_t deposit_id_base =
+        province.id * 100 + 50;  // offset to avoid collision with archetype IDs
 
-    auto add = [&](ResourceType type, float qty_base, float quality_base,
-                    uint8_t era = 1) {
+    auto add = [&](ResourceType type, float qty_base, float quality_base, uint8_t era = 1) {
         ResourceDeposit d{};
         d.id = deposit_id_base++;
         d.type = type;
@@ -1212,20 +1246,14 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
     // Radiogenic decay formulas from design spec §8.2.
     // Uses plate_age as proxy for geological age (per-province).
     // -----------------------------------------------------------------------
-    auto u238_remaining = [](float age) -> float {
-        return std::pow(0.5f, age / 4.47f);
-    };
-    auto u235_remaining = [](float age) -> float {
-        return std::pow(0.5f, age / 0.704f);
-    };
+    auto u238_remaining = [](float age) -> float { return std::pow(0.5f, age / 4.47f); };
+    auto u235_remaining = [](float age) -> float { return std::pow(0.5f, age / 0.704f); };
     auto uranium_age_modifier = [&](float age) -> float {
         float num = 0.993f * u238_remaining(age) + 0.007f * u235_remaining(age);
         float den = 0.993f * 1.0f + 0.007f * 1.0f;  // at age 0
         return num / den;
     };
-    auto thorium_age_modifier = [](float age) -> float {
-        return std::pow(0.5f, age / 14.05f);
-    };
+    auto thorium_age_modifier = [](float age) -> float { return std::pow(0.5f, age / 14.05f); };
     auto geothermal_age_modifier = [](float age) -> float {
         // Mantle heat decays; blend of primordial and radiogenic.
         float primordial = std::exp(-age * 0.15f);
@@ -1235,8 +1263,7 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
         return primordial * 0.60f + radiogenic * 0.40f;
     };
     auto he4_accumulation = [&](float age) -> float {
-        return 8.0f * (1.0f - u238_remaining(age)) +
-               7.0f * (1.0f - u235_remaining(age)) +
+        return 8.0f * (1.0f - u238_remaining(age)) + 7.0f * (1.0f - u235_remaining(age)) +
                6.0f * (1.0f - thorium_age_modifier(age));
     };
 
@@ -1244,7 +1271,8 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
     uint32_t next_deposit_id = 0;
     for (const auto& prov : world.provinces) {
         for (const auto& d : prov.deposits) {
-            if (d.id >= next_deposit_id) next_deposit_id = d.id + 1;
+            if (d.id >= next_deposit_id)
+                next_deposit_id = d.id + 1;
         }
     }
 
@@ -1266,8 +1294,9 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
                     // Helium fraction increases with age (alpha decay accumulation).
                     // Store as quality modifier: higher quality = more helium content.
                     float he_frac = he4_accumulation(age) / 21.0f;  // normalise to ~1.0 at max
-                    deposit.quality = std::min(1.0f,
-                        deposit.quality + he_frac * 0.10f);  // helium upgrades gas quality
+                    deposit.quality =
+                        std::min(1.0f,
+                                 deposit.quality + he_frac * 0.10f);  // helium upgrades gas quality
                     break;
                 }
                 case ResourceType::Copper:
@@ -1275,8 +1304,8 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
                     if (prov.tectonic_context == TectonicContext::CratonInterior ||
                         prov.tectonic_context == TectonicContext::SedimentaryBasin) {
                         // Sediment-hosted copper (Central African Copperbelt analog).
-                        deposit.quality = std::min(1.0f,
-                            deposit.quality + 0.05f + rng.next_float() * 0.15f);
+                        deposit.quality =
+                            std::min(1.0f, deposit.quality + 0.05f + rng.next_float() * 0.15f);
                     }
                     break;
                 default:
@@ -1324,8 +1353,7 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
                 ResourceDeposit pgm{};
                 pgm.id = next_deposit_id++;
                 pgm.type = ResourceType::PlatinumGroupMetals;
-                pgm.quantity = prov.impact_mineral_signal *
-                               (200.0f + rng.next_float() * 600.0f);
+                pgm.quantity = prov.impact_mineral_signal * (200.0f + rng.next_float() * 600.0f);
                 pgm.quality = 0.40f + prov.impact_mineral_signal * 0.40f;
                 pgm.depth = 0.20f + rng.next_float() * 0.30f;
                 pgm.accessibility = 0.30f + rng.next_float() * 0.30f;  // hard to extract
@@ -1348,20 +1376,20 @@ void WorldGenerator::seed_deterministic_resources(WorldState& world, Determinist
     uint32_t next_deposit_id = 0;
     for (const auto& prov : world.provinces) {
         for (const auto& d : prov.deposits) {
-            if (d.id >= next_deposit_id) next_deposit_id = d.id + 1;
+            if (d.id >= next_deposit_id)
+                next_deposit_id = d.id + 1;
         }
     }
 
     for (auto& prov : world.provinces) {
         // Remove pre-existing archetype-seeded SolarPotential and WindPotential
         // deposits — we'll replace them with physics-derived values.
-        prov.deposits.erase(
-            std::remove_if(prov.deposits.begin(), prov.deposits.end(),
-                           [](const ResourceDeposit& d) {
-                               return d.type == ResourceType::SolarPotential ||
-                                      d.type == ResourceType::WindPotential;
-                           }),
-            prov.deposits.end());
+        prov.deposits.erase(std::remove_if(prov.deposits.begin(), prov.deposits.end(),
+                                           [](const ResourceDeposit& d) {
+                                               return d.type == ResourceType::SolarPotential ||
+                                                      d.type == ResourceType::WindPotential;
+                                           }),
+                            prov.deposits.end());
 
         // -----------------------------------------------------------------
         // Sand: marine/river-deposited; highest-volume extracted material.
@@ -1452,29 +1480,66 @@ void WorldGenerator::seed_deterministic_resources(WorldState& world, Determinist
         // Cloud cover penalty by Köppen zone.
         float cloud_penalty = 0.25f;  // default
         switch (kz) {
-            case KoppenZone::Af:  cloud_penalty = 0.35f; break;
-            case KoppenZone::Am:  cloud_penalty = 0.40f; break;
-            case KoppenZone::Aw:  cloud_penalty = 0.15f; break;
-            case KoppenZone::BWh: cloud_penalty = 0.05f; break;
-            case KoppenZone::BWk: cloud_penalty = 0.08f; break;
-            case KoppenZone::BSh: cloud_penalty = 0.10f; break;
-            case KoppenZone::BSk: cloud_penalty = 0.15f; break;
-            case KoppenZone::Cfa: cloud_penalty = 0.25f; break;
-            case KoppenZone::Cfb: cloud_penalty = 0.35f; break;
-            case KoppenZone::Cfc: cloud_penalty = 0.45f; break;
-            case KoppenZone::Csa: cloud_penalty = 0.10f; break;
-            case KoppenZone::Csb: cloud_penalty = 0.12f; break;
-            case KoppenZone::Cwa: cloud_penalty = 0.20f; break;
-            case KoppenZone::Dfa: cloud_penalty = 0.20f; break;
-            case KoppenZone::Dfb: cloud_penalty = 0.25f; break;
-            case KoppenZone::Dfc: cloud_penalty = 0.35f; break;
-            case KoppenZone::Dfd: cloud_penalty = 0.40f; break;
-            case KoppenZone::ET:  cloud_penalty = 0.30f; break;
-            case KoppenZone::EF:  cloud_penalty = 0.25f; break;
+            case KoppenZone::Af:
+                cloud_penalty = 0.35f;
+                break;
+            case KoppenZone::Am:
+                cloud_penalty = 0.40f;
+                break;
+            case KoppenZone::Aw:
+                cloud_penalty = 0.15f;
+                break;
+            case KoppenZone::BWh:
+                cloud_penalty = 0.05f;
+                break;
+            case KoppenZone::BWk:
+                cloud_penalty = 0.08f;
+                break;
+            case KoppenZone::BSh:
+                cloud_penalty = 0.10f;
+                break;
+            case KoppenZone::BSk:
+                cloud_penalty = 0.15f;
+                break;
+            case KoppenZone::Cfa:
+                cloud_penalty = 0.25f;
+                break;
+            case KoppenZone::Cfb:
+                cloud_penalty = 0.35f;
+                break;
+            case KoppenZone::Cfc:
+                cloud_penalty = 0.45f;
+                break;
+            case KoppenZone::Csa:
+                cloud_penalty = 0.10f;
+                break;
+            case KoppenZone::Csb:
+                cloud_penalty = 0.12f;
+                break;
+            case KoppenZone::Cwa:
+                cloud_penalty = 0.20f;
+                break;
+            case KoppenZone::Dfa:
+                cloud_penalty = 0.20f;
+                break;
+            case KoppenZone::Dfb:
+                cloud_penalty = 0.25f;
+                break;
+            case KoppenZone::Dfc:
+                cloud_penalty = 0.35f;
+                break;
+            case KoppenZone::Dfd:
+                cloud_penalty = 0.40f;
+                break;
+            case KoppenZone::ET:
+                cloud_penalty = 0.30f;
+                break;
+            case KoppenZone::EF:
+                cloud_penalty = 0.25f;
+                break;
         }
 
-        float solar_potential = std::max(0.0f, std::min(1.0f,
-            lat_solar - cloud_penalty));
+        float solar_potential = std::max(0.0f, std::min(1.0f, lat_solar - cloud_penalty));
 
         if (solar_potential >= 0.05f) {
             ResourceDeposit solar{};
@@ -1522,8 +1587,7 @@ void WorldGenerator::seed_deterministic_resources(WorldState& world, Determinist
         }
 
         // Elevation bonus: plateaus above boundary layer.
-        if (prov.geography.elevation_avg_m > 1500.0f &&
-            prov.geography.terrain_roughness < 0.35f) {
+        if (prov.geography.elevation_avg_m > 1500.0f && prov.geography.terrain_roughness < 0.35f) {
             terrain_wind = 1.25f;  // plateau: elevated + flat = excellent
         }
 
@@ -1534,8 +1598,9 @@ void WorldGenerator::seed_deterministic_resources(WorldState& world, Determinist
 
         float continent_wind_penalty = prov.climate.continentality * 0.20f;
 
-        float wind_potential = std::max(0.0f, std::min(1.0f,
-            (lat_wind + coastal_wind) * terrain_wind - continent_wind_penalty));
+        float wind_potential = std::max(
+            0.0f,
+            std::min(1.0f, (lat_wind + coastal_wind) * terrain_wind - continent_wind_penalty));
 
         if (wind_potential >= 0.10f) {
             ResourceDeposit wind{};
@@ -1560,7 +1625,8 @@ void WorldGenerator::seed_deterministic_resources(WorldState& world, Determinist
 
 void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rng,
                                          const WorldGeneratorConfig& config) {
-    if (world.provinces.empty()) return;
+    if (world.provinces.empty())
+        return;
 
     const auto& a = config.atmosphere;
     const uint32_t n = static_cast<uint32_t>(world.provinces.size());
@@ -1574,35 +1640,41 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     for (auto& prov : world.provinces) {
         if (!prov.geography.is_landlocked && prov.geography.coastal_length_km > 0.0f) {
             // Coastal province: low continentality.
-            prov.climate.continentality = std::max(0.0f,
-                0.10f - prov.geography.coastal_length_km * 0.0005f);
+            prov.climate.continentality =
+                std::max(0.0f, 0.10f - prov.geography.coastal_length_km * 0.0005f);
         } else {
             // Approximate distance-to-coast via neighbor chain depth.
             // Count hops to nearest coastal province (BFS, max 3 hops).
             float min_dist_proxy = 999.0f;
             for (const auto& link : prov.links) {
                 auto it = world.h3_province_map.find(link.neighbor_h3);
-                if (it == world.h3_province_map.end()) continue;
+                if (it == world.h3_province_map.end())
+                    continue;
                 const auto& nb = world.provinces[it->second];
                 if (!nb.geography.is_landlocked && nb.geography.coastal_length_km > 0.0f) {
                     // Direct neighbor is coastal.
                     float dist = std::sqrt(nb.geography.area_km2);
-                    if (dist < min_dist_proxy) min_dist_proxy = dist;
+                    if (dist < min_dist_proxy)
+                        min_dist_proxy = dist;
                 } else {
                     // Check 2nd-hop neighbors.
                     for (const auto& link2 : nb.links) {
                         auto it2 = world.h3_province_map.find(link2.neighbor_h3);
-                        if (it2 == world.h3_province_map.end()) continue;
+                        if (it2 == world.h3_province_map.end())
+                            continue;
                         const auto& nb2 = world.provinces[it2->second];
-                        if (!nb2.geography.is_landlocked && nb2.geography.coastal_length_km > 0.0f) {
+                        if (!nb2.geography.is_landlocked &&
+                            nb2.geography.coastal_length_km > 0.0f) {
                             float dist = std::sqrt(nb.geography.area_km2) +
                                          std::sqrt(nb2.geography.area_km2);
-                            if (dist < min_dist_proxy) min_dist_proxy = dist;
+                            if (dist < min_dist_proxy)
+                                min_dist_proxy = dist;
                         }
                     }
                 }
             }
-            if (min_dist_proxy > 500.0f) min_dist_proxy = 500.0f;
+            if (min_dist_proxy > 500.0f)
+                min_dist_proxy = 500.0f;
             prov.climate.continentality = 1.0f - 1.0f / (1.0f + min_dist_proxy * a.cont_decay);
         }
     }
@@ -1615,8 +1687,7 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     static constexpr float kLapseRateCPerM = 0.0065f;
     for (auto& prov : world.provinces) {
-        float base_temp = a.temp_equator_c -
-                          std::abs(prov.geography.latitude) * a.temp_lat_rate;
+        float base_temp = a.temp_equator_c - std::abs(prov.geography.latitude) * a.temp_lat_rate;
         float lapse = prov.geography.elevation_avg_m * kLapseRateCPerM;
         float phys_temp = base_temp - lapse;
 
@@ -1625,19 +1696,21 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
         prov.climate.temperature_avg_c = arch_temp * 0.40f + phys_temp * 0.60f;
 
         // Derive min/max from average with seasonal amplitude.
-        float lat_amplitude = std::abs(prov.geography.latitude) * 0.25f;  // higher lat = more seasons
-        float continent_amp = prov.climate.continentality * 8.0f;         // interior = bigger swings
+        float lat_amplitude =
+            std::abs(prov.geography.latitude) * 0.25f;             // higher lat = more seasons
+        float continent_amp = prov.climate.continentality * 8.0f;  // interior = bigger swings
         float amplitude = std::max(5.0f, lat_amplitude + continent_amp);
 
         prov.climate.temperature_min_c = prov.climate.temperature_avg_c - amplitude * 0.6f;
         prov.climate.temperature_max_c = prov.climate.temperature_avg_c + amplitude * 0.4f;
 
         // Clamp to physically plausible extremes.
-        prov.climate.temperature_avg_c = std::max(-50.0f, std::min(50.0f, prov.climate.temperature_avg_c));
-        prov.climate.temperature_min_c = std::max(-65.0f, std::min(prov.climate.temperature_avg_c,
-                                                                     prov.climate.temperature_min_c));
+        prov.climate.temperature_avg_c =
+            std::max(-50.0f, std::min(50.0f, prov.climate.temperature_avg_c));
+        prov.climate.temperature_min_c = std::max(
+            -65.0f, std::min(prov.climate.temperature_avg_c, prov.climate.temperature_min_c));
         prov.climate.temperature_max_c = std::max(prov.climate.temperature_avg_c,
-                                                   std::min(60.0f, prov.climate.temperature_max_c));
+                                                  std::min(60.0f, prov.climate.temperature_max_c));
     }
 
     // -----------------------------------------------------------------------
@@ -1669,7 +1742,8 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
 
         // Blend with archetype (50/50; precipitation is less archetype-bound).
         float arch_precip = prov.climate.precipitation_mm;
-        if (arch_precip < 1.0f) arch_precip = phys_precip;  // unset archetype
+        if (arch_precip < 1.0f)
+            arch_precip = phys_precip;  // unset archetype
         prov.climate.precipitation_mm = arch_precip * 0.50f + phys_precip * 0.50f;
     }
 
@@ -1681,18 +1755,23 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // Determine prevailing wind dx for each province's latitude band.
     auto wind_direction = [](float latitude) -> int {
         float abs_lat = std::abs(latitude);
-        if (abs_lat < 8.0f)  return 0;   // ITCZ: no persistent direction
-        if (abs_lat < 30.0f) return -1;   // Trade winds: E→W (moisture moves west)
-        if (abs_lat < 60.0f) return 1;    // Westerlies: W→E
-        return -1;                         // Polar easterlies
+        if (abs_lat < 8.0f)
+            return 0;  // ITCZ: no persistent direction
+        if (abs_lat < 30.0f)
+            return -1;  // Trade winds: E→W (moisture moves west)
+        if (abs_lat < 60.0f)
+            return 1;  // Westerlies: W→E
+        return -1;     // Polar easterlies
     };
 
     for (uint32_t i = 0; i < n; ++i) {
         auto& prov = world.provinces[i];
-        if (prov.geography.terrain_roughness < 0.40f) continue;  // no significant orographic lift
+        if (prov.geography.terrain_roughness < 0.40f)
+            continue;  // no significant orographic lift
 
         int wind_dx = wind_direction(prov.geography.latitude);
-        if (wind_dx == 0) continue;  // ITCZ: convective, no shadow
+        if (wind_dx == 0)
+            continue;  // ITCZ: convective, no shadow
 
         float lift = prov.geography.terrain_roughness * a.rain_shadow_lift_coeff;
         float shadow_strength = lift * a.rain_shadow_precip_eff;
@@ -1701,19 +1780,20 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
         // Windward side gets orographic enhancement; leeward gets shadow.
         for (const auto& link : prov.links) {
             auto it = world.h3_province_map.find(link.neighbor_h3);
-            if (it == world.h3_province_map.end()) continue;
+            if (it == world.h3_province_map.end())
+                continue;
             auto& nb = world.provinces[it->second];
 
             // Determine if neighbor is downwind (leeward).
             float lng_diff = nb.geography.longitude - prov.geography.longitude;
-            bool is_leeward = (wind_dx > 0 && lng_diff > 0.0f) ||
-                              (wind_dx < 0 && lng_diff < 0.0f);
+            bool is_leeward = (wind_dx > 0 && lng_diff > 0.0f) || (wind_dx < 0 && lng_diff < 0.0f);
 
             if (is_leeward && nb.geography.elevation_avg_m < prov.geography.elevation_avg_m) {
                 // Rain shadow: reduce precipitation.
                 nb.climate.precipitation_mm *= (1.0f - shadow_strength);
                 nb.climate.precipitation_mm = std::max(50.0f, nb.climate.precipitation_mm);
-            } else if (!is_leeward && nb.geography.elevation_avg_m < prov.geography.elevation_avg_m) {
+            } else if (!is_leeward &&
+                       nb.geography.elevation_avg_m < prov.geography.elevation_avg_m) {
                 // Windward enhancement: moisture is lifted and deposited.
                 float windward_bonus = shadow_strength * 0.40f;
                 prov.climate.precipitation_mm *= (1.0f + windward_bonus);
@@ -1727,14 +1807,16 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // Simplified: assign based on latitude band + coastal + archetype hints.
     // -----------------------------------------------------------------------
     for (auto& prov : world.provinces) {
-        if (prov.geography.is_landlocked || prov.geography.coastal_length_km < 20.0f) continue;
+        if (prov.geography.is_landlocked || prov.geography.coastal_length_km < 20.0f)
+            continue;
 
         float abs_lat = std::abs(prov.geography.latitude);
 
         // Cold upwelling currents: subtropical western ocean margins (15-35°).
         // In simplified model: coastal provinces in subtropical dry belt with low precip.
         if (abs_lat >= a.cold_current_lat_min && abs_lat <= a.cold_current_lat_max) {
-            // Probability based on how dry this coastal area already is (dry coast = likely upwelling).
+            // Probability based on how dry this coastal area already is (dry coast = likely
+            // upwelling).
             float dryness = 1.0f - std::min(1.0f, prov.climate.precipitation_mm / 800.0f);
             if (dryness > 0.40f && rng.next_float() < dryness * 0.50f) {
                 prov.climate.cold_current_adjacent = true;
@@ -1763,14 +1845,19 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     for (auto& prov : world.provinces) {
         float abs_lat = std::abs(prov.geography.latitude);
-        if (abs_lat < a.monsoon_lat_min || abs_lat > a.monsoon_lat_max) continue;
-        if (prov.geography.is_landlocked) continue;  // need ocean adjacency
-        if (prov.climate.cold_current_adjacent) continue;  // cold current suppresses monsoon
+        if (abs_lat < a.monsoon_lat_min || abs_lat > a.monsoon_lat_max)
+            continue;
+        if (prov.geography.is_landlocked)
+            continue;  // need ocean adjacency
+        if (prov.climate.cold_current_adjacent)
+            continue;  // cold current suppresses monsoon
 
         // Coastal or near-coastal provinces in monsoon belt.
-        bool near_coast = !prov.geography.is_landlocked &&
-                          (prov.geography.coastal_length_km > 0.0f || prov.climate.continentality < 0.40f);
-        if (!near_coast) continue;
+        bool near_coast =
+            !prov.geography.is_landlocked &&
+            (prov.geography.coastal_length_km > 0.0f || prov.climate.continentality < 0.40f);
+        if (!near_coast)
+            continue;
 
         prov.climate.is_monsoon = true;
         prov.climate.precipitation_mm *= (1.0f + a.monsoon_precip_bonus);
@@ -1807,7 +1894,8 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // Pass 8: Precipitation seasonality for non-monsoon provinces.
     // -----------------------------------------------------------------------
     for (auto& prov : world.provinces) {
-        if (prov.climate.is_monsoon) continue;  // already set in monsoon pass
+        if (prov.climate.is_monsoon)
+            continue;  // already set in monsoon pass
 
         float abs_lat = std::abs(prov.geography.latitude);
         if (abs_lat < 10.0f) {
@@ -1834,8 +1922,10 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     auto classify_koppen = [](float temp_avg, float precip_mm, float seasonality) -> KoppenZone {
         // Polar
-        if (temp_avg < -10.0f) return KoppenZone::EF;
-        if (temp_avg < 0.0f)   return KoppenZone::ET;
+        if (temp_avg < -10.0f)
+            return KoppenZone::EF;
+        if (temp_avg < 0.0f)
+            return KoppenZone::ET;
 
         // Hot desert / steppe
         if (precip_mm < 250.0f) {
@@ -1847,8 +1937,10 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
 
         // Tropical (warm year-round + wet)
         if (temp_avg > 22.0f && precip_mm > 1500.0f) {
-            if (seasonality < 0.30f) return KoppenZone::Af;
-            if (seasonality < 0.60f) return KoppenZone::Am;
+            if (seasonality < 0.30f)
+                return KoppenZone::Af;
+            if (seasonality < 0.60f)
+                return KoppenZone::Am;
             return KoppenZone::Aw;
         }
         if (temp_avg > 20.0f && precip_mm > 1000.0f) {
@@ -1857,7 +1949,8 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
 
         // Continental (cold winters)
         if (temp_avg < 5.0f) {
-            if (precip_mm < 400.0f) return KoppenZone::Dfd;
+            if (precip_mm < 400.0f)
+                return KoppenZone::Dfd;
             return temp_avg < -5.0f ? KoppenZone::Dfc : KoppenZone::Dfb;
         }
 
@@ -1872,8 +1965,10 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
         if (temp_avg > 14.0f) {
             return precip_mm > 1000.0f ? KoppenZone::Cfa : KoppenZone::Cfb;
         }
-        if (temp_avg > 8.0f) return KoppenZone::Cfb;
-        if (temp_avg > 3.0f) return KoppenZone::Cfc;
+        if (temp_avg > 8.0f)
+            return KoppenZone::Cfb;
+        if (temp_avg > 3.0f)
+            return KoppenZone::Cfc;
 
         // Continental fallback.
         return temp_avg > 10.0f ? KoppenZone::Dfa : KoppenZone::Dfb;
@@ -1882,18 +1977,21 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // Helper: same major group?
     auto major_group = [](KoppenZone kz) -> uint8_t {
         uint8_t v = static_cast<uint8_t>(kz);
-        if (v <= 2) return 0;   // Tropical
-        if (v <= 6) return 1;   // Arid
-        if (v <= 12) return 2;  // Temperate
-        if (v <= 16) return 3;  // Continental
-        return 4;               // Polar
+        if (v <= 2)
+            return 0;  // Tropical
+        if (v <= 6)
+            return 1;  // Arid
+        if (v <= 12)
+            return 2;  // Temperate
+        if (v <= 16)
+            return 3;  // Continental
+        return 4;      // Polar
     };
 
     for (auto& prov : world.provinces) {
-        KoppenZone physics_kz = classify_koppen(
-            prov.climate.temperature_avg_c,
-            prov.climate.precipitation_mm,
-            prov.climate.precipitation_seasonality);
+        KoppenZone physics_kz =
+            classify_koppen(prov.climate.temperature_avg_c, prov.climate.precipitation_mm,
+                            prov.climate.precipitation_seasonality);
 
         KoppenZone archetype_kz = prov.climate.koppen_zone;
 
@@ -1937,8 +2035,7 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
             base_vuln = 0.30f + rng.next_float() * 0.15f;
         }
         // Subarctic non-coastal
-        else if ((kz == KoppenZone::Dfc || kz == KoppenZone::Dfd) &&
-                 prov.geography.is_landlocked) {
+        else if ((kz == KoppenZone::Dfc || kz == KoppenZone::Dfd) && prov.geography.is_landlocked) {
             base_vuln = 0.25f + rng.next_float() * 0.15f;
         }
         // Temperate oceanic
@@ -1992,7 +2089,8 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
 
 void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rng,
                                          const WorldGeneratorConfig& config) {
-    if (world.provinces.empty()) return;
+    if (world.provinces.empty())
+        return;
 
     const auto& h = config.hydrology;
     const uint32_t n = static_cast<uint32_t>(world.provinces.size());
@@ -2018,7 +2116,8 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
 
         for (const auto& link : prov.links) {
             auto it = world.h3_province_map.find(link.neighbor_h3);
-            if (it == world.h3_province_map.end()) continue;
+            if (it == world.h3_province_map.end())
+                continue;
             uint32_t nb_idx = it->second;
             float nb_elev = world.provinces[nb_idx].geography.elevation_avg_m;
             if (nb_elev < lowest_elev) {
@@ -2078,7 +2177,8 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
     // Max catchment for normalisation.
     float max_catchment = 1.0f;
     for (float ca : catchment_area) {
-        if (ca > max_catchment) max_catchment = ca;
+        if (ca > max_catchment)
+            max_catchment = ca;
     }
 
     // -----------------------------------------------------------------------
@@ -2089,13 +2189,12 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
         auto& prov = world.provinces[i];
         float catch_frac = catchment_area[i] / max_catchment;
         float precip_contrib = prov.climate.precipitation_mm * h.precip_river_scale;
-        float hydro_river = std::min(1.0f, catch_frac * h.catchment_river_scale * max_catchment
-                                            + precip_contrib);
+        float hydro_river =
+            std::min(1.0f, catch_frac * h.catchment_river_scale * max_catchment + precip_contrib);
 
         // Blend: keep archetype influence (stability) while adding hydrology signal.
         float archetype_river = prov.geography.river_access;
-        prov.geography.river_access = std::min(1.0f,
-            archetype_river * 0.60f + hydro_river * 0.40f);
+        prov.geography.river_access = std::min(1.0f, archetype_river * 0.60f + hydro_river * 0.40f);
     }
 
     // -----------------------------------------------------------------------
@@ -2129,30 +2228,30 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     for (uint32_t i = 0; i < n; ++i) {
         auto& prov = world.provinces[i];
-        float snowline = std::max(0.0f,
-            h.snowline_base_m - std::abs(prov.geography.latitude) * h.snowline_lat_rate);
+        float snowline = std::max(
+            0.0f, h.snowline_base_m - std::abs(prov.geography.latitude) * h.snowline_lat_rate);
 
         if (prov.geography.elevation_avg_m < snowline) {
             prov.geography.snowpack_contribution = 0.0f;
             continue;
         }
 
-        float snow_fraction = std::min(1.0f,
-            (prov.geography.elevation_avg_m - snowline) / 1000.0f);
+        float snow_fraction = std::min(1.0f, (prov.geography.elevation_avg_m - snowline) / 1000.0f);
 
         prov.geography.snowpack_contribution =
             snow_fraction * prov.climate.precipitation_mm * h.snowpack_retention;
 
         // Local snowpack feeds local rivers.
-        prov.geography.river_access = std::min(1.0f,
-            prov.geography.river_access +
-            prov.geography.snowpack_contribution * h.snowmelt_river_scale);
+        prov.geography.river_access =
+            std::min(1.0f, prov.geography.river_access +
+                               prov.geography.snowpack_contribution * h.snowmelt_river_scale);
     }
 
     // Propagate snowmelt downstream through drainage graph (topo order).
     for (uint32_t idx : topo_order) {
         auto& prov = world.provinces[idx];
-        if (prov.geography.snowpack_contribution <= 0.0f) continue;
+        if (prov.geography.snowpack_contribution <= 0.0f)
+            continue;
 
         float melt_volume = prov.geography.snowpack_contribution * prov.geography.area_km2;
 
@@ -2167,12 +2266,14 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
             distance_km += std::sqrt(downstream.geography.area_km2);
             float decay = std::exp(-distance_km / h.melt_decay_km);
 
-            if (decay < 0.01f) break;  // negligible contribution
+            if (decay < 0.01f)
+                break;  // negligible contribution
 
-            float contribution = (melt_volume * decay / std::max(1.0f, downstream.geography.area_km2))
-                                 * h.snowmelt_river_scale;
-            downstream.geography.river_access = std::min(1.0f,
-                downstream.geography.river_access + contribution);
+            float contribution =
+                (melt_volume * decay / std::max(1.0f, downstream.geography.area_km2)) *
+                h.snowmelt_river_scale;
+            downstream.geography.river_access =
+                std::min(1.0f, downstream.geography.river_access + contribution);
             downstream.geography.snowmelt_fed = true;
 
             current = drain_target[static_cast<uint32_t>(current)];
@@ -2190,8 +2291,7 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
         } else if (prov.geography.snowpack_contribution > 100.0f &&
                    prov.geography.elevation_avg_m > 3000.0f) {
             prov.geography.river_flow_regime = RiverFlowRegime::Glacierfed;
-        } else if (prov.geography.snowmelt_fed ||
-                   prov.geography.snowpack_contribution > 50.0f) {
+        } else if (prov.geography.snowmelt_fed || prov.geography.snowpack_contribution > 50.0f) {
             // Perennial if precipitation supports year-round base flow.
             if (prov.climate.precipitation_mm > 400.0f) {
                 prov.geography.river_flow_regime = RiverFlowRegime::SnowmeltPerennial;
@@ -2243,20 +2343,23 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     for (uint32_t i = 0; i < n; ++i) {
         auto& prov = world.provinces[i];
-        if (prov.geography.terrain_roughness > 0.40f) continue;  // fans form on flat terrain
+        if (prov.geography.terrain_roughness > 0.40f)
+            continue;  // fans form on flat terrain
 
         for (const auto& link : prov.links) {
             auto it = world.h3_province_map.find(link.neighbor_h3);
-            if (it == world.h3_province_map.end()) continue;
+            if (it == world.h3_province_map.end())
+                continue;
             const auto& nb = world.provinces[it->second];
 
             if (nb.geography.terrain_roughness > h.fan_roughness_min &&
-                (nb.geography.elevation_avg_m - prov.geography.elevation_avg_m) > h.fan_elev_drop_m) {
+                (nb.geography.elevation_avg_m - prov.geography.elevation_avg_m) >
+                    h.fan_elev_drop_m) {
                 prov.geography.has_alluvial_fan = true;
-                prov.agricultural_productivity = std::min(1.0f,
-                    prov.agricultural_productivity + h.fan_ag_bonus);
-                prov.geography.groundwater_reserve = std::min(1.0f,
-                    prov.geography.groundwater_reserve + h.fan_gw_bonus);
+                prov.agricultural_productivity =
+                    std::min(1.0f, prov.agricultural_productivity + h.fan_ag_bonus);
+                prov.geography.groundwater_reserve =
+                    std::min(1.0f, prov.geography.groundwater_reserve + h.fan_gw_bonus);
                 break;  // one fan is enough
             }
         }
@@ -2268,21 +2371,25 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     for (uint32_t i = 0; i < n; ++i) {
         auto& prov = world.provinces[i];
-        if (prov.geography.is_landlocked) continue;
-        if (prov.geography.coastal_length_km < 10.0f) continue;
+        if (prov.geography.is_landlocked)
+            continue;
+        if (prov.geography.coastal_length_km < 10.0f)
+            continue;
 
         float catch_frac = catchment_area[i] / max_catchment;
-        if (catch_frac < h.delta_catchment_min) continue;
+        if (catch_frac < h.delta_catchment_min)
+            continue;
 
         prov.geography.is_delta = true;
 
         // Delta effects: high ag (natural fertilisation), high flood, moderate port.
         prov.agricultural_productivity = std::max(prov.agricultural_productivity, h.delta_ag_cap);
-        prov.climate.flood_vulnerability = std::max(prov.climate.flood_vulnerability,
-                                                     h.delta_flood_floor);
+        prov.climate.flood_vulnerability =
+            std::max(prov.climate.flood_vulnerability, h.delta_flood_floor);
 
         // Delta ports are shallow (shifting channels, requires dredging).
-        float delta_port = h.delta_port_min + rng.next_float() * (h.delta_port_max - h.delta_port_min);
+        float delta_port =
+            h.delta_port_min + rng.next_float() * (h.delta_port_max - h.delta_port_min);
         prov.geography.port_capacity = std::min(prov.geography.port_capacity, delta_port);
     }
 
@@ -2291,7 +2398,8 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     for (uint32_t i = 0; i < n; ++i) {
         auto& prov = world.provinces[i];
-        if (prov.geography.groundwater_reserve < h.spring_gw_min) continue;
+        if (prov.geography.groundwater_reserve < h.spring_gw_min)
+            continue;
 
         // Check for high-elevation, wet recharge neighbors with permeable rock.
         bool has_recharge_neighbor = false;
@@ -2300,7 +2408,8 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
 
         for (const auto& link : prov.links) {
             auto it = world.h3_province_map.find(link.neighbor_h3);
-            if (it == world.h3_province_map.end()) continue;
+            if (it == world.h3_province_map.end())
+                continue;
             const auto& nb = world.provinces[it->second];
 
             if (nb.geography.elevation_avg_m >
@@ -2313,7 +2422,8 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
             }
         }
 
-        if (!has_recharge_neighbor) continue;
+        if (!has_recharge_neighbor)
+            continue;
 
         // Granite shield has no confining layer — water disperses.
         if (prov.rock_type == RockType::Igneous &&
@@ -2323,15 +2433,14 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
 
         prov.geography.has_artesian_spring = true;
         float mean_recharge_precip = recharge_precip_sum / static_cast<float>(recharge_count);
-        prov.geography.spring_flow_index = std::min(1.0f,
-            prov.geography.groundwater_reserve
-            * (mean_recharge_precip / 1000.0f)
-            * h.artesian_flow_scale);
+        prov.geography.spring_flow_index =
+            std::min(1.0f, prov.geography.groundwater_reserve * (mean_recharge_precip / 1000.0f) *
+                               h.artesian_flow_scale);
 
         // Oasis: desert province with spring.
         KoppenZone kz = prov.climate.koppen_zone;
-        if (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
-            kz == KoppenZone::BSh || kz == KoppenZone::BSk) {
+        if (kz == KoppenZone::BWh || kz == KoppenZone::BWk || kz == KoppenZone::BSh ||
+            kz == KoppenZone::BSk) {
             prov.geography.is_oasis = true;
         }
     }
@@ -2349,20 +2458,19 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
             continue;
         }
 
-        float coast_factor = std::min(1.0f,
-            prov.geography.coastal_length_km / h.port_coast_norm_km);
+        float coast_factor =
+            std::min(1.0f, prov.geography.coastal_length_km / h.port_coast_norm_km);
         float terrain_factor = 1.0f - prov.geography.terrain_roughness * h.port_roughness_penalty;
         float elev_factor = 1.0f - std::min(h.port_elev_max_penalty,
-            prov.geography.elevation_avg_m / h.port_elev_cap_m);
+                                            prov.geography.elevation_avg_m / h.port_elev_cap_m);
         float river_mouth_bonus = prov.geography.river_access * h.port_river_mouth_bonus;
 
-        float geo_port = std::min(1.0f, std::max(0.0f,
-            coast_factor * terrain_factor * elev_factor + river_mouth_bonus));
+        float geo_port = std::min(
+            1.0f, std::max(0.0f, coast_factor * terrain_factor * elev_factor + river_mouth_bonus));
 
         // Blend with archetype value.
         float archetype_port = prov.geography.port_capacity;
-        prov.geography.port_capacity = std::min(1.0f,
-            archetype_port * 0.50f + geo_port * 0.50f);
+        prov.geography.port_capacity = std::min(1.0f, archetype_port * 0.50f + geo_port * 0.50f);
 
         // Island isolation minimum: island must be accessible.
         if (prov.island_isolation && prov.geography.port_capacity < 0.50f) {
@@ -2376,13 +2484,15 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
     uint32_t next_deposit_id = 0;
     for (auto& prov : world.provinces) {
         for (const auto& d : prov.deposits) {
-            if (d.id >= next_deposit_id) next_deposit_id = d.id + 1;
+            if (d.id >= next_deposit_id)
+                next_deposit_id = d.id + 1;
         }
     }
 
     for (uint32_t i = 0; i < n; ++i) {
         auto& prov = world.provinces[i];
-        if (!prov.geography.is_endorheic) continue;
+        if (!prov.geography.is_endorheic)
+            continue;
 
         // Check if province already has lithium.
         bool has_lithium = false;
@@ -2392,7 +2502,8 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
                 break;
             }
         }
-        if (has_lithium) continue;
+        if (has_lithium)
+            continue;
 
         // Probabilistic lithium brine deposit.
         if (rng.next_float() < h.endorheic_lithium_chance) {
@@ -2415,8 +2526,7 @@ void WorldGenerator::calculate_hydrology(WorldState& world, DeterministicRNG& rn
 // Stage 2 derived — Terrain flag detection
 // ===========================================================================
 
-void WorldGenerator::detect_terrain_flags(WorldState& world,
-                                          const WorldGeneratorConfig& config) {
+void WorldGenerator::detect_terrain_flags(WorldState& world, const WorldGeneratorConfig& config) {
     const auto& t = config.terrain;
     for (auto& prov : world.provinces) {
         // Island isolation: no land or river links.
@@ -2440,7 +2550,8 @@ void WorldGenerator::detect_terrain_flags(WorldState& world,
 
             for (const auto& link : prov.links) {
                 auto it = world.h3_province_map.find(link.neighbor_h3);
-                if (it == world.h3_province_map.end()) continue;
+                if (it == world.h3_province_map.end())
+                    continue;
                 const auto& nb = world.provinces[it->second];
                 if (nb.geography.elevation_avg_m < my_elev * t.pass_low_neighbor_fraction) {
                     ++low_neighbor_count;
@@ -2451,7 +2562,8 @@ void WorldGenerator::detect_terrain_flags(WorldState& world,
                 prov.is_mountain_pass = true;
                 for (auto& link : prov.links) {
                     auto it = world.h3_province_map.find(link.neighbor_h3);
-                    if (it == world.h3_province_map.end()) continue;
+                    if (it == world.h3_province_map.end())
+                        continue;
                     const auto& nb = world.provinces[it->second];
                     if (nb.geography.elevation_avg_m < my_elev * t.pass_low_neighbor_fraction) {
                         link.transit_terrain_cost =
@@ -2495,19 +2607,21 @@ void WorldGenerator::seed_economic_geography(WorldState& world,
     const auto& e = config.economy;
     for (auto& prov : world.provinces) {
         // ---- Trade openness from geography ----
-        float geo_openness = prov.geography.port_capacity * e.trade_port_weight
-                           + prov.geography.river_access   * e.trade_river_weight
-                           + prov.infrastructure_rating    * e.trade_infra_weight;
-        if (prov.geography.is_landlocked) geo_openness -= e.trade_landlocked_penalty;
-        if (prov.island_isolation)        geo_openness -= e.trade_island_penalty;
+        float geo_openness = prov.geography.port_capacity * e.trade_port_weight +
+                             prov.geography.river_access * e.trade_river_weight +
+                             prov.infrastructure_rating * e.trade_infra_weight;
+        if (prov.geography.is_landlocked)
+            geo_openness -= e.trade_landlocked_penalty;
+        if (prov.island_isolation)
+            geo_openness -= e.trade_island_penalty;
         geo_openness = std::max(0.08f, std::min(0.85f, geo_openness));
 
         if (prov.trade_openness < 0.01f) {
             prov.trade_openness = geo_openness;
         } else {
-            prov.trade_openness = std::max(0.10f, std::min(0.95f,
-                prov.trade_openness * e.trade_existing_blend +
-                geo_openness        * e.trade_geo_blend));
+            prov.trade_openness =
+                std::max(0.10f, std::min(0.95f, prov.trade_openness * e.trade_existing_blend +
+                                                    geo_openness * e.trade_geo_blend));
         }
 
         // ---- Wildfire vulnerability from climate zone ----
@@ -2555,13 +2669,12 @@ void WorldGenerator::seed_economic_geography(WorldState& world,
             std::max(0.01f, std::min(0.95f, base_wildfire * drought_amp));
 
         // ---- Formal employment rate from infrastructure and governance ----
-        float infra_bonus        = (prov.infrastructure_rating  - 0.50f) * e.employment_infra_scale;
-        float corruption_penalty = prov.political.corruption_index       * e.employment_corruption_scale;
-        float inequality_penalty = prov.conditions.inequality_index      * e.employment_inequality_scale;
+        float infra_bonus = (prov.infrastructure_rating - 0.50f) * e.employment_infra_scale;
+        float corruption_penalty = prov.political.corruption_index * e.employment_corruption_scale;
+        float inequality_penalty = prov.conditions.inequality_index * e.employment_inequality_scale;
         prov.conditions.formal_employment_rate =
-            std::max(0.20f, std::min(0.95f,
-                prov.conditions.formal_employment_rate
-                    + infra_bonus - corruption_penalty - inequality_penalty));
+            std::max(0.20f, std::min(0.95f, prov.conditions.formal_employment_rate + infra_bonus -
+                                                corruption_penalty - inequality_penalty));
     }
 }
 
@@ -2570,7 +2683,7 @@ void WorldGenerator::seed_economic_geography(WorldState& world,
 // ===========================================================================
 
 void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG& rng,
-                                              const WorldGeneratorConfig& config) {
+                                             const WorldGeneratorConfig& config) {
     const auto& s = config.soils;
     for (auto& prov : world.provinces) {
         // ---- Stage 5a: Soil type classification ----
@@ -2695,8 +2808,8 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
 
         // Apply soil fertility to agricultural_productivity (bounded by config).
         prov.agricultural_productivity =
-            std::max(s.ag_min, std::min(s.ag_max,
-                prov.agricultural_productivity * soil_multiplier * climate_soil_mod));
+            std::max(s.ag_min, std::min(s.ag_max, prov.agricultural_productivity * soil_multiplier *
+                                                      climate_soil_mod));
 
         // ---- Stage 6: Biomes — forest coverage from climate zone ----
         // Adjust forest_coverage toward the climate-expected value. Use a blend: 40% climate
@@ -2746,10 +2859,9 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
                 break;
         }
         // Blend: archetype_blend% archetype, climate_blend% climate expectation.
-        prov.geography.forest_coverage =
-            std::max(0.0f, std::min(1.0f,
-                prov.geography.forest_coverage * s.forest_archetype_blend +
-                expected_forest                * s.forest_climate_blend));
+        prov.geography.forest_coverage = std::max(
+            0.0f, std::min(1.0f, prov.geography.forest_coverage * s.forest_archetype_blend +
+                                     expected_forest * s.forest_climate_blend));
 
         // ---- Stage 6: Refine drought/flood vulnerability from climate zone ----
         // Override only if the archetype set a generic value; clamp to reasonable range.
@@ -2758,71 +2870,68 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
         switch (prov.climate.koppen_zone) {
             case KoppenZone::BWh:
                 climate_drought = 0.75f + rng.next_float() * 0.20f;
-                climate_flood   = 0.02f + rng.next_float() * 0.05f;
+                climate_flood = 0.02f + rng.next_float() * 0.05f;
                 break;
             case KoppenZone::BWk:
                 climate_drought = 0.65f + rng.next_float() * 0.20f;
-                climate_flood   = 0.02f + rng.next_float() * 0.05f;
+                climate_flood = 0.02f + rng.next_float() * 0.05f;
                 break;
             case KoppenZone::BSh:
             case KoppenZone::BSk:
                 climate_drought = 0.40f + rng.next_float() * 0.25f;
-                climate_flood   = 0.05f + rng.next_float() * 0.10f;
+                climate_flood = 0.05f + rng.next_float() * 0.10f;
                 break;
             case KoppenZone::Csa:
             case KoppenZone::Csb:
                 climate_drought = 0.30f + rng.next_float() * 0.20f;
-                climate_flood   = 0.08f + rng.next_float() * 0.10f;
+                climate_flood = 0.08f + rng.next_float() * 0.10f;
                 break;
             case KoppenZone::Af:
             case KoppenZone::Am:
                 climate_drought = 0.05f + rng.next_float() * 0.08f;
-                climate_flood   = 0.50f + rng.next_float() * 0.25f;
+                climate_flood = 0.50f + rng.next_float() * 0.25f;
                 break;
             case KoppenZone::Aw:
                 climate_drought = 0.25f + rng.next_float() * 0.20f;
-                climate_flood   = 0.20f + rng.next_float() * 0.20f;
+                climate_flood = 0.20f + rng.next_float() * 0.20f;
                 break;
             case KoppenZone::Dfa:
             case KoppenZone::Dfb:
                 climate_drought = 0.15f + rng.next_float() * 0.15f;
-                climate_flood   = 0.15f + rng.next_float() * 0.15f;
+                climate_flood = 0.15f + rng.next_float() * 0.15f;
                 break;
             case KoppenZone::Dfc:
             case KoppenZone::Dfd:
             case KoppenZone::ET:
                 climate_drought = 0.08f + rng.next_float() * 0.10f;
-                climate_flood   = 0.10f + rng.next_float() * 0.12f;
+                climate_flood = 0.10f + rng.next_float() * 0.12f;
                 break;
             case KoppenZone::EF:
                 climate_drought = 0.02f;
-                climate_flood   = 0.02f;
+                climate_flood = 0.02f;
                 break;
             default:
                 climate_drought = prov.climate.drought_vulnerability;
-                climate_flood   = prov.climate.flood_vulnerability;
+                climate_flood = prov.climate.flood_vulnerability;
                 break;
         }
         // Blend archetype_vuln_blend : climate_vuln_blend with existing values.
-        prov.climate.drought_vulnerability =
-            std::max(0.0f, std::min(1.0f,
-                prov.climate.drought_vulnerability * s.archetype_vuln_blend +
-                climate_drought                    * s.climate_vuln_blend));
-        prov.climate.flood_vulnerability =
-            std::max(0.0f, std::min(1.0f,
-                prov.climate.flood_vulnerability * s.archetype_vuln_blend +
-                climate_flood                    * s.climate_vuln_blend));
+        prov.climate.drought_vulnerability = std::max(
+            0.0f, std::min(1.0f, prov.climate.drought_vulnerability * s.archetype_vuln_blend +
+                                     climate_drought * s.climate_vuln_blend));
+        prov.climate.flood_vulnerability = std::max(
+            0.0f, std::min(1.0f, prov.climate.flood_vulnerability * s.archetype_vuln_blend +
+                                     climate_flood * s.climate_vuln_blend));
 
         // ---- Stage 5c: Irrigation fields ----
         // Water availability composite.
-        prov.water_availability =
-            prov.geography.river_access          * 0.50f +
-            prov.geography.groundwater_reserve   * 0.35f +
-            prov.geography.spring_flow_index     * 0.15f;
+        prov.water_availability = prov.geography.river_access * 0.50f +
+                                  prov.geography.groundwater_reserve * 0.35f +
+                                  prov.geography.spring_flow_index * 0.15f;
 
         // Irrigation potential: maximum ag_productivity achievable with full irrigation.
-        float temp_suit = std::max(0.0f, std::min(1.0f,
-            (prov.climate.temperature_avg_c - 5.0f) / 25.0f));
+        float temp_suit =
+            std::max(0.0f, std::min(1.0f, (prov.climate.temperature_avg_c - 5.0f) / 25.0f));
 
         switch (prov.soil_type) {
             case SoilType::Aridisol:
@@ -2842,8 +2951,7 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
                 prov.irrigation_potential = 0.0f;
                 break;
             default:
-                prov.irrigation_potential = std::min(1.0f,
-                    prov.agricultural_productivity * 1.15f);
+                prov.irrigation_potential = std::min(1.0f, prov.agricultural_productivity * 1.15f);
                 break;
         }
 
@@ -2861,16 +2969,21 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
             water_lift_cost = 1.0f + depth_proxy * 2.0f;
         }
         float scarcity = 1.0f + std::max(0.0f, 0.50f - prov.water_availability) * 4.0f;
-        prov.irrigation_cost_index = std::max(0.5f, std::min(5.0f,
-            terrain_cost * water_lift_cost * scarcity * 0.30f));
+        prov.irrigation_cost_index =
+            std::max(0.5f, std::min(5.0f, terrain_cost * water_lift_cost * scarcity * 0.30f));
 
         // Salinisation risk: endorheic basins + arid climate + poor drainage.
         float salin = 0.0f;
-        if (prov.geography.is_endorheic) salin += 0.30f;
-        if (prov.soil_type == SoilType::Aridisol) salin += 0.25f;
-        if (prov.soil_type == SoilType::Vertisol) salin += 0.10f;
-        if (prov.climate.precipitation_mm < 400.0f) salin += 0.15f;
-        if (prov.geography.terrain_roughness < 0.15f) salin += 0.10f;  // flat = poor drainage
+        if (prov.geography.is_endorheic)
+            salin += 0.30f;
+        if (prov.soil_type == SoilType::Aridisol)
+            salin += 0.25f;
+        if (prov.soil_type == SoilType::Vertisol)
+            salin += 0.10f;
+        if (prov.climate.precipitation_mm < 400.0f)
+            salin += 0.15f;
+        if (prov.geography.terrain_roughness < 0.15f)
+            salin += 0.10f;  // flat = poor drainage
         prov.salinisation_risk = std::min(1.0f, salin);
     }
 }
@@ -2888,9 +3001,7 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
 
         // ---- Permafrost ----
         bool permafrost_condition =
-            (lat > t.permafrost_latitude_min) ||
-            (kz == KoppenZone::ET) ||
-            (kz == KoppenZone::EF);
+            (lat > t.permafrost_latitude_min) || (kz == KoppenZone::ET) || (kz == KoppenZone::EF);
 
         if (permafrost_condition) {
             prov.has_permafrost = true;
@@ -2904,17 +3015,15 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
             }
 
             // Permafrost severely limits agriculture (frozen ground, short growing season).
-            prov.agricultural_productivity =
-                std::max(t.permafrost_ag_floor,
-                         prov.agricultural_productivity * t.permafrost_ag_factor);
+            prov.agricultural_productivity = std::max(
+                t.permafrost_ag_floor, prov.agricultural_productivity * t.permafrost_ag_factor);
         }
 
         // ---- Fjord ----
-        bool fjord_condition =
-            !prov.geography.is_landlocked &&
-            (prov.geography.coastal_length_km > t.fjord_min_coastal_km) &&
-            (prov.geography.terrain_roughness > t.fjord_min_roughness) &&
-            (lat > t.fjord_min_latitude);
+        bool fjord_condition = !prov.geography.is_landlocked &&
+                               (prov.geography.coastal_length_km > t.fjord_min_coastal_km) &&
+                               (prov.geography.terrain_roughness > t.fjord_min_roughness) &&
+                               (lat > t.fjord_min_latitude);
 
         if (fjord_condition) {
             prov.has_fjord = true;
@@ -2929,22 +3038,21 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
 
         // ---- Estuary ----
         // Tidal mixing zone where river meets sea; sheltered water; good port.
-        bool estuary_condition =
-            !prov.geography.is_landlocked &&
-            (prov.geography.river_access > t.estuary_min_river_access) &&
-            (prov.geography.coastal_length_km > t.estuary_min_coastal_km) &&
-            (prov.geography.terrain_roughness < t.estuary_max_roughness) &&
-            !prov.geography.is_delta &&  // deltas and estuaries are distinct
-            !prov.has_fjord;
+        bool estuary_condition = !prov.geography.is_landlocked &&
+                                 (prov.geography.river_access > t.estuary_min_river_access) &&
+                                 (prov.geography.coastal_length_km > t.estuary_min_coastal_km) &&
+                                 (prov.geography.terrain_roughness < t.estuary_max_roughness) &&
+                                 !prov.geography.is_delta &&  // deltas and estuaries are distinct
+                                 !prov.has_fjord;
 
         if (estuary_condition) {
             prov.has_estuary = true;
             // Override port capacity with estuary values.
-            float estuary_port = t.estuary_port_min +
-                (prov.geography.river_access - t.estuary_min_river_access) *
-                (t.estuary_port_max - t.estuary_port_min);
-            prov.geography.port_capacity = std::max(prov.geography.port_capacity,
-                                                     std::min(t.estuary_port_max, estuary_port));
+            float estuary_port =
+                t.estuary_port_min + (prov.geography.river_access - t.estuary_min_river_access) *
+                                         (t.estuary_port_max - t.estuary_port_min);
+            prov.geography.port_capacity =
+                std::max(prov.geography.port_capacity, std::min(t.estuary_port_max, estuary_port));
         }
 
         // ---- Ria coast ----
@@ -2955,38 +3063,37 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
             (prov.geography.terrain_roughness >= t.ria_min_roughness) &&
             (prov.geography.terrain_roughness <= t.ria_max_roughness) &&
             (lat < t.ria_max_latitude) &&  // below glacial line (glacial = fjord instead)
-            !prov.has_fjord &&
-            !prov.has_estuary;
+            !prov.has_fjord && !prov.has_estuary;
 
         if (ria_condition) {
             prov.has_ria_coast = true;
             // Override port capacity with ria values (excellent natural harbours).
-            float ria_port = t.ria_port_min +
-                (prov.geography.terrain_roughness - t.ria_min_roughness) *
-                (t.ria_port_max - t.ria_port_min) / (t.ria_max_roughness - t.ria_min_roughness);
-            prov.geography.port_capacity = std::max(prov.geography.port_capacity,
-                                                     std::min(t.ria_port_max, ria_port));
+            float ria_port =
+                t.ria_port_min + (prov.geography.terrain_roughness - t.ria_min_roughness) *
+                                     (t.ria_port_max - t.ria_port_min) /
+                                     (t.ria_max_roughness - t.ria_min_roughness);
+            prov.geography.port_capacity =
+                std::max(prov.geography.port_capacity, std::min(t.ria_port_max, ria_port));
         }
 
         // ---- Fjord port override ----
         // Fjords have excellent deep-water natural harbours.
         if (prov.has_fjord) {
-            float fjord_port = 0.85f + (prov.geography.terrain_roughness - t.fjord_min_roughness)
-                               * 0.10f / (1.0f - t.fjord_min_roughness);
-            prov.geography.port_capacity = std::max(prov.geography.port_capacity,
-                                                     std::min(0.95f, fjord_port));
+            float fjord_port = 0.85f + (prov.geography.terrain_roughness - t.fjord_min_roughness) *
+                                           0.10f / (1.0f - t.fjord_min_roughness);
+            prov.geography.port_capacity =
+                std::max(prov.geography.port_capacity, std::min(0.95f, fjord_port));
         }
 
         // ---- Badlands ----
         // Eroded soft sedimentary rock in arid climate; spectacular ravine networks.
-        bool badlands_condition =
-            (prov.rock_type == RockType::Sedimentary) &&
-            (prov.geology_type == GeologyType::SedimentarySequence ||
-             prov.geology_type == GeologyType::CarbonateSequence) &&
-            (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
-             kz == KoppenZone::BSh || kz == KoppenZone::BSk) &&
-            (prov.geography.terrain_roughness > 0.55f) &&
-            (prov.geography.elevation_avg_m < 2000.0f);
+        bool badlands_condition = (prov.rock_type == RockType::Sedimentary) &&
+                                  (prov.geology_type == GeologyType::SedimentarySequence ||
+                                   prov.geology_type == GeologyType::CarbonateSequence) &&
+                                  (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
+                                   kz == KoppenZone::BSh || kz == KoppenZone::BSk) &&
+                                  (prov.geography.terrain_roughness > 0.55f) &&
+                                  (prov.geography.elevation_avg_m < 2000.0f);
 
         if (badlands_condition) {
             prov.has_badlands = true;
@@ -3030,14 +3137,15 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
                 } else if (size_roll < 0.90f) {
                     prov.impact_crater_diameter_km = 30.0f + rng.next_float() * 70.0f;  // 30-100 km
                 } else {
-                    prov.impact_crater_diameter_km = 100.0f + rng.next_float() * 200.0f;  // 100-300 km
+                    prov.impact_crater_diameter_km =
+                        100.0f + rng.next_float() * 200.0f;  // 100-300 km
                 }
 
                 // Mineral alteration from impact hydrothermal system.
                 // Larger craters = more alteration; young = better preserved signal.
                 float size_factor = std::min(1.0f, prov.impact_crater_diameter_km / 100.0f);
-                prov.impact_mineral_signal = std::min(1.0f,
-                    size_factor * preservation * (0.50f + rng.next_float() * 0.50f));
+                prov.impact_mineral_signal =
+                    std::min(1.0f, size_factor * preservation * (0.50f + rng.next_float() * 0.50f));
             }
         }
 
@@ -3066,8 +3174,7 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
                 // Thin soils from ice scour.
                 prov.agricultural_productivity = std::min(prov.agricultural_productivity, 0.25f);
                 // Many lakes (fishing, freshwater).
-                prov.geography.river_access = std::min(1.0f,
-                    prov.geography.river_access + 0.15f);
+                prov.geography.river_access = std::min(1.0f, prov.geography.river_access + 0.15f);
             }
 
             // Loess: windblown silt deposited downwind of glaciated regions.
@@ -3076,8 +3183,7 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
             // Chinese Loess Plateau, Ukraine Chernozem).
             bool loess_condition =
                 !was_glaciated &&  // loess deposits DOWNWIND, not under the ice
-                abs_lat > 30.0f && abs_lat < 55.0f &&
-                prov.geography.terrain_roughness < 0.30f &&
+                abs_lat > 30.0f && abs_lat < 55.0f && prov.geography.terrain_roughness < 0.30f &&
                 (prov.climate.precipitation_mm > 400.0f &&
                  prov.climate.precipitation_mm < 1200.0f);  // not too wet (would wash away)
 
@@ -3086,7 +3192,8 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
                 bool has_glacial_neighbor = false;
                 for (const auto& link : prov.links) {
                     auto it = world.h3_province_map.find(link.neighbor_h3);
-                    if (it == world.h3_province_map.end()) continue;
+                    if (it == world.h3_province_map.end())
+                        continue;
                     const auto& nb = world.provinces[it->second];
                     float nb_abs_lat = std::abs(nb.geography.latitude);
                     if (nb_abs_lat > 55.0f ||
@@ -3098,24 +3205,24 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
                 }
                 // Also allow loess if in continental interior at right latitude
                 // (loess can travel hundreds of km on wind).
-                if (has_glacial_neighbor || (prov.climate.continentality > 0.40f && abs_lat > 38.0f)) {
+                if (has_glacial_neighbor ||
+                    (prov.climate.continentality > 0.40f && abs_lat > 38.0f)) {
                     prov.has_loess = true;
                     // Loess is extremely fertile — ag_productivity bonus.
-                    prov.agricultural_productivity = std::min(1.0f,
-                        prov.agricultural_productivity + 0.15f);
+                    prov.agricultural_productivity =
+                        std::min(1.0f, prov.agricultural_productivity + 0.15f);
                 }
             }
         }
 
         // ---- Atoll ----
         // Subsided HotSpot volcanic island with coral: tropical, low elevation, small.
-        bool atoll_condition =
-            prov.island_isolation &&
-            (prov.tectonic_context == TectonicContext::HotSpot ||
-             prov.tectonic_context == TectonicContext::PassiveMargin) &&
-            prov.geography.elevation_avg_m < 50.0f &&
-            std::abs(lat) < 30.0f &&  // coral grows in warm water
-            !prov.geography.is_landlocked;
+        bool atoll_condition = prov.island_isolation &&
+                               (prov.tectonic_context == TectonicContext::HotSpot ||
+                                prov.tectonic_context == TectonicContext::PassiveMargin) &&
+                               prov.geography.elevation_avg_m < 50.0f &&
+                               std::abs(lat) < 30.0f &&  // coral grows in warm water
+                               !prov.geography.is_landlocked;
 
         if (atoll_condition) {
             prov.is_atoll = true;
@@ -3132,15 +3239,14 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
 
         // ---- Karst concealment bonus ----
         if (prov.has_karst) {
-            prov.facility_concealment_bonus = std::min(1.0f,
-                prov.facility_concealment_bonus + 0.25f);
+            prov.facility_concealment_bonus =
+                std::min(1.0f, prov.facility_concealment_bonus + 0.25f);
         }
 
         // ---- Salt flat ----
         // Endorheic basin in arid climate: evaporite surface (Bonneville, Salar de Uyuni).
-        if (prov.geography.is_endorheic &&
-            (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
-             kz == KoppenZone::BSh || kz == KoppenZone::BSk)) {
+        if (prov.geography.is_endorheic && (kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
+                                            kz == KoppenZone::BSh || kz == KoppenZone::BSk)) {
             prov.is_salt_flat = true;
         }
 
@@ -3149,8 +3255,7 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
         {
             auto& f = prov.fisheries;
 
-            if (prov.geography.coastal_length_km < 1.0f &&
-                prov.geography.river_access < 0.15f) {
+            if (prov.geography.coastal_length_km < 1.0f && prov.geography.river_access < 0.15f) {
                 f.access_type = FishingAccessType::NoAccess;
             } else if (prov.geography.coastal_length_km < 1.0f) {
                 // Inland freshwater fisheries.
@@ -3179,12 +3284,23 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
             if (f.access_type != FishingAccessType::NoAccess) {
                 // Growth rate by access type.
                 switch (f.access_type) {
-                    case FishingAccessType::Upwelling:   f.intrinsic_growth_rate = 0.60f; break;
-                    case FishingAccessType::Inshore:     f.intrinsic_growth_rate = 0.40f; break;
-                    case FishingAccessType::Offshore:    f.intrinsic_growth_rate = 0.25f; break;
-                    case FishingAccessType::Pelagic:     f.intrinsic_growth_rate = 0.55f; break;
-                    case FishingAccessType::Freshwater:  f.intrinsic_growth_rate = 0.35f; break;
-                    default: break;
+                    case FishingAccessType::Upwelling:
+                        f.intrinsic_growth_rate = 0.60f;
+                        break;
+                    case FishingAccessType::Inshore:
+                        f.intrinsic_growth_rate = 0.40f;
+                        break;
+                    case FishingAccessType::Offshore:
+                        f.intrinsic_growth_rate = 0.25f;
+                        break;
+                    case FishingAccessType::Pelagic:
+                        f.intrinsic_growth_rate = 0.55f;
+                        break;
+                    case FishingAccessType::Freshwater:
+                        f.intrinsic_growth_rate = 0.35f;
+                        break;
+                    default:
+                        break;
                 }
 
                 // MSY = 0.5 * r * K (Schaefer model).
@@ -3243,8 +3359,7 @@ std::string WorldGenerator::classify_province_archetype(const Province& prov) {
     if (prov.historical_trauma_index > 0.75f && prov.infrastructure_rating < 0.30f) {
         return "war_scar";
     }
-    if (prov.historical_trauma_index > 0.65f &&
-        prov.demographics.total_population < 50000) {
+    if (prov.historical_trauma_index > 0.65f && prov.demographics.total_population < 50000) {
         return "hollow_land";
     }
 
@@ -3253,17 +3368,22 @@ std::string WorldGenerator::classify_province_archetype(const Province& prov) {
     if (!prov.deposits.empty()) {
         const ResourceDeposit* dominant = &prov.deposits[0];
         for (const auto& d : prov.deposits) {
-            if (d.quantity > dominant->quantity) dominant = &d;
+            if (d.quantity > dominant->quantity)
+                dominant = &d;
         }
         if (dominant->quantity > notable_threshold * 1.5f) {
             const char* rclass = classify_resource_class(dominant->type);
             if (std::strcmp(rclass, "hydrocarbons") == 0) {
                 return (prov.infrastructure_rating > 0.60f) ? "oil_capital" : "oil_frontier";
             }
-            if (std::strcmp(rclass, "metals_precious") == 0) return "gold_rush";
-            if (std::strcmp(rclass, "metals_industrial") == 0) return "mining_district";
-            if (std::strcmp(rclass, "energy_nuclear") == 0) return "uranium_territory";
-            if (std::strcmp(rclass, "agricultural_commodity") == 0) return "plantation_economy";
+            if (std::strcmp(rclass, "metals_precious") == 0)
+                return "gold_rush";
+            if (std::strcmp(rclass, "metals_industrial") == 0)
+                return "mining_district";
+            if (std::strcmp(rclass, "energy_nuclear") == 0)
+                return "uranium_territory";
+            if (std::strcmp(rclass, "agricultural_commodity") == 0)
+                return "plantation_economy";
         }
     }
 
@@ -3283,22 +3403,19 @@ std::string WorldGenerator::classify_province_archetype(const Province& prov) {
         (prov.soil_type == SoilType::Alluvial || prov.soil_type == SoilType::Mollisol)) {
         return "breadbasket";
     }
-    if (prov.agricultural_productivity > 0.60f &&
-        (prov.climate.koppen_zone == KoppenZone::Cfb ||
-         prov.climate.koppen_zone == KoppenZone::Cfa ||
-         prov.climate.koppen_zone == KoppenZone::Dfa ||
-         prov.climate.koppen_zone == KoppenZone::Dfb)) {
+    if (prov.agricultural_productivity > 0.60f && (prov.climate.koppen_zone == KoppenZone::Cfb ||
+                                                   prov.climate.koppen_zone == KoppenZone::Cfa ||
+                                                   prov.climate.koppen_zone == KoppenZone::Dfa ||
+                                                   prov.climate.koppen_zone == KoppenZone::Dfb)) {
         return "agrarian_interior";
     }
-    if (prov.agricultural_productivity > 0.50f &&
-        (prov.climate.koppen_zone == KoppenZone::BSk ||
-         prov.climate.koppen_zone == KoppenZone::BSh)) {
+    if (prov.agricultural_productivity > 0.50f && (prov.climate.koppen_zone == KoppenZone::BSk ||
+                                                   prov.climate.koppen_zone == KoppenZone::BSh)) {
         return "dryland_farm";
     }
 
     // --- Landscape character ---
-    if (prov.geography.elevation_avg_m > 2500.0f &&
-        prov.geography.terrain_roughness > 0.40f) {
+    if (prov.geography.elevation_avg_m > 2500.0f && prov.geography.terrain_roughness > 0.40f) {
         return "high_plateau";
     }
     if (prov.is_glacial_scoured) {
@@ -3321,12 +3438,10 @@ std::string WorldGenerator::classify_province_archetype(const Province& prov) {
     }
 
     // --- Urban and industrial character ---
-    if (prov.infrastructure_rating > 0.75f &&
-        prov.demographics.total_population > 500000) {
+    if (prov.infrastructure_rating > 0.75f && prov.demographics.total_population > 500000) {
         return "industrial_heartland";
     }
-    if (prov.infrastructure_rating > 0.70f &&
-        prov.infra_gap > 0.15f &&
+    if (prov.infrastructure_rating > 0.70f && prov.infra_gap > 0.15f &&
         prov.has_colonial_development_event) {
         return "colonial_remnant";
     }
@@ -3335,14 +3450,14 @@ std::string WorldGenerator::classify_province_archetype(const Province& prov) {
     if (prov.infrastructure_rating < 0.25f && !prov.deposits.empty()) {
         const ResourceDeposit* dominant = &prov.deposits[0];
         for (const auto& d : prov.deposits) {
-            if (d.quantity > dominant->quantity) dominant = &d;
+            if (d.quantity > dominant->quantity)
+                dominant = &d;
         }
         if (dominant->quantity > 0.20f) {
             return "resource_frontier";
         }
     }
-    if (prov.infrastructure_rating < 0.20f &&
-        prov.demographics.total_population < 50000) {
+    if (prov.infrastructure_rating < 0.20f && prov.demographics.total_population < 50000) {
         return "marginal_periphery";
     }
 
@@ -3356,57 +3471,73 @@ std::string WorldGenerator::classify_province_archetype(const Province& prov) {
 // Feature name generation: deterministic from seed + feature index.
 // Uses language-family morphemes for plausible-sounding names.
 static std::string generate_feature_name(FeatureType type, DeterministicRNG& rng,
-                                          const std::string& language_family_id) {
+                                         const std::string& language_family_id) {
     // Root morphemes by language family.
     static const char* germanic_roots[] = {
-        "Stein", "Wald", "Berg", "Feld", "Mark", "Grund", "Horn", "Bach",
-        "Thal", "Eis", "Kalt", "Hoch", "Schwarz", "Grau", "Eisen", "Gold",
+        "Stein", "Wald", "Berg", "Feld", "Mark",    "Grund", "Horn",  "Bach",
+        "Thal",  "Eis",  "Kalt", "Hoch", "Schwarz", "Grau",  "Eisen", "Gold",
     };
     static const char* romance_roots[] = {
-        "Mont", "Val", "Rio", "Lago", "Serra", "Costa", "Camp", "Font",
-        "Sol", "Vent", "Alto", "Bel", "Grand", "Oscur", "Clar", "Fior",
+        "Mont", "Val",  "Rio",  "Lago", "Serra", "Costa", "Camp", "Font",
+        "Sol",  "Vent", "Alto", "Bel",  "Grand", "Oscur", "Clar", "Fior",
     };
     static const char* slavic_roots[] = {
-        "Gora", "Reka", "Pole", "Ozero", "Step", "Dol", "Grad", "Holm",
-        "Bor", "Kamen", "Bel", "Chern", "Vod", "Star", "Nov", "Vel",
+        "Gora", "Reka",  "Pole", "Ozero", "Step", "Dol",  "Grad", "Holm",
+        "Bor",  "Kamen", "Bel",  "Chern", "Vod",  "Star", "Nov",  "Vel",
     };
     static const char* generic_roots[] = {
-        "Thar", "Ven", "Kael", "Morn", "Asha", "Drev", "Hael", "Zorn",
-        "Yren", "Bael", "Torn", "Veld", "Skar", "Lum", "Krev", "Daan",
+        "Thar", "Ven",  "Kael", "Morn", "Asha", "Drev", "Hael", "Zorn",
+        "Yren", "Bael", "Torn", "Veld", "Skar", "Lum",  "Krev", "Daan",
     };
 
     // Type suffixes.
     static const char* mountain_suffixes[] = {"fjeld", "horn", "peak", "ridge", "klippe"};
-    static const char* river_suffixes[]    = {"wasser", "flod", "beck", "strom", "burn"};
-    static const char* lake_suffixes[]     = {"mere", "tarn", "see", "loch", "vann"};
-    static const char* desert_suffixes[]   = {"waste", "sands", "steppe", "erg", "hamada"};
-    static const char* plain_suffixes[]    = {"plain", "feld", "pampa", "veldt", "savanna"};
-    static const char* generic_suffixes[]  = {"land", "reach", "mark", "vale", "ward"};
+    static const char* river_suffixes[] = {"wasser", "flod", "beck", "strom", "burn"};
+    static const char* lake_suffixes[] = {"mere", "tarn", "see", "loch", "vann"};
+    static const char* desert_suffixes[] = {"waste", "sands", "steppe", "erg", "hamada"};
+    static const char* plain_suffixes[] = {"plain", "feld", "pampa", "veldt", "savanna"};
+    static const char* generic_suffixes[] = {"land", "reach", "mark", "vale", "ward"};
 
     const char** roots = generic_roots;
     size_t root_count = 16;
     if (language_family_id == "germanic" || language_family_id == "nordic") {
-        roots = germanic_roots; root_count = 16;
+        roots = germanic_roots;
+        root_count = 16;
     } else if (language_family_id == "romance") {
-        roots = romance_roots; root_count = 16;
+        roots = romance_roots;
+        root_count = 16;
     } else if (language_family_id == "slavic") {
-        roots = slavic_roots; root_count = 16;
+        roots = slavic_roots;
+        root_count = 16;
     }
 
     const char** suffixes = generic_suffixes;
     size_t suffix_count = 5;
     switch (type) {
-        case FeatureType::MountainRange: case FeatureType::Plateau:
-            suffixes = mountain_suffixes; suffix_count = 5; break;
+        case FeatureType::MountainRange:
+        case FeatureType::Plateau:
+            suffixes = mountain_suffixes;
+            suffix_count = 5;
+            break;
         case FeatureType::River:
-            suffixes = river_suffixes; suffix_count = 5; break;
+            suffixes = river_suffixes;
+            suffix_count = 5;
+            break;
         case FeatureType::Lake:
-            suffixes = lake_suffixes; suffix_count = 5; break;
+            suffixes = lake_suffixes;
+            suffix_count = 5;
+            break;
         case FeatureType::Desert:
-            suffixes = desert_suffixes; suffix_count = 5; break;
-        case FeatureType::Plain: case FeatureType::Forest:
-            suffixes = plain_suffixes; suffix_count = 5; break;
-        default: break;
+            suffixes = desert_suffixes;
+            suffix_count = 5;
+            break;
+        case FeatureType::Plain:
+        case FeatureType::Forest:
+            suffixes = plain_suffixes;
+            suffix_count = 5;
+            break;
+        default:
+            break;
     }
 
     uint32_t ri = static_cast<uint32_t>(rng.next_float() * root_count) % root_count;
@@ -3416,27 +3547,42 @@ static std::string generate_feature_name(FeatureType type, DeterministicRNG& rng
 
 static const char* feature_type_str(FeatureType ft) {
     switch (ft) {
-        case FeatureType::MountainRange: return "mountain_range";
-        case FeatureType::River:         return "river";
-        case FeatureType::Lake:          return "lake";
-        case FeatureType::Desert:        return "desert";
-        case FeatureType::Basin:         return "basin";
-        case FeatureType::Strait:        return "strait";
-        case FeatureType::Bay:           return "bay";
-        case FeatureType::Island:        return "island";
-        case FeatureType::Plateau:       return "plateau";
-        case FeatureType::Cape:          return "cape";
-        case FeatureType::Crater:        return "crater";
-        case FeatureType::Plain:         return "plain";
-        case FeatureType::Forest:        return "forest";
-        case FeatureType::Peninsula:     return "peninsula";
-        case FeatureType::Archipelago:   return "archipelago";
+        case FeatureType::MountainRange:
+            return "mountain_range";
+        case FeatureType::River:
+            return "river";
+        case FeatureType::Lake:
+            return "lake";
+        case FeatureType::Desert:
+            return "desert";
+        case FeatureType::Basin:
+            return "basin";
+        case FeatureType::Strait:
+            return "strait";
+        case FeatureType::Bay:
+            return "bay";
+        case FeatureType::Island:
+            return "island";
+        case FeatureType::Plateau:
+            return "plateau";
+        case FeatureType::Cape:
+            return "cape";
+        case FeatureType::Crater:
+            return "crater";
+        case FeatureType::Plain:
+            return "plain";
+        case FeatureType::Forest:
+            return "forest";
+        case FeatureType::Peninsula:
+            return "peninsula";
+        case FeatureType::Archipelago:
+            return "archipelago";
     }
     return "unknown";
 }
 
 void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& rng,
-                                            const WorldGeneratorConfig& /*config*/) {
+                                           const WorldGeneratorConfig& /*config*/) {
     world.named_features.clear();
     uint64_t next_id = 1;
 
@@ -3456,8 +3602,7 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
         const auto& nation = world.nations[prov.nation_id];
 
         // --- Mountain ranges: high roughness + elevation ---
-        if (prov.geography.terrain_roughness > 0.55f &&
-            prov.geography.elevation_avg_m > 800.0f &&
+        if (prov.geography.terrain_roughness > 0.55f && prov.geography.elevation_avg_m > 800.0f &&
             assigned_mountain.find(pi) == assigned_mountain.end()) {
             NamedFeature f{};
             f.id = next_id++;
@@ -3469,7 +3614,8 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
             // Expand to adjacent high-terrain provinces.
             for (const auto& link : prov.links) {
                 auto it = h3_to_idx.find(link.neighbor_h3);
-                if (it == h3_to_idx.end()) continue;
+                if (it == h3_to_idx.end())
+                    continue;
                 const auto& np = world.provinces[it->second];
                 if (np.geography.terrain_roughness > 0.50f &&
                     np.geography.elevation_avg_m > 600.0f &&
@@ -3482,8 +3628,8 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
             }
 
             f.significance = std::min(1.0f, f.peak_elevation_m / 5000.0f);
-            f.name = generate_feature_name(FeatureType::MountainRange, rng,
-                                            nation.language_family_id);
+            f.name =
+                generate_feature_name(FeatureType::MountainRange, rng, nation.language_family_id);
             // Check if feature crosses national border.
             for (H3Index h3 : f.extent) {
                 auto it2 = h3_to_idx.find(h3);
@@ -3493,8 +3639,7 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
                     // Generate local_name from the other nation's language.
                     f.local_name = generate_feature_name(
                         FeatureType::MountainRange, rng,
-                        world.nations[world.provinces[it2->second].nation_id]
-                            .language_family_id);
+                        world.nations[world.provinces[it2->second].nation_id].language_family_id);
                     break;
                 }
             }
@@ -3509,8 +3654,7 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
             f.extent.push_back(prov.h3_index);
             f.is_navigable = (prov.geography.river_access > 0.60f);
             f.significance = prov.geography.river_access;
-            f.name = generate_feature_name(FeatureType::River, rng,
-                                            nation.language_family_id);
+            f.name = generate_feature_name(FeatureType::River, rng, nation.language_family_id);
             world.named_features.push_back(std::move(f));
         }
 
@@ -3528,7 +3672,8 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
 
             for (const auto& link : prov.links) {
                 auto it = h3_to_idx.find(link.neighbor_h3);
-                if (it == h3_to_idx.end()) continue;
+                if (it == h3_to_idx.end())
+                    continue;
                 const auto& np = world.provinces[it->second];
                 if ((np.climate.koppen_zone == KoppenZone::BWh ||
                      np.climate.koppen_zone == KoppenZone::BWk) &&
@@ -3541,8 +3686,7 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
             }
 
             f.significance = std::min(1.0f, f.area_km2 / 50000.0f);
-            f.name = generate_feature_name(FeatureType::Desert, rng,
-                                            nation.language_family_id);
+            f.name = generate_feature_name(FeatureType::Desert, rng, nation.language_family_id);
             world.named_features.push_back(std::move(f));
         }
 
@@ -3555,8 +3699,7 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
             f.area_km2 = 3.14159f * (prov.impact_crater_diameter_km / 2.0f) *
                          (prov.impact_crater_diameter_km / 2.0f);
             f.significance = std::min(1.0f, prov.impact_crater_diameter_km / 200.0f);
-            f.name = generate_feature_name(FeatureType::Crater, rng,
-                                            nation.language_family_id);
+            f.name = generate_feature_name(FeatureType::Crater, rng, nation.language_family_id);
             world.named_features.push_back(std::move(f));
         }
 
@@ -3568,14 +3711,12 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
             f.extent.push_back(prov.h3_index);
             f.area_km2 = prov.geography.area_km2 * 0.15f;  // lake fraction of basin
             f.significance = 0.40f + prov.geography.river_access * 0.30f;
-            f.name = generate_feature_name(FeatureType::Lake, rng,
-                                            nation.language_family_id);
+            f.name = generate_feature_name(FeatureType::Lake, rng, nation.language_family_id);
             world.named_features.push_back(std::move(f));
         }
 
         // --- Plains: flat + moderate ag + not desert ---
-        if (prov.geography.terrain_roughness < 0.20f &&
-            prov.agricultural_productivity > 0.40f &&
+        if (prov.geography.terrain_roughness < 0.20f && prov.agricultural_productivity > 0.40f &&
             prov.climate.koppen_zone != KoppenZone::BWh &&
             prov.climate.koppen_zone != KoppenZone::BWk &&
             assigned_plain.find(pi) == assigned_plain.end()) {
@@ -3586,8 +3727,7 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
             f.area_km2 = prov.geography.area_km2;
             assigned_plain.insert(pi);
             f.significance = 0.30f + prov.agricultural_productivity * 0.30f;
-            f.name = generate_feature_name(FeatureType::Plain, rng,
-                                            nation.language_family_id);
+            f.name = generate_feature_name(FeatureType::Plain, rng, nation.language_family_id);
             world.named_features.push_back(std::move(f));
         }
     }
@@ -3599,28 +3739,50 @@ void WorldGenerator::detect_named_features(WorldState& world, DeterministicRNG& 
 
 static const char* historical_event_type_str(HistoricalEventType t) {
     switch (t) {
-        case HistoricalEventType::FoundingEvent:              return "FoundingEvent";
-        case HistoricalEventType::TradeRouteEstablished:      return "TradeRouteEstablished";
-        case HistoricalEventType::ResourceDiscovery:          return "ResourceDiscovery";
-        case HistoricalEventType::PortDevelopment:            return "PortDevelopment";
-        case HistoricalEventType::ColonialDevelopment:        return "ColonialDevelopment";
-        case HistoricalEventType::MigrationInflux:            return "MigrationInflux";
-        case HistoricalEventType::PopulationCollapse:         return "PopulationCollapse";
-        case HistoricalEventType::InfrastructureDestruction:  return "InfrastructureDestruction";
-        case HistoricalEventType::ResourceDepletion:          return "ResourceDepletion";
-        case HistoricalEventType::EnvironmentalDisaster:      return "EnvironmentalDisaster";
-        case HistoricalEventType::EconomicCollapse:           return "EconomicCollapse";
-        case HistoricalEventType::ForcedRelocation:           return "ForcedRelocation";
-        case HistoricalEventType::Famine:                     return "Famine";
-        case HistoricalEventType::BorderChange:               return "BorderChange";
-        case HistoricalEventType::OccupationHistory:          return "OccupationHistory";
-        case HistoricalEventType::IndependenceEvent:          return "IndependenceEvent";
-        case HistoricalEventType::CivilConflict:              return "CivilConflict";
-        case HistoricalEventType::TreatyProvision:            return "TreatyProvision";
-        case HistoricalEventType::ImpactEvent:                return "ImpactEvent";
-        case HistoricalEventType::VolcanicEvent:              return "VolcanicEvent";
-        case HistoricalEventType::FloodEvent:                 return "FloodEvent";
-        case HistoricalEventType::ClimateShift:               return "ClimateShift";
+        case HistoricalEventType::FoundingEvent:
+            return "FoundingEvent";
+        case HistoricalEventType::TradeRouteEstablished:
+            return "TradeRouteEstablished";
+        case HistoricalEventType::ResourceDiscovery:
+            return "ResourceDiscovery";
+        case HistoricalEventType::PortDevelopment:
+            return "PortDevelopment";
+        case HistoricalEventType::ColonialDevelopment:
+            return "ColonialDevelopment";
+        case HistoricalEventType::MigrationInflux:
+            return "MigrationInflux";
+        case HistoricalEventType::PopulationCollapse:
+            return "PopulationCollapse";
+        case HistoricalEventType::InfrastructureDestruction:
+            return "InfrastructureDestruction";
+        case HistoricalEventType::ResourceDepletion:
+            return "ResourceDepletion";
+        case HistoricalEventType::EnvironmentalDisaster:
+            return "EnvironmentalDisaster";
+        case HistoricalEventType::EconomicCollapse:
+            return "EconomicCollapse";
+        case HistoricalEventType::ForcedRelocation:
+            return "ForcedRelocation";
+        case HistoricalEventType::Famine:
+            return "Famine";
+        case HistoricalEventType::BorderChange:
+            return "BorderChange";
+        case HistoricalEventType::OccupationHistory:
+            return "OccupationHistory";
+        case HistoricalEventType::IndependenceEvent:
+            return "IndependenceEvent";
+        case HistoricalEventType::CivilConflict:
+            return "CivilConflict";
+        case HistoricalEventType::TreatyProvision:
+            return "TreatyProvision";
+        case HistoricalEventType::ImpactEvent:
+            return "ImpactEvent";
+        case HistoricalEventType::VolcanicEvent:
+            return "VolcanicEvent";
+        case HistoricalEventType::FloodEvent:
+            return "FloodEvent";
+        case HistoricalEventType::ClimateShift:
+            return "ClimateShift";
     }
     return "Unknown";
 }
@@ -3628,20 +3790,29 @@ static const char* historical_event_type_str(HistoricalEventType t) {
 // Trauma weight per event type (from spec §10.2).
 static float trauma_weight(HistoricalEventType t) {
     switch (t) {
-        case HistoricalEventType::ForcedRelocation:           return 0.90f;
-        case HistoricalEventType::Famine:                     return 0.80f;
-        case HistoricalEventType::CivilConflict:              return 0.70f;
-        case HistoricalEventType::PopulationCollapse:         return 0.65f;
-        case HistoricalEventType::OccupationHistory:          return 0.60f;
-        case HistoricalEventType::InfrastructureDestruction:  return 0.40f;
-        case HistoricalEventType::EconomicCollapse:           return 0.35f;
-        case HistoricalEventType::ResourceDepletion:          return 0.20f;
-        default:                                              return 0.0f;
+        case HistoricalEventType::ForcedRelocation:
+            return 0.90f;
+        case HistoricalEventType::Famine:
+            return 0.80f;
+        case HistoricalEventType::CivilConflict:
+            return 0.70f;
+        case HistoricalEventType::PopulationCollapse:
+            return 0.65f;
+        case HistoricalEventType::OccupationHistory:
+            return 0.60f;
+        case HistoricalEventType::InfrastructureDestruction:
+            return 0.40f;
+        case HistoricalEventType::EconomicCollapse:
+            return 0.35f;
+        case HistoricalEventType::ResourceDepletion:
+            return 0.20f;
+        default:
+            return 0.0f;
     }
 }
 
 void WorldGenerator::generate_province_histories(WorldState& world, DeterministicRNG& rng,
-                                                   const WorldGeneratorConfig& /*config*/) {
+                                                 const WorldGeneratorConfig& /*config*/) {
     for (auto& prov : world.provinces) {
         ProvinceHistory& hist = prov.history;
         hist.events.clear();
@@ -3653,15 +3824,18 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
         {
             HistoricalEvent e{};
             e.type = HistoricalEventType::FoundingEvent;
-            e.years_before_game_start = -static_cast<int32_t>(
-                200 + rng.next_float() * 800);  // 200-1000 years ago
+            e.years_before_game_start =
+                -static_cast<int32_t>(200 + rng.next_float() * 800);  // 200-1000 years ago
             e.magnitude = 0.30f + rng.next_float() * 0.30f;
-            e.headline = "The region was first settled by communities drawn to its "
-                         "natural advantages.";
-            e.description = "Early settlement patterns were determined by the "
-                            "availability of fresh water, arable land, and defensible terrain.";
-            e.lasting_effect = "The initial settlement sites still anchor the province's "
-                               "population distribution.";
+            e.headline =
+                "The region was first settled by communities drawn to its "
+                "natural advantages.";
+            e.description =
+                "Early settlement patterns were determined by the "
+                "availability of fresh water, arable land, and defensible terrain.";
+            e.lasting_effect =
+                "The initial settlement sites still anchor the province's "
+                "population distribution.";
             e.has_living_memory = false;
             hist.events.push_back(std::move(e));
         }
@@ -3674,48 +3848,62 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
             // Better than formula predicts — something built it up.
             float roll = rng.next_float();
             HistoricalEventType cause;
-            if (roll < 0.30f) cause = HistoricalEventType::TradeRouteEstablished;
-            else if (roll < 0.55f) cause = HistoricalEventType::ResourceDiscovery;
-            else if (roll < 0.75f) cause = HistoricalEventType::ColonialDevelopment;
-            else if (roll < 0.90f) cause = HistoricalEventType::PortDevelopment;
-            else cause = HistoricalEventType::MigrationInflux;
+            if (roll < 0.30f)
+                cause = HistoricalEventType::TradeRouteEstablished;
+            else if (roll < 0.55f)
+                cause = HistoricalEventType::ResourceDiscovery;
+            else if (roll < 0.75f)
+                cause = HistoricalEventType::ColonialDevelopment;
+            else if (roll < 0.90f)
+                cause = HistoricalEventType::PortDevelopment;
+            else
+                cause = HistoricalEventType::MigrationInflux;
 
             HistoricalEvent e{};
             e.type = cause;
-            e.years_before_game_start = -static_cast<int32_t>(
-                30 + rng.next_float() * 120);
+            e.years_before_game_start = -static_cast<int32_t>(30 + rng.next_float() * 120);
             e.magnitude = std::min(1.0f, gap * 3.0f);
-            e.headline = "External investment or strategic interest drove infrastructure "
-                         "development beyond what local conditions would normally sustain.";
-            e.description = "The province's infrastructure rating exceeds what its "
-                            "geographic attractiveness alone would predict, indicating "
-                            "deliberate development driven by trade, resources, or "
-                            "colonial administration.";
-            e.lasting_effect = "Current infrastructure rating reflects this historical "
-                               "over-investment.";
+            e.headline =
+                "External investment or strategic interest drove infrastructure "
+                "development beyond what local conditions would normally sustain.";
+            e.description =
+                "The province's infrastructure rating exceeds what its "
+                "geographic attractiveness alone would predict, indicating "
+                "deliberate development driven by trade, resources, or "
+                "colonial administration.";
+            e.lasting_effect =
+                "Current infrastructure rating reflects this historical "
+                "over-investment.";
             e.has_living_memory = (e.years_before_game_start > -80);
             hist.events.push_back(std::move(e));
         } else if (gap < -0.15f) {
             // Worse than formula predicts — something damaged or suppressed it.
             float roll = rng.next_float();
             HistoricalEventType cause;
-            if (roll < 0.25f) cause = HistoricalEventType::InfrastructureDestruction;
-            else if (roll < 0.45f) cause = HistoricalEventType::EconomicCollapse;
-            else if (roll < 0.65f) cause = HistoricalEventType::ResourceDepletion;
-            else if (roll < 0.80f) cause = HistoricalEventType::PopulationCollapse;
-            else if (roll < 0.90f) cause = HistoricalEventType::ForcedRelocation;
-            else cause = HistoricalEventType::CivilConflict;
+            if (roll < 0.25f)
+                cause = HistoricalEventType::InfrastructureDestruction;
+            else if (roll < 0.45f)
+                cause = HistoricalEventType::EconomicCollapse;
+            else if (roll < 0.65f)
+                cause = HistoricalEventType::ResourceDepletion;
+            else if (roll < 0.80f)
+                cause = HistoricalEventType::PopulationCollapse;
+            else if (roll < 0.90f)
+                cause = HistoricalEventType::ForcedRelocation;
+            else
+                cause = HistoricalEventType::CivilConflict;
 
             HistoricalEvent e{};
             e.type = cause;
-            e.years_before_game_start = -static_cast<int32_t>(
-                20 + rng.next_float() * 100);
+            e.years_before_game_start = -static_cast<int32_t>(20 + rng.next_float() * 100);
             e.magnitude = std::min(1.0f, std::fabs(gap) * 3.0f);
-            e.headline = "A disruptive event suppressed development below the "
-                         "province's natural potential.";
-            e.description = "The province's infrastructure lags behind what its "
-                            "geographic advantages would normally produce, suggesting "
-                            "historical disruption, conflict, or economic failure.";
+            e.headline =
+                "A disruptive event suppressed development below the "
+                "province's natural potential.";
+            e.description =
+                "The province's infrastructure lags behind what its "
+                "geographic advantages would normally produce, suggesting "
+                "historical disruption, conflict, or economic failure.";
             e.lasting_effect = "The infrastructure deficit persists into the present day.";
             e.has_living_memory = (e.years_before_game_start > -80);
             hist.events.push_back(std::move(e));
@@ -3725,19 +3913,21 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
         if (prov.has_impact_crater) {
             HistoricalEvent e{};
             e.type = HistoricalEventType::ImpactEvent;
-            e.years_before_game_start = -static_cast<int32_t>(
-                1000000 + rng.next_float() * 500000000);  // millions of years
+            e.years_before_game_start =
+                -static_cast<int32_t>(1000000 + rng.next_float() * 500000000);  // millions of years
             e.magnitude = std::min(1.0f, prov.impact_crater_diameter_km / 200.0f);
             char buf[128];
             std::snprintf(buf, sizeof(buf),
-                "An asteroid impact created a crater %d km in diameter.",
-                static_cast<int>(prov.impact_crater_diameter_km));
+                          "An asteroid impact created a crater %d km in diameter.",
+                          static_cast<int>(prov.impact_crater_diameter_km));
             e.headline = buf;
-            e.description = "The impact structure concentrated platinum group metals "
-                            "and nickel sulfides in the surrounding rock through "
-                            "hydrothermal alteration.";
-            e.lasting_effect = "The crater's mineral signature remains economically "
-                               "significant.";
+            e.description =
+                "The impact structure concentrated platinum group metals "
+                "and nickel sulfides in the surrounding rock through "
+                "hydrothermal alteration.";
+            e.lasting_effect =
+                "The crater's mineral signature remains economically "
+                "significant.";
             e.has_living_memory = false;
             hist.events.push_back(std::move(e));
         }
@@ -3748,15 +3938,17 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
             rng.next_float() < 0.30f) {
             HistoricalEvent e{};
             e.type = HistoricalEventType::VolcanicEvent;
-            e.years_before_game_start = -static_cast<int32_t>(
-                50 + rng.next_float() * 500);
+            e.years_before_game_start = -static_cast<int32_t>(50 + rng.next_float() * 500);
             e.magnitude = 0.30f + rng.next_float() * 0.50f;
-            e.headline = "A significant volcanic eruption shaped the local terrain "
-                         "and enriched soils with mineral-laden ash.";
-            e.description = "Volcanic activity deposited fertile ash soils and created "
-                            "geothermal features, while also posing ongoing hazard risks.";
-            e.lasting_effect = "Volcanic soils support above-average agricultural "
-                               "productivity in the vicinity.";
+            e.headline =
+                "A significant volcanic eruption shaped the local terrain "
+                "and enriched soils with mineral-laden ash.";
+            e.description =
+                "Volcanic activity deposited fertile ash soils and created "
+                "geothermal features, while also posing ongoing hazard risks.";
+            e.lasting_effect =
+                "Volcanic soils support above-average agricultural "
+                "productivity in the vicinity.";
             e.has_living_memory = (e.years_before_game_start > -80);
             hist.events.push_back(std::move(e));
         }
@@ -3765,20 +3957,23 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
         if (!prov.deposits.empty()) {
             const ResourceDeposit* best = &prov.deposits[0];
             for (const auto& d : prov.deposits) {
-                if (d.quantity > best->quantity) best = &d;
+                if (d.quantity > best->quantity)
+                    best = &d;
             }
             if (best->quantity > 0.50f && best->era_unlock == 1) {
                 HistoricalEvent e{};
                 e.type = HistoricalEventType::ResourceDiscovery;
-                e.years_before_game_start = -static_cast<int32_t>(
-                    40 + rng.next_float() * 160);
+                e.years_before_game_start = -static_cast<int32_t>(40 + rng.next_float() * 160);
                 e.magnitude = std::min(1.0f, best->quantity);
-                e.headline = "Significant mineral or energy deposits were confirmed "
-                             "in the province.";
-                e.description = "The discovery attracted prospectors, investment capital, "
-                                "and infrastructure development to the region.";
-                e.lasting_effect = "Extraction industries remain a defining feature of "
-                                   "the provincial economy.";
+                e.headline =
+                    "Significant mineral or energy deposits were confirmed "
+                    "in the province.";
+                e.description =
+                    "The discovery attracted prospectors, investment capital, "
+                    "and infrastructure development to the region.";
+                e.lasting_effect =
+                    "Extraction industries remain a defining feature of "
+                    "the provincial economy.";
                 e.has_living_memory = (e.years_before_game_start > -80);
                 hist.events.push_back(std::move(e));
             }
@@ -3788,14 +3983,15 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
         if (prov.climate.flood_vulnerability > 0.70f) {
             HistoricalEvent e{};
             e.type = HistoricalEventType::FloodEvent;
-            e.years_before_game_start = -static_cast<int32_t>(
-                10 + rng.next_float() * 90);
+            e.years_before_game_start = -static_cast<int32_t>(10 + rng.next_float() * 90);
             e.magnitude = prov.climate.flood_vulnerability;
             e.headline = "Catastrophic flooding affected the province.";
-            e.description = "The province's position in a floodplain or low-lying "
-                            "delta makes it vulnerable to periodic inundation.";
-            e.lasting_effect = "Flood infrastructure remains a critical investment "
-                               "priority.";
+            e.description =
+                "The province's position in a floodplain or low-lying "
+                "delta makes it vulnerable to periodic inundation.";
+            e.lasting_effect =
+                "Flood infrastructure remains a critical investment "
+                "priority.";
             e.has_living_memory = (e.years_before_game_start > -80);
             hist.events.push_back(std::move(e));
         }
@@ -3804,20 +4000,20 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
         if (prov.border_change_count > 0) {
             HistoricalEvent e{};
             e.type = HistoricalEventType::BorderChange;
-            e.years_before_game_start = -static_cast<int32_t>(
-                15 + rng.next_float() * 135);
+            e.years_before_game_start = -static_cast<int32_t>(15 + rng.next_float() * 135);
             e.magnitude = std::min(1.0f, prov.border_change_count * 0.20f);
             char buf[128];
             std::snprintf(buf, sizeof(buf),
-                "The province changed national administration %d time%s in the "
-                "pre-game period.",
-                prov.border_change_count,
-                prov.border_change_count > 1 ? "s" : "");
+                          "The province changed national administration %d time%s in the "
+                          "pre-game period.",
+                          prov.border_change_count, prov.border_change_count > 1 ? "s" : "");
             e.headline = buf;
-            e.description = "Contested borders and changing sovereignty have left "
-                            "cultural and institutional legacies.";
-            e.lasting_effect = "Border instability affects institutional trust and "
-                               "political volatility.";
+            e.description =
+                "Contested borders and changing sovereignty have left "
+                "cultural and institutional legacies.";
+            e.lasting_effect =
+                "Border instability affects institutional trust and "
+                "political volatility.";
             e.has_living_memory = (e.years_before_game_start > -80);
             hist.events.push_back(std::move(e));
         }
@@ -3832,8 +4028,8 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
         float trauma = 0.0f;
         for (const auto& e : hist.events) {
             float tw = trauma_weight(e.type);
-            float recency = 1.0f / (1.0f + std::fabs(
-                static_cast<float>(e.years_before_game_start)) / 50.0f);
+            float recency =
+                1.0f / (1.0f + std::fabs(static_cast<float>(e.years_before_game_start)) / 50.0f);
             trauma += tw * e.magnitude * recency;
         }
         prov.historical_trauma_index = std::clamp(trauma, 0.0f, 1.0f);
@@ -3841,21 +4037,20 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
         // --- Generate summary from events ---
         std::string summary;
         for (size_t i = 0; i < std::min(hist.events.size(), size_t(3)); ++i) {
-            if (!summary.empty()) summary += " ";
+            if (!summary.empty())
+                summary += " ";
             summary += hist.events[i].headline;
         }
         hist.summary = summary;
 
         // --- Current character from archetype ---
-        hist.current_character = "A " + hist.province_archetype_label +
-                                  " province defined by its " +
-                                  (prov.infrastructure_rating > 0.60f
-                                       ? "developed infrastructure"
-                                       : "natural landscape") +
-                                  " and " +
-                                  (prov.agricultural_productivity > 0.50f
-                                       ? "productive agricultural base."
-                                       : "extractive or service economy.");
+        hist.current_character =
+            "A " + hist.province_archetype_label + " province defined by its " +
+            (prov.infrastructure_rating > 0.60f ? "developed infrastructure"
+                                                : "natural landscape") +
+            " and " +
+            (prov.agricultural_productivity > 0.50f ? "productive agricultural base."
+                                                    : "extractive or service economy.");
     }
 }
 
@@ -3864,7 +4059,7 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
 // ===========================================================================
 
 void WorldGenerator::seed_pre_game_events(WorldState& world, DeterministicRNG& rng,
-                                            const WorldGeneratorConfig& /*config*/) {
+                                          const WorldGeneratorConfig& /*config*/) {
     world.pre_game_events.clear();
 
     // Scan all province histories for events within 40 years of game start.
@@ -3888,23 +4083,23 @@ void WorldGenerator::seed_pre_game_events(WorldState& world, DeterministicRNG& r
                     case HistoricalEventType::VolcanicEvent: {
                         // Infrastructure damage decays: residual = magnitude * (years / 40)
                         float decay = 1.0f - static_cast<float>(pge.years_before_start) / 50.0f;
-                        pge.infrastructure_damage = std::clamp(
-                            e.magnitude * std::max(0.0f, decay), 0.0f, 1.0f);
+                        pge.infrastructure_damage =
+                            std::clamp(e.magnitude * std::max(0.0f, decay), 0.0f, 1.0f);
                         break;
                     }
                     case HistoricalEventType::PopulationCollapse:
                     case HistoricalEventType::ForcedRelocation:
                     case HistoricalEventType::Famine: {
                         float recovery = 1.0f - static_cast<float>(pge.years_before_start) / 60.0f;
-                        pge.population_displacement = std::clamp(
-                            e.magnitude * 0.5f * std::max(0.0f, recovery), 0.0f, 1.0f);
+                        pge.population_displacement =
+                            std::clamp(e.magnitude * 0.5f * std::max(0.0f, recovery), 0.0f, 1.0f);
                         break;
                     }
                     case HistoricalEventType::BorderChange:
                     case HistoricalEventType::IndependenceEvent:
                     case HistoricalEventType::OccupationHistory:
-                        pge.has_active_claim = (pge.years_before_start <= 30 &&
-                                                e.magnitude > 0.40f);
+                        pge.has_active_claim =
+                            (pge.years_before_start <= 30 && e.magnitude > 0.40f);
                         break;
                     default:
                         break;
@@ -3948,7 +4143,7 @@ static const NamedFeature* find_best_feature(const WorldState& world, FeatureTyp
 }
 
 void WorldGenerator::generate_loading_commentary(WorldState& world, DeterministicRNG& rng,
-                                                   const WorldGeneratorConfig& /*config*/) {
+                                                 const WorldGeneratorConfig& /*config*/) {
     LoadingCommentary& lc = world.loading_commentary;
 
     const uint32_t prov_count = static_cast<uint32_t>(world.provinces.size());
@@ -3959,13 +4154,14 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
     {
         uint32_t subduction_count = 0;
         for (const auto& p : world.provinces) {
-            if (p.tectonic_context == TectonicContext::Subduction) ++subduction_count;
+            if (p.tectonic_context == TectonicContext::Subduction)
+                ++subduction_count;
         }
         char buf[256];
         std::snprintf(buf, sizeof(buf),
-            "The continental plates are settling. %u of %u provinces sit on active "
-            "subduction zones where new mountains are still being built.",
-            subduction_count, prov_count);
+                      "The continental plates are settling. %u of %u provinces sit on active "
+                      "subduction zones where new mountains are still being built.",
+                      subduction_count, prov_count);
         lc.stage_1_text = buf;
     }
 
@@ -3973,11 +4169,14 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
     {
         const NamedFeature* river = find_best_feature(world, FeatureType::River);
         if (river) {
-            lc.stage_2_text = "The " + river->name + " is cutting through the landscape. "
+            lc.stage_2_text =
+                "The " + river->name +
+                " is cutting through the landscape. "
                 "By the time civilisation arrives, the valley will define trade routes "
                 "for centuries.";
         } else {
-            lc.stage_2_text = "Wind and water are shaping the terrain. Valleys deepen, "
+            lc.stage_2_text =
+                "Wind and water are shaping the terrain. Valleys deepen, "
                 "plateaus erode, and the landscape takes its final form.";
         }
     }
@@ -3986,13 +4185,14 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
     {
         uint32_t river_count = 0;
         for (const auto& f : world.named_features) {
-            if (f.type == FeatureType::River) ++river_count;
+            if (f.type == FeatureType::River)
+                ++river_count;
         }
         char buf[256];
         std::snprintf(buf, sizeof(buf),
-            "%u named river systems are establishing their courses. "
-            "Where they reach the sea, deltas and estuaries form.",
-            river_count);
+                      "%u named river systems are establishing their courses. "
+                      "Where they reach the sea, deltas and estuaries form.",
+                      river_count);
         lc.stage_3_text = buf;
     }
 
@@ -4000,17 +4200,19 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
     {
         uint32_t monsoon_count = 0;
         for (const auto& p : world.provinces) {
-            if (p.climate.is_monsoon) ++monsoon_count;
+            if (p.climate.is_monsoon)
+                ++monsoon_count;
         }
         if (monsoon_count > 0) {
             char buf[256];
             std::snprintf(buf, sizeof(buf),
-                "Monsoon patterns are emerging across %u provinces. "
-                "Seasonal rains will define agriculture and flood risk.",
-                monsoon_count);
+                          "Monsoon patterns are emerging across %u provinces. "
+                          "Seasonal rains will define agriculture and flood risk.",
+                          monsoon_count);
             lc.stage_4_text = buf;
         } else {
-            lc.stage_4_text = "The atmosphere is stabilising. Rain shadows form behind "
+            lc.stage_4_text =
+                "The atmosphere is stabilising. Rain shadows form behind "
                 "mountain ranges, and ocean currents begin to shape coastal climates.";
         }
     }
@@ -4019,13 +4221,14 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
     {
         uint32_t fertile = 0;
         for (const auto& p : world.provinces) {
-            if (p.agricultural_productivity > 0.60f) ++fertile;
+            if (p.agricultural_productivity > 0.60f)
+                ++fertile;
         }
         char buf[256];
         std::snprintf(buf, sizeof(buf),
-            "%u provinces develop fertile soils capable of sustaining large populations. "
-            "The rest will depend on trade, industry, or the sea.",
-            fertile);
+                      "%u provinces develop fertile soils capable of sustaining large populations. "
+                      "The rest will depend on trade, industry, or the sea.",
+                      fertile);
         lc.stage_5_text = buf;
     }
 
@@ -4033,13 +4236,14 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
     {
         uint32_t forested = 0;
         for (const auto& p : world.provinces) {
-            if (p.geography.forest_coverage > 0.50f) ++forested;
+            if (p.geography.forest_coverage > 0.50f)
+                ++forested;
         }
         char buf[256];
         std::snprintf(buf, sizeof(buf),
-            "Forest covers %u provinces. Grasslands and savannas fill the gaps "
-            "between the treeline and the deserts.",
-            forested);
+                      "Forest covers %u provinces. Grasslands and savannas fill the gaps "
+                      "between the treeline and the deserts.",
+                      forested);
         lc.stage_6_text = buf;
     }
 
@@ -4049,12 +4253,13 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
         if (mtn && mtn->peak_elevation_m > 0.0f) {
             char buf[256];
             std::snprintf(buf, sizeof(buf),
-                "The %s rise to %.0f metres, dividing climates and cultures. "
-                "Passes through the range will become strategic chokepoints.",
-                mtn->name.c_str(), mtn->peak_elevation_m);
+                          "The %s rise to %.0f metres, dividing climates and cultures. "
+                          "Passes through the range will become strategic chokepoints.",
+                          mtn->name.c_str(), mtn->peak_elevation_m);
             lc.stage_7_text = buf;
         } else {
-            lc.stage_7_text = "Special geographic features are forming: karst caves, "
+            lc.stage_7_text =
+                "Special geographic features are forming: karst caves, "
                 "fjords, atolls, and impact craters, each with unique economic potential.";
         }
     }
@@ -4066,7 +4271,8 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
             deposit_count += static_cast<uint32_t>(p.deposits.size());
         }
         char buf[256];
-        std::snprintf(buf, sizeof(buf),
+        std::snprintf(
+            buf, sizeof(buf),
             "%u resource deposits are embedded in the geology. "
             "Some will be found early. Others will wait for the technology to reach them.",
             deposit_count);
@@ -4078,11 +4284,13 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
         // Find the highest-attractiveness province.
         const Province* best = &world.provinces[0];
         for (const auto& p : world.provinces) {
-            if (p.settlement_attractiveness > best->settlement_attractiveness) best = &p;
+            if (p.settlement_attractiveness > best->settlement_attractiveness)
+                best = &p;
         }
-        lc.stage_9_text = best->fictional_name + " emerges as the most attractive "
-            "settlement site. Early communities cluster around fresh water, arable "
-            "land, and defensible terrain.";
+        lc.stage_9_text = best->fictional_name +
+                          " emerges as the most attractive "
+                          "settlement site. Early communities cluster around fresh water, arable "
+                          "land, and defensible terrain.";
     }
 
     // Stage 10 — History
@@ -4091,13 +4299,14 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
             const auto& pge = world.pre_game_events[0];
             char buf[256];
             std::snprintf(buf, sizeof(buf),
-                "%u events within living memory will shape the world at game start. "
-                "The oldest occurred %d years before the present.",
-                static_cast<uint32_t>(world.pre_game_events.size()),
-                pge.years_before_start);
+                          "%u events within living memory will shape the world at game start. "
+                          "The oldest occurred %d years before the present.",
+                          static_cast<uint32_t>(world.pre_game_events.size()),
+                          pge.years_before_start);
             lc.stage_10_text = buf;
         } else {
-            lc.stage_10_text = "The pre-game period was remarkably stable. No major "
+            lc.stage_10_text =
+                "The pre-game period was remarkably stable. No major "
                 "disruptions within living memory.";
         }
     }
@@ -4110,54 +4319,53 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
 
     // Facts from named features.
     for (const auto& f : world.named_features) {
-        if (lc.sidebar_facts.size() >= 15) break;
+        if (lc.sidebar_facts.size() >= 15)
+            break;
         char buf[256];
         switch (f.type) {
             case FeatureType::River:
                 if (f.length_km > 0.0f) {
-                    std::snprintf(buf, sizeof(buf),
-                        "The %s stretches %.0f km. %s",
-                        f.name.c_str(), f.length_km,
-                        f.is_navigable ? "It is navigable by barge."
-                                       : "Its rapids prevent navigation.");
+                    std::snprintf(buf, sizeof(buf), "The %s stretches %.0f km. %s", f.name.c_str(),
+                                  f.length_km,
+                                  f.is_navigable ? "It is navigable by barge."
+                                                 : "Its rapids prevent navigation.");
                     lc.sidebar_facts.emplace_back(buf);
                 }
                 break;
             case FeatureType::MountainRange:
                 if (f.peak_elevation_m > 0.0f) {
                     std::snprintf(buf, sizeof(buf),
-                        "The %s reach %.0f metres at their highest point.",
-                        f.name.c_str(), f.peak_elevation_m);
+                                  "The %s reach %.0f metres at their highest point.",
+                                  f.name.c_str(), f.peak_elevation_m);
                     lc.sidebar_facts.emplace_back(buf);
                 }
                 break;
             case FeatureType::Desert:
                 if (f.area_km2 > 0.0f) {
-                    std::snprintf(buf, sizeof(buf),
-                        "The %s covers %.0f km\u00B2 of arid terrain.",
-                        f.name.c_str(), f.area_km2);
+                    std::snprintf(buf, sizeof(buf), "The %s covers %.0f km\u00B2 of arid terrain.",
+                                  f.name.c_str(), f.area_km2);
                     lc.sidebar_facts.emplace_back(buf);
                 }
                 break;
             case FeatureType::Lake:
                 std::snprintf(buf, sizeof(buf),
-                    "The %s has no outlet to the sea. Its waters grow more saline "
-                    "with each passing century.",
-                    f.name.c_str());
+                              "The %s has no outlet to the sea. Its waters grow more saline "
+                              "with each passing century.",
+                              f.name.c_str());
                 lc.sidebar_facts.emplace_back(buf);
                 break;
             case FeatureType::Crater:
                 std::snprintf(buf, sizeof(buf),
-                    "The %s is the remnant of an asteroid strike. "
-                    "Platinum group metals concentrate in its rim.",
-                    f.name.c_str());
+                              "The %s is the remnant of an asteroid strike. "
+                              "Platinum group metals concentrate in its rim.",
+                              f.name.c_str());
                 lc.sidebar_facts.emplace_back(buf);
                 break;
             default:
                 if (f.significance > 0.60f) {
                     std::snprintf(buf, sizeof(buf),
-                        "The %s is a significant geographic feature of this world.",
-                        f.name.c_str());
+                                  "The %s is a significant geographic feature of this world.",
+                                  f.name.c_str());
                     lc.sidebar_facts.emplace_back(buf);
                 }
                 break;
@@ -4166,31 +4374,35 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
 
     // Facts from province data.
     for (const auto& p : world.provinces) {
-        if (lc.sidebar_facts.size() >= 15) break;
+        if (lc.sidebar_facts.size() >= 15)
+            break;
         if (p.has_permafrost) {
             lc.sidebar_facts.emplace_back(
-                p.fictional_name + " is locked in permafrost. Oil and gas deposits "
+                p.fictional_name +
+                " is locked in permafrost. Oil and gas deposits "
                 "here cannot be accessed until thawing technology arrives.");
             break;  // One permafrost fact is enough.
         }
     }
     for (const auto& p : world.provinces) {
-        if (lc.sidebar_facts.size() >= 15) break;
+        if (lc.sidebar_facts.size() >= 15)
+            break;
         if (p.geography.is_oasis) {
-            lc.sidebar_facts.emplace_back(
-                p.fictional_name + " exists because of a single underground spring. "
-                "Without it, this would be empty desert.");
+            lc.sidebar_facts.emplace_back(p.fictional_name +
+                                          " exists because of a single underground spring. "
+                                          "Without it, this would be empty desert.");
             break;
         }
     }
     for (const auto& p : world.provinces) {
-        if (lc.sidebar_facts.size() >= 15) break;
+        if (lc.sidebar_facts.size() >= 15)
+            break;
         if (p.is_nation_capital && p.settlement_attractiveness > 0.60f) {
             char buf[256];
             std::snprintf(buf, sizeof(buf),
-                "%s was chosen as a national capital for its strategic position "
-                "and natural advantages.",
-                p.fictional_name.c_str());
+                          "%s was chosen as a national capital for its strategic position "
+                          "and natural advantages.",
+                          p.fictional_name.c_str());
             lc.sidebar_facts.emplace_back(buf);
             break;
         }
@@ -4201,9 +4413,8 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
         char buf[256];
         if (lc.sidebar_facts.size() < 8) {
             uint32_t nation_count = static_cast<uint32_t>(world.nations.size());
-            std::snprintf(buf, sizeof(buf),
-                "This world contains %u nations across %u provinces.",
-                nation_count, prov_count);
+            std::snprintf(buf, sizeof(buf), "This world contains %u nations across %u provinces.",
+                          nation_count, prov_count);
             lc.sidebar_facts.emplace_back(buf);
         }
         if (lc.sidebar_facts.size() < 8) {
@@ -4211,14 +4422,13 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
             for (const auto& p : world.provinces) {
                 total_pop += p.demographics.total_population;
             }
-            std::snprintf(buf, sizeof(buf),
-                "The total population is approximately %u.", total_pop);
+            std::snprintf(buf, sizeof(buf), "The total population is approximately %u.", total_pop);
             lc.sidebar_facts.emplace_back(buf);
         }
         if (lc.sidebar_facts.size() < 8) {
             uint32_t feature_count = static_cast<uint32_t>(world.named_features.size());
-            std::snprintf(buf, sizeof(buf),
-                "%u geographic features have been named.", feature_count);
+            std::snprintf(buf, sizeof(buf), "%u geographic features have been named.",
+                          feature_count);
             lc.sidebar_facts.emplace_back(buf);
         }
         if (lc.sidebar_facts.size() < 8) {
@@ -4227,38 +4437,36 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
                 deposit_count += static_cast<uint32_t>(p.deposits.size());
             }
             std::snprintf(buf, sizeof(buf),
-                "Geologists have mapped %u resource deposits across the world.",
-                deposit_count);
+                          "Geologists have mapped %u resource deposits across the world.",
+                          deposit_count);
             lc.sidebar_facts.emplace_back(buf);
         }
         if (lc.sidebar_facts.size() < 8) {
             uint32_t coastal = 0;
             for (const auto& p : world.provinces) {
-                if (p.geography.coastal_length_km > 10.0f) ++coastal;
+                if (p.geography.coastal_length_km > 10.0f)
+                    ++coastal;
             }
-            std::snprintf(buf, sizeof(buf),
-                "%u provinces have significant coastline.", coastal);
+            std::snprintf(buf, sizeof(buf), "%u provinces have significant coastline.", coastal);
             lc.sidebar_facts.emplace_back(buf);
         }
         if (lc.sidebar_facts.size() < 8) {
             uint32_t landlocked = 0;
             for (const auto& p : world.provinces) {
-                if (p.geography.is_landlocked) ++landlocked;
+                if (p.geography.is_landlocked)
+                    ++landlocked;
             }
             std::snprintf(buf, sizeof(buf),
-                "%u provinces are landlocked, dependent on overland trade.",
-                landlocked);
+                          "%u provinces are landlocked, dependent on overland trade.", landlocked);
             lc.sidebar_facts.emplace_back(buf);
         }
         if (lc.sidebar_facts.size() < 8) {
-            std::snprintf(buf, sizeof(buf),
-                "World seed: %lu. Same seed, same world, every time.",
-                static_cast<unsigned long>(world.world_seed));
+            std::snprintf(buf, sizeof(buf), "World seed: %lu. Same seed, same world, every time.",
+                          static_cast<unsigned long>(world.world_seed));
             lc.sidebar_facts.emplace_back(buf);
         }
         if (lc.sidebar_facts.size() < 8) {
-            lc.sidebar_facts.emplace_back(
-                "Every province has a unique geological history.");
+            lc.sidebar_facts.emplace_back("Every province has a unique geological history.");
         }
     }
 }
@@ -4272,15 +4480,15 @@ static const char* pre_game_event_type_str(HistoricalEventType t) {
 }
 
 nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
-                                                     const WorldGeneratorConfig& config) {
+                                                    const WorldGeneratorConfig& config) {
     using json = nlohmann::json;
     json root;
 
     root["schema_version"] = "1.0";
     root["world_seed"] = world.world_seed;
     root["generated_at"] = "2000-01-01T00:00:00Z";  // game start date
-    root["planet_name"] = world.nations.empty() ? "Unknown" : "World-" +
-                          std::to_string(world.world_seed);
+    root["planet_name"] =
+        world.nations.empty() ? "Unknown" : "World-" + std::to_string(world.world_seed);
 
     // --- Provinces ---
     json provinces_obj = json::object();
@@ -4316,9 +4524,8 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         json sidebar = json::array();
         if (prov.has_impact_crater) {
             char buf[128];
-            std::snprintf(buf, sizeof(buf),
-                "A %d km impact crater dominates the terrain.",
-                static_cast<int>(prov.impact_crater_diameter_km));
+            std::snprintf(buf, sizeof(buf), "A %d km impact crater dominates the terrain.",
+                          static_cast<int>(prov.impact_crater_diameter_km));
             sidebar.push_back(buf);
         }
         if (prov.geography.is_oasis) {
@@ -4345,28 +4552,25 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         fj["name"] = f.name;
 
         json provinces_list = json::array();
-        for (auto h : f.extent) provinces_list.push_back(h);
+        for (auto h : f.extent)
+            provinces_list.push_back(h);
         fj["provinces"] = std::move(provinces_list);
 
         // Headline fact.
         char buf[256];
         if (f.type == FeatureType::River && f.length_km > 0.0f) {
-            std::snprintf(buf, sizeof(buf),
-                "The %s stretches %.0f km through the region.",
-                f.name.c_str(), f.length_km);
+            std::snprintf(buf, sizeof(buf), "The %s stretches %.0f km through the region.",
+                          f.name.c_str(), f.length_km);
         } else if (f.type == FeatureType::MountainRange && f.peak_elevation_m > 0.0f) {
-            std::snprintf(buf, sizeof(buf),
-                "The %s reach %.0f metres at their highest.",
-                f.name.c_str(), f.peak_elevation_m);
+            std::snprintf(buf, sizeof(buf), "The %s reach %.0f metres at their highest.",
+                          f.name.c_str(), f.peak_elevation_m);
         } else {
-            std::snprintf(buf, sizeof(buf),
-                "The %s is a notable %s.",
-                f.name.c_str(), feature_type_str(f.type));
+            std::snprintf(buf, sizeof(buf), "The %s is a notable %s.", f.name.c_str(),
+                          feature_type_str(f.type));
         }
         fj["headline_fact"] = buf;
-        fj["description"] = std::string("A ") + feature_type_str(f.type) +
-                             " spanning " + std::to_string(f.extent.size()) +
-                             " province(s).";
+        fj["description"] = std::string("A ") + feature_type_str(f.type) + " spanning " +
+                            std::to_string(f.extent.size()) + " province(s).";
         fj["is_disputed"] = f.is_disputed;
         if (f.is_disputed) {
             fj["diplomatic_context_entry"] = {
@@ -4390,7 +4594,8 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         ej["years_before_start"] = pge.years_before_start;
         ej["epicenter_province"] = pge.epicenter_province;
         json affected = json::array();
-        for (auto h : pge.affected_provinces) affected.push_back(h);
+        for (auto h : pge.affected_provinces)
+            affected.push_back(h);
         ej["affected_provinces"] = std::move(affected);
         ej["magnitude"] = pge.magnitude;
         ej["description"] = pge.description;
@@ -4407,20 +4612,16 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         const auto& lc = world.loading_commentary;
         json lcj;
         lcj["stage_texts"] = {
-            {"stage_1", lc.stage_1_text},
-            {"stage_2", lc.stage_2_text},
-            {"stage_3", lc.stage_3_text},
-            {"stage_4", lc.stage_4_text},
-            {"stage_5", lc.stage_5_text},
-            {"stage_6", lc.stage_6_text},
-            {"stage_7", lc.stage_7_text},
-            {"stage_8", lc.stage_8_text},
-            {"stage_9", lc.stage_9_text},
-            {"stage_10", lc.stage_10_text},
+            {"stage_1", lc.stage_1_text},   {"stage_2", lc.stage_2_text},
+            {"stage_3", lc.stage_3_text},   {"stage_4", lc.stage_4_text},
+            {"stage_5", lc.stage_5_text},   {"stage_6", lc.stage_6_text},
+            {"stage_7", lc.stage_7_text},   {"stage_8", lc.stage_8_text},
+            {"stage_9", lc.stage_9_text},   {"stage_10", lc.stage_10_text},
             {"stage_11", lc.stage_11_text},
         };
         json facts = json::array();
-        for (const auto& f : lc.sidebar_facts) facts.push_back(f);
+        for (const auto& f : lc.sidebar_facts)
+            facts.push_back(f);
         lcj["sidebar_facts"] = std::move(facts);
         root["loading_commentary"] = std::move(lcj);
     }
@@ -4436,9 +4637,9 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         std::unordered_map<std::string, uint32_t> archetype_counts;
 
         for (const auto& p : world.provinces) {
-            if (p.settlement_attractiveness > 0.15f) ++habitable;
-            if (p.geography.coastal_length_km > 100.0f &&
-                p.geography.is_landlocked == false &&
+            if (p.settlement_attractiveness > 0.15f)
+                ++habitable;
+            if (p.geography.coastal_length_km > 100.0f && p.geography.is_landlocked == false &&
                 p.settlement_attractiveness < 0.05f) {
                 ++ocean;
             }
@@ -4458,7 +4659,10 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         std::string most_common;
         uint32_t max_count = 0;
         for (const auto& [label, count] : archetype_counts) {
-            if (count > max_count) { max_count = count; most_common = label; }
+            if (count > max_count) {
+                max_count = count;
+                most_common = label;
+            }
         }
         stats["most_common_archetype"] = most_common;
         stats["highest_trauma_province"] = highest_trauma_h3;
@@ -4482,11 +4686,12 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
 }
 
 void WorldGenerator::write_encyclopedia_json(const WorldState& world,
-                                               const WorldGeneratorConfig& config,
-                                               const std::string& path) {
+                                             const WorldGeneratorConfig& config,
+                                             const std::string& path) {
     auto j = to_encyclopedia_json(world, config);
     std::ofstream out(path);
-    if (!out.is_open()) return;
+    if (!out.is_open())
+        return;
     out << j.dump(2);
 }
 
@@ -4639,51 +4844,56 @@ void WorldGenerator::generate_commentary(WorldState& world, DeterministicRNG& rn
     };
 
     for (auto& prov : world.provinces) {
-        uint8_t ctx_idx =
-            static_cast<uint8_t>(prov.tectonic_context) < 8
-                ? static_cast<uint8_t>(prov.tectonic_context)
-                : 6;  // fallback to CratonInterior
+        uint8_t ctx_idx = static_cast<uint8_t>(prov.tectonic_context) < 8
+                              ? static_cast<uint8_t>(prov.tectonic_context)
+                              : 6;  // fallback to CratonInterior
         uint8_t variant = rng.next_uint(2);
 
-        const char* geo    = geo_sentences[ctx_idx][variant];
+        const char* geo = geo_sentences[ctx_idx][variant];
         const char* climate = climate_sentence(prov.climate.koppen_zone);
-        const char* econ   = econ_sentences[prov.province_archetype_index < 6
-                                                ? prov.province_archetype_index
-                                                : 5];
+        const char* econ =
+            econ_sentences[prov.province_archetype_index < 6 ? prov.province_archetype_index : 5];
 
         std::string lore = std::string(geo) + " " + climate + " " + econ;
 
         // Hydrology commentary (Stage 3 features).
         if (prov.geography.is_delta) {
-            lore += " The province encompasses a major river delta whose fertile alluvial "
-                    "soils and extensive waterway network have supported dense agricultural "
-                    "settlement since antiquity, though seasonal flooding remains a constant "
-                    "challenge for infrastructure.";
+            lore +=
+                " The province encompasses a major river delta whose fertile alluvial "
+                "soils and extensive waterway network have supported dense agricultural "
+                "settlement since antiquity, though seasonal flooding remains a constant "
+                "challenge for infrastructure.";
         } else if (prov.geography.is_oasis) {
-            lore += " In an otherwise inhospitable desert landscape, artesian springs "
-                    "sustain a cluster of settlements whose existence depends entirely on "
-                    "ancient groundwater reserves recharged by distant mountain precipitation.";
+            lore +=
+                " In an otherwise inhospitable desert landscape, artesian springs "
+                "sustain a cluster of settlements whose existence depends entirely on "
+                "ancient groundwater reserves recharged by distant mountain precipitation.";
         } else if (prov.geography.snowmelt_fed) {
-            lore += " The province's rivers are sustained by snowmelt from distant mountain "
-                    "ranges, providing reliable irrigation water through the growing season "
-                    "even as local rainfall remains sparse.";
+            lore +=
+                " The province's rivers are sustained by snowmelt from distant mountain "
+                "ranges, providing reliable irrigation water through the growing season "
+                "even as local rainfall remains sparse.";
         } else if (prov.geography.is_endorheic) {
-            lore += " Situated in a closed drainage basin with no outlet to the sea, the "
-                    "province's inland waters have concentrated mineral salts over millennia, "
-                    "creating economically significant brine deposits.";
+            lore +=
+                " Situated in a closed drainage basin with no outlet to the sea, the "
+                "province's inland waters have concentrated mineral salts over millennia, "
+                "creating economically significant brine deposits.";
         }
 
         if (prov.has_estuary) {
-            lore += " A sheltered estuary where river meets tide provides natural harbour "
-                    "conditions and productive fisheries.";
+            lore +=
+                " A sheltered estuary where river meets tide provides natural harbour "
+                "conditions and productive fisheries.";
         } else if (prov.has_ria_coast) {
-            lore += " Drowned river valleys along the coast create a series of natural "
-                    "deep-water harbours ideal for maritime commerce.";
+            lore +=
+                " Drowned river valleys along the coast create a series of natural "
+                "deep-water harbours ideal for maritime commerce.";
         }
 
         if (prov.has_impact_crater) {
             char buf[256];
-            std::snprintf(buf, sizeof(buf),
+            std::snprintf(
+                buf, sizeof(buf),
                 " A circular geological formation %d km across marks the site of an ancient "
                 "asteroid impact whose hydrothermal aftermath concentrated platinum group metals "
                 "and nickel sulfides in the surrounding rock.",
@@ -4692,21 +4902,24 @@ void WorldGenerator::generate_commentary(WorldState& world, DeterministicRNG& rn
         }
 
         if (prov.has_badlands) {
-            lore += " Arid erosion has carved the soft sedimentary rock into a spectacular "
-                    "network of ravines, hoodoos, and exposed geological strata — terrain of "
-                    "scientific and archaeological interest but near-zero agricultural value.";
+            lore +=
+                " Arid erosion has carved the soft sedimentary rock into a spectacular "
+                "network of ravines, hoodoos, and exposed geological strata — terrain of "
+                "scientific and archaeological interest but near-zero agricultural value.";
         }
 
         if (prov.has_loess) {
-            lore += " Windblown glacial silt deposited over millennia has created deep loess "
-                    "soils of exceptional fertility, the foundation of the province's "
-                    "agricultural abundance.";
+            lore +=
+                " Windblown glacial silt deposited over millennia has created deep loess "
+                "soils of exceptional fertility, the foundation of the province's "
+                "agricultural abundance.";
         }
 
         if (prov.is_glacial_scoured) {
-            lore += " Ancient ice sheets stripped the bedrock clean, leaving a landscape of "
-                    "thin soils dotted with thousands of lakes — poor for farming but rich in "
-                    "freshwater, timber, and exposed ancient mineral formations.";
+            lore +=
+                " Ancient ice sheets stripped the bedrock clean, leaving a landscape of "
+                "thin soils dotted with thousands of lakes — poor for farming but rich in "
+                "freshwater, timber, and exposed ancient mineral formations.";
         }
 
         prov.province_lore = std::move(lore);
@@ -4722,179 +4935,278 @@ namespace {
 
 static const char* tectonic_context_str(TectonicContext tc) {
     switch (tc) {
-        case TectonicContext::Subduction:          return "Subduction";
-        case TectonicContext::ContinentalCollision: return "ContinentalCollision";
-        case TectonicContext::RiftZone:            return "RiftZone";
-        case TectonicContext::TransformFault:      return "TransformFault";
-        case TectonicContext::HotSpot:             return "HotSpot";
-        case TectonicContext::PassiveMargin:       return "PassiveMargin";
-        case TectonicContext::CratonInterior:      return "CratonInterior";
-        case TectonicContext::SedimentaryBasin:    return "SedimentaryBasin";
+        case TectonicContext::Subduction:
+            return "Subduction";
+        case TectonicContext::ContinentalCollision:
+            return "ContinentalCollision";
+        case TectonicContext::RiftZone:
+            return "RiftZone";
+        case TectonicContext::TransformFault:
+            return "TransformFault";
+        case TectonicContext::HotSpot:
+            return "HotSpot";
+        case TectonicContext::PassiveMargin:
+            return "PassiveMargin";
+        case TectonicContext::CratonInterior:
+            return "CratonInterior";
+        case TectonicContext::SedimentaryBasin:
+            return "SedimentaryBasin";
     }
     return "Unknown";
 }
 
 static const char* rock_type_str(RockType rt) {
     switch (rt) {
-        case RockType::Igneous:     return "Igneous";
-        case RockType::Sedimentary: return "Sedimentary";
-        case RockType::Metamorphic: return "Metamorphic";
-        case RockType::Mixed:       return "Mixed";
+        case RockType::Igneous:
+            return "Igneous";
+        case RockType::Sedimentary:
+            return "Sedimentary";
+        case RockType::Metamorphic:
+            return "Metamorphic";
+        case RockType::Mixed:
+            return "Mixed";
     }
     return "Unknown";
 }
 
 static const char* geology_type_str(GeologyType gt) {
     switch (gt) {
-        case GeologyType::VolcanicArc:        return "VolcanicArc";
-        case GeologyType::GraniteShield:      return "GraniteShield";
-        case GeologyType::GreenstoneBelt:     return "GreenstoneBelt";
-        case GeologyType::SedimentarySequence: return "SedimentarySequence";
-        case GeologyType::CarbonateSequence:  return "CarbonateSequence";
-        case GeologyType::MetamorphicCore:    return "MetamorphicCore";
-        case GeologyType::BasalticPlateau:    return "BasalticPlateau";
-        case GeologyType::AlluvialFill:       return "AlluvialFill";
+        case GeologyType::VolcanicArc:
+            return "VolcanicArc";
+        case GeologyType::GraniteShield:
+            return "GraniteShield";
+        case GeologyType::GreenstoneBelt:
+            return "GreenstoneBelt";
+        case GeologyType::SedimentarySequence:
+            return "SedimentarySequence";
+        case GeologyType::CarbonateSequence:
+            return "CarbonateSequence";
+        case GeologyType::MetamorphicCore:
+            return "MetamorphicCore";
+        case GeologyType::BasalticPlateau:
+            return "BasalticPlateau";
+        case GeologyType::AlluvialFill:
+            return "AlluvialFill";
     }
     return "Unknown";
 }
 
 static const char* koppen_zone_str(KoppenZone kz) {
     switch (kz) {
-        case KoppenZone::Af:  return "Af";
-        case KoppenZone::Am:  return "Am";
-        case KoppenZone::Aw:  return "Aw";
-        case KoppenZone::BWh: return "BWh";
-        case KoppenZone::BWk: return "BWk";
-        case KoppenZone::BSh: return "BSh";
-        case KoppenZone::BSk: return "BSk";
-        case KoppenZone::Cfa: return "Cfa";
-        case KoppenZone::Cfb: return "Cfb";
-        case KoppenZone::Cfc: return "Cfc";
-        case KoppenZone::Csa: return "Csa";
-        case KoppenZone::Csb: return "Csb";
-        case KoppenZone::Cwa: return "Cwa";
-        case KoppenZone::Dfa: return "Dfa";
-        case KoppenZone::Dfb: return "Dfb";
-        case KoppenZone::Dfc: return "Dfc";
-        case KoppenZone::Dfd: return "Dfd";
-        case KoppenZone::ET:  return "ET";
-        case KoppenZone::EF:  return "EF";
+        case KoppenZone::Af:
+            return "Af";
+        case KoppenZone::Am:
+            return "Am";
+        case KoppenZone::Aw:
+            return "Aw";
+        case KoppenZone::BWh:
+            return "BWh";
+        case KoppenZone::BWk:
+            return "BWk";
+        case KoppenZone::BSh:
+            return "BSh";
+        case KoppenZone::BSk:
+            return "BSk";
+        case KoppenZone::Cfa:
+            return "Cfa";
+        case KoppenZone::Cfb:
+            return "Cfb";
+        case KoppenZone::Cfc:
+            return "Cfc";
+        case KoppenZone::Csa:
+            return "Csa";
+        case KoppenZone::Csb:
+            return "Csb";
+        case KoppenZone::Cwa:
+            return "Cwa";
+        case KoppenZone::Dfa:
+            return "Dfa";
+        case KoppenZone::Dfb:
+            return "Dfb";
+        case KoppenZone::Dfc:
+            return "Dfc";
+        case KoppenZone::Dfd:
+            return "Dfd";
+        case KoppenZone::ET:
+            return "ET";
+        case KoppenZone::EF:
+            return "EF";
     }
     return "Unknown";
 }
 
 static const char* resource_type_str(ResourceType rt) {
     switch (rt) {
-        case ResourceType::IronOre:        return "IronOre";
-        case ResourceType::Copper:         return "Copper";
-        case ResourceType::Bauxite:        return "Bauxite";
-        case ResourceType::Lithium:        return "Lithium";
-        case ResourceType::Coal:           return "Coal";
-        case ResourceType::CrudeOil:       return "CrudeOil";
-        case ResourceType::NaturalGas:     return "NaturalGas";
-        case ResourceType::LimestoneSilica: return "LimestoneSilica";
-        case ResourceType::Wheat:          return "Wheat";
-        case ResourceType::Corn:           return "Corn";
-        case ResourceType::Soybeans:       return "Soybeans";
-        case ResourceType::Cotton:         return "Cotton";
-        case ResourceType::Timber:         return "Timber";
-        case ResourceType::Fish:           return "Fish";
-        case ResourceType::SolarPotential: return "SolarPotential";
-        case ResourceType::WindPotential:  return "WindPotential";
-        case ResourceType::Gold:           return "Gold";
-        case ResourceType::Geothermal:     return "Geothermal";
-        case ResourceType::Uranium:        return "Uranium";
-        case ResourceType::Potash:         return "Potash";
-        case ResourceType::Sand:           return "Sand";
-        case ResourceType::Aggregate:      return "Aggregate";
-        case ResourceType::PlatinumGroupMetals: return "PlatinumGroupMetals";
+        case ResourceType::IronOre:
+            return "IronOre";
+        case ResourceType::Copper:
+            return "Copper";
+        case ResourceType::Bauxite:
+            return "Bauxite";
+        case ResourceType::Lithium:
+            return "Lithium";
+        case ResourceType::Coal:
+            return "Coal";
+        case ResourceType::CrudeOil:
+            return "CrudeOil";
+        case ResourceType::NaturalGas:
+            return "NaturalGas";
+        case ResourceType::LimestoneSilica:
+            return "LimestoneSilica";
+        case ResourceType::Wheat:
+            return "Wheat";
+        case ResourceType::Corn:
+            return "Corn";
+        case ResourceType::Soybeans:
+            return "Soybeans";
+        case ResourceType::Cotton:
+            return "Cotton";
+        case ResourceType::Timber:
+            return "Timber";
+        case ResourceType::Fish:
+            return "Fish";
+        case ResourceType::SolarPotential:
+            return "SolarPotential";
+        case ResourceType::WindPotential:
+            return "WindPotential";
+        case ResourceType::Gold:
+            return "Gold";
+        case ResourceType::Geothermal:
+            return "Geothermal";
+        case ResourceType::Uranium:
+            return "Uranium";
+        case ResourceType::Potash:
+            return "Potash";
+        case ResourceType::Sand:
+            return "Sand";
+        case ResourceType::Aggregate:
+            return "Aggregate";
+        case ResourceType::PlatinumGroupMetals:
+            return "PlatinumGroupMetals";
     }
     return "Unknown";
 }
 
 static const char* fishing_access_str(FishingAccessType fa) {
     switch (fa) {
-        case FishingAccessType::NoAccess:   return "None";
-        case FishingAccessType::Inshore:    return "Inshore";
-        case FishingAccessType::Offshore:   return "Offshore";
-        case FishingAccessType::Pelagic:    return "Pelagic";
-        case FishingAccessType::Freshwater: return "Freshwater";
-        case FishingAccessType::Upwelling:  return "Upwelling";
+        case FishingAccessType::NoAccess:
+            return "None";
+        case FishingAccessType::Inshore:
+            return "Inshore";
+        case FishingAccessType::Offshore:
+            return "Offshore";
+        case FishingAccessType::Pelagic:
+            return "Pelagic";
+        case FishingAccessType::Freshwater:
+            return "Freshwater";
+        case FishingAccessType::Upwelling:
+            return "Upwelling";
     }
     return "Unknown";
 }
 
 static const char* soil_type_str(SoilType st) {
     switch (st) {
-        case SoilType::Mollisol:  return "Mollisol";
-        case SoilType::Oxisol:    return "Oxisol";
-        case SoilType::Aridisol:  return "Aridisol";
-        case SoilType::Vertisol:  return "Vertisol";
-        case SoilType::Spodosol:  return "Spodosol";
-        case SoilType::Histosol:  return "Histosol";
-        case SoilType::Alluvial:  return "Alluvial";
-        case SoilType::Andisol:   return "Andisol";
-        case SoilType::Cryosol:   return "Cryosol";
-        case SoilType::Entisol:   return "Entisol";
+        case SoilType::Mollisol:
+            return "Mollisol";
+        case SoilType::Oxisol:
+            return "Oxisol";
+        case SoilType::Aridisol:
+            return "Aridisol";
+        case SoilType::Vertisol:
+            return "Vertisol";
+        case SoilType::Spodosol:
+            return "Spodosol";
+        case SoilType::Histosol:
+            return "Histosol";
+        case SoilType::Alluvial:
+            return "Alluvial";
+        case SoilType::Andisol:
+            return "Andisol";
+        case SoilType::Cryosol:
+            return "Cryosol";
+        case SoilType::Entisol:
+            return "Entisol";
     }
     return "Unknown";
 }
 
 static const char* river_flow_regime_str(RiverFlowRegime rfr) {
     switch (rfr) {
-        case RiverFlowRegime::RainfedPerennial:   return "RainfedPerennial";
-        case RiverFlowRegime::SnowmeltPerennial:  return "SnowmeltPerennial";
-        case RiverFlowRegime::SnowmeltEphemeral:  return "SnowmeltEphemeral";
-        case RiverFlowRegime::RainfedEphemeral:   return "RainfedEphemeral";
-        case RiverFlowRegime::Glacierfed:         return "Glacierfed";
-        case RiverFlowRegime::None:               return "None";
+        case RiverFlowRegime::RainfedPerennial:
+            return "RainfedPerennial";
+        case RiverFlowRegime::SnowmeltPerennial:
+            return "SnowmeltPerennial";
+        case RiverFlowRegime::SnowmeltEphemeral:
+            return "SnowmeltEphemeral";
+        case RiverFlowRegime::RainfedEphemeral:
+            return "RainfedEphemeral";
+        case RiverFlowRegime::Glacierfed:
+            return "Glacierfed";
+        case RiverFlowRegime::None:
+            return "None";
     }
     return "Unknown";
 }
 
 static const char* link_type_str(LinkType lt) {
     switch (lt) {
-        case LinkType::Land:     return "Land";
-        case LinkType::Maritime: return "Maritime";
-        case LinkType::River:    return "River";
+        case LinkType::Land:
+            return "Land";
+        case LinkType::Maritime:
+            return "Maritime";
+        case LinkType::River:
+            return "River";
     }
     return "Unknown";
 }
 
 static const char* lod_str(SimulationLOD lod) {
     switch (lod) {
-        case SimulationLOD::full:        return "full";
-        case SimulationLOD::simplified:  return "simplified";
-        case SimulationLOD::statistical: return "statistical";
+        case SimulationLOD::full:
+            return "full";
+        case SimulationLOD::simplified:
+            return "simplified";
+        case SimulationLOD::statistical:
+            return "statistical";
     }
     return "unknown";
 }
 
 static const char* nation_size_str(NationSize s) {
     switch (s) {
-        case NationSize::Microstate:   return "microstate";
-        case NationSize::Small:        return "small";
-        case NationSize::Medium:       return "medium";
-        case NationSize::Large:        return "large";
-        case NationSize::Continental:  return "continental";
+        case NationSize::Microstate:
+            return "microstate";
+        case NationSize::Small:
+            return "small";
+        case NationSize::Medium:
+            return "medium";
+        case NationSize::Large:
+            return "large";
+        case NationSize::Continental:
+            return "continental";
     }
     return "small";
 }
 
 static const char* government_type_str(GovernmentType gt) {
     switch (gt) {
-        case GovernmentType::Democracy:    return "Democracy";
-        case GovernmentType::Autocracy:    return "Autocracy";
-        case GovernmentType::Federation:   return "Federation";
-        case GovernmentType::FailedState:  return "FailedState";
+        case GovernmentType::Democracy:
+            return "Democracy";
+        case GovernmentType::Autocracy:
+            return "Autocracy";
+        case GovernmentType::Federation:
+            return "Federation";
+        case GovernmentType::FailedState:
+            return "FailedState";
     }
     return "Unknown";
 }
 
 static const char* archetype_str(uint8_t idx) {
     static const char* names[] = {
-        "industrial_hub", "agricultural", "resource_rich",
-        "coastal_trade", "financial_center", "mixed_economy",
+        "industrial_hub", "agricultural",     "resource_rich",
+        "coastal_trade",  "financial_center", "mixed_economy",
     };
     return idx < 6 ? names[idx] : "mixed_economy";
 }
@@ -5197,13 +5509,17 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         fj["id"] = f.id;
         fj["type"] = feature_type_str(f.type);
         fj["name"] = f.name;
-        if (!f.local_name.empty()) fj["local_name"] = f.local_name;
+        if (!f.local_name.empty())
+            fj["local_name"] = f.local_name;
         fj["language_family_id"] = f.language_family_id;
         fj["significance"] = f.significance;
         fj["extent"] = f.extent;
-        if (f.length_km > 0.0f) fj["length_km"] = f.length_km;
-        if (f.area_km2 > 0.0f) fj["area_km2"] = f.area_km2;
-        if (f.peak_elevation_m > 0.0f) fj["peak_elevation_m"] = f.peak_elevation_m;
+        if (f.length_km > 0.0f)
+            fj["length_km"] = f.length_km;
+        if (f.area_km2 > 0.0f)
+            fj["area_km2"] = f.area_km2;
+        if (f.peak_elevation_m > 0.0f)
+            fj["peak_elevation_m"] = f.peak_elevation_m;
         fj["is_navigable"] = f.is_navigable;
         fj["is_disputed"] = f.is_disputed;
         fj["is_chokepoint"] = f.is_chokepoint;
@@ -5217,7 +5533,8 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
 void WorldGenerator::write_world_json(const WorldState& world, const std::string& path) {
     auto j = to_world_json(world);
     std::ofstream out(path);
-    if (!out.is_open()) return;
+    if (!out.is_open())
+        return;
     out << j.dump(2);
 }
 

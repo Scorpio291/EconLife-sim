@@ -38,9 +38,9 @@ static std::vector<std::string> facility_categories_for_sector(BusinessSector se
 }
 
 void FacilityGenerator::create_facilities(WorldState& world, DeterministicRNG& rng,
-                                       const RecipeCatalog& recipes,
-                                       const FacilityTypeCatalog& facility_types,
-                                       const WorldGeneratorConfig& config) {
+                                          const RecipeCatalog& recipes,
+                                          const FacilityTypeCatalog& facility_types,
+                                          const WorldGeneratorConfig& config) {
     uint32_t facility_id_counter = 5000;
 
     for (auto& biz : world.npc_businesses) {
@@ -113,8 +113,8 @@ void FacilityGenerator::create_facilities(WorldState& world, DeterministicRNG& r
 // ===========================================================================
 
 void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng,
-                                     const TechnologyCatalog& tech_catalog,
-                                     const WorldGeneratorConfig& config) {
+                                        const TechnologyCatalog& tech_catalog,
+                                        const WorldGeneratorConfig& config) {
     // Initialize GlobalTechnologyState.
     world.technology.current_era = SimulationEra::era_1_turn_of_millennium;
     world.technology.era_started_tick = 0;
@@ -128,7 +128,8 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
 
     // Get baseline technology nodes (available at game start).
     auto baseline = tech_catalog.baseline_nodes();
-    if (baseline.empty()) return;
+    if (baseline.empty())
+        return;
 
     // Sector-to-relevant-domain mapping for seeding.
     // Businesses get baseline tech holdings in their relevant domains.
@@ -167,7 +168,8 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
                     break;
                 }
             }
-            if (!relevant) continue;
+            if (!relevant)
+                continue;
 
             TechHolding holding;
             holding.node_key = node->node_key;
@@ -180,10 +182,10 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
 
             // Maturation: baseline tech is mature (0.7-0.95 range, randomized).
             float ceiling = tech_catalog.ceiling_for(node->node_key, config.starting_era);
-            if (ceiling < 0.0f) ceiling = 1.0f;  // fallback if no ceiling data
+            if (ceiling < 0.0f)
+                ceiling = 1.0f;  // fallback if no ceiling data
             holding.maturation_ceiling = ceiling;
-            holding.maturation_level =
-                std::min(ceiling, 0.7f + rng.next_float() * 0.25f);
+            holding.maturation_level = std::min(ceiling, 0.7f + rng.next_float() * 0.25f);
 
             biz.actor_tech_state.holdings[node->node_key] = std::move(holding);
         }
@@ -192,7 +194,8 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
         // (simulating early R&D investment that existed before year 2000).
         auto era1_nodes = tech_catalog.nodes_available_at(1);
         for (const TechnologyNode* node : era1_nodes) {
-            if (node->is_baseline) continue;
+            if (node->is_baseline)
+                continue;
 
             // Check domain relevance.
             bool relevant = false;
@@ -202,10 +205,12 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
                     break;
                 }
             }
-            if (!relevant) continue;
+            if (!relevant)
+                continue;
 
             // ~20% chance of having started early research.
-            if (rng.next_float() > 0.20f) continue;
+            if (rng.next_float() > 0.20f)
+                continue;
 
             TechHolding holding;
             holding.node_key = node->node_key;
@@ -217,11 +222,11 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
             holding.internal_use_only = false;
 
             float ceiling = tech_catalog.ceiling_for(node->node_key, config.starting_era);
-            if (ceiling < 0.0f) ceiling = 0.3f;  // low ceiling for early-era tech
+            if (ceiling < 0.0f)
+                ceiling = 0.3f;  // low ceiling for early-era tech
             holding.maturation_ceiling = ceiling;
             // Early research: low maturation (0.05-0.25).
-            holding.maturation_level =
-                std::min(ceiling, 0.05f + rng.next_float() * 0.20f);
+            holding.maturation_level = std::min(ceiling, 0.05f + rng.next_float() * 0.20f);
 
             biz.actor_tech_state.holdings[node->node_key] = std::move(holding);
         }
@@ -231,6 +236,5 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
 // ===========================================================================
 // Stage 1 — Tectonic plate generation and context classification
 // ===========================================================================
-
 
 }  // namespace econlife

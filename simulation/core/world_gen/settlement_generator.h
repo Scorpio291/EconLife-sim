@@ -20,7 +20,7 @@ class SettlementGenerator {
     // Adjusts total_population from geology/climate score (bounded ±40%).
     // Must run after detect_special_features() so permafrost/island flags are set.
     static void seed_population_attractiveness(WorldState& world, DeterministicRNG& rng,
-                                                const WorldGeneratorConfig& config);
+                                               const WorldGeneratorConfig& config);
 
     // NPC population seeding from demographics.
     static void create_npcs(WorldState& world, DeterministicRNG& rng,
