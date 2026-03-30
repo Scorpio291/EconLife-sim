@@ -202,19 +202,9 @@ void TechnologyModule::check_era_transition(const WorldState& state, DeltaBuffer
     float score = compute_era_transition_score(state, target_era);
 
     if (score >= config_.era_transition_threshold) {
-        // Era advance! We cannot directly modify WorldState (const), so we signal
-        // the transition via the deferred work queue or a special delta.
-        // For now, we set a flag that the orchestrator will pick up.
-        // NOTE: In V1, the orchestrator's apply_deltas handles this via a
-        // technology delta. We write a placeholder RegionDelta to signal the change.
-        // TODO: Add proper TechnologyDelta to DeltaBuffer.
-
-        // For now, era transitions are applied directly by the module writing
-        // to the global technology state. Since TechnologyModule is sequential
-        // (not province-parallel), and it has exclusive write access to
-        // GlobalTechnologyState, this is safe.
-        // The WorldState const contract is maintained by deferring actual
-        // mutation to the delta application phase.
+        TechnologyDelta td{};
+        td.new_era = target_era;
+        delta.technology_deltas.push_back(td);
     }
 }
 
@@ -301,16 +291,11 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
             std::min(holding.maturation_ceiling, holding.maturation_level + maturation_delta);
 
         if (new_level > holding.maturation_level) {
-            // Write a BusinessDelta to signal maturation change.
-            // The actual maturation update happens in apply_deltas.
-            // For now, we record the intent. The apply_deltas function
-            // will need to handle TechHolding updates.
-            // TODO: Add TechnologyDelta to DeltaBuffer for proper mutation.
-            BusinessDelta biz_delta{};
-            biz_delta.business_id = project.business_id;
-            // We overload output_quality_update as a signal for now.
-            // This is a V1 simplification; proper TechnologyDelta is needed.
-            delta.business_deltas.push_back(biz_delta);
+            TechnologyDelta td{};
+            td.business_id = project.business_id;
+            td.node_key = project.node_key;
+            td.maturation_level_update = new_level;
+            delta.technology_deltas.push_back(td);
         }
     }
 }
@@ -319,12 +304,21 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
 // TechnologyModule — domain knowledge decay
 // ===========================================================================
 
-void TechnologyModule::decay_domain_knowledge(const WorldState& state, DeltaBuffer& /* delta */) {
+void TechnologyModule::decay_domain_knowledge(const WorldState& state, DeltaBuffer& delta) {
     // Domain knowledge decays slowly per tick (obsolescence).
-    // Since GlobalTechnologyState is in WorldState (const), actual decay
-    // is deferred to apply_deltas. For V1, the decay rate is very small
-    // and the effect is primarily cosmetic in early eras.
-    // TODO: Add TechnologyDelta to DeltaBuffer for domain knowledge mutation.
+    // V1: very small rate, primarily cosmetic in early eras.
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
+        float current = state.technology.domain_knowledge[i];
+        if (current > 0.0f) {
+            float decay = -current * config_.knowledge_decay_rate;
+            if (decay < -0.0001f) {  // Skip negligible decay.
+                TechnologyDelta td{};
+                td.domain_index = i;
+                td.domain_knowledge_delta = decay;
+                delta.technology_deltas.push_back(td);
+            }
+        }
+    }
 }
 
 // ===========================================================================

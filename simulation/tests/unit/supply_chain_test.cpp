@@ -185,7 +185,8 @@ TEST_CASE("test_module_interface_properties", "[supply_chain][tier2]") {
     REQUIRE(module.name() == "supply_chain");
     REQUIRE(module.package_id() == "base_game");
     REQUIRE(module.scope() == ModuleScope::v1);
-    REQUIRE(module.is_province_parallel() == false);
+    REQUIRE(module.is_province_parallel() == true);
+    REQUIRE(module.has_global_post_pass() == true);
 
     auto after = module.runs_after();
     REQUIRE(after.size() == 1);

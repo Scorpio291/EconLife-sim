@@ -44,14 +44,11 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
 }
 
 void LaborMarketModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Global post-pass: called by the orchestrator after all province-parallel
+    // execute_province() calls have been merged and applied.
     // Monthly wage update runs globally (not per-province).
     if (state.current_tick % LaborConfig::monthly_tick_interval == 0) {
         update_regional_wages(state);
-    }
-
-    // Province-parallel modules also provide sequential fallback.
-    for (uint32_t p = 0; p < static_cast<uint32_t>(state.provinces.size()); ++p) {
-        execute_province(p, state, delta);
     }
 }
 

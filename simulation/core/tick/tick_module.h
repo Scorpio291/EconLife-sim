@@ -38,7 +38,15 @@ class ITickModule {
     virtual void execute_province(uint32_t province_idx, const WorldState& state,
                                   DeltaBuffer& province_delta) {}
 
+    // Global post-pass for province-parallel modules. When true, execute()
+    // is called after all province deltas are merged and applied, allowing
+    // the module to perform global coordination (e.g., transit arrivals,
+    // wage equilibration). Only meaningful when is_province_parallel() is true.
+    virtual bool has_global_post_pass() const noexcept { return false; }
+
     // Sequential execution. Called if is_province_parallel() returns false.
+    // Also called as a global post-pass if both is_province_parallel() and
+    // has_global_post_pass() return true (after province deltas are applied).
     virtual void execute(const WorldState& state, DeltaBuffer& delta) = 0;
 };
 

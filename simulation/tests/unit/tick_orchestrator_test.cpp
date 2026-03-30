@@ -54,6 +54,36 @@ class TestModule : public ITickModule {
     static inline std::vector<std::string> execution_order_;
 };
 
+// Test module that supports province-parallel + global post-pass.
+class TestModuleWithPostPass : public ITickModule {
+   public:
+    TestModuleWithPostPass(std::string name, std::vector<std::string_view> after = {},
+                           std::vector<std::string_view> before = {})
+        : name_(std::move(name)), after_(std::move(after)), before_(std::move(before)) {}
+
+    std::string_view name() const noexcept override { return name_; }
+    std::string_view package_id() const noexcept override { return "test"; }
+
+    std::vector<std::string_view> runs_after() const override { return after_; }
+    std::vector<std::string_view> runs_before() const override { return before_; }
+    bool is_province_parallel() const noexcept override { return true; }
+    bool has_global_post_pass() const noexcept override { return true; }
+
+    void execute(const WorldState& state, DeltaBuffer& delta) override {
+        TestModule::execution_order().push_back(name_ + "_global");
+    }
+
+    void execute_province(uint32_t province_idx, const WorldState& state,
+                          DeltaBuffer& province_delta) override {
+        TestModule::execution_order().push_back(name_ + "_p" + std::to_string(province_idx));
+    }
+
+   private:
+    std::string name_;
+    std::vector<std::string_view> after_;
+    std::vector<std::string_view> before_;
+};
+
 // --- Tests ---
 
 TEST_CASE("empty orchestrator finalizes without error", "[orchestrator][tier0]") {
@@ -181,4 +211,101 @@ TEST_CASE("sequential modules execute in sorted order", "[orchestrator][tier0]")
     REQUIRE(order[1] == "b");
     REQUIRE(order[2] == "c");
     REQUIRE(state.current_tick == 1);
+}
+
+TEST_CASE("province-parallel module with global post-pass executes provinces then global",
+          "[orchestrator][tier0]") {
+    TestModule::reset_order();
+    TickOrchestrator orch;
+
+    // "alpha" is province-parallel with global post-pass.
+    orch.register_module(std::make_unique<TestModuleWithPostPass>("alpha"));
+    orch.finalize_registration();
+
+    // Create WorldState with 3 provinces to verify province dispatch.
+    WorldState state{};
+    state.current_tick = 0;
+    state.world_seed = 42;
+    state.player = nullptr;
+    state.lod2_price_index = nullptr;
+    state.provinces.resize(3);
+    for (auto& p : state.provinces) {
+        p.lod_level = SimulationLOD::full;
+    }
+
+    ThreadPool pool(1);
+    orch.execute_tick(state, pool);
+
+    auto& order = TestModule::execution_order();
+    // Should execute: alpha_p0, alpha_p1, alpha_p2, alpha_global
+    REQUIRE(order.size() == 4);
+    CHECK(order[0] == "alpha_p0");
+    CHECK(order[1] == "alpha_p1");
+    CHECK(order[2] == "alpha_p2");
+    CHECK(order[3] == "alpha_global");
+}
+
+TEST_CASE("mixed sequential and province-parallel-with-post-pass modules execute correctly",
+          "[orchestrator][tier0]") {
+    TestModule::reset_order();
+    TickOrchestrator orch;
+
+    // "first" sequential, "middle" province-parallel with post-pass, "last" sequential after middle.
+    orch.register_module(std::make_unique<TestModule>("last", std::vector<std::string_view>{"middle"}));
+    orch.register_module(std::make_unique<TestModuleWithPostPass>("middle",
+                         std::vector<std::string_view>{"first"}));
+    orch.register_module(std::make_unique<TestModule>("first"));
+    orch.finalize_registration();
+
+    WorldState state{};
+    state.current_tick = 0;
+    state.world_seed = 42;
+    state.player = nullptr;
+    state.lod2_price_index = nullptr;
+    state.provinces.resize(2);
+    for (auto& p : state.provinces) {
+        p.lod_level = SimulationLOD::full;
+    }
+
+    ThreadPool pool(1);
+    orch.execute_tick(state, pool);
+
+    auto& order = TestModule::execution_order();
+    // first (sequential), middle_p0, middle_p1, middle_global, last (sequential)
+    REQUIRE(order.size() == 5);
+    CHECK(order[0] == "first");
+    CHECK(order[1] == "middle_p0");
+    CHECK(order[2] == "middle_p1");
+    CHECK(order[3] == "middle_global");
+    CHECK(order[4] == "last");
+}
+
+TEST_CASE("province-parallel module without post-pass does not call execute",
+          "[orchestrator][tier0]") {
+    TestModule::reset_order();
+    TickOrchestrator orch;
+
+    // "par" is province-parallel but does NOT have global post-pass.
+    orch.register_module(std::make_unique<TestModule>("par", std::vector<std::string_view>{},
+                                                      std::vector<std::string_view>{}, true));
+    orch.finalize_registration();
+
+    WorldState state{};
+    state.current_tick = 0;
+    state.world_seed = 42;
+    state.player = nullptr;
+    state.lod2_price_index = nullptr;
+    state.provinces.resize(2);
+    for (auto& p : state.provinces) {
+        p.lod_level = SimulationLOD::full;
+    }
+
+    ThreadPool pool(1);
+    orch.execute_tick(state, pool);
+
+    auto& order = TestModule::execution_order();
+    // Should only execute province calls, no global execute call.
+    REQUIRE(order.size() == 2);
+    CHECK(order[0] == "par_p0");
+    CHECK(order[1] == "par_p1");
 }

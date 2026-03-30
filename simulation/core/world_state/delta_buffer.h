@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 // Complete type definitions needed for std::optional and std::vector members.
@@ -84,6 +85,20 @@ struct CurrencyDelta {
     std::optional<float> foreign_reserves_delta;  // additive; reserve depletion
 };
 
+struct TechnologyDelta {
+    // Era transition: replacement. Only one per tick (from TechnologyModule).
+    std::optional<uint8_t> new_era;  // SimulationEra cast to uint8_t
+
+    // Domain knowledge decay: additive per domain index.
+    std::optional<uint8_t> domain_index;      // index into domain_knowledge[]
+    std::optional<float> domain_knowledge_delta;  // additive (usually negative for decay)
+
+    // Per-business maturation update: identifies a TechHolding to update.
+    std::optional<uint32_t> business_id;
+    std::optional<std::string> node_key;  // string key into holdings map
+    std::optional<float> maturation_level_update;  // replacement
+};
+
 struct RegionDelta {
     uint32_t region_id;
     std::optional<float> stability_delta;            // additive
@@ -112,6 +127,7 @@ struct DeltaBuffer {
     std::vector<BusinessDelta> business_deltas;
     std::vector<RegionDelta> region_deltas;
     std::vector<CurrencyDelta> currency_deltas;
+    std::vector<TechnologyDelta> technology_deltas;
     std::vector<CalendarEntry> new_calendar_entries;
     std::vector<SceneCard> new_scene_cards;
     std::vector<ObligationNode> new_obligation_nodes;
