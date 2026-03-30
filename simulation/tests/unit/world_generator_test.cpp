@@ -4,17 +4,17 @@
 
 #include "core/world_gen/world_generator.h"
 
+#include <h3api.h>
+
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <set>
 #include <string>
-
-#include <h3api.h>
-#include <nlohmann/json.hpp>
 
 #include "core/world_gen/goods_catalog.h"
 
@@ -670,7 +670,8 @@ TEST_CASE("WorldGenerator - tectonic context varies across provinces", "[world_g
     CHECK(contexts.size() >= 2);
 }
 
-TEST_CASE("WorldGenerator - tectonic deposits added on top of archetype deposits", "[world_gen][tectonics]") {
+TEST_CASE("WorldGenerator - tectonic deposits added on top of archetype deposits",
+          "[world_gen][tectonics]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -732,7 +733,8 @@ TEST_CASE("WorldGenerator - island isolation and mountain pass flags are set cor
     }
 }
 
-TEST_CASE("WorldGenerator - province_lore is non-empty for all provinces", "[world_gen][commentary]") {
+TEST_CASE("WorldGenerator - province_lore is non-empty for all provinces",
+          "[world_gen][commentary]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -747,7 +749,8 @@ TEST_CASE("WorldGenerator - province_lore is non-empty for all provinces", "[wor
     }
 }
 
-TEST_CASE("WorldGenerator - province_lore is deterministic", "[world_gen][commentary][determinism]") {
+TEST_CASE("WorldGenerator - province_lore is deterministic",
+          "[world_gen][commentary][determinism]") {
     WorldGeneratorConfig config{};
     config.seed = 99;
     config.province_count = 6;
@@ -817,7 +820,7 @@ TEST_CASE("WorldGenerator - agricultural_productivity reflects soil fertility mo
     // We need enough samples for a meaningful comparison.
     if (volcanic_count >= 3 && granite_count >= 3) {
         float volcanic_avg = volcanic_sum / static_cast<float>(volcanic_count);
-        float granite_avg  = granite_sum  / static_cast<float>(granite_count);
+        float granite_avg = granite_sum / static_cast<float>(granite_count);
         // VolcanicArc soil multiplier (1.10–1.30) >> GraniteShield (0.65–0.85).
         CHECK(volcanic_avg > granite_avg);
     }
@@ -827,7 +830,7 @@ TEST_CASE("WorldGenerator - forest_coverage is blended with climate expectation"
           "[world_gen][biomes]") {
     // Desert (BWh/BWk) provinces should have low forest coverage (<0.25).
     // Tropical (Af/Am) provinces should have higher coverage (>0.25).
-    bool found_low_forest_desert  = false;
+    bool found_low_forest_desert = false;
     bool found_high_forest_tropic = false;
 
     for (uint64_t seed = 1; seed <= 30; ++seed) {
@@ -886,10 +889,10 @@ TEST_CASE("WorldGenerator - permafrost provinces have oil/gas accessibility lock
         config.npc_count = 50;
         auto world = WorldGenerator::generate(config);
         for (const auto& p : world.provinces) {
-            if (!p.has_permafrost) continue;
+            if (!p.has_permafrost)
+                continue;
             for (const auto& dep : p.deposits) {
-                if (dep.type == ResourceType::CrudeOil ||
-                    dep.type == ResourceType::NaturalGas) {
+                if (dep.type == ResourceType::CrudeOil || dep.type == ResourceType::NaturalGas) {
                     CHECK(dep.accessibility == 0.0f);
                 }
             }
@@ -932,7 +935,8 @@ TEST_CASE("WorldGenerator - fjord provinces satisfy geographic preconditions",
         config.npc_count = 50;
         auto world = WorldGenerator::generate(config);
         for (const auto& p : world.provinces) {
-            if (!p.has_fjord) continue;
+            if (!p.has_fjord)
+                continue;
             CHECK_FALSE(p.geography.is_landlocked);
             CHECK(p.geography.coastal_length_km > 100.0f);
             CHECK(p.geography.terrain_roughness > 0.55f);
@@ -982,12 +986,12 @@ TEST_CASE("WorldGenerator - stages 5-9 are deterministic", "[world_gen][determin
         const auto& a = world1.provinces[i];
         const auto& b = world2.provinces[i];
         CHECK(a.agricultural_productivity == b.agricultural_productivity);
-        CHECK(a.geography.forest_coverage  == b.geography.forest_coverage);
+        CHECK(a.geography.forest_coverage == b.geography.forest_coverage);
         CHECK(a.climate.drought_vulnerability == b.climate.drought_vulnerability);
-        CHECK(a.climate.flood_vulnerability   == b.climate.flood_vulnerability);
+        CHECK(a.climate.flood_vulnerability == b.climate.flood_vulnerability);
         CHECK(a.has_permafrost == b.has_permafrost);
-        CHECK(a.has_fjord      == b.has_fjord);
-        CHECK(a.has_karst      == b.has_karst);
+        CHECK(a.has_fjord == b.has_fjord);
+        CHECK(a.has_karst == b.has_karst);
         CHECK(a.demographics.total_population == b.demographics.total_population);
     }
 }
@@ -1041,7 +1045,7 @@ TEST_CASE("WorldGenerator - temperature decreases with elevation (lapse rate)",
         for (const auto& p : world.provinces) {
             // Temperatures must be in a physically plausible range.
             CHECK(p.climate.temperature_avg_c >= -50.0f);
-            CHECK(p.climate.temperature_avg_c <=  50.0f);
+            CHECK(p.climate.temperature_avg_c <= 50.0f);
             CHECK(p.climate.temperature_min_c <= p.climate.temperature_avg_c);
             CHECK(p.climate.temperature_max_c >= p.climate.temperature_avg_c);
             // High-elevation provinces (> 800m) must be meaningfully cool.
@@ -1067,9 +1071,9 @@ TEST_CASE("WorldGenerator - elevation and temperature are deterministic",
 
     REQUIRE(w1.provinces.size() == w2.provinces.size());
     for (size_t i = 0; i < w1.provinces.size(); ++i) {
-        CHECK(w1.provinces[i].geography.elevation_avg_m  ==
+        CHECK(w1.provinces[i].geography.elevation_avg_m ==
               w2.provinces[i].geography.elevation_avg_m);
-        CHECK(w1.provinces[i].climate.temperature_avg_c  ==
+        CHECK(w1.provinces[i].climate.temperature_avg_c ==
               w2.provinces[i].climate.temperature_avg_c);
     }
 }
@@ -1120,7 +1124,7 @@ TEST_CASE("WorldGenerator - coastal provinces have higher trade_openness than la
         }
     }
     if (coastal_count > 0 && landlocked_count > 0) {
-        float coastal_avg   = coastal_openness_sum   / static_cast<float>(coastal_count);
+        float coastal_avg = coastal_openness_sum / static_cast<float>(coastal_count);
         float landlocked_avg = landlocked_openness_sum / static_cast<float>(landlocked_count);
         CHECK(coastal_avg > landlocked_avg);
     }
@@ -1179,8 +1183,9 @@ TEST_CASE("WorldGenerator - economic geography is deterministic",
 
     REQUIRE(w1.provinces.size() == w2.provinces.size());
     for (size_t i = 0; i < w1.provinces.size(); ++i) {
-        CHECK(w1.provinces[i].trade_openness                   == w2.provinces[i].trade_openness);
-        CHECK(w1.provinces[i].climate.wildfire_vulnerability   == w2.provinces[i].climate.wildfire_vulnerability);
+        CHECK(w1.provinces[i].trade_openness == w2.provinces[i].trade_openness);
+        CHECK(w1.provinces[i].climate.wildfire_vulnerability ==
+              w2.provinces[i].climate.wildfire_vulnerability);
         CHECK(w1.provinces[i].conditions.formal_employment_rate ==
               w2.provinces[i].conditions.formal_employment_rate);
     }
@@ -1190,8 +1195,7 @@ TEST_CASE("WorldGenerator - economic geography is deterministic",
 // Stage 8 — era_unlock field on ResourceDeposit
 // ===========================================================================
 
-TEST_CASE("WorldGenerator - deposits have valid era_unlock",
-          "[world_gen][era_unlock]") {
+TEST_CASE("WorldGenerator - deposits have valid era_unlock", "[world_gen][era_unlock]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -1203,8 +1207,7 @@ TEST_CASE("WorldGenerator - deposits have valid era_unlock",
     for (const auto& prov : world.provinces) {
         for (const auto& d : prov.deposits) {
             // Renewable energy (solar/wind) unlocks at Era 2; all others at Era 1.
-            if (d.type == ResourceType::SolarPotential ||
-                d.type == ResourceType::WindPotential) {
+            if (d.type == ResourceType::SolarPotential || d.type == ResourceType::WindPotential) {
                 CHECK(d.era_unlock == 2);
             } else {
                 CHECK(d.era_unlock == 1);
@@ -1268,8 +1271,7 @@ TEST_CASE("WorldGenerator - to_world_json produces valid JSON with all provinces
     CHECK(j["provinces"].size() == world.provinces.size());
 }
 
-TEST_CASE("WorldGenerator - JSON province has all required fields",
-          "[world_gen][json_output]") {
+TEST_CASE("WorldGenerator - JSON province has all required fields", "[world_gen][json_output]") {
     WorldGeneratorConfig config{};
     config.seed = 77;
     config.province_count = 6;
@@ -1334,8 +1336,7 @@ TEST_CASE("WorldGenerator - JSON province has all required fields",
     CHECK(p.contains("has_karst"));
 }
 
-TEST_CASE("WorldGenerator - write_world_json creates file on disk",
-          "[world_gen][json_output]") {
+TEST_CASE("WorldGenerator - write_world_json creates file on disk", "[world_gen][json_output]") {
     WorldGeneratorConfig config{};
     config.seed = 99;
     config.province_count = 6;
@@ -1343,8 +1344,7 @@ TEST_CASE("WorldGenerator - write_world_json creates file on disk",
 
     auto world = WorldGenerator::generate(config);
 
-    std::string tmp_path = "/tmp/econlife_test_world_" +
-                           std::to_string(config.seed) + ".json";
+    std::string tmp_path = "/tmp/econlife_test_world_" + std::to_string(config.seed) + ".json";
     WorldGenerator::write_world_json(world, tmp_path);
 
     // File should exist and be valid JSON.
@@ -1377,8 +1377,7 @@ TEST_CASE("WorldGenerator - JSON output is deterministic",
     CHECK(j1.dump() == j2.dump());
 }
 
-TEST_CASE("WorldGenerator - JSON nation fields are present",
-          "[world_gen][json_output]") {
+TEST_CASE("WorldGenerator - JSON nation fields are present", "[world_gen][json_output]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -1427,8 +1426,7 @@ TEST_CASE("WorldGenerator - output_world_file config writes during generate",
 // Stage 3 — Hydrology Tests
 // ===========================================================================
 
-TEST_CASE("WorldGenerator  - hydrology: river_access is bounded [0,1]",
-          "[world_gen][hydrology]") {
+TEST_CASE("WorldGenerator  - hydrology: river_access is bounded [0,1]", "[world_gen][hydrology]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -1473,8 +1471,7 @@ TEST_CASE("WorldGenerator  - hydrology: port_capacity is 0 for landlocked provin
     }
 }
 
-TEST_CASE("WorldGenerator  - hydrology: port_capacity bounded [0,1]",
-          "[world_gen][hydrology]") {
+TEST_CASE("WorldGenerator  - hydrology: port_capacity bounded [0,1]", "[world_gen][hydrology]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -1641,8 +1638,7 @@ TEST_CASE("WorldGenerator  - atmosphere: temperature bounded [-50, 50]",
     }
 }
 
-TEST_CASE("WorldGenerator  - atmosphere: precipitation non-negative",
-          "[world_gen][atmosphere]") {
+TEST_CASE("WorldGenerator  - atmosphere: precipitation non-negative", "[world_gen][atmosphere]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -1778,7 +1774,8 @@ TEST_CASE("WorldGenerator  - atmosphere: monsoon provinces have elevated seasona
 
         for (const auto& prov : world.provinces) {
             if (prov.climate.is_monsoon) {
-                CHECK(prov.climate.precipitation_seasonality >= config.atmosphere.monsoon_seasonality);
+                CHECK(prov.climate.precipitation_seasonality >=
+                      config.atmosphere.monsoon_seasonality);
                 found_monsoon = true;
                 break;
             }
@@ -1806,8 +1803,7 @@ TEST_CASE("WorldGenerator  - atmosphere: coastal provinces have lower continenta
 // Stage 5 — Soil Type & Irrigation Tests
 // ===========================================================================
 
-TEST_CASE("WorldGenerator  - soils: every province gets a valid SoilType",
-          "[world_gen][soils]") {
+TEST_CASE("WorldGenerator  - soils: every province gets a valid SoilType", "[world_gen][soils]") {
     for (uint64_t seed = 1; seed <= 10; ++seed) {
         WorldGeneratorConfig config{};
         config.seed = seed;
@@ -1822,8 +1818,7 @@ TEST_CASE("WorldGenerator  - soils: every province gets a valid SoilType",
     }
 }
 
-TEST_CASE("WorldGenerator  - soils: soil assignment is deterministic",
-          "[world_gen][soils]") {
+TEST_CASE("WorldGenerator  - soils: soil assignment is deterministic", "[world_gen][soils]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -1836,14 +1831,14 @@ TEST_CASE("WorldGenerator  - soils: soil assignment is deterministic",
     for (size_t i = 0; i < world1.provinces.size(); ++i) {
         CHECK(world1.provinces[i].soil_type == world2.provinces[i].soil_type);
         CHECK(world1.provinces[i].irrigation_potential == world2.provinces[i].irrigation_potential);
-        CHECK(world1.provinces[i].irrigation_cost_index == world2.provinces[i].irrigation_cost_index);
+        CHECK(world1.provinces[i].irrigation_cost_index ==
+              world2.provinces[i].irrigation_cost_index);
         CHECK(world1.provinces[i].salinisation_risk == world2.provinces[i].salinisation_risk);
         CHECK(world1.provinces[i].water_availability == world2.provinces[i].water_availability);
     }
 }
 
-TEST_CASE("WorldGenerator  - soils: irrigation fields bounded",
-          "[world_gen][soils]") {
+TEST_CASE("WorldGenerator  - soils: irrigation fields bounded", "[world_gen][soils]") {
     for (uint64_t seed = 1; seed <= 10; ++seed) {
         WorldGeneratorConfig config{};
         config.seed = seed;
@@ -1865,8 +1860,7 @@ TEST_CASE("WorldGenerator  - soils: irrigation fields bounded",
     }
 }
 
-TEST_CASE("WorldGenerator  - soils: permafrost provinces get Cryosol",
-          "[world_gen][soils]") {
+TEST_CASE("WorldGenerator  - soils: permafrost provinces get Cryosol", "[world_gen][soils]") {
     bool found = false;
     for (uint64_t seed = 1; seed <= 20 && !found; ++seed) {
         WorldGeneratorConfig config{};
@@ -2045,8 +2039,7 @@ TEST_CASE("WorldGenerator  - hydrology: estuary and ria_coast exclusive with fjo
 // Stage 7 — Impact Craters, Badlands, and Glacial Features Tests
 // ===========================================================================
 
-TEST_CASE("WorldGenerator  - features: impact crater fields bounded",
-          "[world_gen][features]") {
+TEST_CASE("WorldGenerator  - features: impact crater fields bounded", "[world_gen][features]") {
     for (uint64_t seed = 1; seed <= 10; ++seed) {
         WorldGeneratorConfig config{};
         config.seed = seed;
@@ -2069,8 +2062,7 @@ TEST_CASE("WorldGenerator  - features: impact crater fields bounded",
     }
 }
 
-TEST_CASE("WorldGenerator  - features: impact craters seed PGMs",
-          "[world_gen][features]") {
+TEST_CASE("WorldGenerator  - features: impact craters seed PGMs", "[world_gen][features]") {
     bool found_pgm = false;
     for (uint64_t seed = 1; seed <= 50 && !found_pgm; ++seed) {
         WorldGeneratorConfig config{};
@@ -2096,8 +2088,7 @@ TEST_CASE("WorldGenerator  - features: impact craters seed PGMs",
     // PGMs may be rare — OK if not found in 50 seeds.
 }
 
-TEST_CASE("WorldGenerator  - features: badlands have zero arable land",
-          "[world_gen][features]") {
+TEST_CASE("WorldGenerator  - features: badlands have zero arable land", "[world_gen][features]") {
     bool found_badlands = false;
     for (uint64_t seed = 1; seed <= 50 && !found_badlands; ++seed) {
         WorldGeneratorConfig config{};
@@ -2118,8 +2109,7 @@ TEST_CASE("WorldGenerator  - features: badlands have zero arable land",
     // Badlands require specific geology + arid climate — may not appear.
 }
 
-TEST_CASE("WorldGenerator  - features: loess provinces have elevated ag",
-          "[world_gen][features]") {
+TEST_CASE("WorldGenerator  - features: loess provinces have elevated ag", "[world_gen][features]") {
     bool found_loess = false;
     for (uint64_t seed = 1; seed <= 30 && !found_loess; ++seed) {
         WorldGeneratorConfig config{};
@@ -2252,8 +2242,7 @@ TEST_CASE("WorldGenerator  - fisheries: upwelling has highest carrying capacity"
     }
 }
 
-TEST_CASE("WorldGenerator  - fisheries: freshwater from rivers",
-          "[world_gen][fisheries]") {
+TEST_CASE("WorldGenerator  - fisheries: freshwater from rivers", "[world_gen][fisheries]") {
     bool found_freshwater = false;
     for (uint64_t seed = 1; seed <= 20 && !found_freshwater; ++seed) {
         WorldGeneratorConfig config{};
@@ -2274,8 +2263,7 @@ TEST_CASE("WorldGenerator  - fisheries: freshwater from rivers",
     }
 }
 
-TEST_CASE("WorldGenerator  - fisheries: deterministic",
-          "[world_gen][fisheries]") {
+TEST_CASE("WorldGenerator  - fisheries: deterministic", "[world_gen][fisheries]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2340,8 +2328,8 @@ TEST_CASE("WorldGenerator  - features: salt flat on endorheic arid provinces",
                 CHECK(prov.geography.is_endorheic);
                 // Must be in arid zone.
                 KoppenZone kz = prov.climate.koppen_zone;
-                CHECK((kz == KoppenZone::BWh || kz == KoppenZone::BWk ||
-                       kz == KoppenZone::BSh || kz == KoppenZone::BSk));
+                CHECK((kz == KoppenZone::BWh || kz == KoppenZone::BWk || kz == KoppenZone::BSh ||
+                       kz == KoppenZone::BSk));
             }
         }
     }
@@ -2403,8 +2391,10 @@ TEST_CASE("WorldGenerator  - resources: every province gets Sand and Aggregate",
             bool has_sand = false;
             bool has_agg = false;
             for (const auto& d : prov.deposits) {
-                if (d.type == ResourceType::Sand) has_sand = true;
-                if (d.type == ResourceType::Aggregate) has_agg = true;
+                if (d.type == ResourceType::Sand)
+                    has_sand = true;
+                if (d.type == ResourceType::Aggregate)
+                    has_agg = true;
             }
             // Most provinces should have at least aggregate (from rock type).
             CHECK(has_agg);
@@ -2414,8 +2404,7 @@ TEST_CASE("WorldGenerator  - resources: every province gets Sand and Aggregate",
     }
 }
 
-TEST_CASE("WorldGenerator  - resources: desert sand has low quality",
-          "[world_gen][resources]") {
+TEST_CASE("WorldGenerator  - resources: desert sand has low quality", "[world_gen][resources]") {
     bool found_desert = false;
     for (uint64_t seed = 1; seed <= 20 && !found_desert; ++seed) {
         WorldGeneratorConfig config{};
@@ -2475,8 +2464,7 @@ TEST_CASE("WorldGenerator  - resources: SolarPotential and WindPotential seeded"
     CHECK(found_wind);
 }
 
-TEST_CASE("WorldGenerator  - resources: deterministic deposit seeding",
-          "[world_gen][resources]") {
+TEST_CASE("WorldGenerator  - resources: deterministic deposit seeding", "[world_gen][resources]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2519,8 +2507,7 @@ TEST_CASE("WorldGenerator  - features: atoll has zero ag and moderate port",
     // Atolls are rare — OK if not found in 50 seeds.
 }
 
-TEST_CASE("WorldGenerator  - features: JSON includes is_atoll",
-          "[world_gen][features][json]") {
+TEST_CASE("WorldGenerator  - features: JSON includes is_atoll", "[world_gen][features][json]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2605,8 +2592,7 @@ TEST_CASE("WorldGenerator  - population: deterministic settlement and disease",
     for (size_t i = 0; i < world1.provinces.size(); ++i) {
         CHECK(world1.provinces[i].settlement_attractiveness ==
               world2.provinces[i].settlement_attractiveness);
-        CHECK(world1.provinces[i].disease_burden ==
-              world2.provinces[i].disease_burden);
+        CHECK(world1.provinces[i].disease_burden == world2.provinces[i].disease_burden);
         CHECK(world1.provinces[i].infrastructure_rating ==
               world2.provinces[i].infrastructure_rating);
         CHECK(world1.provinces[i].demographics.total_population ==
@@ -2690,8 +2676,7 @@ TEST_CASE("WorldGenerator  - nations: every province assigned to a nation",
     }
 }
 
-TEST_CASE("WorldGenerator  - nations: nation struct fields populated",
-          "[world_gen][nations]") {
+TEST_CASE("WorldGenerator  - nations: nation struct fields populated", "[world_gen][nations]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2733,8 +2718,7 @@ TEST_CASE("WorldGenerator  - nations: capitals are valid and unique per nation",
     CHECK(capital_ids.size() == world.nations.size());
 }
 
-TEST_CASE("WorldGenerator  - nations: border_change_count bounds",
-          "[world_gen][nations]") {
+TEST_CASE("WorldGenerator  - nations: border_change_count bounds", "[world_gen][nations]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2759,10 +2743,8 @@ TEST_CASE("WorldGenerator  - nations: infra_gap computed for all provinces",
 
     // infra_gap = infrastructure_rating - settlement_attractiveness * 0.70.
     for (const auto& prov : world.provinces) {
-        float expected = prov.infrastructure_rating -
-                         prov.settlement_attractiveness * 0.70f;
-        CHECK_THAT(prov.infra_gap,
-                   Catch::Matchers::WithinAbs(expected, 0.01));
+        float expected = prov.infrastructure_rating - prov.settlement_attractiveness * 0.70f;
+        CHECK_THAT(prov.infra_gap, Catch::Matchers::WithinAbs(expected, 0.01));
     }
 }
 
@@ -2779,18 +2761,14 @@ TEST_CASE("WorldGenerator  - nations: nation formation is deterministic",
     REQUIRE(world1.nations.size() == world2.nations.size());
     for (size_t i = 0; i < world1.nations.size(); ++i) {
         CHECK(world1.nations[i].name == world2.nations[i].name);
-        CHECK(world1.nations[i].language_family_id ==
-              world2.nations[i].language_family_id);
-        CHECK(world1.nations[i].capital_province_id ==
-              world2.nations[i].capital_province_id);
+        CHECK(world1.nations[i].language_family_id == world2.nations[i].language_family_id);
+        CHECK(world1.nations[i].capital_province_id == world2.nations[i].capital_province_id);
         CHECK(world1.nations[i].province_ids == world2.nations[i].province_ids);
     }
     for (size_t i = 0; i < world1.provinces.size(); ++i) {
         CHECK(world1.provinces[i].nation_id == world2.provinces[i].nation_id);
-        CHECK(world1.provinces[i].border_change_count ==
-              world2.provinces[i].border_change_count);
-        CHECK(world1.provinces[i].is_nation_capital ==
-              world2.provinces[i].is_nation_capital);
+        CHECK(world1.provinces[i].border_change_count == world2.provinces[i].border_change_count);
+        CHECK(world1.provinces[i].is_nation_capital == world2.provinces[i].is_nation_capital);
     }
 }
 
@@ -2827,8 +2805,7 @@ TEST_CASE("WorldGenerator  - nations: JSON includes nation formation fields",
 // Stage 9.6 — Nomadic population tests
 // ===========================================================================
 
-TEST_CASE("WorldGenerator  - nomadic: pastoral_carrying_capacity bounds",
-          "[world_gen][nomadic]") {
+TEST_CASE("WorldGenerator  - nomadic: pastoral_carrying_capacity bounds", "[world_gen][nomadic]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2865,8 +2842,7 @@ TEST_CASE("WorldGenerator  - nomadic: steppe/savanna provinces have pastoral cap
     }
 }
 
-TEST_CASE("WorldGenerator  - nomadic: deterministic",
-          "[world_gen][nomadic][determinism]") {
+TEST_CASE("WorldGenerator  - nomadic: deterministic", "[world_gen][nomadic][determinism]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2883,8 +2859,7 @@ TEST_CASE("WorldGenerator  - nomadic: deterministic",
     }
 }
 
-TEST_CASE("WorldGenerator  - nomadic: JSON includes nomadic fields",
-          "[world_gen][nomadic][json]") {
+TEST_CASE("WorldGenerator  - nomadic: JSON includes nomadic fields", "[world_gen][nomadic][json]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2935,8 +2910,7 @@ TEST_CASE("WorldGenerator  - nations: target count formula scales correctly",
     }
 }
 
-TEST_CASE("WorldGenerator  - nations: config params respected",
-          "[world_gen][nations][config]") {
+TEST_CASE("WorldGenerator  - nations: config params respected", "[world_gen][nations][config]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -2971,7 +2945,8 @@ TEST_CASE("WorldGenerator  - nations: config params respected",
         auto world = WorldGenerator::generate(config_full_prop);
         // With 100% propagation from largest neighbor, we expect fewer distinct languages.
         std::set<std::string> langs;
-        for (const auto& n : world.nations) langs.insert(n.language_family_id);
+        for (const auto& n : world.nations)
+            langs.insert(n.language_family_id);
         // Should have at most 3 distinct languages (likely 1-2 with full propagation).
         CHECK(langs.size() <= 3);
     }
@@ -3006,11 +2981,16 @@ TEST_CASE("WorldGenerator  - nations: nation size_class matches province count",
 
     for (const auto& nation : world.nations) {
         size_t n = nation.province_ids.size();
-        if (n <= 3) CHECK(nation.size_class == NationSize::Microstate);
-        else if (n <= 12) CHECK(nation.size_class == NationSize::Small);
-        else if (n <= 40) CHECK(nation.size_class == NationSize::Medium);
-        else if (n <= 120) CHECK(nation.size_class == NationSize::Large);
-        else CHECK(nation.size_class == NationSize::Continental);
+        if (n <= 3)
+            CHECK(nation.size_class == NationSize::Microstate);
+        else if (n <= 12)
+            CHECK(nation.size_class == NationSize::Small);
+        else if (n <= 40)
+            CHECK(nation.size_class == NationSize::Medium);
+        else if (n <= 120)
+            CHECK(nation.size_class == NationSize::Large);
+        else
+            CHECK(nation.size_class == NationSize::Continental);
     }
 }
 
@@ -3096,14 +3076,14 @@ TEST_CASE("WorldGenerator  - nations: border_change_count responds to instabilit
 
         // Build h3_to_idx for neighbor lookup.
         std::unordered_map<uint64_t, uint32_t> h3_map;
-        for (const auto& p : world.provinces) h3_map[p.h3_index] = p.id;
+        for (const auto& p : world.provinces)
+            h3_map[p.h3_index] = p.id;
 
         for (const auto& prov : world.provinces) {
             bool is_border = false;
             for (const auto& link : prov.links) {
                 auto it = h3_map.find(link.neighbor_h3);
-                if (it != h3_map.end() &&
-                    world.provinces[it->second].nation_id != prov.nation_id) {
+                if (it != h3_map.end() && world.provinces[it->second].nation_id != prov.nation_id) {
                     is_border = true;
                     break;
                 }
@@ -3141,13 +3121,12 @@ TEST_CASE("WorldGenerator  - archetype: every province gets a valid archetype la
     auto world = WorldGenerator::generate(config);
 
     const std::set<std::string> valid_archetypes = {
-        "war_scar", "hollow_land", "oil_capital", "oil_frontier",
-        "gold_rush", "mining_district", "uranium_territory", "plantation_economy",
-        "major_port", "island_enclave", "fishing_port",
-        "breadbasket", "agrarian_interior", "dryland_farm",
-        "high_plateau", "lake_district", "true_desert", "oasis_settlement",
-        "pastoral_steppe", "industrial_heartland", "colonial_remnant",
-        "resource_frontier", "marginal_periphery", "ordinary_interior",
+        "war_scar",          "hollow_land",       "oil_capital",        "oil_frontier",
+        "gold_rush",         "mining_district",   "uranium_territory",  "plantation_economy",
+        "major_port",        "island_enclave",    "fishing_port",       "breadbasket",
+        "agrarian_interior", "dryland_farm",      "high_plateau",       "lake_district",
+        "true_desert",       "oasis_settlement",  "pastoral_steppe",    "industrial_heartland",
+        "colonial_remnant",  "resource_frontier", "marginal_periphery", "ordinary_interior",
     };
 
     for (const auto& prov : world.provinces) {
@@ -3255,8 +3234,7 @@ TEST_CASE("WorldGenerator  - named_features: JSON includes named_features array"
 // Stage 10.2 — Province history tests
 // ===========================================================================
 
-TEST_CASE("WorldGenerator  - history: every province has events",
-          "[world_gen][history]") {
+TEST_CASE("WorldGenerator  - history: every province has events", "[world_gen][history]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -3272,8 +3250,7 @@ TEST_CASE("WorldGenerator  - history: every province has events",
     }
 }
 
-TEST_CASE("WorldGenerator  - history: events are chronologically sorted",
-          "[world_gen][history]") {
+TEST_CASE("WorldGenerator  - history: events are chronologically sorted", "[world_gen][history]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -3289,8 +3266,7 @@ TEST_CASE("WorldGenerator  - history: events are chronologically sorted",
     }
 }
 
-TEST_CASE("WorldGenerator  - history: historical_trauma_index bounds",
-          "[world_gen][history]") {
+TEST_CASE("WorldGenerator  - history: historical_trauma_index bounds", "[world_gen][history]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -3304,8 +3280,7 @@ TEST_CASE("WorldGenerator  - history: historical_trauma_index bounds",
     }
 }
 
-TEST_CASE("WorldGenerator  - history: deterministic",
-          "[world_gen][history][determinism]") {
+TEST_CASE("WorldGenerator  - history: deterministic", "[world_gen][history][determinism]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -3370,8 +3345,7 @@ TEST_CASE("WorldGenerator  - history: border changes generate BorderChange event
     }
 }
 
-TEST_CASE("WorldGenerator  - history: JSON includes history block",
-          "[world_gen][history][json]") {
+TEST_CASE("WorldGenerator  - history: JSON includes history block", "[world_gen][history][json]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.province_count = 6;
@@ -3427,8 +3401,7 @@ TEST_CASE("WorldGenerator: pre_game_events are extracted from province histories
     }
 }
 
-TEST_CASE("WorldGenerator: pre_game_events sorted oldest first",
-          "[world_gen][pre_game_events]") {
+TEST_CASE("WorldGenerator: pre_game_events sorted oldest first", "[world_gen][pre_game_events]") {
     WorldGeneratorConfig config{};
     config.seed = 10031;
     config.province_count = 6;
@@ -3440,8 +3413,7 @@ TEST_CASE("WorldGenerator: pre_game_events sorted oldest first",
     }
 }
 
-TEST_CASE("WorldGenerator: pre_game_events deterministic",
-          "[world_gen][pre_game_events]") {
+TEST_CASE("WorldGenerator: pre_game_events deterministic", "[world_gen][pre_game_events]") {
     WorldGeneratorConfig config{};
     config.seed = 10032;
     config.province_count = 6;
@@ -3452,10 +3424,8 @@ TEST_CASE("WorldGenerator: pre_game_events deterministic",
     REQUIRE(w1.pre_game_events.size() == w2.pre_game_events.size());
     for (size_t i = 0; i < w1.pre_game_events.size(); ++i) {
         CHECK(w1.pre_game_events[i].type == w2.pre_game_events[i].type);
-        CHECK(w1.pre_game_events[i].years_before_start ==
-              w2.pre_game_events[i].years_before_start);
-        CHECK(w1.pre_game_events[i].epicenter_province ==
-              w2.pre_game_events[i].epicenter_province);
+        CHECK(w1.pre_game_events[i].years_before_start == w2.pre_game_events[i].years_before_start);
+        CHECK(w1.pre_game_events[i].epicenter_province == w2.pre_game_events[i].epicenter_province);
         CHECK(w1.pre_game_events[i].magnitude == w2.pre_game_events[i].magnitude);
     }
 }
@@ -3468,7 +3438,8 @@ TEST_CASE("WorldGenerator: pre_game_events epicenter matches a real province",
     auto world = WorldGenerator::generate(config);
 
     std::set<H3Index> province_h3s;
-    for (const auto& p : world.provinces) province_h3s.insert(p.h3_index);
+    for (const auto& p : world.provinces)
+        province_h3s.insert(p.h3_index);
 
     for (const auto& pge : world.pre_game_events) {
         CHECK(province_h3s.count(pge.epicenter_province) == 1);
@@ -3515,8 +3486,7 @@ TEST_CASE("WorldGenerator: loading_commentary sidebar_facts >= 8",
     }
 }
 
-TEST_CASE("WorldGenerator: loading_commentary deterministic",
-          "[world_gen][loading_commentary]") {
+TEST_CASE("WorldGenerator: loading_commentary deterministic", "[world_gen][loading_commentary]") {
     WorldGeneratorConfig config{};
     config.seed = 10042;
     config.province_count = 6;
@@ -3529,8 +3499,7 @@ TEST_CASE("WorldGenerator: loading_commentary deterministic",
     REQUIRE(w1.loading_commentary.sidebar_facts.size() ==
             w2.loading_commentary.sidebar_facts.size());
     for (size_t i = 0; i < w1.loading_commentary.sidebar_facts.size(); ++i) {
-        CHECK(w1.loading_commentary.sidebar_facts[i] ==
-              w2.loading_commentary.sidebar_facts[i]);
+        CHECK(w1.loading_commentary.sidebar_facts[i] == w2.loading_commentary.sidebar_facts[i]);
     }
 }
 
@@ -3556,8 +3525,7 @@ TEST_CASE("WorldGenerator: encyclopedia JSON has required top-level keys",
     CHECK(j.contains("world_statistics"));
 }
 
-TEST_CASE("WorldGenerator: encyclopedia provinces keyed by h3_index",
-          "[world_gen][encyclopedia]") {
+TEST_CASE("WorldGenerator: encyclopedia provinces keyed by h3_index", "[world_gen][encyclopedia]") {
     WorldGeneratorConfig config{};
     config.seed = 10051;
     config.province_count = 6;
@@ -3581,8 +3549,7 @@ TEST_CASE("WorldGenerator: encyclopedia provinces keyed by h3_index",
     }
 }
 
-TEST_CASE("WorldGenerator: encyclopedia full depth includes history",
-          "[world_gen][encyclopedia]") {
+TEST_CASE("WorldGenerator: encyclopedia full depth includes history", "[world_gen][encyclopedia]") {
     WorldGeneratorConfig config{};
     config.seed = 10052;
     config.province_count = 6;
@@ -3617,8 +3584,7 @@ TEST_CASE("WorldGenerator: encyclopedia loading_commentary has stage_texts",
     CHECK(lc["sidebar_facts"].is_array());
 }
 
-TEST_CASE("WorldGenerator: encyclopedia world_statistics populated",
-          "[world_gen][encyclopedia]") {
+TEST_CASE("WorldGenerator: encyclopedia world_statistics populated", "[world_gen][encyclopedia]") {
     WorldGeneratorConfig config{};
     config.seed = 10054;
     config.province_count = 6;
@@ -3640,8 +3606,7 @@ TEST_CASE("WorldGenerator: encyclopedia world_statistics populated",
 // Commentary depth control
 // ===========================================================================
 
-TEST_CASE("WorldGenerator: commentary_depth none skips Stage 10",
-          "[world_gen][commentary_depth]") {
+TEST_CASE("WorldGenerator: commentary_depth none skips Stage 10", "[world_gen][commentary_depth]") {
     WorldGeneratorConfig config{};
     config.seed = 10060;
     config.province_count = 6;
@@ -3729,8 +3694,7 @@ TEST_CASE("WorldGeneratorConfig: default planetary_params are Earth-analog",
     CHECK(config.planetary_params.hydrology_mode == HydrologyMode::Active);
 }
 
-TEST_CASE("WorldGeneratorConfig: default scenario params match spec §11",
-          "[world_gen][scenario]") {
+TEST_CASE("WorldGeneratorConfig: default scenario params match spec §11", "[world_gen][scenario]") {
     WorldGeneratorConfig config{};
 
     CHECK(config.tectonic_plate_count == 6);
@@ -3746,8 +3710,7 @@ TEST_CASE("WorldGeneratorConfig: default scenario params match spec §11",
     CHECK(config.planetary_body_ref == "earth_analog");
 }
 
-TEST_CASE("WorldGeneratorConfig: load_from_json reads scenario file",
-          "[world_gen][scenario]") {
+TEST_CASE("WorldGeneratorConfig: load_from_json reads scenario file", "[world_gen][scenario]") {
     // Write a temporary scenario file.
     std::string path = "test_scenario.json";
     {
@@ -3816,8 +3779,7 @@ TEST_CASE("WorldGeneratorConfig: load_from_json returns false for missing file",
     CHECK_FALSE(ok);
 }
 
-TEST_CASE("WorldGenerator: planetary_params carried to generated world",
-          "[world_gen][scenario]") {
+TEST_CASE("WorldGenerator: planetary_params carried to generated world", "[world_gen][scenario]") {
     WorldGeneratorConfig config{};
     config.seed = 10070;
     config.province_count = 6;

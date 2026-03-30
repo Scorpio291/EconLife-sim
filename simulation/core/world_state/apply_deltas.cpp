@@ -398,8 +398,7 @@ static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
 // ---------------------------------------------------------------------------
 // apply_technology_deltas
 // ---------------------------------------------------------------------------
-static void apply_technology_deltas(WorldState& world,
-                                     const std::vector<TechnologyDelta>& deltas) {
+static void apply_technology_deltas(WorldState& world, const std::vector<TechnologyDelta>& deltas) {
     for (const auto& td : deltas) {
         // Era transition (replacement, irreversible forward-only).
         if (td.new_era.has_value()) {
@@ -428,8 +427,8 @@ static void apply_technology_deltas(WorldState& world,
                 if (biz.id == *td.business_id) {
                     auto it = biz.actor_tech_state.holdings.find(*td.node_key);
                     if (it != biz.actor_tech_state.holdings.end()) {
-                        it->second.maturation_level = std::min(
-                            *td.maturation_level_update, it->second.maturation_ceiling);
+                        it->second.maturation_level =
+                            std::min(*td.maturation_level_update, it->second.maturation_ceiling);
                     }
                     break;
                 }

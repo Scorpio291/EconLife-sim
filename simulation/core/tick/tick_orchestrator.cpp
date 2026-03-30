@@ -183,11 +183,11 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
                                            province_delta.region_deltas.begin(),
                                            province_delta.region_deltas.end());
                 delta.currency_deltas.insert(delta.currency_deltas.end(),
-                                              province_delta.currency_deltas.begin(),
-                                              province_delta.currency_deltas.end());
+                                             province_delta.currency_deltas.begin(),
+                                             province_delta.currency_deltas.end());
                 delta.technology_deltas.insert(delta.technology_deltas.end(),
-                                                province_delta.technology_deltas.begin(),
-                                                province_delta.technology_deltas.end());
+                                               province_delta.technology_deltas.begin(),
+                                               province_delta.technology_deltas.end());
                 delta.new_calendar_entries.insert(delta.new_calendar_entries.end(),
                                                   province_delta.new_calendar_entries.begin(),
                                                   province_delta.new_calendar_entries.end());

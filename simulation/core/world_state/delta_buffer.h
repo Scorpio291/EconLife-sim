@@ -57,10 +57,11 @@ struct MarketDelta {
 };
 
 struct EvidenceDelta {
-    std::optional<EvidenceToken> new_token;         // appended to evidence_pool
-    std::optional<uint32_t> retired_token_id;       // set is_active = false
-    std::optional<uint32_t> updated_token_id;       // token whose actionability to replace
-    std::optional<float>    updated_actionability;  // replacement actionability (with updated_token_id)
+    std::optional<EvidenceToken> new_token;    // appended to evidence_pool
+    std::optional<uint32_t> retired_token_id;  // set is_active = false
+    std::optional<uint32_t> updated_token_id;  // token whose actionability to replace
+    std::optional<float>
+        updated_actionability;  // replacement actionability (with updated_token_id)
 };
 
 struct ConsequenceDelta {
@@ -90,12 +91,12 @@ struct TechnologyDelta {
     std::optional<uint8_t> new_era;  // SimulationEra cast to uint8_t
 
     // Domain knowledge decay: additive per domain index.
-    std::optional<uint8_t> domain_index;      // index into domain_knowledge[]
+    std::optional<uint8_t> domain_index;          // index into domain_knowledge[]
     std::optional<float> domain_knowledge_delta;  // additive (usually negative for decay)
 
     // Per-business maturation update: identifies a TechHolding to update.
     std::optional<uint32_t> business_id;
-    std::optional<std::string> node_key;  // string key into holdings map
+    std::optional<std::string> node_key;           // string key into holdings map
     std::optional<float> maturation_level_update;  // replacement
 };
 

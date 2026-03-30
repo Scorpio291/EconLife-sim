@@ -67,15 +67,15 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
         float weight;
     };
     static constexpr EraYearThreshold year_thresholds[] = {
-        {2, 2007.0f, 0.40f},  // Era 1→2
-        {3, 2013.0f, 0.40f},  // Era 2→3
-        {4, 2019.0f, 0.40f},  // Era 3→4
-        {5, 2024.0f, 0.40f},  // Era 4→5
-        {6, 2035.0f, 0.40f},  // Era 5→6
-        {7, 2050.0f, 0.40f},  // Era 6→7
-        {8, 2075.0f, 0.40f},  // Era 7→8
-        {9, 2100.0f, 0.40f},  // Era 8→9
-        {10, 2150.0f, 0.40f}, // Era 9→10
+        {2, 2007.0f, 0.40f},   // Era 1→2
+        {3, 2013.0f, 0.40f},   // Era 2→3
+        {4, 2019.0f, 0.40f},   // Era 3→4
+        {5, 2024.0f, 0.40f},   // Era 4→5
+        {6, 2035.0f, 0.40f},   // Era 5→6
+        {7, 2050.0f, 0.40f},   // Era 6→7
+        {8, 2075.0f, 0.40f},   // Era 7→8
+        {9, 2100.0f, 0.40f},   // Era 8→9
+        {10, 2150.0f, 0.40f},  // Era 9→10
     };
 
     // Calendar year contribution.
@@ -108,15 +108,12 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
                 // Map domain string to index.
                 // For simplicity, iterate the domain names.
                 static const char* domain_names[] = {
-                    "materials_science",      "semiconductor_physics",
-                    "chemical_synthesis",      "energy_systems",
-                    "mechanical_engineering",  "software_systems",
-                    "biotechnology",           "climate_and_environment",
-                    "information_security",    "social_media_platforms",
-                    "financial_instruments",   "illicit_chemistry",
-                    "nuclear_engineering",     "advanced_transportation",
-                    "space_systems",           "cognitive_science",
-                    "synthetic_biology",       "geoengineering",
+                    "materials_science",      "semiconductor_physics",   "chemical_synthesis",
+                    "energy_systems",         "mechanical_engineering",  "software_systems",
+                    "biotechnology",          "climate_and_environment", "information_security",
+                    "social_media_platforms", "financial_instruments",   "illicit_chemistry",
+                    "nuclear_engineering",    "advanced_transportation", "space_systems",
+                    "cognitive_science",      "synthetic_biology",       "geoengineering",
                     "quantum_systems",
                 };
                 for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
@@ -141,10 +138,12 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
                 max_smartphone =
                     std::max(max_smartphone, biz.actor_tech_state.maturation_of("smartphone_os"));
             }
-            if (max_smartphone > 0.5f) score += 0.20f;
+            if (max_smartphone > 0.5f)
+                score += 0.20f;
 
             // Software domain knowledge as proxy for broadband/digital adoption.
-            if (state.technology.domain_knowledge[5] > 0.40f) score += 0.15f;  // software_systems
+            if (state.technology.domain_knowledge[5] > 0.40f)
+                score += 0.15f;  // software_systems
             break;
         }
         case 3: {
@@ -157,8 +156,10 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
                 max_solar = std::max(max_solar,
                                      biz.actor_tech_state.maturation_of("cost_competitive_solar"));
             }
-            if (max_cloud > 0.3f) score += 0.15f;
-            if (max_solar > 0.3f) score += 0.15f;
+            if (max_cloud > 0.3f)
+                score += 0.15f;
+            if (max_solar > 0.3f)
+                score += 0.15f;
             break;
         }
         case 4: {
@@ -166,23 +167,24 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
             float max_ev = 0.0f;
             float max_genai = 0.0f;
             for (const auto& biz : state.npc_businesses) {
-                max_ev =
-                    std::max(max_ev, biz.actor_tech_state.maturation_of("electric_vehicle"));
+                max_ev = std::max(max_ev, biz.actor_tech_state.maturation_of("electric_vehicle"));
                 max_genai =
                     std::max(max_genai, biz.actor_tech_state.maturation_of("generative_ai"));
             }
-            if (max_ev > 0.3f) score += 0.15f;
-            if (max_genai > 0.2f) score += 0.15f;
+            if (max_ev > 0.3f)
+                score += 0.15f;
+            if (max_genai > 0.2f)
+                score += 0.15f;
             break;
         }
         case 5: {
             // 4→5: Renewables parity, EV penetration, AI integration
             float max_ai = 0.0f;
             for (const auto& biz : state.npc_businesses) {
-                max_ai =
-                    std::max(max_ai, biz.actor_tech_state.maturation_of("ai_integration"));
+                max_ai = std::max(max_ai, biz.actor_tech_state.maturation_of("ai_integration"));
             }
-            if (max_ai > 0.3f) score += 0.15f;
+            if (max_ai > 0.3f)
+                score += 0.15f;
             if (state.technology.domain_knowledge[3] > 0.70f)
                 score += 0.15f;  // energy_systems
             break;
@@ -196,7 +198,8 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
 
 void TechnologyModule::check_era_transition(const WorldState& state, DeltaBuffer& delta) {
     uint8_t current_era = static_cast<uint8_t>(state.technology.current_era);
-    if (current_era >= MAX_ERA) return;
+    if (current_era >= MAX_ERA)
+        return;
 
     uint8_t target_era = current_era + 1;
     float score = compute_era_transition_score(state, target_era);
@@ -223,16 +226,19 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
                 break;
             }
         }
-        if (!biz) continue;
+        if (!biz)
+            continue;
 
         // Find the tech holding.
         auto holding_it = biz->actor_tech_state.holdings.find(project.node_key);
-        if (holding_it == biz->actor_tech_state.holdings.end()) continue;
+        if (holding_it == biz->actor_tech_state.holdings.end())
+            continue;
 
         const TechHolding& holding = holding_it->second;
 
         // Already at ceiling? Skip.
-        if (holding.maturation_level >= holding.maturation_ceiling) continue;
+        if (holding.maturation_level >= holding.maturation_ceiling)
+            continue;
 
         // Compute researcher quality average.
         // V1 simplification: use a flat researcher quality of 0.7 (competent).
@@ -248,22 +254,18 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
         const TechnologyNode* node = catalog_.find(project.node_key);
         if (node) {
             static const char* domain_names[] = {
-                "materials_science",      "semiconductor_physics",
-                "chemical_synthesis",      "energy_systems",
-                "mechanical_engineering",  "software_systems",
-                "biotechnology",           "climate_and_environment",
-                "information_security",    "social_media_platforms",
-                "financial_instruments",   "illicit_chemistry",
-                "nuclear_engineering",     "advanced_transportation",
-                "space_systems",           "cognitive_science",
-                "synthetic_biology",       "geoengineering",
+                "materials_science",      "semiconductor_physics",   "chemical_synthesis",
+                "energy_systems",         "mechanical_engineering",  "software_systems",
+                "biotechnology",          "climate_and_environment", "information_security",
+                "social_media_platforms", "financial_instruments",   "illicit_chemistry",
+                "nuclear_engineering",    "advanced_transportation", "space_systems",
+                "cognitive_science",      "synthetic_biology",       "geoengineering",
                 "quantum_systems",
             };
             for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
                 if (node->domain == domain_names[i]) {
-                    domain_knowledge_bonus =
-                        1.0f +
-                        state.technology.domain_knowledge[i] * config_.domain_knowledge_bonus_coeff;
+                    domain_knowledge_bonus = 1.0f + state.technology.domain_knowledge[i] *
+                                                        config_.domain_knowledge_bonus_coeff;
                     break;
                 }
             }
@@ -278,10 +280,10 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
         }
 
         // Compute maturation progress.
-        float maturation_progress =
-            static_cast<float>(project.researchers_assigned) * researcher_quality_avg *
-            facility_quality_modifier * domain_knowledge_bonus * funding_adequacy *
-            config_.maturation_rate_coeff;
+        float maturation_progress = static_cast<float>(project.researchers_assigned) *
+                                    researcher_quality_avg * facility_quality_modifier *
+                                    domain_knowledge_bonus * funding_adequacy *
+                                    config_.maturation_rate_coeff;
 
         float maturation_delta =
             maturation_progress / (config_.maturation_difficulty_per_level * 10.0f);
@@ -326,7 +328,7 @@ void TechnologyModule::decay_domain_knowledge(const WorldState& state, DeltaBuff
 // ===========================================================================
 
 void TechnologyModule::update_maturation_ceilings(const WorldState& state,
-                                                   DeltaBuffer& /* delta */) {
+                                                  DeltaBuffer& /* delta */) {
     // Maturation ceilings are era-gated. When the era changes, all actors'
     // TechHolding.maturation_ceiling values need updating.
     // For V1, this is handled at the WorldGenerator level (seeding correct

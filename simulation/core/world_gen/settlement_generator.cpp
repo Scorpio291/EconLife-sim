@@ -14,7 +14,7 @@ namespace econlife {
 // ===========================================================================
 
 void SettlementGenerator::seed_population_attractiveness(WorldState& world, DeterministicRNG& rng,
-                                                    const WorldGeneratorConfig& config) {
+                                                         const WorldGeneratorConfig& config) {
     const auto& p = config.population;
 
     for (auto& prov : world.provinces) {
@@ -61,14 +61,13 @@ void SettlementGenerator::seed_population_attractiveness(WorldState& world, Dete
             }
         }
 
-        float base =
-            prov.agricultural_productivity                * p.w_ag_productivity
-          + prov.geography.port_capacity                  * p.w_port_capacity
-          + prov.geography.river_access                   * p.w_river_access
-          + (1.0f - prov.geography.terrain_roughness)     * p.w_terrain_flatness
-          + (prov.soil_type == SoilType::Alluvial ? 1.0f : 0.0f) * p.w_alluvial_soil
-          + (has_geothermal ? 1.0f : 0.0f)                * p.w_geothermal
-          + (prov.soil_type == SoilType::Andisol ? 1.0f : 0.0f) * p.w_volcanic_soil;
+        float base = prov.agricultural_productivity * p.w_ag_productivity +
+                     prov.geography.port_capacity * p.w_port_capacity +
+                     prov.geography.river_access * p.w_river_access +
+                     (1.0f - prov.geography.terrain_roughness) * p.w_terrain_flatness +
+                     (prov.soil_type == SoilType::Alluvial ? 1.0f : 0.0f) * p.w_alluvial_soil +
+                     (has_geothermal ? 1.0f : 0.0f) * p.w_geothermal +
+                     (prov.soil_type == SoilType::Andisol ? 1.0f : 0.0f) * p.w_volcanic_soil;
 
         // Altitude ceiling — hard physiological limits.
         if (prov.geography.elevation_avg_m > 4500.0f) {
@@ -112,9 +111,9 @@ void SettlementGenerator::seed_population_attractiveness(WorldState& world, Dete
         // Flood vulnerability reduces infrastructure (costlier construction)
         // without reducing population attractiveness.
         // -----------------------------------------------------------------
-        float infra = score * p.infra_attract_scale
-                    - prov.climate.flood_vulnerability * p.infra_flood_penalty
-                    + (rng.next_float() - 0.5f) * 2.0f * p.infra_variance_sigma;
+        float infra = score * p.infra_attract_scale -
+                      prov.climate.flood_vulnerability * p.infra_flood_penalty +
+                      (rng.next_float() - 0.5f) * 2.0f * p.infra_variance_sigma;
         infra = std::max(0.0f, std::min(1.0f, infra));
 
         // Blend with archetype infrastructure (50/50) to maintain diversity.
@@ -137,7 +136,7 @@ void SettlementGenerator::seed_population_attractiveness(WorldState& world, Dete
 // ===========================================================================
 
 void SettlementGenerator::create_npcs(WorldState& world, DeterministicRNG& rng,
-                                 const WorldGeneratorConfig& config) {
+                                      const WorldGeneratorConfig& config) {
     // Role distribution weights — determines the workforce composition.
     // Workers are the majority; specialists are rarer.
     struct RoleWeight {
@@ -325,7 +324,7 @@ void SettlementGenerator::create_npcs(WorldState& world, DeterministicRNG& rng,
 // ===========================================================================
 
 void SettlementGenerator::create_businesses(WorldState& world, DeterministicRNG& rng,
-                                       const WorldGeneratorConfig& config) {
+                                            const WorldGeneratorConfig& config) {
     // Business count: roughly 1 per 10 NPCs, minimum 1 per province.
     uint32_t total_businesses = std::max(static_cast<uint32_t>(world.provinces.size()),
                                          static_cast<uint32_t>(world.significant_npcs.size()) / 10);
