@@ -95,7 +95,7 @@ TEST_CASE("Journalist publishes story from evidence", "[media_system][tier7]") {
 
     PlayerCharacter player{};
     player.id = 999;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     // Create evidence token about the player
     EvidenceToken token{};
@@ -158,7 +158,7 @@ TEST_CASE("Story expires after propagation window", "[media_system][tier7]") {
 
     PlayerCharacter player{};
     player.id = 999;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     MediaSystemModule module;
 
@@ -187,7 +187,7 @@ TEST_CASE("Editorial filter suppresses story at player outlet", "[media_system][
 
     PlayerCharacter player{};
     player.id = 999;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     // Evidence about player
     EvidenceToken token{};

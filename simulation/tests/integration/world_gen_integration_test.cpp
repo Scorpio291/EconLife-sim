@@ -16,6 +16,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <filesystem>
+#include <memory>
 #include <set>
 
 #include "core/tick/thread_pool.h"
@@ -73,7 +74,7 @@ TEST_CASE("WorldGenerator world runs 365 ticks at V1 scale", "[integration][worl
     config.goods_directory = find_goods_dir();
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = &player;
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     REQUIRE(world.provinces.size() == 6);
     REQUIRE(world.significant_npcs.size() >= 450);
@@ -118,7 +119,7 @@ TEST_CASE("WorldGenerator world: province conditions stay in [0,1] over 365 tick
     config.goods_directory = find_goods_dir();
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = &player;
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     run_orchestrated_ticks(world, 365);
 
@@ -155,7 +156,7 @@ TEST_CASE("WorldGenerator world: market prices stay positive over 365 ticks",
     config.goods_directory = find_goods_dir();
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = &player;
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     run_orchestrated_ticks(world, 365);
 
@@ -180,7 +181,7 @@ TEST_CASE("WorldGenerator determinism: same seed, same output after 30 ticks",
         config.goods_directory = find_goods_dir();
 
         auto [world, player] = WorldGenerator::generate_with_player(config);
-        world.player = &player;
+        world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
         TickOrchestrator orchestrator;
         register_base_game_modules(orchestrator);
@@ -190,9 +191,9 @@ TEST_CASE("WorldGenerator determinism: same seed, same output after 30 ticks",
         for (int i = 0; i < 30; ++i) {
             orchestrator.execute_tick(world, pool);
         }
-        // Null out player pointer before return (it's a local reference).
-        world.player = nullptr;
-        return world;
+        // Null out player pointer before return.
+        world.player.reset();
+        return std::move(world);
     };
 
     auto a = run_30(55555);
@@ -226,7 +227,7 @@ TEST_CASE("WorldGenerator minimal world: 1 province 5 NPCs runs 100 ticks",
     // No goods dir — fallback goods.
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = &player;
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     REQUIRE(world.provinces.size() == 1);
     REQUIRE(world.significant_npcs.size() >= 1);
@@ -361,7 +362,7 @@ TEST_CASE("WorldGenerator H3: valid cells and province map survive 365 ticks",
     config.npc_count = 100;
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = &player;
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     // Pre-run H3 invariants.
     REQUIRE(world.h3_province_map.size() == world.provinces.size());
@@ -397,7 +398,7 @@ TEST_CASE("WorldGenerator provinces show economic differentiation after 30 ticks
     config.npc_count = 300;
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = &player;
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     // Record initial province diversity.
     float initial_infra_spread = 0.0f;

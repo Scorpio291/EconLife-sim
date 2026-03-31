@@ -119,7 +119,7 @@ inline Province create_test_province(uint32_t id, uint32_t region_id, uint32_t n
 
     p.has_karst = false;
     p.historical_trauma_index = 0.1f;
-    p.cohort_stats = nullptr;
+    p.cohort_stats.reset();
 
     return p;
 }
@@ -209,7 +209,7 @@ inline WorldState create_test_world(uint64_t seed, uint32_t npc_count = 100,
     world.game_mode = GameMode::standard;
     world.current_schema_version = 1;
     world.network_health_dirty = false;
-    world.lod2_price_index = nullptr;
+    world.lod2_price_index.reset();
 
     // --- Nation ---
     Nation nation{};

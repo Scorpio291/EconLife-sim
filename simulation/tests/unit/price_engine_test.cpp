@@ -30,8 +30,8 @@ WorldState make_test_world_state() {
     WorldState state{};
     state.current_tick = 1;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 1;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -314,7 +314,7 @@ TEST_CASE("test_execute_province_with_lod2_modifier", "[price_engine][tier3]") {
     GlobalCommodityPriceIndex lod2_index{};
     lod2_index.last_updated_tick = 0;
     lod2_index.lod2_price_modifier[1] = 1.2f;
-    state.lod2_price_index = &lod2_index;
+    state.lod2_price_index = std::make_unique<GlobalCommodityPriceIndex>(lod2_index);
 
     PriceEngineModule module;
     DeltaBuffer delta{};

@@ -167,6 +167,34 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
                 // Merge province delta into main delta buffer.
                 delta.npc_deltas.insert(delta.npc_deltas.end(), province_delta.npc_deltas.begin(),
                                         province_delta.npc_deltas.end());
+                // Merge player_delta additively.
+                if (province_delta.player_delta.health_delta.has_value()) {
+                    delta.player_delta.health_delta =
+                        delta.player_delta.health_delta.value_or(0.0f) +
+                        *province_delta.player_delta.health_delta;
+                }
+                if (province_delta.player_delta.wealth_delta.has_value()) {
+                    delta.player_delta.wealth_delta =
+                        delta.player_delta.wealth_delta.value_or(0.0f) +
+                        *province_delta.player_delta.wealth_delta;
+                }
+                if (province_delta.player_delta.exhaustion_delta.has_value()) {
+                    delta.player_delta.exhaustion_delta =
+                        delta.player_delta.exhaustion_delta.value_or(0.0f) +
+                        *province_delta.player_delta.exhaustion_delta;
+                }
+                // Replacement fields: last province wins.
+                if (province_delta.player_delta.skill_delta.has_value()) {
+                    delta.player_delta.skill_delta = province_delta.player_delta.skill_delta;
+                }
+                if (province_delta.player_delta.new_evidence_awareness.has_value()) {
+                    delta.player_delta.new_evidence_awareness =
+                        province_delta.player_delta.new_evidence_awareness;
+                }
+                if (province_delta.player_delta.relationship_delta.has_value()) {
+                    delta.player_delta.relationship_delta =
+                        province_delta.player_delta.relationship_delta;
+                }
                 delta.market_deltas.insert(delta.market_deltas.end(),
                                            province_delta.market_deltas.begin(),
                                            province_delta.market_deltas.end());
@@ -197,6 +225,9 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
                 delta.new_obligation_nodes.insert(delta.new_obligation_nodes.end(),
                                                   province_delta.new_obligation_nodes.begin(),
                                                   province_delta.new_obligation_nodes.end());
+                delta.cross_province_deltas.insert(delta.cross_province_deltas.end(),
+                                                    province_delta.cross_province_deltas.begin(),
+                                                    province_delta.cross_province_deltas.end());
             }
 
             // Apply province-parallel deltas before global post-pass so the

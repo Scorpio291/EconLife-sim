@@ -79,8 +79,8 @@ TEST_CASE("CurrencyExchange: execute writes CurrencyDelta on weekly tick",
     WorldState state{};
     state.current_tick = 7;  // weekly tick (7 % 7 == 0)
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.game_mode = GameMode::standard;
 
     // Add a nation with economic indicators
@@ -119,8 +119,8 @@ TEST_CASE("CurrencyExchange: execute is noop on non-weekly tick", "[currency_exc
     WorldState state{};
     state.current_tick = 3;  // not a weekly tick
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.game_mode = GameMode::standard;
 
     CurrencyRecord cur{};
@@ -142,8 +142,8 @@ TEST_CASE("CurrencyExchange: peg break emits pegged_update delta", "[currency_ex
     WorldState state{};
     state.current_tick = 14;  // weekly tick
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.game_mode = GameMode::standard;
 
     CurrencyRecord cur{};
@@ -171,8 +171,8 @@ TEST_CASE("CurrencyExchange: pegged currency with healthy reserves produces no d
     WorldState state{};
     state.current_tick = 7;  // weekly tick
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.game_mode = GameMode::standard;
 
     CurrencyRecord cur{};

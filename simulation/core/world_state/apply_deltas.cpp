@@ -67,6 +67,11 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             npc->status = *d.new_status;
         }
 
+        // new_travel_status: replacement
+        if (d.new_travel_status.has_value()) {
+            npc->travel_status = *d.new_travel_status;
+        }
+
         // new_memory_entry: append (with overflow protection)
         if (d.new_memory_entry.has_value()) {
             if (npc->memory_log.size() >= MAX_MEMORY_ENTRIES) {
@@ -113,10 +118,12 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             }
         }
 
-        // motivation_delta: additive (applied to first non-zero weight, then renormalize)
-        // In practice, modules should write specific motivation shifts via a more
-        // detailed mechanism. For now, apply as a uniform shift to financial_gain slot.
-        if (d.motivation_delta.has_value() && !std::isnan(*d.motivation_delta)) {
+        // motivation_replacement: full vector override (preferred path).
+        // Replaces the entire motivation vector. Invariant: must sum to 1.0.
+        if (d.motivation_replacement.has_value()) {
+            npc->motivations = *d.motivation_replacement;
+        } else if (d.motivation_delta.has_value() && !std::isnan(*d.motivation_delta)) {
+            // Legacy: additive shift to financial_gain slot, then renormalize.
             npc->motivations.weights[0] += *d.motivation_delta;
             // Renormalize to sum to 1.0
             float sum = 0.0f;
@@ -451,6 +458,12 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     apply_technology_deltas(world, delta.technology_deltas);
     apply_append_deltas(world, delta);
 
+    // Route cross-province deltas into WorldState's CrossProvinceDeltaBuffer
+    // for application at the start of the next tick.
+    for (auto& cpd : delta.cross_province_deltas) {
+        world.cross_province_delta_buffer.entries.push_back(std::move(cpd));
+    }
+
     // Clear the delta buffer for next step
     delta.npc_deltas.clear();
     delta.player_delta = PlayerDelta{};
@@ -464,6 +477,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
     delta.new_calendar_entries.clear();
     delta.new_scene_cards.clear();
     delta.new_obligation_nodes.clear();
+    delta.cross_province_deltas.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -472,9 +486,14 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta) {
 void apply_cross_province_deltas(WorldState& world) {
     auto& cpd = world.cross_province_delta_buffer;
 
+    // Partition: apply entries that are due, retain entries scheduled for later.
+    std::vector<CrossProvinceDelta> pending;
+
     for (const auto& entry : cpd.entries) {
-        if (entry.due_tick > world.current_tick)
+        if (entry.due_tick > world.current_tick) {
+            pending.push_back(entry);
             continue;
+        }
 
         if (entry.npc_delta.has_value()) {
             // Apply NPC delta to the target province's NPC
@@ -487,7 +506,8 @@ void apply_cross_province_deltas(WorldState& world) {
         }
     }
 
-    cpd.entries.clear();
+    // Retain only entries not yet due.
+    cpd.entries = std::move(pending);
 }
 
 }  // namespace econlife

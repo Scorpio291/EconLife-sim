@@ -103,7 +103,7 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
     // Collect active NPCs in this province, sorted by id ascending for determinism.
     std::vector<const NPC*> province_npcs;
     for (const auto& npc : state.significant_npcs) {
-        if (npc.home_province_id == province.id && npc.status == NPCStatus::active) {
+        if (npc.current_province_id == province.id && npc.status == NPCStatus::active) {
             province_npcs.push_back(&npc);
         }
     }

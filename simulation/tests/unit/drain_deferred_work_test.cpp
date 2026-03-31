@@ -3,6 +3,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"
+
 #include "core/tick/deferred_work.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -16,8 +18,8 @@ static WorldState make_dwq_world() {
     w.current_tick = 10;
     w.world_seed = 42;
     w.game_mode = GameMode::standard;
-    w.lod2_price_index = nullptr;
-    w.player = nullptr;
+    w.lod2_price_index.reset();
+    w.player.reset();
 
     Province p{};
     p.id = 0;
@@ -94,6 +96,7 @@ TEST_CASE("drain: relationship decay reduces trust toward zero", "[drain_deferre
 
     DeltaBuffer delta{};
     drain_deferred_work(w, delta);
+    apply_deltas(w, delta);
 
     // Trust should have decayed
     REQUIRE(w.significant_npcs[0].relationships[0].trust < 0.5f);
@@ -133,6 +136,7 @@ TEST_CASE("drain: evidence decay reduces actionability", "[drain_deferred_work][
 
     DeltaBuffer delta{};
     drain_deferred_work(w, delta);
+    apply_deltas(w, delta);
 
     // actionability should decrease: 0.8 - (0.05 * 7) = 0.45
     REQUIRE_THAT(w.evidence_pool[0].actionability, WithinAbs(0.45, 0.01));
@@ -160,6 +164,7 @@ TEST_CASE("drain: evidence decay retires token when actionability near zero",
 
     DeltaBuffer delta{};
     drain_deferred_work(w, delta);
+    apply_deltas(w, delta);
 
     // Token should be retired
     REQUIRE(w.evidence_pool[0].is_active == false);
@@ -178,6 +183,7 @@ TEST_CASE("drain: NPC travel arrival sets status to resident", "[drain_deferred_
 
     DeltaBuffer delta{};
     drain_deferred_work(w, delta);
+    apply_deltas(w, delta);
 
     REQUIRE(w.significant_npcs[0].travel_status == NPCTravelStatus::resident);
     REQUIRE(w.deferred_work_queue.empty());
@@ -226,6 +232,7 @@ TEST_CASE("drain: multiple items fire in due_tick order", "[drain_deferred_work]
 
     DeltaBuffer delta{};
     drain_deferred_work(w, delta);
+    apply_deltas(w, delta);
 
     // Both should have been processed
     REQUIRE(w.evidence_pool[0].actionability < 0.9f);
@@ -254,6 +261,7 @@ TEST_CASE("drain: negative trust decays toward zero", "[drain_deferred_work][cor
 
     DeltaBuffer delta{};
     drain_deferred_work(w, delta);
+    apply_deltas(w, delta);
 
     // Negative trust should move toward zero (increase)
     REQUIRE(w.significant_npcs[0].relationships[0].trust > -0.5f);

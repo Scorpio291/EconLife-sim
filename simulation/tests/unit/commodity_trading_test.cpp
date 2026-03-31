@@ -34,8 +34,8 @@ WorldState make_test_world_state() {
     WorldState state{};
     state.current_tick = 100;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 1;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;

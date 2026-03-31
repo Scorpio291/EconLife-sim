@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -635,6 +636,12 @@ struct RegionConditions {
 // Province
 // ---------------------------------------------------------------------------
 struct Province {
+    Province() = default;
+    Province(Province&&) = default;
+    Province& operator=(Province&&) = default;
+    Province(const Province& other);
+    Province& operator=(const Province& other);
+
     // Identity
     H3Index h3_index;            // canonical spatial identifier (H3 res 4); external-stable
                                  // across saves and used by WorldGen pipeline; O(1) neighbor/
@@ -668,7 +675,7 @@ struct Province {
 
     // NPCs (LOD 0 only; empty at LOD 1/2)
     std::vector<uint32_t> significant_npc_ids;
-    RegionCohortStats* cohort_stats;  // aggregated; all LOD levels (forward-declared)
+    std::unique_ptr<RegionCohortStats> cohort_stats;  // aggregated; all LOD levels
 
     // Tectonic geology (Stage 1 — WorldGen v0.18; static after world generation)
     TectonicContext tectonic_context = TectonicContext::CratonInterior;

@@ -385,21 +385,28 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
                 npc_delta.new_status = NPCStatus::active;
             }
 
+            // Accumulate capital effects: start with cost, then add income.
+            float capital_change = 0.0f;
+
             // Apply capital cost of chosen action.
             if (best_cost > 0.0f) {
-                npc_delta.capital_delta = -best_cost;
+                capital_change -= best_cost;
             }
 
             // Work action earns income (simplified: base wage * employment rate).
             if (best_eval.action == DailyAction::work) {
                 float wage = 50.0f * employment_rate;
-                npc_delta.capital_delta = wage;
+                capital_change += wage;
             }
 
             // Criminal activity earns illicit income.
             if (best_eval.action == DailyAction::criminal_activity) {
                 float illicit_income = 80.0f * crime_rate;
-                npc_delta.capital_delta = illicit_income;
+                capital_change += illicit_income;
+            }
+
+            if (capital_change != 0.0f) {
+                npc_delta.capital_delta = capital_change;
             }
 
             // Form a memory entry for the action taken this tick.
@@ -465,7 +472,7 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
             if (best_eval.action == DailyAction::whistleblow) {
                 EvidenceDelta ed{};
                 EvidenceToken token{};
-                token.id = state.current_tick * 10000 + npc.id;
+                token.id = 0;  // auto-assigned by apply_evidence_deltas
                 token.type = EvidenceType::testimonial;
                 token.source_npc_id = npc.id;
                 token.target_npc_id = 0;  // target determined by investigation module
@@ -478,7 +485,7 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
                 province_delta.evidence_deltas.push_back(ed);
             }
 
-            // Migration uses CrossProvinceDeltaBuffer.
+            // Migration uses cross-province deltas routed through DeltaBuffer.
             if (best_eval.action == DailyAction::migrate) {
                 // Find best destination province (highest stability).
                 uint32_t best_dest = province_idx;
@@ -499,9 +506,8 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
                     migration_delta.npc_id = npc.id;
                     // The actual province_id change is handled by npc_travel_arrival DWQ.
                     cpd.npc_delta = migration_delta;
-                    // Write to cross-province buffer (thread-safe via partitioning).
-                    const_cast<WorldState&>(state).cross_province_delta_buffer.entries.push_back(
-                        cpd);
+                    // Write to DeltaBuffer; orchestrator merges into CrossProvinceDeltaBuffer.
+                    province_delta.cross_province_deltas.push_back(cpd);
                 }
             }
         }
@@ -527,10 +533,8 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
                 std::abs(shifted_motivations.weights[i] - npc.motivations.weights[i]);
         }
         if (motivation_diff > 0.0001f) {
-            // Use the first changed weight as the delta signal.
-            // The full motivation vector update is handled by apply_deltas
-            // recognizing this as a replacement of the entire vector.
-            npc_delta.motivation_delta = motivation_diff;
+            // Send the full shifted motivation vector as a replacement.
+            npc_delta.motivation_replacement = shifted_motivations;
         }
 
         // --- Step 6: Relationship updates ---

@@ -53,7 +53,7 @@ void PriceEngineModule::execute_province(uint32_t province_idx, const WorldState
             compute_sticky_adjustment(market->spot_price, equilibrium_price, adjustment_rate);
 
         // Step 3: LOD 2 modifier.
-        float lod2_modifier = get_lod2_modifier(market->good_id, state.lod2_price_index);
+        float lod2_modifier = get_lod2_modifier(market->good_id, state.lod2_price_index.get());
         new_spot_price *= lod2_modifier;
 
         // Ensure non-negative.

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -11,8 +12,9 @@
 #include "../tick/deferred_work.h"  // DeferredWorkQueue
 #include "delta_buffer.h"           // DeltaBuffer + npc.h + shared_types.h
 
-// Complete type definitions needed for std::vector/std::map value members
+// Complete type definitions needed for std::vector/std::map value members and unique_ptr members
 #include "geography.h"                                 // Nation, Province, Region
+#include "player.h"                                    // PlayerCharacter (complete type for unique_ptr)
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
 #include "modules/production/production_types.h"       // Facility, Recipe
 #include "modules/trade_infrastructure/trade_types.h"  // TariffSchedule, NationalTradeOffer,
@@ -22,11 +24,9 @@
 
 namespace econlife {
 
-// Forward declarations for types used only as pointers (complete type not needed)
-struct PlayerCharacter;            // defined in player.h; used as PlayerCharacter*
-struct GlobalCommodityPriceIndex;  // defined in trade_types.h; used as pointer
-                                   // (already complete from trade_types.h include above,
-                                   //  but kept as documentation of the pointer contract)
+// GlobalCommodityPriceIndex is complete from trade_types.h include above;
+// PlayerCharacter is complete from player.h include above.
+// Both are needed as complete types for std::unique_ptr members.
 
 enum class GameMode : uint8_t {
     ironman = 0,   // Timeline restoration locked. Achievement-eligible.
@@ -59,7 +59,7 @@ struct WorldState {
     // Background population is aggregated in Region.cohort_stats, not per-individual
 
     // --- Player ---
-    PlayerCharacter* player;  // see §11; pointer to allow forward declaration
+    std::unique_ptr<PlayerCharacter> player;  // see §11; unique ownership
 
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)
@@ -92,7 +92,7 @@ struct WorldState {
     // --- Trade and Transport Infrastructure ---
     std::vector<TariffSchedule> tariff_schedules;
     std::vector<NationalTradeOffer> lod1_trade_offers;  // regenerated monthly
-    GlobalCommodityPriceIndex* lod2_price_index;        // updated annually
+    std::unique_ptr<GlobalCommodityPriceIndex> lod2_price_index;  // updated annually
     std::map<uint32_t, Lod1NationStats> lod1_national_stats;
     std::map<std::pair<uint32_t, uint32_t>, std::array<RouteProfile, 5>>
         province_route_table;  // precomputed at load

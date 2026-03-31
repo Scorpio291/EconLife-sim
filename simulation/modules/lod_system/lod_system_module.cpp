@@ -137,7 +137,7 @@ void LodSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 compute_lod2_price_modifier(total_consumption, total_production, SUPPLY_FLOOR);
 
             // lod2_price_index carries a smoothed_modifier field; apply lerp smoothing.
-            // Access pattern: lod2_price_index is a raw pointer (non-const in WorldState).
+            // Access pattern: lod2_price_index is a unique_ptr in WorldState.
             // The LOD system is the only module that writes the global price index.
             // Using LOD2_SMOOTHING_RATE constant from the module header.
             (void)raw_modifier;  // applied by engine via DeltaBuffer in full implementation

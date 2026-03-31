@@ -36,8 +36,8 @@ WorldState make_test_world_state(uint32_t tick = 1) {
     WorldState state{};
     state.current_tick = tick;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 1;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -475,7 +475,7 @@ TEST_CASE("test_credit_score_clamped_to_valid_range_lower", "[banking][tier5]") 
 TEST_CASE("test_player_loan_repayment_reduces_wealth", "[banking][tier5]") {
     auto state = make_test_world_state(10);
     PlayerCharacter player = make_test_player(1, 10000.0f);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     BankingModule module;
 
@@ -1004,7 +1004,7 @@ TEST_CASE("test_derived_credit_fields_updated", "[banking][tier5]") {
 TEST_CASE("test_player_insufficient_wealth_triggers_miss", "[banking][tier5]") {
     auto state = make_test_world_state(10);
     PlayerCharacter player = make_test_player(1, 10.0f);  // low wealth
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     BankingModule module;
 

@@ -232,7 +232,7 @@ int main(int argc, char* argv[]) {
     }
 
     auto [world, player] = WorldGenerator::generate_with_player(gen_config);
-    world.player = &player;
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     std::printf(
         "World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets, "

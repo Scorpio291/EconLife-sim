@@ -125,7 +125,7 @@ TEST_CASE("Dormant org dominance decays", "[criminal_operations][tier7]") {
 
     PlayerCharacter player{};
     player.id = 999;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     CriminalOperationsModule module;
 
@@ -154,7 +154,7 @@ TEST_CASE("Personnel violence generates evidence", "[criminal_operations][tier7]
 
     PlayerCharacter player{};
     player.id = 999;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     CriminalOperationsModule module;
 

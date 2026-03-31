@@ -35,8 +35,8 @@ WorldState make_test_world_state() {
     WorldState state{};
     state.current_tick = 100;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 100;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -158,7 +158,7 @@ TEST_CASE("test_player_owned_business_skipped", "[npc_business][tier4]") {
     state.current_tick = 100;
 
     static PlayerCharacter player = make_test_player(999);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     Province prov{};
     prov.id = 0;
@@ -515,7 +515,7 @@ TEST_CASE("test_is_decision_tick", "[npc_business][tier4]") {
 TEST_CASE("test_is_player_owned", "[npc_business][tier4]") {
     auto state = make_test_world_state();
     static PlayerCharacter player = make_test_player(999);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto biz_player = make_test_business(1, BusinessProfile::cost_cutter);
     biz_player.owner_id = 999;
@@ -526,7 +526,7 @@ TEST_CASE("test_is_player_owned", "[npc_business][tier4]") {
     REQUIRE(NpcBusinessModule::is_player_owned(biz_npc, state) == false);
 
     // Null player means no business is player-owned.
-    state.player = nullptr;
+    state.player.reset();
     REQUIRE(NpcBusinessModule::is_player_owned(biz_player, state) == false);
 }
 
