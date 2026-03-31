@@ -117,6 +117,13 @@ struct EvidenceConfig {
     float share_trust_threshold = 0.45f;
 };
 
+struct SafetyCeilingsConfig {
+    float npc_capital_ceiling = 1.0e9f;
+    float business_cash_ceiling = 1.0e10f;
+    float market_supply_ceiling = 1.0e8f;
+    float market_price_ceiling = 1.0e6f;
+};
+
 struct ProductionConfig {
     float tech_tier_output_bonus = 0.08f;
     float tech_tier_cost_reduction = 0.05f;
@@ -170,6 +177,7 @@ struct PackageConfig {
     InformantConfig informant;
     LegalProcessConfig legal_process;
     EvidenceConfig evidence;
+    SafetyCeilingsConfig safety_ceilings;
     ProductionConfig production;
     RndConfig rnd;
     ConsequenceDelayConfig consequence_delays;

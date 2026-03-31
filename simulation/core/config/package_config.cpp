@@ -100,6 +100,16 @@ PackageConfig load_package_config(const std::string& config_dir) {
             tr.value("transport_cost_per_km_per_tonne", cfg.trade.transport_cost_per_km_per_tonne);
         cfg.trade.transit_delay_base_ticks =
             tr.value("transit_delay_base_ticks", cfg.trade.transit_delay_base_ticks);
+
+        const auto sc2 = j.value("safety_ceilings", nlohmann::json::object());
+        cfg.safety_ceilings.npc_capital_ceiling =
+            sc2.value("npc_capital_ceiling", cfg.safety_ceilings.npc_capital_ceiling);
+        cfg.safety_ceilings.business_cash_ceiling =
+            sc2.value("business_cash_ceiling", cfg.safety_ceilings.business_cash_ceiling);
+        cfg.safety_ceilings.market_supply_ceiling =
+            sc2.value("market_supply_ceiling", cfg.safety_ceilings.market_supply_ceiling);
+        cfg.safety_ceilings.market_price_ceiling =
+            sc2.value("market_price_ceiling", cfg.safety_ceilings.market_price_ceiling);
     }
 
     // -----------------------------------------------------------------

@@ -270,9 +270,7 @@ TEST_CASE("transport mode affects transit time", "[scenario][tdd][trade]") {
     }
     REQUIRE_THAT(supply_tick2, WithinAbs(supply_before, 0.01f));
 
-    // At tick 3: road shipment fires. Sea shipment does not.
-    world.cross_province_delta_buffer.entries.push_back(road_cpd);
-    world.cross_province_delta_buffer.entries.push_back(sea_cpd);
+    // At tick 3: road shipment fires. Sea shipment retained from tick 2 call.
     world.current_tick = 3;
     apply_cross_province_deltas(world);
 
@@ -285,8 +283,7 @@ TEST_CASE("transport mode affects transit time", "[scenario][tdd][trade]") {
     }
     REQUIRE_THAT(supply_tick3, WithinAbs(supply_before + 50.0f, 0.01f));
 
-    // At tick 10: sea shipment fires.
-    world.cross_province_delta_buffer.entries.push_back(sea_cpd);
+    // At tick 10: sea shipment fires (retained from earlier calls).
     world.current_tick = 10;
     apply_cross_province_deltas(world);
 
@@ -603,9 +600,8 @@ TEST_CASE("cross-province effect has one-tick delay", "[scenario][tdd][core]") {
     REQUIRE_THAT(supply_tick_n, WithinAbs(supply_before, 0.01f));
 
     // ---- At tick N+1: effect IS visible ----
-    // Re-enqueue because buffer was cleared.
+    // Entry was retained in buffer from tick N (not yet due). Now it fires.
     world.current_tick = TICK_NOW + 1;
-    world.cross_province_delta_buffer.entries.push_back(cpd);
     apply_cross_province_deltas(world);
 
     float supply_tick_n1 = 0.0f;
@@ -643,9 +639,10 @@ TEST_CASE("cross-province buffer empty at save time", "[scenario][tdd][core]") {
 
     REQUIRE(!world.cross_province_delta_buffer.entries.empty());
 
-    world.current_tick = 2;
+    // Set tick high enough that all entries (due_tick 0..4) are due.
+    world.current_tick = 4;
     apply_cross_province_deltas(world);
 
-    // Buffer cleared unconditionally — safe to serialize.
+    // All entries were due at tick <= 4, so buffer is empty — safe to serialize.
     REQUIRE(world.cross_province_delta_buffer.entries.empty());
 }
