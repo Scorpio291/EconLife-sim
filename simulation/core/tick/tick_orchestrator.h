@@ -9,6 +9,7 @@ namespace econlife {
 
 // Forward declarations — in econlife namespace to match type definitions
 struct WorldState;
+struct PackageConfig;
 class ThreadPool;
 
 // Manages module registration, topological sorting, and tick execution.
@@ -28,6 +29,9 @@ class TickOrchestrator {
     // Locks module list after completion.
     void finalize_registration();
 
+    // Set config for deferred work queue handling.
+    void set_config(const PackageConfig& config) { config_ = &config; }
+
     // Main tick entry point. Asserts finalize_registration() was called.
     // Province-parallel modules dispatch to thread_pool; sequential modules
     // run on main thread. Delta buffers merged in ascending province index order.
@@ -39,6 +43,7 @@ class TickOrchestrator {
 
    private:
     std::vector<std::unique_ptr<ITickModule>> modules_;
+    const PackageConfig* config_ = nullptr;
     bool finalized_ = false;
 
     void resolve_and_sort();

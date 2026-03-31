@@ -235,7 +235,7 @@ TEST_CASE("test_memory_decay_archives_old_entries", "[npc_behavior][tier5]") {
     // Apply a small decay that will push the 0.005 entry below floor (0.01).
     // After decay: 0.005 * (1.0 - 0.002) = 0.00499 < 0.01 -> archived
     // After decay: 0.02 * (1.0 - 0.002) = 0.01996 > 0.01 -> kept
-    NpcBehaviorModule::decay_memories(npc, NpcBehaviorModule::Constants::memory_decay_rate);
+    NpcBehaviorModule::decay_memories(npc, NpcBehaviorConfig{}.memory_decay_rate, NpcBehaviorConfig{}.memory_decay_floor);
 
     // The entry with decay 0.005 should have been archived (removed).
     REQUIRE(npc.memory_log.size() == 2);
@@ -516,7 +516,7 @@ TEST_CASE("test_memory_decay_below_floor_archived", "[npc_behavior][tier5]") {
     npc.memory_log.push_back(make_test_memory(1, 0.011f));
 
     // After one decay step: 0.011 * (1.0 - 0.002) = 0.010978 > 0.01 -> kept
-    NpcBehaviorModule::decay_memories(npc, NpcBehaviorModule::Constants::memory_decay_rate);
+    NpcBehaviorModule::decay_memories(npc, NpcBehaviorConfig{}.memory_decay_rate, NpcBehaviorConfig{}.memory_decay_floor);
     REQUIRE(npc.memory_log.size() == 1);
 
     // Create a memory entry just below where decay will push it under floor.
@@ -524,7 +524,7 @@ TEST_CASE("test_memory_decay_below_floor_archived", "[npc_behavior][tier5]") {
     npc2.memory_log.push_back(make_test_memory(1, 0.009f));
 
     // After one decay step: 0.009 * (1.0 - 0.002) = 0.008982 < 0.01 -> archived
-    NpcBehaviorModule::decay_memories(npc2, NpcBehaviorModule::Constants::memory_decay_rate);
+    NpcBehaviorModule::decay_memories(npc2, NpcBehaviorConfig{}.memory_decay_rate, NpcBehaviorConfig{}.memory_decay_floor);
     REQUIRE(npc2.memory_log.empty());
 }
 
@@ -555,7 +555,7 @@ TEST_CASE("test_motivation_shift_preserves_sum", "[npc_behavior][tier5]") {
 
 TEST_CASE("test_knowledge_confidence_decay", "[npc_behavior][tier5]") {
     // Verify the constant exists and is reasonable.
-    float rate = NpcBehaviorModule::Constants::knowledge_confidence_decay_rate;
+    float rate = NpcBehaviorConfig{}.knowledge_confidence_decay_rate;
     REQUIRE_THAT(rate, WithinAbs(0.001f, 0.0001f));
 
     // Simulate confidence decay.
@@ -574,7 +574,7 @@ TEST_CASE("test_knowledge_confidence_decay", "[npc_behavior][tier5]") {
 
 TEST_CASE("test_knowledge_confidence_clamps_to_zero", "[npc_behavior][tier5]") {
     float confidence = 0.0005f;
-    confidence -= NpcBehaviorModule::Constants::knowledge_confidence_decay_rate;
+    confidence -= NpcBehaviorConfig{}.knowledge_confidence_decay_rate;
     confidence = std::max(0.0f, confidence);
     REQUIRE_THAT(confidence, WithinAbs(0.0f, 0.001f));
 }
@@ -844,10 +844,10 @@ TEST_CASE("test_npc_behavior_constants", "[npc_behavior][tier5]") {
     REQUIRE_THAT(NpcBehaviorModule::Constants::min_risk_discount, WithinAbs(0.05f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModule::Constants::risk_sensitivity_coeff, WithinAbs(2.0f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModule::Constants::trust_ev_bonus, WithinAbs(0.3f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::memory_decay_rate, WithinAbs(0.002f, 0.0001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::memory_decay_floor, WithinAbs(0.01f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::knowledge_confidence_decay_rate,
+    REQUIRE_THAT(NpcBehaviorConfig{}.memory_decay_rate, WithinAbs(0.002f, 0.0001f));
+    REQUIRE_THAT(NpcBehaviorConfig{}.memory_decay_floor, WithinAbs(0.01f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorConfig{}.knowledge_confidence_decay_rate,
                  WithinAbs(0.001f, 0.0001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::motivation_shift_rate, WithinAbs(0.001f, 0.0001f));
+    REQUIRE_THAT(NpcBehaviorConfig{}.motivation_shift_rate, WithinAbs(0.001f, 0.0001f));
     REQUIRE(MAX_MEMORY_ENTRIES == 500);
 }

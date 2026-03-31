@@ -73,7 +73,7 @@ class NpcBehaviorModule : public ITickModule {
 
     // Decay all memory entries in an NPC's memory_log.
     // decay = decay * (1.0 - decay_rate). Entries below decay_floor are archived (removed).
-    static void decay_memories(NPC& npc_copy, float decay_rate);
+    static void decay_memories(NPC& npc_copy, float decay_rate, float decay_floor);
 
     // Archive the memory entry with the lowest decay value.
     // Used when memory_log is at MAX_MEMORY_ENTRIES capacity.
@@ -94,16 +94,12 @@ class NpcBehaviorModule : public ITickModule {
     // Map MemoryType to the closest OutcomeType for motivation shift.
     static size_t memory_type_to_outcome_index(MemoryType type);
 
-    // --- Constants ---
+    // --- Constants (non-configurable internal thresholds) ---
     struct Constants {
         static constexpr float inaction_threshold = 0.10f;
         static constexpr float min_risk_discount = 0.05f;
         static constexpr float risk_sensitivity_coeff = 2.0f;
         static constexpr float trust_ev_bonus = 0.3f;
-        static constexpr float memory_decay_rate = 0.002f;
-        static constexpr float memory_decay_floor = 0.01f;
-        static constexpr float knowledge_confidence_decay_rate = 0.001f;
-        static constexpr float motivation_shift_rate = 0.001f;
         static constexpr float recovery_ceiling_minimum = 0.15f;
     };
 
