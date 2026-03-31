@@ -72,12 +72,20 @@ struct NpcBehaviorConfig {
     float motivation_loyalty = 0.10f;
     float motivation_self_preservation = 0.10f;
     float memory_decay_rate = 0.002f;
+    float memory_decay_floor = 0.01f;
+    float knowledge_confidence_decay_rate = 0.001f;
+    float motivation_shift_rate = 0.001f;
     float risk_tolerance_default = 0.5f;
+    float base_wage = 50.0f;
+    float base_illicit_income = 80.0f;
+    float shop_cost_fraction = 0.05f;
     uint32_t memory_log_cap = 500;
 };
 
 struct RelationshipConfig {
     float decay_rate_per_30_ticks = 0.01f;
+    float trust_decay_rate_per_batch = 0.02f;
+    float fear_decay_rate_per_batch = 0.03f;
     uint32_t max_per_npc = 100;
 };
 

@@ -252,6 +252,7 @@ int main(int argc, char* argv[]) {
     // 3. Set up orchestrator
     TickOrchestrator orchestrator;
     register_base_game_modules(orchestrator, pkg_config);
+    orchestrator.set_config(pkg_config);
     orchestrator.finalize_registration();
     std::printf("Registered %zu modules, topological sort OK.\n\n", orchestrator.modules().size());
 

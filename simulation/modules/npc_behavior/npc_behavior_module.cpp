@@ -71,11 +71,11 @@ ActionEvaluation NpcBehaviorModule::evaluate_action(const NPC& npc, DailyAction 
     return eval;
 }
 
-void NpcBehaviorModule::decay_memories(NPC& npc_copy, float decay_rate) {
+void NpcBehaviorModule::decay_memories(NPC& npc_copy, float decay_rate, float decay_floor) {
     auto it = npc_copy.memory_log.begin();
     while (it != npc_copy.memory_log.end()) {
         it->decay *= (1.0f - decay_rate);
-        if (it->decay < Constants::memory_decay_floor) {
+        if (it->decay < decay_floor) {
             it = npc_copy.memory_log.erase(it);
         } else {
             ++it;
@@ -238,15 +238,15 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
         }
 
         // --- Step 1: Memory decay ---
-        decay_memories(npc_copy, Constants::memory_decay_rate);
+        decay_memories(npc_copy, cfg_.memory_decay_rate, cfg_.memory_decay_floor);
 
         // --- Step 2: Knowledge confidence decay ---
         for (auto& ke : npc_copy.known_evidence) {
-            ke.confidence -= Constants::knowledge_confidence_decay_rate;
+            ke.confidence -= cfg_.knowledge_confidence_decay_rate;
             ke.confidence = std::max(0.0f, std::min(1.0f, ke.confidence));
         }
         for (auto& ke : npc_copy.known_relationships) {
-            ke.confidence -= Constants::knowledge_confidence_decay_rate;
+            ke.confidence -= cfg_.knowledge_confidence_decay_rate;
             ke.confidence = std::max(0.0f, std::min(1.0f, ke.confidence));
         }
 
@@ -271,7 +271,7 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
 
         // shop: magnitude scales inversely with price (stability proxy)
         float shop_mag = std::min(1.0f, 0.2f + stability * 0.2f);
-        float shop_cost = std::min(npc.capital, npc.capital * 0.05f);
+        float shop_cost = std::min(npc.capital, npc.capital * cfg_.shop_cost_fraction);
         candidates.push_back({DailyAction::shop,
                               {{OutcomeType::security_gain, 0.7f, shop_mag}},
                               0.0f,
@@ -395,13 +395,13 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
 
             // Work action earns income (simplified: base wage * employment rate).
             if (best_eval.action == DailyAction::work) {
-                float wage = 50.0f * employment_rate;
+                float wage = cfg_.base_wage * employment_rate;
                 capital_change += wage;
             }
 
             // Criminal activity earns illicit income.
             if (best_eval.action == DailyAction::criminal_activity) {
-                float illicit_income = 80.0f * crime_rate;
+                float illicit_income = cfg_.base_illicit_income * crime_rate;
                 capital_change += illicit_income;
             }
 
@@ -515,10 +515,10 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
         // --- Step 5: Motivation shift from accumulated memory ---
         MotivationVector shifted_motivations = npc.motivations;
         for (const auto& mem : npc_copy.memory_log) {
-            if (mem.is_actionable && mem.decay > Constants::memory_decay_floor) {
+            if (mem.is_actionable && mem.decay > cfg_.memory_decay_floor) {
                 size_t target_idx = memory_type_to_outcome_index(mem.type);
                 if (target_idx < shifted_motivations.weights.size()) {
-                    shifted_motivations.weights[target_idx] += Constants::motivation_shift_rate *
+                    shifted_motivations.weights[target_idx] += cfg_.motivation_shift_rate *
                                                                std::abs(mem.emotional_weight) *
                                                                mem.decay;
                 }

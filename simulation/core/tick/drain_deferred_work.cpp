@@ -18,11 +18,7 @@
 
 namespace econlife {
 
-// ---------------------------------------------------------------------------
-// Reschedule intervals (ticks)
-// ---------------------------------------------------------------------------
-static constexpr uint32_t RELATIONSHIP_DECAY_INTERVAL = 30;
-static constexpr uint32_t EVIDENCE_DECAY_INTERVAL = 7;
+// Reschedule intervals and decay rates are passed via DrainConfig.
 
 // ---------------------------------------------------------------------------
 // Helper: find NPC by id
@@ -68,7 +64,7 @@ static void handle_transit_arrival(const DeferredWorkItem& item, WorldState& wor
 }
 
 static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldState& world,
-                                          DeltaBuffer& delta) {
+                                          DeltaBuffer& delta, const DrainConfig& cfg) {
     // Batch decay for one NPC's relationships.
     // Trust and fear decay toward 0 over time.
     // Write relationship updates via DeltaBuffer (not direct mutation).
@@ -80,8 +76,8 @@ static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldSta
     if (!npc)
         return;
 
-    static constexpr float TRUST_DECAY_RATE = 0.02f;  // per batch (30 ticks)
-    static constexpr float FEAR_DECAY_RATE = 0.03f;   // fear decays faster
+    const float TRUST_DECAY_RATE = cfg.trust_decay_rate_per_batch;
+    const float FEAR_DECAY_RATE = cfg.fear_decay_rate_per_batch;
 
     for (const auto& rel : npc->relationships) {
         float trust_change = 0.0f;
@@ -117,13 +113,13 @@ static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldSta
     }
 
     // Reschedule
-    world.deferred_work_queue.push({world.current_tick + RELATIONSHIP_DECAY_INTERVAL,
+    world.deferred_work_queue.push({world.current_tick + cfg.relationship_decay_interval,
                                     WorkType::npc_relationship_decay, payload->npc_id,
                                     NPCRelationshipDecayPayload{payload->npc_id}});
 }
 
 static void handle_evidence_decay(const DeferredWorkItem& item, WorldState& world,
-                                  DeltaBuffer& delta) {
+                                  DeltaBuffer& delta, const DrainConfig& cfg) {
     // Decay actionability of one evidence token via DeltaBuffer.
     auto* payload = std::get_if<EvidenceDecayPayload>(&item.payload);
     if (!payload)
@@ -133,7 +129,7 @@ static void handle_evidence_decay(const DeferredWorkItem& item, WorldState& worl
         if (token.id == payload->evidence_token_id && token.is_active) {
             float new_actionability =
                 std::max(0.0f, token.actionability -
-                                   token.decay_rate * static_cast<float>(EVIDENCE_DECAY_INTERVAL));
+                                   token.decay_rate * static_cast<float>(cfg.evidence_decay_interval));
 
             EvidenceDelta ed{};
             if (new_actionability < 0.01f) {
@@ -147,7 +143,7 @@ static void handle_evidence_decay(const DeferredWorkItem& item, WorldState& worl
                 ed.updated_actionability = new_actionability;
                 // Reschedule only if still active
                 world.deferred_work_queue.push(
-                    {world.current_tick + EVIDENCE_DECAY_INTERVAL, WorkType::evidence_decay_batch,
+                    {world.current_tick + cfg.evidence_decay_interval, WorkType::evidence_decay_batch,
                      payload->evidence_token_id, EvidenceDecayPayload{payload->evidence_token_id}});
             }
             delta.evidence_deltas.push_back(ed);
@@ -255,7 +251,7 @@ static void handle_interception_check(const DeferredWorkItem& item, WorldState& 
 // ---------------------------------------------------------------------------
 // drain_deferred_work — main entry point
 // ---------------------------------------------------------------------------
-void drain_deferred_work(WorldState& world, DeltaBuffer& delta) {
+void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfig& cfg) {
     auto& queue = world.deferred_work_queue;
 
     while (!queue.empty() && queue.top().due_tick <= world.current_tick) {
@@ -273,10 +269,10 @@ void drain_deferred_work(WorldState& world, DeltaBuffer& delta) {
                 handle_interception_check(item, world, delta);
                 break;
             case WorkType::npc_relationship_decay:
-                handle_npc_relationship_decay(item, world, delta);
+                handle_npc_relationship_decay(item, world, delta, cfg);
                 break;
             case WorkType::evidence_decay_batch:
-                handle_evidence_decay(item, world, delta);
+                handle_evidence_decay(item, world, delta, cfg);
                 break;
             case WorkType::npc_business_decision:
                 handle_npc_business_decision(item, world, delta);

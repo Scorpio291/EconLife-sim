@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "core/config/package_config.h"
+
 #include "core/tick/drain_deferred_work.h"
 #include "core/tick/thread_pool.h"
 #include "core/world_state/apply_deltas.h"
@@ -154,7 +156,14 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
     // documentation ambiguity; do not change the drain position without design approval.
     {
         DeltaBuffer dwq_delta;
-        drain_deferred_work(state, dwq_delta);
+        DrainConfig dcfg;
+        if (config_) {
+            dcfg.relationship_decay_interval = config_->consequence_delays.relationship_decay_interval;
+            dcfg.evidence_decay_interval = config_->consequence_delays.evidence_decay_interval;
+            dcfg.trust_decay_rate_per_batch = config_->relationships.trust_decay_rate_per_batch;
+            dcfg.fear_decay_rate_per_batch = config_->relationships.fear_decay_rate_per_batch;
+        }
+        drain_deferred_work(state, dwq_delta, dcfg);
         apply_deltas(state, dwq_delta);
     }
 

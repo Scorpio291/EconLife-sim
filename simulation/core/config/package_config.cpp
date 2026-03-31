@@ -130,12 +130,28 @@ PackageConfig load_package_config(const std::string& config_dir) {
             nb.value("risk_tolerance_default", cfg.npc_behavior.risk_tolerance_default);
         cfg.npc_behavior.memory_log_cap =
             nb.value("memory_log_cap", cfg.npc_behavior.memory_log_cap);
+        cfg.npc_behavior.memory_decay_floor =
+            nb.value("memory_decay_floor", cfg.npc_behavior.memory_decay_floor);
+        cfg.npc_behavior.knowledge_confidence_decay_rate =
+            nb.value("knowledge_confidence_decay_rate", cfg.npc_behavior.knowledge_confidence_decay_rate);
+        cfg.npc_behavior.motivation_shift_rate =
+            nb.value("motivation_shift_rate", cfg.npc_behavior.motivation_shift_rate);
+        cfg.npc_behavior.base_wage =
+            nb.value("base_wage", cfg.npc_behavior.base_wage);
+        cfg.npc_behavior.base_illicit_income =
+            nb.value("base_illicit_income", cfg.npc_behavior.base_illicit_income);
+        cfg.npc_behavior.shop_cost_fraction =
+            nb.value("shop_cost_fraction", cfg.npc_behavior.shop_cost_fraction);
 
         const auto rel = j.value("relationships", nlohmann::json::object());
         cfg.relationships.decay_rate_per_30_ticks =
             rel.value("decay_rate_per_30_ticks", cfg.relationships.decay_rate_per_30_ticks);
         cfg.relationships.max_per_npc =
             rel.value("max_relationships_per_npc", cfg.relationships.max_per_npc);
+        cfg.relationships.trust_decay_rate_per_batch =
+            rel.value("trust_decay_rate_per_batch", cfg.relationships.trust_decay_rate_per_batch);
+        cfg.relationships.fear_decay_rate_per_batch =
+            rel.value("fear_decay_rate_per_batch", cfg.relationships.fear_decay_rate_per_batch);
     }
 
     // -----------------------------------------------------------------
