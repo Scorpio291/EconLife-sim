@@ -101,7 +101,7 @@ TEST_CASE("test_overdue_obligation_demand_grows", "[obligation_network][tier6]")
     PlayerCharacter player{};
     player.id = 100;
     player.net_assets = 100000.0f;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     // Create overdue obligation
     ObligationNetworkModule::ObligationState obl;
@@ -137,7 +137,7 @@ TEST_CASE("test_not_yet_overdue_no_escalation", "[obligation_network][tier6]") {
     PlayerCharacter player{};
     player.id = 100;
     player.net_assets = 100000.0f;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     ObligationNetworkModule::ObligationState obl;
     obl.obligation_id = 1;
@@ -172,7 +172,7 @@ TEST_CASE("test_status_transitions_open_to_escalated", "[obligation_network][tie
     PlayerCharacter player{};
     player.id = 100;
     player.net_assets = 500000.0f;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     // Obligation already at 1.51x original value (just past threshold)
     ObligationNetworkModule::ObligationState obl;
@@ -208,7 +208,7 @@ TEST_CASE("test_status_transitions_escalated_to_critical", "[obligation_network]
     PlayerCharacter player{};
     player.id = 100;
     player.net_assets = 500000.0f;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     // Obligation at 3.1x (past critical threshold)
     ObligationNetworkModule::ObligationState obl;
@@ -243,7 +243,7 @@ TEST_CASE("test_hostile_action_risk_tolerance_gated", "[obligation_network][tier
     PlayerCharacter player{};
     player.id = 100;
     player.net_assets = 500000.0f;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     ObligationNetworkModule::ObligationState obl;
     obl.obligation_id = 1;
@@ -278,7 +278,7 @@ TEST_CASE("test_hostile_triggers_when_risk_high", "[obligation_network][tier6]")
     PlayerCharacter player{};
     player.id = 100;
     player.net_assets = 500000.0f;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     ObligationNetworkModule::ObligationState obl;
     obl.obligation_id = 1;
@@ -344,7 +344,7 @@ TEST_CASE("test_dead_creditor_freezes_obligation", "[obligation_network][tier6]"
     PlayerCharacter player{};
     player.id = 100;
     player.net_assets = 500000.0f;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     ObligationNetworkModule::ObligationState obl;
     obl.obligation_id = 1;

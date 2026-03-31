@@ -35,8 +35,8 @@ WorldState make_test_world_state() {
     WorldState state{};
     state.current_tick = 90;  // Default to quarterly tick for budget tests.
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 1;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -46,7 +46,7 @@ WorldState make_test_world_state() {
     Province prov{};
     prov.id = 0;
     prov.infrastructure_rating = 0.80f;
-    prov.cohort_stats = nullptr;
+    prov.cohort_stats.reset();
     state.provinces.push_back(prov);
 
     // Add one nation with tax rates.
@@ -857,12 +857,12 @@ TEST_CASE("test_multiple_provinces_intergovernmental", "[government_budget][tier
     // Add more provinces to WorldState.
     Province prov1{};
     prov1.id = 1;
-    prov1.cohort_stats = nullptr;
+    prov1.cohort_stats.reset();
     state.provinces.push_back(prov1);
 
     Province prov2{};
     prov2.id = 2;
-    prov2.cohort_stats = nullptr;
+    prov2.cohort_stats.reset();
     state.provinces.push_back(prov2);
 
     GovernmentBudgetModule module;

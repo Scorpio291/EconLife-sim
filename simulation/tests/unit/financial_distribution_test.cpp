@@ -33,8 +33,8 @@ WorldState make_test_world_state() {
     WorldState state{};
     state.current_tick = 1;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 1;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -795,7 +795,7 @@ TEST_CASE("test_player_owned_business_salary", "[financial_distribution][tier4]"
     // Player-owned business: salary should go to player.wealth_delta.
     auto state = make_test_world_state();
     PlayerCharacter player = make_test_player(1);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     constexpr uint32_t business_id = 1;
 

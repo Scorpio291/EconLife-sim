@@ -39,8 +39,8 @@ WorldState make_test_world_state(uint32_t tick = 1) {
     WorldState state{};
     state.current_tick = tick;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 1;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -394,7 +394,7 @@ TEST_CASE("test_rental_income_credits_player_wealth", "[real_estate][tier4]") {
     state.provinces.push_back(make_test_province(0));
 
     PlayerCharacter player = make_test_player(1);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     RealEstateModule module;
     auto prop = make_test_property(1, PropertyType::residential, 0, 1,
@@ -462,7 +462,7 @@ TEST_CASE("test_multiple_rented_properties_accumulate_player_income", "[real_est
     state.provinces.push_back(make_test_province(0));
 
     PlayerCharacter player = make_test_player(1);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     RealEstateModule module;
 

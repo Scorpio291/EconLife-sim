@@ -1005,13 +1005,13 @@ Province read_province(ByteReader& r) {
 
     bool has_cohort = r.read_bool();
     if (has_cohort) {
-        p.cohort_stats = new RegionCohortStats{};
+        p.cohort_stats = std::make_unique<RegionCohortStats>();
         p.cohort_stats->total_population = r.read_u32();
         p.cohort_stats->median_age = r.read_float();
         p.cohort_stats->working_age_fraction = r.read_float();
         p.cohort_stats->dependency_ratio = r.read_float();
     } else {
-        p.cohort_stats = nullptr;
+        p.cohort_stats.reset();
     }
 
     p.has_karst = r.read_bool();
@@ -1649,9 +1649,9 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // Player
     bool has_player = r.read_bool();
     if (has_player) {
-        out_state.player = new PlayerCharacter(read_player(r));
+        out_state.player = std::make_unique<PlayerCharacter>(read_player(r));
     } else {
-        out_state.player = nullptr;
+        out_state.player.reset();
     }
 
     // Markets
@@ -1708,7 +1708,7 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // LOD2 price index
     bool has_lod2 = r.read_bool();
     if (has_lod2) {
-        out_state.lod2_price_index = new GlobalCommodityPriceIndex{};
+        out_state.lod2_price_index = std::make_unique<GlobalCommodityPriceIndex>();
         out_state.lod2_price_index->last_updated_tick = r.read_u32();
         uint32_t lod2_count = r.read_u32();
         for (uint32_t i = 0; i < lod2_count; ++i) {
@@ -1717,7 +1717,7 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             out_state.lod2_price_index->lod2_price_modifier[k] = v;
         }
     } else {
-        out_state.lod2_price_index = nullptr;
+        out_state.lod2_price_index.reset();
     }
 
     // LOD1 stats

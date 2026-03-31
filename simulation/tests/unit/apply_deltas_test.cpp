@@ -15,8 +15,8 @@ static WorldState make_minimal_world() {
     w.current_tick = 10;
     w.world_seed = 42;
     w.game_mode = GameMode::standard;
-    w.lod2_price_index = nullptr;
-    w.player = nullptr;
+    w.lod2_price_index.reset();
+    w.player.reset();
 
     Province p{};
     p.id = 0;

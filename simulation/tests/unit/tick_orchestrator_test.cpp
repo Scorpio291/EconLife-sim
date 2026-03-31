@@ -199,8 +199,8 @@ TEST_CASE("sequential modules execute in sorted order", "[orchestrator][tier0]")
     WorldState state{};
     state.current_tick = 0;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
 
     ThreadPool pool(1);
     orch.execute_tick(state, pool);
@@ -226,8 +226,8 @@ TEST_CASE("province-parallel module with global post-pass executes provinces the
     WorldState state{};
     state.current_tick = 0;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.provinces.resize(3);
     for (auto& p : state.provinces) {
         p.lod_level = SimulationLOD::full;
@@ -262,8 +262,8 @@ TEST_CASE("mixed sequential and province-parallel-with-post-pass modules execute
     WorldState state{};
     state.current_tick = 0;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.provinces.resize(2);
     for (auto& p : state.provinces) {
         p.lod_level = SimulationLOD::full;
@@ -295,8 +295,8 @@ TEST_CASE("province-parallel module without post-pass does not call execute",
     WorldState state{};
     state.current_tick = 0;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.provinces.resize(2);
     for (auto& p : state.provinces) {
         p.lod_level = SimulationLOD::full;

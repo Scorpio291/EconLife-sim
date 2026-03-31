@@ -183,8 +183,8 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     world.game_mode = GameMode::standard;
     world.current_schema_version = 1;
     world.network_health_dirty = false;
-    world.lod2_price_index = nullptr;
-    world.player = nullptr;
+    world.lod2_price_index.reset();
+    world.player.reset();
 
     // Step 1: Placeholder nation (replaced by form_nations after Stage 9.1).
     // create_nation creates a single nation and regions so early pipeline stages
@@ -682,7 +682,7 @@ void WorldGenerator::create_provinces(WorldState& world, DeterministicRNG& rng,
         province.region_id = p;
         province.nation_id = 0;
         province.lod_level = SimulationLOD::full;
-        province.cohort_stats = nullptr;
+        province.cohort_stats.reset();
 
         ProvinceArchetype archetype = assign_archetype(rng, p, config.province_count);
         province.province_archetype_index = static_cast<uint8_t>(archetype);

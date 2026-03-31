@@ -34,8 +34,8 @@ WorldState make_test_world_state(uint32_t tick = 1) {
     WorldState state{};
     state.current_tick = tick;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 1;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -60,7 +60,7 @@ Province make_test_province(uint32_t id) {
     prov.conditions.addiction_rate = 0.0f;
     prov.infrastructure_rating = 0.6f;
     prov.demographics.total_population = 100000;
-    prov.cohort_stats = nullptr;
+    prov.cohort_stats.reset();
     return prov;
 }
 

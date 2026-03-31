@@ -31,11 +31,13 @@ struct RelationshipDelta {
 
 struct NPCDelta {
     uint32_t npc_id;
-    std::optional<float> capital_delta;                // additive
-    std::optional<NPCStatus> new_status;               // replacement
-    std::optional<MemoryEntry> new_memory_entry;       // appended to memory_log
-    std::optional<Relationship> updated_relationship;  // upsert by target_npc_id
-    std::optional<float> motivation_delta;             // additive to specific motivation slot
+    std::optional<float> capital_delta;                     // additive
+    std::optional<NPCStatus> new_status;                    // replacement
+    std::optional<NPCTravelStatus> new_travel_status;       // replacement
+    std::optional<MemoryEntry> new_memory_entry;            // appended to memory_log
+    std::optional<Relationship> updated_relationship;       // upsert by target_npc_id
+    std::optional<float> motivation_delta;                  // additive to specific motivation slot
+    std::optional<MotivationVector> motivation_replacement; // replacement; full vector override
 };
 
 struct PlayerDelta {
@@ -117,6 +119,20 @@ struct RegionDelta {
         infrastructure_rating_delta;  // additive; applied to province infrastructure_rating
 };
 
+// --- Cross-province communication ---
+// Effects take hold at the start of the following tick (one-tick propagation delay).
+
+struct CrossProvinceDelta {
+    uint32_t source_province_id;
+    uint32_t target_province_id;
+    uint32_t due_tick;  // current_tick + 1
+
+    // Exactly one of these is populated per entry:
+    std::optional<NPCDelta> npc_delta;
+    std::optional<MarketDelta> market_delta;
+    // EvidenceToken and DeferredWorkItem payloads added in Pass 2
+};
+
 // Accumulated state changes for one tick step.
 // Pre-reserve vectors at WorldState initialization using known NPC count.
 struct DeltaBuffer {
@@ -132,20 +148,7 @@ struct DeltaBuffer {
     std::vector<CalendarEntry> new_calendar_entries;
     std::vector<SceneCard> new_scene_cards;
     std::vector<ObligationNode> new_obligation_nodes;
-};
-
-// --- Cross-province communication ---
-// Effects take hold at the start of the following tick (one-tick propagation delay).
-
-struct CrossProvinceDelta {
-    uint32_t source_province_id;
-    uint32_t target_province_id;
-    uint32_t due_tick;  // current_tick + 1
-
-    // Exactly one of these is populated per entry:
-    std::optional<NPCDelta> npc_delta;
-    std::optional<MarketDelta> market_delta;
-    // EvidenceToken and DeferredWorkItem payloads added in Pass 2
+    std::vector<CrossProvinceDelta> cross_province_deltas;
 };
 
 // Thread-safe via partitioning: each province worker appends to its own partition.

@@ -136,7 +136,7 @@ TEST_CASE("Facility signals execute province computes signals", "[facility_signa
 
     PlayerCharacter player{};
     player.id = 999;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     FacilitySignalsModule module;
 
@@ -198,7 +198,7 @@ TEST_CASE("Regulator reads chemical and traffic only", "[facility_signals][tier7
 
     PlayerCharacter player{};
     player.id = 999;
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     FacilitySignalsModule module;
 

@@ -27,8 +27,8 @@ static constexpr uint32_t EVIDENCE_DECAY_INTERVAL = 7;
 // ---------------------------------------------------------------------------
 // Helper: find NPC by id
 // ---------------------------------------------------------------------------
-static NPC* find_npc(WorldState& world, uint32_t npc_id) {
-    for (auto& n : world.significant_npcs) {
+static const NPC* find_npc(const WorldState& world, uint32_t npc_id) {
+    for (const auto& n : world.significant_npcs) {
         if (n.id == npc_id)
             return &n;
     }
@@ -71,27 +71,48 @@ static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldSta
                                           DeltaBuffer& delta) {
     // Batch decay for one NPC's relationships.
     // Trust and fear decay toward 0 over time.
+    // Write relationship updates via DeltaBuffer (not direct mutation).
     auto* payload = std::get_if<NPCRelationshipDecayPayload>(&item.payload);
     if (!payload)
         return;
 
-    NPC* npc = find_npc(world, payload->npc_id);
+    const NPC* npc = find_npc(world, payload->npc_id);
     if (!npc)
         return;
 
     static constexpr float TRUST_DECAY_RATE = 0.02f;  // per batch (30 ticks)
     static constexpr float FEAR_DECAY_RATE = 0.03f;   // fear decays faster
 
-    for (auto& rel : npc->relationships) {
-        // Trust decays toward 0
+    for (const auto& rel : npc->relationships) {
+        float trust_change = 0.0f;
+        float fear_change = 0.0f;
+
+        // Trust decays toward 0 — compute the additive delta
         if (rel.trust > 0.0f) {
-            rel.trust = std::max(0.0f, rel.trust - TRUST_DECAY_RATE);
+            trust_change = -std::min(TRUST_DECAY_RATE, rel.trust);
         } else if (rel.trust < 0.0f) {
-            rel.trust = std::min(0.0f, rel.trust + TRUST_DECAY_RATE);
+            trust_change = std::min(TRUST_DECAY_RATE, -rel.trust);
         }
         // Fear decays toward 0
         if (rel.fear > 0.0f) {
-            rel.fear = std::max(0.0f, rel.fear - FEAR_DECAY_RATE);
+            fear_change = -std::min(FEAR_DECAY_RATE, rel.fear);
+        }
+
+        // Only emit delta if values actually changed
+        if (trust_change != 0.0f || fear_change != 0.0f) {
+            NPCDelta npc_delta{};
+            npc_delta.npc_id = payload->npc_id;
+            // apply_deltas treats updated_relationship as additive for trust/fear
+            Relationship delta_rel{};
+            delta_rel.target_npc_id = rel.target_npc_id;
+            delta_rel.trust = trust_change;
+            delta_rel.fear = fear_change;
+            delta_rel.obligation_balance = 0.0f;
+            delta_rel.last_interaction_tick = rel.last_interaction_tick;
+            delta_rel.is_movement_ally = false;
+            delta_rel.recovery_ceiling = rel.recovery_ceiling;
+            npc_delta.updated_relationship = delta_rel;
+            delta.npc_deltas.push_back(npc_delta);
         }
     }
 
@@ -103,26 +124,33 @@ static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldSta
 
 static void handle_evidence_decay(const DeferredWorkItem& item, WorldState& world,
                                   DeltaBuffer& delta) {
-    // Decay actionability of one evidence token.
+    // Decay actionability of one evidence token via DeltaBuffer.
     auto* payload = std::get_if<EvidenceDecayPayload>(&item.payload);
     if (!payload)
         return;
 
-    for (auto& token : world.evidence_pool) {
+    for (const auto& token : world.evidence_pool) {
         if (token.id == payload->evidence_token_id && token.is_active) {
-            token.actionability =
+            float new_actionability =
                 std::max(0.0f, token.actionability -
                                    token.decay_rate * static_cast<float>(EVIDENCE_DECAY_INTERVAL));
 
-            // If actionability drops to near-zero, retire the token
-            if (token.actionability < 0.01f) {
-                token.is_active = false;
+            EvidenceDelta ed{};
+            if (new_actionability < 0.01f) {
+                // Retire the token and zero its actionability
+                ed.retired_token_id = payload->evidence_token_id;
+                ed.updated_token_id = payload->evidence_token_id;
+                ed.updated_actionability = 0.0f;
             } else {
+                // Update actionability
+                ed.updated_token_id = payload->evidence_token_id;
+                ed.updated_actionability = new_actionability;
                 // Reschedule only if still active
                 world.deferred_work_queue.push(
                     {world.current_tick + EVIDENCE_DECAY_INTERVAL, WorkType::evidence_decay_batch,
                      payload->evidence_token_id, EvidenceDecayPayload{payload->evidence_token_id}});
             }
+            delta.evidence_deltas.push_back(ed);
             break;
         }
     }
@@ -168,13 +196,15 @@ static void handle_climate_downstream(const DeferredWorkItem& item, WorldState& 
 static void handle_npc_travel_arrival(const DeferredWorkItem& item, WorldState& world,
                                       DeltaBuffer& delta) {
     // NPC physically arrives at destination province.
-    NPC* npc = find_npc(world, item.subject_id);
+    // Write status change via DeltaBuffer (not direct mutation).
+    const NPC* npc = find_npc(world, item.subject_id);
     if (!npc)
         return;
 
-    // The destination is encoded in the subject's current travel state.
-    // For now, mark them as arrived (resident at current_province_id).
-    npc->travel_status = NPCTravelStatus::resident;
+    NPCDelta npc_delta{};
+    npc_delta.npc_id = item.subject_id;
+    npc_delta.new_travel_status = NPCTravelStatus::resident;
+    delta.npc_deltas.push_back(npc_delta);
 }
 
 static void handle_player_travel_arrival(const DeferredWorkItem& item, WorldState& world,

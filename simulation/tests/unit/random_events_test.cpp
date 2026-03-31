@@ -56,7 +56,7 @@ Province make_test_province(uint32_t id, float climate_stress = 0.0f, float stab
     p.community.institutional_trust = 0.6f;
     p.community.resource_access = 0.5f;
     p.community.response_stage = 0;
-    p.cohort_stats = nullptr;
+    p.cohort_stats.reset();
     return p;
 }
 
@@ -64,8 +64,8 @@ WorldState make_test_world_state(uint64_t seed = 42, uint32_t current_tick = 100
     WorldState ws{};
     ws.world_seed = seed;
     ws.current_tick = current_tick;
-    ws.player = nullptr;
-    ws.lod2_price_index = nullptr;
+    ws.player.reset();
+    ws.lod2_price_index.reset();
     ws.ticks_this_session = 0;
     ws.game_mode = GameMode::standard;
     ws.current_schema_version = 1;
@@ -610,7 +610,7 @@ TEST_CASE("test_human_event_scene_card_for_player", "[random_events][tier1]") {
     player.wealth = 10000.0f;
     player.net_assets = 10000.0f;
     player.ironman_eligible = false;
-    ws.player = &player;
+    ws.player = std::make_unique<PlayerCharacter>(player);
 
     DeltaBuffer db{};
     module.execute_province(0, ws, db);

@@ -22,8 +22,8 @@ static WorldState make_test_world(uint32_t current_tick) {
     WorldState state{};
     state.current_tick = current_tick;
     state.world_seed = 12345;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 0;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -112,7 +112,7 @@ TEST_CASE("test_deadline_miss_applies_relationship_penalty", "[calendar][tier1]"
 
     auto state = make_test_world(11);
     auto player = make_test_player(1000);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     NPC npc = make_test_npc(42);
     state.significant_npcs.push_back(npc);
@@ -149,7 +149,7 @@ TEST_CASE("test_deadline_miss_queues_consequence_with_delay", "[calendar][tier1]
 
     auto state = make_test_world(11);
     auto player = make_test_player(1000);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     NPC npc = make_test_npc(42);
     state.significant_npcs.push_back(npc);
@@ -184,7 +184,7 @@ TEST_CASE("test_deadline_miss_creates_memory_entry", "[calendar][tier1]") {
 
     auto state = make_test_world(11);
     auto player = make_test_player(1000);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     NPC npc = make_test_npc(42);
     state.significant_npcs.push_back(npc);
@@ -223,7 +223,7 @@ TEST_CASE("test_npc_initiative_fires_on_miss", "[calendar][tier1]") {
 
     auto state = make_test_world(11);
     auto player = make_test_player(1000);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     NPC npc = make_test_npc(42);
     state.significant_npcs.push_back(npc);
@@ -262,7 +262,7 @@ TEST_CASE("test_no_initiative_no_action", "[calendar][tier1]") {
 
     auto state = make_test_world(11);
     auto player = make_test_player(1000);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     NPC npc = make_test_npc(42);
     state.significant_npcs.push_back(npc);
@@ -299,7 +299,7 @@ TEST_CASE("test_mandatory_entry_suppresses_fast_forward", "[calendar][tier1]") {
     {
         auto state = make_test_world(7);
         auto player = make_test_player(1000);
-        state.player = &player;
+        state.player = std::make_unique<PlayerCharacter>(player);
 
         CalendarEntry entry{};
         entry.id = 1;
@@ -331,7 +331,7 @@ TEST_CASE("test_mandatory_entry_suppresses_fast_forward", "[calendar][tier1]") {
     {
         auto state = make_test_world(5);
         auto player = make_test_player(1000);
-        state.player = &player;
+        state.player = std::make_unique<PlayerCharacter>(player);
 
         CalendarEntry entry{};
         entry.id = 1;
@@ -360,7 +360,7 @@ TEST_CASE("test_mandatory_entry_suppresses_fast_forward", "[calendar][tier1]") {
     {
         auto state = make_test_world(8);
         auto player = make_test_player(1000);
-        state.player = &player;
+        state.player = std::make_unique<PlayerCharacter>(player);
 
         CalendarEntry entry{};
         entry.id = 1;
@@ -398,7 +398,7 @@ TEST_CASE("test_completed_entry_expires", "[calendar][tier1]") {
 
     auto state = make_test_world(8);
     auto player = make_test_player(1000);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     CalendarEntry entry{};
     entry.id = 1;
@@ -435,7 +435,7 @@ TEST_CASE("test_dead_npc_skips_relationship", "[calendar][tier1]") {
 
     auto state = make_test_world(11);
     auto player = make_test_player(1000);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     // NPC with status = dead
     NPC npc = make_test_npc(42, NPCStatus::dead);

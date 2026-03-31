@@ -33,8 +33,8 @@ WorldState make_test_world_state() {
     WorldState state{};
     state.current_tick = 10;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 10;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -57,7 +57,7 @@ Province make_test_province(uint32_t id, float infrastructure = 0.5f) {
     prov.historical_trauma_index = 0.0f;
     prov.region_id = 0;
     prov.nation_id = 0;
-    prov.cohort_stats = nullptr;
+    prov.cohort_stats.reset();
 
     // Initialize conditions to defaults
     prov.conditions.stability_score = 0.8f;

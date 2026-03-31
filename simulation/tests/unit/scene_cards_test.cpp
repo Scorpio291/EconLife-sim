@@ -98,8 +98,8 @@ static WorldState make_base_state() {
     WorldState state{};
     state.current_tick = 10;
     state.world_seed = 42;
-    state.player = nullptr;
-    state.lod2_price_index = nullptr;
+    state.player.reset();
+    state.lod2_price_index.reset();
     state.ticks_this_session = 10;
     state.game_mode = GameMode::standard;
     state.current_schema_version = 1;
@@ -119,7 +119,7 @@ TEST_CASE("test_calendar_triggers_scene_card", "[scene_cards][tier1]") {
     state.current_tick = 10;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 3);  // Same province as player
     add_relationship(npc, 1, 0.5f);
@@ -144,7 +144,7 @@ TEST_CASE("test_presentation_state_from_trust", "[scene_cards][tier1]") {
     state.current_tick = 10;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 3, 0.5f);  // risk_tolerance = 0.5
     add_relationship(npc, 1, 0.9f);     // high trust toward player
@@ -174,7 +174,7 @@ TEST_CASE("test_hostile_presentation", "[scene_cards][tier1]") {
     state.current_tick = 10;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 3, 0.2f);  // low risk_tolerance
     add_relationship(npc, 1, 0.1f);     // low trust toward player
@@ -204,7 +204,7 @@ TEST_CASE("test_in_person_requires_province_match", "[scene_cards][tier1]") {
     state.current_tick = 10;
 
     auto player = make_player(1, 1);  // Player in province 1
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 3);  // NPC in province 3
     add_relationship(npc, 1, 0.5f);
@@ -237,7 +237,7 @@ TEST_CASE("test_remote_ignores_province", "[scene_cards][tier1]") {
     state.current_tick = 10;
 
     auto player = make_player(1, 1);  // Player in province 1
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 5);  // NPC in province 5 (different)
     add_relationship(npc, 1, 0.5f);
@@ -338,7 +338,7 @@ TEST_CASE("test_dead_npc_card_discarded", "[scene_cards][tier1]") {
     state.current_tick = 9;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto dead_npc = make_npc(100, 3, 0.5f, NPCStatus::dead);
     add_relationship(dead_npc, 1, 0.5f);
@@ -363,7 +363,7 @@ TEST_CASE("test_authored_takes_priority", "[scene_cards][tier1]") {
     state.current_tick = 10;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 3);
     add_relationship(npc, 1, 0.5f);
@@ -402,7 +402,7 @@ TEST_CASE("calendar entry at wrong tick does not trigger", "[scene_cards][tier1]
     state.current_tick = 10;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 3);
     state.significant_npcs.push_back(npc);
@@ -463,7 +463,7 @@ TEST_CASE("presentation state formula is correct", "[scene_cards][tier1]") {
 TEST_CASE("no player means no execution", "[scene_cards][tier1]") {
     auto state = make_base_state();
     state.current_tick = 10;
-    state.player = nullptr;
+    state.player.reset();
 
     state.calendar.push_back(make_calendar_entry(1, 10, 42, 100));
 
@@ -480,7 +480,7 @@ TEST_CASE("calendar entry with scene_card_id zero does not trigger", "[scene_car
     state.current_tick = 10;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     // Calendar entry with scene_card_id = 0
     state.calendar.push_back(make_calendar_entry(1, 10, 0, 100));
@@ -500,7 +500,7 @@ TEST_CASE("resolved card generates consequence delta", "[scene_cards][tier1]") {
     state.current_tick = 10;
 
     auto player = make_player(1, 3);
-    state.player = &player;
+    state.player = std::make_unique<PlayerCharacter>(player);
 
     auto npc = make_npc(100, 3);
     add_relationship(npc, 1, 0.5f);
