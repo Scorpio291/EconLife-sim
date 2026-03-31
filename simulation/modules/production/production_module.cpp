@@ -82,10 +82,8 @@ uint32_t ProductionModule::good_id_from_string(const std::string& good_id_str) {
 void ProductionModule::execute_province(uint32_t province_idx, const WorldState& state,
                                         DeltaBuffer& province_delta) {
     // Lazy-init: populate registries from WorldState on first execution.
-    if (!initialized_) {
-        init_from_world_state(state);
-        initialized_ = true;
-    }
+    // std::call_once is thread-safe for province-parallel dispatch.
+    std::call_once(init_flag_, [this, &state]() { init_from_world_state(state); });
 
     // Fork RNG with province_id for deterministic province-parallel work.
     DeterministicRNG rng = DeterministicRNG(state.world_seed).fork(province_idx);

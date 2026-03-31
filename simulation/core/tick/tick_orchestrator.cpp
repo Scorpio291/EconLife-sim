@@ -84,7 +84,12 @@ void TickOrchestrator::resolve_and_sort() {
     }
 
     // Kahn's algorithm for topological sort.
-    std::queue<size_t> ready;
+    // Use a min-heap ordered by module name for deterministic tiebreaking
+    // when multiple modules have in_degree == 0 simultaneously.
+    auto cmp = [this](size_t a, size_t b) {
+        return modules_[a]->name() > modules_[b]->name();  // min-heap: smallest name first
+    };
+    std::priority_queue<size_t, std::vector<size_t>, decltype(cmp)> ready(cmp);
     for (size_t i = 0; i < n; ++i) {
         if (in_degree[i] == 0) {
             ready.push(i);
@@ -95,7 +100,7 @@ void TickOrchestrator::resolve_and_sort() {
     order.reserve(n);
 
     while (!ready.empty()) {
-        size_t curr = ready.front();
+        size_t curr = ready.top();
         ready.pop();
         order.push_back(curr);
 

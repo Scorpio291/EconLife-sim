@@ -6,6 +6,7 @@
 //
 // See docs/interfaces/production/INTERFACE.md for the canonical specification.
 
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -93,7 +94,7 @@ class ProductionModule : public ITickModule {
     ProductionConstants config_;
     RecipeRegistry recipe_registry_;
     FacilityRegistry facility_registry_;
-    bool initialized_ = false;
+    std::once_flag init_flag_;
 
     void process_business(const NPCBusiness& biz, const WorldState& state, DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,

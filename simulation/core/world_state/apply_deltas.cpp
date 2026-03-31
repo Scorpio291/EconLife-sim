@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 #include "modules/technology/technology_types.h"
 #include "player.h"
@@ -41,17 +42,21 @@ static constexpr float NPC_CAPITAL_CEILING = 1.0e9f;
 // apply_npc_deltas
 // ---------------------------------------------------------------------------
 static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& deltas) {
+    if (deltas.empty())
+        return;
+
+    // Build index for O(1) NPC lookup instead of O(N) per delta.
+    std::unordered_map<uint32_t, NPC*> npc_index;
+    npc_index.reserve(world.significant_npcs.size());
+    for (auto& n : world.significant_npcs) {
+        npc_index[n.id] = &n;
+    }
+
     for (const auto& d : deltas) {
-        // Find NPC by id (linear scan; acceptable at <2000 NPCs)
-        NPC* npc = nullptr;
-        for (auto& n : world.significant_npcs) {
-            if (n.id == d.npc_id) {
-                npc = &n;
-                break;
-            }
-        }
-        if (!npc)
+        auto it = npc_index.find(d.npc_id);
+        if (it == npc_index.end())
             continue;
+        NPC* npc = it->second;
 
         // capital_delta: additive, floor at 0, ceiling at NPC_CAPITAL_CEILING
         if (d.capital_delta.has_value()) {
@@ -202,31 +207,39 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
 // apply_business_deltas
 // ---------------------------------------------------------------------------
 static void apply_business_deltas(WorldState& world, const std::vector<BusinessDelta>& deltas) {
+    if (deltas.empty())
+        return;
+
+    // Build index for O(1) business lookup.
+    std::unordered_map<uint32_t, NPCBusiness*> biz_index;
+    biz_index.reserve(world.npc_businesses.size());
+    for (auto& b : world.npc_businesses) {
+        biz_index[b.id] = &b;
+    }
+
     for (const auto& d : deltas) {
-        for (auto& biz : world.npc_businesses) {
-            if (biz.id == d.business_id) {
-                if (d.cash_delta.has_value()) {
-                    biz.cash = safe_add(biz.cash, *d.cash_delta);
-                    // Business cash can go negative (indicates insolvency).
-                    // Clamp magnitude to prevent float overflow/Inf/NaN.
-                    if (std::isinf(biz.cash) || std::isnan(biz.cash)) {
-                        biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash))
-                                       ? BUSINESS_CASH_CEILING
-                                       : -BUSINESS_CASH_CEILING;
-                    }
-                    biz.cash = std::clamp(biz.cash, -BUSINESS_CASH_CEILING, BUSINESS_CASH_CEILING);
-                }
-                if (d.revenue_per_tick_update.has_value()) {
-                    biz.revenue_per_tick = std::max(0.0f, *d.revenue_per_tick_update);
-                }
-                if (d.cost_per_tick_update.has_value()) {
-                    biz.cost_per_tick = std::max(0.0f, *d.cost_per_tick_update);
-                }
-                if (d.output_quality_update.has_value()) {
-                    biz.output_quality = clamp01(*d.output_quality_update);
-                }
-                break;
+        auto it = biz_index.find(d.business_id);
+        if (it == biz_index.end())
+            continue;
+        auto& biz = *it->second;
+
+        if (d.cash_delta.has_value()) {
+            biz.cash = safe_add(biz.cash, *d.cash_delta);
+            if (std::isinf(biz.cash) || std::isnan(biz.cash)) {
+                biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash))
+                               ? BUSINESS_CASH_CEILING
+                               : -BUSINESS_CASH_CEILING;
             }
+            biz.cash = std::clamp(biz.cash, -BUSINESS_CASH_CEILING, BUSINESS_CASH_CEILING);
+        }
+        if (d.revenue_per_tick_update.has_value()) {
+            biz.revenue_per_tick = std::max(0.0f, *d.revenue_per_tick_update);
+        }
+        if (d.cost_per_tick_update.has_value()) {
+            biz.cost_per_tick = std::max(0.0f, *d.cost_per_tick_update);
+        }
+        if (d.output_quality_update.has_value()) {
+            biz.output_quality = clamp01(*d.output_quality_update);
         }
     }
 }
@@ -238,30 +251,43 @@ static constexpr float MARKET_SUPPLY_CEILING = 1.0e8f;
 static constexpr float MARKET_PRICE_CEILING = 1.0e6f;
 
 static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta>& deltas) {
+    if (deltas.empty())
+        return;
+
+    // Build index: (good_id, province_id) -> RegionalMarket* for O(1) lookup.
+    // Composite key packed into uint64_t: upper 32 = good_id, lower 32 = province_id.
+    std::unordered_map<uint64_t, RegionalMarket*> market_index;
+    market_index.reserve(world.regional_markets.size());
+    for (auto& m : world.regional_markets) {
+        uint64_t key = (static_cast<uint64_t>(m.good_id) << 32) | m.province_id;
+        market_index[key] = &m;
+    }
+
     for (const auto& d : deltas) {
-        for (auto& m : world.regional_markets) {
-            if (m.good_id == d.good_id && m.province_id == d.region_id) {
-                if (d.supply_delta.has_value()) {
-                    m.supply = std::clamp(safe_add(m.supply, *d.supply_delta), 0.0f,
-                                          MARKET_SUPPLY_CEILING);
-                }
-                if (d.demand_buffer_delta.has_value()) {
-                    m.demand_buffer = std::clamp(safe_add(m.demand_buffer, *d.demand_buffer_delta),
-                                                 0.0f, MARKET_SUPPLY_CEILING);
-                }
-                if (d.spot_price_override.has_value()) {
-                    float price = *d.spot_price_override;
-                    m.spot_price = std::clamp(std::isnan(price) ? m.spot_price : price, 0.001f,
-                                              MARKET_PRICE_CEILING);
-                }
-                if (d.equilibrium_price_override.has_value()) {
-                    float price = *d.equilibrium_price_override;
-                    m.equilibrium_price =
-                        std::clamp(std::isnan(price) ? m.equilibrium_price : price, 0.001f,
-                                   MARKET_PRICE_CEILING);
-                }
-                break;
-            }
+        uint64_t key = (static_cast<uint64_t>(d.good_id) << 32) | d.region_id;
+        auto it = market_index.find(key);
+        if (it == market_index.end())
+            continue;
+        auto& m = *it->second;
+
+        if (d.supply_delta.has_value()) {
+            m.supply = std::clamp(safe_add(m.supply, *d.supply_delta), 0.0f,
+                                  MARKET_SUPPLY_CEILING);
+        }
+        if (d.demand_buffer_delta.has_value()) {
+            m.demand_buffer = std::clamp(safe_add(m.demand_buffer, *d.demand_buffer_delta),
+                                         0.0f, MARKET_SUPPLY_CEILING);
+        }
+        if (d.spot_price_override.has_value()) {
+            float price = *d.spot_price_override;
+            m.spot_price = std::clamp(std::isnan(price) ? m.spot_price : price, 0.001f,
+                                      MARKET_PRICE_CEILING);
+        }
+        if (d.equilibrium_price_override.has_value()) {
+            float price = *d.equilibrium_price_override;
+            m.equilibrium_price =
+                std::clamp(std::isnan(price) ? m.equilibrium_price : price, 0.001f,
+                           MARKET_PRICE_CEILING);
         }
     }
 }
