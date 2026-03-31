@@ -47,5 +47,11 @@
     "tariff_base_rate_percent": 5.0,
     "transport_cost_per_km_per_tonne": 0.05,
     "transit_delay_base_ticks": 3
+  },
+  "safety_ceilings": {
+    "npc_capital_ceiling": 1.0e9,
+    "business_cash_ceiling": 1.0e10,
+    "market_supply_ceiling": 1.0e8,
+    "market_price_ceiling": 1.0e6
   }
 }

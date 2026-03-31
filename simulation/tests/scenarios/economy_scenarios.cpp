@@ -111,14 +111,12 @@ TEST_CASE("inter-province trade creates transit shipment", "[scenario][economy][
     cpd.market_delta = arrival;
     world.cross_province_delta_buffer.entries.push_back(cpd);
 
-    // At tick 3, cross-province delta should NOT fire.
+    // At tick 3, cross-province delta should NOT fire (due_tick=5 > 3).
     world.current_tick = 3;
     apply_cross_province_deltas(world);
-    // All entries cleared regardless (current implementation clears buffer)
-    // The real orchestrator handles timing via due_tick check.
+    // Entry is retained in the buffer because it's not yet due.
 
     // At tick 5, the arrival should apply.
-    world.cross_province_delta_buffer.entries.push_back(cpd);
     world.current_tick = 5;
     float supply_before = world.regional_markets[0].supply;
     apply_cross_province_deltas(world);
@@ -291,6 +289,7 @@ TEST_CASE("evidence decays over time via DWQ", "[scenario][economy][evidence]") 
 
     DeltaBuffer delta{};
     drain_deferred_work(world, delta);
+    apply_deltas(world, delta);
 
     REQUIRE(world.evidence_pool[0].actionability < 0.8f);
     REQUIRE(world.evidence_pool[0].is_active == true);
@@ -317,6 +316,7 @@ TEST_CASE("relationship trust decays over time via DWQ", "[scenario][economy][np
 
     DeltaBuffer delta{};
     drain_deferred_work(world, delta);
+    apply_deltas(world, delta);
 
     REQUIRE(world.significant_npcs[0].relationships[0].trust < 0.7f);
     REQUIRE(world.significant_npcs[0].relationships[0].fear < 0.2f);

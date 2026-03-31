@@ -12,6 +12,7 @@
 #include <cmath>
 #include <unordered_map>
 
+#include "core/config/package_config.h"
 #include "modules/technology/technology_types.h"
 #include "player.h"
 #include "world_state.h"
@@ -32,16 +33,14 @@ static float safe_add(float base, float delta) {
     return std::isnan(delta) ? base : base + delta;
 }
 
-// Magnitude ceilings: prevent float overflow from runaway accumulation.
-// These are safety clamps, not game mechanics — if values hit these,
-// the economic loop has a balance issue to investigate.
-static constexpr float BUSINESS_CASH_CEILING = 1.0e10f;
-static constexpr float NPC_CAPITAL_CEILING = 1.0e9f;
+// Default safety ceilings — used when no config is provided.
+static const SafetyCeilingsConfig DEFAULT_CEILINGS{};
 
 // ---------------------------------------------------------------------------
 // apply_npc_deltas
 // ---------------------------------------------------------------------------
-static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& deltas) {
+static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& deltas,
+                             const SafetyCeilingsConfig& ceil) {
     if (deltas.empty())
         return;
 
@@ -58,13 +57,13 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             continue;
         NPC* npc = it->second;
 
-        // capital_delta: additive, floor at 0, ceiling at NPC_CAPITAL_CEILING
+        // capital_delta: additive, floor at 0, ceiling at ceil.npc_capital_ceiling
         if (d.capital_delta.has_value()) {
             npc->capital = safe_add(npc->capital, *d.capital_delta);
             if (std::isinf(npc->capital) || std::isnan(npc->capital)) {
-                npc->capital = NPC_CAPITAL_CEILING;
+                npc->capital = ceil.npc_capital_ceiling;
             }
-            npc->capital = std::clamp(npc->capital, 0.0f, NPC_CAPITAL_CEILING);
+            npc->capital = std::clamp(npc->capital, 0.0f, ceil.npc_capital_ceiling);
         }
 
         // new_status: replacement
@@ -206,7 +205,8 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
 // ---------------------------------------------------------------------------
 // apply_business_deltas
 // ---------------------------------------------------------------------------
-static void apply_business_deltas(WorldState& world, const std::vector<BusinessDelta>& deltas) {
+static void apply_business_deltas(WorldState& world, const std::vector<BusinessDelta>& deltas,
+                                  const SafetyCeilingsConfig& ceil) {
     if (deltas.empty())
         return;
 
@@ -227,10 +227,10 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
             biz.cash = safe_add(biz.cash, *d.cash_delta);
             if (std::isinf(biz.cash) || std::isnan(biz.cash)) {
                 biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash))
-                               ? BUSINESS_CASH_CEILING
-                               : -BUSINESS_CASH_CEILING;
+                               ? ceil.business_cash_ceiling
+                               : -ceil.business_cash_ceiling;
             }
-            biz.cash = std::clamp(biz.cash, -BUSINESS_CASH_CEILING, BUSINESS_CASH_CEILING);
+            biz.cash = std::clamp(biz.cash, -ceil.business_cash_ceiling, ceil.business_cash_ceiling);
         }
         if (d.revenue_per_tick_update.has_value()) {
             biz.revenue_per_tick = std::max(0.0f, *d.revenue_per_tick_update);
@@ -247,10 +247,8 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
 // ---------------------------------------------------------------------------
 // apply_market_deltas
 // ---------------------------------------------------------------------------
-static constexpr float MARKET_SUPPLY_CEILING = 1.0e8f;
-static constexpr float MARKET_PRICE_CEILING = 1.0e6f;
-
-static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta>& deltas) {
+static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta>& deltas,
+                                const SafetyCeilingsConfig& ceil) {
     if (deltas.empty())
         return;
 
@@ -272,22 +270,22 @@ static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta
 
         if (d.supply_delta.has_value()) {
             m.supply = std::clamp(safe_add(m.supply, *d.supply_delta), 0.0f,
-                                  MARKET_SUPPLY_CEILING);
+                                  ceil.market_supply_ceiling);
         }
         if (d.demand_buffer_delta.has_value()) {
             m.demand_buffer = std::clamp(safe_add(m.demand_buffer, *d.demand_buffer_delta),
-                                         0.0f, MARKET_SUPPLY_CEILING);
+                                         0.0f, ceil.market_supply_ceiling);
         }
         if (d.spot_price_override.has_value()) {
             float price = *d.spot_price_override;
             m.spot_price = std::clamp(std::isnan(price) ? m.spot_price : price, 0.001f,
-                                      MARKET_PRICE_CEILING);
+                                      ceil.market_price_ceiling);
         }
         if (d.equilibrium_price_override.has_value()) {
             float price = *d.equilibrium_price_override;
             m.equilibrium_price =
                 std::clamp(std::isnan(price) ? m.equilibrium_price : price, 0.001f,
-                           MARKET_PRICE_CEILING);
+                           ceil.market_price_ceiling);
         }
     }
 }
@@ -473,11 +471,13 @@ static void apply_technology_deltas(WorldState& world, const std::vector<Technol
 // ---------------------------------------------------------------------------
 // apply_deltas — main entry point
 // ---------------------------------------------------------------------------
-void apply_deltas(WorldState& world, DeltaBuffer& delta) {
-    apply_npc_deltas(world, delta.npc_deltas);
+void apply_deltas(WorldState& world, DeltaBuffer& delta,
+                  const SafetyCeilingsConfig* ceilings) {
+    const auto& ceil = ceilings ? *ceilings : DEFAULT_CEILINGS;
+    apply_npc_deltas(world, delta.npc_deltas, ceil);
     apply_player_delta(world, delta.player_delta);
-    apply_business_deltas(world, delta.business_deltas);
-    apply_market_deltas(world, delta.market_deltas);
+    apply_business_deltas(world, delta.business_deltas, ceil);
+    apply_market_deltas(world, delta.market_deltas, ceil);
     apply_evidence_deltas(world, delta.evidence_deltas);
     apply_region_deltas(world, delta.region_deltas);
     apply_currency_deltas(world, delta.currency_deltas);
@@ -524,11 +524,11 @@ void apply_cross_province_deltas(WorldState& world) {
         if (entry.npc_delta.has_value()) {
             // Apply NPC delta to the target province's NPC
             std::vector<NPCDelta> single = {*entry.npc_delta};
-            apply_npc_deltas(world, single);
+            apply_npc_deltas(world, single, DEFAULT_CEILINGS);
         }
         if (entry.market_delta.has_value()) {
             std::vector<MarketDelta> single = {*entry.market_delta};
-            apply_market_deltas(world, single);
+            apply_market_deltas(world, single, DEFAULT_CEILINGS);
         }
     }
 

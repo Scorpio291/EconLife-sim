@@ -138,6 +138,9 @@ void TickOrchestrator::resolve_and_sort() {
 void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) {
     assert(finalized_ && "execute_tick() called before finalize_registration()");
 
+    // Resolve config pointers once for this tick.
+    const SafetyCeilingsConfig* sc = config_ ? &config_->safety_ceilings : nullptr;
+
     // Step 0: Apply cross-province deltas from previous tick (one-tick propagation delay).
     apply_cross_province_deltas(state);
 
@@ -164,7 +167,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
             dcfg.fear_decay_rate_per_batch = config_->relationships.fear_decay_rate_per_batch;
         }
         drain_deferred_work(state, dwq_delta, dcfg);
-        apply_deltas(state, dwq_delta);
+        apply_deltas(state, dwq_delta, sc);
     }
 
     for (auto& module : modules_) {
@@ -246,7 +249,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
 
             // Apply province-parallel deltas before global post-pass so the
             // post-pass sees the accumulated province effects.
-            apply_deltas(state, delta);
+            apply_deltas(state, delta, sc);
 
             // Global post-pass: execute() runs after all province deltas are
             // merged and applied, allowing global coordination (transit arrivals,
@@ -254,7 +257,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
             if (module->has_global_post_pass()) {
                 DeltaBuffer post_delta;
                 module->execute(state, post_delta);
-                apply_deltas(state, post_delta);
+                apply_deltas(state, post_delta, sc);
             }
         } else {
             // Sequential execution on main thread.
@@ -262,7 +265,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
 
             // Apply this module's deltas to WorldState immediately.
             // Each module sees the effects of all prior modules in this tick.
-            apply_deltas(state, delta);
+            apply_deltas(state, delta, sc);
         }
     }
 

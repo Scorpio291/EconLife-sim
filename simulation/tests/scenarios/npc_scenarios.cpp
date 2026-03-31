@@ -306,6 +306,7 @@ TEST_CASE("NPC migrates when satisfaction below threshold", "[scenario][npc][mig
 
     DeltaBuffer delta{};
     drain_deferred_work(world, delta);
+    apply_deltas(world, delta);
 
     // After drain, the NPC should be marked as resident (arrived).
     REQUIRE(world.significant_npcs[0].travel_status == NPCTravelStatus::resident);

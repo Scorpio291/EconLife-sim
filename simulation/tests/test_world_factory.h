@@ -29,7 +29,7 @@ inline PlayerCharacter create_test_player(uint32_t home_province_id) {
     player.starting_province_id = home_province_id;
     player.home_province_id = home_province_id;
     player.current_province_id = home_province_id;
-    player.travel_status = static_cast<NPCTravelStatus>(0);  // resident
+    player.travel_status = NPCTravelStatus::resident;
     player.health.current_health = 1.0f;
     player.health.base_lifespan = 75.0f;
     player.health.lifespan_projection = 75.0f;
