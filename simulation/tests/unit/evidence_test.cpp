@@ -62,14 +62,16 @@ TEST_CASE("test_evaluate_holder_credibility", "[evidence][tier6]") {
 }
 
 TEST_CASE("test_normalize_trust_to_factor", "[evidence][tier6]") {
+    constexpr float kMin = EvidenceConfig{}.trust_factor_min;
+    constexpr float kMax = EvidenceConfig{}.trust_factor_max;
     // Negative trust -> minimum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(-0.5f), WithinAbs(0.1f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(-0.5f, kMin, kMax), WithinAbs(0.1f, 0.001f));
     // Zero trust -> minimum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(0.0f), WithinAbs(0.1f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(0.0f, kMin, kMax), WithinAbs(0.1f, 0.001f));
     // Full trust -> maximum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(1.0f), WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(1.0f, kMin, kMax), WithinAbs(1.0f, 0.001f));
     // Half trust -> mid factor
-    float mid = EvidenceModule::normalize_trust_to_factor(0.5f);
+    float mid = EvidenceModule::normalize_trust_to_factor(0.5f, kMin, kMax);
     REQUIRE(mid > 0.1f);
     REQUIRE(mid < 1.0f);
     // 0.1 + 0.5 * 0.9 = 0.55
@@ -84,7 +86,8 @@ TEST_CASE("test_can_share_with_player", "[evidence][tier6]") {
 
 TEST_CASE("test_evidence_propagation_confidence_scaling", "[evidence][tier6]") {
     // sharer_confidence=0.8, trust=0.5 -> factor=0.55 -> received=0.44
-    float received = EvidenceModule::compute_propagation_confidence(0.8f, 0.5f);
+    float received = EvidenceModule::compute_propagation_confidence(
+        0.8f, 0.5f, EvidenceConfig{}.trust_factor_min, EvidenceConfig{}.trust_factor_max);
     REQUIRE_THAT(received, WithinAbs(0.44f, 0.01f));
 }
 
@@ -159,7 +162,7 @@ TEST_CASE("test_criminal_business_generates_evidence", "[evidence][tier6]") {
             REQUIRE(token.is_active == true);
             REQUIRE_THAT(
                 token.actionability,
-                WithinAbs(EvidenceModule::Constants::criminal_evidence_actionability, 0.01f));
+                WithinAbs(EvidenceConfig{}.criminal_evidence_actionability, 0.01f));
             found_new_token = true;
         }
     }

@@ -24,6 +24,9 @@ using namespace econlife;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
+// Default-constructed module instance for calling non-static methods in tests.
+static const NpcBusinessModule test_module{};
+
 // ---------------------------------------------------------------------------
 // Test helpers -- create minimal WorldState and NPCBusiness instances
 // ---------------------------------------------------------------------------
@@ -196,7 +199,7 @@ TEST_CASE("test_cost_cutter_reduces_workforce_when_cash_critical", "[npc_busines
     biz.cash = 4000.0f;  // below critical threshold (4000 < 6000)
 
     DeterministicRNG rng(42);
-    auto result = NpcBusinessModule::evaluate_decision(biz, nullptr, rng);
+    auto result = test_module.evaluate_decision(biz, nullptr, rng);
 
     REQUIRE(result.business_id == 1);
     REQUIRE(result.contract == true);
@@ -218,7 +221,7 @@ TEST_CASE("test_fast_expander_invests_when_cash_available", "[npc_business][tier
     biz.market_share = 0.35f;  // high market share for market entry
 
     DeterministicRNG rng(42);
-    auto result = NpcBusinessModule::evaluate_decision(biz, nullptr, rng);
+    auto result = test_module.evaluate_decision(biz, nullptr, rng);
 
     REQUIRE(result.business_id == 1);
     REQUIRE(result.expand == true);
@@ -240,7 +243,7 @@ TEST_CASE("test_defensive_incumbent_maintains_stability", "[npc_business][tier4]
     biz.cash = 50000.0f;
 
     DeterministicRNG rng(42);
-    auto result = NpcBusinessModule::evaluate_decision(biz, nullptr, rng);
+    auto result = test_module.evaluate_decision(biz, nullptr, rng);
 
     REQUIRE(result.business_id == 1);
     // Defensive incumbent should NOT expand or enter new markets.
@@ -264,11 +267,11 @@ TEST_CASE("test_investment_capped_at_available_cash", "[npc_business][tier4]") {
     // Available cash = cash - floor
     biz.cash = 20000.0f;  // floor = 15000, available = 5000
 
-    float available = NpcBusinessModule::compute_available_cash(biz);
+    float available = test_module.compute_available_cash(biz);
     REQUIRE_THAT(available, WithinAbs(5000.0f, 0.01f));
 
     DeterministicRNG rng(42);
-    auto result = NpcBusinessModule::evaluate_decision(biz, nullptr, rng);
+    auto result = test_module.evaluate_decision(biz, nullptr, rng);
 
     // Total spending must not exceed available cash.
     REQUIRE(result.cash_spent <= available + 0.01f);
@@ -282,13 +285,13 @@ TEST_CASE("test_no_investment_when_cash_below_floor", "[npc_business][tier4]") {
     // Working capital floor = 100 * 30 * 5.0 = 15000
     biz.cash = 10000.0f;  // below floor, available_cash = 0
 
-    float available = NpcBusinessModule::compute_available_cash(biz);
+    float available = test_module.compute_available_cash(biz);
     REQUIRE_THAT(available, WithinAbs(0.0f, 0.01f));
 
     // With cash_months = 10000 / 3000 = 3.33, still above cash_comfortable
     // but available_cash is 0, so no expansion spending.
     DeterministicRNG rng(42);
-    auto result = NpcBusinessModule::evaluate_decision(biz, nullptr, rng);
+    auto result = test_module.evaluate_decision(biz, nullptr, rng);
 
     // cash_months ~3.33 >= comfortable, but available_cash == 0
     // expand might be set but cash_spent should be 0 or near 0.
@@ -308,7 +311,7 @@ TEST_CASE("test_captured_board_approves_everything", "[npc_business][tier4]") {
     decision.enter_new_market = true;
 
     DeterministicRNG rng(42);
-    bool approved = NpcBusinessModule::check_board_approval(&board, decision, rng);
+    bool approved = test_module.check_board_approval(&board, decision, rng);
 
     REQUIRE(approved == true);
 }
@@ -320,7 +323,7 @@ TEST_CASE("test_no_board_approves_everything", "[npc_business][tier4]") {
     decision.enter_new_market = true;
 
     DeterministicRNG rng(42);
-    bool approved = NpcBusinessModule::check_board_approval(nullptr, decision, rng);
+    bool approved = test_module.check_board_approval(nullptr, decision, rng);
 
     REQUIRE(approved == true);
 }
@@ -338,7 +341,7 @@ TEST_CASE("test_independent_board_may_block_risky_decisions", "[npc_business][ti
     constexpr int trials = 100;
     for (int i = 0; i < trials; ++i) {
         DeterministicRNG rng(static_cast<uint64_t>(i * 7919));
-        bool approved = NpcBusinessModule::check_board_approval(&board, decision, rng);
+        bool approved = test_module.check_board_approval(&board, decision, rng);
         if (!approved) {
             ++blocked_count;
         }
@@ -362,7 +365,7 @@ TEST_CASE("test_independent_board_does_not_block_non_risky_decisions", "[npc_bus
     decision.contract = true;
 
     DeterministicRNG rng(42);
-    bool approved = NpcBusinessModule::check_board_approval(&board, decision, rng);
+    bool approved = test_module.check_board_approval(&board, decision, rng);
 
     REQUIRE(approved == true);
 }
@@ -443,7 +446,7 @@ TEST_CASE("test_compute_working_capital_floor", "[npc_business][tier4]") {
     biz.cost_per_tick = 100.0f;
 
     // floor = 100 * 30 * 5.0 = 15000
-    float floor = NpcBusinessModule::compute_working_capital_floor(biz);
+    float floor = test_module.compute_working_capital_floor(biz);
     REQUIRE_THAT(floor, WithinAbs(15000.0f, 0.01f));
 }
 
@@ -453,7 +456,7 @@ TEST_CASE("test_compute_available_cash", "[npc_business][tier4]") {
     biz.cash = 20000.0f;
 
     // floor = 15000, available = 20000 - 15000 = 5000
-    float available = NpcBusinessModule::compute_available_cash(biz);
+    float available = test_module.compute_available_cash(biz);
     REQUIRE_THAT(available, WithinAbs(5000.0f, 0.01f));
 }
 
@@ -463,7 +466,7 @@ TEST_CASE("test_compute_available_cash_below_floor", "[npc_business][tier4]") {
     biz.cash = 5000.0f;
 
     // floor = 15000, available = max(5000 - 15000, 0) = 0
-    float available = NpcBusinessModule::compute_available_cash(biz);
+    float available = test_module.compute_available_cash(biz);
     REQUIRE_THAT(available, WithinAbs(0.0f, 0.01f));
 }
 
@@ -472,7 +475,7 @@ TEST_CASE("test_compute_monthly_operating_costs", "[npc_business][tier4]") {
     biz.cost_per_tick = 100.0f;
 
     // monthly = 100 * 30 = 3000
-    float monthly = NpcBusinessModule::compute_monthly_operating_costs(biz);
+    float monthly = test_module.compute_monthly_operating_costs(biz);
     REQUIRE_THAT(monthly, WithinAbs(3000.0f, 0.01f));
 }
 
@@ -541,12 +544,12 @@ TEST_CASE("test_quality_player_invests_in_rd", "[npc_business][tier4]") {
     biz.cash = 50000.0f;
 
     DeterministicRNG rng(42);
-    auto result = NpcBusinessModule::evaluate_decision(biz, nullptr, rng);
+    auto result = test_module.evaluate_decision(biz, nullptr, rng);
 
     REQUIRE(result.business_id == 1);
     // Quality player should invest in R&D at the configured rate.
     REQUIRE_THAT(result.rd_investment_rate,
-                 WithinAbs(NpcBusinessConstants::quality_player_rd_rate, 0.001f));
+                 WithinAbs(NpcBusinessConfig{}.quality_player_rd_rate, 0.001f));
     REQUIRE(result.cash_spent > 0.0f);
 }
 
@@ -615,12 +618,12 @@ TEST_CASE("test_execute_processes_all_provinces", "[npc_business][tier4]") {
 // ===========================================================================
 
 TEST_CASE("test_npc_business_constants", "[npc_business][tier4]") {
-    REQUIRE_THAT(NpcBusinessConstants::cash_critical_months, WithinAbs(2.0f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::cash_comfortable_months, WithinAbs(3.0f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::cash_surplus_months, WithinAbs(5.0f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::exit_market_threshold, WithinAbs(0.05f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::exit_probability, WithinAbs(0.30f, 0.001f));
-    REQUIRE_THAT(NpcBusinessConstants::expansion_return_threshold, WithinAbs(0.15f, 0.001f));
-    REQUIRE(NpcBusinessConstants::ticks_per_quarter == 90);
-    REQUIRE(NpcBusinessConstants::dispatch_period == 30);
+    REQUIRE_THAT(NpcBusinessConfig{}.cash_critical_months, WithinAbs(2.0f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConfig{}.cash_comfortable_months, WithinAbs(3.0f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConfig{}.cash_surplus_months, WithinAbs(5.0f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConfig{}.exit_market_threshold, WithinAbs(0.05f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConfig{}.exit_probability, WithinAbs(0.30f, 0.001f));
+    REQUIRE_THAT(NpcBusinessConfig{}.expansion_return_threshold, WithinAbs(0.15f, 0.001f));
+    REQUIRE(NpcBusinessConfig{}.ticks_per_quarter == 90);
+    REQUIRE(NpcBusinessConfig{}.dispatch_period == 30);
 }

@@ -129,9 +129,9 @@ TEST_CASE("InvestigatorEngine: violence multiplier on personnel_violence",
           "[investigator_engine][tier8]") {
     // Fill rate during violence should be 3.0x
     float base_fill = 0.005f;
-    float multiplied = base_fill * InvestigatorEngineModule::PERSONNEL_VIOLENCE_MULTIPLIER;
+    float multiplied = base_fill * InvestigatorEngineConfig{}.personnel_violence_multiplier;
     REQUIRE_THAT(multiplied, WithinAbs(0.015f, 0.001f));
     // But clamped to fill_rate_max
-    float clamped = std::min(multiplied, InvestigatorEngineModule::FILL_RATE_MAX);
+    float clamped = std::min(multiplied, InvestigatorEngineConfig{}.fill_rate_max);
     REQUIRE_THAT(clamped, WithinAbs(0.01f, 0.001f));
 }

@@ -35,14 +35,15 @@ TEST_CASE("PoliticalCycle: zero weight demographics return 0.5", "[political_cyc
 }
 
 TEST_CASE("PoliticalCycle: resource modifier diminishing returns", "[political_cycle][tier10]") {
-    float low = PoliticalCycleModule::compute_resource_modifier(0.5f);
-    float high = PoliticalCycleModule::compute_resource_modifier(5.0f);
+    PoliticalCycleConfig cfg{};
+    float low = PoliticalCycleModule::compute_resource_modifier(0.5f, cfg.resource_scale, cfg.resource_max_effect);
+    float high = PoliticalCycleModule::compute_resource_modifier(5.0f, cfg.resource_scale, cfg.resource_max_effect);
 
     // Both within bounds
-    REQUIRE(low >= -PoliticalCycleModule::RESOURCE_MAX_EFFECT);
-    REQUIRE(low <= PoliticalCycleModule::RESOURCE_MAX_EFFECT);
-    REQUIRE(high >= -PoliticalCycleModule::RESOURCE_MAX_EFFECT);
-    REQUIRE(high <= PoliticalCycleModule::RESOURCE_MAX_EFFECT);
+    REQUIRE(low >= -cfg.resource_max_effect);
+    REQUIRE(low <= cfg.resource_max_effect);
+    REQUIRE(high >= -cfg.resource_max_effect);
+    REQUIRE(high <= cfg.resource_max_effect);
 
     // Diminishing returns: 5.0 produces less than 10x the effect of 0.5
     REQUIRE(high < low * 10.0f);
@@ -50,14 +51,16 @@ TEST_CASE("PoliticalCycle: resource modifier diminishing returns", "[political_c
 }
 
 TEST_CASE("PoliticalCycle: event modifiers capped at 20%", "[political_cycle][tier10]") {
+    PoliticalCycleConfig cfg{};
     std::vector<float> mods = {0.10f, 0.10f, 0.10f, 0.10f, 0.10f};
-    float total = PoliticalCycleModule::compute_event_modifier_total(mods);
+    float total = PoliticalCycleModule::compute_event_modifier_total(mods, cfg.event_modifier_cap);
     REQUIRE_THAT(total, WithinAbs(0.20f, 0.01f));
 }
 
 TEST_CASE("PoliticalCycle: negative event modifiers capped", "[political_cycle][tier10]") {
+    PoliticalCycleConfig cfg{};
     std::vector<float> mods = {-0.15f, -0.15f};
-    float total = PoliticalCycleModule::compute_event_modifier_total(mods);
+    float total = PoliticalCycleModule::compute_event_modifier_total(mods, cfg.event_modifier_cap);
     REQUIRE_THAT(total, WithinAbs(-0.20f, 0.01f));
 }
 
@@ -81,14 +84,16 @@ TEST_CASE("PoliticalCycle: legislative vote resolution passes", "[political_cycl
 }
 
 TEST_CASE("PoliticalCycle: constants match spec", "[political_cycle][tier10]") {
-    REQUIRE_THAT(PoliticalCycleModule::SUPPORT_THRESHOLD, WithinAbs(0.55f, 0.001f));
-    REQUIRE_THAT(PoliticalCycleModule::OPPOSE_THRESHOLD, WithinAbs(0.35f, 0.001f));
-    REQUIRE_THAT(PoliticalCycleModule::MAJORITY_THRESHOLD, WithinAbs(0.50f, 0.001f));
-    REQUIRE_THAT(PoliticalCycleModule::RESOURCE_SCALE, WithinAbs(2.0f, 0.001f));
-    REQUIRE_THAT(PoliticalCycleModule::RESOURCE_MAX_EFFECT, WithinAbs(0.15f, 0.001f));
+    PoliticalCycleConfig cfg{};
+    REQUIRE_THAT(cfg.support_threshold, WithinAbs(0.55f, 0.001f));
+    REQUIRE_THAT(cfg.oppose_threshold, WithinAbs(0.35f, 0.001f));
+    REQUIRE_THAT(cfg.majority_threshold, WithinAbs(0.50f, 0.001f));
+    REQUIRE_THAT(cfg.resource_scale, WithinAbs(2.0f, 0.001f));
+    REQUIRE_THAT(cfg.resource_max_effect, WithinAbs(0.15f, 0.001f));
 }
 
 TEST_CASE("PoliticalCycle: resource modifier at zero deployment", "[political_cycle][tier10]") {
-    float mod = PoliticalCycleModule::compute_resource_modifier(0.0f);
+    PoliticalCycleConfig cfg{};
+    float mod = PoliticalCycleModule::compute_resource_modifier(0.0f, cfg.resource_scale, cfg.resource_max_effect);
     REQUIRE_THAT(mod, WithinAbs(0.0f, 0.001f));
 }

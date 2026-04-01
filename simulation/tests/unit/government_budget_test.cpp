@@ -719,8 +719,8 @@ TEST_CASE("test_infrastructure_decays_without_investment", "[government_budget][
     float new_rating = GovernmentBudgetModule::compute_infrastructure_change(
         0.80f,  // current rating
         0.0f,   // no spending
-        GovernmentBudgetModule::Constants::infrastructure_decay_per_quarter,
-        GovernmentBudgetModule::Constants::infrastructure_investment_scale);
+        GovernmentBudgetConfig{}.infrastructure_decay_per_quarter,
+        GovernmentBudgetConfig{}.infrastructure_investment_scale);
 
     // Expected: 0.80 - 0.01 = 0.79
     REQUIRE_THAT(new_rating, WithinAbs(0.79f, 0.001f));
@@ -807,15 +807,15 @@ TEST_CASE("test_debt_accumulates_from_deficit", "[government_budget][tier5]") {
 // ===========================================================================
 
 TEST_CASE("test_constants_values", "[government_budget][tier5]") {
-    using C = GovernmentBudgetModule::Constants;
+    GovernmentBudgetConfig cfg{};
 
-    REQUIRE(C::ticks_per_quarter == 90);
-    REQUIRE_THAT(C::infrastructure_decay_per_quarter, WithinAbs(0.01f, 0.0001f));
-    REQUIRE_THAT(C::infrastructure_investment_scale, WithinAbs(1000000.0f, 1.0f));
-    REQUIRE_THAT(C::debt_warning_ratio, WithinAbs(2.0f, 0.001f));
-    REQUIRE_THAT(C::debt_crisis_ratio, WithinAbs(4.0f, 0.001f));
-    REQUIRE_THAT(C::city_revenue_fraction, WithinAbs(0.25f, 0.001f));
-    REQUIRE_THAT(C::corruption_evidence_threshold, WithinAbs(500000.0f, 1.0f));
+    REQUIRE(cfg.ticks_per_quarter == 90);
+    REQUIRE_THAT(cfg.infrastructure_decay_per_quarter, WithinAbs(0.01f, 0.0001f));
+    REQUIRE_THAT(cfg.infrastructure_investment_scale, WithinAbs(1000000.0f, 1.0f));
+    REQUIRE_THAT(cfg.debt_warning_ratio, WithinAbs(2.0f, 0.001f));
+    REQUIRE_THAT(cfg.debt_crisis_ratio, WithinAbs(4.0f, 0.001f));
+    REQUIRE_THAT(cfg.city_revenue_fraction, WithinAbs(0.25f, 0.001f));
+    REQUIRE_THAT(cfg.corruption_evidence_threshold, WithinAbs(500000.0f, 1.0f));
 }
 
 // ===========================================================================

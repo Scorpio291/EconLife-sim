@@ -31,20 +31,23 @@ bool EvidenceModule::evaluate_holder_credibility(float public_credibility,
     return public_credibility >= credibility_threshold;
 }
 
-float EvidenceModule::normalize_trust_to_factor(float trust) {
+float EvidenceModule::normalize_trust_to_factor(float trust, float trust_factor_min,
+                                                 float trust_factor_max) {
     // Map trust from [-1.0, 1.0] range to [trust_factor_min, trust_factor_max].
     // Negative trust maps to minimum factor.
     if (trust <= 0.0f)
-        return Constants::trust_factor_min;
+        return trust_factor_min;
     // Positive trust: linear map from (0, 1] -> [trust_factor_min, trust_factor_max]
-    float factor = Constants::trust_factor_min +
-                   trust * (Constants::trust_factor_max - Constants::trust_factor_min);
-    return std::min(std::max(factor, Constants::trust_factor_min), Constants::trust_factor_max);
+    float factor = trust_factor_min + trust * (trust_factor_max - trust_factor_min);
+    return std::min(std::max(factor, trust_factor_min), trust_factor_max);
 }
 
 float EvidenceModule::compute_propagation_confidence(float sharer_confidence,
-                                                     float relationship_trust) {
-    float trust_factor = normalize_trust_to_factor(relationship_trust);
+                                                     float relationship_trust,
+                                                     float trust_factor_min,
+                                                     float trust_factor_max) {
+    float trust_factor = normalize_trust_to_factor(relationship_trust, trust_factor_min,
+                                                   trust_factor_max);
     float result = sharer_confidence * trust_factor;
     return std::max(0.0f, std::min(1.0f, result));
 }
@@ -84,7 +87,7 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
 
         float decay =
             compute_decay_amount(cfg_.base_decay_rate, is_credible,
-                                 Constants::discredit_decay_multiplier, cfg_.batch_interval);
+                                 cfg_.discredit_decay_multiplier, cfg_.batch_interval);
 
         float new_actionability =
             apply_actionability_decay(token.actionability, decay, cfg_.actionability_floor);
@@ -117,7 +120,7 @@ void EvidenceModule::create_evidence_from_businesses(const WorldState& state, De
             new_token.type = EvidenceType::physical;
             new_token.source_npc_id = biz->owner_id;
             new_token.target_npc_id = biz->owner_id;
-            new_token.actionability = Constants::criminal_evidence_actionability;
+            new_token.actionability = cfg_.criminal_evidence_actionability;
             new_token.decay_rate = cfg_.base_decay_rate;
             new_token.created_tick = state.current_tick;
             new_token.province_id = biz->province_id;
@@ -149,7 +152,7 @@ void EvidenceModule::create_evidence_from_businesses(const WorldState& state, De
             new_token.source_npc_id = biz->owner_id;
             new_token.target_npc_id = biz->owner_id;
             new_token.actionability =
-                Constants::violation_evidence_actionability * biz->regulatory_violation_severity;
+                cfg_.violation_evidence_actionability * biz->regulatory_violation_severity;
             new_token.decay_rate = cfg_.base_decay_rate;
             new_token.created_tick = state.current_tick;
             new_token.province_id = biz->province_id;

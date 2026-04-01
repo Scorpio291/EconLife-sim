@@ -92,17 +92,17 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
         // Step 1: Passive Health Recovery
         // ---------------------------------------------------------------
         float recovery = compute_passive_recovery(profile.access_level, profile.quality_level,
-                                                  Constants::base_recovery_rate);
+                                                  cfg_.base_recovery_rate);
 
         hr->health += recovery;
 
         // ---------------------------------------------------------------
         // Step 2: Treatment for critically ill NPCs
         // ---------------------------------------------------------------
-        if (hr->health < Constants::critical_health_threshold && profile.access_level > 0.0f &&
+        if (hr->health < cfg_.critical_health_threshold && profile.access_level > 0.0f &&
             npc->capital >= profile.cost_per_treatment) {
             float boost =
-                compute_treatment_boost(profile.quality_level, Constants::treatment_health_boost);
+                compute_treatment_boost(profile.quality_level, cfg_.treatment_health_boost);
 
             hr->health += boost;
 
@@ -113,7 +113,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
             province_delta.npc_deltas.push_back(cost_delta);
 
             // Update capacity utilisation.
-            profile.capacity_utilisation += Constants::capacity_per_treatment;
+            profile.capacity_utilisation += cfg_.capacity_per_treatment;
             if (profile.capacity_utilisation > 1.0f) {
                 profile.capacity_utilisation = 1.0f;
             }
@@ -161,7 +161,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
         // ---------------------------------------------------------------
         // Sick leave counting (for Step 5)
         // ---------------------------------------------------------------
-        if (hr->health < Constants::labour_impairment_threshold) {
+        if (hr->health < cfg_.labour_impairment_threshold) {
             sick_count++;
         }
     }
@@ -170,8 +170,8 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
     // Step 4: Overload Quality Degradation
     // ---------------------------------------------------------------
     profile.quality_level = compute_overload_quality(
-        profile.quality_level, profile.capacity_utilisation, Constants::overload_threshold,
-        Constants::overload_quality_penalty);
+        profile.quality_level, profile.capacity_utilisation, cfg_.overload_threshold,
+        cfg_.overload_quality_penalty);
 
     // Clamp quality to [0.0, 1.0].
     if (profile.quality_level > 1.0f) {
@@ -186,7 +186,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
     // ---------------------------------------------------------------
     phs->sick_leave_fraction = compute_sick_leave_fraction(sick_count, labour_force);
     phs->effective_labour_supply = compute_effective_labour_supply(
-        labour_force, phs->sick_leave_fraction, Constants::labour_supply_impact);
+        labour_force, phs->sick_leave_fraction, cfg_.labour_supply_impact);
 
     // ---------------------------------------------------------------
     // Step 6: Health Crisis — RegionDelta

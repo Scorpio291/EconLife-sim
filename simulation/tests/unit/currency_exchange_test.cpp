@@ -9,14 +9,18 @@ using namespace econlife;
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("CurrencyExchange: macro factor computation", "[currency_exchange][tier11]") {
+    CurrencyExchangeConfig cfg{};
     // 1.0 + (0.10*0.30) - (0.05*0.40) - ((1.0-0.80)*0.30)
     // = 1.0 + 0.03 - 0.02 - 0.06 = 0.95
-    float factor = CurrencyExchangeModule::compute_macro_factor(0.10f, 0.05f, 0.80f);
+    float factor = CurrencyExchangeModule::compute_macro_factor(
+        0.10f, 0.05f, 0.80f, cfg.trade_balance_weight, cfg.inflation_weight, cfg.sovereign_risk_weight);
     REQUIRE_THAT(factor, WithinAbs(0.95f, 0.01f));
 }
 
 TEST_CASE("CurrencyExchange: macro factor neutral", "[currency_exchange][tier11]") {
-    float factor = CurrencyExchangeModule::compute_macro_factor(0.0f, 0.0f, 1.0f);
+    CurrencyExchangeConfig cfg{};
+    float factor = CurrencyExchangeModule::compute_macro_factor(
+        0.0f, 0.0f, 1.0f, cfg.trade_balance_weight, cfg.inflation_weight, cfg.sovereign_risk_weight);
     REQUIRE_THAT(factor, WithinAbs(1.0f, 0.01f));
 }
 
@@ -48,9 +52,10 @@ TEST_CASE("CurrencyExchange: conversion zero buyer rate", "[currency_exchange][t
 }
 
 TEST_CASE("CurrencyExchange: peg broken detection", "[currency_exchange][tier11]") {
-    REQUIRE(CurrencyExchangeModule::is_peg_broken(0.10f) == true);
-    REQUIRE(CurrencyExchangeModule::is_peg_broken(0.15f) == true);
-    REQUIRE(CurrencyExchangeModule::is_peg_broken(0.50f) == false);
+    CurrencyExchangeConfig cfg{};
+    REQUIRE(CurrencyExchangeModule::is_peg_broken(0.10f, cfg.peg_break_reserve_threshold) == true);
+    REQUIRE(CurrencyExchangeModule::is_peg_broken(0.15f, cfg.peg_break_reserve_threshold) == true);
+    REQUIRE(CurrencyExchangeModule::is_peg_broken(0.50f, cfg.peg_break_reserve_threshold) == false);
 }
 
 TEST_CASE("CurrencyExchange: weekly tick check", "[currency_exchange][tier11]") {
@@ -192,9 +197,10 @@ TEST_CASE("CurrencyExchange: pegged currency with healthy reserves produces no d
 }
 
 TEST_CASE("CurrencyExchange: constants match spec", "[currency_exchange][tier11]") {
-    REQUIRE_THAT(CurrencyExchangeModule::TRADE_BALANCE_WEIGHT, WithinAbs(0.30f, 0.001f));
-    REQUIRE_THAT(CurrencyExchangeModule::INFLATION_WEIGHT, WithinAbs(0.40f, 0.001f));
-    REQUIRE_THAT(CurrencyExchangeModule::SOVEREIGN_RISK_WEIGHT, WithinAbs(0.30f, 0.001f));
-    REQUIRE_THAT(CurrencyExchangeModule::PEG_BREAK_RESERVE_THRESHOLD, WithinAbs(0.15f, 0.001f));
-    REQUIRE_THAT(CurrencyExchangeModule::FX_TRANSACTION_COST, WithinAbs(0.01f, 0.001f));
+    CurrencyExchangeConfig cfg{};
+    REQUIRE_THAT(cfg.trade_balance_weight, WithinAbs(0.30f, 0.001f));
+    REQUIRE_THAT(cfg.inflation_weight, WithinAbs(0.40f, 0.001f));
+    REQUIRE_THAT(cfg.sovereign_risk_weight, WithinAbs(0.30f, 0.001f));
+    REQUIRE_THAT(cfg.peg_break_reserve_threshold, WithinAbs(0.15f, 0.001f));
+    REQUIRE_THAT(cfg.fx_transaction_cost, WithinAbs(0.01f, 0.001f));
 }

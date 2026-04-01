@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "investigator_engine_types.h"
 
@@ -26,6 +27,8 @@ struct FacilitySignals;
 
 class InvestigatorEngineModule : public ITickModule {
    public:
+    explicit InvestigatorEngineModule(const InvestigatorEngineConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "investigator_engine"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -73,19 +76,8 @@ class InvestigatorEngineModule : public ITickModule {
     // Compute meter decay when detection risk is zero
     static float compute_decay(float current_level, float decay_rate);
 
-    // --- Named constants from INTERFACE.md ---
-    static constexpr float FACILITY_COUNT_NORMALIZER = 5.0f;
-    static constexpr float DETECTION_TO_FILL_RATE_SCALE = 0.005f;
-    static constexpr float FILL_RATE_MAX = 0.01f;
-    static constexpr float PERSONNEL_VIOLENCE_MULTIPLIER = 3.0f;
-    static constexpr float SURVEILLANCE_THRESHOLD = 0.30f;
-    static constexpr float FORMAL_INQUIRY_THRESHOLD = 0.60f;
-    static constexpr float RAID_THRESHOLD = 0.80f;
-    static constexpr float WARRANT_TRUST_MIN = 0.30f;
-    static constexpr float DECAY_RATE = 0.001f;
-    static constexpr float DEFAULT_CORRUPTION_SUSCEPTIBILITY = 0.5f;
-
    private:
+    InvestigatorEngineConfig cfg_;
     // Internal state: per-investigator case tracking
     std::vector<InvestigationCase> cases_;
 };

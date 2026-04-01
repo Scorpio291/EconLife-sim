@@ -29,22 +29,22 @@ namespace {
 
 void apply_cost_cutter_strategy(const NPCBusiness& biz, BusinessDecisionResult& result,
                                 float margin, float cash_months, float /*available_cash*/,
-                                DeterministicRNG& rng) {
+                                DeterministicRNG& rng, const NpcBusinessConfig& cfg) {
     // If cash is critical (< 2 months of operating costs), reduce workforce by 10%.
-    if (cash_months < NpcBusinessConstants::cash_critical_months) {
+    if (cash_months < cfg.cash_critical_months) {
         result.contract = true;
         // Negative hiring_target_change = layoffs.
         result.hiring_target_change = -static_cast<int32_t>(std::max(
-            1.0f, biz.cost_per_tick * NpcBusinessConstants::cost_cutter_layoff_fraction * 10.0f));
+            1.0f, biz.cost_per_tick * cfg.cost_cutter_layoff_fraction * 10.0f));
         // Cost reduction from layoffs.
         result.cost_per_tick_delta =
-            biz.cost_per_tick * -NpcBusinessConstants::cost_cutter_layoff_fraction;
+            biz.cost_per_tick * -cfg.cost_cutter_layoff_fraction;
     }
 
     // If market share is below exit threshold, consider market exit.
-    if (biz.market_share < NpcBusinessConstants::exit_market_threshold) {
+    if (biz.market_share < cfg.exit_market_threshold) {
         float roll = rng.next_float();
-        if (roll < NpcBusinessConstants::exit_probability) {
+        if (roll < cfg.exit_probability) {
             result.contract = true;
             result.enter_new_market = false;
             result.expand = false;
@@ -68,9 +68,9 @@ void apply_cost_cutter_strategy(const NPCBusiness& biz, BusinessDecisionResult& 
 
 void apply_quality_player_strategy(const NPCBusiness& biz, BusinessDecisionResult& result,
                                    float margin, float cash_months, float available_cash,
-                                   DeterministicRNG& /*rng*/) {
+                                   DeterministicRNG& /*rng*/, const NpcBusinessConfig& cfg) {
     // Contraction check first -- if cash is critical, override everything.
-    if (cash_months < NpcBusinessConstants::cash_critical_months) {
+    if (cash_months < cfg.cash_critical_months) {
         result.contract = true;
         result.expand = false;
         result.hiring_target_change =
@@ -81,15 +81,15 @@ void apply_quality_player_strategy(const NPCBusiness& biz, BusinessDecisionResul
     }
 
     // Quality players invest in R&D when they have sufficient cash.
-    if (cash_months >= NpcBusinessConstants::cash_comfortable_months && available_cash > 0.0f) {
-        result.rd_investment_rate = NpcBusinessConstants::quality_player_rd_rate;
+    if (cash_months >= cfg.cash_comfortable_months && available_cash > 0.0f) {
+        result.rd_investment_rate = cfg.quality_player_rd_rate;
         float rd_spend = available_cash * result.rd_investment_rate;
         result.cash_spent = rd_spend;
     }
 
     // If profitable, consider modest expansion.
-    if (margin > NpcBusinessConstants::expansion_return_threshold &&
-        cash_months >= NpcBusinessConstants::cash_comfortable_months) {
+    if (margin > cfg.expansion_return_threshold &&
+        cash_months >= cfg.cash_comfortable_months) {
         result.expand = true;
         float expansion_spend = available_cash * 0.10f;
         result.cash_spent += expansion_spend;
@@ -104,9 +104,9 @@ void apply_quality_player_strategy(const NPCBusiness& biz, BusinessDecisionResul
 
 void apply_fast_expander_strategy(const NPCBusiness& biz, BusinessDecisionResult& result,
                                   float /*margin*/, float cash_months, float available_cash,
-                                  DeterministicRNG& /*rng*/) {
+                                  DeterministicRNG& /*rng*/, const NpcBusinessConfig& cfg) {
     // Contraction only if truly desperate.
-    if (cash_months < NpcBusinessConstants::cash_critical_months) {
+    if (cash_months < cfg.cash_critical_months) {
         result.contract = true;
         result.expand = false;
         result.enter_new_market = false;
@@ -118,7 +118,7 @@ void apply_fast_expander_strategy(const NPCBusiness& biz, BusinessDecisionResult
     }
 
     // Fast expanders invest aggressively when cash is available.
-    if (cash_months >= NpcBusinessConstants::cash_comfortable_months && available_cash > 0.0f) {
+    if (cash_months >= cfg.cash_comfortable_months && available_cash > 0.0f) {
         result.expand = true;
 
         // Invest up to 40% of available cash in expansion.
@@ -129,13 +129,13 @@ void apply_fast_expander_strategy(const NPCBusiness& biz, BusinessDecisionResult
         result.hiring_target_change = static_cast<int32_t>(std::max(1.0f, expansion_spend * 0.02f));
 
         // Some R&D too.
-        result.rd_investment_rate = NpcBusinessConstants::fast_expander_rd_rate;
+        result.rd_investment_rate = cfg.fast_expander_rd_rate;
         result.cash_spent += available_cash * result.rd_investment_rate;
     }
 
     // If market share is high and cash allows, enter adjacent market.
     if (biz.market_share > 0.30f && available_cash > 0.0f &&
-        cash_months >= NpcBusinessConstants::cash_comfortable_months) {
+        cash_months >= cfg.cash_comfortable_months) {
         result.enter_new_market = true;
         float entry_cost = available_cash * 0.15f;
         result.cash_spent += entry_cost;
@@ -149,9 +149,9 @@ void apply_fast_expander_strategy(const NPCBusiness& biz, BusinessDecisionResult
 
 void apply_defensive_incumbent_strategy(const NPCBusiness& biz, BusinessDecisionResult& result,
                                         float margin, float cash_months, float available_cash,
-                                        DeterministicRNG& /*rng*/) {
+                                        DeterministicRNG& /*rng*/, const NpcBusinessConfig& cfg) {
     // Contraction if cash is critical.
-    if (cash_months < NpcBusinessConstants::cash_critical_months) {
+    if (cash_months < cfg.cash_critical_months) {
         result.contract = true;
         result.hiring_target_change =
             -static_cast<int32_t>(std::max(1.0f, biz.cost_per_tick * 0.05f * 10.0f));
@@ -161,7 +161,7 @@ void apply_defensive_incumbent_strategy(const NPCBusiness& biz, BusinessDecision
     }
 
     // Defensive incumbents focus on stability and dividends.
-    if (margin > 0.0f && cash_months >= NpcBusinessConstants::cash_comfortable_months) {
+    if (margin > 0.0f && cash_months >= cfg.cash_comfortable_months) {
         // Minimal R&D to maintain position.
         result.rd_investment_rate = 0.02f;
         float rd_spend = available_cash * result.rd_investment_rate;
@@ -169,7 +169,7 @@ void apply_defensive_incumbent_strategy(const NPCBusiness& biz, BusinessDecision
     }
 
     // If surplus cash, invest in regulatory lobbying.
-    if (cash_months >= NpcBusinessConstants::cash_surplus_months && available_cash > 0.0f) {
+    if (cash_months >= cfg.cash_surplus_months && available_cash > 0.0f) {
         float lobby_spend = available_cash * 0.05f;
         result.cash_spent += lobby_spend;
     }
@@ -271,21 +271,21 @@ const BoardComposition* NpcBusinessModule::get_board_composition(uint32_t busine
 // Static utility functions
 // ===========================================================================
 
-float NpcBusinessModule::compute_working_capital_floor(const NPCBusiness& biz) {
+float NpcBusinessModule::compute_working_capital_floor(const NPCBusiness& biz) const {
     // Working capital floor = cost_per_tick * dispatch_period * cash_surplus_months
     // Ensures the business retains enough cash for ongoing operations.
-    return biz.cost_per_tick * static_cast<float>(NpcBusinessConstants::dispatch_period) *
-           NpcBusinessConstants::cash_surplus_months;
+    return biz.cost_per_tick * static_cast<float>(cfg_.dispatch_period) *
+           cfg_.cash_surplus_months;
 }
 
-float NpcBusinessModule::compute_available_cash(const NPCBusiness& biz) {
+float NpcBusinessModule::compute_available_cash(const NPCBusiness& biz) const {
     float floor = compute_working_capital_floor(biz);
     float available = biz.cash - floor;
     return std::max(available, 0.0f);
 }
 
-float NpcBusinessModule::compute_monthly_operating_costs(const NPCBusiness& biz) {
-    return biz.cost_per_tick * static_cast<float>(NpcBusinessConstants::dispatch_period);
+float NpcBusinessModule::compute_monthly_operating_costs(const NPCBusiness& biz) const {
+    return biz.cost_per_tick * static_cast<float>(cfg_.dispatch_period);
 }
 
 float NpcBusinessModule::compute_profit_margin(const NPCBusiness& biz) {
@@ -316,7 +316,7 @@ bool NpcBusinessModule::is_player_owned(const NPCBusiness& biz, const WorldState
 
 BusinessDecisionResult NpcBusinessModule::evaluate_decision(const NPCBusiness& biz,
                                                             const BoardComposition* /*board*/,
-                                                            DeterministicRNG& rng) {
+                                                            DeterministicRNG& rng) const {
     BusinessDecisionResult result{};
     result.business_id = biz.id;
     result.board_approved = true;  // default; may be overridden by board check later
@@ -328,20 +328,20 @@ BusinessDecisionResult NpcBusinessModule::evaluate_decision(const NPCBusiness& b
 
     switch (biz.profile) {
         case BusinessProfile::cost_cutter:
-            apply_cost_cutter_strategy(biz, result, margin, cash_months, available_cash, rng);
+            apply_cost_cutter_strategy(biz, result, margin, cash_months, available_cash, rng, cfg_);
             break;
 
         case BusinessProfile::quality_player:
-            apply_quality_player_strategy(biz, result, margin, cash_months, available_cash, rng);
+            apply_quality_player_strategy(biz, result, margin, cash_months, available_cash, rng, cfg_);
             break;
 
         case BusinessProfile::fast_expander:
-            apply_fast_expander_strategy(biz, result, margin, cash_months, available_cash, rng);
+            apply_fast_expander_strategy(biz, result, margin, cash_months, available_cash, rng, cfg_);
             break;
 
         case BusinessProfile::defensive_incumbent:
             apply_defensive_incumbent_strategy(biz, result, margin, cash_months, available_cash,
-                                               rng);
+                                               rng, cfg_);
             break;
 
         default:
@@ -358,7 +358,7 @@ BusinessDecisionResult NpcBusinessModule::evaluate_decision(const NPCBusiness& b
 
 bool NpcBusinessModule::check_board_approval(const BoardComposition* board,
                                              const BusinessDecisionResult& decision,
-                                             DeterministicRNG& rng) {
+                                             DeterministicRNG& rng) const {
     // No board = micro/small business. All decisions auto-approved.
     if (board == nullptr) {
         return true;
@@ -367,7 +367,7 @@ bool NpcBusinessModule::check_board_approval(const BoardComposition* board,
     float independence = board->independence_score;
 
     // Captured board (independence < 0.25) rubber-stamps everything.
-    if (independence < NpcBusinessConstants::board_captured_threshold) {
+    if (independence < cfg_.board_captured_threshold) {
         return true;
     }
 
@@ -379,8 +379,8 @@ bool NpcBusinessModule::check_board_approval(const BoardComposition* board,
 
     // The more independent the board, the more likely to block risky moves.
     // Block probability scales with independence above the captured threshold.
-    if (independence > NpcBusinessConstants::board_risky_block_threshold) {
-        float block_prob = (independence - NpcBusinessConstants::board_captured_threshold) * 0.5f;
+    if (independence > cfg_.board_risky_block_threshold) {
+        float block_prob = (independence - cfg_.board_captured_threshold) * 0.5f;
         float roll = rng.next_float();
         if (roll < block_prob) {
             return false;  // Board blocks the decision.

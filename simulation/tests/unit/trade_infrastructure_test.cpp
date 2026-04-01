@@ -19,6 +19,9 @@ using namespace econlife;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
+// Default-constructed module for calling non-static methods in tests.
+static const TradeInfrastructureModule test_trade_module{};
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -94,7 +97,7 @@ TEST_CASE("test_transit_time_flat_road", "[trade_infrastructure][tier3]") {
     // infra_delay = 1.0 + (1.0 - 1.0) * 0.6 = 1.0
     // transit_ticks = max(1, round(1.0 * 1.0 * 1.0)) = 1
     auto route = make_test_route(800.0f, 0.0f, 1.0f);
-    auto result = TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::road);
+    auto result = test_trade_module.calculate_transit_ticks(route, TransportMode::road);
     REQUIRE(result == 1);
 }
 
@@ -105,7 +108,7 @@ TEST_CASE("test_transit_time_with_terrain", "[trade_infrastructure][tier3]") {
     // infra_delay = 1.0
     // transit_ticks = max(1, round(1.0 * 1.2 * 1.0)) = 1 (rounds to 1)
     auto route = make_test_route(800.0f, 0.5f, 1.0f);
-    auto result = TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::road);
+    auto result = test_trade_module.calculate_transit_ticks(route, TransportMode::road);
     REQUIRE(result == 1);
 }
 
@@ -116,7 +119,7 @@ TEST_CASE("test_transit_time_with_poor_infrastructure", "[trade_infrastructure][
     // infra_delay = 1.0 + (1.0 - 0.0) * 0.6 = 1.6
     // transit_ticks = max(1, round(1.0 * 1.0 * 1.6)) = 2
     auto route = make_test_route(800.0f, 0.0f, 0.0f);
-    auto result = TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::road);
+    auto result = test_trade_module.calculate_transit_ticks(route, TransportMode::road);
     REQUIRE(result == 2);
 }
 
@@ -128,7 +131,7 @@ TEST_CASE("test_transit_time_combined_delays", "[trade_infrastructure][tier3]") 
     // raw = 2.0 * 1.4 * 1.6 = 4.48
     // transit_ticks = max(1, round(4.48)) = 4
     auto route = make_test_route(1600.0f, 1.0f, 0.0f);
-    auto result = TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::road);
+    auto result = test_trade_module.calculate_transit_ticks(route, TransportMode::road);
     REQUIRE(result == 4);
 }
 
@@ -137,25 +140,25 @@ TEST_CASE("test_transit_time_different_modes", "[trade_infrastructure][tier3]") 
     auto route = make_test_route(4500.0f, 0.0f, 1.0f);
 
     // Road: 4500/800 = 5.625 -> round = 6
-    REQUIRE(TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::road) == 6);
+    REQUIRE(test_trade_module.calculate_transit_ticks(route, TransportMode::road) == 6);
 
     // Rail: 4500/700 = 6.4286 -> round = 6
-    REQUIRE(TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::rail) == 6);
+    REQUIRE(test_trade_module.calculate_transit_ticks(route, TransportMode::rail) == 6);
 
     // Sea: 4500/900 = 5.0 -> round = 5
-    REQUIRE(TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::sea) == 5);
+    REQUIRE(test_trade_module.calculate_transit_ticks(route, TransportMode::sea) == 5);
 
     // River: 4500/450 = 10.0 -> round = 10
-    REQUIRE(TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::river) == 10);
+    REQUIRE(test_trade_module.calculate_transit_ticks(route, TransportMode::river) == 10);
 
     // Air: 4500/10000 = 0.45 -> round = 0, clamped to 1
-    REQUIRE(TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::air) == 1);
+    REQUIRE(test_trade_module.calculate_transit_ticks(route, TransportMode::air) == 1);
 }
 
 TEST_CASE("test_transit_time_minimum_one_tick", "[trade_infrastructure][tier3]") {
     // Very short distance: should never produce 0 ticks.
     auto route = make_test_route(1.0f, 0.0f, 1.0f);
-    auto result = TradeInfrastructureModule::calculate_transit_ticks(route, TransportMode::air);
+    auto result = test_trade_module.calculate_transit_ticks(route, TransportMode::air);
     REQUIRE(result == 1);
 }
 
@@ -238,7 +241,7 @@ TEST_CASE("test_interception_zero_risk_never_intercepted", "[trade_infrastructur
     DeterministicRNG rng(42);
 
     for (int i = 0; i < 100; ++i) {
-        REQUIRE(TradeInfrastructureModule::check_interception(shipment, rng) == false);
+        REQUIRE(test_trade_module.check_interception(shipment, rng) == false);
     }
 }
 
@@ -249,7 +252,7 @@ TEST_CASE("test_interception_full_risk_always_intercepted", "[trade_infrastructu
     DeterministicRNG rng(42);
 
     for (int i = 0; i < 100; ++i) {
-        REQUIRE(TradeInfrastructureModule::check_interception(shipment, rng) == true);
+        REQUIRE(test_trade_module.check_interception(shipment, rng) == true);
     }
 }
 
@@ -264,7 +267,7 @@ TEST_CASE("test_concealment_reduces_effective_risk", "[trade_infrastructure][tie
     int intercepted_count = 0;
     constexpr int trials = 10000;
     for (int i = 0; i < trials; ++i) {
-        if (TradeInfrastructureModule::check_interception(shipment, rng)) {
+        if (test_trade_module.check_interception(shipment, rng)) {
             intercepted_count++;
         }
     }
@@ -284,7 +287,7 @@ TEST_CASE("test_concealment_cap_at_040", "[trade_infrastructure][tier3]") {
     int intercepted_count = 0;
     constexpr int trials = 10000;
     for (int i = 0; i < trials; ++i) {
-        if (TradeInfrastructureModule::check_interception(shipment, rng)) {
+        if (test_trade_module.check_interception(shipment, rng)) {
             intercepted_count++;
         }
     }
@@ -417,23 +420,24 @@ TEST_CASE("test_module_interface_properties", "[trade_infrastructure][tier3]") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_mode_speed_constants", "[trade_infrastructure][tier3]") {
-    REQUIRE_THAT(TradeInfrastructureConstants::speed_for_mode(TransportMode::road),
+    TradeInfrastructureModule module;
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::road),
                  WithinAbs(800.0f, 0.01f));
-    REQUIRE_THAT(TradeInfrastructureConstants::speed_for_mode(TransportMode::rail),
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::rail),
                  WithinAbs(700.0f, 0.01f));
-    REQUIRE_THAT(TradeInfrastructureConstants::speed_for_mode(TransportMode::sea),
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::sea),
                  WithinAbs(900.0f, 0.01f));
-    REQUIRE_THAT(TradeInfrastructureConstants::speed_for_mode(TransportMode::river),
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::river),
                  WithinAbs(450.0f, 0.01f));
-    REQUIRE_THAT(TradeInfrastructureConstants::speed_for_mode(TransportMode::air),
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::air),
                  WithinAbs(10000.0f, 0.01f));
 }
 
 TEST_CASE("test_delay_coefficient_constants", "[trade_infrastructure][tier3]") {
-    REQUIRE_THAT(TradeInfrastructureConstants::terrain_delay_coeff, WithinAbs(0.4f, 0.001f));
-    REQUIRE_THAT(TradeInfrastructureConstants::infra_delay_coeff, WithinAbs(0.6f, 0.001f));
-    REQUIRE_THAT(TradeInfrastructureConstants::max_concealment_modifier, WithinAbs(0.40f, 0.001f));
-    REQUIRE_THAT(TradeInfrastructureConstants::perishable_decay_base, WithinAbs(0.01f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConfig{}.terrain_delay_coeff, WithinAbs(0.4f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConfig{}.infra_delay_coeff, WithinAbs(0.6f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConfig{}.max_concealment_modifier, WithinAbs(0.40f, 0.001f));
+    REQUIRE_THAT(TradeInfrastructureConfig{}.perishable_decay_base, WithinAbs(0.01f, 0.001f));
 }
 
 // ---------------------------------------------------------------------------

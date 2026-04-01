@@ -112,7 +112,7 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
     }
 
     float regional_signal =
-        compute_regional_signal(criminal_net_signals, FACILITY_COUNT_NORMALIZER);
+        compute_regional_signal(criminal_net_signals, cfg_.facility_count_normalizer);
 
     // Phase 2: Process investigator NPCs in this province
     std::vector<const NPC*> investigators;
@@ -149,22 +149,22 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
         float fill_rate = 0.0f;
         if (is_le || is_ngo) {
             fill_rate =
-                compute_fill_rate(regional_signal, DETECTION_TO_FILL_RATE_SCALE, FILL_RATE_MAX);
+                compute_fill_rate(regional_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
         } else if (is_reg) {
             // Regulators: lower signal aggregate (chemical + traffic only)
             float regulator_signal = regional_signal * 0.5f;
             fill_rate =
-                compute_fill_rate(regulator_signal, DETECTION_TO_FILL_RATE_SCALE, FILL_RATE_MAX);
+                compute_fill_rate(regulator_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
         } else if (is_jrn) {
             // Journalists: evidence-driven, lower rate
             float journalist_signal = regional_signal * 0.25f;
             fill_rate =
-                compute_fill_rate(journalist_signal, DETECTION_TO_FILL_RATE_SCALE, FILL_RATE_MAX);
+                compute_fill_rate(journalist_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
         }
 
         // Apply corruption modifier (NGO investigators are immune per INTERFACE.md)
         if (!is_ngo) {
-            fill_rate = apply_corruption_modifier(fill_rate, DEFAULT_CORRUPTION_SUSCEPTIBILITY,
+            fill_rate = apply_corruption_modifier(fill_rate, cfg_.default_corruption_susceptibility,
                                                   corruption_coverage);
         }
 
@@ -194,7 +194,7 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
 
         // If no fill rate signal, decay the meter
         if (fill_rate <= 0.0f && !found_case->formally_opened) {
-            found_case->current_level = compute_decay(found_case->current_level, DECAY_RATE);
+            found_case->current_level = compute_decay(found_case->current_level, cfg_.decay_rate);
         } else {
             found_case->fill_rate = fill_rate;
             found_case->current_level =
@@ -203,15 +203,15 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
 
         // Formally opened investigations don't close on signal drop
         if (found_case->formally_opened && fill_rate <= 0.0f) {
-            found_case->current_level = compute_decay(found_case->current_level, DECAY_RATE);
+            found_case->current_level = compute_decay(found_case->current_level, cfg_.decay_rate);
             found_case->current_level =
-                std::max(found_case->current_level, FORMAL_INQUIRY_THRESHOLD);
+                std::max(found_case->current_level, cfg_.formal_inquiry_threshold);
         }
 
         // Derive status
         uint8_t old_status = found_case->status;
-        found_case->status = derive_status(found_case->current_level, SURVEILLANCE_THRESHOLD,
-                                           FORMAL_INQUIRY_THRESHOLD, RAID_THRESHOLD);
+        found_case->status = derive_status(found_case->current_level, cfg_.surveillance_threshold,
+                                           cfg_.formal_inquiry_threshold, cfg_.raid_threshold);
 
         // Resolve target
         std::vector<std::pair<uint32_t, float>> contributions(actor_signal_map.begin(),
@@ -237,7 +237,7 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
             // Scale bonus to fill_rate units: each 1.0 total actionability
             // contributes DETECTION_TO_FILL_RATE_SCALE worth of fill.
             float bonus_fill =
-                compute_fill_rate(evidence_bonus, DETECTION_TO_FILL_RATE_SCALE, FILL_RATE_MAX);
+                compute_fill_rate(evidence_bonus, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
             found_case->fill_rate = fill_rate + bonus_fill;
             found_case->current_level =
                 std::clamp(found_case->current_level + bonus_fill, 0.0f, 1.0f);

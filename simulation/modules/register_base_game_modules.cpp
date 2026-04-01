@@ -79,8 +79,8 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     orchestrator.register_module(std::make_unique<CalendarModule>());
     orchestrator.register_module(std::make_unique<TechnologyModule>());
     orchestrator.register_module(std::make_unique<ProductionModule>(config.production));
-    orchestrator.register_module(std::make_unique<SceneCardsModule>());
-    orchestrator.register_module(std::make_unique<RandomEventsModule>());
+    orchestrator.register_module(std::make_unique<SceneCardsModule>(config.scene_cards));
+    orchestrator.register_module(std::make_unique<RandomEventsModule>(config.random_events));
 
     // Tier 2
     orchestrator.register_module(std::make_unique<SupplyChainModule>());
@@ -89,19 +89,19 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
 
     // Tier 3
     orchestrator.register_module(std::make_unique<PriceEngineModule>(config.price_model));
-    orchestrator.register_module(std::make_unique<TradeInfrastructureModule>());
+    orchestrator.register_module(std::make_unique<TradeInfrastructureModule>(config.trade_infrastructure));
 
     // Tier 4
     orchestrator.register_module(std::make_unique<FinancialDistributionModule>());
-    orchestrator.register_module(std::make_unique<NpcBusinessModule>());
+    orchestrator.register_module(std::make_unique<NpcBusinessModule>(config.npc_business));
     orchestrator.register_module(std::make_unique<CommodityTradingModule>());
     orchestrator.register_module(std::make_unique<RealEstateModule>());
 
     // Tier 5
     orchestrator.register_module(std::make_unique<NpcBehaviorModule>(config.npc_behavior));
     orchestrator.register_module(std::make_unique<BankingModule>(config.banking));
-    orchestrator.register_module(std::make_unique<GovernmentBudgetModule>());
-    orchestrator.register_module(std::make_unique<HealthcareModule>());
+    orchestrator.register_module(std::make_unique<GovernmentBudgetModule>(config.government_budget));
+    orchestrator.register_module(std::make_unique<HealthcareModule>(config.healthcare));
 
     // Tier 6
     orchestrator.register_module(std::make_unique<NpcSpendingModule>());
@@ -113,11 +113,11 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     // Tier 7
     orchestrator.register_module(std::make_unique<FacilitySignalsModule>());
     orchestrator.register_module(std::make_unique<CriminalOperationsModule>());
-    orchestrator.register_module(std::make_unique<MediaSystemModule>());
+    orchestrator.register_module(std::make_unique<MediaSystemModule>(config.media_system));
     orchestrator.register_module(std::make_unique<AntitrustModule>());
 
     // Tier 8
-    orchestrator.register_module(std::make_unique<InvestigatorEngineModule>());
+    orchestrator.register_module(std::make_unique<InvestigatorEngineModule>(config.investigator_engine));
     orchestrator.register_module(std::make_unique<MoneyLaunderingModule>());
     orchestrator.register_module(std::make_unique<DrugEconomyModule>());
     orchestrator.register_module(std::make_unique<WeaponsTraffickingModule>());
@@ -130,15 +130,15 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     orchestrator.register_module(std::make_unique<DesignerDrugModule>());
 
     // Tier 10
-    orchestrator.register_module(std::make_unique<PoliticalCycleModule>());
-    orchestrator.register_module(std::make_unique<InfluenceNetworkModule>());
+    orchestrator.register_module(std::make_unique<PoliticalCycleModule>(config.political_cycle));
+    orchestrator.register_module(std::make_unique<InfluenceNetworkModule>(config.influence_network));
     orchestrator.register_module(std::make_unique<TrustUpdatesModule>());
     orchestrator.register_module(std::make_unique<AddictionModule>());
 
     // Tier 11
     orchestrator.register_module(std::make_unique<RegionalConditionsModule>());
     orchestrator.register_module(std::make_unique<PopulationAgingModule>());
-    orchestrator.register_module(std::make_unique<CurrencyExchangeModule>());
+    orchestrator.register_module(std::make_unique<CurrencyExchangeModule>(config.currency_exchange));
     orchestrator.register_module(std::make_unique<LodSystemModule>());
 
     // Tier 12

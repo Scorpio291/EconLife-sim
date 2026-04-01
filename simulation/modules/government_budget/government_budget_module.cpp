@@ -31,7 +31,7 @@ namespace econlife {
 void GovernmentBudgetModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Non-quarterly ticks: only infrastructure decay and spending effects.
     // Quarterly ticks: full processing pipeline.
-    if (is_quarterly_tick(state.current_tick)) {
+    if (is_quarterly_tick(state.current_tick, cfg_.ticks_per_quarter)) {
         process_quarterly_taxes(state, delta);
         process_intergovernmental_transfers();
         execute_spending(delta);
@@ -97,7 +97,7 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state,
         // Sum revenue_per_tick * ticks_per_quarter * corporate_tax_rate
         // for all non-criminal businesses in this province.
         float prov_corporate =
-            compute_corporate_tax(state.npc_businesses, corporate_tax_rate, prov.id);
+            compute_corporate_tax(state.npc_businesses, corporate_tax_rate, prov.id, cfg_.ticks_per_quarter);
         national_corporate_tax += prov_corporate;
 
         // --- Income tax ---
@@ -113,18 +113,18 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state,
 
             // Working class: 60% of working population, modifier 0.40
             float working_class_income = median_income_estimate * pop * working_fraction * 0.60f *
-                                         income_tax_rate * Constants::cohort_mod_working_class *
-                                         static_cast<float>(Constants::ticks_per_quarter);
+                                         income_tax_rate * cfg_.cohort_mod_working_class *
+                                         static_cast<float>(cfg_.ticks_per_quarter);
 
             // Professional: 30% of working population, modifier 0.85
             float professional_income = median_income_estimate * pop * working_fraction * 0.30f *
-                                        income_tax_rate * Constants::cohort_mod_professional *
-                                        static_cast<float>(Constants::ticks_per_quarter);
+                                        income_tax_rate * cfg_.cohort_mod_professional *
+                                        static_cast<float>(cfg_.ticks_per_quarter);
 
             // Corporate: 10% of working population, modifier 1.00
             float corporate_income = median_income_estimate * pop * working_fraction * 0.10f *
-                                     income_tax_rate * Constants::cohort_mod_corporate *
-                                     static_cast<float>(Constants::ticks_per_quarter);
+                                     income_tax_rate * cfg_.cohort_mod_corporate *
+                                     static_cast<float>(cfg_.ticks_per_quarter);
 
             national_income_tax += working_class_income + professional_income + corporate_income;
         }
@@ -331,11 +331,11 @@ void GovernmentBudgetModule::update_infrastructure(const WorldState& state, Delt
         // For very small or zero areas fall back to the module constant.
         float area_km2 = province->geography.area_km2;
         float investment_scale =
-            (area_km2 > 0.0f) ? area_km2 : Constants::infrastructure_investment_scale;
+            (area_km2 > 0.0f) ? area_km2 : cfg_.infrastructure_investment_scale;
 
         float new_rating = compute_infrastructure_change(
             province->infrastructure_rating, infra_spend,
-            Constants::infrastructure_decay_per_quarter, investment_scale);
+            cfg_.infrastructure_decay_per_quarter, investment_scale);
 
         // Province.infrastructure_rating is const on WorldState; write the
         // net change as a stability_delta on the region that owns this
@@ -374,13 +374,13 @@ void GovernmentBudgetModule::check_fiscal_health(DeltaBuffer& delta) {
         }
 
         // Check fiscal stress thresholds.
-        if (budget.debt_to_revenue_ratio > Constants::debt_crisis_ratio) {
+        if (budget.debt_to_revenue_ratio > cfg_.debt_crisis_ratio) {
             // Fiscal crisis consequence.
             ConsequenceDelta consequence{};
             consequence.new_entry_id =
                 static_cast<uint32_t>(budget.jurisdiction_id * 100 + 2);  // deterministic ID
             delta.consequence_deltas.push_back(consequence);
-        } else if (budget.debt_to_revenue_ratio > Constants::debt_warning_ratio) {
+        } else if (budget.debt_to_revenue_ratio > cfg_.debt_warning_ratio) {
             // Fiscal pressure warning consequence.
             ConsequenceDelta consequence{};
             consequence.new_entry_id =
@@ -416,7 +416,7 @@ void GovernmentBudgetModule::apply_spending_effects(DeltaBuffer& delta) {
         // Law enforcement spending reduces crime rate.
         auto le_it = budget.spending_actual.find(SpendingCategory::law_enforcement);
         if (le_it != budget.spending_actual.end() && le_it->second > 0.0f) {
-            float crime_reduction = -(le_it->second * Constants::spending_crime_scale);
+            float crime_reduction = -(le_it->second * cfg_.spending_crime_scale);
             region_delta.crime_rate_delta = crime_reduction;
             has_effect = true;
         }
@@ -424,7 +424,7 @@ void GovernmentBudgetModule::apply_spending_effects(DeltaBuffer& delta) {
         // Social programs spending reduces inequality.
         auto sp_it = budget.spending_actual.find(SpendingCategory::social_programs);
         if (sp_it != budget.spending_actual.end() && sp_it->second > 0.0f) {
-            float inequality_reduction = -(sp_it->second * Constants::spending_inequality_scale);
+            float inequality_reduction = -(sp_it->second * cfg_.spending_inequality_scale);
             region_delta.inequality_delta = inequality_reduction;
             has_effect = true;
         }
@@ -432,7 +432,7 @@ void GovernmentBudgetModule::apply_spending_effects(DeltaBuffer& delta) {
         // Public services spending improves stability.
         auto ps_it = budget.spending_actual.find(SpendingCategory::public_services);
         if (ps_it != budget.spending_actual.end() && ps_it->second > 0.0f) {
-            float stability_improvement = ps_it->second * Constants::spending_stability_scale;
+            float stability_improvement = ps_it->second * cfg_.spending_stability_scale;
             region_delta.stability_delta = stability_improvement;
             has_effect = true;
         }
@@ -448,7 +448,8 @@ void GovernmentBudgetModule::apply_spending_effects(DeltaBuffer& delta) {
 // ===========================================================================
 
 float GovernmentBudgetModule::compute_corporate_tax(const std::vector<NPCBusiness>& businesses,
-                                                    float tax_rate, uint32_t province_id) {
+                                                    float tax_rate, uint32_t province_id,
+                                                    uint32_t ticks_per_quarter) {
     // Sort businesses by id ascending for deterministic accumulation order
     // (IEEE 754 non-associativity concern from CLAUDE.md).
     std::vector<const NPCBusiness*> sorted;
@@ -463,7 +464,7 @@ float GovernmentBudgetModule::compute_corporate_tax(const std::vector<NPCBusines
     float total = 0.0f;
     for (const NPCBusiness* biz : sorted) {
         total +=
-            biz->revenue_per_tick * static_cast<float>(Constants::ticks_per_quarter) * tax_rate;
+            biz->revenue_per_tick * static_cast<float>(ticks_per_quarter) * tax_rate;
     }
     return total;
 }
@@ -537,10 +538,10 @@ float GovernmentBudgetModule::compute_debt_to_revenue_ratio(float accumulated_de
     return accumulated_debt / total_revenue;
 }
 
-bool GovernmentBudgetModule::is_quarterly_tick(uint32_t current_tick) {
+bool GovernmentBudgetModule::is_quarterly_tick(uint32_t current_tick, uint32_t ticks_per_quarter) {
     if (current_tick == 0)
         return false;
-    return (current_tick % Constants::ticks_per_quarter) == 0;
+    return (current_tick % ticks_per_quarter) == 0;
 }
 
 // ===========================================================================

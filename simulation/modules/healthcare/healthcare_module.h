@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/healthcare/healthcare_types.h"
 
@@ -25,6 +26,8 @@ struct NPC;
 // ---------------------------------------------------------------------------
 class HealthcareModule : public ITickModule {
    public:
+    explicit HealthcareModule(const HealthcareConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "healthcare"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -99,19 +102,8 @@ class HealthcareModule : public ITickModule {
     static float compute_effective_labour_supply(uint32_t labour_force, float sick_leave_fraction,
                                                  float labour_supply_impact);
 
-    // --- Constants (from INTERFACE.md / config.healthcare) ---
-    struct Constants {
-        static constexpr float base_recovery_rate = 0.001f;
-        static constexpr float critical_health_threshold = 0.30f;
-        static constexpr float treatment_health_boost = 0.25f;
-        static constexpr float overload_threshold = 0.85f;
-        static constexpr float overload_quality_penalty = 0.999f;
-        static constexpr float labour_impairment_threshold = 0.50f;
-        static constexpr float labour_supply_impact = 0.80f;
-        static constexpr float capacity_per_treatment = 0.001f;
-    };
-
    private:
+    HealthcareConfig cfg_;
     std::vector<ProvinceHealthState> province_health_states_;
     std::vector<NpcHealthRecord> npc_health_records_;
 };

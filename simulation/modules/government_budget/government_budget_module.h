@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/government_budget/budget_types.h"
 
@@ -26,6 +27,8 @@ struct NPCBusiness;
 // ---------------------------------------------------------------------------
 class GovernmentBudgetModule : public ITickModule {
    public:
+    explicit GovernmentBudgetModule(const GovernmentBudgetConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "government_budget"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -53,7 +56,7 @@ class GovernmentBudgetModule : public ITickModule {
     // Sums (business.revenue_per_tick * ticks_per_quarter * tax_rate) for all
     // non-criminal businesses in the given province.
     static float compute_corporate_tax(const std::vector<NPCBusiness>& businesses, float tax_rate,
-                                       uint32_t province_id);
+                                       uint32_t province_id, uint32_t ticks_per_quarter = 90);
 
     // Compute infrastructure rating change for one quarter:
     //   new_rating = (current_rating - decay_rate) + (spending_actual / investment_scale)
@@ -74,32 +77,10 @@ class GovernmentBudgetModule : public ITickModule {
 
     // Returns true if current_tick is a quarterly boundary (multiple of ticks_per_quarter).
     // Tick 0 is NOT treated as quarterly to avoid processing before the world is initialized.
-    static bool is_quarterly_tick(uint32_t current_tick);
-
-    // --- Compile-time constants ---
-
-    struct Constants {
-        static constexpr uint32_t ticks_per_quarter = 90;
-        static constexpr float infrastructure_decay_per_quarter = 0.01f;
-        static constexpr float infrastructure_investment_scale = 1000000.0f;
-        static constexpr float debt_warning_ratio = 2.0f;
-        static constexpr float debt_crisis_ratio = 4.0f;
-        static constexpr float city_revenue_fraction = 0.25f;
-        static constexpr float corruption_evidence_threshold = 500000.0f;
-
-        // Spending effect scales: how much spending (per unit) affects region conditions.
-        static constexpr float spending_stability_scale = 0.0001f;
-        static constexpr float spending_crime_scale = 0.0001f;
-        static constexpr float spending_inequality_scale = 0.0001f;
-
-        // Cohort tax rate modifiers by income group.
-        static constexpr float cohort_mod_working_class = 0.40f;
-        static constexpr float cohort_mod_professional = 0.85f;
-        static constexpr float cohort_mod_corporate = 1.00f;
-        static constexpr float cohort_mod_criminal_adjacent = 0.10f;
-    };
+    static bool is_quarterly_tick(uint32_t current_tick, uint32_t ticks_per_quarter = 90);
 
    private:
+    GovernmentBudgetConfig cfg_;
     std::vector<GovernmentBudget> budgets_;
 
     // --- Internal processing steps ---

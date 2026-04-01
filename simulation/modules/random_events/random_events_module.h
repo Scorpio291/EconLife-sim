@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/rng/deterministic_rng.h"
 #include "core/tick/tick_module.h"
 #include "core/world_state/delta_buffer.h"
@@ -13,7 +14,7 @@ namespace econlife {
 // Forward declaration — full class defined in random_events_module.cpp
 class RandomEventsModule : public ITickModule {
    public:
-    RandomEventsModule();
+    explicit RandomEventsModule(const RandomEventsConfig& cfg = {});
 
     std::string_view name() const noexcept override;
     std::string_view package_id() const noexcept override;
@@ -40,6 +41,7 @@ class RandomEventsModule : public ITickModule {
     uint32_t allocate_event_id();
 
    private:
+    RandomEventsConfig cfg_;
     std::vector<RandomEventTemplate> templates_;
     std::vector<ActiveRandomEvent> active_events_;
     uint32_t next_event_id_;
