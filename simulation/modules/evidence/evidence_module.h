@@ -61,10 +61,12 @@ class EvidenceModule : public ITickModule {
 
     // Compute propagation confidence when evidence is shared.
     // received_confidence = sharer_confidence * trust_factor
-    static float compute_propagation_confidence(float sharer_confidence, float relationship_trust);
+    static float compute_propagation_confidence(float sharer_confidence, float relationship_trust,
+                                                    float trust_factor_min, float trust_factor_max);
 
     // Normalize relationship trust [-1.0, 1.0] to trust factor [0.1, 1.0].
-    static float normalize_trust_to_factor(float trust);
+    static float normalize_trust_to_factor(float trust, float trust_factor_min,
+                                              float trust_factor_max);
 
     // Check if NPC can share evidence with player based on trust threshold.
     static bool can_share_with_player(float trust, float share_threshold);
@@ -72,21 +74,6 @@ class EvidenceModule : public ITickModule {
     // --- Internal evidence tracking ---
     // Module-internal next_token_id counter for new evidence creation.
     uint32_t& next_token_id() { return next_token_id_; }
-
-    // --- Constants ---
-    struct Constants {
-        static constexpr float base_decay_rate = 0.002f;     // per-tick effective
-        static constexpr uint32_t batch_interval = 7;        // ticks between decay batches
-        static constexpr float batch_decay_amount = 0.014f;  // base_decay_rate * 7
-        static constexpr float discredit_decay_multiplier = 5.0f;
-        static constexpr float actionability_floor = 0.10f;
-        static constexpr float credibility_threshold = 0.30f;
-        static constexpr float share_trust_threshold = 0.45f;
-        static constexpr float trust_factor_min = 0.1f;
-        static constexpr float trust_factor_max = 1.0f;
-        static constexpr float criminal_evidence_actionability = 0.80f;
-        static constexpr float violation_evidence_actionability = 0.60f;
-    };
 
    private:
     EvidenceConfig cfg_;

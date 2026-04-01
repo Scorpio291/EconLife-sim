@@ -8,6 +8,8 @@
 
 namespace econlife {
 
+PoliticalCycleModule::PoliticalCycleModule(const PoliticalCycleConfig& cfg) : cfg_(cfg) {}
+
 float PoliticalCycleModule::compute_raw_vote_share(
     const std::unordered_map<std::string, float>& approval_by_demographic,
     const std::vector<DemographicWeight>& demographics) {
@@ -43,18 +45,20 @@ float PoliticalCycleModule::compute_raw_vote_share(
     return weighted_sum / weight_total;
 }
 
-float PoliticalCycleModule::compute_resource_modifier(float resource_deployment) {
-    float raw = std::tanh(resource_deployment * RESOURCE_SCALE) * RESOURCE_MAX_EFFECT;
-    return std::clamp(raw, -RESOURCE_MAX_EFFECT, RESOURCE_MAX_EFFECT);
+float PoliticalCycleModule::compute_resource_modifier(float resource_deployment,
+                                                      float resource_scale,
+                                                      float resource_max_effect) {
+    float raw = std::tanh(resource_deployment * resource_scale) * resource_max_effect;
+    return std::clamp(raw, -resource_max_effect, resource_max_effect);
 }
 
 float PoliticalCycleModule::compute_event_modifier_total(
-    const std::vector<float>& event_modifiers) {
+    const std::vector<float>& event_modifiers, float event_modifier_cap) {
     float total = 0.0f;
     for (float m : event_modifiers) {
         total += m;
     }
-    return std::clamp(total, -EVENT_MODIFIER_CAP, EVENT_MODIFIER_CAP);
+    return std::clamp(total, -event_modifier_cap, event_modifier_cap);
 }
 
 float PoliticalCycleModule::compute_final_vote_share(float raw_share, float resource_modifier,
@@ -89,8 +93,11 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
             if (campaign.resolved)
                 continue;
 
-            float event_total = compute_event_modifier_total(campaign.event_modifiers);
-            float resource_mod = compute_resource_modifier(campaign.resource_deployment);
+            float event_total = compute_event_modifier_total(campaign.event_modifiers,
+                                                              cfg_.event_modifier_cap);
+            float resource_mod = compute_resource_modifier(campaign.resource_deployment,
+                                                           cfg_.resource_scale,
+                                                           cfg_.resource_max_effect);
 
             // Compute raw share from campaign approval
             float raw_share = 0.5f;
@@ -162,7 +169,8 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
             continue;
 
         bool passed =
-            compute_vote_passed(proposal.votes_for, proposal.votes_against, MAJORITY_THRESHOLD);
+            compute_vote_passed(proposal.votes_for, proposal.votes_against,
+                               cfg_.majority_threshold);
         proposal.status =
             passed ? LegislativeProposalStatus::enacted : LegislativeProposalStatus::failed;
     }

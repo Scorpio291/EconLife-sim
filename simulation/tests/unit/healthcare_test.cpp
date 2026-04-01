@@ -519,7 +519,7 @@ TEST_CASE("capacity utilisation incremented by treatment", "[healthcare][tier5]"
     REQUIRE(phs != nullptr);
     REQUIRE_THAT(
         phs->profile.capacity_utilisation,
-        WithinAbs(initial_utilisation + HealthcareModule::Constants::capacity_per_treatment,
+        WithinAbs(initial_utilisation + HealthcareConfig{}.capacity_per_treatment,
                   1e-7f));
 }
 
@@ -600,7 +600,7 @@ TEST_CASE("multiple NPC treatment in single province", "[healthcare][tier5]") {
     auto* phs = mod.find_province_health(0);
     REQUIRE(phs != nullptr);
     REQUIRE_THAT(phs->profile.capacity_utilisation,
-                 WithinAbs(2.0f * HealthcareModule::Constants::capacity_per_treatment, 1e-7f));
+                 WithinAbs(2.0f * HealthcareConfig{}.capacity_per_treatment, 1e-7f));
 }
 
 TEST_CASE("inactive NPC is not processed", "[healthcare][tier5]") {
@@ -747,7 +747,7 @@ TEST_CASE("deterministic processing order by NPC id", "[healthcare][tier5]") {
     auto* phs = mod.find_province_health(0);
     REQUIRE(phs != nullptr);
     REQUIRE_THAT(phs->profile.capacity_utilisation,
-                 WithinAbs(3.0f * HealthcareModule::Constants::capacity_per_treatment, 1e-7f));
+                 WithinAbs(3.0f * HealthcareConfig{}.capacity_per_treatment, 1e-7f));
 }
 
 TEST_CASE("no overload when capacity below threshold", "[healthcare][tier5]") {

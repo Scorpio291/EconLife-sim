@@ -16,19 +16,8 @@
 
 namespace econlife {
 
-// ---------------------------------------------------------------------------
-// Configuration constants
-// ---------------------------------------------------------------------------
-
-// Maximum scene cards that can be queued for delivery in a single tick.
-// Prevents UI overload per the interface spec.
-static constexpr uint32_t MAX_SCENE_CARDS_PER_TICK = 5;
-
-// Weights for npc_presentation_state derivation.
-// Formula: clamp(trust_weight * trust_normalized + risk_weight * risk_tolerance, 0, 1)
-// where trust_normalized = (trust + 1.0) / 2.0 to map [-1,1] -> [0,1].
-static constexpr float TRUST_WEIGHT = 0.7f;
-static constexpr float RISK_WEIGHT = 0.3f;
+// Configuration constants were moved to SceneCardsConfig (package_config.h).
+// The module accesses them via cfg_ member.
 
 // ---------------------------------------------------------------------------
 // Free function implementations
@@ -44,9 +33,10 @@ bool is_in_person_setting(SceneSetting setting) {
     }
 }
 
-float compute_presentation_state(float trust, float risk_tolerance) {
+float compute_presentation_state(float trust, float risk_tolerance,
+                                 float trust_weight, float risk_weight) {
     float trust_normalized = (trust + 1.0f) / 2.0f;
-    float raw = TRUST_WEIGHT * trust_normalized + RISK_WEIGHT * risk_tolerance;
+    float raw = trust_weight * trust_normalized + risk_weight * risk_tolerance;
     return std::clamp(raw, 0.0f, 1.0f);
 }
 
@@ -234,7 +224,7 @@ void SceneCardsModule::trigger_calendar_cards(const WorldState& state, DeltaBuff
         }
 
         // Respect per-tick card limit.
-        if (cards_added >= MAX_SCENE_CARDS_PER_TICK) {
+        if (cards_added >= cfg_.max_scene_cards_per_tick) {
             break;
         }
 
@@ -326,7 +316,8 @@ void SceneCardsModule::finalize_new_cards(const WorldState& state, DeltaBuffer& 
                                      if (card.type != SceneCardType::news_notification) {
                                          float trust = find_trust_toward_player(*npc, player_id);
                                          card.npc_presentation_state =
-                                             compute_presentation_state(trust, npc->risk_tolerance);
+                                             compute_presentation_state(trust, npc->risk_tolerance,
+                                                                        cfg_.trust_weight, cfg_.risk_weight);
                                      } else {
                                          card.npc_presentation_state = 0.0f;
                                      }
@@ -340,8 +331,8 @@ void SceneCardsModule::finalize_new_cards(const WorldState& state, DeltaBuffer& 
     delta.new_scene_cards.erase(it, delta.new_scene_cards.end());
 
     // Enforce per-tick cap on new cards.
-    if (delta.new_scene_cards.size() > MAX_SCENE_CARDS_PER_TICK) {
-        delta.new_scene_cards.resize(MAX_SCENE_CARDS_PER_TICK);
+    if (delta.new_scene_cards.size() > cfg_.max_scene_cards_per_tick) {
+        delta.new_scene_cards.resize(cfg_.max_scene_cards_per_tick);
     }
 }
 

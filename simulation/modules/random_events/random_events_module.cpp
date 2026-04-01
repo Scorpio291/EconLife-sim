@@ -8,36 +8,10 @@
 namespace econlife {
 
 // =============================================================================
-// Constants — from INTERFACE.md §19 invariants
+// Constants — fixed time conversions (not tunable)
 // =============================================================================
 
-static constexpr float BASE_RATE = 0.15f;  // events/province/month
 static constexpr float TICKS_PER_MONTH = 30.0f;
-static constexpr float CLIMATE_EVENT_AMPLIFIER = 1.5f;
-static constexpr float INSTABILITY_EVENT_AMPLIFIER = 1.0f;
-static constexpr float EVIDENCE_SEVERITY_THRESHOLD = 0.3f;
-
-// Category base weights (before conditioning on province state)
-static constexpr float WEIGHT_NATURAL = 0.25f;
-static constexpr float WEIGHT_ACCIDENT = 0.20f;
-static constexpr float WEIGHT_ECONOMIC = 0.30f;
-static constexpr float WEIGHT_HUMAN = 0.25f;
-
-// Natural event effect ranges
-static constexpr float NATURAL_AGRI_MOD_MIN = -0.40f;
-static constexpr float NATURAL_AGRI_MOD_MAX = -0.05f;
-static constexpr float NATURAL_INFRA_DMG_MIN = 0.01f;
-static constexpr float NATURAL_INFRA_DMG_MAX = 0.15f;
-
-// Accident event effect ranges
-static constexpr float ACCIDENT_OUTPUT_RATE_MIN = -1.0f;
-static constexpr float ACCIDENT_OUTPUT_RATE_MAX = -0.10f;
-static constexpr float ACCIDENT_INFRA_DMG_MIN = 0.01f;
-static constexpr float ACCIDENT_INFRA_DMG_MAX = 0.05f;
-
-// Economic event effect ranges
-static constexpr float ECONOMIC_PRICE_SHIFT_MIN = 0.10f;
-static constexpr float ECONOMIC_PRICE_SHIFT_MAX = 0.40f;
 
 // =============================================================================
 // Default templates — used when template registry is not loaded.
@@ -84,7 +58,8 @@ static std::vector<RandomEventTemplate> get_default_templates() {
 // RandomEventsModule — out-of-line method implementations
 // =============================================================================
 
-RandomEventsModule::RandomEventsModule() : templates_(get_default_templates()), next_event_id_(1) {}
+RandomEventsModule::RandomEventsModule(const RandomEventsConfig& cfg)
+    : cfg_(cfg), templates_(get_default_templates()), next_event_id_(1) {}
 
 std::string_view RandomEventsModule::name() const noexcept {
     return "random_events";
@@ -153,7 +128,7 @@ uint32_t RandomEventsModule::allocate_event_id() {
 }
 
 float RandomEventsModule::effective_base_rate() const {
-    return (base_rate_override_ >= 0.0f) ? base_rate_override_ : BASE_RATE;
+    return (base_rate_override_ >= 0.0f) ? base_rate_override_ : cfg_.base_rate;
 }
 
 void RandomEventsModule::process_active_events(const WorldState& state, const Province& province,
@@ -197,8 +172,8 @@ void RandomEventsModule::apply_natural_per_tick(const WorldState& /*state*/,
                                                 const Province& province,
                                                 const ActiveRandomEvent& event,
                                                 DeltaBuffer& province_delta) {
-    float agri_impact = NATURAL_AGRI_MOD_MIN +
-                        (NATURAL_AGRI_MOD_MAX - NATURAL_AGRI_MOD_MIN) * (1.0f - event.severity);
+    float agri_impact = cfg_.natural_agri_mod_min +
+                        (cfg_.natural_agri_mod_max - cfg_.natural_agri_mod_min) * (1.0f - event.severity);
     (void)agri_impact;
 
     RegionDelta rd{};
@@ -210,7 +185,7 @@ void RandomEventsModule::apply_natural_per_tick(const WorldState& /*state*/,
 void RandomEventsModule::apply_accident_per_tick(const WorldState& state, const Province& province,
                                                  ActiveRandomEvent& event,
                                                  DeltaBuffer& province_delta) {
-    if (!event.evidence_generated && event.severity >= EVIDENCE_SEVERITY_THRESHOLD) {
+    if (!event.evidence_generated && event.severity >= cfg_.evidence_severity_threshold) {
         uint32_t target_owner_id = 0;
         for (const auto& biz : state.npc_businesses) {
             if (biz.province_id == province.id) {
@@ -253,7 +228,7 @@ void RandomEventsModule::apply_accident_per_tick(const WorldState& state, const 
                 mem.subject_id = province.id;
                 mem.emotional_weight = -0.3f * event.severity;
                 mem.decay = 1.0f;
-                mem.is_actionable = (event.severity >= EVIDENCE_SEVERITY_THRESHOLD);
+                mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
                 nd.new_memory_entry = mem;
                 province_delta.npc_deltas.push_back(nd);
                 break;
@@ -266,8 +241,8 @@ void RandomEventsModule::apply_economic_per_tick(const WorldState& state, const 
                                                  const ActiveRandomEvent& event,
                                                  DeltaBuffer& province_delta) {
     if (!province.market_ids.empty()) {
-        float shift = ECONOMIC_PRICE_SHIFT_MIN +
-                      (ECONOMIC_PRICE_SHIFT_MAX - ECONOMIC_PRICE_SHIFT_MIN) * event.severity;
+        float shift = cfg_.economic_price_shift_min +
+                      (cfg_.economic_price_shift_max - cfg_.economic_price_shift_min) * event.severity;
         if (event.id % 2 == 0)
             shift = -shift;
 
@@ -313,8 +288,8 @@ void RandomEventsModule::roll_for_new_event(const WorldState& state, const Provi
     float economic_volatility = compute_economic_volatility(state, province);
 
     float adjusted_rate = effective_base_rate() *
-                          (1.0f + climate_stress * CLIMATE_EVENT_AMPLIFIER) *
-                          (1.0f + instability * INSTABILITY_EVENT_AMPLIFIER) * economic_volatility;
+                          (1.0f + climate_stress * cfg_.climate_event_amplifier) *
+                          (1.0f + instability * cfg_.instability_event_amplifier) * economic_volatility;
 
     float p = 1.0f - std::exp(-adjusted_rate / TICKS_PER_MONTH);
 
@@ -376,10 +351,10 @@ float RandomEventsModule::compute_economic_volatility(const WorldState& state,
 EventCategory RandomEventsModule::select_category(float climate_stress, float instability,
                                                   float infra_rating, float economic_volatility,
                                                   DeterministicRNG& rng) const {
-    float w_natural = WEIGHT_NATURAL * (1.0f + climate_stress);
-    float w_accident = WEIGHT_ACCIDENT * (1.0f + (1.0f - infra_rating));
-    float w_economic = WEIGHT_ECONOMIC * economic_volatility;
-    float w_human = WEIGHT_HUMAN * (1.0f + instability);
+    float w_natural = cfg_.weight_natural * (1.0f + climate_stress);
+    float w_accident = cfg_.weight_accident * (1.0f + (1.0f - infra_rating));
+    float w_economic = cfg_.weight_economic * economic_volatility;
+    float w_human = cfg_.weight_human * (1.0f + instability);
 
     float total = w_natural + w_accident + w_economic + w_human;
     if (total <= 0.0f)
@@ -441,10 +416,10 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                                                  DeltaBuffer& province_delta) {
     switch (event.category) {
         case EventCategory::natural: {
-            float agri_mod = NATURAL_AGRI_MOD_MIN + (NATURAL_AGRI_MOD_MAX - NATURAL_AGRI_MOD_MIN) *
+            float agri_mod = cfg_.natural_agri_mod_min + (cfg_.natural_agri_mod_max - cfg_.natural_agri_mod_min) *
                                                         (1.0f - event.severity);
-            float infra_dmg = NATURAL_INFRA_DMG_MIN +
-                              (NATURAL_INFRA_DMG_MAX - NATURAL_INFRA_DMG_MIN) * event.severity;
+            float infra_dmg = cfg_.natural_infra_dmg_min +
+                              (cfg_.natural_infra_dmg_max - cfg_.natural_infra_dmg_min) * event.severity;
             (void)agri_mod;
             (void)infra_dmg;
 
@@ -457,10 +432,10 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
 
         case EventCategory::accident: {
             float output_impact =
-                ACCIDENT_OUTPUT_RATE_MIN +
-                (ACCIDENT_OUTPUT_RATE_MAX - ACCIDENT_OUTPUT_RATE_MIN) * (1.0f - event.severity);
-            float infra_dmg = ACCIDENT_INFRA_DMG_MIN +
-                              (ACCIDENT_INFRA_DMG_MAX - ACCIDENT_INFRA_DMG_MIN) * event.severity;
+                cfg_.accident_output_rate_min +
+                (cfg_.accident_output_rate_max - cfg_.accident_output_rate_min) * (1.0f - event.severity);
+            float infra_dmg = cfg_.accident_infra_dmg_min +
+                              (cfg_.accident_infra_dmg_max - cfg_.accident_infra_dmg_min) * event.severity;
             (void)output_impact;
             (void)infra_dmg;
 
@@ -469,7 +444,7 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             rd.stability_delta = -0.01f * event.severity;
             province_delta.region_deltas.push_back(rd);
 
-            if (event.severity >= EVIDENCE_SEVERITY_THRESHOLD) {
+            if (event.severity >= cfg_.evidence_severity_threshold) {
                 uint32_t target_owner_id = 0;
                 for (const auto& biz : state.npc_businesses) {
                     if (biz.province_id == province.id) {
@@ -507,7 +482,7 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                         mem.subject_id = province.id;
                         mem.emotional_weight = -0.5f * event.severity;
                         mem.decay = 1.0f;
-                        mem.is_actionable = (event.severity >= EVIDENCE_SEVERITY_THRESHOLD);
+                        mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
                         nd.new_memory_entry = mem;
                         province_delta.npc_deltas.push_back(nd);
                         break;
@@ -520,8 +495,8 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
         case EventCategory::economic: {
             if (!province.market_ids.empty()) {
                 float shift =
-                    ECONOMIC_PRICE_SHIFT_MIN +
-                    (ECONOMIC_PRICE_SHIFT_MAX - ECONOMIC_PRICE_SHIFT_MIN) * event.severity;
+                    cfg_.economic_price_shift_min +
+                    (cfg_.economic_price_shift_max - cfg_.economic_price_shift_min) * event.severity;
                 if (event.id % 2 == 0)
                     shift = -shift;
 

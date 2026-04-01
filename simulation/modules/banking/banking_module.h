@@ -59,16 +59,20 @@ class BankingModule : public ITickModule {
     // rate = base_interest_rate + (1.0 - credit_score) * credit_risk_spread
     //        - (has_collateral ? collateral_rate_discount : 0)
     // Result clamped to >= 0.0.
-    static float compute_interest_rate(float credit_score, bool has_collateral);
+    static float compute_interest_rate(float credit_score, bool has_collateral,
+                                          float base_rate, float risk_spread,
+                                          float collateral_discount);
 
     // Compute maximum loan amount from per-tick revenue.
     // max_loan = revenue_per_tick * 365 * max_loan_multiple_of_income / 12
-    static float compute_max_loan_amount(float revenue_per_tick);
+    static float compute_max_loan_amount(float revenue_per_tick,
+                                            float max_loan_multiple_of_income);
 
     // Evaluate a loan application: returns true if approved.
     // Deny if credit_score < min_credit_score_for_purpose(purpose)
-    // Deny if dti_ratio > denial_dti_threshold (0.40)
-    static bool evaluate_loan_application(float credit_score, float dti_ratio, LoanPurpose purpose);
+    // Deny if dti_ratio > denial_dti_threshold
+    static bool evaluate_loan_application(float credit_score, float dti_ratio,
+                                             LoanPurpose purpose, float denial_dti_threshold);
 
     // Compute fixed repayment per tick for an amortizing loan.
     // Simple amortization: (principal * (1 + interest_rate * duration_ticks)) / duration_ticks
@@ -78,19 +82,6 @@ class BankingModule : public ITickModule {
 
     // Return the minimum credit score required for a given loan purpose.
     static float min_credit_score_for_purpose(LoanPurpose purpose);
-
-    // --- Constants ---
-    struct Constants {
-        static constexpr float base_interest_rate = 0.000027f;        // ~1% annual
-        static constexpr float credit_risk_spread = 0.000082f;        // ~3% annual spread
-        static constexpr float collateral_rate_discount = 0.000014f;  // ~0.5% annual
-        static constexpr uint32_t default_grace_ticks = 3;
-        static constexpr float credit_score_payment_gain = 0.002f;
-        static constexpr float credit_score_miss_penalty = 0.01f;
-        static constexpr float denial_dti_threshold = 0.40f;
-        static constexpr float max_loan_multiple_of_income = 36.0f;
-        static constexpr float criminal_conviction_penalty = 0.20f;
-    };
 
    private:
     std::vector<LoanRecord> active_loans_;

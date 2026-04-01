@@ -23,37 +23,31 @@ namespace econlife {
 // Static utility functions
 // ===========================================================================
 
-float BankingModule::compute_interest_rate(float credit_score, bool has_collateral) {
-    // rate = base_interest_rate + (1.0 - credit_score) * credit_risk_spread
-    //        - (has_collateral ? collateral_rate_discount : 0)
-    float rate = Constants::base_interest_rate +
-                 (1.0f - credit_score) * Constants::credit_risk_spread -
-                 (has_collateral ? Constants::collateral_rate_discount : 0.0f);
-
-    // Clamp to non-negative.
+float BankingModule::compute_interest_rate(float credit_score, bool has_collateral,
+                                           float base_rate, float risk_spread,
+                                           float collateral_discount) {
+    float rate = base_rate + (1.0f - credit_score) * risk_spread -
+                 (has_collateral ? collateral_discount : 0.0f);
     if (rate < 0.0f) {
         rate = 0.0f;
     }
     return rate;
 }
 
-float BankingModule::compute_max_loan_amount(float revenue_per_tick) {
-    // max_loan = revenue_per_tick * 365 * max_loan_multiple_of_income / 12
-    return revenue_per_tick * 365.0f * Constants::max_loan_multiple_of_income / 12.0f;
+float BankingModule::compute_max_loan_amount(float revenue_per_tick,
+                                             float max_loan_multiple_of_income) {
+    return revenue_per_tick * 365.0f * max_loan_multiple_of_income / 12.0f;
 }
 
 bool BankingModule::evaluate_loan_application(float credit_score, float dti_ratio,
-                                              LoanPurpose purpose) {
-    // Deny if credit_score below minimum for purpose.
+                                              LoanPurpose purpose,
+                                              float denial_dti_threshold) {
     if (credit_score < min_credit_score_for_purpose(purpose)) {
         return false;
     }
-
-    // Deny if debt-to-income ratio exceeds threshold.
-    if (dti_ratio > Constants::denial_dti_threshold) {
+    if (dti_ratio > denial_dti_threshold) {
         return false;
     }
-
     return true;
 }
 
@@ -167,7 +161,7 @@ void BankingModule::process_loan_repayment(LoanRecord& loan, const WorldState& s
 
         // Improve credit score (not for criminal_informal loans).
         if (loan.purpose != LoanPurpose::criminal_informal) {
-            credit->profile.credit_score += Constants::credit_score_payment_gain;
+            credit->profile.credit_score += cfg_.credit_score_payment_gain;
             if (credit->profile.credit_score > 1.0f) {
                 credit->profile.credit_score = 1.0f;
             }
@@ -182,14 +176,14 @@ void BankingModule::process_loan_repayment(LoanRecord& loan, const WorldState& s
 
         // Penalize credit score (not for criminal_informal loans).
         if (loan.purpose != LoanPurpose::criminal_informal) {
-            credit->profile.credit_score -= Constants::credit_score_miss_penalty;
+            credit->profile.credit_score -= cfg_.credit_score_miss_penalty;
             if (credit->profile.credit_score < 0.0f) {
                 credit->profile.credit_score = 0.0f;
             }
         }
 
         // Check for default after grace period.
-        if (credit->consecutive_misses > Constants::default_grace_ticks) {
+        if (credit->consecutive_misses > cfg_.default_grace_ticks) {
             loan.in_default = true;
             process_loan_default(loan, delta);
         }
@@ -302,14 +296,18 @@ void BankingModule::process_loan_origination(const WorldState& state, DeltaBuffe
         float dti = credit->profile.debt_service_per_tick / std::max(1.0f, biz->revenue_per_tick);
 
         if (!evaluate_loan_application(credit->profile.credit_score, dti,
-                                       LoanPurpose::business_capital)) {
+                                       LoanPurpose::business_capital,
+                                       cfg_.per_tick_denial_dti_threshold)) {
             continue;
         }
 
         // Compute loan terms.
-        float loan_amount = std::min(compute_max_loan_amount(biz->revenue_per_tick),
-                                     biz->revenue_per_tick * 180.0f);
-        float interest_rate = compute_interest_rate(credit->profile.credit_score, false);
+        float loan_amount = std::min(
+            compute_max_loan_amount(biz->revenue_per_tick, cfg_.max_loan_multiple_of_income),
+            biz->revenue_per_tick * 180.0f);
+        float interest_rate = compute_interest_rate(
+            credit->profile.credit_score, false, cfg_.per_tick_base_interest_rate,
+            cfg_.credit_risk_spread, cfg_.collateral_rate_discount);
         constexpr uint32_t duration_ticks = 365;
         float repayment = compute_repayment_per_tick(loan_amount, interest_rate, duration_ticks);
 

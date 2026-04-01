@@ -3,6 +3,7 @@
 // scene_cards module — public header for SceneCardsModule.
 // See docs/interfaces/scene_cards/INTERFACE.md for canonical spec.
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "scene_card_types.h"  // SceneSetting, SceneCard (complete types)
 
@@ -19,7 +20,8 @@ struct DeltaBuffer;
 // risk_tolerance is already on [0.0, 1.0].
 //
 // Result: 0.0 = hostile/closed, 1.0 = open/cooperative.
-float compute_presentation_state(float trust, float risk_tolerance);
+float compute_presentation_state(float trust, float risk_tolerance,
+                                 float trust_weight = 0.7f, float risk_weight = 0.3f);
 
 // Returns true if the given SceneSetting requires physical co-location
 // (player and NPC in the same province).
@@ -27,6 +29,8 @@ bool is_in_person_setting(SceneSetting setting);
 
 class SceneCardsModule : public ITickModule {
    public:
+    explicit SceneCardsModule(const SceneCardsConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override;
     std::string_view package_id() const noexcept override;
     ModuleScope scope() const noexcept override;
@@ -36,6 +40,8 @@ class SceneCardsModule : public ITickModule {
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
    private:
+    SceneCardsConfig cfg_;
+
     void resolve_player_choices(const WorldState& state, DeltaBuffer& delta) const;
 
     void discard_dead_npc_cards(const WorldState& state, DeltaBuffer& delta) const;

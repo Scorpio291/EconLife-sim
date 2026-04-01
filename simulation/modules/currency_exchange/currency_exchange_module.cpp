@@ -10,9 +10,12 @@
 namespace econlife {
 
 float CurrencyExchangeModule::compute_macro_factor(float trade_balance, float inflation,
-                                                   float credit_rating) {
-    return 1.0f + (trade_balance * TRADE_BALANCE_WEIGHT) - (inflation * INFLATION_WEIGHT) -
-           ((1.0f - credit_rating) * SOVEREIGN_RISK_WEIGHT);
+                                                   float credit_rating,
+                                                   float trade_balance_weight,
+                                                   float inflation_weight,
+                                                   float sovereign_risk_weight) {
+    return 1.0f + (trade_balance * trade_balance_weight) - (inflation * inflation_weight) -
+           ((1.0f - credit_rating) * sovereign_risk_weight);
 }
 
 float CurrencyExchangeModule::apply_rate_clamp(float rate, float baseline, float floor_frac,
@@ -29,8 +32,9 @@ float CurrencyExchangeModule::convert_currency(float amount, float seller_usd_ra
     return amount * (seller_usd_rate / buyer_usd_rate) * (1.0f + transaction_cost);
 }
 
-bool CurrencyExchangeModule::is_peg_broken(float foreign_reserves) {
-    return foreign_reserves <= PEG_BREAK_RESERVE_THRESHOLD;
+bool CurrencyExchangeModule::is_peg_broken(float foreign_reserves,
+                                           float peg_break_reserve_threshold) {
+    return foreign_reserves <= peg_break_reserve_threshold;
 }
 
 bool CurrencyExchangeModule::is_weekly_tick(uint32_t current_tick) {
@@ -46,7 +50,7 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
     // Process each currency from WorldState in nation_id ascending order (deterministic).
     for (const auto& currency : state.currencies) {
         if (currency.pegged) {
-            if (is_peg_broken(currency.foreign_reserves)) {
+            if (is_peg_broken(currency.foreign_reserves, cfg_.peg_break_reserve_threshold)) {
                 // Peg break: emit delta to set pegged = false.
                 CurrencyDelta cd{};
                 cd.nation_id = currency.nation_id;
@@ -73,7 +77,9 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
             }
         }
 
-        float macro_factor = compute_macro_factor(trade_balance, inflation, credit_rating);
+        float macro_factor = compute_macro_factor(trade_balance, inflation, credit_rating,
+                                                    cfg_.trade_balance_weight, cfg_.inflation_weight,
+                                                    cfg_.sovereign_risk_weight);
 
         // Add noise term using DeterministicRNG for this nation.
         float noise = 0.0f;
@@ -94,8 +100,8 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
             new_rate = currency.usd_rate;  // fallback to previous rate
         }
 
-        new_rate = apply_rate_clamp(new_rate, currency.usd_rate_baseline, FLOOR_FRACTION,
-                                    CEILING_FRACTION);
+        new_rate = apply_rate_clamp(new_rate, currency.usd_rate_baseline, cfg_.floor_fraction,
+                                    cfg_.ceiling_fraction);
 
         // Only emit delta if rate actually changed.
         if (new_rate != currency.usd_rate) {

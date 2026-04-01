@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/media_system/media_system_types.h"
 
@@ -26,6 +27,8 @@ struct EvidenceToken;
 // ---------------------------------------------------------------------------
 class MediaSystemModule : public ITickModule {
    public:
+    explicit MediaSystemModule(const MediaSystemConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "media_system"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -73,19 +76,8 @@ class MediaSystemModule : public ITickModule {
     static bool is_within_propagation_window(uint32_t published_tick, uint32_t current_tick,
                                              uint32_t window_ticks);
 
-    // --- Constants ---
-    struct Constants {
-        static constexpr float cross_outlet_pickup_rate = 0.15f;
-        static constexpr float cross_outlet_amplification_factor = 0.50f;
-        static constexpr float social_amplification_multiplier = 2.50f;
-        static constexpr float exposure_per_amplification_unit = 0.02f;
-        static constexpr float crisis_evidence_threshold = 0.40f;
-        static constexpr float owner_suppression_base_rate = 0.50f;
-        static constexpr uint32_t propagation_window_ticks = 90;
-        static constexpr float editorial_independence_journalist_bonus = 0.30f;
-    };
-
    private:
+    MediaSystemConfig cfg_;
     std::vector<MediaOutlet> outlets_;
     std::vector<Story> active_stories_;
     uint32_t next_story_id_ = 1000;

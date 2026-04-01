@@ -69,7 +69,7 @@ TEST_CASE("Story outside propagation window", "[media_system][tier7]") {
 TEST_CASE("Exposure not converted below threshold", "[media_system][tier7]") {
     // evidence_weight below crisis threshold
     float evidence = 0.30f;
-    CHECK(evidence < MediaSystemModule::Constants::crisis_evidence_threshold);
+    CHECK(evidence < MediaSystemConfig{}.crisis_evidence_threshold);
     // If evidence_weight < threshold, no exposure conversion should happen
     // (tested at module level, not static — verified by checking the threshold constant)
 }

@@ -33,7 +33,7 @@ void TradeInfrastructureModule::execute(const WorldState& state, DeltaBuffer& de
     process_transit_arrivals(current_tick, delta);
 
     // Step 2: Apply perishable degradation to all still-in-transit shipments.
-    process_perishable_decay(TradeInfrastructureConstants::perishable_decay_base);
+    process_perishable_decay(cfg_.perishable_decay_base);
 
     // Step 3: Criminal interception checks for in-transit criminal shipments.
     process_interception_checks(current_tick, delta, rng);
@@ -137,19 +137,19 @@ void TradeInfrastructureModule::add_shipment(TransitShipment shipment) {
 // calculate_transit_ticks (static)
 // ---------------------------------------------------------------------------
 uint32_t TradeInfrastructureModule::calculate_transit_ticks(const RouteProfile& route,
-                                                            TransportMode mode) {
-    const float mode_speed = TradeInfrastructureConstants::speed_for_mode(mode);
+                                                            TransportMode mode) const {
+    const float mode_speed = speed_for_mode(mode);
 
     // Base transit time in ticks (fractional).
     const float base_transit = route.distance_km / mode_speed;
 
     // Terrain delay multiplier: 1.0 + terrain_roughness * coeff.
     const float terrain_delay =
-        1.0f + route.route_terrain_roughness * TradeInfrastructureConstants::terrain_delay_coeff;
+        1.0f + route.route_terrain_roughness * cfg_.terrain_delay_coeff;
 
     // Infrastructure delay multiplier: 1.0 + (1 - min_infrastructure) * coeff.
     const float infra_delay =
-        1.0f + (1.0f - route.min_infrastructure) * TradeInfrastructureConstants::infra_delay_coeff;
+        1.0f + (1.0f - route.min_infrastructure) * cfg_.infra_delay_coeff;
 
     // Final transit ticks: at least 1.
     const float raw = base_transit * terrain_delay * infra_delay;
@@ -177,11 +177,11 @@ bool TradeInfrastructureModule::apply_perishable_decay(TransitShipment& shipment
 // check_interception (static)
 // ---------------------------------------------------------------------------
 bool TradeInfrastructureModule::check_interception(const TransitShipment& shipment,
-                                                   DeterministicRNG& rng) {
+                                                   DeterministicRNG& rng) const {
     // Cap concealment modifier at the configured maximum.
     const float capped_concealment =
         std::min(shipment.route_concealment_modifier,
-                 TradeInfrastructureConstants::max_concealment_modifier);
+                 cfg_.max_concealment_modifier);
 
     // Effective risk per tick after concealment reduction.
     const float effective_risk = shipment.interception_risk_per_tick * (1.0f - capped_concealment);

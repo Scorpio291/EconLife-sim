@@ -112,7 +112,7 @@ void MediaSystemModule::create_stories_from_journalists(const WorldState& state,
                 }
                 if (!token)
                     continue;
-                if (token->actionability < Constants::crisis_evidence_threshold)
+                if (token->actionability < cfg_.crisis_evidence_threshold)
                     continue;
 
                 // Check if story already exists for this token+outlet
@@ -138,7 +138,7 @@ void MediaSystemModule::create_stories_from_journalists(const WorldState& state,
                     // Apply editorial filter: use deterministic roll from confidence
                     float roll = knowledge.confidence;
                     if (!evaluate_editorial_filter(outlet.editorial_independence,
-                                                   Constants::owner_suppression_base_rate, roll)) {
+                                                   cfg_.owner_suppression_base_rate, roll)) {
                         // Story suppressed; give journalist memory
                         NPCDelta npc_delta;
                         npc_delta.npc_id = journalist_id;
@@ -233,7 +233,7 @@ void MediaSystemModule::propagate_stories(const WorldState& state, DeltaBuffer& 
         if (!story.is_active)
             continue;
         if (!is_within_propagation_window(story.published_tick, state.current_tick,
-                                          Constants::propagation_window_ticks)) {
+                                          cfg_.propagation_window_ticks)) {
             continue;
         }
 
@@ -256,12 +256,12 @@ void MediaSystemModule::propagate_stories(const WorldState& state, DeltaBuffer& 
                 continue;
 
             float pickup_prob = compute_pickup_probability(
-                story.evidence_weight, outlet.credibility, Constants::cross_outlet_pickup_rate);
+                story.evidence_weight, outlet.credibility, cfg_.cross_outlet_pickup_rate);
 
             // Deterministic pickup: use (story.id * outlet.id) % 100 as roll
             float roll = static_cast<float>((story.id * outlet.id) % 100) / 100.0f;
             if (roll < pickup_prob) {
-                story.amplification += outlet.reach * Constants::cross_outlet_amplification_factor;
+                story.amplification += outlet.reach * cfg_.cross_outlet_amplification_factor;
             }
         }
 
@@ -282,7 +282,7 @@ void MediaSystemModule::propagate_stories(const WorldState& state, DeltaBuffer& 
                 continue;
 
             float social_amp = compute_social_amplification(
-                story.amplification, outlet.reach, Constants::social_amplification_multiplier,
+                story.amplification, outlet.reach, cfg_.social_amplification_multiplier,
                 story.evidence_weight);
             story.amplification += social_amp;
         }
@@ -296,7 +296,7 @@ void MediaSystemModule::convert_exposure(const WorldState& state, DeltaBuffer& d
             continue;
         if (story.tone != StoryTone::damaging)
             continue;
-        if (story.evidence_weight < Constants::crisis_evidence_threshold)
+        if (story.evidence_weight < cfg_.crisis_evidence_threshold)
             continue;
 
         // Find the outlet province for region effects
@@ -309,7 +309,7 @@ void MediaSystemModule::convert_exposure(const WorldState& state, DeltaBuffer& d
         }
 
         float exposure =
-            compute_exposure_delta(story.amplification, Constants::exposure_per_amplification_unit);
+            compute_exposure_delta(story.amplification, cfg_.exposure_per_amplification_unit);
 
         if (story.subject_id == state.player->id) {
             // V1: accumulate into player health_delta as reputation proxy
@@ -335,7 +335,7 @@ void MediaSystemModule::convert_exposure(const WorldState& state, DeltaBuffer& d
 void MediaSystemModule::expire_old_stories(uint32_t current_tick) {
     for (auto& story : active_stories_) {
         if (story.is_active && !is_within_propagation_window(story.published_tick, current_tick,
-                                                             Constants::propagation_window_ticks)) {
+                                                             cfg_.propagation_window_ticks)) {
             story.is_active = false;
         }
     }
