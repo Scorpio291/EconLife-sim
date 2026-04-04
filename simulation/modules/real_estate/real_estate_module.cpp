@@ -42,11 +42,11 @@ std::vector<PropertyListing>& RealEstateModule::properties() {
 }
 
 // ===========================================================================
-// Static utilities
+// Utilities
 // ===========================================================================
 
 float RealEstateModule::compute_market_value(const PropertyListing& prop,
-                                             const Province& province) {
+                                             const Province& province) const {
     // Start with current market_value as baseline.
     float base_value = prop.market_value;
     if (base_value <= 0.0f) {
@@ -56,12 +56,12 @@ float RealEstateModule::compute_market_value(const PropertyListing& prop,
     // Criminal dominance penalty: reduces value by penalty_rate * dominance_index.
     // criminal_dominance_index is on RegionConditions.
     float dominance = province.conditions.criminal_dominance_index;
-    float dominance_penalty = dominance * RealEstateConstants::criminal_dominance_penalty;
+    float dominance_penalty = dominance * cfg_.criminal_dominance_penalty;
 
     // Laundering premium: inflates value for launder-eligible properties.
     float launder_bonus = 0.0f;
     if (prop.launder_eligible) {
-        launder_bonus = RealEstateConstants::laundering_premium;
+        launder_bonus = cfg_.laundering_premium;
     }
 
     // Apply modifiers: base_value * (1.0 - dominance_penalty + launder_bonus)
@@ -72,11 +72,11 @@ float RealEstateModule::compute_market_value(const PropertyListing& prop,
     return base_value * multiplier;
 }
 
-float RealEstateModule::compute_rental_income(float market_value, float rental_yield_rate) {
+float RealEstateModule::compute_rental_income(float market_value, float rental_yield_rate) const {
     return market_value * rental_yield_rate;
 }
 
-void RealEstateModule::converge_asking_price(PropertyListing& prop, float rate) {
+void RealEstateModule::converge_asking_price(PropertyListing& prop, float rate) const {
     float gap = prop.market_value - prop.asking_price;
     prop.asking_price += gap * rate;
 
@@ -87,7 +87,7 @@ void RealEstateModule::converge_asking_price(PropertyListing& prop, float rate) 
 }
 
 float RealEstateModule::compute_avg_property_value(const std::vector<PropertyListing>& props,
-                                                   uint32_t province_id) {
+                                                   uint32_t province_id) const {
     float sum = 0.0f;
     uint32_t count = 0;
 
@@ -113,7 +113,7 @@ float RealEstateModule::compute_avg_property_value(const std::vector<PropertyLis
 void RealEstateModule::execute_province(uint32_t province_idx, const WorldState& state,
                                         DeltaBuffer& province_delta) {
     const bool is_monthly_tick =
-        (state.current_tick % RealEstateConstants::convergence_interval == 0);
+        (state.current_tick % cfg_.convergence_interval == 0);
 
     // Locate the province for market value computation.
     const Province* province = nullptr;
@@ -142,7 +142,7 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
                 compute_rental_income(prop.market_value, prop.rental_yield_rate);
 
             // Converge asking_price toward market_value.
-            converge_asking_price(prop, RealEstateConstants::price_convergence_rate);
+            converge_asking_price(prop, cfg_.price_convergence_rate);
         }
     }
 

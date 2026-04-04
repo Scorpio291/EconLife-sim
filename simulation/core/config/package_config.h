@@ -282,6 +282,147 @@ struct SceneCardsConfig {
     float risk_weight = 0.3f;
 };
 
+struct CommodityTradingConfig {
+    float market_impact_threshold = 0.05f;
+    float market_impact_coefficient = 0.01f;
+    float capital_gains_tax_rate = 0.15f;
+};
+
+struct PriceEngineConfig {
+    float supply_floor = 0.01f;
+    float default_price_adjustment_rate = 0.10f;
+    float max_price_change_per_tick = 0.25f;
+    float export_floor_coeff = 0.40f;
+    float import_ceiling_coeff = 3.0f;
+    float default_base_price = 1.0f;
+};
+
+struct SeasonalAgricultureConfig {
+    uint32_t ticks_per_year = 365;
+    uint32_t planting_duration_ticks = 7;
+    uint32_t harvest_duration_ticks = 14;
+    float fallow_soil_recovery_rate = 0.003f;
+    float soil_health_max = 1.0f;
+    float soil_health_min_monoculture = 0.5f;
+    uint16_t monoculture_penalty_threshold = 3;
+    float monoculture_soil_penalty_rate = 0.002f;
+    uint32_t southern_hemisphere_offset = 182;
+    float perennial_base = 0.85f;
+    float perennial_amplitude = 0.25f;
+    float livestock_base = 0.85f;
+    float livestock_amplitude = 0.10f;
+    float timber_multiplier = 1.0f;
+};
+
+struct RealEstateConfig {
+    float residential_yield_rate = 0.003f;
+    float commercial_yield_rate = 0.004f;
+    float industrial_yield_rate = 0.005f;
+    float price_convergence_rate = 0.05f;
+    uint32_t convergence_interval = 30;
+    float criminal_dominance_penalty = 0.15f;
+    float laundering_premium = 0.10f;
+    float transaction_evidence_threshold = 50000.0f;
+};
+
+struct FinancialDistributionConfig {
+    uint32_t ticks_per_quarter = 91;
+    uint32_t deferred_salary_max_ticks = 30;
+    float draw_reporting_threshold = 20000.0f;
+    uint32_t ticks_per_month = 30;
+    float cash_surplus_months = 5.0f;
+    float board_rubber_stamp_threshold = 0.3f;
+    float board_approval_bonus_threshold = 0.25f;
+    float default_tax_withholding_rate = 0.20f;
+    float owners_draw_fraction = 0.5f;
+    float wage_theft_emotional_weight = -0.6f;
+};
+
+struct NpcBehaviorModuleConfig {
+    float inaction_threshold = 0.10f;
+    float min_risk_discount = 0.05f;
+    float risk_sensitivity_coeff = 2.0f;
+    float trust_ev_bonus = 0.3f;
+    float recovery_ceiling_minimum = 0.15f;
+};
+
+struct ObligationNetworkConfig {
+    float escalation_rate_base = 0.001f;
+    float escalation_threshold = 1.5f;
+    float critical_threshold = 3.0f;
+    float hostile_action_threshold = 0.7f;
+    float wealth_reference_scale = 1000000.0f;
+    float max_wealth_factor = 2.0f;
+    float trust_erosion_per_tick = -0.001f;
+    uint32_t orphan_obligation_timeout_ticks = 180;
+};
+
+struct CriminalOperationsConfig {
+    uint32_t quarterly_interval = 90;
+    float le_heat_threshold = 0.60f;
+    float territory_pressure_conflict_threshold = 0.60f;
+    float cash_comfortable_months = 3.0f;
+    float cash_low_threshold = 0.50f;
+    float territory_pressure_expand_threshold = 0.30f;
+    float le_heat_expand_threshold = 0.30f;
+    float expansion_initial_dominance = 0.05f;
+    float cash_per_expansion_slot = 5000.0f;
+    uint32_t min_expansion_team_size = 2;
+    float expansion_refund_fraction = 0.50f;
+    float dormant_dominance_decay_rate = 0.001f;
+};
+
+struct CommunityResponseConfig {
+    float ema_alpha = 0.05f;
+    float social_capital_max = 100.0f;
+    float capital_normalizer = 10000.0f;
+    float social_normalizer = 50.0f;
+    float memory_decay_floor = 0.01f;
+    float grievance_normalizer = 10.0f;
+    float grievance_shock_threshold = 0.15f;
+    float resistance_revenue_penalty = -0.15f;
+    float trauma_grievance_floor_scale = 0.25f;
+    float trauma_trust_ceiling_scale = 0.30f;
+    uint32_t regression_cooldown_ticks = 7;
+};
+
+struct NpcSpendingConfig {
+    float reference_income = 1000.0f;
+    float max_income_factor = 5.0f;
+    float min_price_factor = 0.05f;
+    float default_base_demand_units = 1.0f;
+    float default_income_elasticity = 1.0f;
+    float default_price_elasticity = -1.0f;
+    float default_base_price = 10.0f;
+    float default_quality_weight = 0.0f;
+};
+
+struct AntitrustConfig {
+    float market_share_threshold = 0.40f;
+    float dominant_price_mover_threshold = 0.70f;
+    float meter_fill_per_threshold_tick = 0.002f;
+    float dominance_proposal_pressure_per_tick = 0.005f;
+    float proposal_pressure_decay_rate = 0.01f;
+    float proposal_threshold = 0.50f;
+    uint32_t monthly_interval = 30;
+};
+
+struct FacilitySignalsConfig {
+    float default_weight = 0.25f;
+    float karst_mitigation_bonus = 0.10f;
+    float facility_count_normalizer = 5.0f;
+    float detection_to_fill_rate_scale = 0.005f;
+    float fill_rate_max = 0.01f;
+    float surveillance_threshold = 0.30f;
+    float formal_inquiry_threshold = 0.60f;
+    float raid_threshold = 0.80f;
+    float notice_threshold = 0.25f;
+    float audit_threshold = 0.50f;
+    float enforcement_threshold = 0.75f;
+    float meter_decay_rate = 0.001f;
+    float personnel_violence_multiplier = 3.0f;
+};
+
 struct ProductionConfig {
     float tech_tier_output_bonus = 0.08f;
     float tech_tier_cost_reduction = 0.05f;
@@ -350,6 +491,18 @@ struct PackageConfig {
     GovernmentBudgetConfig government_budget;
     HealthcareConfig healthcare;
     SceneCardsConfig scene_cards;
+    CommodityTradingConfig commodity_trading;
+    PriceEngineConfig price_engine;
+    SeasonalAgricultureConfig seasonal_agriculture;
+    RealEstateConfig real_estate;
+    FinancialDistributionConfig financial_distribution;
+    NpcBehaviorModuleConfig npc_behavior_module;
+    ObligationNetworkConfig obligation_network;
+    CriminalOperationsConfig criminal_operations;
+    CommunityResponseConfig community_response;
+    NpcSpendingConfig npc_spending;
+    AntitrustConfig antitrust;
+    FacilitySignalsConfig facility_signals;
 };
 
 // Load PackageConfig from a directory containing JSON config files.

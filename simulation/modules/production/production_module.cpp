@@ -196,10 +196,10 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
     int32_t effective_tier_diff = std::max(0, tier_diff);
 
     float output_multiplier =
-        1.0f + config_.tech_tier_output_bonus_per_tier * static_cast<float>(effective_tier_diff);
+        1.0f + cfg_.tech_tier_output_bonus * static_cast<float>(effective_tier_diff);
 
     float cost_multiplier =
-        1.0f - config_.tech_tier_cost_reduction_per_tier * static_cast<float>(effective_tier_diff);
+        1.0f - cfg_.tech_tier_cost_reduction * static_cast<float>(effective_tier_diff);
 
     // Determine input availability — compute bottleneck ratio.
     // The bottleneck ratio is the minimum ratio of (available / required)
@@ -266,8 +266,8 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
     // Compute quality ceiling.
     float quality_ceiling =
-        config_.tech_quality_ceiling_base +
-        config_.tech_quality_ceiling_step * static_cast<float>(effective_tier_diff);
+        cfg_.tech_quality_ceiling_base +
+        cfg_.tech_quality_ceiling_step * static_cast<float>(effective_tier_diff);
 
     // For technology-intensive recipes, cap by maturation level.
     // If the recipe has a key_technology_node, the actor's maturation level

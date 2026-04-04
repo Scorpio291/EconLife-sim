@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/config/package_config.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/commodity_trading/commodity_trading_module.h"
@@ -164,7 +165,7 @@ TEST_CASE("test_market_impact_large_position", "[commodity_trading][tier4]") {
     // Long position => demand_impact = 1.5, supply_impact = 0.
     auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 200.0f, 50.0f, 10);
 
-    MarketImpact impact = CommodityTradingModule::compute_market_impact(pos, 1000.0f);
+    MarketImpact impact = CommodityTradingModule{}.compute_market_impact(pos, 1000.0f);
     REQUIRE(impact.good_id_hash == 5);
     REQUIRE_THAT(impact.demand_impact, WithinAbs(1.5f, 0.001f));
     REQUIRE_THAT(impact.supply_impact, WithinAbs(0.0f, 0.001f));
@@ -180,7 +181,7 @@ TEST_CASE("test_no_market_impact_small_position", "[commodity_trading][tier4]") 
     // No impact expected.
     auto pos = make_test_position(1, 10, 5, 0, PositionType::long_position, 40.0f, 50.0f, 10);
 
-    MarketImpact impact = CommodityTradingModule::compute_market_impact(pos, 1000.0f);
+    MarketImpact impact = CommodityTradingModule{}.compute_market_impact(pos, 1000.0f);
     REQUIRE_THAT(impact.demand_impact, WithinAbs(0.0f, 0.001f));
     REQUIRE_THAT(impact.supply_impact, WithinAbs(0.0f, 0.001f));
 }
@@ -311,9 +312,9 @@ TEST_CASE("test_multiple_positions_same_good", "[commodity_trading][tier4]") {
 
     // Both should have tax computed on positive gains.
     REQUIRE_THAT(r1.capital_gains_tax,
-                 WithinAbs(2000.0f * CommodityTradingConstants::capital_gains_tax_rate, 0.001f));
+                 WithinAbs(2000.0f * CommodityTradingConfig{}.capital_gains_tax_rate, 0.001f));
     REQUIRE_THAT(r2.capital_gains_tax,
-                 WithinAbs(1600.0f * CommodityTradingConstants::capital_gains_tax_rate, 0.001f));
+                 WithinAbs(1600.0f * CommodityTradingConfig{}.capital_gains_tax_rate, 0.001f));
 }
 
 // ===========================================================================
@@ -326,7 +327,7 @@ TEST_CASE("test_market_impact_short_position_supply_pressure", "[commodity_tradi
     // Excess = 150 - 50 = 100. Impact = 0.01 * 100 = 1.0.
     auto pos = make_test_position(1, 10, 5, 0, PositionType::short_position, 150.0f, 50.0f, 10);
 
-    MarketImpact impact = CommodityTradingModule::compute_market_impact(pos, 1000.0f);
+    MarketImpact impact = CommodityTradingModule{}.compute_market_impact(pos, 1000.0f);
     REQUIRE_THAT(impact.supply_impact, WithinAbs(1.0f, 0.001f));
     REQUIRE_THAT(impact.demand_impact, WithinAbs(0.0f, 0.001f));
 }
@@ -526,7 +527,7 @@ TEST_CASE("test_execute_garbage_collects_old_positions", "[commodity_trading][ti
 }
 
 TEST_CASE("test_commodity_trading_constants", "[commodity_trading][tier4]") {
-    REQUIRE_THAT(CommodityTradingConstants::market_impact_threshold, WithinAbs(0.05f, 0.0001f));
-    REQUIRE_THAT(CommodityTradingConstants::market_impact_coefficient, WithinAbs(0.01f, 0.0001f));
-    REQUIRE_THAT(CommodityTradingConstants::capital_gains_tax_rate, WithinAbs(0.15f, 0.0001f));
+    REQUIRE_THAT(CommodityTradingConfig{}.market_impact_threshold, WithinAbs(0.05f, 0.0001f));
+    REQUIRE_THAT(CommodityTradingConfig{}.market_impact_coefficient, WithinAbs(0.01f, 0.0001f));
+    REQUIRE_THAT(CommodityTradingConfig{}.capital_gains_tax_rate, WithinAbs(0.15f, 0.0001f));
 }

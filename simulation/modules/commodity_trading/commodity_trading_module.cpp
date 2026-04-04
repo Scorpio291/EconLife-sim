@@ -140,7 +140,7 @@ SettlementResult CommodityTradingModule::close_position(uint32_t position_id, fl
             // Capital gains tax: applied only on positive realized gains.
             float taxable_gain = std::max(0.0f, pnl);
             result.capital_gains_tax =
-                taxable_gain * CommodityTradingConstants::capital_gains_tax_rate;
+                taxable_gain * cfg_.capital_gains_tax_rate;
 
             return result;
         }
@@ -155,11 +155,11 @@ const std::vector<CommodityPosition>& CommodityTradingModule::positions() const 
 }
 
 // ===========================================================================
-// Static Utility: Market Impact Calculation
+// Utility: Market Impact Calculation
 // ===========================================================================
 
 MarketImpact CommodityTradingModule::compute_market_impact(const CommodityPosition& pos,
-                                                           float market_supply) {
+                                                           float market_supply) const {
     MarketImpact impact{};
     impact.good_id_hash = pos.good_id;
 
@@ -172,14 +172,14 @@ MarketImpact CommodityTradingModule::compute_market_impact(const CommodityPositi
     float fraction = pos.quantity / market_supply;
 
     // No impact below the threshold.
-    if (fraction <= CommodityTradingConstants::market_impact_threshold) {
+    if (fraction <= cfg_.market_impact_threshold) {
         return impact;
     }
 
     // Impact magnitude: coefficient * quantity beyond the threshold.
     float excess_quantity =
-        pos.quantity - (market_supply * CommodityTradingConstants::market_impact_threshold);
-    float impact_magnitude = CommodityTradingConstants::market_impact_coefficient * excess_quantity;
+        pos.quantity - (market_supply * cfg_.market_impact_threshold);
+    float impact_magnitude = cfg_.market_impact_coefficient * excess_quantity;
 
     // Long positions increase demand; short positions increase supply pressure.
     if (pos.position_type == PositionType::long_position) {

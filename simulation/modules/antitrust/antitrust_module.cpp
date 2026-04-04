@@ -23,28 +23,28 @@ float AntitrustModule::compute_supply_share(float actor_output, float total_supp
     return std::clamp(share, 0.0f, 1.0f);
 }
 
-bool AntitrustModule::is_tier1_triggered(float supply_share) {
-    return supply_share >= Constants::market_share_threshold;
+bool AntitrustModule::is_tier1_triggered(float supply_share) const {
+    return supply_share >= cfg_.market_share_threshold;
 }
 
-bool AntitrustModule::is_tier2_triggered(float supply_share) {
-    return supply_share >= Constants::dominant_price_mover_threshold;
+bool AntitrustModule::is_tier2_triggered(float supply_share) const {
+    return supply_share >= cfg_.dominant_price_mover_threshold;
 }
 
-float AntitrustModule::compute_meter_fill_increment() {
-    return Constants::meter_fill_per_threshold_tick;
+float AntitrustModule::compute_meter_fill_increment() const {
+    return cfg_.meter_fill_per_threshold_tick;
 }
 
-float AntitrustModule::compute_pressure_increment() {
-    return Constants::dominance_proposal_pressure_per_tick;
+float AntitrustModule::compute_pressure_increment() const {
+    return cfg_.dominance_proposal_pressure_per_tick;
 }
 
-float AntitrustModule::compute_pressure_decay() {
-    return Constants::proposal_pressure_decay_rate;
+float AntitrustModule::compute_pressure_decay() const {
+    return cfg_.proposal_pressure_decay_rate;
 }
 
-bool AntitrustModule::should_generate_proposal(float pressure) {
-    return pressure >= Constants::proposal_threshold;
+bool AntitrustModule::should_generate_proposal(float pressure) const {
+    return pressure >= cfg_.proposal_threshold;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ void AntitrustModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Monthly check: only fire when current_tick matches next_check_tick
     if (state.current_tick >= next_check_tick_) {
         run_monthly_check(state, delta);
-        next_check_tick_ = state.current_tick + Constants::monthly_interval;
+        next_check_tick_ = state.current_tick + cfg_.monthly_interval;
     }
 }
 
@@ -199,14 +199,14 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
                 }
 
                 // Generate actor-targeted evidence if share is significantly above threshold.
-                if (share > Constants::market_share_threshold + 0.10f) {
+                if (share > cfg_.market_share_threshold + 0.10f) {
                     EvidenceDelta ev_delta;
                     EvidenceToken token;
                     token.id = state.current_tick * 1000 + actor_id;
                     token.type = EvidenceType::documentary;
                     token.source_npc_id = 0;  // public market records
                     token.target_npc_id = actor_id;
-                    token.actionability = share - Constants::market_share_threshold;
+                    token.actionability = share - cfg_.market_share_threshold;
                     token.decay_rate = 0.001f;
                     token.created_tick = state.current_tick;
                     token.province_id = mk.province_id;
@@ -236,8 +236,8 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
                 tier2_token.type = EvidenceType::financial;
                 tier2_token.source_npc_id = 0;
                 tier2_token.target_npc_id = actor_id;
-                tier2_token.actionability = share - Constants::dominant_price_mover_threshold +
-                                            Constants::dominant_price_mover_threshold * 0.5f;
+                tier2_token.actionability = share - cfg_.dominant_price_mover_threshold +
+                                            cfg_.dominant_price_mover_threshold * 0.5f;
                 tier2_token.actionability = std::clamp(tier2_token.actionability, 0.0f, 1.0f);
                 tier2_token.decay_rate = 0.0005f;
                 tier2_token.created_tick = state.current_tick;
@@ -275,7 +275,7 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
             proposal.province_id = prov_id;
             proposal.proposer_npc_id = proposer;
             proposal.created_tick = state.current_tick;
-            proposal.target_market_share_cap = Constants::market_share_threshold;
+            proposal.target_market_share_cap = cfg_.market_share_threshold;
             proposals_.push_back(proposal);
 
             // Reset pressure after proposal generation

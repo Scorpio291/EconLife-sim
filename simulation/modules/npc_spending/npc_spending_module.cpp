@@ -137,19 +137,19 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
             const auto* npc = province_npcs[ni];
             BuyerType bt = get_buyer_type(npc->id);
 
-            float income_f = compute_income_factor(npc->capital, Constants::reference_income,
-                                                   Constants::default_income_elasticity,
-                                                   Constants::max_income_factor);
+            float income_f = compute_income_factor(npc->capital, cfg_.reference_income,
+                                                   cfg_.default_income_elasticity,
+                                                   cfg_.max_income_factor);
 
-            float price_f = compute_price_factor(Constants::default_base_price, market->spot_price,
-                                                 Constants::default_price_elasticity, bt,
-                                                 Constants::min_price_factor);
+            float price_f = compute_price_factor(cfg_.default_base_price, market->spot_price,
+                                                 cfg_.default_price_elasticity, bt,
+                                                 cfg_.min_price_factor);
 
             // Use 0.5 as default batch_quality and market_quality_avg
             // (no per-good quality data in V1 bootstrap)
             float quality_f = compute_quality_factor(0.5f, 0.5f, bt);
 
-            float demand = compute_demand_contribution(Constants::default_base_demand_units,
+            float demand = compute_demand_contribution(cfg_.default_base_demand_units,
                                                        income_f, price_f, quality_f);
 
             total_demand += demand;

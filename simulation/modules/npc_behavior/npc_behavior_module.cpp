@@ -37,9 +37,9 @@ float NpcBehaviorModule::compute_expected_value(const NPC& npc, const ActionOutc
     return npc.motivations.weights[type_idx] * outcome.probability * outcome.magnitude;
 }
 
-float NpcBehaviorModule::compute_risk_discount(float exposure_risk, float risk_tolerance) {
-    float raw = 1.0f - (exposure_risk - risk_tolerance) * Constants::risk_sensitivity_coeff;
-    return std::max(Constants::min_risk_discount, std::min(1.0f, raw));
+float NpcBehaviorModule::compute_risk_discount(float exposure_risk, float risk_tolerance) const {
+    float raw = 1.0f - (exposure_risk - risk_tolerance) * mcfg_.risk_sensitivity_coeff;
+    return std::max(mcfg_.min_risk_discount, std::min(1.0f, raw));
 }
 
 float NpcBehaviorModule::apply_relationship_modifier(float base_ev, float trust,
@@ -50,7 +50,7 @@ float NpcBehaviorModule::apply_relationship_modifier(float base_ev, float trust,
 ActionEvaluation NpcBehaviorModule::evaluate_action(const NPC& npc, DailyAction action,
                                                     const std::vector<ActionOutcome>& outcomes,
                                                     float exposure_risk, float trust_bonus_target,
-                                                    float trust_ev_bonus) {
+                                                    float trust_ev_bonus) const {
     float total_ev = 0.0f;
     for (const auto& outcome : outcomes) {
         total_ev += compute_expected_value(npc, outcome);
@@ -112,13 +112,13 @@ void NpcBehaviorModule::renormalize_motivation_weights(MotivationVector& motivat
     }
 }
 
-void NpcBehaviorModule::clamp_relationship(Relationship& rel) {
+void NpcBehaviorModule::clamp_relationship(Relationship& rel) const {
     rel.trust = std::max(-1.0f, std::min(1.0f, rel.trust));
     if (rel.trust > rel.recovery_ceiling) {
         rel.trust = rel.recovery_ceiling;
     }
     rel.fear = std::max(0.0f, std::min(1.0f, rel.fear));
-    rel.recovery_ceiling = std::max(Constants::recovery_ceiling_minimum, rel.recovery_ceiling);
+    rel.recovery_ceiling = std::max(mcfg_.recovery_ceiling_minimum, rel.recovery_ceiling);
 }
 
 float NpcBehaviorModule::worker_satisfaction(const NPC& npc) {
@@ -359,7 +359,7 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
 
             ActionEvaluation eval =
                 evaluate_action(npc, candidate.action, candidate.outcomes, candidate.exposure_risk,
-                                candidate.trust_target, Constants::trust_ev_bonus);
+                                candidate.trust_target, mcfg_.trust_ev_bonus);
 
             // NaN guard.
             if (std::isnan(eval.net_utility)) {
@@ -376,7 +376,7 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
         NPCDelta npc_delta{};
         npc_delta.npc_id = npc.id;
 
-        if (best_eval.net_utility < Constants::inaction_threshold) {
+        if (best_eval.net_utility < mcfg_.inaction_threshold) {
             // Below threshold: set to waiting.
             npc_delta.new_status = NPCStatus::waiting;
         } else {

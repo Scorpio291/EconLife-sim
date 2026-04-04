@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/facility_signals/facility_signals_types.h"
 
@@ -25,6 +26,8 @@ struct NPC;
 // ---------------------------------------------------------------------------
 class FacilitySignalsModule : public ITickModule {
    public:
+    explicit FacilitySignalsModule(FacilitySignalsConfig cfg = {}) : cfg_(std::move(cfg)) {}
+
     std::string_view name() const noexcept override { return "facility_signals"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -57,33 +60,17 @@ class FacilitySignalsModule : public ITickModule {
                                       float fill_rate_max);
 
     // Determine investigator meter status from current level.
-    static InvestigatorMeterStatus evaluate_investigator_status(float current_level);
+    InvestigatorMeterStatus evaluate_investigator_status(float current_level) const;
 
     // Determine regulator meter status from current level.
-    static RegulatorMeterStatus evaluate_regulator_status(float current_level);
+    RegulatorMeterStatus evaluate_regulator_status(float current_level) const;
 
     // Apply corruption to fill rate.
     static float apply_corruption_to_fill_rate(float fill_rate, float corruption_susceptibility,
                                                float regional_corruption_coverage);
 
-    // --- Constants ---
-    struct Constants {
-        static constexpr float default_weight = 0.25f;
-        static constexpr float karst_mitigation_bonus = 0.10f;
-        static constexpr float facility_count_normalizer = 5.0f;
-        static constexpr float detection_to_fill_rate_scale = 0.005f;
-        static constexpr float fill_rate_max = 0.01f;
-        static constexpr float surveillance_threshold = 0.30f;
-        static constexpr float formal_inquiry_threshold = 0.60f;
-        static constexpr float raid_threshold = 0.80f;
-        static constexpr float notice_threshold = 0.25f;
-        static constexpr float audit_threshold = 0.50f;
-        static constexpr float enforcement_threshold = 0.75f;
-        static constexpr float meter_decay_rate = 0.001f;
-        static constexpr float personnel_violence_multiplier = 3.0f;
-    };
-
    private:
+    FacilitySignalsConfig cfg_;
     std::vector<FacilitySignals> facility_signals_;
 };
 

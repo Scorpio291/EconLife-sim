@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/criminal_operations/criminal_operations_types.h"
 
@@ -25,6 +26,8 @@ struct NPC;
 // ---------------------------------------------------------------------------
 class CriminalOperationsModule : public ITickModule {
    public:
+    explicit CriminalOperationsModule(const CriminalOperationsConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "criminal_operations"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -62,34 +65,20 @@ class CriminalOperationsModule : public ITickModule {
 
     // Evaluate strategic decision from priority matrix.
     static CriminalStrategicDecision evaluate_decision(float le_heat, float territory_pressure,
-                                                       float cash_level);
+                                                       float cash_level,
+                                                       const CriminalOperationsConfig& cfg);
 
     // Compute decision_day_offset from org id.
-    static uint8_t compute_decision_offset(uint32_t org_id);
+    static uint8_t compute_decision_offset(uint32_t org_id, uint32_t quarterly_interval);
 
     // Advance conflict stage by one step (max one per cycle).
     static TerritorialConflictStage advance_conflict_stage(TerritorialConflictStage current);
 
     // Compute initial dominance seed on territory establishment.
-    static float initial_dominance_seed();
-
-    // --- Constants ---
-    struct Constants {
-        static constexpr uint32_t quarterly_interval = 90;
-        static constexpr float le_heat_threshold = 0.60f;
-        static constexpr float territory_pressure_conflict_threshold = 0.60f;
-        static constexpr float cash_comfortable_months = 3.0f;
-        static constexpr float cash_low_threshold = 0.50f;
-        static constexpr float territory_pressure_expand_threshold = 0.30f;
-        static constexpr float le_heat_expand_threshold = 0.30f;
-        static constexpr float expansion_initial_dominance = 0.05f;
-        static constexpr float cash_per_expansion_slot = 5000.0f;
-        static constexpr uint32_t min_expansion_team_size = 2;
-        static constexpr float expansion_refund_fraction = 0.50f;
-        static constexpr float dormant_dominance_decay_rate = 0.001f;
-    };
+    static float initial_dominance_seed(float expansion_initial_dominance);
 
    private:
+    CriminalOperationsConfig cfg_;
     std::vector<CriminalOrganization> organizations_;
     std::vector<ExpansionTeam> active_expansions_;
 

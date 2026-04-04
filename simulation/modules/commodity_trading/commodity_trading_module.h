@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/commodity_trading/commodity_trading_types.h"
 #include "modules/economy/financial_types.h"
@@ -29,6 +30,8 @@ struct DeltaBuffer;
 // ---------------------------------------------------------------------------
 class CommodityTradingModule : public ITickModule {
    public:
+    explicit CommodityTradingModule(const CommodityTradingConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "commodity_trading"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -57,17 +60,19 @@ class CommodityTradingModule : public ITickModule {
     // Read-only access to all positions (sorted by id ascending).
     const std::vector<CommodityPosition>& positions() const;
 
-    // --- Static utility functions (exposed for testing) ---
+    // --- Utility functions (exposed for testing) ---
 
     // Compute the market impact of a position given current market supply.
     // Returns zero impact if position is below threshold.
-    static MarketImpact compute_market_impact(const CommodityPosition& pos, float market_supply);
+    MarketImpact compute_market_impact(const CommodityPosition& pos, float market_supply) const;
 
     // Compute P&L for a position given entry/exit prices and quantity.
     static float compute_pnl(PositionType type, float entry_price, float exit_price,
                              float quantity);
 
    private:
+    CommodityTradingConfig cfg_;
+
     // Internal position storage (WorldState does not hold these).
     // Kept sorted by id ascending for deterministic processing.
     std::vector<CommodityPosition> positions_;

@@ -28,41 +28,41 @@ TEST_CASE("Supply share clamped to 1.0", "[antitrust][tier7]") {
 }
 
 TEST_CASE("Tier 1 below threshold no trigger", "[antitrust][tier7]") {
-    CHECK(AntitrustModule::is_tier1_triggered(0.30f) == false);
-    CHECK(AntitrustModule::is_tier1_triggered(0.39f) == false);
+    CHECK(AntitrustModule{}.is_tier1_triggered(0.30f) == false);
+    CHECK(AntitrustModule{}.is_tier1_triggered(0.39f) == false);
 }
 
 TEST_CASE("Tier 1 at threshold triggers", "[antitrust][tier7]") {
-    CHECK(AntitrustModule::is_tier1_triggered(0.40f) == true);
-    CHECK(AntitrustModule::is_tier1_triggered(0.50f) == true);
+    CHECK(AntitrustModule{}.is_tier1_triggered(0.40f) == true);
+    CHECK(AntitrustModule{}.is_tier1_triggered(0.50f) == true);
 }
 
 TEST_CASE("Tier 2 below threshold no trigger", "[antitrust][tier7]") {
-    CHECK(AntitrustModule::is_tier2_triggered(0.60f) == false);
-    CHECK(AntitrustModule::is_tier2_triggered(0.69f) == false);
+    CHECK(AntitrustModule{}.is_tier2_triggered(0.60f) == false);
+    CHECK(AntitrustModule{}.is_tier2_triggered(0.69f) == false);
 }
 
 TEST_CASE("Tier 2 at threshold triggers", "[antitrust][tier7]") {
-    CHECK(AntitrustModule::is_tier2_triggered(0.70f) == true);
-    CHECK(AntitrustModule::is_tier2_triggered(0.90f) == true);
+    CHECK(AntitrustModule{}.is_tier2_triggered(0.70f) == true);
+    CHECK(AntitrustModule{}.is_tier2_triggered(0.90f) == true);
 }
 
 TEST_CASE("Meter fill increment value", "[antitrust][tier7]") {
-    CHECK_THAT(AntitrustModule::compute_meter_fill_increment(), WithinAbs(0.002f, 0.0001f));
+    CHECK_THAT(AntitrustModule{}.compute_meter_fill_increment(), WithinAbs(0.002f, 0.0001f));
 }
 
 TEST_CASE("Pressure increment value", "[antitrust][tier7]") {
-    CHECK_THAT(AntitrustModule::compute_pressure_increment(), WithinAbs(0.005f, 0.0001f));
+    CHECK_THAT(AntitrustModule{}.compute_pressure_increment(), WithinAbs(0.005f, 0.0001f));
 }
 
 TEST_CASE("Pressure decay value", "[antitrust][tier7]") {
-    CHECK_THAT(AntitrustModule::compute_pressure_decay(), WithinAbs(0.01f, 0.001f));
+    CHECK_THAT(AntitrustModule{}.compute_pressure_decay(), WithinAbs(0.01f, 0.001f));
 }
 
 TEST_CASE("Proposal generation threshold", "[antitrust][tier7]") {
-    CHECK(AntitrustModule::should_generate_proposal(0.49f) == false);
-    CHECK(AntitrustModule::should_generate_proposal(0.50f) == true);
-    CHECK(AntitrustModule::should_generate_proposal(0.80f) == true);
+    CHECK(AntitrustModule{}.should_generate_proposal(0.49f) == false);
+    CHECK(AntitrustModule{}.should_generate_proposal(0.50f) == true);
+    CHECK(AntitrustModule{}.should_generate_proposal(0.80f) == true);
 }
 
 // =============================================================================

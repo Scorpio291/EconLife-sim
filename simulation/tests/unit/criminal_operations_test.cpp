@@ -3,6 +3,7 @@
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "core/config/package_config.h"
 #include "modules/criminal_operations/criminal_operations_module.h"
 
 using namespace econlife;
@@ -56,40 +57,41 @@ TEST_CASE("Cash level with zero cost", "[criminal_operations][tier7]") {
 }
 
 TEST_CASE("Decision: reduce activity on high heat", "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.70f, 0.20f, 1.0f);
+    auto decision = CriminalOperationsModule::evaluate_decision(0.70f, 0.20f, 1.0f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::reduce_activity);
 }
 
 TEST_CASE("Decision: initiate conflict on high pressure with cash",
           "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.65f, 1.5f);
+    auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.65f, 1.5f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::initiate_conflict);
 }
 
 TEST_CASE("Decision: reduce headcount on low cash", "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.20f, 0.30f);
+    auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.20f, 0.30f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::reduce_headcount);
 }
 
 TEST_CASE("Decision: expand territory when safe", "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.10f, 0.15f, 2.0f);
+    auto decision = CriminalOperationsModule::evaluate_decision(0.10f, 0.15f, 2.0f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::expand_territory);
 }
 
 TEST_CASE("Decision: maintain as default", "[criminal_operations][tier7]") {
     // Moderate pressure, moderate heat, sufficient cash
-    auto decision = CriminalOperationsModule::evaluate_decision(0.40f, 0.40f, 0.80f);
+    auto decision = CriminalOperationsModule::evaluate_decision(0.40f, 0.40f, 0.80f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::maintain);
 }
 
 TEST_CASE("Decision offset spreads load", "[criminal_operations][tier7]") {
     // Verify different org IDs get different offsets (mod 90)
-    uint8_t offset_1 = CriminalOperationsModule::compute_decision_offset(1);
-    uint8_t offset_2 = CriminalOperationsModule::compute_decision_offset(91);
+    constexpr uint32_t qi = CriminalOperationsConfig{}.quarterly_interval;
+    uint8_t offset_1 = CriminalOperationsModule::compute_decision_offset(1, qi);
+    uint8_t offset_2 = CriminalOperationsModule::compute_decision_offset(91, qi);
     CHECK(offset_1 == offset_2);  // 1 % 90 == 91 % 90
 
-    uint8_t offset_3 = CriminalOperationsModule::compute_decision_offset(5);
-    uint8_t offset_4 = CriminalOperationsModule::compute_decision_offset(10);
+    uint8_t offset_3 = CriminalOperationsModule::compute_decision_offset(5, qi);
+    uint8_t offset_4 = CriminalOperationsModule::compute_decision_offset(10, qi);
     CHECK(offset_3 != offset_4);
 }
 
@@ -112,7 +114,7 @@ TEST_CASE("Conflict stage escalation chain", "[criminal_operations][tier7]") {
 }
 
 TEST_CASE("Initial dominance seed value", "[criminal_operations][tier7]") {
-    CHECK_THAT(CriminalOperationsModule::initial_dominance_seed(), WithinAbs(0.05f, 0.001f));
+    CHECK_THAT(CriminalOperationsModule::initial_dominance_seed(CriminalOperationsConfig{}.expansion_initial_dominance), WithinAbs(0.05f, 0.001f));
 }
 
 // =============================================================================

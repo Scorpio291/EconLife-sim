@@ -80,13 +80,13 @@ PropertyListing make_test_property(uint32_t id, PropertyType type, uint32_t prov
     // Set yield rate based on property type.
     switch (type) {
         case PropertyType::residential:
-            prop.rental_yield_rate = RealEstateConstants::residential_yield_rate;
+            prop.rental_yield_rate = RealEstateConfig{}.residential_yield_rate;
             break;
         case PropertyType::commercial:
-            prop.rental_yield_rate = RealEstateConstants::commercial_yield_rate;
+            prop.rental_yield_rate = RealEstateConfig{}.commercial_yield_rate;
             break;
         case PropertyType::industrial:
-            prop.rental_yield_rate = RealEstateConstants::industrial_yield_rate;
+            prop.rental_yield_rate = RealEstateConfig{}.industrial_yield_rate;
             break;
     }
 
@@ -115,22 +115,25 @@ PlayerCharacter make_test_player(uint32_t id = 1) {
 // ===========================================================================
 
 TEST_CASE("test_rental_income_derived_from_market_value_and_yield", "[real_estate][tier4]") {
+    RealEstateModule mod;
     float market_value = 200000.0f;
-    float yield_rate = RealEstateConstants::residential_yield_rate;
+    float yield_rate = RealEstateConfig{}.residential_yield_rate;
 
-    float rental = RealEstateModule::compute_rental_income(market_value, yield_rate);
+    float rental = mod.compute_rental_income(market_value, yield_rate);
 
     // 200,000 * 0.003 = 600.0
     REQUIRE_THAT(rental, WithinAbs(600.0f, 0.01f));
 }
 
 TEST_CASE("test_rental_income_zero_market_value", "[real_estate][tier4]") {
-    float rental = RealEstateModule::compute_rental_income(0.0f, 0.003f);
+    RealEstateModule mod;
+    float rental = mod.compute_rental_income(0.0f, 0.003f);
     REQUIRE_THAT(rental, WithinAbs(0.0f, 0.0001f));
 }
 
 TEST_CASE("test_rental_income_zero_yield_rate", "[real_estate][tier4]") {
-    float rental = RealEstateModule::compute_rental_income(100000.0f, 0.0f);
+    RealEstateModule mod;
+    float rental = mod.compute_rental_income(100000.0f, 0.0f);
     REQUIRE_THAT(rental, WithinAbs(0.0f, 0.0001f));
 }
 
@@ -139,44 +142,48 @@ TEST_CASE("test_rental_income_zero_yield_rate", "[real_estate][tier4]") {
 // ===========================================================================
 
 TEST_CASE("test_asking_price_converges_upward", "[real_estate][tier4]") {
+    RealEstateModule mod;
     PropertyListing prop =
         make_test_property(1, PropertyType::residential, 0, 100, 150000.0f, 100000.0f);
 
     // asking = 100,000, market = 150,000
     // gap = 150,000 - 100,000 = 50,000
     // convergence: 100,000 + 50,000 * 0.05 = 102,500
-    RealEstateModule::converge_asking_price(prop, RealEstateConstants::price_convergence_rate);
+    mod.converge_asking_price(prop, RealEstateConfig{}.price_convergence_rate);
 
     REQUIRE_THAT(prop.asking_price, WithinAbs(102500.0f, 0.01f));
 }
 
 TEST_CASE("test_asking_price_converges_downward", "[real_estate][tier4]") {
+    RealEstateModule mod;
     PropertyListing prop =
         make_test_property(1, PropertyType::residential, 0, 100, 80000.0f, 100000.0f);
 
     // asking = 100,000, market = 80,000
     // gap = 80,000 - 100,000 = -20,000
     // convergence: 100,000 + (-20,000) * 0.05 = 99,000
-    RealEstateModule::converge_asking_price(prop, RealEstateConstants::price_convergence_rate);
+    mod.converge_asking_price(prop, RealEstateConfig{}.price_convergence_rate);
 
     REQUIRE_THAT(prop.asking_price, WithinAbs(99000.0f, 0.01f));
 }
 
 TEST_CASE("test_asking_price_at_market_value_unchanged", "[real_estate][tier4]") {
+    RealEstateModule mod;
     PropertyListing prop =
         make_test_property(1, PropertyType::residential, 0, 100, 100000.0f, 100000.0f);
 
-    RealEstateModule::converge_asking_price(prop, RealEstateConstants::price_convergence_rate);
+    mod.converge_asking_price(prop, RealEstateConfig{}.price_convergence_rate);
 
     REQUIRE_THAT(prop.asking_price, WithinAbs(100000.0f, 0.01f));
 }
 
 TEST_CASE("test_asking_price_never_negative", "[real_estate][tier4]") {
+    RealEstateModule mod;
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 0.0f, 1.0f);
 
     // market_value = 0, asking = 1.0
     // gap = 0 - 1 = -1.0, convergence: 1.0 + (-1.0) * 0.05 = 0.95
-    RealEstateModule::converge_asking_price(prop, 1.0f);
+    mod.converge_asking_price(prop, 1.0f);
     REQUIRE(prop.asking_price >= 0.0f);
 }
 
@@ -255,24 +262,26 @@ TEST_CASE("test_property_transaction_transfers_ownership", "[real_estate][tier4]
 // ===========================================================================
 
 TEST_CASE("test_avg_property_value_is_mean_of_market_values", "[real_estate][tier4]") {
+    RealEstateModule mod;
     std::vector<PropertyListing> props;
     props.push_back(make_test_property(1, PropertyType::residential, 0, 100, 100000.0f));
     props.push_back(make_test_property(2, PropertyType::commercial, 0, 101, 200000.0f));
     props.push_back(make_test_property(3, PropertyType::industrial, 0, 102, 300000.0f));
 
-    float avg = RealEstateModule::compute_avg_property_value(props, 0);
+    float avg = mod.compute_avg_property_value(props, 0);
 
     // mean = (100,000 + 200,000 + 300,000) / 3 = 200,000
     REQUIRE_THAT(avg, WithinAbs(200000.0f, 0.01f));
 }
 
 TEST_CASE("test_avg_property_value_filters_by_province", "[real_estate][tier4]") {
+    RealEstateModule mod;
     std::vector<PropertyListing> props;
     props.push_back(make_test_property(1, PropertyType::residential, 0, 100, 100000.0f));
     props.push_back(make_test_property(2, PropertyType::residential, 1, 101, 500000.0f));
     props.push_back(make_test_property(3, PropertyType::residential, 0, 102, 300000.0f));
 
-    float avg = RealEstateModule::compute_avg_property_value(props, 0);
+    float avg = mod.compute_avg_property_value(props, 0);
 
     // Only province 0 properties: (100,000 + 300,000) / 2 = 200,000
     REQUIRE_THAT(avg, WithinAbs(200000.0f, 0.01f));
@@ -283,11 +292,12 @@ TEST_CASE("test_avg_property_value_filters_by_province", "[real_estate][tier4]")
 // ===========================================================================
 
 TEST_CASE("test_criminal_dominance_reduces_market_value", "[real_estate][tier4]") {
+    RealEstateModule mod;
     Province prov = make_test_province(0, 1.0f);  // max criminal dominance
 
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 200000.0f);
 
-    float new_value = RealEstateModule::compute_market_value(prop, prov);
+    float new_value = mod.compute_market_value(prop, prov);
 
     // multiplier = 1.0 - (1.0 * 0.15) + 0.0 = 0.85
     // new_value = 200,000 * 0.85 = 170,000
@@ -295,11 +305,12 @@ TEST_CASE("test_criminal_dominance_reduces_market_value", "[real_estate][tier4]"
 }
 
 TEST_CASE("test_zero_criminal_dominance_preserves_value", "[real_estate][tier4]") {
+    RealEstateModule mod;
     Province prov = make_test_province(0, 0.0f);
 
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 200000.0f);
 
-    float new_value = RealEstateModule::compute_market_value(prop, prov);
+    float new_value = mod.compute_market_value(prop, prov);
 
     // multiplier = 1.0 - 0.0 + 0.0 = 1.0
     // new_value = 200,000 * 1.0 = 200,000
@@ -307,12 +318,13 @@ TEST_CASE("test_zero_criminal_dominance_preserves_value", "[real_estate][tier4]"
 }
 
 TEST_CASE("test_laundering_eligible_inflates_value", "[real_estate][tier4]") {
+    RealEstateModule mod;
     Province prov = make_test_province(0, 0.0f);
 
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 200000.0f);
     prop.launder_eligible = true;
 
-    float new_value = RealEstateModule::compute_market_value(prop, prov);
+    float new_value = mod.compute_market_value(prop, prov);
 
     // multiplier = 1.0 - 0.0 + 0.10 = 1.10
     // new_value = 200,000 * 1.10 = 220,000
@@ -320,12 +332,13 @@ TEST_CASE("test_laundering_eligible_inflates_value", "[real_estate][tier4]") {
 }
 
 TEST_CASE("test_criminal_dominance_and_laundering_coexist", "[real_estate][tier4]") {
+    RealEstateModule mod;
     Province prov = make_test_province(0, 0.5f);
 
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 200000.0f);
     prop.launder_eligible = true;
 
-    float new_value = RealEstateModule::compute_market_value(prop, prov);
+    float new_value = mod.compute_market_value(prop, prov);
 
     // multiplier = 1.0 - (0.5 * 0.15) + 0.10 = 1.0 - 0.075 + 0.10 = 1.025
     // new_value = 200,000 * 1.025 = 205,000
@@ -333,13 +346,14 @@ TEST_CASE("test_criminal_dominance_and_laundering_coexist", "[real_estate][tier4
 }
 
 TEST_CASE("test_market_value_multiplier_clamped_to_minimum", "[real_estate][tier4]") {
+    RealEstateModule mod;
     // Extreme criminal dominance that would push multiplier below 0.1
     Province prov = make_test_province(0, 0.0f);
     prov.conditions.criminal_dominance_index = 10.0f;  // extreme value
 
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 200000.0f);
 
-    float new_value = RealEstateModule::compute_market_value(prop, prov);
+    float new_value = mod.compute_market_value(prop, prov);
 
     // multiplier = 1.0 - (10.0 * 0.15) = 1.0 - 1.5 = -0.5, clamped to 0.1
     // new_value = 200,000 * 0.1 = 20,000
@@ -351,27 +365,30 @@ TEST_CASE("test_market_value_multiplier_clamped_to_minimum", "[real_estate][tier
 // ===========================================================================
 
 TEST_CASE("test_residential_yield_rate", "[real_estate][tier4]") {
+    RealEstateModule mod;
     float market_value = 100000.0f;
-    float rental = RealEstateModule::compute_rental_income(
-        market_value, RealEstateConstants::residential_yield_rate);
+    float rental = mod.compute_rental_income(
+        market_value, RealEstateConfig{}.residential_yield_rate);
 
     // 100,000 * 0.003 = 300.0
     REQUIRE_THAT(rental, WithinAbs(300.0f, 0.01f));
 }
 
 TEST_CASE("test_commercial_yield_rate", "[real_estate][tier4]") {
+    RealEstateModule mod;
     float market_value = 100000.0f;
-    float rental = RealEstateModule::compute_rental_income(
-        market_value, RealEstateConstants::commercial_yield_rate);
+    float rental = mod.compute_rental_income(
+        market_value, RealEstateConfig{}.commercial_yield_rate);
 
     // 100,000 * 0.004 = 400.0
     REQUIRE_THAT(rental, WithinAbs(400.0f, 0.01f));
 }
 
 TEST_CASE("test_industrial_yield_rate", "[real_estate][tier4]") {
+    RealEstateModule mod;
     float market_value = 100000.0f;
-    float rental = RealEstateModule::compute_rental_income(
-        market_value, RealEstateConstants::industrial_yield_rate);
+    float rental = mod.compute_rental_income(
+        market_value, RealEstateConfig{}.industrial_yield_rate);
 
     // 100,000 * 0.005 = 500.0
     REQUIRE_THAT(rental, WithinAbs(500.0f, 0.01f));
@@ -379,10 +396,10 @@ TEST_CASE("test_industrial_yield_rate", "[real_estate][tier4]") {
 
 TEST_CASE("test_industrial_yield_higher_than_commercial_higher_than_residential",
           "[real_estate][tier4]") {
-    REQUIRE(RealEstateConstants::industrial_yield_rate >
-            RealEstateConstants::commercial_yield_rate);
-    REQUIRE(RealEstateConstants::commercial_yield_rate >
-            RealEstateConstants::residential_yield_rate);
+    REQUIRE(RealEstateConfig{}.industrial_yield_rate >
+            RealEstateConfig{}.commercial_yield_rate);
+    REQUIRE(RealEstateConfig{}.commercial_yield_rate >
+            RealEstateConfig{}.residential_yield_rate);
 }
 
 // ===========================================================================
@@ -493,16 +510,16 @@ TEST_CASE("test_multiple_rented_properties_accumulate_player_income", "[real_est
 TEST_CASE("test_transaction_above_threshold_flagged", "[real_estate][tier4]") {
     // The transaction evidence threshold is 50,000.
     // A property with asking_price above this should be flagged as suspicious.
-    REQUIRE_THAT(RealEstateConstants::transaction_evidence_threshold, WithinAbs(50000.0f, 0.01f));
+    REQUIRE_THAT(RealEstateConfig{}.transaction_evidence_threshold, WithinAbs(50000.0f, 0.01f));
 
     // Verify the constant is set correctly for use in transaction processing.
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 60000.0f);
-    REQUIRE(prop.market_value > RealEstateConstants::transaction_evidence_threshold);
+    REQUIRE(prop.market_value > RealEstateConfig{}.transaction_evidence_threshold);
 }
 
 TEST_CASE("test_transaction_below_threshold_not_flagged", "[real_estate][tier4]") {
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 40000.0f);
-    REQUIRE(prop.market_value < RealEstateConstants::transaction_evidence_threshold);
+    REQUIRE(prop.market_value < RealEstateConfig{}.transaction_evidence_threshold);
 }
 
 // ===========================================================================
@@ -650,8 +667,9 @@ TEST_CASE("test_business_already_has_premises_not_reassigned", "[real_estate][ti
 // ===========================================================================
 
 TEST_CASE("test_empty_province_has_zero_avg_property_value", "[real_estate][tier4]") {
+    RealEstateModule mod;
     std::vector<PropertyListing> empty_props;
-    float avg = RealEstateModule::compute_avg_property_value(empty_props, 0);
+    float avg = mod.compute_avg_property_value(empty_props, 0);
     REQUIRE_THAT(avg, WithinAbs(0.0f, 0.0001f));
 }
 
@@ -660,7 +678,8 @@ TEST_CASE("test_province_with_no_matching_properties_has_zero_avg", "[real_estat
     props.push_back(make_test_property(1, PropertyType::residential, 1, 100, 200000.0f));
 
     // Ask for province 0, which has no properties.
-    float avg = RealEstateModule::compute_avg_property_value(props, 0);
+    RealEstateModule mod;
+    float avg = mod.compute_avg_property_value(props, 0);
     REQUIRE_THAT(avg, WithinAbs(0.0f, 0.0001f));
 }
 
@@ -741,12 +760,12 @@ TEST_CASE("test_non_monthly_tick_no_region_delta", "[real_estate][tier4]") {
 // ===========================================================================
 
 TEST_CASE("test_real_estate_constants", "[real_estate][tier4]") {
-    REQUIRE_THAT(RealEstateConstants::residential_yield_rate, WithinAbs(0.003f, 0.0001f));
-    REQUIRE_THAT(RealEstateConstants::commercial_yield_rate, WithinAbs(0.004f, 0.0001f));
-    REQUIRE_THAT(RealEstateConstants::industrial_yield_rate, WithinAbs(0.005f, 0.0001f));
-    REQUIRE_THAT(RealEstateConstants::price_convergence_rate, WithinAbs(0.05f, 0.0001f));
-    REQUIRE(RealEstateConstants::convergence_interval == 30);
-    REQUIRE_THAT(RealEstateConstants::criminal_dominance_penalty, WithinAbs(0.15f, 0.0001f));
-    REQUIRE_THAT(RealEstateConstants::laundering_premium, WithinAbs(0.10f, 0.0001f));
-    REQUIRE_THAT(RealEstateConstants::transaction_evidence_threshold, WithinAbs(50000.0f, 0.01f));
+    REQUIRE_THAT(RealEstateConfig{}.residential_yield_rate, WithinAbs(0.003f, 0.0001f));
+    REQUIRE_THAT(RealEstateConfig{}.commercial_yield_rate, WithinAbs(0.004f, 0.0001f));
+    REQUIRE_THAT(RealEstateConfig{}.industrial_yield_rate, WithinAbs(0.005f, 0.0001f));
+    REQUIRE_THAT(RealEstateConfig{}.price_convergence_rate, WithinAbs(0.05f, 0.0001f));
+    REQUIRE(RealEstateConfig{}.convergence_interval == 30);
+    REQUIRE_THAT(RealEstateConfig{}.criminal_dominance_penalty, WithinAbs(0.15f, 0.0001f));
+    REQUIRE_THAT(RealEstateConfig{}.laundering_premium, WithinAbs(0.10f, 0.0001f));
+    REQUIRE_THAT(RealEstateConfig{}.transaction_evidence_threshold, WithinAbs(50000.0f, 0.01f));
 }

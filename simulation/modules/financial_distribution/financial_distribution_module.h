@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/financial_distribution/financial_distribution_types.h"
 
@@ -26,6 +27,8 @@ struct NPCBusiness;
 // ---------------------------------------------------------------------------
 class FinancialDistributionModule : public ITickModule {
    public:
+    explicit FinancialDistributionModule(const FinancialDistributionConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "financial_distribution"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -63,16 +66,17 @@ class FinancialDistributionModule : public ITickModule {
     static bool is_mechanism_valid_for_scale(CompensationMechanism mechanism, BusinessScale scale);
 
     // Compute quarterly net profit.
-    static float compute_quarterly_net_profit(float revenue_per_tick, float cost_per_tick,
-                                              float salary_per_tick);
+    float compute_quarterly_net_profit(float revenue_per_tick, float cost_per_tick,
+                                       float salary_per_tick) const;
 
     // Compute working capital floor for dividend payout protection.
-    static float compute_working_capital_floor(float cost_per_tick);
+    float compute_working_capital_floor(float cost_per_tick) const;
 
     // Determine if board approval is needed and granted.
-    static bool is_board_approved(const BoardComposition& board, uint32_t current_tick);
+    bool is_board_approved(const BoardComposition& board, uint32_t current_tick) const;
 
    private:
+    FinancialDistributionConfig cfg_;
     std::vector<BusinessCompensationRecord> compensation_records_;
 
     // --- Per-province processing steps ---

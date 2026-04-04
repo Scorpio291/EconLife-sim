@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/antitrust/antitrust_types.h"
 
@@ -28,6 +29,8 @@ struct NPCBusiness;
 // ---------------------------------------------------------------------------
 class AntitrustModule : public ITickModule {
    public:
+    explicit AntitrustModule(AntitrustConfig cfg = {}) : cfg_(std::move(cfg)) {}
+
     std::string_view name() const noexcept override { return "antitrust"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -62,35 +65,25 @@ class AntitrustModule : public ITickModule {
     static float compute_supply_share(float actor_output, float total_supply);
 
     // Check if supply share triggers Tier 1 (preliminary inquiry).
-    static bool is_tier1_triggered(float supply_share);
+    bool is_tier1_triggered(float supply_share) const;
 
     // Check if supply share triggers Tier 2 (dominant price-mover).
-    static bool is_tier2_triggered(float supply_share);
+    bool is_tier2_triggered(float supply_share) const;
 
     // Compute meter fill increment for Tier 1 actors.
-    static float compute_meter_fill_increment();
+    float compute_meter_fill_increment() const;
 
     // Compute proposal pressure increment for Tier 2 actors.
-    static float compute_pressure_increment();
+    float compute_pressure_increment() const;
 
     // Compute proposal pressure decay when no dominant actor.
-    static float compute_pressure_decay();
+    float compute_pressure_decay() const;
 
     // Check if proposal pressure has crossed the auto-generation threshold.
-    static bool should_generate_proposal(float pressure);
-
-    // --- Constants ---
-    struct Constants {
-        static constexpr float market_share_threshold = 0.40f;
-        static constexpr float dominant_price_mover_threshold = 0.70f;
-        static constexpr float meter_fill_per_threshold_tick = 0.002f;
-        static constexpr float dominance_proposal_pressure_per_tick = 0.005f;
-        static constexpr float proposal_pressure_decay_rate = 0.01f;
-        static constexpr float proposal_threshold = 0.50f;
-        static constexpr uint32_t monthly_interval = 30;
-    };
+    bool should_generate_proposal(float pressure) const;
 
    private:
+    AntitrustConfig cfg_;
     std::map<uint32_t, float> proposal_pressure_;
     uint32_t next_check_tick_ = 30;
     std::vector<AntitrustProposal> proposals_;

@@ -130,5 +130,134 @@
     "max_scene_cards_per_tick": 5,
     "trust_weight": 0.7,
     "risk_weight": 0.3
+  },
+  "commodity_trading": {
+    "market_impact_threshold": 0.05,
+    "market_impact_coefficient": 0.01,
+    "capital_gains_tax_rate": 0.15
+  },
+  "price_engine": {
+    "supply_floor": 0.01,
+    "default_price_adjustment_rate": 0.10,
+    "max_price_change_per_tick": 0.25,
+    "export_floor_coeff": 0.40,
+    "import_ceiling_coeff": 3.0,
+    "default_base_price": 1.0
+  },
+  "seasonal_agriculture": {
+    "ticks_per_year": 365,
+    "planting_duration_ticks": 7,
+    "harvest_duration_ticks": 14,
+    "fallow_soil_recovery_rate": 0.003,
+    "soil_health_max": 1.0,
+    "soil_health_min_monoculture": 0.5,
+    "monoculture_penalty_threshold": 3,
+    "monoculture_soil_penalty_rate": 0.002,
+    "southern_hemisphere_offset": 182,
+    "perennial_base": 0.85,
+    "perennial_amplitude": 0.25,
+    "livestock_base": 0.85,
+    "livestock_amplitude": 0.10,
+    "timber_multiplier": 1.0
+  },
+  "real_estate": {
+    "residential_yield_rate": 0.003,
+    "commercial_yield_rate": 0.004,
+    "industrial_yield_rate": 0.005,
+    "price_convergence_rate": 0.05,
+    "convergence_interval": 30,
+    "criminal_dominance_penalty": 0.15,
+    "laundering_premium": 0.10,
+    "transaction_evidence_threshold": 50000.0
+  },
+  "financial_distribution": {
+    "ticks_per_quarter": 91,
+    "deferred_salary_max_ticks": 30,
+    "draw_reporting_threshold": 20000.0,
+    "ticks_per_month": 30,
+    "cash_surplus_months": 5.0,
+    "board_rubber_stamp_threshold": 0.3,
+    "board_approval_bonus_threshold": 0.25,
+    "default_tax_withholding_rate": 0.20,
+    "owners_draw_fraction": 0.5,
+    "wage_theft_emotional_weight": -0.6
+  },
+  "npc_behavior_module": {
+    "inaction_threshold": 0.10,
+    "min_risk_discount": 0.05,
+    "risk_sensitivity_coeff": 2.0,
+    "trust_ev_bonus": 0.3,
+    "recovery_ceiling_minimum": 0.15
+  },
+  "obligation_network": {
+    "escalation_rate_base": 0.001,
+    "escalation_threshold": 1.5,
+    "critical_threshold": 3.0,
+    "hostile_action_threshold": 0.7,
+    "wealth_reference_scale": 1000000.0,
+    "max_wealth_factor": 2.0,
+    "trust_erosion_per_tick": -0.001,
+    "orphan_obligation_timeout_ticks": 180
+  },
+  "criminal_operations": {
+    "quarterly_interval": 90,
+    "le_heat_threshold": 0.60,
+    "territory_pressure_conflict_threshold": 0.60,
+    "cash_comfortable_months": 3.0,
+    "cash_low_threshold": 0.50,
+    "territory_pressure_expand_threshold": 0.30,
+    "le_heat_expand_threshold": 0.30,
+    "expansion_initial_dominance": 0.05,
+    "cash_per_expansion_slot": 5000.0,
+    "min_expansion_team_size": 2,
+    "expansion_refund_fraction": 0.50,
+    "dormant_dominance_decay_rate": 0.001
+  },
+  "community_response": {
+    "ema_alpha": 0.05,
+    "social_capital_max": 100.0,
+    "capital_normalizer": 10000.0,
+    "social_normalizer": 50.0,
+    "memory_decay_floor": 0.01,
+    "grievance_normalizer": 10.0,
+    "grievance_shock_threshold": 0.15,
+    "resistance_revenue_penalty": -0.15,
+    "trauma_grievance_floor_scale": 0.25,
+    "trauma_trust_ceiling_scale": 0.30,
+    "regression_cooldown_ticks": 7
+  },
+  "npc_spending": {
+    "reference_income": 1000.0,
+    "max_income_factor": 5.0,
+    "min_price_factor": 0.05,
+    "default_base_demand_units": 1.0,
+    "default_income_elasticity": 1.0,
+    "default_price_elasticity": -1.0,
+    "default_base_price": 10.0,
+    "default_quality_weight": 0.0
+  },
+  "antitrust": {
+    "market_share_threshold": 0.40,
+    "dominant_price_mover_threshold": 0.70,
+    "meter_fill_per_threshold_tick": 0.002,
+    "dominance_proposal_pressure_per_tick": 0.005,
+    "proposal_pressure_decay_rate": 0.01,
+    "proposal_threshold": 0.50,
+    "monthly_interval": 30
+  },
+  "facility_signals": {
+    "default_weight": 0.25,
+    "karst_mitigation_bonus": 0.10,
+    "facility_count_normalizer": 5.0,
+    "detection_to_fill_rate_scale": 0.005,
+    "fill_rate_max": 0.01,
+    "surveillance_threshold": 0.30,
+    "formal_inquiry_threshold": 0.60,
+    "raid_threshold": 0.80,
+    "notice_threshold": 0.25,
+    "audit_threshold": 0.50,
+    "enforcement_threshold": 0.75,
+    "meter_decay_rate": 0.001,
+    "personnel_violence_multiplier": 3.0
   }
 }

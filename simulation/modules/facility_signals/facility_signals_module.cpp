@@ -38,22 +38,22 @@ float FacilitySignalsModule::compute_le_fill_rate(float regional_signal, float d
     return std::clamp(rate, 0.0f, fill_rate_max);
 }
 
-InvestigatorMeterStatus FacilitySignalsModule::evaluate_investigator_status(float current_level) {
-    if (current_level >= Constants::raid_threshold)
+InvestigatorMeterStatus FacilitySignalsModule::evaluate_investigator_status(float current_level) const {
+    if (current_level >= cfg_.raid_threshold)
         return InvestigatorMeterStatus::raid_imminent;
-    if (current_level >= Constants::formal_inquiry_threshold)
+    if (current_level >= cfg_.formal_inquiry_threshold)
         return InvestigatorMeterStatus::formal_inquiry;
-    if (current_level >= Constants::surveillance_threshold)
+    if (current_level >= cfg_.surveillance_threshold)
         return InvestigatorMeterStatus::surveillance;
     return InvestigatorMeterStatus::inactive;
 }
 
-RegulatorMeterStatus FacilitySignalsModule::evaluate_regulator_status(float current_level) {
-    if (current_level >= Constants::enforcement_threshold)
+RegulatorMeterStatus FacilitySignalsModule::evaluate_regulator_status(float current_level) const {
+    if (current_level >= cfg_.enforcement_threshold)
         return RegulatorMeterStatus::enforcement_action;
-    if (current_level >= Constants::audit_threshold)
+    if (current_level >= cfg_.audit_threshold)
         return RegulatorMeterStatus::formal_audit;
-    if (current_level >= Constants::notice_threshold)
+    if (current_level >= cfg_.notice_threshold)
         return RegulatorMeterStatus::notice_filed;
     return RegulatorMeterStatus::inactive;
 }
@@ -78,11 +78,11 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
     const Province& province = state.provinces[province_idx];
 
     // Default weights used when facility type weights not available
-    FacilityTypeSignalWeights default_weights{Constants::default_weight, Constants::default_weight,
-                                              Constants::default_weight, Constants::default_weight};
+    FacilityTypeSignalWeights default_weights{cfg_.default_weight, cfg_.default_weight,
+                                              cfg_.default_weight, cfg_.default_weight};
 
     // Karst mitigation bonus for this province
-    float karst_bonus = province.has_karst ? Constants::karst_mitigation_bonus : 0.0f;
+    float karst_bonus = province.has_karst ? cfg_.karst_mitigation_bonus : 0.0f;
 
     // --- Phase 1: Compute signal composites for all facilities in this province ---
     // Collect businesses in this province, sorted by id for determinism
@@ -138,9 +138,9 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
     }
 
     // --- Phase 2: Update LE investigator meters ---
-    float regional_signal = criminal_signal_sum / Constants::facility_count_normalizer;
+    float regional_signal = criminal_signal_sum / cfg_.facility_count_normalizer;
     float base_le_fill_rate = compute_le_fill_rate(
-        regional_signal, Constants::detection_to_fill_rate_scale, Constants::fill_rate_max);
+        regional_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
 
     std::vector<const NPC*> le_npcs;
     for (const auto& npc : state.significant_npcs) {
@@ -156,7 +156,7 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
         float fill_rate = base_le_fill_rate;
 
         if (criminal_signal_sum <= 0.0f) {
-            fill_rate = -Constants::meter_decay_rate;
+            fill_rate = -cfg_.meter_decay_rate;
         }
 
         NPCDelta delta;
@@ -193,11 +193,11 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
     }
 
     float reg_fill_rate =
-        compute_le_fill_rate(regulatory_signal_sum / Constants::facility_count_normalizer,
-                             Constants::detection_to_fill_rate_scale, Constants::fill_rate_max);
+        compute_le_fill_rate(regulatory_signal_sum / cfg_.facility_count_normalizer,
+                             cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
 
     for (const NPC* reg_npc : reg_npcs) {
-        float fill = (regulatory_signal_sum > 0.0f) ? reg_fill_rate : -Constants::meter_decay_rate;
+        float fill = (regulatory_signal_sum > 0.0f) ? reg_fill_rate : -cfg_.meter_decay_rate;
 
         NPCDelta delta;
         delta.npc_id = reg_npc->id;

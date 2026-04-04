@@ -159,40 +159,40 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
                 // 6)
                 float stability_w = npc->motivations.weights[6];
                 cohesion_sum += compute_cohesion_sample(npc->social_capital,
-                                                        Constants::social_capital_max, stability_w);
+                                                        cfg_.social_capital_max, stability_w);
 
                 // Grievance: from negative memory entries
                 grievance_sum +=
-                    compute_grievance_contribution(npc->memory_log, Constants::memory_decay_floor);
+                    compute_grievance_contribution(npc->memory_log, cfg_.memory_decay_floor);
 
                 // Resource access
                 resource_sum += compute_resource_access_sample(
-                    npc->capital, Constants::capital_normalizer, npc->social_capital,
-                    Constants::social_normalizer);
+                    npc->capital, cfg_.capital_normalizer, npc->social_capital,
+                    cfg_.social_normalizer);
             }
 
             float npc_count = static_cast<float>(province_npcs.size());
             float cohesion_sample = cohesion_sum / npc_count;
             float grievance_sample =
-                std::min(grievance_sum / (npc_count * Constants::grievance_normalizer), 1.0f);
+                std::min(grievance_sum / (npc_count * cfg_.grievance_normalizer), 1.0f);
             float resource_sample = resource_sum / npc_count;
 
             // Check for grievance shock (per-tick increase > threshold).
             float grievance_raw_delta = grievance_sample - grievance;
-            if (grievance_raw_delta > Constants::grievance_shock_threshold) {
+            if (grievance_raw_delta > cfg_.grievance_shock_threshold) {
                 // Shock: bypass EMA, apply directly.
                 grievance = std::min(grievance + grievance_raw_delta, 1.0f);
             } else {
-                grievance = ema_update(grievance, grievance_sample, Constants::ema_alpha);
+                grievance = ema_update(grievance, grievance_sample, cfg_.ema_alpha);
             }
 
-            cohesion = ema_update(cohesion, cohesion_sample, Constants::ema_alpha);
-            resource_access = ema_update(resource_access, resource_sample, Constants::ema_alpha);
+            cohesion = ema_update(cohesion, cohesion_sample, cfg_.ema_alpha);
+            resource_access = ema_update(resource_access, resource_sample, cfg_.ema_alpha);
 
             // Institutional trust: target based on base trust and corruption.
             float trust_target =
                 std::min(std::max(0.5f - province.political.corruption_index * 0.5f, 0.0f), 1.0f);
-            inst_trust = ema_update(inst_trust, trust_target, Constants::ema_alpha);
+            inst_trust = ema_update(inst_trust, trust_target, cfg_.ema_alpha);
         }
 
         // Clamp all metrics to [0, 1].
@@ -216,7 +216,7 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
         // Check regression cooldown.
         auto& pstate = province_states_[pi];
         bool can_regress = (state.current_tick - pstate.last_stage_change_tick >=
-                            Constants::regression_cooldown_ticks);
+                            cfg_.regression_cooldown_ticks);
 
         CommunityResponseStage new_stage =
             apply_stage_transition(static_cast<CommunityResponseStage>(current_stage), target,

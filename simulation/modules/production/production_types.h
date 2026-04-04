@@ -15,12 +15,7 @@ namespace econlife {
 // Production Constants — defaults; overridable via production_config.json
 // ---------------------------------------------------------------------------
 struct ProductionConstants {
-    float tech_tier_output_bonus_per_tier = 0.08f;
-    float tech_tier_cost_reduction_per_tier = 0.05f;
-    float tech_quality_ceiling_base = 0.5f;
-    float tech_quality_ceiling_step = 0.1f;
-    float worker_productivity_diminishing_factor = 0.15f;
-    float minimum_input_fraction_to_produce = 0.1f;
+    // Migrated to ProductionConfig in core/config/package_config.h.
 };
 
 // ---------------------------------------------------------------------------

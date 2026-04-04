@@ -28,6 +28,9 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
+// Default config for reference values in tests (matches FinancialDistributionConfig defaults).
+const FinancialDistributionConfig kDefaultCfg{};
+
 // Create a minimal WorldState suitable for financial distribution tests.
 WorldState make_test_world_state() {
     WorldState state{};
@@ -176,7 +179,7 @@ TEST_CASE("test_salary_paid_when_cash_sufficient", "[financial_distribution][tie
 
     // Owner NPC should receive salary minus tax withholding (20%).
     float expected_net =
-        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        100.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(expected_net, 0.01f));
 
@@ -212,7 +215,7 @@ TEST_CASE("test_salary_deferred_when_cash_insufficient", "[financial_distributio
 
     // Owner should receive 30 (partial payment) minus tax.
     float expected_net =
-        30.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        30.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(expected_net, 0.01f));
 
@@ -280,7 +283,7 @@ TEST_CASE("test_deferred_salary_paid_first_on_recovery", "[financial_distributio
 
     // Total payment = 200 (deferred) + 100 (current) = 300, minus 20% tax = 240.
     float expected_net =
-        300.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        300.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(expected_net, 0.01f));
 
@@ -297,7 +300,7 @@ TEST_CASE("test_deferred_salary_paid_first_on_recovery", "[financial_distributio
 TEST_CASE("test_quarterly_bonus_from_net_profit", "[financial_distribution][tier4]") {
     // Set tick to a quarter boundary.
     auto state = make_test_world_state();
-    state.current_tick = FinancialDistributionConstants::ticks_per_quarter;
+    state.current_tick = kDefaultCfg.ticks_per_quarter;
 
     constexpr uint32_t owner_npc_id = 100;
     constexpr uint32_t business_id = 1;
@@ -322,12 +325,12 @@ TEST_CASE("test_quarterly_bonus_from_net_profit", "[financial_distribution][tier
     // bonus net = 3640 * 0.80 = 2912
     // total = 80 + 2912 = 2992
     float salary_net =
-        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        100.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float quarterly_net_profit =
-        FinancialDistributionModule::compute_quarterly_net_profit(1000.0f, 500.0f, 100.0f);
+        FinancialDistributionModule{}.compute_quarterly_net_profit(1000.0f, 500.0f, 100.0f);
     float bonus_amount = quarterly_net_profit * 0.10f;
     float bonus_net =
-        bonus_amount * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        bonus_amount * (1.0f - kDefaultCfg.default_tax_withholding_rate);
 
     float total_expected = salary_net + bonus_net;
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
@@ -337,7 +340,7 @@ TEST_CASE("test_quarterly_bonus_from_net_profit", "[financial_distribution][tier
 TEST_CASE("test_quarterly_bonus_zero_when_no_profit", "[financial_distribution][tier4]") {
     // When cost exceeds revenue, no bonus should be paid.
     auto state = make_test_world_state();
-    state.current_tick = FinancialDistributionConstants::ticks_per_quarter;
+    state.current_tick = kDefaultCfg.ticks_per_quarter;
 
     constexpr uint32_t owner_npc_id = 100;
     constexpr uint32_t business_id = 1;
@@ -356,7 +359,7 @@ TEST_CASE("test_quarterly_bonus_zero_when_no_profit", "[financial_distribution][
 
     // Only salary should be paid, no bonus (net profit is negative).
     float salary_net =
-        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        100.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -373,7 +376,7 @@ TEST_CASE("test_dividend_payout_respects_working_capital_floor",
     // Since cash (50,000) < working_capital_floor (150,000), max_payout = 0.
     // No dividend should be paid.
     auto state = make_test_world_state();
-    state.current_tick = FinancialDistributionConstants::ticks_per_quarter;
+    state.current_tick = kDefaultCfg.ticks_per_quarter;
 
     constexpr uint32_t owner_npc_id = 100;
     constexpr uint32_t business_id = 1;
@@ -398,7 +401,7 @@ TEST_CASE("test_dividend_payout_respects_working_capital_floor",
     // Cash = 50,000 < 150,000 => max_payout = 50,000 - 150,000 = negative => no dividend.
     // Only salary should be paid.
     float salary_net =
-        500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        500.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -407,7 +410,7 @@ TEST_CASE("test_dividend_payout_when_sufficient_cash", "[financial_distribution]
     // Business with very high cash, low cost, high retained earnings.
     // Should pay dividend up to the target.
     auto state = make_test_world_state();
-    state.current_tick = FinancialDistributionConstants::ticks_per_quarter;
+    state.current_tick = kDefaultCfg.ticks_per_quarter;
 
     constexpr uint32_t owner_npc_id = 100;
     constexpr uint32_t business_id = 1;
@@ -432,9 +435,9 @@ TEST_CASE("test_dividend_payout_when_sufficient_cash", "[financial_distribution]
     module.execute_province(0, state, delta);
 
     float salary_net =
-        200.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        200.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float dividend_net =
-        25000.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        25000.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float expected_total = salary_net + dividend_net;
 
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
@@ -473,7 +476,7 @@ TEST_CASE("test_owners_draw_only_micro", "[financial_distribution][tier4]") {
     module.execute_province(0, state, delta);
 
     // Owner should receive the draw (no tax withholding on owner's draw).
-    float expected_draw = 1000.0f * FinancialDistributionConstants::owners_draw_fraction;
+    float expected_draw = 1000.0f * kDefaultCfg.owners_draw_fraction;
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(expected_draw, 0.01f));
 }
@@ -504,7 +507,7 @@ TEST_CASE("test_owners_draw_not_available_for_small", "[financial_distribution][
 
     // Should receive salary payment instead of draw.
     float salary_net =
-        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        100.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -660,7 +663,7 @@ TEST_CASE("test_no_cash_negative_from_compensation", "[financial_distribution][t
     // Business with limited cash. Salary, bonus, and dividend all requested.
     // Verify that total payments do not exceed available cash.
     auto state = make_test_world_state();
-    state.current_tick = FinancialDistributionConstants::ticks_per_quarter;
+    state.current_tick = kDefaultCfg.ticks_per_quarter;
 
     constexpr uint32_t owner_npc_id = 100;
     constexpr uint32_t business_id = 1;
@@ -723,7 +726,7 @@ TEST_CASE("test_board_rejects_bonus_when_independent", "[financial_distribution]
     // Board has not yet met (next_approval_tick in the future).
     // Bonus should not be paid.
     auto state = make_test_world_state();
-    state.current_tick = FinancialDistributionConstants::ticks_per_quarter;
+    state.current_tick = kDefaultCfg.ticks_per_quarter;
 
     constexpr uint32_t owner_npc_id = 100;
     constexpr uint32_t business_id = 1;
@@ -745,7 +748,7 @@ TEST_CASE("test_board_rejects_bonus_when_independent", "[financial_distribution]
 
     // Only salary should be paid (bonus blocked by board).
     float salary_net =
-        500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        500.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
     REQUIRE_THAT(npc_capital, WithinAbs(salary_net, 0.01f));
 }
@@ -754,7 +757,7 @@ TEST_CASE("test_captured_board_auto_approves", "[financial_distribution][tier4]"
     // Medium business with captured board (independence_score=0.1, below 0.3 threshold).
     // Bonus should be paid even without explicit meeting.
     auto state = make_test_world_state();
-    state.current_tick = FinancialDistributionConstants::ticks_per_quarter;
+    state.current_tick = kDefaultCfg.ticks_per_quarter;
 
     constexpr uint32_t owner_npc_id = 100;
     constexpr uint32_t business_id = 1;
@@ -775,12 +778,12 @@ TEST_CASE("test_captured_board_auto_approves", "[financial_distribution][tier4]"
 
     // Both salary and bonus should be paid.
     float salary_net =
-        500.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        500.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float quarterly_net =
-        FinancialDistributionModule::compute_quarterly_net_profit(10000.0f, 2000.0f, 500.0f);
+        FinancialDistributionModule{}.compute_quarterly_net_profit(10000.0f, 2000.0f, 500.0f);
     float bonus_amount = quarterly_net * 0.30f;
     float bonus_net =
-        bonus_amount * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        bonus_amount * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float expected = salary_net + bonus_net;
 
     float npc_capital = sum_npc_capital_deltas(delta, owner_npc_id);
@@ -811,7 +814,7 @@ TEST_CASE("test_player_owned_business_salary", "[financial_distribution][tier4]"
     module.execute_province(0, state, delta);
 
     float expected_net =
-        100.0f * (1.0f - FinancialDistributionConstants::default_tax_withholding_rate);
+        100.0f * (1.0f - kDefaultCfg.default_tax_withholding_rate);
     float player_wealth = get_player_wealth_delta(delta);
     REQUIRE_THAT(player_wealth, WithinAbs(expected_net, 0.01f));
 
@@ -920,7 +923,7 @@ TEST_CASE("test_wage_theft_memory_on_sustained_deferral", "[financial_distributi
     auto comp_rec = make_test_comp_record(business_id, BusinessScale::small,
                                           CompensationMechanism::salary_only, 100.0f);
     // Pre-set to just at the threshold.
-    comp_rec.deferred_salary_ticks = FinancialDistributionConstants::deferred_salary_max_ticks;
+    comp_rec.deferred_salary_ticks = kDefaultCfg.deferred_salary_max_ticks;
     module.compensation_records().push_back(comp_rec);
 
     DeltaBuffer delta{};
@@ -937,7 +940,7 @@ TEST_CASE("test_wage_theft_memory_on_sustained_deferral", "[financial_distributi
                 REQUIRE(mem.subject_id == business_id);
                 REQUIRE_THAT(
                     mem.emotional_weight,
-                    WithinAbs(FinancialDistributionConstants::wage_theft_emotional_weight, 0.01f));
+                    WithinAbs(kDefaultCfg.wage_theft_emotional_weight, 0.01f));
                 REQUIRE(mem.is_actionable == true);
             }
         }
@@ -1016,48 +1019,51 @@ TEST_CASE("test_execute_fallback_all_provinces", "[financial_distribution][tier4
 // ===========================================================================
 
 TEST_CASE("test_compute_quarterly_net_profit", "[financial_distribution][tier4]") {
+    FinancialDistributionModule module;
     // revenue=1000, cost=500, salary=100
     // net_per_tick = 400
     // quarterly = 400 * 91 = 36,400
-    float profit =
-        FinancialDistributionModule::compute_quarterly_net_profit(1000.0f, 500.0f, 100.0f);
+    float profit = module.compute_quarterly_net_profit(1000.0f, 500.0f, 100.0f);
     REQUIRE_THAT(profit, WithinAbs(36400.0f, 0.1f));
 }
 
 TEST_CASE("test_compute_quarterly_net_profit_negative", "[financial_distribution][tier4]") {
+    FinancialDistributionModule module;
     // revenue=100, cost=500, salary=100
     // net_per_tick = -500
     // quarterly = -500 * 91 = -45,500
-    float profit =
-        FinancialDistributionModule::compute_quarterly_net_profit(100.0f, 500.0f, 100.0f);
+    float profit = module.compute_quarterly_net_profit(100.0f, 500.0f, 100.0f);
     REQUIRE(profit < 0.0f);
 }
 
 TEST_CASE("test_compute_working_capital_floor", "[financial_distribution][tier4]") {
+    FinancialDistributionModule module;
     // cost_per_tick=1000
     // floor = 1000 * 5.0 * 30 = 150,000
-    float floor = FinancialDistributionModule::compute_working_capital_floor(1000.0f);
+    float floor = module.compute_working_capital_floor(1000.0f);
     REQUIRE_THAT(floor, WithinAbs(150000.0f, 0.1f));
 }
 
 TEST_CASE("test_board_approval_rubber_stamp", "[financial_distribution][tier4]") {
+    FinancialDistributionModule module;
     // Captured board auto-approves.
     BoardComposition board{};
     board.independence_score = 0.1f;  // Below 0.3 threshold.
     board.next_approval_tick = 99999;
 
-    REQUIRE(FinancialDistributionModule::is_board_approved(board, 0) == true);
+    REQUIRE(module.is_board_approved(board, 0) == true);
 }
 
 TEST_CASE("test_board_approval_independent_board_at_meeting", "[financial_distribution][tier4]") {
+    FinancialDistributionModule module;
     // Independent board approves at meeting tick.
     BoardComposition board{};
     board.independence_score = 0.8f;
     board.next_approval_tick = 100;
 
-    REQUIRE(FinancialDistributionModule::is_board_approved(board, 100) == true);
-    REQUIRE(FinancialDistributionModule::is_board_approved(board, 101) == true);
-    REQUIRE(FinancialDistributionModule::is_board_approved(board, 99) == false);
+    REQUIRE(module.is_board_approved(board, 100) == true);
+    REQUIRE(module.is_board_approved(board, 101) == true);
+    REQUIRE(module.is_board_approved(board, 99) == false);
 }
 
 // ===========================================================================
@@ -1065,19 +1071,19 @@ TEST_CASE("test_board_approval_independent_board_at_meeting", "[financial_distri
 // ===========================================================================
 
 TEST_CASE("test_financial_distribution_constants", "[financial_distribution][tier4]") {
-    REQUIRE(FinancialDistributionConstants::ticks_per_quarter == 91);
-    REQUIRE(FinancialDistributionConstants::deferred_salary_max_ticks == 30);
-    REQUIRE_THAT(FinancialDistributionConstants::draw_reporting_threshold,
+    REQUIRE(kDefaultCfg.ticks_per_quarter == 91);
+    REQUIRE(kDefaultCfg.deferred_salary_max_ticks == 30);
+    REQUIRE_THAT(kDefaultCfg.draw_reporting_threshold,
                  WithinAbs(20000.0f, 0.01f));
-    REQUIRE(FinancialDistributionConstants::ticks_per_month == 30);
-    REQUIRE_THAT(FinancialDistributionConstants::cash_surplus_months, WithinAbs(5.0f, 0.01f));
-    REQUIRE_THAT(FinancialDistributionConstants::board_rubber_stamp_threshold,
+    REQUIRE(kDefaultCfg.ticks_per_month == 30);
+    REQUIRE_THAT(kDefaultCfg.cash_surplus_months, WithinAbs(5.0f, 0.01f));
+    REQUIRE_THAT(kDefaultCfg.board_rubber_stamp_threshold,
                  WithinAbs(0.3f, 0.01f));
-    REQUIRE_THAT(FinancialDistributionConstants::board_approval_bonus_threshold,
+    REQUIRE_THAT(kDefaultCfg.board_approval_bonus_threshold,
                  WithinAbs(0.25f, 0.01f));
-    REQUIRE_THAT(FinancialDistributionConstants::default_tax_withholding_rate,
+    REQUIRE_THAT(kDefaultCfg.default_tax_withholding_rate,
                  WithinAbs(0.20f, 0.01f));
-    REQUIRE_THAT(FinancialDistributionConstants::owners_draw_fraction, WithinAbs(0.5f, 0.01f));
-    REQUIRE_THAT(FinancialDistributionConstants::wage_theft_emotional_weight,
+    REQUIRE_THAT(kDefaultCfg.owners_draw_fraction, WithinAbs(0.5f, 0.01f));
+    REQUIRE_THAT(kDefaultCfg.wage_theft_emotional_weight,
                  WithinAbs(-0.6f, 0.01f));
 }
