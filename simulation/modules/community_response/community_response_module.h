@@ -28,7 +28,7 @@ enum class MemoryType : uint8_t;
 // ---------------------------------------------------------------------------
 class CommunityResponseModule : public ITickModule {
    public:
-    explicit CommunityResponseModule(const ConsequenceDelayConfig& cfg = {}) : cfg_(cfg) {}
+    explicit CommunityResponseModule(const CommunityResponseConfig& cfg = {}) : cfg_(cfg) {}
 
     std::string_view name() const noexcept override { return "community_response"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
@@ -89,23 +89,8 @@ class CommunityResponseModule : public ITickModule {
     std::vector<ProvinceOppositionState>& province_states() { return province_states_; }
     const std::vector<ProvinceOppositionState>& province_states() const { return province_states_; }
 
-    // --- Constants ---
-    struct Constants {
-        static constexpr float ema_alpha = 0.05f;
-        static constexpr float social_capital_max = 100.0f;
-        static constexpr float capital_normalizer = 10000.0f;
-        static constexpr float social_normalizer = 50.0f;
-        static constexpr float memory_decay_floor = 0.01f;
-        static constexpr float grievance_normalizer = 10.0f;
-        static constexpr float grievance_shock_threshold = 0.15f;
-        static constexpr float resistance_revenue_penalty = -0.15f;
-        static constexpr float trauma_grievance_floor_scale = 0.25f;
-        static constexpr float trauma_trust_ceiling_scale = 0.30f;
-        static constexpr uint32_t regression_cooldown_ticks = 7;
-    };
-
    private:
-    ConsequenceDelayConfig cfg_;
+    CommunityResponseConfig cfg_;
     std::vector<ProvinceOppositionState> province_states_;
 };
 

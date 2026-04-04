@@ -92,7 +92,7 @@ void FinancialDistributionModule::execute_province(uint32_t province_idx, const 
         // Quarterly processing (bonus, dividend) — only on quarter boundaries.
         bool is_quarter_tick =
             (state.current_tick > 0) &&
-            (state.current_tick % FinancialDistributionConstants::ticks_per_quarter == 0);
+            (state.current_tick % cfg_.ticks_per_quarter == 0);
 
         if (is_quarter_tick) {
             // Reset quarterly approval flags at quarter boundary.
@@ -164,7 +164,7 @@ void FinancialDistributionModule::process_salary_payments(const NPCBusiness& bus
         float total_payment = total_owed;
 
         // Apply tax withholding.
-        float tax = total_payment * FinancialDistributionConstants::default_tax_withholding_rate;
+        float tax = total_payment * cfg_.default_tax_withholding_rate;
         float net_payment = total_payment - tax;
 
         // Emit payment to owner.
@@ -195,7 +195,7 @@ void FinancialDistributionModule::process_salary_payments(const NPCBusiness& bus
         // Partial payment: pay what we can. Deferred salary paid first (FIFO).
         float payment = available_cash;
 
-        float tax = payment * FinancialDistributionConstants::default_tax_withholding_rate;
+        float tax = payment * cfg_.default_tax_withholding_rate;
         float net_payment = payment - tax;
 
         if (state.player && business.owner_id == state.player->id) {
@@ -227,7 +227,7 @@ void FinancialDistributionModule::process_salary_payments(const NPCBusiness& bus
     }
 
     // Check for sustained deferral exceeding threshold — generate wage theft memory.
-    if (record.deferred_salary_ticks > FinancialDistributionConstants::deferred_salary_max_ticks) {
+    if (record.deferred_salary_ticks > cfg_.deferred_salary_max_ticks) {
         if (business.owner_id != 0) {
             NPCDelta wage_theft_delta{};
             wage_theft_delta.npc_id = business.owner_id;
@@ -236,7 +236,7 @@ void FinancialDistributionModule::process_salary_payments(const NPCBusiness& bus
             mem.tick_timestamp = state.current_tick;
             mem.type = MemoryType::witnessed_wage_theft;
             mem.subject_id = business.id;
-            mem.emotional_weight = FinancialDistributionConstants::wage_theft_emotional_weight;
+            mem.emotional_weight = cfg_.wage_theft_emotional_weight;
             mem.decay = 1.0f;
             mem.is_actionable = true;
 
@@ -261,7 +261,7 @@ void FinancialDistributionModule::process_owners_draw(const NPCBusiness& busines
     if (profit_this_tick <= 0.0f)
         return;
 
-    float draw_amount = profit_this_tick * FinancialDistributionConstants::owners_draw_fraction;
+    float draw_amount = profit_this_tick * cfg_.owners_draw_fraction;
 
     // Cannot draw more than available cash.
     if (draw_amount > business.cash) {
@@ -272,7 +272,7 @@ void FinancialDistributionModule::process_owners_draw(const NPCBusiness& busines
 
     // Reset monthly draw accumulator if we've crossed a month boundary.
     if (state.current_tick >=
-        record.draw_accumulator_reset_tick + FinancialDistributionConstants::ticks_per_month) {
+        record.draw_accumulator_reset_tick + cfg_.ticks_per_month) {
         record.monthly_draw_accumulator = 0.0f;
         record.draw_accumulator_reset_tick = state.current_tick;
     }
@@ -304,7 +304,7 @@ void FinancialDistributionModule::process_owners_draw(const NPCBusiness& busines
 
     // Check if monthly draw exceeds reporting threshold — generate evidence.
     if (record.monthly_draw_accumulator >
-        FinancialDistributionConstants::draw_reporting_threshold) {
+        cfg_.draw_reporting_threshold) {
         EvidenceDelta ev_delta{};
         EvidenceToken token{};
         token.id = business.id * 1000 + state.current_tick % 1000;  // deterministic ID
@@ -337,7 +337,7 @@ void FinancialDistributionModule::process_quarterly_bonus(const NPCBusiness& bus
     // Board approval check for medium/large businesses.
     if (record.scale == BusinessScale::medium || record.scale == BusinessScale::large) {
         // If bonus_rate exceeds threshold, board approval is required.
-        if (bonus_rate > FinancialDistributionConstants::board_approval_bonus_threshold) {
+        if (bonus_rate > cfg_.board_approval_bonus_threshold) {
             if (!record.bonus_approved_this_quarter) {
                 return;  // Board did not approve; skip bonus.
             }
@@ -361,7 +361,7 @@ void FinancialDistributionModule::process_quarterly_bonus(const NPCBusiness& bus
         return;
 
     // Apply tax withholding.
-    float tax = bonus_amount * FinancialDistributionConstants::default_tax_withholding_rate;
+    float tax = bonus_amount * cfg_.default_tax_withholding_rate;
     float net_bonus = bonus_amount - tax;
 
     // Pay bonus to owner.
@@ -430,7 +430,7 @@ void FinancialDistributionModule::process_quarterly_dividend(const NPCBusiness& 
     }
 
     // Apply tax withholding.
-    float tax = actual_payout * FinancialDistributionConstants::default_tax_withholding_rate;
+    float tax = actual_payout * cfg_.default_tax_withholding_rate;
     float net_dividend = actual_payout - tax;
 
     // Pay dividend to owner.
@@ -530,22 +530,22 @@ bool FinancialDistributionModule::is_mechanism_valid_for_scale(CompensationMecha
 
 float FinancialDistributionModule::compute_quarterly_net_profit(float revenue_per_tick,
                                                                 float cost_per_tick,
-                                                                float salary_per_tick) {
+                                                                float salary_per_tick) const {
     // Net profit = (revenue - cost - salary) * ticks_per_quarter.
     float net_per_tick = revenue_per_tick - cost_per_tick - salary_per_tick;
-    return net_per_tick * static_cast<float>(FinancialDistributionConstants::ticks_per_quarter);
+    return net_per_tick * static_cast<float>(cfg_.ticks_per_quarter);
 }
 
-float FinancialDistributionModule::compute_working_capital_floor(float cost_per_tick) {
+float FinancialDistributionModule::compute_working_capital_floor(float cost_per_tick) const {
     // Working capital floor = cost_per_tick * cash_surplus_months * ticks_per_month.
-    return cost_per_tick * FinancialDistributionConstants::cash_surplus_months *
-           static_cast<float>(FinancialDistributionConstants::ticks_per_month);
+    return cost_per_tick * cfg_.cash_surplus_months *
+           static_cast<float>(cfg_.ticks_per_month);
 }
 
 bool FinancialDistributionModule::is_board_approved(const BoardComposition& board,
-                                                    uint32_t current_tick) {
+                                                    uint32_t current_tick) const {
     // Captured boards (independence_score below rubber stamp threshold) auto-approve.
-    if (board.independence_score < FinancialDistributionConstants::board_rubber_stamp_threshold) {
+    if (board.independence_score < cfg_.board_rubber_stamp_threshold) {
         return true;
     }
 

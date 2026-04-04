@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/real_estate/real_estate_types.h"
 
@@ -26,6 +27,8 @@ struct Province;
 // ---------------------------------------------------------------------------
 class RealEstateModule : public ITickModule {
    public:
+    explicit RealEstateModule(const RealEstateConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "real_estate"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -46,26 +49,28 @@ class RealEstateModule : public ITickModule {
     const std::vector<PropertyListing>& properties() const;
     std::vector<PropertyListing>& properties();
 
-    // --- Static utilities (exposed for testing) ---
+    // --- Utilities (exposed for testing) ---
 
     // Compute the market value for a property based on provincial conditions.
     // Base value is the property's current market_value; modifiers come from
     // the province's criminal_dominance_index and launder_eligible flag.
-    static float compute_market_value(const PropertyListing& prop, const Province& province);
+    float compute_market_value(const PropertyListing& prop, const Province& province) const;
 
     // Compute rental income: market_value * rental_yield_rate (derived invariant).
-    static float compute_rental_income(float market_value, float rental_yield_rate);
+    float compute_rental_income(float market_value, float rental_yield_rate) const;
 
     // Converge asking_price toward market_value by the given rate.
     // asking_price += (market_value - asking_price) * rate
-    static void converge_asking_price(PropertyListing& prop, float rate);
+    void converge_asking_price(PropertyListing& prop, float rate) const;
 
     // Compute average property value for a province as mean of market_values.
     // Returns 0.0f if no properties exist in the given province.
-    static float compute_avg_property_value(const std::vector<PropertyListing>& props,
-                                            uint32_t province_id);
+    float compute_avg_property_value(const std::vector<PropertyListing>& props,
+                                     uint32_t province_id) const;
 
    private:
+    RealEstateConfig cfg_;
+
     // Internal property storage — WorldState does not hold property listings.
     // Sorted by id ascending for deterministic processing order.
     std::vector<PropertyListing> properties_;

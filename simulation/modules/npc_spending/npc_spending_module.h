@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/npc_spending/npc_spending_types.h"
 
@@ -28,6 +29,8 @@ struct NPC;
 // ---------------------------------------------------------------------------
 class NpcSpendingModule : public ITickModule {
    public:
+    explicit NpcSpendingModule(NpcSpendingConfig cfg = {}) : cfg_(std::move(cfg)) {}
+
     std::string_view name() const noexcept override { return "npc_spending"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -78,19 +81,8 @@ class NpcSpendingModule : public ITickModule {
     // quality_seeker=0.6, necessity_buyer=0.0.
     static float buyer_type_quality_weight(BuyerType buyer_type);
 
-    // --- Constants ---
-    struct Constants {
-        static constexpr float reference_income = 1000.0f;
-        static constexpr float max_income_factor = 5.0f;
-        static constexpr float min_price_factor = 0.05f;
-        static constexpr float default_base_demand_units = 1.0f;
-        static constexpr float default_income_elasticity = 1.0f;
-        static constexpr float default_price_elasticity = -1.0f;
-        static constexpr float default_base_price = 10.0f;
-        static constexpr float default_quality_weight = 0.0f;
-    };
-
    private:
+    NpcSpendingConfig cfg_;
     std::vector<NPCBuyerProfile> buyer_profiles_;
 
     // Find buyer type for an NPC. Returns necessity_buyer if no profile found.

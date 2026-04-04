@@ -85,36 +85,36 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     // Tier 2
     orchestrator.register_module(std::make_unique<SupplyChainModule>());
     orchestrator.register_module(std::make_unique<LaborMarketModule>());
-    orchestrator.register_module(std::make_unique<SeasonalAgricultureModule>());
+    orchestrator.register_module(std::make_unique<SeasonalAgricultureModule>(config.seasonal_agriculture));
 
     // Tier 3
-    orchestrator.register_module(std::make_unique<PriceEngineModule>(config.price_model));
+    orchestrator.register_module(std::make_unique<PriceEngineModule>(config.price_model, config.price_engine));
     orchestrator.register_module(std::make_unique<TradeInfrastructureModule>(config.trade_infrastructure));
 
     // Tier 4
-    orchestrator.register_module(std::make_unique<FinancialDistributionModule>());
+    orchestrator.register_module(std::make_unique<FinancialDistributionModule>(config.financial_distribution));
     orchestrator.register_module(std::make_unique<NpcBusinessModule>(config.npc_business));
-    orchestrator.register_module(std::make_unique<CommodityTradingModule>());
-    orchestrator.register_module(std::make_unique<RealEstateModule>());
+    orchestrator.register_module(std::make_unique<CommodityTradingModule>(config.commodity_trading));
+    orchestrator.register_module(std::make_unique<RealEstateModule>(config.real_estate));
 
     // Tier 5
-    orchestrator.register_module(std::make_unique<NpcBehaviorModule>(config.npc_behavior));
+    orchestrator.register_module(std::make_unique<NpcBehaviorModule>(config.npc_behavior_module, config.npc_behavior));
     orchestrator.register_module(std::make_unique<BankingModule>(config.banking));
     orchestrator.register_module(std::make_unique<GovernmentBudgetModule>(config.government_budget));
     orchestrator.register_module(std::make_unique<HealthcareModule>(config.healthcare));
 
     // Tier 6
-    orchestrator.register_module(std::make_unique<NpcSpendingModule>());
+    orchestrator.register_module(std::make_unique<NpcSpendingModule>(config.npc_spending));
     orchestrator.register_module(std::make_unique<EvidenceModule>(config.evidence));
-    orchestrator.register_module(std::make_unique<ObligationNetworkModule>());
+    orchestrator.register_module(std::make_unique<ObligationNetworkModule>(config.obligation_network));
     orchestrator.register_module(
-        std::make_unique<CommunityResponseModule>(config.consequence_delays));
+        std::make_unique<CommunityResponseModule>(config.community_response));
 
     // Tier 7
-    orchestrator.register_module(std::make_unique<FacilitySignalsModule>());
-    orchestrator.register_module(std::make_unique<CriminalOperationsModule>());
+    orchestrator.register_module(std::make_unique<FacilitySignalsModule>(config.facility_signals));
+    orchestrator.register_module(std::make_unique<CriminalOperationsModule>(config.criminal_operations));
     orchestrator.register_module(std::make_unique<MediaSystemModule>(config.media_system));
-    orchestrator.register_module(std::make_unique<AntitrustModule>());
+    orchestrator.register_module(std::make_unique<AntitrustModule>(config.antitrust));
 
     // Tier 8
     orchestrator.register_module(std::make_unique<InvestigatorEngineModule>(config.investigator_engine));

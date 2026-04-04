@@ -15,6 +15,7 @@
 #include "modules/production/production_types.h"
 #include "modules/seasonal_agriculture/agriculture_types.h"
 #include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
+#include "core/config/package_config.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -282,7 +283,7 @@ TEST_CASE("harvest phase spreads supply over harvest_remaining_ticks",
     fs.current_phase = SeasonPhase::harvest;
     fs.phase_started_tick = 500;
     fs.pending_harvest = total_harvest;
-    fs.harvest_remaining_ticks = SeasonalAgricultureConstants::harvest_duration_ticks;  // 14
+    fs.harvest_remaining_ticks = SeasonalAgricultureConfig{}.harvest_duration_ticks;  // 14
 
     auto state = make_test_world_state(501);
     state.provinces.push_back(make_test_province(province_id));
@@ -364,7 +365,7 @@ TEST_CASE("fallow phase recovers soil_health", "[seasonal_agriculture][tier2]") 
 
     // soil_health should increase by 0.003 (from 0.8 to 0.803).
     // Access the facility's internal soil_health via the module.
-    float expected_health = 0.8f + SeasonalAgricultureConstants::fallow_soil_recovery_rate;
+    float expected_health = 0.8f + SeasonalAgricultureConfig{}.fallow_soil_recovery_rate;
     // We need to check the module's internal facility copy.
     // The module updates facilities_[1].soil_health.
     // We can read it indirectly by checking that a second growing tick uses it.
@@ -494,8 +495,9 @@ TEST_CASE("monoculture soil_health floor at 0.5", "[seasonal_agriculture][tier2]
 // ===========================================================================
 
 TEST_CASE("perennial seasonal multiplier follows cosine curve", "[seasonal_agriculture][tier2]") {
+    SeasonalAgricultureModule mod;
     // At peak_tick, cos(0) = 1.0, multiplier = 0.85 + 0.25 * 1.0 = 1.1
-    float at_peak = SeasonalAgricultureModule::compute_seasonal_multiplier(
+    float at_peak = mod.compute_seasonal_multiplier(
         CropCategory::perennial_tree, 182, 182);
     REQUIRE_THAT(at_peak, WithinAbs(1.1f, 0.001f));
 
@@ -504,7 +506,7 @@ TEST_CASE("perennial seasonal multiplier follows cosine curve", "[seasonal_agric
     // But exact half-year is tick 182 + 182 = 364 (mod 365).
     // cos(2*pi*182/365) is approximately cos(pi) = -1.0 (not exactly due to 365 being odd).
     uint32_t opposite_tick = (182 + 182) % 365;  // 364
-    float at_opposite = SeasonalAgricultureModule::compute_seasonal_multiplier(
+    float at_opposite = mod.compute_seasonal_multiplier(
         CropCategory::perennial_tree, opposite_tick, 182);
     // phase = 2*pi*(364-182)/365 = 2*pi*182/365 ~ pi * 0.9973
     // cos(0.9973*pi) ~ -0.9999 => multiplier ~ 0.85 + 0.25*(-0.9999) ~ 0.6000
@@ -512,22 +514,24 @@ TEST_CASE("perennial seasonal multiplier follows cosine curve", "[seasonal_agric
 }
 
 TEST_CASE("livestock seasonal multiplier has minimal variation", "[seasonal_agriculture][tier2]") {
+    SeasonalAgricultureModule mod;
     // At peak: 0.85 + 0.10 * 1.0 = 0.95
     float at_peak =
-        SeasonalAgricultureModule::compute_seasonal_multiplier(CropCategory::livestock, 100, 100);
+        mod.compute_seasonal_multiplier(CropCategory::livestock, 100, 100);
     REQUIRE_THAT(at_peak, WithinAbs(0.95f, 0.001f));
 
     // At trough (half-year): 0.85 + 0.10 * (-1.0) ~ 0.75
     uint32_t trough = (100 + 182) % 365;
-    float at_trough = SeasonalAgricultureModule::compute_seasonal_multiplier(
+    float at_trough = mod.compute_seasonal_multiplier(
         CropCategory::livestock, trough, 100);
     REQUIRE_THAT(at_trough, WithinAbs(0.75f, 0.01f));
 }
 
 TEST_CASE("timber seasonal multiplier is constant 1.0", "[seasonal_agriculture][tier2]") {
+    SeasonalAgricultureModule mod;
     for (uint32_t tick = 0; tick < 365; tick += 73) {
         float mult =
-            SeasonalAgricultureModule::compute_seasonal_multiplier(CropCategory::timber, tick, 182);
+            mod.compute_seasonal_multiplier(CropCategory::timber, tick, 182);
         REQUIRE_THAT(mult, WithinAbs(1.0f, 0.001f));
     }
 }
@@ -586,16 +590,17 @@ TEST_CASE("continuous facility output reduced by climate stress", "[seasonal_agr
 // ===========================================================================
 
 TEST_CASE("southern hemisphere offsets tick_of_year by 182", "[seasonal_agriculture][tier2]") {
+    SeasonalAgricultureModule mod;
     // Northern hemisphere: tick 0 -> tick_of_year 0
-    uint32_t north = SeasonalAgricultureModule::effective_tick_of_year(0, 45.0f);
+    uint32_t north = mod.effective_tick_of_year(0, 45.0f);
     REQUIRE(north == 0);
 
     // Southern hemisphere: tick 0 -> tick_of_year 182
-    uint32_t south = SeasonalAgricultureModule::effective_tick_of_year(0, -30.0f);
+    uint32_t south = mod.effective_tick_of_year(0, -30.0f);
     REQUIRE(south == 182);
 
     // Wrap-around: tick 200, southern hemisphere -> (200 + 182) % 365 = 17
-    uint32_t wrapped = SeasonalAgricultureModule::effective_tick_of_year(200, -30.0f);
+    uint32_t wrapped = mod.effective_tick_of_year(200, -30.0f);
     REQUIRE(wrapped == 17);
 }
 
@@ -732,12 +737,12 @@ TEST_CASE("full harvest cycle releases total pending_harvest", "[seasonal_agricu
     fs.current_phase = SeasonPhase::harvest;
     fs.phase_started_tick = 500;
     fs.pending_harvest = total_harvest;
-    fs.harvest_remaining_ticks = SeasonalAgricultureConstants::harvest_duration_ticks;
+    fs.harvest_remaining_ticks = SeasonalAgricultureConfig{}.harvest_duration_ticks;
 
     float total_released = 0.0f;
 
     // Run for exactly harvest_duration_ticks.
-    for (uint32_t t = 0; t < SeasonalAgricultureConstants::harvest_duration_ticks; ++t) {
+    for (uint32_t t = 0; t < SeasonalAgricultureConfig{}.harvest_duration_ticks; ++t) {
         auto state = make_test_world_state(501 + t);
         state.provinces.push_back(make_test_province(province_id));
 

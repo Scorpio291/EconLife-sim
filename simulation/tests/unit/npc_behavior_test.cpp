@@ -34,6 +34,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "core/config/package_config.h"
 #include "modules/npc_behavior/npc_behavior_module.h"
 #include "modules/npc_behavior/npc_behavior_types.h"
 
@@ -151,11 +152,11 @@ TEST_CASE("test_high_ev_action_selected_over_inaction", "[npc_behavior][tier5]")
     // Work action with high financial gain outcome.
     std::vector<ActionOutcome> work_outcomes = {{OutcomeType::financial_gain, 0.9f, 0.8f}};
 
-    ActionEvaluation eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::work,
+    ActionEvaluation eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::work,
                                                                work_outcomes, 0.0f, -2.0f, 0.3f);
 
     // EV = 0.9 * 0.9 * 0.8 = 0.648, risk_discount = 1.0 (no risk), net = 0.648
-    REQUIRE(eval.net_utility > NpcBehaviorModule::Constants::inaction_threshold);
+    REQUIRE(eval.net_utility > NpcBehaviorModuleConfig{}.inaction_threshold);
     REQUIRE(eval.action == DailyAction::work);
 }
 
@@ -182,13 +183,13 @@ TEST_CASE("test_below_threshold_produces_waiting_status", "[npc_behavior][tier5]
     // Instead, directly test with a tiny outcome.
     std::vector<ActionOutcome> tiny_outcomes = {{OutcomeType::financial_gain, 0.01f, 0.01f}};
 
-    ActionEvaluation eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::rest,
+    ActionEvaluation eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::rest,
                                                                tiny_outcomes, 0.5f, -2.0f, 0.3f);
 
     // EV = (1/8) * 0.01 * 0.01 = 0.0000125
     // risk_discount = max(0.05, 1.0 - (0.5 - 0.0) * 2.0) = max(0.05, 0.0) = 0.05
     // net = 0.0000125 * 0.05 = very small
-    REQUIRE(eval.net_utility < NpcBehaviorModule::Constants::inaction_threshold);
+    REQUIRE(eval.net_utility < NpcBehaviorModuleConfig{}.inaction_threshold);
 }
 
 // ===========================================================================
@@ -208,9 +209,9 @@ TEST_CASE("test_motivation_vector_drives_action_preference", "[npc_behavior][tie
     std::vector<ActionOutcome> rest_outcomes = {{OutcomeType::self_preservation, 0.9f, 0.5f}};
     std::vector<ActionOutcome> work_outcomes = {{OutcomeType::financial_gain, 0.9f, 0.5f}};
 
-    auto rest_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::rest, rest_outcomes, 0.0f,
+    auto rest_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::rest, rest_outcomes, 0.0f,
                                                         -2.0f, 0.3f);
-    auto work_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::work, work_outcomes, 0.0f,
+    auto work_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::work, work_outcomes, 0.0f,
                                                         -2.0f, 0.3f);
 
     // rest EV = 1.0 * 0.9 * 0.5 = 0.45
@@ -252,10 +253,10 @@ TEST_CASE("test_risk_discount_reduces_high_exposure_ev", "[npc_behavior][tier5]"
 
     // Low exposure_risk action.
     auto low_risk_eval =
-        NpcBehaviorModule::evaluate_action(npc, DailyAction::work, outcomes, 0.1f, -2.0f, 0.3f);
+        NpcBehaviorModule{}.evaluate_action(npc, DailyAction::work, outcomes, 0.1f, -2.0f, 0.3f);
 
     // High exposure_risk action.
-    auto high_risk_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::criminal_activity,
+    auto high_risk_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::criminal_activity,
                                                              outcomes, 0.8f, -2.0f, 0.3f);
 
     // High risk should produce lower net_utility.
@@ -272,12 +273,12 @@ TEST_CASE("test_relationship_modifier_boosts_cooperative_action", "[npc_behavior
     std::vector<ActionOutcome> outcomes = {{OutcomeType::relationship_repair, 0.7f, 0.5f}};
 
     // Without trust bonus.
-    auto no_trust_eval = NpcBehaviorModule::evaluate_action(npc, DailyAction::socialize, outcomes,
+    auto no_trust_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::socialize, outcomes,
                                                             0.0f, -2.0f, 0.3f);
 
     // With positive trust bonus.
     auto with_trust_eval =
-        NpcBehaviorModule::evaluate_action(npc, DailyAction::socialize, outcomes, 0.0f, 0.8f, 0.3f);
+        NpcBehaviorModule{}.evaluate_action(npc, DailyAction::socialize, outcomes, 0.0f, 0.8f, 0.3f);
 
     // Trust modifier: net *= (1.0 + 0.8 * 0.3) = 1.24
     REQUIRE(with_trust_eval.net_utility > no_trust_eval.net_utility);
@@ -333,14 +334,14 @@ TEST_CASE("test_compute_risk_discount_low_risk", "[npc_behavior][tier5]") {
     // exposure_risk = 0.1, risk_tolerance = 0.5
     // raw = 1.0 - (0.1 - 0.5) * 2.0 = 1.0 + 0.8 = 1.8
     // clamped to min(1.0, 1.8) = 1.0 (risk discount never boosts above 1.0)
-    float discount = NpcBehaviorModule::compute_risk_discount(0.1f, 0.5f);
+    float discount = NpcBehaviorModule{}.compute_risk_discount(0.1f, 0.5f);
     REQUIRE_THAT(discount, WithinAbs(1.0f, 0.001f));
 }
 
 TEST_CASE("test_compute_risk_discount_equal_risk_and_tolerance", "[npc_behavior][tier5]") {
     // exposure_risk = 0.5, risk_tolerance = 0.5
     // raw = 1.0 - (0.5 - 0.5) * 2.0 = 1.0
-    float discount = NpcBehaviorModule::compute_risk_discount(0.5f, 0.5f);
+    float discount = NpcBehaviorModule{}.compute_risk_discount(0.5f, 0.5f);
     REQUIRE_THAT(discount, WithinAbs(1.0f, 0.001f));
 }
 
@@ -352,7 +353,7 @@ TEST_CASE("test_compute_risk_discount_high_risk_clamped", "[npc_behavior][tier5]
     // exposure_risk = 1.0, risk_tolerance = 0.0
     // raw = 1.0 - (1.0 - 0.0) * 2.0 = 1.0 - 2.0 = -1.0
     // clamped to max(0.05, -1.0) = 0.05
-    float discount = NpcBehaviorModule::compute_risk_discount(1.0f, 0.0f);
+    float discount = NpcBehaviorModule{}.compute_risk_discount(1.0f, 0.0f);
     REQUIRE_THAT(discount, WithinAbs(0.05f, 0.001f));
 }
 
@@ -360,7 +361,7 @@ TEST_CASE("test_compute_risk_discount_extreme_exposure", "[npc_behavior][tier5]"
     // exposure_risk = 0.9, risk_tolerance = 0.1
     // raw = 1.0 - (0.9 - 0.1) * 2.0 = 1.0 - 1.6 = -0.6
     // clamped to max(0.05, -0.6) = 0.05
-    float discount = NpcBehaviorModule::compute_risk_discount(0.9f, 0.1f);
+    float discount = NpcBehaviorModule{}.compute_risk_discount(0.9f, 0.1f);
     REQUIRE_THAT(discount, WithinAbs(0.05f, 0.001f));
 }
 
@@ -436,7 +437,7 @@ TEST_CASE("test_renormalize_motivation_weights_already_normalized", "[npc_behavi
 TEST_CASE("test_clamp_relationship_trust", "[npc_behavior][tier5]") {
     Relationship rel = make_test_relationship(1, 1.5f, 0.5f);
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // Trust clamped to 1.0.
     REQUIRE_THAT(rel.trust, WithinAbs(1.0f, 0.001f));
@@ -445,7 +446,7 @@ TEST_CASE("test_clamp_relationship_trust", "[npc_behavior][tier5]") {
 TEST_CASE("test_clamp_relationship_trust_negative", "[npc_behavior][tier5]") {
     Relationship rel = make_test_relationship(1, -1.5f, 0.5f);
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // Trust clamped to -1.0.
     REQUIRE_THAT(rel.trust, WithinAbs(-1.0f, 0.001f));
@@ -454,7 +455,7 @@ TEST_CASE("test_clamp_relationship_trust_negative", "[npc_behavior][tier5]") {
 TEST_CASE("test_clamp_relationship_trust_within_range", "[npc_behavior][tier5]") {
     Relationship rel = make_test_relationship(1, 0.5f, 0.3f);
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // Trust should be unchanged.
     REQUIRE_THAT(rel.trust, WithinAbs(0.5f, 0.001f));
@@ -467,7 +468,7 @@ TEST_CASE("test_clamp_relationship_trust_within_range", "[npc_behavior][tier5]")
 TEST_CASE("test_clamp_relationship_fear", "[npc_behavior][tier5]") {
     Relationship rel = make_test_relationship(1, 0.5f, 1.5f);
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // Fear clamped to 1.0.
     REQUIRE_THAT(rel.fear, WithinAbs(1.0f, 0.001f));
@@ -476,7 +477,7 @@ TEST_CASE("test_clamp_relationship_fear", "[npc_behavior][tier5]") {
 TEST_CASE("test_clamp_relationship_fear_negative", "[npc_behavior][tier5]") {
     Relationship rel = make_test_relationship(1, 0.5f, -0.5f);
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // Fear clamped to 0.0.
     REQUIRE_THAT(rel.fear, WithinAbs(0.0f, 0.001f));
@@ -490,7 +491,7 @@ TEST_CASE("test_recovery_ceiling_limits_trust", "[npc_behavior][tier5]") {
     Relationship rel = make_test_relationship(1, 0.8f, 0.1f, 0.5f);
     // trust = 0.8, recovery_ceiling = 0.5
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // Trust should be clamped to recovery_ceiling.
     REQUIRE_THAT(rel.trust, WithinAbs(0.5f, 0.001f));
@@ -499,7 +500,7 @@ TEST_CASE("test_recovery_ceiling_limits_trust", "[npc_behavior][tier5]") {
 TEST_CASE("test_recovery_ceiling_at_one_does_not_limit", "[npc_behavior][tier5]") {
     Relationship rel = make_test_relationship(1, 0.8f, 0.1f, 1.0f);
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // Trust should not be limited.
     REQUIRE_THAT(rel.trust, WithinAbs(0.8f, 0.001f));
@@ -672,7 +673,7 @@ TEST_CASE("test_evaluate_action_with_multiple_outcomes", "[npc_behavior][tier5]"
     };
 
     auto eval =
-        NpcBehaviorModule::evaluate_action(npc, DailyAction::work, outcomes, 0.0f, -2.0f, 0.3f);
+        NpcBehaviorModule{}.evaluate_action(npc, DailyAction::work, outcomes, 0.0f, -2.0f, 0.3f);
 
     // EV = (1/8)(0.8*0.5) + (1/8)(0.6*0.3) + (1/8)(0.4*0.7)
     //    = (1/8)(0.40 + 0.18 + 0.28)
@@ -694,7 +695,7 @@ TEST_CASE("test_empty_outcomes_produce_zero_ev", "[npc_behavior][tier5]") {
     std::vector<ActionOutcome> no_outcomes;
 
     auto eval =
-        NpcBehaviorModule::evaluate_action(npc, DailyAction::rest, no_outcomes, 0.0f, -2.0f, 0.3f);
+        NpcBehaviorModule{}.evaluate_action(npc, DailyAction::rest, no_outcomes, 0.0f, -2.0f, 0.3f);
 
     REQUIRE_THAT(eval.expected_value, WithinAbs(0.0f, 0.0001f));
     REQUIRE_THAT(eval.net_utility, WithinAbs(0.0f, 0.0001f));
@@ -734,7 +735,7 @@ TEST_CASE("test_relationship_recovery_ceiling_minimum", "[npc_behavior][tier5]")
     Relationship rel = make_test_relationship(1, 0.1f, 0.1f, 0.05f);
     // recovery_ceiling = 0.05, which is below minimum (0.15)
 
-    NpcBehaviorModule::clamp_relationship(rel);
+    NpcBehaviorModule{}.clamp_relationship(rel);
 
     // recovery_ceiling should be raised to minimum.
     REQUIRE_THAT(rel.recovery_ceiling, WithinAbs(0.15f, 0.001f));
@@ -840,10 +841,10 @@ TEST_CASE("test_npcs_from_other_provinces_not_processed", "[npc_behavior][tier5]
 // ===========================================================================
 
 TEST_CASE("test_npc_behavior_constants", "[npc_behavior][tier5]") {
-    REQUIRE_THAT(NpcBehaviorModule::Constants::inaction_threshold, WithinAbs(0.10f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::min_risk_discount, WithinAbs(0.05f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::risk_sensitivity_coeff, WithinAbs(2.0f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorModule::Constants::trust_ev_bonus, WithinAbs(0.3f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModuleConfig{}.inaction_threshold, WithinAbs(0.10f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModuleConfig{}.min_risk_discount, WithinAbs(0.05f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModuleConfig{}.risk_sensitivity_coeff, WithinAbs(2.0f, 0.001f));
+    REQUIRE_THAT(NpcBehaviorModuleConfig{}.trust_ev_bonus, WithinAbs(0.3f, 0.001f));
     REQUIRE_THAT(NpcBehaviorConfig{}.memory_decay_rate, WithinAbs(0.002f, 0.0001f));
     REQUIRE_THAT(NpcBehaviorConfig{}.memory_decay_floor, WithinAbs(0.01f, 0.001f));
     REQUIRE_THAT(NpcBehaviorConfig{}.knowledge_confidence_decay_rate,

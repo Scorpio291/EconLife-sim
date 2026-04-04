@@ -47,7 +47,7 @@ void PriceEngineModule::execute_province(uint32_t province_idx, const WorldState
         // Step 2: Sticky price adjustment.
         float adjustment_rate = market->adjustment_rate;
         if (adjustment_rate <= 0.0f) {
-            adjustment_rate = PriceEngineConstants::default_price_adjustment_rate;
+            adjustment_rate = pe_cfg_.default_price_adjustment_rate;
         }
         float new_spot_price =
             compute_sticky_adjustment(market->spot_price, equilibrium_price, adjustment_rate);
@@ -85,16 +85,16 @@ void PriceEngineModule::execute(const WorldState& state, DeltaBuffer& delta) {
 // PriceEngineModule — Step 1: Equilibrium Computation
 // ===========================================================================
 
-float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market) {
+float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market) const {
     // Use equilibrium_price as proxy for base_price (RegionalMarket has no
     // base_price field). Fall back to default if zero or negative.
     float base_price = market.equilibrium_price;
     if (base_price <= 0.0f) {
-        base_price = PriceEngineConstants::default_base_price;
+        base_price = pe_cfg_.default_base_price;
     }
 
     // Effective supply: prevent division by zero.
-    float effective_supply = std::max(market.supply, PriceEngineConstants::supply_floor);
+    float effective_supply = std::max(market.supply, pe_cfg_.supply_floor);
 
     // Demand/supply ratio drives equilibrium.
     float demand_supply_ratio = market.demand_buffer / effective_supply;
@@ -107,7 +107,7 @@ float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market)
     if (market.export_price_floor > 0.0f) {
         floor_price = market.export_price_floor;
     } else {
-        floor_price = base_price * PriceEngineConstants::export_floor_coeff;
+        floor_price = base_price * pe_cfg_.export_floor_coeff;
     }
 
     // Compute effective ceiling.
@@ -115,7 +115,7 @@ float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market)
     if (market.import_price_ceiling > 0.0f) {
         ceiling_price = market.import_price_ceiling;
     } else {
-        ceiling_price = base_price * PriceEngineConstants::import_ceiling_coeff;
+        ceiling_price = base_price * pe_cfg_.import_ceiling_coeff;
     }
 
     // Clamp to [floor, ceiling].
@@ -130,12 +130,12 @@ float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market)
 // ===========================================================================
 
 float PriceEngineModule::compute_sticky_adjustment(float spot_price, float equilibrium_price,
-                                                   float adjustment_rate) {
+                                                   float adjustment_rate) const {
     float gap = equilibrium_price - spot_price;
     float adjustment = gap * adjustment_rate;
 
     // Clamp adjustment magnitude to max_price_change_per_tick * spot_price.
-    float max_change = PriceEngineConstants::max_price_change_per_tick * spot_price;
+    float max_change = pe_cfg_.max_price_change_per_tick * spot_price;
     if (adjustment > max_change) {
         adjustment = max_change;
     } else if (adjustment < -max_change) {

@@ -58,26 +58,27 @@ float CriminalOperationsModule::compute_le_heat(const CriminalOrganization& org,
 
 CriminalStrategicDecision CriminalOperationsModule::evaluate_decision(float le_heat,
                                                                       float territory_pressure,
-                                                                      float cash_level) {
-    if (le_heat >= Constants::le_heat_threshold) {
+                                                                      float cash_level,
+                                                                      const CriminalOperationsConfig& cfg) {
+    if (le_heat >= cfg.le_heat_threshold) {
         return CriminalStrategicDecision::reduce_activity;
     }
-    if (territory_pressure >= Constants::territory_pressure_conflict_threshold &&
+    if (territory_pressure >= cfg.territory_pressure_conflict_threshold &&
         cash_level >= 1.0f) {
         return CriminalStrategicDecision::initiate_conflict;
     }
-    if (cash_level < Constants::cash_low_threshold) {
+    if (cash_level < cfg.cash_low_threshold) {
         return CriminalStrategicDecision::reduce_headcount;
     }
-    if (territory_pressure < Constants::territory_pressure_expand_threshold &&
-        le_heat < Constants::le_heat_expand_threshold) {
+    if (territory_pressure < cfg.territory_pressure_expand_threshold &&
+        le_heat < cfg.le_heat_expand_threshold) {
         return CriminalStrategicDecision::expand_territory;
     }
     return CriminalStrategicDecision::maintain;
 }
 
-uint8_t CriminalOperationsModule::compute_decision_offset(uint32_t org_id) {
-    return static_cast<uint8_t>(org_id % Constants::quarterly_interval);
+uint8_t CriminalOperationsModule::compute_decision_offset(uint32_t org_id, uint32_t quarterly_interval) {
+    return static_cast<uint8_t>(org_id % quarterly_interval);
 }
 
 TerritorialConflictStage CriminalOperationsModule::advance_conflict_stage(
@@ -101,8 +102,8 @@ TerritorialConflictStage CriminalOperationsModule::advance_conflict_stage(
     return TerritorialConflictStage::none;
 }
 
-float CriminalOperationsModule::initial_dominance_seed() {
-    return Constants::expansion_initial_dominance;
+float CriminalOperationsModule::initial_dominance_seed(float expansion_initial_dominance) {
+    return expansion_initial_dominance;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +123,7 @@ void CriminalOperationsModule::execute(const WorldState& state, DeltaBuffer& del
 
         if (state.current_tick == org.strategic_decision_tick) {
             process_strategic_decision(org, state, delta);
-            org.strategic_decision_tick = state.current_tick + Constants::quarterly_interval;
+            org.strategic_decision_tick = state.current_tick + cfg_.quarterly_interval;
         }
     }
 
@@ -146,9 +147,9 @@ void CriminalOperationsModule::process_strategic_decision(CriminalOrganization& 
     }
 
     float cash_level =
-        compute_cash_level(org.cash, monthly_cost, Constants::cash_comfortable_months);
+        compute_cash_level(org.cash, monthly_cost, cfg_.cash_comfortable_months);
 
-    CriminalStrategicDecision decision = evaluate_decision(le_heat, territory_pressure, cash_level);
+    CriminalStrategicDecision decision = evaluate_decision(le_heat, territory_pressure, cash_level, cfg_);
 
     switch (decision) {
         case CriminalStrategicDecision::reduce_activity: {
@@ -280,7 +281,7 @@ void CriminalOperationsModule::process_dormant_orgs(const WorldState& state) {
     for (auto& org : organizations_) {
         if (org.member_npc_ids.empty()) {
             for (auto& [prov_id, dom] : org.dominance_by_province) {
-                dom -= Constants::dormant_dominance_decay_rate;
+                dom -= cfg_.dormant_dominance_decay_rate;
                 dom = std::max(0.0f, dom);
             }
         }

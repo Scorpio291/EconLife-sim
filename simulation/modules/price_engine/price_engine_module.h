@@ -27,7 +27,9 @@ struct GlobalCommodityPriceIndex;
 // ---------------------------------------------------------------------------
 class PriceEngineModule : public ITickModule {
    public:
-    explicit PriceEngineModule(const PriceModelConfig& cfg = {}) : cfg_(cfg) {}
+    explicit PriceEngineModule(const PriceModelConfig& cfg = {},
+                              const PriceEngineConfig& pe_cfg = {})
+        : cfg_(cfg), pe_cfg_(pe_cfg) {}
 
     std::string_view name() const noexcept override { return "price_engine"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
@@ -48,20 +50,21 @@ class PriceEngineModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
-    // --- Static utility for computing price components (exposed for testing) ---
+    // --- Utility for computing price components (exposed for testing) ---
 
     // Step 1: Compute the clamped equilibrium price for a single market.
-    static float compute_equilibrium_price(const RegionalMarket& market);
+    float compute_equilibrium_price(const RegionalMarket& market) const;
 
     // Step 2: Compute the new spot price after sticky adjustment.
-    static float compute_sticky_adjustment(float spot_price, float equilibrium_price,
-                                           float adjustment_rate);
+    float compute_sticky_adjustment(float spot_price, float equilibrium_price,
+                                    float adjustment_rate) const;
 
     // Step 3: Apply LOD 2 modifier (returns 1.0 if no modifier found).
     static float get_lod2_modifier(uint32_t good_id, const GlobalCommodityPriceIndex* index);
 
    private:
     PriceModelConfig cfg_;
+    PriceEngineConfig pe_cfg_;
 };
 
 }  // namespace econlife

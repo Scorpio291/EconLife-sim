@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/production/production_types.h"
 #include "modules/seasonal_agriculture/agriculture_types.h"
@@ -26,36 +27,17 @@ struct Province;
 // ---------------------------------------------------------------------------
 // Configuration constants for seasonal agriculture (TDD S44)
 // ---------------------------------------------------------------------------
-struct SeasonalAgricultureConstants {
-    static constexpr uint32_t TICKS_PER_YEAR = 365;
-
-    static constexpr uint32_t planting_duration_ticks = 7;
-    static constexpr uint32_t harvest_duration_ticks = 14;
-
-    static constexpr float fallow_soil_recovery_rate = 0.003f;
-    static constexpr float soil_health_max = 1.0f;
-    static constexpr float soil_health_min_monoculture = 0.5f;
-
-    static constexpr uint16_t monoculture_penalty_threshold = 3;  // years
-    static constexpr float monoculture_soil_penalty_rate = 0.002f;
-
-    static constexpr uint32_t southern_hemisphere_offset = 182;
-
-    // Continuous-output cosine curve parameters
-    static constexpr float perennial_base = 0.85f;
-    static constexpr float perennial_amplitude = 0.25f;
-
-    static constexpr float livestock_base = 0.85f;
-    static constexpr float livestock_amplitude = 0.10f;
-
-    static constexpr float timber_multiplier = 1.0f;
-};
+// SeasonalAgricultureConstants has been retired. All tunables now live in
+// SeasonalAgricultureConfig (core/config/package_config.h) and are accessed
+// through the module's cfg_ member.
 
 // ---------------------------------------------------------------------------
 // SeasonalAgricultureModule -- ITickModule implementation
 // ---------------------------------------------------------------------------
 class SeasonalAgricultureModule : public ITickModule {
    public:
+    explicit SeasonalAgricultureModule(const SeasonalAgricultureConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "seasonal_agriculture"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -90,17 +72,19 @@ class SeasonalAgricultureModule : public ITickModule {
     static uint32_t good_id_from_string(const std::string& good_id_str);
 
     // Compute the seasonal yield multiplier for continuous-output categories.
-    static float compute_seasonal_multiplier(CropCategory category, uint32_t tick_of_year,
-                                             uint32_t peak_tick);
+    float compute_seasonal_multiplier(CropCategory category, uint32_t tick_of_year,
+                                      uint32_t peak_tick) const;
 
     // Determine the effective tick_of_year for a province, accounting for
     // Southern Hemisphere offset.
-    static uint32_t effective_tick_of_year(uint32_t current_tick, float latitude);
+    uint32_t effective_tick_of_year(uint32_t current_tick, float latitude) const;
 
     // Check whether a crop category follows the annual cycle (fallow/planting/growing/harvest).
     static bool is_annual_cycle(CropCategory category);
 
    private:
+    SeasonalAgricultureConfig cfg_;
+
     // Internal map: facility_id -> FarmSeasonState (for annual-cycle facilities).
     std::unordered_map<uint32_t, FarmSeasonState> farm_states_;
 

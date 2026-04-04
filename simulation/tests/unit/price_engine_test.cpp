@@ -13,6 +13,7 @@
 #include "core/world_state/world_state.h"
 #include "modules/price_engine/price_engine_module.h"
 #include "modules/price_engine/price_engine_types.h"
+#include "core/config/package_config.h"
 #include "modules/trade_infrastructure/trade_types.h"
 
 using namespace econlife;
@@ -48,7 +49,7 @@ RegionalMarket make_test_market(uint32_t good_id, uint32_t province_id, float su
     market.province_id = province_id;
     market.spot_price = spot_price;
     market.equilibrium_price = equilibrium_price;
-    market.adjustment_rate = PriceEngineConstants::default_price_adjustment_rate;
+    market.adjustment_rate = PriceEngineConfig{}.default_price_adjustment_rate;
     market.supply = supply;
     market.demand_buffer = demand_buffer;
     market.import_price_ceiling = 0.0f;
@@ -81,7 +82,8 @@ TEST_CASE("test_equilibrium_price_from_supply_demand_ratio", "[price_engine][tie
     // ceiling = 10.0 * 3.0 = 30.0, so 20.0 is within bounds.
     RegionalMarket market = make_test_market(1, 0, 100.0f, 200.0f, 10.0f, 10.0f);
 
-    float eq = PriceEngineModule::compute_equilibrium_price(market);
+    PriceEngineModule mod;
+    float eq = mod.compute_equilibrium_price(market);
     REQUIRE_THAT(eq, WithinAbs(20.0f, 0.001f));
 }
 
@@ -93,7 +95,8 @@ TEST_CASE("test_price_floor_clamp_via_export_price_floor", "[price_engine][tier3
     RegionalMarket market = make_test_market(1, 0, 1000.0f, 1.0f, 10.0f, 10.0f);
     market.export_price_floor = 5.0f;
 
-    float eq = PriceEngineModule::compute_equilibrium_price(market);
+    PriceEngineModule mod;
+    float eq = mod.compute_equilibrium_price(market);
     REQUIRE_THAT(eq, WithinAbs(5.0f, 0.001f));
 }
 
@@ -104,7 +107,8 @@ TEST_CASE("test_price_floor_clamp_default_coefficient", "[price_engine][tier3]")
     // Raw eq = 10.0 * 0.001 = 0.01, clamped to 4.0
     RegionalMarket market = make_test_market(1, 0, 1000.0f, 1.0f, 10.0f, 10.0f);
 
-    float eq = PriceEngineModule::compute_equilibrium_price(market);
+    PriceEngineModule mod;
+    float eq = mod.compute_equilibrium_price(market);
     REQUIRE_THAT(eq, WithinAbs(4.0f, 0.001f));
 }
 
@@ -116,7 +120,8 @@ TEST_CASE("test_price_ceiling_clamp_via_import_price_ceiling", "[price_engine][t
     RegionalMarket market = make_test_market(1, 0, 1.0f, 1000.0f, 10.0f, 10.0f);
     market.import_price_ceiling = 15.0f;
 
-    float eq = PriceEngineModule::compute_equilibrium_price(market);
+    PriceEngineModule mod;
+    float eq = mod.compute_equilibrium_price(market);
     REQUIRE_THAT(eq, WithinAbs(15.0f, 0.001f));
 }
 
@@ -127,7 +132,8 @@ TEST_CASE("test_price_ceiling_clamp_default_coefficient", "[price_engine][tier3]
     // Raw eq = 10.0 * 1000 = 10000, clamped to 30.0
     RegionalMarket market = make_test_market(1, 0, 1.0f, 1000.0f, 10.0f, 10.0f);
 
-    float eq = PriceEngineModule::compute_equilibrium_price(market);
+    PriceEngineModule mod;
+    float eq = mod.compute_equilibrium_price(market);
     REQUIRE_THAT(eq, WithinAbs(30.0f, 0.001f));
 }
 
@@ -139,7 +145,8 @@ TEST_CASE("test_zero_supply_uses_supply_floor", "[price_engine][tier3]") {
     // Raw eq = 10.0 * 500.0 = 5000.0, clamped to ceiling = 30.0
     RegionalMarket market = make_test_market(1, 0, 0.0f, 5.0f, 10.0f, 10.0f);
 
-    float eq = PriceEngineModule::compute_equilibrium_price(market);
+    PriceEngineModule mod;
+    float eq = mod.compute_equilibrium_price(market);
     REQUIRE_THAT(eq, WithinAbs(30.0f, 0.001f));
 }
 
@@ -153,7 +160,8 @@ TEST_CASE("test_sticky_adjustment_moves_toward_equilibrium", "[price_engine][tie
     // adjustment = 10.0 * 0.10 = 1.0
     // max_change = 0.25 * 10.0 = 2.5 (1.0 < 2.5, not capped)
     // new_spot = 10.0 + 1.0 = 11.0
-    float new_spot = PriceEngineModule::compute_sticky_adjustment(10.0f, 20.0f, 0.10f);
+    PriceEngineModule mod;
+    float new_spot = mod.compute_sticky_adjustment(10.0f, 20.0f, 0.10f);
     REQUIRE_THAT(new_spot, WithinAbs(11.0f, 0.001f));
 }
 
@@ -163,7 +171,8 @@ TEST_CASE("test_sticky_adjustment_downward", "[price_engine][tier3]") {
     // adjustment = -10.0 * 0.10 = -1.0
     // max_change = 0.25 * 20.0 = 5.0 (|-1.0| < 5.0, not capped)
     // new_spot = 20.0 + (-1.0) = 19.0
-    float new_spot = PriceEngineModule::compute_sticky_adjustment(20.0f, 10.0f, 0.10f);
+    PriceEngineModule mod;
+    float new_spot = mod.compute_sticky_adjustment(20.0f, 10.0f, 0.10f);
     REQUIRE_THAT(new_spot, WithinAbs(19.0f, 0.001f));
 }
 
@@ -173,7 +182,8 @@ TEST_CASE("test_max_price_change_per_tick_cap", "[price_engine][tier3]") {
     // adjustment = 90.0 * 0.50 = 45.0
     // max_change = 0.25 * 10.0 = 2.5 (45.0 > 2.5, CAPPED)
     // new_spot = 10.0 + 2.5 = 12.5
-    float new_spot = PriceEngineModule::compute_sticky_adjustment(10.0f, 100.0f, 0.50f);
+    PriceEngineModule mod;
+    float new_spot = mod.compute_sticky_adjustment(10.0f, 100.0f, 0.50f);
     REQUIRE_THAT(new_spot, WithinAbs(12.5f, 0.001f));
 }
 
@@ -183,7 +193,8 @@ TEST_CASE("test_max_price_change_cap_downward", "[price_engine][tier3]") {
     // adjustment = -90.0 * 0.50 = -45.0
     // max_change = 0.25 * 100.0 = 25.0 (|-45.0| > 25.0, CAPPED to -25.0)
     // new_spot = 100.0 + (-25.0) = 75.0
-    float new_spot = PriceEngineModule::compute_sticky_adjustment(100.0f, 10.0f, 0.50f);
+    PriceEngineModule mod;
+    float new_spot = mod.compute_sticky_adjustment(100.0f, 10.0f, 0.50f);
     REQUIRE_THAT(new_spot, WithinAbs(75.0f, 0.001f));
 }
 
@@ -193,18 +204,19 @@ TEST_CASE("test_spot_price_never_negative", "[price_engine][tier3]") {
     // adjustment = -1.0 * 0.50 = -0.5
     // max_change = 0.25 * 1.0 = 0.25 (|-0.5| > 0.25, CAPPED to -0.25)
     // new_spot = 1.0 + (-0.25) = 0.75 (positive, OK)
-    float result = PriceEngineModule::compute_sticky_adjustment(1.0f, 0.0f, 0.50f);
+    PriceEngineModule mod;
+    float result = mod.compute_sticky_adjustment(1.0f, 0.0f, 0.50f);
     REQUIRE(result >= 0.0f);
 
     // More extreme: spot = 0.01, eq = 0.0, rate = 1.0
     // gap = -0.01, adjustment = -0.01 * 1.0 = -0.01
     // max_change = 0.25 * 0.01 = 0.0025 (|-0.01| > 0.0025, CAPPED to -0.0025)
     // new_spot = 0.01 - 0.0025 = 0.0075 (positive)
-    float result2 = PriceEngineModule::compute_sticky_adjustment(0.01f, 0.0f, 1.0f);
+    float result2 = mod.compute_sticky_adjustment(0.01f, 0.0f, 1.0f);
     REQUIRE(result2 >= 0.0f);
 
     // Spot = 0.0 should stay at 0.0.
-    float result3 = PriceEngineModule::compute_sticky_adjustment(0.0f, 0.0f, 0.10f);
+    float result3 = mod.compute_sticky_adjustment(0.0f, 0.0f, 0.10f);
     REQUIRE_THAT(result3, WithinAbs(0.0f, 0.0001f));
 }
 
@@ -385,7 +397,7 @@ TEST_CASE("test_execute_fallback_processes_all_provinces", "[price_engine][tier3
 
 TEST_CASE("test_default_adjustment_rate_used_when_market_rate_zero", "[price_engine][tier3]") {
     // If the market's adjustment_rate is zero or negative, the module
-    // should fall back to PriceEngineConstants::default_price_adjustment_rate.
+    // should fall back to PriceEngineConfig{}.default_price_adjustment_rate.
     auto state = make_test_world_state();
     constexpr uint32_t province_id = 0;
 
@@ -435,10 +447,10 @@ TEST_CASE("test_module_interface_properties", "[price_engine][tier3]") {
 // ===========================================================================
 
 TEST_CASE("test_price_engine_constants", "[price_engine][tier3]") {
-    REQUIRE_THAT(PriceEngineConstants::supply_floor, WithinAbs(0.01f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::default_price_adjustment_rate, WithinAbs(0.10f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::max_price_change_per_tick, WithinAbs(0.25f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::export_floor_coeff, WithinAbs(0.40f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::import_ceiling_coeff, WithinAbs(3.0f, 0.0001f));
-    REQUIRE_THAT(PriceEngineConstants::default_base_price, WithinAbs(1.0f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConfig{}.supply_floor, WithinAbs(0.01f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConfig{}.default_price_adjustment_rate, WithinAbs(0.10f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConfig{}.max_price_change_per_tick, WithinAbs(0.25f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConfig{}.export_floor_coeff, WithinAbs(0.40f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConfig{}.import_ceiling_coeff, WithinAbs(3.0f, 0.0001f));
+    REQUIRE_THAT(PriceEngineConfig{}.default_base_price, WithinAbs(1.0f, 0.0001f));
 }

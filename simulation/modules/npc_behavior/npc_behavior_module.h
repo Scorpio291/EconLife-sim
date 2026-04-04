@@ -28,7 +28,9 @@ struct ActionOutcome;
 // ---------------------------------------------------------------------------
 class NpcBehaviorModule : public ITickModule {
    public:
-    explicit NpcBehaviorModule(const NpcBehaviorConfig& cfg = {}) : cfg_(cfg) {}
+    explicit NpcBehaviorModule(const NpcBehaviorModuleConfig& mcfg = {},
+                               const NpcBehaviorConfig& cfg = {})
+        : mcfg_(mcfg), cfg_(cfg) {}
 
     std::string_view name() const noexcept override { return "npc_behavior"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
@@ -58,7 +60,7 @@ class NpcBehaviorModule : public ITickModule {
     // Compute risk discount factor from exposure_risk and risk_tolerance.
     // risk_discount = max(min_risk_discount, 1.0 - (exposure_risk - risk_tolerance) *
     // risk_sensitivity_coeff)
-    static float compute_risk_discount(float exposure_risk, float risk_tolerance);
+    float compute_risk_discount(float exposure_risk, float risk_tolerance) const;
 
     // Apply relationship modifier for cooperative actions.
     // result = base_ev * (1.0 + trust * trust_ev_bonus)
@@ -66,10 +68,10 @@ class NpcBehaviorModule : public ITickModule {
 
     // Evaluate a complete action: sum outcome EVs, apply risk discount and
     // optional trust bonus. Returns ActionEvaluation with net_utility.
-    static ActionEvaluation evaluate_action(const NPC& npc, DailyAction action,
-                                            const std::vector<ActionOutcome>& outcomes,
-                                            float exposure_risk, float trust_bonus_target,
-                                            float trust_ev_bonus);
+    ActionEvaluation evaluate_action(const NPC& npc, DailyAction action,
+                                     const std::vector<ActionOutcome>& outcomes,
+                                     float exposure_risk, float trust_bonus_target,
+                                     float trust_ev_bonus) const;
 
     // Decay all memory entries in an NPC's memory_log.
     // decay = decay * (1.0 - decay_rate). Entries below decay_floor are archived (removed).
@@ -85,7 +87,7 @@ class NpcBehaviorModule : public ITickModule {
 
     // Clamp relationship trust to [-1.0, 1.0], fear to [0.0, 1.0].
     // Trust cannot exceed recovery_ceiling.
-    static void clamp_relationship(Relationship& rel);
+    void clamp_relationship(Relationship& rel) const;
 
     // Compute worker satisfaction from memory log.
     // Returns 0.0-1.0; based on ratio of positive to negative employment memories.
@@ -94,16 +96,8 @@ class NpcBehaviorModule : public ITickModule {
     // Map MemoryType to the closest OutcomeType for motivation shift.
     static size_t memory_type_to_outcome_index(MemoryType type);
 
-    // --- Constants (non-configurable internal thresholds) ---
-    struct Constants {
-        static constexpr float inaction_threshold = 0.10f;
-        static constexpr float min_risk_discount = 0.05f;
-        static constexpr float risk_sensitivity_coeff = 2.0f;
-        static constexpr float trust_ev_bonus = 0.3f;
-        static constexpr float recovery_ceiling_minimum = 0.15f;
-    };
-
    private:
+    NpcBehaviorModuleConfig mcfg_;
     NpcBehaviorConfig cfg_;
 };
 

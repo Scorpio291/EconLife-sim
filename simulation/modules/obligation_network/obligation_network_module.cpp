@@ -94,7 +94,7 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         player_net_worth = state.player->net_assets;
     }
     float wealth_factor = compute_player_wealth_factor(
-        player_net_worth, Constants::wealth_reference_scale, Constants::max_wealth_factor);
+        player_net_worth, cfg_.wealth_reference_scale, cfg_.max_wealth_factor);
 
     for (auto& obl : obligation_states_) {
         // Skip resolved obligations.
@@ -121,13 +121,13 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         float urgency = compute_creditor_urgency(creditor->motivations.weights.data(),
                                                  creditor->motivations.weights.size());
         float growth =
-            compute_demand_growth(urgency, Constants::escalation_rate_base, wealth_factor);
+            compute_demand_growth(urgency, cfg_.escalation_rate_base, wealth_factor);
         obl.current_demand += growth;
 
         // Evaluate escalation status.
         ObligationStatus new_status =
             evaluate_escalation(obl.current_demand, obl.original_value,
-                                Constants::escalation_threshold, Constants::critical_threshold);
+                                cfg_.escalation_threshold, cfg_.critical_threshold);
 
         // At most one status transition per tick.
         if (new_status > obl.status) {
@@ -145,7 +145,7 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         // Check hostile trigger.
         bool went_hostile = false;
         if (should_trigger_hostile(obl.status, creditor->risk_tolerance,
-                                   Constants::hostile_action_threshold)) {
+                                   cfg_.hostile_action_threshold)) {
             EscalationStep step;
             step.tick = state.current_tick;
             step.from_status = obl.status;
@@ -179,7 +179,7 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         // Trust erosion for overdue obligation: write proper updated_relationship delta.
         uint32_t overdue_ticks = state.current_tick - obl.deadline_tick;
         if (overdue_ticks > 0) {
-            float erosion = compute_trust_erosion(1u, Constants::trust_erosion_per_tick);
+            float erosion = compute_trust_erosion(1u, cfg_.trust_erosion_per_tick);
 
             // Find creditor's current relationship with the debtor (player) to
             // build the updated relationship struct.

@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/obligation_network/obligation_network_types.h"
 
@@ -25,6 +26,8 @@ struct ObligationNode;
 // ---------------------------------------------------------------------------
 class ObligationNetworkModule : public ITickModule {
    public:
+    explicit ObligationNetworkModule(const ObligationNetworkConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "obligation_network"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -79,19 +82,8 @@ class ObligationNetworkModule : public ITickModule {
     // erosion = overdue_ticks * trust_erosion_per_tick
     static float compute_trust_erosion(uint32_t overdue_ticks, float trust_erosion_per_tick);
 
-    // --- Constants ---
-    struct Constants {
-        static constexpr float escalation_rate_base = 0.001f;
-        static constexpr float escalation_threshold = 1.5f;  // current_demand / original_value
-        static constexpr float critical_threshold = 3.0f;
-        static constexpr float hostile_action_threshold = 0.7f;  // creditor risk_tolerance
-        static constexpr float wealth_reference_scale = 1000000.0f;
-        static constexpr float max_wealth_factor = 2.0f;
-        static constexpr float trust_erosion_per_tick = -0.001f;
-        static constexpr uint32_t orphan_obligation_timeout_ticks = 180;
-    };
-
    private:
+    ObligationNetworkConfig cfg_;
     std::vector<ObligationState> obligation_states_;
 
     // Find creditor NPC in world state. Returns nullptr if not found or dead.

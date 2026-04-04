@@ -408,6 +408,135 @@ PackageConfig load_package_config(const std::string& config_dir) {
         cfg.scene_cards.max_scene_cards_per_tick = scc.value("max_scene_cards_per_tick", cfg.scene_cards.max_scene_cards_per_tick);
         cfg.scene_cards.trust_weight = scc.value("trust_weight", cfg.scene_cards.trust_weight);
         cfg.scene_cards.risk_weight = scc.value("risk_weight", cfg.scene_cards.risk_weight);
+
+        const auto ct = j.value("commodity_trading", nlohmann::json::object());
+        cfg.commodity_trading.market_impact_threshold = ct.value("market_impact_threshold", cfg.commodity_trading.market_impact_threshold);
+        cfg.commodity_trading.market_impact_coefficient = ct.value("market_impact_coefficient", cfg.commodity_trading.market_impact_coefficient);
+        cfg.commodity_trading.capital_gains_tax_rate = ct.value("capital_gains_tax_rate", cfg.commodity_trading.capital_gains_tax_rate);
+
+        const auto pe = j.value("price_engine", nlohmann::json::object());
+        cfg.price_engine.supply_floor = pe.value("supply_floor", cfg.price_engine.supply_floor);
+        cfg.price_engine.default_price_adjustment_rate = pe.value("default_price_adjustment_rate", cfg.price_engine.default_price_adjustment_rate);
+        cfg.price_engine.max_price_change_per_tick = pe.value("max_price_change_per_tick", cfg.price_engine.max_price_change_per_tick);
+        cfg.price_engine.export_floor_coeff = pe.value("export_floor_coeff", cfg.price_engine.export_floor_coeff);
+        cfg.price_engine.import_ceiling_coeff = pe.value("import_ceiling_coeff", cfg.price_engine.import_ceiling_coeff);
+        cfg.price_engine.default_base_price = pe.value("default_base_price", cfg.price_engine.default_base_price);
+
+        const auto sa = j.value("seasonal_agriculture", nlohmann::json::object());
+        cfg.seasonal_agriculture.ticks_per_year = sa.value("ticks_per_year", cfg.seasonal_agriculture.ticks_per_year);
+        cfg.seasonal_agriculture.planting_duration_ticks = sa.value("planting_duration_ticks", cfg.seasonal_agriculture.planting_duration_ticks);
+        cfg.seasonal_agriculture.harvest_duration_ticks = sa.value("harvest_duration_ticks", cfg.seasonal_agriculture.harvest_duration_ticks);
+        cfg.seasonal_agriculture.fallow_soil_recovery_rate = sa.value("fallow_soil_recovery_rate", cfg.seasonal_agriculture.fallow_soil_recovery_rate);
+        cfg.seasonal_agriculture.soil_health_max = sa.value("soil_health_max", cfg.seasonal_agriculture.soil_health_max);
+        cfg.seasonal_agriculture.soil_health_min_monoculture = sa.value("soil_health_min_monoculture", cfg.seasonal_agriculture.soil_health_min_monoculture);
+        cfg.seasonal_agriculture.monoculture_penalty_threshold = sa.value("monoculture_penalty_threshold", cfg.seasonal_agriculture.monoculture_penalty_threshold);
+        cfg.seasonal_agriculture.monoculture_soil_penalty_rate = sa.value("monoculture_soil_penalty_rate", cfg.seasonal_agriculture.monoculture_soil_penalty_rate);
+        cfg.seasonal_agriculture.southern_hemisphere_offset = sa.value("southern_hemisphere_offset", cfg.seasonal_agriculture.southern_hemisphere_offset);
+        cfg.seasonal_agriculture.perennial_base = sa.value("perennial_base", cfg.seasonal_agriculture.perennial_base);
+        cfg.seasonal_agriculture.perennial_amplitude = sa.value("perennial_amplitude", cfg.seasonal_agriculture.perennial_amplitude);
+        cfg.seasonal_agriculture.livestock_base = sa.value("livestock_base", cfg.seasonal_agriculture.livestock_base);
+        cfg.seasonal_agriculture.livestock_amplitude = sa.value("livestock_amplitude", cfg.seasonal_agriculture.livestock_amplitude);
+        cfg.seasonal_agriculture.timber_multiplier = sa.value("timber_multiplier", cfg.seasonal_agriculture.timber_multiplier);
+
+        const auto rst = j.value("real_estate", nlohmann::json::object());
+        cfg.real_estate.residential_yield_rate = rst.value("residential_yield_rate", cfg.real_estate.residential_yield_rate);
+        cfg.real_estate.commercial_yield_rate = rst.value("commercial_yield_rate", cfg.real_estate.commercial_yield_rate);
+        cfg.real_estate.industrial_yield_rate = rst.value("industrial_yield_rate", cfg.real_estate.industrial_yield_rate);
+        cfg.real_estate.price_convergence_rate = rst.value("price_convergence_rate", cfg.real_estate.price_convergence_rate);
+        cfg.real_estate.convergence_interval = rst.value("convergence_interval", cfg.real_estate.convergence_interval);
+        cfg.real_estate.criminal_dominance_penalty = rst.value("criminal_dominance_penalty", cfg.real_estate.criminal_dominance_penalty);
+        cfg.real_estate.laundering_premium = rst.value("laundering_premium", cfg.real_estate.laundering_premium);
+        cfg.real_estate.transaction_evidence_threshold = rst.value("transaction_evidence_threshold", cfg.real_estate.transaction_evidence_threshold);
+
+        const auto fd = j.value("financial_distribution", nlohmann::json::object());
+        cfg.financial_distribution.ticks_per_quarter = fd.value("ticks_per_quarter", cfg.financial_distribution.ticks_per_quarter);
+        cfg.financial_distribution.deferred_salary_max_ticks = fd.value("deferred_salary_max_ticks", cfg.financial_distribution.deferred_salary_max_ticks);
+        cfg.financial_distribution.draw_reporting_threshold = fd.value("draw_reporting_threshold", cfg.financial_distribution.draw_reporting_threshold);
+        cfg.financial_distribution.ticks_per_month = fd.value("ticks_per_month", cfg.financial_distribution.ticks_per_month);
+        cfg.financial_distribution.cash_surplus_months = fd.value("cash_surplus_months", cfg.financial_distribution.cash_surplus_months);
+        cfg.financial_distribution.board_rubber_stamp_threshold = fd.value("board_rubber_stamp_threshold", cfg.financial_distribution.board_rubber_stamp_threshold);
+        cfg.financial_distribution.board_approval_bonus_threshold = fd.value("board_approval_bonus_threshold", cfg.financial_distribution.board_approval_bonus_threshold);
+        cfg.financial_distribution.default_tax_withholding_rate = fd.value("default_tax_withholding_rate", cfg.financial_distribution.default_tax_withholding_rate);
+        cfg.financial_distribution.owners_draw_fraction = fd.value("owners_draw_fraction", cfg.financial_distribution.owners_draw_fraction);
+        cfg.financial_distribution.wage_theft_emotional_weight = fd.value("wage_theft_emotional_weight", cfg.financial_distribution.wage_theft_emotional_weight);
+
+        const auto nbm = j.value("npc_behavior_module", nlohmann::json::object());
+        cfg.npc_behavior_module.inaction_threshold = nbm.value("inaction_threshold", cfg.npc_behavior_module.inaction_threshold);
+        cfg.npc_behavior_module.min_risk_discount = nbm.value("min_risk_discount", cfg.npc_behavior_module.min_risk_discount);
+        cfg.npc_behavior_module.risk_sensitivity_coeff = nbm.value("risk_sensitivity_coeff", cfg.npc_behavior_module.risk_sensitivity_coeff);
+        cfg.npc_behavior_module.trust_ev_bonus = nbm.value("trust_ev_bonus", cfg.npc_behavior_module.trust_ev_bonus);
+        cfg.npc_behavior_module.recovery_ceiling_minimum = nbm.value("recovery_ceiling_minimum", cfg.npc_behavior_module.recovery_ceiling_minimum);
+
+        const auto on = j.value("obligation_network", nlohmann::json::object());
+        cfg.obligation_network.escalation_rate_base = on.value("escalation_rate_base", cfg.obligation_network.escalation_rate_base);
+        cfg.obligation_network.escalation_threshold = on.value("escalation_threshold", cfg.obligation_network.escalation_threshold);
+        cfg.obligation_network.critical_threshold = on.value("critical_threshold", cfg.obligation_network.critical_threshold);
+        cfg.obligation_network.hostile_action_threshold = on.value("hostile_action_threshold", cfg.obligation_network.hostile_action_threshold);
+        cfg.obligation_network.wealth_reference_scale = on.value("wealth_reference_scale", cfg.obligation_network.wealth_reference_scale);
+        cfg.obligation_network.max_wealth_factor = on.value("max_wealth_factor", cfg.obligation_network.max_wealth_factor);
+        cfg.obligation_network.trust_erosion_per_tick = on.value("trust_erosion_per_tick", cfg.obligation_network.trust_erosion_per_tick);
+        cfg.obligation_network.orphan_obligation_timeout_ticks = on.value("orphan_obligation_timeout_ticks", cfg.obligation_network.orphan_obligation_timeout_ticks);
+
+        const auto co = j.value("criminal_operations", nlohmann::json::object());
+        cfg.criminal_operations.quarterly_interval = co.value("quarterly_interval", cfg.criminal_operations.quarterly_interval);
+        cfg.criminal_operations.le_heat_threshold = co.value("le_heat_threshold", cfg.criminal_operations.le_heat_threshold);
+        cfg.criminal_operations.territory_pressure_conflict_threshold = co.value("territory_pressure_conflict_threshold", cfg.criminal_operations.territory_pressure_conflict_threshold);
+        cfg.criminal_operations.cash_comfortable_months = co.value("cash_comfortable_months", cfg.criminal_operations.cash_comfortable_months);
+        cfg.criminal_operations.cash_low_threshold = co.value("cash_low_threshold", cfg.criminal_operations.cash_low_threshold);
+        cfg.criminal_operations.territory_pressure_expand_threshold = co.value("territory_pressure_expand_threshold", cfg.criminal_operations.territory_pressure_expand_threshold);
+        cfg.criminal_operations.le_heat_expand_threshold = co.value("le_heat_expand_threshold", cfg.criminal_operations.le_heat_expand_threshold);
+        cfg.criminal_operations.expansion_initial_dominance = co.value("expansion_initial_dominance", cfg.criminal_operations.expansion_initial_dominance);
+        cfg.criminal_operations.cash_per_expansion_slot = co.value("cash_per_expansion_slot", cfg.criminal_operations.cash_per_expansion_slot);
+        cfg.criminal_operations.min_expansion_team_size = co.value("min_expansion_team_size", cfg.criminal_operations.min_expansion_team_size);
+        cfg.criminal_operations.expansion_refund_fraction = co.value("expansion_refund_fraction", cfg.criminal_operations.expansion_refund_fraction);
+        cfg.criminal_operations.dormant_dominance_decay_rate = co.value("dormant_dominance_decay_rate", cfg.criminal_operations.dormant_dominance_decay_rate);
+
+        const auto cr = j.value("community_response", nlohmann::json::object());
+        cfg.community_response.ema_alpha = cr.value("ema_alpha", cfg.community_response.ema_alpha);
+        cfg.community_response.social_capital_max = cr.value("social_capital_max", cfg.community_response.social_capital_max);
+        cfg.community_response.capital_normalizer = cr.value("capital_normalizer", cfg.community_response.capital_normalizer);
+        cfg.community_response.social_normalizer = cr.value("social_normalizer", cfg.community_response.social_normalizer);
+        cfg.community_response.memory_decay_floor = cr.value("memory_decay_floor", cfg.community_response.memory_decay_floor);
+        cfg.community_response.grievance_normalizer = cr.value("grievance_normalizer", cfg.community_response.grievance_normalizer);
+        cfg.community_response.grievance_shock_threshold = cr.value("grievance_shock_threshold", cfg.community_response.grievance_shock_threshold);
+        cfg.community_response.resistance_revenue_penalty = cr.value("resistance_revenue_penalty", cfg.community_response.resistance_revenue_penalty);
+        cfg.community_response.trauma_grievance_floor_scale = cr.value("trauma_grievance_floor_scale", cfg.community_response.trauma_grievance_floor_scale);
+        cfg.community_response.trauma_trust_ceiling_scale = cr.value("trauma_trust_ceiling_scale", cfg.community_response.trauma_trust_ceiling_scale);
+        cfg.community_response.regression_cooldown_ticks = cr.value("regression_cooldown_ticks", cfg.community_response.regression_cooldown_ticks);
+
+        const auto ns = j.value("npc_spending", nlohmann::json::object());
+        cfg.npc_spending.reference_income = ns.value("reference_income", cfg.npc_spending.reference_income);
+        cfg.npc_spending.max_income_factor = ns.value("max_income_factor", cfg.npc_spending.max_income_factor);
+        cfg.npc_spending.min_price_factor = ns.value("min_price_factor", cfg.npc_spending.min_price_factor);
+        cfg.npc_spending.default_base_demand_units = ns.value("default_base_demand_units", cfg.npc_spending.default_base_demand_units);
+        cfg.npc_spending.default_income_elasticity = ns.value("default_income_elasticity", cfg.npc_spending.default_income_elasticity);
+        cfg.npc_spending.default_price_elasticity = ns.value("default_price_elasticity", cfg.npc_spending.default_price_elasticity);
+        cfg.npc_spending.default_base_price = ns.value("default_base_price", cfg.npc_spending.default_base_price);
+        cfg.npc_spending.default_quality_weight = ns.value("default_quality_weight", cfg.npc_spending.default_quality_weight);
+
+        const auto at = j.value("antitrust", nlohmann::json::object());
+        cfg.antitrust.market_share_threshold = at.value("market_share_threshold", cfg.antitrust.market_share_threshold);
+        cfg.antitrust.dominant_price_mover_threshold = at.value("dominant_price_mover_threshold", cfg.antitrust.dominant_price_mover_threshold);
+        cfg.antitrust.meter_fill_per_threshold_tick = at.value("meter_fill_per_threshold_tick", cfg.antitrust.meter_fill_per_threshold_tick);
+        cfg.antitrust.dominance_proposal_pressure_per_tick = at.value("dominance_proposal_pressure_per_tick", cfg.antitrust.dominance_proposal_pressure_per_tick);
+        cfg.antitrust.proposal_pressure_decay_rate = at.value("proposal_pressure_decay_rate", cfg.antitrust.proposal_pressure_decay_rate);
+        cfg.antitrust.proposal_threshold = at.value("proposal_threshold", cfg.antitrust.proposal_threshold);
+        cfg.antitrust.monthly_interval = at.value("monthly_interval", cfg.antitrust.monthly_interval);
+
+        const auto fs = j.value("facility_signals", nlohmann::json::object());
+        cfg.facility_signals.default_weight = fs.value("default_weight", cfg.facility_signals.default_weight);
+        cfg.facility_signals.karst_mitigation_bonus = fs.value("karst_mitigation_bonus", cfg.facility_signals.karst_mitigation_bonus);
+        cfg.facility_signals.facility_count_normalizer = fs.value("facility_count_normalizer", cfg.facility_signals.facility_count_normalizer);
+        cfg.facility_signals.detection_to_fill_rate_scale = fs.value("detection_to_fill_rate_scale", cfg.facility_signals.detection_to_fill_rate_scale);
+        cfg.facility_signals.fill_rate_max = fs.value("fill_rate_max", cfg.facility_signals.fill_rate_max);
+        cfg.facility_signals.surveillance_threshold = fs.value("surveillance_threshold", cfg.facility_signals.surveillance_threshold);
+        cfg.facility_signals.formal_inquiry_threshold = fs.value("formal_inquiry_threshold", cfg.facility_signals.formal_inquiry_threshold);
+        cfg.facility_signals.raid_threshold = fs.value("raid_threshold", cfg.facility_signals.raid_threshold);
+        cfg.facility_signals.notice_threshold = fs.value("notice_threshold", cfg.facility_signals.notice_threshold);
+        cfg.facility_signals.audit_threshold = fs.value("audit_threshold", cfg.facility_signals.audit_threshold);
+        cfg.facility_signals.enforcement_threshold = fs.value("enforcement_threshold", cfg.facility_signals.enforcement_threshold);
+        cfg.facility_signals.meter_decay_rate = fs.value("meter_decay_rate", cfg.facility_signals.meter_decay_rate);
+        cfg.facility_signals.personnel_violence_multiplier = fs.value("personnel_violence_multiplier", cfg.facility_signals.personnel_violence_multiplier);
     }
 
     return cfg;

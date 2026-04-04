@@ -18,39 +18,8 @@ namespace econlife {
 // For V1 bootstrap these are compile-time defaults matching the interface spec.
 // ---------------------------------------------------------------------------
 struct FinancialDistributionConstants {
-    // Ticks per quarter (365 / 4 ~ 91 ticks).
-    static constexpr uint32_t ticks_per_quarter = 91;
-
-    // Maximum ticks of deferred salary before wage theft memory is generated.
-    static constexpr uint32_t deferred_salary_max_ticks = 30;
-
-    // Monthly reporting threshold for owner's draw. Draws above this per month
-    // generate a suspicious_transaction evidence token.
-    static constexpr float draw_reporting_threshold = 20000.0f;
-
-    // Ticks per month (used for draw accumulation tracking).
-    static constexpr uint32_t ticks_per_month = 30;
-
-    // Working capital floor multiplier: business must retain
-    // cost_per_tick * cash_surplus_months in cash after dividend payout.
-    static constexpr float cash_surplus_months = 5.0f;
-
-    // Board rubber-stamp threshold: boards with independence_score below this
-    // auto-approve all compensation decisions.
-    static constexpr float board_rubber_stamp_threshold = 0.3f;
-
-    // Board approval bonus threshold: bonus_rate above this requires board
-    // approval at medium/large scale.
-    static constexpr float board_approval_bonus_threshold = 0.25f;
-
-    // Tax withholding rate (simplified flat rate for V1).
-    static constexpr float default_tax_withholding_rate = 0.20f;
-
-    // Owner's draw default fraction of profit for micro businesses per tick.
-    static constexpr float owners_draw_fraction = 0.5f;
-
-    // Emotional weight for wage theft memory entry.
-    static constexpr float wage_theft_emotional_weight = -0.6f;
+    // Migrated to FinancialDistributionConfig in core/config/package_config.h.
+    // This struct is kept empty for backward compatibility.
 };
 
 // ---------------------------------------------------------------------------

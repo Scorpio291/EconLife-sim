@@ -61,36 +61,36 @@ TEST_CASE("LE fill rate clamped to max", "[facility_signals][tier7]") {
 }
 
 TEST_CASE("Investigator meter threshold surveillance", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule::evaluate_investigator_status(0.29f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.29f) ==
           InvestigatorMeterStatus::inactive);
-    CHECK(FacilitySignalsModule::evaluate_investigator_status(0.30f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.30f) ==
           InvestigatorMeterStatus::surveillance);
-    CHECK(FacilitySignalsModule::evaluate_investigator_status(0.59f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.59f) ==
           InvestigatorMeterStatus::surveillance);
 }
 
 TEST_CASE("Investigator meter threshold formal inquiry", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule::evaluate_investigator_status(0.60f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.60f) ==
           InvestigatorMeterStatus::formal_inquiry);
-    CHECK(FacilitySignalsModule::evaluate_investigator_status(0.79f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.79f) ==
           InvestigatorMeterStatus::formal_inquiry);
 }
 
 TEST_CASE("Investigator meter threshold raid imminent", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule::evaluate_investigator_status(0.80f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.80f) ==
           InvestigatorMeterStatus::raid_imminent);
-    CHECK(FacilitySignalsModule::evaluate_investigator_status(1.0f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(1.0f) ==
           InvestigatorMeterStatus::raid_imminent);
 }
 
 TEST_CASE("Regulator meter thresholds", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule::evaluate_regulator_status(0.24f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.24f) ==
           RegulatorMeterStatus::inactive);
-    CHECK(FacilitySignalsModule::evaluate_regulator_status(0.25f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.25f) ==
           RegulatorMeterStatus::notice_filed);
-    CHECK(FacilitySignalsModule::evaluate_regulator_status(0.50f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.50f) ==
           RegulatorMeterStatus::formal_audit);
-    CHECK(FacilitySignalsModule::evaluate_regulator_status(0.75f) ==
+    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.75f) ==
           RegulatorMeterStatus::enforcement_action);
 }
 
