@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/config/package_config.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/protection_rackets/protection_rackets_module.h"
@@ -64,26 +65,22 @@ TEST_CASE("ProtectionRackets: defensive incumbent has higher base refusal",
 }
 
 TEST_CASE("ProtectionRackets: escalation stage thresholds", "[protection_rackets][tier8]") {
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(0) ==
-            RacketEscalationStage::demand_issued);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(4) ==
-            RacketEscalationStage::demand_issued);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(5) ==
-            RacketEscalationStage::warning);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(14) ==
-            RacketEscalationStage::warning);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(15) ==
-            RacketEscalationStage::property_damage);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(29) ==
-            RacketEscalationStage::property_damage);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(30) ==
-            RacketEscalationStage::violence);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(59) ==
-            RacketEscalationStage::violence);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(60) ==
-            RacketEscalationStage::abandonment);
-    REQUIRE(ProtectionRacketsModule::determine_escalation_stage(100) ==
-            RacketEscalationStage::abandonment);
+    constexpr ProtectionRacketsConfig cfg{};
+    auto stage = [&](uint32_t t) {
+        return ProtectionRacketsModule::determine_escalation_stage(
+            t, cfg.warning_threshold, cfg.property_damage_threshold, cfg.violence_threshold,
+            cfg.abandonment_threshold);
+    };
+    REQUIRE(stage(0) == RacketEscalationStage::demand_issued);
+    REQUIRE(stage(4) == RacketEscalationStage::demand_issued);
+    REQUIRE(stage(5) == RacketEscalationStage::warning);
+    REQUIRE(stage(14) == RacketEscalationStage::warning);
+    REQUIRE(stage(15) == RacketEscalationStage::property_damage);
+    REQUIRE(stage(29) == RacketEscalationStage::property_damage);
+    REQUIRE(stage(30) == RacketEscalationStage::violence);
+    REQUIRE(stage(59) == RacketEscalationStage::violence);
+    REQUIRE(stage(60) == RacketEscalationStage::abandonment);
+    REQUIRE(stage(100) == RacketEscalationStage::abandonment);
 }
 
 TEST_CASE("ProtectionRackets: business can pay check", "[protection_rackets][tier8]") {
@@ -97,13 +94,13 @@ TEST_CASE("ProtectionRackets: violence LE multiplier applied", "[protection_rack
     REQUIRE_THAT(multiplied, WithinAbs(0.015f, 0.001f));
 }
 
-TEST_CASE("ProtectionRackets: demand rate constant is 0.08", "[protection_rackets][tier8]") {
-    REQUIRE_THAT(ProtectionRacketsModule::DEMAND_RATE, WithinAbs(0.08f, 0.001f));
+TEST_CASE("ProtectionRackets: demand rate default is 0.08", "[protection_rackets][tier8]") {
+    REQUIRE_THAT(ProtectionRacketsConfig{}.demand_rate, WithinAbs(0.08f, 0.001f));
 }
 
-TEST_CASE("ProtectionRackets: grievance per demand unit constant is 0.00001",
+TEST_CASE("ProtectionRackets: grievance per demand unit default is 0.00001",
           "[protection_rackets][tier8]") {
-    REQUIRE_THAT(ProtectionRacketsModule::GRIEVANCE_PER_DEMAND_UNIT,
+    REQUIRE_THAT(ProtectionRacketsConfig{}.grievance_per_demand_unit,
                  WithinAbs(0.00001f, 0.000001f));
 }
 
@@ -125,11 +122,13 @@ TEST_CASE("ProtectionRackets: violation severity reduces refusal", "[protection_
     REQUIRE(with_violation < without_violation);
 }
 
-TEST_CASE("ProtectionRackets: property damage severity is 0.4", "[protection_rackets][tier8]") {
-    REQUIRE_THAT(ProtectionRacketsModule::PROPERTY_DAMAGE_SEVERITY, WithinAbs(0.4f, 0.001f));
+TEST_CASE("ProtectionRackets: property damage severity default is 0.4",
+          "[protection_rackets][tier8]") {
+    REQUIRE_THAT(ProtectionRacketsConfig{}.property_damage_severity, WithinAbs(0.4f, 0.001f));
 }
 
-TEST_CASE("ProtectionRackets: warning memory weight is -0.5", "[protection_rackets][tier8]") {
-    REQUIRE_THAT(ProtectionRacketsModule::MEMORY_EMOTIONAL_WEIGHT_WARNING,
+TEST_CASE("ProtectionRackets: warning memory weight default is -0.5",
+          "[protection_rackets][tier8]") {
+    REQUIRE_THAT(ProtectionRacketsConfig{}.memory_emotional_weight_warning,
                  WithinAbs(-0.5f, 0.001f));
 }

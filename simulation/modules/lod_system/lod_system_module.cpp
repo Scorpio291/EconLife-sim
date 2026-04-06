@@ -22,7 +22,8 @@ float LodSystemModule::compute_lod2_price_modifier(float consumption, float prod
                                                    float supply_floor) {
     float denom = std::max(production, supply_floor);
     float ratio = consumption / denom;
-    return std::clamp(ratio, LOD2_MIN_MODIFIER, LOD2_MAX_MODIFIER);
+    constexpr LodSystemConfig kDefaults{};
+    return std::clamp(ratio, kDefaults.lod2_min_modifier, kDefaults.lod2_max_modifier);
 }
 
 float LodSystemModule::compute_smoothed_modifier(float old_modifier, float raw_modifier,
@@ -134,7 +135,7 @@ void LodSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
         if (total_production > 0.0f || total_consumption > 0.0f) {
             float raw_modifier =
-                compute_lod2_price_modifier(total_consumption, total_production, SUPPLY_FLOOR);
+                compute_lod2_price_modifier(total_consumption, total_production, cfg_.supply_floor);
 
             // lod2_price_index carries a smoothed_modifier field; apply lerp smoothing.
             // Access pattern: lod2_price_index is a unique_ptr in WorldState.

@@ -10,8 +10,9 @@ namespace econlife {
 
 float RegionalConditionsModule::compute_stability_recovery(float current_stability,
                                                            uint32_t instability_events) {
-    float recovery = STABILITY_RECOVERY_RATE * (1.0f - current_stability);
-    float degradation = static_cast<float>(instability_events) * EVENT_STABILITY_IMPACT;
+    constexpr RegionalConditionsConfig kDefaults{};
+    float recovery = kDefaults.stability_recovery_rate * (1.0f - current_stability);
+    float degradation = static_cast<float>(instability_events) * kDefaults.event_stability_impact;
     float result = current_stability + recovery - degradation;
     return std::clamp(result, 0.0f, 1.0f);
 }

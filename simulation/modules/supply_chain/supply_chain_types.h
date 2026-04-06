@@ -13,33 +13,14 @@ namespace econlife {
 // ---------------------------------------------------------------------------
 // Supply Chain Configuration Constants
 //
-// Transport cost and transit time formulas for V1.
-// These would ultimately come from simulation_config.json; hardcoded as
-// constexpr for the bootstrap phase.
+// All runtime-tunable constants have moved to SupplyChainModuleConfig in
+// core/config/package_config.h. Only the compile-time sentinel below remains
+// here because it is used as a template / switch-case constant that must be
+// known at compile time.
 // ---------------------------------------------------------------------------
 struct SupplyChainConfig {
-    // Transport cost = base_transport_rate * distance_km * (1 + terrain_roughness *
-    // terrain_cost_coeff)
-    static constexpr float base_transport_rate = 0.01f;  // cost per unit per km
-    static constexpr float terrain_cost_coeff = 0.5f;    // multiplier for terrain roughness
-    static constexpr float infra_speed_coeff = 0.5f;     // infrastructure bonus to speed
-
-    // Transit time = ceil(distance_km / (mode_speed * (1 + infrastructure * infra_speed_coeff)))
-    // Mode speeds in km per tick (1 tick = 1 day)
-    static constexpr float road_speed = 300.0f;
-    static constexpr float rail_speed = 600.0f;
-    static constexpr float sea_speed = 500.0f;
-    static constexpr float river_speed = 200.0f;
-    static constexpr float air_speed = 2000.0f;
-
-    // Criminal interception
-    static constexpr float max_concealment_modifier = 0.40f;
-    static constexpr float base_interception_risk = 0.05f;  // per-tick base risk for criminal
-
-    // Perishable decay per tick (fraction of quantity_remaining lost per tick in transit)
-    static constexpr float default_perishable_decay_rate = 0.02f;
-
-    // LOD 1 import transit: uses sea_speed and geographic centroid distance
+    // LOD 1 import transit: uses sea_speed and geographic centroid distance.
+    // Compile-time sentinel — must remain static constexpr.
     static constexpr uint32_t lod1_sentinel_province_id = 0xFFFFFFFF;
 };
 

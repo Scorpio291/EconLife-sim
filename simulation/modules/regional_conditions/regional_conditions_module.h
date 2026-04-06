@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "regional_conditions_types.h"
 
@@ -13,6 +14,8 @@ struct DeltaBuffer;
 
 class RegionalConditionsModule : public ITickModule {
    public:
+    explicit RegionalConditionsModule(const RegionalConditionsConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "regional_conditions"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -30,12 +33,8 @@ class RegionalConditionsModule : public ITickModule {
     static float compute_drought_recovery(float current_modifier, float recovery_rate);
     static float compute_inequality_from_gini(float gini_coefficient);
 
-    // Constants
-    static constexpr float STABILITY_RECOVERY_RATE = 0.001f;
-    static constexpr float EVENT_STABILITY_IMPACT = 0.05f;
-    static constexpr float INFRASTRUCTURE_DECAY_RATE = 0.0002f;
-    static constexpr float DROUGHT_RECOVERY_RATE = 0.005f;
-    static constexpr float FLOOD_RECOVERY_RATE = 0.01f;
+   private:
+    RegionalConditionsConfig cfg_;
 };
 
 }  // namespace econlife

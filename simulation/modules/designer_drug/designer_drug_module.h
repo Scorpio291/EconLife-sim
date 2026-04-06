@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "designer_drug_types.h"
 
@@ -12,6 +13,8 @@ struct DeltaBuffer;
 
 class DesignerDrugModule : public ITickModule {
    public:
+    explicit DesignerDrugModule(const DesignerDrugConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "designer_drug"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -24,18 +27,12 @@ class DesignerDrugModule : public ITickModule {
     // --- Static utilities ---
     static bool is_detection_triggered(float cumulative_evidence, float threshold);
     static uint32_t compute_review_duration(uint32_t base_duration, float political_delay);
-    static float compute_market_margin(SchedulingStage stage, bool has_successor);
+    float compute_market_margin(SchedulingStage stage, bool has_successor) const;
     static bool should_check_detection(uint32_t current_tick, uint32_t monthly_interval);
     static float accumulate_evidence_weight(float current, float new_weight);
 
-    static constexpr float DETECTION_THRESHOLD = 2.5f;
-    static constexpr uint32_t BASE_REVIEW_DURATION = 180;
-    static constexpr float UNSCHEDULED_MARGIN = 2.5f;
-    static constexpr float SCHEDULED_MARGIN = 1.0f;
-    static constexpr float NO_SUCCESSOR_MARGIN = 0.80f;
-    static constexpr uint32_t MONTHLY_INTERVAL = 30;
-
    private:
+    DesignerDrugConfig cfg_;
     std::vector<DesignerDrugCompound> compounds_;
 };
 

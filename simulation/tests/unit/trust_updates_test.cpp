@@ -77,10 +77,11 @@ TEST_CASE("TrustUpdates: negative delta does not trigger ceiling cap", "[trust_u
     REQUIRE_THAT(result, WithinAbs(0.10f, 0.01f));
 }
 
-TEST_CASE("TrustUpdates: constants match spec", "[trust_updates][tier10]") {
-    REQUIRE_THAT(TrustUpdatesModule::CATASTROPHIC_TRUST_LOSS_THRESHOLD, WithinAbs(-0.55f, 0.001f));
-    REQUIRE_THAT(TrustUpdatesModule::CATASTROPHIC_TRUST_FLOOR, WithinAbs(0.10f, 0.001f));
-    REQUIRE_THAT(TrustUpdatesModule::RECOVERY_CEILING_FACTOR, WithinAbs(0.60f, 0.001f));
-    REQUIRE_THAT(TrustUpdatesModule::RECOVERY_CEILING_MINIMUM, WithinAbs(0.15f, 0.001f));
-    REQUIRE_THAT(TrustUpdatesModule::SIGNIFICANT_CHANGE_THRESHOLD, WithinAbs(0.10f, 0.001f));
+TEST_CASE("TrustUpdates: config defaults match spec", "[trust_updates][tier10]") {
+    constexpr TrustUpdatesConfig cfg{};
+    REQUIRE_THAT(cfg.catastrophic_trust_loss_threshold, WithinAbs(-0.55f, 0.001f));
+    REQUIRE_THAT(cfg.catastrophic_trust_floor, WithinAbs(0.10f, 0.001f));
+    REQUIRE_THAT(cfg.recovery_ceiling_factor, WithinAbs(0.60f, 0.001f));
+    REQUIRE_THAT(cfg.recovery_ceiling_minimum, WithinAbs(0.15f, 0.001f));
+    REQUIRE_THAT(cfg.significant_change_threshold, WithinAbs(0.10f, 0.001f));
 }

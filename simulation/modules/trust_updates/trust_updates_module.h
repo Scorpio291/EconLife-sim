@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "trust_updates_types.h"
 
@@ -13,6 +14,8 @@ struct DeltaBuffer;
 
 class TrustUpdatesModule : public ITickModule {
    public:
+    explicit TrustUpdatesModule(const TrustUpdatesConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "trust_updates"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -39,15 +42,8 @@ class TrustUpdatesModule : public ITickModule {
     // Check if trust change is significant enough for memory
     static bool is_significant_change(float trust_delta);
 
-    // Constants
-    static constexpr float CATASTROPHIC_TRUST_LOSS_THRESHOLD = -0.55f;
-    static constexpr float CATASTROPHIC_TRUST_FLOOR = 0.10f;
-    static constexpr float RECOVERY_CEILING_FACTOR = 0.60f;
-    static constexpr float RECOVERY_CEILING_MINIMUM = 0.15f;
-    static constexpr float SIGNIFICANT_CHANGE_THRESHOLD = 0.10f;
-    static constexpr float TRUST_MIN = -1.0f;
-    static constexpr float TRUST_MAX = 1.0f;
-    static constexpr float DEFAULT_RECOVERY_CEILING = 1.0f;
+   private:
+    TrustUpdatesConfig cfg_;
 };
 
 }  // namespace econlife

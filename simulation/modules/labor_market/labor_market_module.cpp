@@ -35,7 +35,7 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
     process_hiring_decisions(province_idx, state, province_delta);
 
     // Step 3: Monthly voluntary departures (every 30 ticks).
-    if (state.current_tick % LaborConfig::monthly_tick_interval == 0) {
+    if (state.current_tick % LaborModuleConfig{}.monthly_tick_interval == 0) {
         process_voluntary_departures(province_idx, state, province_delta, rng);
     }
 
@@ -47,7 +47,7 @@ void LaborMarketModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Global post-pass: called by the orchestrator after all province-parallel
     // execute_province() calls have been merged and applied.
     // Monthly wage update runs globally (not per-province).
-    if (state.current_tick % LaborConfig::monthly_tick_interval == 0) {
+    if (state.current_tick % LaborModuleConfig{}.monthly_tick_interval == 0) {
         update_regional_wages(state);
     }
 }
@@ -111,7 +111,7 @@ void LaborMarketModule::process_wage_payments(uint32_t province_id, const WorldS
             rec.deferred_salary_ticks++;
 
             // If deferred too long, generate wage theft memory.
-            if (rec.deferred_salary_ticks > LaborConfig::deferred_salary_max_ticks) {
+            if (rec.deferred_salary_ticks > LaborModuleConfig{}.deferred_salary_max_ticks) {
                 NPCDelta npc_delta{};
                 npc_delta.npc_id = rec.npc_id;
 
@@ -275,14 +275,14 @@ void LaborMarketModule::process_voluntary_departures(uint32_t province_id, const
         float satisfaction = compute_worker_satisfaction(*npc);
 
         // Only evaluate departure if satisfaction below threshold.
-        if (satisfaction >= LaborConfig::voluntary_departure_threshold)
+        if (satisfaction >= LaborModuleConfig{}.voluntary_departure_threshold)
             continue;
 
         // career motivation weight (OutcomeType::career_advance = 2).
         float career_motivation = npc->motivations.weights[2];
 
         float departure_prob =
-            LaborConfig::departure_base_rate * (1.0f - satisfaction) * career_motivation;
+            LaborModuleConfig{}.departure_base_rate * (1.0f - satisfaction) * career_motivation;
 
         // Draw from RNG to decide departure.
         float roll = rng.next_float();
@@ -355,7 +355,7 @@ void LaborMarketModule::update_regional_wages(const WorldState& state) {
         float median_income = prov.demographics.income_middle_fraction;
         // For V1: use a reasonable default if median_income is near-zero.
         float base_wage = (median_income > 0.01f) ? median_income : 1.0f;
-        float wage_ceiling = LaborConfig::wage_ceiling_multiplier * base_wage;
+        float wage_ceiling = LaborModuleConfig{}.wage_ceiling_multiplier * base_wage;
 
         // Count demand and supply per domain.
         // We iterate over a fixed set of SkillDomain values.
@@ -405,10 +405,10 @@ void LaborMarketModule::update_regional_wages(const WorldState& state) {
 
             // Adjust wage.
             float new_wage =
-                current_wage * (1.0f + LaborConfig::wage_adjustment_rate * (ratio - 1.0f));
+                current_wage * (1.0f + LaborModuleConfig{}.wage_adjustment_rate * (ratio - 1.0f));
 
             // Clamp.
-            new_wage = std::max(LaborConfig::wage_floor, new_wage);
+            new_wage = std::max(LaborModuleConfig{}.wage_floor, new_wage);
             new_wage = std::min(wage_ceiling, new_wage);
 
             regional_wages_[key] = new_wage;
@@ -451,11 +451,11 @@ float LaborMarketModule::compute_employer_reputation(uint32_t business_id,
     }
 
     if (memory_count == 0) {
-        return LaborConfig::reputation_default;
+        return LaborModuleConfig{}.reputation_default;
     }
 
     if (total_weight <= 0.0f) {
-        return LaborConfig::reputation_default;
+        return LaborModuleConfig{}.reputation_default;
     }
 
     return positive_weight / total_weight;
@@ -515,20 +515,20 @@ uint32_t LaborMarketModule::effective_pool_size(HiringChannel channel, float rep
     uint32_t base_size = 0;
     switch (channel) {
         case HiringChannel::public_board:
-            base_size = LaborConfig::pool_size_public;
+            base_size = LaborModuleConfig{}.pool_size_public;
             break;
         case HiringChannel::professional_network:
-            base_size = LaborConfig::pool_size_professional;
+            base_size = LaborModuleConfig{}.pool_size_professional;
             break;
         case HiringChannel::personal_referral:
-            base_size = LaborConfig::pool_size_referral;
+            base_size = LaborModuleConfig{}.pool_size_referral;
             break;
     }
 
     // Low reputation penalty: reduce pool size.
-    if (reputation < LaborConfig::reputation_threshold) {
-        float penalty = (LaborConfig::reputation_threshold - reputation) *
-                        LaborConfig::reputation_pool_penalty_scale;
+    if (reputation < LaborModuleConfig{}.reputation_threshold) {
+        float penalty = (LaborModuleConfig{}.reputation_threshold - reputation) *
+                        LaborModuleConfig{}.reputation_pool_penalty_scale;
         uint32_t reduction = static_cast<uint32_t>(std::round(penalty));
         if (reduction >= base_size) {
             return 1;  // At least 1 applicant.
@@ -549,9 +549,9 @@ float LaborMarketModule::compute_salary_expectation(float regional_wage, float m
     float expectation = regional_wage * (1.0f + money_motivation * 0.3f);
 
     // Low reputation premium.
-    if (employer_reputation < LaborConfig::reputation_threshold) {
-        float premium = 1.0f + (LaborConfig::reputation_threshold - employer_reputation) *
-                                   LaborConfig::salary_premium_per_rep_point;
+    if (employer_reputation < LaborModuleConfig{}.reputation_threshold) {
+        float premium = 1.0f + (LaborModuleConfig{}.reputation_threshold - employer_reputation) *
+                                   LaborModuleConfig{}.salary_premium_per_rep_point;
         expectation *= premium;
     }
 

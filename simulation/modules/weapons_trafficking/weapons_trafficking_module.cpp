@@ -95,10 +95,10 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
             continue;
 
         float diversion_fraction = biz->regulatory_violation_severity * 0.5f;  // proxy
-        diversion_fraction = clamp_diversion_fraction(diversion_fraction, MAX_DIVERSION_FRACTION);
+        diversion_fraction = clamp_diversion_fraction(diversion_fraction, cfg_.max_diversion_fraction);
 
         float diverted =
-            compute_diversion_output(total_output, diversion_fraction, MAX_DIVERSION_FRACTION);
+            compute_diversion_output(total_output, diversion_fraction, cfg_.max_diversion_fraction);
         float formal = total_output - diverted;
 
         total_weapon_supply += diverted;
@@ -110,7 +110,7 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
         if (diverted > 0.0f) {
             // Revenue = diverted quantity * informal spot price
             float informal_price = compute_informal_spot_price(
-                BASE_PRICE_SMALL_ARMS, demand_modifier, diverted, PRICE_FLOOR_SUPPLY);
+                cfg_.base_price_small_arms, demand_modifier, diverted, cfg_.price_floor_supply);
             float sales_revenue = diverted * informal_price;
 
             BusinessDelta revenue_delta;
@@ -176,7 +176,7 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
                                                      EvidenceType::physical,
                                                      biz.owner_id,
                                                      biz.owner_id,
-                                                     EMBARGO_METER_SPIKE,
+                                                     cfg_.embargo_meter_spike,
                                                      0.001f,
                                                      state.current_tick,
                                                      province.id,

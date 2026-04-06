@@ -97,7 +97,7 @@ TEST_CASE("DrugEconomy: zero addiction rate produces zero demand", "[drug_econom
 }
 
 TEST_CASE("DrugEconomy: wholesale price fraction constant is 0.45", "[drug_economy][tier8]") {
-    REQUIRE_THAT(DrugEconomyModule::WHOLESALE_PRICE_FRACTION, WithinAbs(0.45f, 0.001f));
+    REQUIRE_THAT(DrugEconomyConfig{}.wholesale_price_fraction, WithinAbs(0.45f, 0.001f));
 }
 
 TEST_CASE("DrugEconomy: quality degradation factors match spec", "[drug_economy][tier8]") {

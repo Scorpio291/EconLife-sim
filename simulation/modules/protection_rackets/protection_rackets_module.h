@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "protection_rackets_types.h"
 
@@ -23,6 +24,8 @@ struct NPCBusiness;
 
 class ProtectionRacketsModule : public ITickModule {
    public:
+    explicit ProtectionRacketsModule(const ProtectionRacketsConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "protection_rackets"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -57,7 +60,11 @@ class ProtectionRacketsModule : public ITickModule {
                                              float default_refuse_probability);
 
     // Determine escalation stage from ticks overdue
-    static RacketEscalationStage determine_escalation_stage(uint32_t ticks_overdue);
+    static RacketEscalationStage determine_escalation_stage(uint32_t ticks_overdue,
+                                                             uint32_t warning_threshold,
+                                                             uint32_t property_damage_threshold,
+                                                             uint32_t violence_threshold,
+                                                             uint32_t abandonment_threshold);
 
     // Check if business can pay demand
     static bool can_business_pay(float business_cash, float demand_per_tick);
@@ -66,20 +73,8 @@ class ProtectionRacketsModule : public ITickModule {
     static float compute_violence_le_multiplier(float base_fill_rate,
                                                 float personnel_violence_multiplier);
 
-    // --- Named constants from INTERFACE.md ---
-    static constexpr float DEMAND_RATE = 0.08f;
-    static constexpr float GRIEVANCE_PER_DEMAND_UNIT = 0.00001f;
-    static constexpr float INCUMBENT_REFUSE_PROBABILITY = 0.40f;
-    static constexpr float DEFAULT_REFUSE_PROBABILITY = 0.20f;
-    static constexpr float PERSONNEL_VIOLENCE_MULTIPLIER = 3.0f;
-    static constexpr uint32_t WARNING_THRESHOLD = 5;
-    static constexpr uint32_t PROPERTY_DAMAGE_THRESHOLD = 15;
-    static constexpr uint32_t VIOLENCE_THRESHOLD = 30;
-    static constexpr uint32_t ABANDONMENT_THRESHOLD = 60;
-    static constexpr float PROPERTY_DAMAGE_SEVERITY = 0.4f;
-    static constexpr float MEMORY_EMOTIONAL_WEIGHT_WARNING = -0.5f;
-
    private:
+    ProtectionRacketsConfig cfg_;
     // Internal state: racket records
     std::vector<ProtectionRacket> rackets_;
 };

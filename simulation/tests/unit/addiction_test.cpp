@@ -124,13 +124,14 @@ TEST_CASE("Addiction: recovery complete check", "[addiction][tier10]") {
     REQUIRE(AddictionModule::is_recovery_complete(300, 0.04f) == false);
 }
 
-TEST_CASE("Addiction: constants match spec", "[addiction][tier10]") {
-    REQUIRE_THAT(AddictionModule::TOLERANCE_PER_USE_CASUAL, WithinAbs(0.05f, 0.001f));
-    REQUIRE(AddictionModule::REGULAR_USE_THRESHOLD == 30);
-    REQUIRE(AddictionModule::DEPENDENCY_THRESHOLD == 90);
-    REQUIRE_THAT(AddictionModule::WITHDRAWAL_HEALTH_HIT, WithinAbs(0.005f, 0.001f));
-    REQUIRE_THAT(AddictionModule::DEPENDENT_WORK_EFFICIENCY, WithinAbs(0.70f, 0.01f));
-    REQUIRE(AddictionModule::FULL_RECOVERY_TICKS == 365);
-    REQUIRE_THAT(AddictionModule::TERMINAL_HEALTH_THRESHOLD, WithinAbs(0.15f, 0.01f));
-    REQUIRE(AddictionModule::TERMINAL_PERSISTENCE_TICKS == 90);
+TEST_CASE("Addiction: config defaults match spec", "[addiction][tier10]") {
+    constexpr AddictionConfig cfg{};
+    REQUIRE_THAT(cfg.tolerance_per_use_casual, WithinAbs(0.05f, 0.001f));
+    REQUIRE(cfg.regular_use_threshold == 30);
+    REQUIRE(cfg.dependency_threshold == 90);
+    REQUIRE_THAT(cfg.withdrawal_health_hit, WithinAbs(0.005f, 0.001f));
+    REQUIRE_THAT(cfg.dependent_work_efficiency, WithinAbs(0.70f, 0.01f));
+    REQUIRE(cfg.full_recovery_ticks == 365);
+    REQUIRE_THAT(cfg.terminal_health_threshold, WithinAbs(0.15f, 0.01f));
+    REQUIRE(cfg.terminal_persistence_ticks == 90);
 }

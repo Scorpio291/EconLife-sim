@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "money_laundering_types.h"
 
@@ -22,6 +23,8 @@ struct DeltaBuffer;
 
 class MoneyLaunderingModule : public ITickModule {
    public:
+    explicit MoneyLaunderingModule(const MoneyLaunderingConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "money_laundering"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -70,23 +73,9 @@ class MoneyLaunderingModule : public ITickModule {
     // Check if operation is completed
     static bool is_operation_completed(float laundered_so_far, float dirty_amount);
 
-    // --- Named constants from INTERFACE.md ---
-    static constexpr uint32_t STRUCTURING_TOKEN_INTERVAL = 7;
-    static constexpr uint32_t SHELL_CHAIN_EVIDENCE_INTERVAL = 30;
-    static constexpr uint32_t TRADE_INVOICE_EVIDENCE_INTERVAL = 20;
-    static constexpr uint32_t COMMINGLING_EVIDENCE_INTERVAL = 15;
-    static constexpr uint32_t MAX_CHAIN_DEPTH = 5;
-    static constexpr float COMMINGLE_CAPACITY_FRACTION = 0.40f;
-    static constexpr float RATE_COMMINGLE_MAX = 5000.0f;
-    static constexpr float CRYPTO_EVIDENCE_SKILL_DIVISOR = 10.0f;
-    static constexpr float FIU_TOKEN_THRESHOLD = 0.35f;
-    static constexpr float FIU_METER_FILL_SCALE = 0.10f;
-    static constexpr uint32_t FIU_MONTHLY_INTERVAL = 30;
-    static constexpr uint32_t STRUCTURING_DEPOSIT_COUNT_THRESHOLD = 8;
-    static constexpr float ORG_CAPACITY_MULTIPLIER = 0.25f;
-    static constexpr uint32_t TICKS_PER_QUARTER = 90;
-
    private:
+    MoneyLaunderingConfig cfg_;
+
     // Internal state: active operations
     std::vector<LaunderingOperation> operations_;
     std::vector<FIUPatternResult> fiu_results_;

@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "population_aging_types.h"
 
@@ -12,6 +13,8 @@ struct DeltaBuffer;
 
 class PopulationAgingModule : public ITickModule {
    public:
+    explicit PopulationAgingModule(const PopulationAgingConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "population_aging"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -29,12 +32,12 @@ class PopulationAgingModule : public ITickModule {
     static float compute_gini_coefficient(const std::vector<float>& sorted_incomes);
     static bool is_monthly_tick(uint32_t current_tick);
 
-    // Constants
-    static constexpr float COHORT_INCOME_UPDATE_RATE = 0.05f;
-    static constexpr float COHORT_EMPLOYMENT_UPDATE_RATE = 0.02f;
-    static constexpr float MAX_EDUCATION_DRIFT_PER_YEAR = 0.01f;
+    // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;
     static constexpr uint32_t TICKS_PER_YEAR = 365;
+
+   private:
+    PopulationAgingConfig cfg_;
 };
 
 }  // namespace econlife

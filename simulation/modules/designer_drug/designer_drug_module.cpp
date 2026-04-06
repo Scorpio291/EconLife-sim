@@ -17,15 +17,15 @@ uint32_t DesignerDrugModule::compute_review_duration(uint32_t base_duration,
     return static_cast<uint32_t>(static_cast<float>(base_duration) * political_delay);
 }
 
-float DesignerDrugModule::compute_market_margin(SchedulingStage stage, bool has_successor) {
+float DesignerDrugModule::compute_market_margin(SchedulingStage stage, bool has_successor) const {
     switch (stage) {
         case SchedulingStage::unscheduled:
         case SchedulingStage::review_initiated:
-            return UNSCHEDULED_MARGIN;
+            return cfg_.unscheduled_margin;
         case SchedulingStage::scheduled:
-            return has_successor ? SCHEDULED_MARGIN : NO_SUCCESSOR_MARGIN;
+            return has_successor ? cfg_.scheduled_margin : cfg_.no_successor_margin;
         default:
-            return SCHEDULED_MARGIN;
+            return cfg_.scheduled_margin;
     }
 }
 
@@ -43,7 +43,7 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
                   return a.compound_id < b.compound_id;
               });
 
-    bool monthly_check = should_check_detection(state.current_tick, MONTHLY_INTERVAL);
+    bool monthly_check = should_check_detection(state.current_tick, cfg_.monthly_interval);
 
     for (auto& compound : compounds_) {
         if (compound.stage == SchedulingStage::scheduled)

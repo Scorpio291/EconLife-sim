@@ -354,7 +354,7 @@ TEST_CASE("test_criminal_sector_uses_informal_price", "[production][tier1]") {
     // The criminal sector flag is verified through the get_price_for_business
     // method which applies the informal_price_discount. We verify the
     // discount constant is correctly defined.
-    REQUIRE_THAT(ProductionModule::informal_price_discount, WithinAbs(0.7f, 0.001f));
+    REQUIRE_THAT(ProductionConfig{}.informal_price_discount, WithinAbs(0.7f, 0.001f));
 }
 
 TEST_CASE("test_derived_demand", "[production][tier1]") {

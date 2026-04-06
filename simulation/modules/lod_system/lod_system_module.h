@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "lod_system_types.h"
 
@@ -13,6 +14,8 @@ struct DeltaBuffer;
 
 class LodSystemModule : public ITickModule {
    public:
+    explicit LodSystemModule(const LodSystemConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "lod_system"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -32,13 +35,12 @@ class LodSystemModule : public ITickModule {
     static bool is_monthly_tick(uint32_t current_tick);
     static bool is_annual_tick(uint32_t current_tick);
 
-    // Constants
+    // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;
     static constexpr uint32_t TICKS_PER_YEAR = 365;
-    static constexpr float LOD2_MIN_MODIFIER = 0.50f;
-    static constexpr float LOD2_MAX_MODIFIER = 2.00f;
-    static constexpr float LOD2_SMOOTHING_RATE = 0.30f;
-    static constexpr float SUPPLY_FLOOR = 1.0f;
+
+   private:
+    LodSystemConfig cfg_;
 };
 
 }  // namespace econlife
