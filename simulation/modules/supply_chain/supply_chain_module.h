@@ -8,6 +8,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/supply_chain/supply_chain_types.h"
 
@@ -31,6 +32,8 @@ class DeterministicRNG;
 // ---------------------------------------------------------------------------
 class SupplyChainModule : public ITickModule {
    public:
+    explicit SupplyChainModule(const SupplyChainModuleConfig& scfg = {}) : scfg_(scfg) {}
+
     std::string_view name() const noexcept override { return "supply_chain"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -64,6 +67,8 @@ class SupplyChainModule : public ITickModule {
     static float compute_transport_cost(const RouteProfile& route, float quantity);
 
    private:
+    SupplyChainModuleConfig scfg_;
+
     // Build sell offers from market supply for a given province.
     void collect_sell_offers(uint32_t province_id, const WorldState& state,
                              std::vector<SellOffer>& offers) const;

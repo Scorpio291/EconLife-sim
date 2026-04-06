@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "drug_economy_types.h"
 
@@ -23,6 +24,8 @@ struct NPCBusiness;
 
 class DrugEconomyModule : public ITickModule {
    public:
+    explicit DrugEconomyModule(const DrugEconomyConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "drug_economy"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -63,16 +66,8 @@ class DrugEconomyModule : public ITickModule {
     // Compute meth chemical waste signature
     static float compute_meth_waste_signature(float output_quantity, float waste_per_unit);
 
-    // --- Named constants from INTERFACE.md ---
-    static constexpr float WHOLESALE_PRICE_FRACTION = 0.45f;
-    static constexpr float WHOLESALE_QUALITY_DEGRADATION = 0.95f;  // multiply by this
-    static constexpr float RETAIL_QUALITY_DEGRADATION = 0.90f;     // multiply by this
-    static constexpr float METH_WASTE_PER_UNIT = 0.15f;
-    static constexpr float DEMAND_PER_ADDICT = 1.0f;
-    static constexpr float PRECURSOR_RATIO_METH = 2.0f;  // units precursor per unit meth
-    static constexpr float DESIGNER_LEGAL_MARGIN_MULT = 1.5f;
-
    private:
+    DrugEconomyConfig cfg_;
     // Internal state: production records per tick
     std::vector<DrugProductionRecord> production_records_;
     // Per-province legalization status (index = province_id)

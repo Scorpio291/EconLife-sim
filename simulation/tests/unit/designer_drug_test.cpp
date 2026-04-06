@@ -21,23 +21,26 @@ TEST_CASE("DesignerDrug: review duration scales with political delay", "[designe
 }
 
 TEST_CASE("DesignerDrug: market margin unscheduled is 2.5x", "[designer_drug][tier9]") {
-    float margin = DesignerDrugModule::compute_market_margin(SchedulingStage::unscheduled, false);
+    DesignerDrugModule mod;
+    float margin = mod.compute_market_margin(SchedulingStage::unscheduled, false);
     REQUIRE_THAT(margin, WithinAbs(2.5f, 0.01f));
 }
 
 TEST_CASE("DesignerDrug: market margin review_initiated still 2.5x", "[designer_drug][tier9]") {
-    float margin =
-        DesignerDrugModule::compute_market_margin(SchedulingStage::review_initiated, false);
+    DesignerDrugModule mod;
+    float margin = mod.compute_market_margin(SchedulingStage::review_initiated, false);
     REQUIRE_THAT(margin, WithinAbs(2.5f, 0.01f));
 }
 
 TEST_CASE("DesignerDrug: scheduled with successor is 1.0x", "[designer_drug][tier9]") {
-    float margin = DesignerDrugModule::compute_market_margin(SchedulingStage::scheduled, true);
+    DesignerDrugModule mod;
+    float margin = mod.compute_market_margin(SchedulingStage::scheduled, true);
     REQUIRE_THAT(margin, WithinAbs(1.0f, 0.01f));
 }
 
 TEST_CASE("DesignerDrug: scheduled without successor is 0.80x", "[designer_drug][tier9]") {
-    float margin = DesignerDrugModule::compute_market_margin(SchedulingStage::scheduled, false);
+    DesignerDrugModule mod;
+    float margin = mod.compute_market_margin(SchedulingStage::scheduled, false);
     REQUIRE_THAT(margin, WithinAbs(0.80f, 0.01f));
 }
 
@@ -58,12 +61,13 @@ TEST_CASE("DesignerDrug: negative evidence weight ignored", "[designer_drug][tie
     REQUIRE_THAT(total, WithinAbs(1.0f, 0.01f));
 }
 
-TEST_CASE("DesignerDrug: constants match spec", "[designer_drug][tier9]") {
-    REQUIRE_THAT(DesignerDrugModule::DETECTION_THRESHOLD, WithinAbs(2.5f, 0.01f));
-    REQUIRE(DesignerDrugModule::BASE_REVIEW_DURATION == 180);
-    REQUIRE_THAT(DesignerDrugModule::UNSCHEDULED_MARGIN, WithinAbs(2.5f, 0.01f));
-    REQUIRE_THAT(DesignerDrugModule::SCHEDULED_MARGIN, WithinAbs(1.0f, 0.01f));
-    REQUIRE_THAT(DesignerDrugModule::NO_SUCCESSOR_MARGIN, WithinAbs(0.80f, 0.01f));
+TEST_CASE("DesignerDrug: config defaults match spec", "[designer_drug][tier9]") {
+    DesignerDrugConfig cfg{};
+    REQUIRE_THAT(cfg.detection_threshold, WithinAbs(2.5f, 0.01f));
+    REQUIRE(cfg.base_review_duration == 180);
+    REQUIRE_THAT(cfg.unscheduled_margin, WithinAbs(2.5f, 0.01f));
+    REQUIRE_THAT(cfg.scheduled_margin, WithinAbs(1.0f, 0.01f));
+    REQUIRE_THAT(cfg.no_successor_margin, WithinAbs(0.80f, 0.01f));
 }
 
 TEST_CASE("DesignerDrug: scheduling stage enum values", "[designer_drug][tier9]") {

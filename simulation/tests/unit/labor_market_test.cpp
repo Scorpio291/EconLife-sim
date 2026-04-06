@@ -234,7 +234,7 @@ TEST_CASE("test_deferred_salary_generates_wage_theft_memory", "[labor_market][ti
     LaborMarketModule module;
     // Pre-set deferred ticks to just at the threshold.
     module.employment_records().push_back(
-        EmploymentRecord{100, 1, 5.0f, 0, LaborConfig::deferred_salary_max_ticks});
+        EmploymentRecord{100, 1, 5.0f, 0, LaborModuleConfig{}.deferred_salary_max_ticks});
 
     DeltaBuffer delta{};
     module.execute_province(province_id, state, delta);
@@ -494,12 +494,12 @@ TEST_CASE("test_voluntary_departure_probability", "[labor_market][tier2]") {
     // Verify departure probability formula.
     float career_motivation = 0.5f;
     float departure_prob =
-        LaborConfig::departure_base_rate * (1.0f - satisfaction) * career_motivation;
+        LaborModuleConfig{}.departure_base_rate * (1.0f - satisfaction) * career_motivation;
     // 0.08 * 0.8 * 0.5 = 0.032
     REQUIRE_THAT(departure_prob, WithinAbs(0.032f, 0.001f));
 
     // Below threshold check.
-    REQUIRE(satisfaction < LaborConfig::voluntary_departure_threshold);
+    REQUIRE(satisfaction < LaborModuleConfig{}.voluntary_departure_threshold);
 }
 
 TEST_CASE("test_criminal_business_cannot_use_professional_network", "[labor_market][tier2]") {
@@ -770,7 +770,7 @@ TEST_CASE("test_wage_floor_clamp", "[labor_market][tier2]") {
 
     // Set initial wage at exactly the floor.
     ProvinceSkillKey key{province_id, SkillDomain::Trade};
-    module.regional_wages()[key] = LaborConfig::wage_floor;
+    module.regional_wages()[key] = LaborModuleConfig{}.wage_floor;
 
     // 1 posting, 20 supply => ratio = 1/20 = 0.05.
     // new_wage = 0.01 * (1.0 + 0.03 * (0.05 - 1.0))
@@ -793,7 +793,7 @@ TEST_CASE("test_wage_floor_clamp", "[labor_market][tier2]") {
 
     float new_wage = module.regional_wages()[key];
     // Without clamping, wage would be ~0.009715. With clamping, it stays at 0.01.
-    REQUIRE_THAT(new_wage, WithinAbs(LaborConfig::wage_floor, 0.001f));
+    REQUIRE_THAT(new_wage, WithinAbs(LaborModuleConfig{}.wage_floor, 0.001f));
 }
 
 TEST_CASE("test_salary_expectation_with_money_motivation", "[labor_market][tier2]") {

@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/config/package_config.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/money_laundering/money_laundering_module.h"
@@ -116,7 +117,8 @@ TEST_CASE("MoneyLaundering: zero conversion loss passes through full amount",
 TEST_CASE("MoneyLaundering: NPC org capacity limit", "[money_laundering][tier8]") {
     // NPC org with cash 100000, capacity multiplier 0.25, ticks per quarter 90
     // Max rate = 0.25 * 100000 / 90 = 277.78
-    float max_rate = MoneyLaunderingModule::ORG_CAPACITY_MULTIPLIER * 100000.0f /
-                     MoneyLaunderingModule::TICKS_PER_QUARTER;
+    MoneyLaunderingConfig default_cfg{};
+    float max_rate = default_cfg.org_capacity_multiplier * 100000.0f /
+                     static_cast<float>(default_cfg.ticks_per_quarter);
     REQUIRE_THAT(max_rate, WithinAbs(277.78f, 0.1f));
 }

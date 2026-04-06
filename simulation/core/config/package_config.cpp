@@ -182,6 +182,8 @@ PackageConfig load_package_config(const std::string& config_dir) {
                     cfg.production.worker_productivity_diminishing);
         cfg.production.minimum_input_fraction =
             j.value("minimum_input_fraction_to_produce", cfg.production.minimum_input_fraction);
+        cfg.production.informal_price_discount =
+            j.value("informal_price_discount", cfg.production.informal_price_discount);
     }
 
     // -----------------------------------------------------------------
@@ -537,6 +539,156 @@ PackageConfig load_package_config(const std::string& config_dir) {
         cfg.facility_signals.enforcement_threshold = fs.value("enforcement_threshold", cfg.facility_signals.enforcement_threshold);
         cfg.facility_signals.meter_decay_rate = fs.value("meter_decay_rate", cfg.facility_signals.meter_decay_rate);
         cfg.facility_signals.personnel_violence_multiplier = fs.value("personnel_violence_multiplier", cfg.facility_signals.personnel_violence_multiplier);
+
+        const auto ad = j.value("addiction", nlohmann::json::object());
+        cfg.addiction.tolerance_per_use_casual = ad.value("tolerance_per_use_casual", cfg.addiction.tolerance_per_use_casual);
+        cfg.addiction.regular_use_threshold = ad.value("regular_use_threshold", cfg.addiction.regular_use_threshold);
+        cfg.addiction.dependency_threshold = ad.value("dependency_threshold", cfg.addiction.dependency_threshold);
+        cfg.addiction.dependency_tolerance_floor = ad.value("dependency_tolerance_floor", cfg.addiction.dependency_tolerance_floor);
+        cfg.addiction.active_craving_threshold = ad.value("active_craving_threshold", cfg.addiction.active_craving_threshold);
+        cfg.addiction.active_duration_ticks = ad.value("active_duration_ticks", cfg.addiction.active_duration_ticks);
+        cfg.addiction.withdrawal_health_hit = ad.value("withdrawal_health_hit", cfg.addiction.withdrawal_health_hit);
+        cfg.addiction.dependent_work_efficiency = ad.value("dependent_work_efficiency", cfg.addiction.dependent_work_efficiency);
+        cfg.addiction.active_work_efficiency = ad.value("active_work_efficiency", cfg.addiction.active_work_efficiency);
+        cfg.addiction.terminal_work_efficiency = ad.value("terminal_work_efficiency", cfg.addiction.terminal_work_efficiency);
+        cfg.addiction.recovery_attempt_threshold = ad.value("recovery_attempt_threshold", cfg.addiction.recovery_attempt_threshold);
+        cfg.addiction.craving_decay_rate_recovery = ad.value("craving_decay_rate_recovery", cfg.addiction.craving_decay_rate_recovery);
+        cfg.addiction.full_recovery_ticks = ad.value("full_recovery_ticks", cfg.addiction.full_recovery_ticks);
+        cfg.addiction.recovery_success_threshold = ad.value("recovery_success_threshold", cfg.addiction.recovery_success_threshold);
+        cfg.addiction.terminal_health_threshold = ad.value("terminal_health_threshold", cfg.addiction.terminal_health_threshold);
+        cfg.addiction.terminal_persistence_ticks = ad.value("terminal_persistence_ticks", cfg.addiction.terminal_persistence_ticks);
+        cfg.addiction.rate_delta_per_active_npc = ad.value("rate_delta_per_active_npc", cfg.addiction.rate_delta_per_active_npc);
+        cfg.addiction.labour_impact_per_addict = ad.value("labour_impact_per_addict", cfg.addiction.labour_impact_per_addict);
+        cfg.addiction.healthcare_load_per_addict = ad.value("healthcare_load_per_addict", cfg.addiction.healthcare_load_per_addict);
+        cfg.addiction.grievance_per_addict_fraction = ad.value("grievance_per_addict_fraction", cfg.addiction.grievance_per_addict_fraction);
+        cfg.addiction.casual_craving_inc = ad.value("casual_craving_inc", cfg.addiction.casual_craving_inc);
+        cfg.addiction.regular_craving_inc = ad.value("regular_craving_inc", cfg.addiction.regular_craving_inc);
+        cfg.addiction.dependent_craving_inc = ad.value("dependent_craving_inc", cfg.addiction.dependent_craving_inc);
+        cfg.addiction.active_craving_inc = ad.value("active_craving_inc", cfg.addiction.active_craving_inc);
+        cfg.addiction.casual_to_regular_craving = ad.value("casual_to_regular_craving", cfg.addiction.casual_to_regular_craving);
+        cfg.addiction.regular_to_dependent_craving = ad.value("regular_to_dependent_craving", cfg.addiction.regular_to_dependent_craving);
+
+        const auto ai = j.value("alternative_identity", nlohmann::json::object());
+        cfg.alternative_identity.documentation_decay_rate = ai.value("documentation_decay_rate", cfg.alternative_identity.documentation_decay_rate);
+        cfg.alternative_identity.documentation_build_rate = ai.value("documentation_build_rate", cfg.alternative_identity.documentation_build_rate);
+        cfg.alternative_identity.burn_threshold = ai.value("burn_threshold", cfg.alternative_identity.burn_threshold);
+        cfg.alternative_identity.witness_confidence = ai.value("witness_confidence", cfg.alternative_identity.witness_confidence);
+        cfg.alternative_identity.forensic_confidence = ai.value("forensic_confidence", cfg.alternative_identity.forensic_confidence);
+
+        const auto pr = j.value("protection_rackets", nlohmann::json::object());
+        cfg.protection_rackets.demand_rate = pr.value("demand_rate", cfg.protection_rackets.demand_rate);
+        cfg.protection_rackets.grievance_per_demand_unit = pr.value("grievance_per_demand_unit", cfg.protection_rackets.grievance_per_demand_unit);
+        cfg.protection_rackets.incumbent_refuse_probability = pr.value("incumbent_refuse_probability", cfg.protection_rackets.incumbent_refuse_probability);
+        cfg.protection_rackets.default_refuse_probability = pr.value("default_refuse_probability", cfg.protection_rackets.default_refuse_probability);
+        cfg.protection_rackets.personnel_violence_multiplier = pr.value("personnel_violence_multiplier", cfg.protection_rackets.personnel_violence_multiplier);
+        cfg.protection_rackets.warning_threshold = pr.value("warning_threshold", cfg.protection_rackets.warning_threshold);
+        cfg.protection_rackets.property_damage_threshold = pr.value("property_damage_threshold", cfg.protection_rackets.property_damage_threshold);
+        cfg.protection_rackets.violence_threshold = pr.value("violence_threshold", cfg.protection_rackets.violence_threshold);
+        cfg.protection_rackets.abandonment_threshold = pr.value("abandonment_threshold", cfg.protection_rackets.abandonment_threshold);
+        cfg.protection_rackets.property_damage_severity = pr.value("property_damage_severity", cfg.protection_rackets.property_damage_severity);
+        cfg.protection_rackets.memory_emotional_weight_warning = pr.value("memory_emotional_weight_warning", cfg.protection_rackets.memory_emotional_weight_warning);
+
+        const auto ml = j.value("money_laundering", nlohmann::json::object());
+        cfg.money_laundering.structuring_token_interval = ml.value("structuring_token_interval", cfg.money_laundering.structuring_token_interval);
+        cfg.money_laundering.shell_chain_evidence_interval = ml.value("shell_chain_evidence_interval", cfg.money_laundering.shell_chain_evidence_interval);
+        cfg.money_laundering.trade_invoice_evidence_interval = ml.value("trade_invoice_evidence_interval", cfg.money_laundering.trade_invoice_evidence_interval);
+        cfg.money_laundering.commingling_evidence_interval = ml.value("commingling_evidence_interval", cfg.money_laundering.commingling_evidence_interval);
+        cfg.money_laundering.max_chain_depth = ml.value("max_chain_depth", cfg.money_laundering.max_chain_depth);
+        cfg.money_laundering.commingle_capacity_fraction = ml.value("commingle_capacity_fraction", cfg.money_laundering.commingle_capacity_fraction);
+        cfg.money_laundering.rate_commingle_max = ml.value("rate_commingle_max", cfg.money_laundering.rate_commingle_max);
+        cfg.money_laundering.crypto_evidence_skill_divisor = ml.value("crypto_evidence_skill_divisor", cfg.money_laundering.crypto_evidence_skill_divisor);
+        cfg.money_laundering.fiu_token_threshold = ml.value("fiu_token_threshold", cfg.money_laundering.fiu_token_threshold);
+        cfg.money_laundering.fiu_meter_fill_scale = ml.value("fiu_meter_fill_scale", cfg.money_laundering.fiu_meter_fill_scale);
+        cfg.money_laundering.fiu_monthly_interval = ml.value("fiu_monthly_interval", cfg.money_laundering.fiu_monthly_interval);
+        cfg.money_laundering.structuring_deposit_count_threshold = ml.value("structuring_deposit_count_threshold", cfg.money_laundering.structuring_deposit_count_threshold);
+        cfg.money_laundering.org_capacity_multiplier = ml.value("org_capacity_multiplier", cfg.money_laundering.org_capacity_multiplier);
+        cfg.money_laundering.ticks_per_quarter = ml.value("ticks_per_quarter", cfg.money_laundering.ticks_per_quarter);
+
+        const auto dd = j.value("designer_drug", nlohmann::json::object());
+        cfg.designer_drug.detection_threshold = dd.value("detection_threshold", cfg.designer_drug.detection_threshold);
+        cfg.designer_drug.base_review_duration = dd.value("base_review_duration", cfg.designer_drug.base_review_duration);
+        cfg.designer_drug.unscheduled_margin = dd.value("unscheduled_margin", cfg.designer_drug.unscheduled_margin);
+        cfg.designer_drug.scheduled_margin = dd.value("scheduled_margin", cfg.designer_drug.scheduled_margin);
+        cfg.designer_drug.no_successor_margin = dd.value("no_successor_margin", cfg.designer_drug.no_successor_margin);
+        cfg.designer_drug.monthly_interval = dd.value("monthly_interval", cfg.designer_drug.monthly_interval);
+
+        const auto de = j.value("drug_economy", nlohmann::json::object());
+        cfg.drug_economy.wholesale_price_fraction = de.value("wholesale_price_fraction", cfg.drug_economy.wholesale_price_fraction);
+        cfg.drug_economy.wholesale_quality_degradation = de.value("wholesale_quality_degradation", cfg.drug_economy.wholesale_quality_degradation);
+        cfg.drug_economy.retail_quality_degradation = de.value("retail_quality_degradation", cfg.drug_economy.retail_quality_degradation);
+        cfg.drug_economy.meth_waste_per_unit = de.value("meth_waste_per_unit", cfg.drug_economy.meth_waste_per_unit);
+        cfg.drug_economy.demand_per_addict = de.value("demand_per_addict", cfg.drug_economy.demand_per_addict);
+        cfg.drug_economy.precursor_ratio_meth = de.value("precursor_ratio_meth", cfg.drug_economy.precursor_ratio_meth);
+        cfg.drug_economy.designer_legal_margin_mult = de.value("designer_legal_margin_mult", cfg.drug_economy.designer_legal_margin_mult);
+
+        const auto rc = j.value("regional_conditions", nlohmann::json::object());
+        cfg.regional_conditions.stability_recovery_rate = rc.value("stability_recovery_rate", cfg.regional_conditions.stability_recovery_rate);
+        cfg.regional_conditions.event_stability_impact = rc.value("event_stability_impact", cfg.regional_conditions.event_stability_impact);
+        cfg.regional_conditions.infrastructure_decay_rate = rc.value("infrastructure_decay_rate", cfg.regional_conditions.infrastructure_decay_rate);
+        cfg.regional_conditions.drought_recovery_rate = rc.value("drought_recovery_rate", cfg.regional_conditions.drought_recovery_rate);
+        cfg.regional_conditions.flood_recovery_rate = rc.value("flood_recovery_rate", cfg.regional_conditions.flood_recovery_rate);
+
+        const auto tu = j.value("trust_updates", nlohmann::json::object());
+        cfg.trust_updates.catastrophic_trust_loss_threshold = tu.value("catastrophic_trust_loss_threshold", cfg.trust_updates.catastrophic_trust_loss_threshold);
+        cfg.trust_updates.catastrophic_trust_floor = tu.value("catastrophic_trust_floor", cfg.trust_updates.catastrophic_trust_floor);
+        cfg.trust_updates.recovery_ceiling_factor = tu.value("recovery_ceiling_factor", cfg.trust_updates.recovery_ceiling_factor);
+        cfg.trust_updates.recovery_ceiling_minimum = tu.value("recovery_ceiling_minimum", cfg.trust_updates.recovery_ceiling_minimum);
+        cfg.trust_updates.significant_change_threshold = tu.value("significant_change_threshold", cfg.trust_updates.significant_change_threshold);
+        cfg.trust_updates.trust_min = tu.value("trust_min", cfg.trust_updates.trust_min);
+        cfg.trust_updates.trust_max = tu.value("trust_max", cfg.trust_updates.trust_max);
+        cfg.trust_updates.default_recovery_ceiling = tu.value("default_recovery_ceiling", cfg.trust_updates.default_recovery_ceiling);
+
+        const auto wt = j.value("weapons_trafficking", nlohmann::json::object());
+        cfg.weapons_trafficking.base_price_small_arms = wt.value("base_price_small_arms", cfg.weapons_trafficking.base_price_small_arms);
+        cfg.weapons_trafficking.base_price_ammunition = wt.value("base_price_ammunition", cfg.weapons_trafficking.base_price_ammunition);
+        cfg.weapons_trafficking.base_price_heavy_weapons = wt.value("base_price_heavy_weapons", cfg.weapons_trafficking.base_price_heavy_weapons);
+        cfg.weapons_trafficking.base_price_converted_legal = wt.value("base_price_converted_legal", cfg.weapons_trafficking.base_price_converted_legal);
+        cfg.weapons_trafficking.price_floor_supply = wt.value("price_floor_supply", cfg.weapons_trafficking.price_floor_supply);
+        cfg.weapons_trafficking.max_diversion_fraction = wt.value("max_diversion_fraction", cfg.weapons_trafficking.max_diversion_fraction);
+        cfg.weapons_trafficking.chain_custody_actionability = wt.value("chain_custody_actionability", cfg.weapons_trafficking.chain_custody_actionability);
+        cfg.weapons_trafficking.embargo_meter_spike = wt.value("embargo_meter_spike", cfg.weapons_trafficking.embargo_meter_spike);
+        cfg.weapons_trafficking.trust_threshold_diversion = wt.value("trust_threshold_diversion", cfg.weapons_trafficking.trust_threshold_diversion);
+
+        const auto pa = j.value("population_aging", nlohmann::json::object());
+        cfg.population_aging.cohort_income_update_rate = pa.value("cohort_income_update_rate", cfg.population_aging.cohort_income_update_rate);
+        cfg.population_aging.cohort_employment_update_rate = pa.value("cohort_employment_update_rate", cfg.population_aging.cohort_employment_update_rate);
+        cfg.population_aging.max_education_drift_per_year = pa.value("max_education_drift_per_year", cfg.population_aging.max_education_drift_per_year);
+
+        const auto ls = j.value("lod_system", nlohmann::json::object());
+        cfg.lod_system.lod2_min_modifier = ls.value("lod2_min_modifier", cfg.lod_system.lod2_min_modifier);
+        cfg.lod_system.lod2_max_modifier = ls.value("lod2_max_modifier", cfg.lod_system.lod2_max_modifier);
+        cfg.lod_system.lod2_smoothing_rate = ls.value("lod2_smoothing_rate", cfg.lod_system.lod2_smoothing_rate);
+        cfg.lod_system.supply_floor = ls.value("supply_floor", cfg.lod_system.supply_floor);
+
+        const auto sc = j.value("supply_chain_module", nlohmann::json::object());
+        cfg.supply_chain_module.base_transport_rate = sc.value("base_transport_rate", cfg.supply_chain_module.base_transport_rate);
+        cfg.supply_chain_module.terrain_cost_coeff = sc.value("terrain_cost_coeff", cfg.supply_chain_module.terrain_cost_coeff);
+        cfg.supply_chain_module.infra_speed_coeff = sc.value("infra_speed_coeff", cfg.supply_chain_module.infra_speed_coeff);
+        cfg.supply_chain_module.road_speed = sc.value("road_speed", cfg.supply_chain_module.road_speed);
+        cfg.supply_chain_module.rail_speed = sc.value("rail_speed", cfg.supply_chain_module.rail_speed);
+        cfg.supply_chain_module.sea_speed = sc.value("sea_speed", cfg.supply_chain_module.sea_speed);
+        cfg.supply_chain_module.river_speed = sc.value("river_speed", cfg.supply_chain_module.river_speed);
+        cfg.supply_chain_module.air_speed = sc.value("air_speed", cfg.supply_chain_module.air_speed);
+        cfg.supply_chain_module.max_concealment_modifier = sc.value("max_concealment_modifier", cfg.supply_chain_module.max_concealment_modifier);
+        cfg.supply_chain_module.base_interception_risk = sc.value("base_interception_risk", cfg.supply_chain_module.base_interception_risk);
+        cfg.supply_chain_module.default_perishable_decay_rate = sc.value("default_perishable_decay_rate", cfg.supply_chain_module.default_perishable_decay_rate);
+
+        const auto lm = j.value("labor_module", nlohmann::json::object());
+        cfg.labor_module.wage_adjustment_rate = lm.value("wage_adjustment_rate", cfg.labor_module.wage_adjustment_rate);
+        cfg.labor_module.wage_floor = lm.value("wage_floor", cfg.labor_module.wage_floor);
+        cfg.labor_module.wage_ceiling_multiplier = lm.value("wage_ceiling_multiplier", cfg.labor_module.wage_ceiling_multiplier);
+        cfg.labor_module.pool_size_public = lm.value("pool_size_public", cfg.labor_module.pool_size_public);
+        cfg.labor_module.pool_size_professional = lm.value("pool_size_professional", cfg.labor_module.pool_size_professional);
+        cfg.labor_module.pool_size_referral = lm.value("pool_size_referral", cfg.labor_module.pool_size_referral);
+        cfg.labor_module.reputation_threshold = lm.value("reputation_threshold", cfg.labor_module.reputation_threshold);
+        cfg.labor_module.reputation_pool_penalty_scale = lm.value("reputation_pool_penalty_scale", cfg.labor_module.reputation_pool_penalty_scale);
+        cfg.labor_module.salary_premium_per_rep_point = lm.value("salary_premium_per_rep_point", cfg.labor_module.salary_premium_per_rep_point);
+        cfg.labor_module.voluntary_departure_threshold = lm.value("voluntary_departure_threshold", cfg.labor_module.voluntary_departure_threshold);
+        cfg.labor_module.departure_base_rate = lm.value("departure_base_rate", cfg.labor_module.departure_base_rate);
+        cfg.labor_module.reputation_default = lm.value("reputation_default", cfg.labor_module.reputation_default);
+        cfg.labor_module.deferred_salary_max_ticks = lm.value("deferred_salary_max_ticks", cfg.labor_module.deferred_salary_max_ticks);
+        cfg.labor_module.personal_referral_trust_min = lm.value("personal_referral_trust_min", cfg.labor_module.personal_referral_trust_min);
+        cfg.labor_module.monthly_tick_interval = lm.value("monthly_tick_interval", cfg.labor_module.monthly_tick_interval);
     }
 
     return cfg;

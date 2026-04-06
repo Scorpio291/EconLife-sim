@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "weapons_trafficking_types.h"
 
@@ -24,6 +25,8 @@ struct NPCBusiness;
 
 class WeaponsTraffickingModule : public ITickModule {
    public:
+    explicit WeaponsTraffickingModule(const WeaponsTraffickingConfig& cfg = {}) : cfg_(cfg) {}
+
     std::string_view name() const noexcept override { return "weapons_trafficking"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -63,18 +66,9 @@ class WeaponsTraffickingModule : public ITickModule {
     // Compute chain-of-custody evidence actionability
     static float compute_chain_custody_actionability(float base_actionability);
 
-    // --- Named constants from INTERFACE.md ---
-    static constexpr float BASE_PRICE_SMALL_ARMS = 500.0f;
-    static constexpr float BASE_PRICE_AMMUNITION = 50.0f;
-    static constexpr float BASE_PRICE_HEAVY_WEAPONS = 5000.0f;
-    static constexpr float BASE_PRICE_CONVERTED_LEGAL = 300.0f;
-    static constexpr float PRICE_FLOOR_SUPPLY = 1.0f;
-    static constexpr float MAX_DIVERSION_FRACTION = 0.30f;
-    static constexpr float CHAIN_CUSTODY_ACTIONABILITY = 0.60f;
-    static constexpr float EMBARGO_METER_SPIKE = 0.25f;
-    static constexpr float TRUST_THRESHOLD_DIVERSION = 0.60f;
-
    private:
+    WeaponsTraffickingConfig cfg_;
+
     // Internal state: diversion records per tick
     std::vector<WeaponDiversionRecord> diversion_records_;
     std::vector<WeaponProcurementRecord> procurement_records_;

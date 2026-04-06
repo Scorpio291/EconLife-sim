@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "modules/labor_market/labor_types.h"
 
@@ -25,6 +26,8 @@ class DeterministicRNG;
 // ---------------------------------------------------------------------------
 class LaborMarketModule : public ITickModule {
    public:
+    explicit LaborMarketModule(const LaborModuleConfig& lcfg = {}) : lcfg_(lcfg) {}
+
     std::string_view name() const noexcept override { return "labor_market"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
@@ -96,6 +99,7 @@ class LaborMarketModule : public ITickModule {
     const EmploymentRecord* find_employment(uint32_t npc_id) const;
 
    private:
+    LaborModuleConfig lcfg_;
     std::vector<JobPosting> job_postings_;
     std::vector<EmploymentRecord> employment_records_;
     std::unordered_map<uint32_t, std::vector<NPCSkillEntry>> npc_skills_;

@@ -10,6 +10,7 @@ namespace econlife {
 
 float TrustUpdatesModule::apply_trust_delta(float current_trust, float delta,
                                             float recovery_ceiling) {
+    constexpr TrustUpdatesConfig kDefaults{};
     float new_trust = current_trust + delta;
 
     // If gain, cap at recovery ceiling
@@ -17,16 +18,19 @@ float TrustUpdatesModule::apply_trust_delta(float current_trust, float delta,
         new_trust = recovery_ceiling;
     }
 
-    return std::clamp(new_trust, TRUST_MIN, TRUST_MAX);
+    return std::clamp(new_trust, kDefaults.trust_min, kDefaults.trust_max);
 }
 
 bool TrustUpdatesModule::is_catastrophic_loss(float trust_delta, float resulting_trust) {
-    return trust_delta <= CATASTROPHIC_TRUST_LOSS_THRESHOLD ||
-           (trust_delta < -0.3f && resulting_trust < CATASTROPHIC_TRUST_FLOOR);
+    constexpr TrustUpdatesConfig kDefaults{};
+    return trust_delta <= kDefaults.catastrophic_trust_loss_threshold ||
+           (trust_delta < -0.3f && resulting_trust < kDefaults.catastrophic_trust_floor);
 }
 
 float TrustUpdatesModule::compute_recovery_ceiling(float trust_before_loss) {
-    return std::max(trust_before_loss * RECOVERY_CEILING_FACTOR, RECOVERY_CEILING_MINIMUM);
+    constexpr TrustUpdatesConfig kDefaults{};
+    return std::max(trust_before_loss * kDefaults.recovery_ceiling_factor,
+                    kDefaults.recovery_ceiling_minimum);
 }
 
 float TrustUpdatesModule::update_recovery_ceiling(float existing_ceiling, float new_ceiling) {
@@ -34,7 +38,8 @@ float TrustUpdatesModule::update_recovery_ceiling(float existing_ceiling, float 
 }
 
 bool TrustUpdatesModule::is_significant_change(float trust_delta) {
-    return std::abs(trust_delta) >= SIGNIFICANT_CHANGE_THRESHOLD;
+    constexpr TrustUpdatesConfig kDefaults{};
+    return std::abs(trust_delta) >= kDefaults.significant_change_threshold;
 }
 
 void TrustUpdatesModule::execute_province(uint32_t province_idx, const WorldState& state,

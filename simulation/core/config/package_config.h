@@ -430,6 +430,7 @@ struct ProductionConfig {
     float tech_quality_ceiling_step = 0.1f;
     float worker_productivity_diminishing = 0.15f;
     float minimum_input_fraction = 0.1f;
+    float informal_price_discount = 0.7f;
 };
 
 struct RndConfig {
@@ -462,6 +463,169 @@ struct ConsequenceDelayConfig {
     uint32_t charge_to_trial_max = 365;
     uint32_t community_response_stage_min = 30;
     uint32_t community_response_stage_max = 180;
+};
+
+struct AddictionConfig {
+    float tolerance_per_use_casual = 0.05f;
+    uint32_t regular_use_threshold = 30;
+    uint32_t dependency_threshold = 90;
+    float dependency_tolerance_floor = 0.30f;
+    float active_craving_threshold = 0.70f;
+    uint32_t active_duration_ticks = 60;
+    float withdrawal_health_hit = 0.005f;
+    float dependent_work_efficiency = 0.70f;
+    float active_work_efficiency = 0.50f;
+    float terminal_work_efficiency = 0.20f;
+    uint32_t recovery_attempt_threshold = 14;
+    float craving_decay_rate_recovery = 0.003f;
+    uint32_t full_recovery_ticks = 365;
+    float recovery_success_threshold = 0.05f;
+    float terminal_health_threshold = 0.15f;
+    uint32_t terminal_persistence_ticks = 90;
+    float rate_delta_per_active_npc = 0.001f;
+    float labour_impact_per_addict = 0.80f;
+    float healthcare_load_per_addict = 0.50f;
+    float grievance_per_addict_fraction = 0.30f;
+    float casual_craving_inc = 0.01f;
+    float regular_craving_inc = 0.02f;
+    float dependent_craving_inc = 0.03f;
+    float active_craving_inc = 0.05f;
+    float casual_to_regular_craving = 0.30f;
+    float regular_to_dependent_craving = 0.70f;
+};
+
+struct AlternativeIdentityConfig {
+    float documentation_decay_rate = 0.001f;
+    float documentation_build_rate = 0.005f;
+    float burn_threshold = 0.10f;
+    float witness_confidence = 0.70f;
+    float forensic_confidence = 0.55f;
+};
+
+struct ProtectionRacketsConfig {
+    float demand_rate = 0.08f;
+    float grievance_per_demand_unit = 0.00001f;
+    float incumbent_refuse_probability = 0.40f;
+    float default_refuse_probability = 0.20f;
+    float personnel_violence_multiplier = 3.0f;
+    uint32_t warning_threshold = 5;
+    uint32_t property_damage_threshold = 15;
+    uint32_t violence_threshold = 30;
+    uint32_t abandonment_threshold = 60;
+    float property_damage_severity = 0.4f;
+    float memory_emotional_weight_warning = -0.5f;
+};
+
+struct MoneyLaunderingConfig {
+    uint32_t structuring_token_interval = 7;
+    uint32_t shell_chain_evidence_interval = 30;
+    uint32_t trade_invoice_evidence_interval = 20;
+    uint32_t commingling_evidence_interval = 15;
+    uint32_t max_chain_depth = 5;
+    float commingle_capacity_fraction = 0.40f;
+    float rate_commingle_max = 5000.0f;
+    float crypto_evidence_skill_divisor = 10.0f;
+    float fiu_token_threshold = 0.35f;
+    float fiu_meter_fill_scale = 0.10f;
+    uint32_t fiu_monthly_interval = 30;
+    uint32_t structuring_deposit_count_threshold = 8;
+    float org_capacity_multiplier = 0.25f;
+    uint32_t ticks_per_quarter = 90;
+};
+
+struct DesignerDrugConfig {
+    float detection_threshold = 2.5f;
+    uint32_t base_review_duration = 180;
+    float unscheduled_margin = 2.5f;
+    float scheduled_margin = 1.0f;
+    float no_successor_margin = 0.80f;
+    uint32_t monthly_interval = 30;
+};
+
+struct DrugEconomyConfig {
+    float wholesale_price_fraction = 0.45f;
+    float wholesale_quality_degradation = 0.95f;
+    float retail_quality_degradation = 0.90f;
+    float meth_waste_per_unit = 0.15f;
+    float demand_per_addict = 1.0f;
+    float precursor_ratio_meth = 2.0f;
+    float designer_legal_margin_mult = 1.5f;
+};
+
+struct RegionalConditionsConfig {
+    float stability_recovery_rate = 0.001f;
+    float event_stability_impact = 0.05f;
+    float infrastructure_decay_rate = 0.0002f;
+    float drought_recovery_rate = 0.005f;
+    float flood_recovery_rate = 0.01f;
+};
+
+struct TrustUpdatesConfig {
+    float catastrophic_trust_loss_threshold = -0.55f;
+    float catastrophic_trust_floor = 0.10f;
+    float recovery_ceiling_factor = 0.60f;
+    float recovery_ceiling_minimum = 0.15f;
+    float significant_change_threshold = 0.10f;
+    float trust_min = -1.0f;
+    float trust_max = 1.0f;
+    float default_recovery_ceiling = 1.0f;
+};
+
+struct WeaponsTraffickingConfig {
+    float base_price_small_arms = 500.0f;
+    float base_price_ammunition = 50.0f;
+    float base_price_heavy_weapons = 5000.0f;
+    float base_price_converted_legal = 300.0f;
+    float price_floor_supply = 1.0f;
+    float max_diversion_fraction = 0.30f;
+    float chain_custody_actionability = 0.60f;
+    float embargo_meter_spike = 0.25f;
+    float trust_threshold_diversion = 0.60f;
+};
+
+struct PopulationAgingConfig {
+    float cohort_income_update_rate = 0.05f;
+    float cohort_employment_update_rate = 0.02f;
+    float max_education_drift_per_year = 0.01f;
+};
+
+struct LodSystemConfig {
+    float lod2_min_modifier = 0.50f;
+    float lod2_max_modifier = 2.00f;
+    float lod2_smoothing_rate = 0.30f;
+    float supply_floor = 1.0f;
+};
+
+struct SupplyChainModuleConfig {
+    float base_transport_rate = 0.01f;
+    float terrain_cost_coeff = 0.5f;
+    float infra_speed_coeff = 0.5f;
+    float road_speed = 300.0f;
+    float rail_speed = 600.0f;
+    float sea_speed = 500.0f;
+    float river_speed = 200.0f;
+    float air_speed = 2000.0f;
+    float max_concealment_modifier = 0.40f;
+    float base_interception_risk = 0.05f;
+    float default_perishable_decay_rate = 0.02f;
+};
+
+struct LaborModuleConfig {
+    float wage_adjustment_rate = 0.03f;
+    float wage_floor = 0.01f;
+    float wage_ceiling_multiplier = 5.0f;
+    uint32_t pool_size_public = 12;
+    uint32_t pool_size_professional = 5;
+    uint32_t pool_size_referral = 3;
+    float reputation_threshold = 0.3f;
+    float reputation_pool_penalty_scale = 8.0f;
+    float salary_premium_per_rep_point = 0.5f;
+    float voluntary_departure_threshold = 0.35f;
+    float departure_base_rate = 0.08f;
+    float reputation_default = 0.5f;
+    uint32_t deferred_salary_max_ticks = 30;
+    float personal_referral_trust_min = 0.4f;
+    uint32_t monthly_tick_interval = 30;
 };
 
 struct PackageConfig {
@@ -503,6 +667,19 @@ struct PackageConfig {
     NpcSpendingConfig npc_spending;
     AntitrustConfig antitrust;
     FacilitySignalsConfig facility_signals;
+    AddictionConfig addiction;
+    AlternativeIdentityConfig alternative_identity;
+    ProtectionRacketsConfig protection_rackets;
+    MoneyLaunderingConfig money_laundering;
+    DesignerDrugConfig designer_drug;
+    DrugEconomyConfig drug_economy;
+    RegionalConditionsConfig regional_conditions;
+    TrustUpdatesConfig trust_updates;
+    WeaponsTraffickingConfig weapons_trafficking;
+    PopulationAgingConfig population_aging;
+    LodSystemConfig lod_system;
+    SupplyChainModuleConfig supply_chain_module;
+    LaborModuleConfig labor_module;
 };
 
 // Load PackageConfig from a directory containing JSON config files.

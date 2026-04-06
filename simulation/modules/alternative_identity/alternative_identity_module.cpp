@@ -20,12 +20,12 @@ bool AlternativeIdentityModule::should_burn_identity(float quality, float thresh
     return quality < threshold;
 }
 
-float AlternativeIdentityModule::compute_witness_discovery_confidence() {
-    return WITNESS_CONFIDENCE;
+float AlternativeIdentityModule::compute_witness_discovery_confidence() const {
+    return cfg_.witness_confidence;
 }
 
-float AlternativeIdentityModule::compute_forensic_discovery_confidence() {
-    return FORENSIC_CONFIDENCE;
+float AlternativeIdentityModule::compute_forensic_discovery_confidence() const {
+    return cfg_.forensic_confidence;
 }
 
 void AlternativeIdentityModule::execute(const WorldState& state, DeltaBuffer& delta) {
@@ -41,7 +41,7 @@ void AlternativeIdentityModule::execute(const WorldState& state, DeltaBuffer& de
         if (state.current_tick > identity.last_maintenance_tick) {
             uint32_t ticks_since = state.current_tick - identity.last_maintenance_tick;
             identity.documentation_quality = decay_documentation_quality(
-                identity.documentation_quality, DOCUMENTATION_DECAY_RATE * ticks_since);
+                identity.documentation_quality, cfg_.documentation_decay_rate * ticks_since);
         }
 
         if (identity.status == IdentityStatus::active) {
@@ -50,7 +50,7 @@ void AlternativeIdentityModule::execute(const WorldState& state, DeltaBuffer& de
             // actionability toward the real actor (cover absorbs investigative pressure).
             for (const auto& token : state.evidence_pool) {
                 if (token.is_active && token.target_npc_id == identity.real_actor_id &&
-                    identity.documentation_quality > BURN_THRESHOLD) {
+                    identity.documentation_quality > cfg_.burn_threshold) {
                     // Reduce actionability in proportion to documentation quality
                     EvidenceDelta redirect_ev;
                     redirect_ev.retired_token_id = token.id;  // retire original
@@ -80,7 +80,7 @@ void AlternativeIdentityModule::execute(const WorldState& state, DeltaBuffer& de
         }
 
         if (identity.status == IdentityStatus::active &&
-            should_burn_identity(identity.documentation_quality, BURN_THRESHOLD)) {
+            should_burn_identity(identity.documentation_quality, cfg_.burn_threshold)) {
             identity.status = IdentityStatus::burned;
             identity.burn_tick = state.current_tick;
 

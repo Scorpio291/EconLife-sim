@@ -83,8 +83,8 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     orchestrator.register_module(std::make_unique<RandomEventsModule>(config.random_events));
 
     // Tier 2
-    orchestrator.register_module(std::make_unique<SupplyChainModule>());
-    orchestrator.register_module(std::make_unique<LaborMarketModule>());
+    orchestrator.register_module(std::make_unique<SupplyChainModule>(config.supply_chain_module));
+    orchestrator.register_module(std::make_unique<LaborMarketModule>(config.labor_module));
     orchestrator.register_module(std::make_unique<SeasonalAgricultureModule>(config.seasonal_agriculture));
 
     // Tier 3
@@ -118,28 +118,28 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
 
     // Tier 8
     orchestrator.register_module(std::make_unique<InvestigatorEngineModule>(config.investigator_engine));
-    orchestrator.register_module(std::make_unique<MoneyLaunderingModule>());
-    orchestrator.register_module(std::make_unique<DrugEconomyModule>());
-    orchestrator.register_module(std::make_unique<WeaponsTraffickingModule>());
-    orchestrator.register_module(std::make_unique<ProtectionRacketsModule>());
+    orchestrator.register_module(std::make_unique<MoneyLaunderingModule>(config.money_laundering));
+    orchestrator.register_module(std::make_unique<DrugEconomyModule>(config.drug_economy));
+    orchestrator.register_module(std::make_unique<WeaponsTraffickingModule>(config.weapons_trafficking));
+    orchestrator.register_module(std::make_unique<ProtectionRacketsModule>(config.protection_rackets));
 
     // Tier 9
     orchestrator.register_module(std::make_unique<LegalProcessModule>(config.legal_process));
     orchestrator.register_module(std::make_unique<InformantSystemModule>(config.informant));
-    orchestrator.register_module(std::make_unique<AlternativeIdentityModule>());
-    orchestrator.register_module(std::make_unique<DesignerDrugModule>());
+    orchestrator.register_module(std::make_unique<AlternativeIdentityModule>(config.alternative_identity));
+    orchestrator.register_module(std::make_unique<DesignerDrugModule>(config.designer_drug));
 
     // Tier 10
     orchestrator.register_module(std::make_unique<PoliticalCycleModule>(config.political_cycle));
     orchestrator.register_module(std::make_unique<InfluenceNetworkModule>(config.influence_network));
-    orchestrator.register_module(std::make_unique<TrustUpdatesModule>());
-    orchestrator.register_module(std::make_unique<AddictionModule>());
+    orchestrator.register_module(std::make_unique<TrustUpdatesModule>(config.trust_updates));
+    orchestrator.register_module(std::make_unique<AddictionModule>(config.addiction));
 
     // Tier 11
-    orchestrator.register_module(std::make_unique<RegionalConditionsModule>());
-    orchestrator.register_module(std::make_unique<PopulationAgingModule>());
+    orchestrator.register_module(std::make_unique<RegionalConditionsModule>(config.regional_conditions));
+    orchestrator.register_module(std::make_unique<PopulationAgingModule>(config.population_aging));
     orchestrator.register_module(std::make_unique<CurrencyExchangeModule>(config.currency_exchange));
-    orchestrator.register_module(std::make_unique<LodSystemModule>());
+    orchestrator.register_module(std::make_unique<LodSystemModule>(config.lod_system));
 
     // Tier 12
     orchestrator.register_module(std::make_unique<PersistenceModule>());

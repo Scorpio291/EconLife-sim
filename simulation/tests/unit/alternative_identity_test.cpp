@@ -35,25 +35,25 @@ TEST_CASE("AltIdentity: burn triggered below threshold", "[alternative_identity]
 }
 
 TEST_CASE("AltIdentity: witness discovery confidence", "[alternative_identity][tier9]") {
-    REQUIRE_THAT(AlternativeIdentityModule::compute_witness_discovery_confidence(),
-                 WithinAbs(0.70f, 0.01f));
+    AlternativeIdentityModule mod;
+    REQUIRE_THAT(mod.compute_witness_discovery_confidence(), WithinAbs(0.70f, 0.01f));
 }
 
 TEST_CASE("AltIdentity: forensic discovery confidence", "[alternative_identity][tier9]") {
-    REQUIRE_THAT(AlternativeIdentityModule::compute_forensic_discovery_confidence(),
-                 WithinAbs(0.55f, 0.01f));
+    AlternativeIdentityModule mod;
+    REQUIRE_THAT(mod.compute_forensic_discovery_confidence(), WithinAbs(0.55f, 0.01f));
 }
 
-TEST_CASE("AltIdentity: decay rate constant is 0.001", "[alternative_identity][tier9]") {
-    REQUIRE_THAT(AlternativeIdentityModule::DOCUMENTATION_DECAY_RATE, WithinAbs(0.001f, 0.0001f));
+TEST_CASE("AltIdentity: decay rate default is 0.001", "[alternative_identity][tier9]") {
+    REQUIRE_THAT(AlternativeIdentityConfig{}.documentation_decay_rate, WithinAbs(0.001f, 0.0001f));
 }
 
-TEST_CASE("AltIdentity: build rate constant is 0.005", "[alternative_identity][tier9]") {
-    REQUIRE_THAT(AlternativeIdentityModule::DOCUMENTATION_BUILD_RATE, WithinAbs(0.005f, 0.0001f));
+TEST_CASE("AltIdentity: build rate default is 0.005", "[alternative_identity][tier9]") {
+    REQUIRE_THAT(AlternativeIdentityConfig{}.documentation_build_rate, WithinAbs(0.005f, 0.0001f));
 }
 
-TEST_CASE("AltIdentity: burn threshold constant is 0.10", "[alternative_identity][tier9]") {
-    REQUIRE_THAT(AlternativeIdentityModule::BURN_THRESHOLD, WithinAbs(0.10f, 0.001f));
+TEST_CASE("AltIdentity: burn threshold default is 0.10", "[alternative_identity][tier9]") {
+    REQUIRE_THAT(AlternativeIdentityConfig{}.burn_threshold, WithinAbs(0.10f, 0.001f));
 }
 
 TEST_CASE("AltIdentity: multiple ticks of decay", "[alternative_identity][tier9]") {

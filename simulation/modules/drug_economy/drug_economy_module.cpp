@@ -87,11 +87,11 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         // Degrade quality through distribution tier
         float output_quality = base_quality;
         if (tier == DrugMarketTier::wholesale) {
-            output_quality = degrade_quality(base_quality, WHOLESALE_QUALITY_DEGRADATION);
+            output_quality = degrade_quality(base_quality, cfg_.wholesale_quality_degradation);
         } else {
             output_quality =
-                degrade_quality(degrade_quality(base_quality, WHOLESALE_QUALITY_DEGRADATION),
-                                RETAIL_QUALITY_DEGRADATION);
+                degrade_quality(degrade_quality(base_quality, cfg_.wholesale_quality_degradation),
+                                cfg_.retail_quality_degradation);
         }
 
         // Compute pricing
@@ -100,7 +100,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         float revenue = 0.0f;
         if (tier == DrugMarketTier::wholesale) {
             revenue =
-                production_output * compute_wholesale_price(spot_price, WHOLESALE_PRICE_FRACTION);
+                production_output * compute_wholesale_price(spot_price, cfg_.wholesale_price_fraction);
         } else {
             revenue = production_output * spot_price;
         }
@@ -122,7 +122,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         // Compute precursor consumption (meth requires 2x precursor)
         if (drug_type == DrugType::methamphetamine) {
             float precursor =
-                compute_precursor_consumption(production_output, PRECURSOR_RATIO_METH);
+                compute_precursor_consumption(production_output, cfg_.precursor_ratio_meth);
             MarketDelta precursor_demand;
             precursor_demand.good_id = 9999;  // proxy precursor good_id
             precursor_demand.region_id = province.id;
@@ -146,7 +146,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
     float addiction_rate = province.conditions.addiction_rate;
     if (addiction_rate > 0.0f && province.cohort_stats) {
         float demand = compute_addiction_demand(
-            addiction_rate, province.cohort_stats->total_population, DEMAND_PER_ADDICT);
+            addiction_rate, province.cohort_stats->total_population, cfg_.demand_per_addict);
 
         MarketDelta demand_delta;
         demand_delta.good_id = 0;  // aggregate drug demand

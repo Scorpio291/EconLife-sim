@@ -83,9 +83,6 @@ class ProductionModule : public ITickModule {
     // --- Utility: convert string good_id to uint32_t ---
     static uint32_t good_id_from_string(const std::string& good_id_str);
 
-    // Informal market price discount factor (criminal sector).
-    static constexpr float informal_price_discount = 0.7f;
-
     // --- Configuration ---
     ProductionConstants& config() { return config_; }
     const ProductionConstants& config() const { return config_; }

@@ -261,7 +261,7 @@ TEST_CASE("test_transit_time_from_route_profile", "[supply_chain][tier2]") {
     float infra = 0.5f;
 
     uint32_t ticks =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, infra);
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, infra);
 
     // Expected: ceil(600 / (300 * (1 + 0.5 * 0.5))) = ceil(600 / 375) = ceil(1.6) = 2
     REQUIRE(ticks == 2);
@@ -273,7 +273,7 @@ TEST_CASE("test_transit_time_minimum_one_tick", "[supply_chain][tier2]") {
     float infra = 1.0f;
 
     uint32_t ticks =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, infra);
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, infra);
 
     // Expected: ceil(10 / (300 * 1.5)) = ceil(0.022) = 1
     REQUIRE(ticks == 1);
@@ -286,9 +286,9 @@ TEST_CASE("test_transit_time_high_infrastructure", "[supply_chain][tier2]") {
     float high_infra = 1.0f;
 
     uint32_t ticks_low =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, low_infra);
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, low_infra);
     uint32_t ticks_high =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainConfig::road_speed, high_infra);
+        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, high_infra);
 
     // Low infra: ceil(900 / (300 * 1.0)) = 3
     REQUIRE(ticks_low == 3);
@@ -374,7 +374,7 @@ TEST_CASE("test_perishable_decay_formula", "[supply_chain][tier2]") {
     // Test the perishable decay calculation.
     // quantity_remaining = quantity_dispatched * (1 - decay_rate)^transit_ticks
     float quantity_dispatched = 100.0f;
-    float decay_rate = SupplyChainConfig::default_perishable_decay_rate;
+    float decay_rate = SupplyChainModuleConfig{}.default_perishable_decay_rate;
     uint32_t transit_ticks = 5;
 
     float quantity_remaining =
@@ -389,7 +389,7 @@ TEST_CASE("test_perishable_decay_formula", "[supply_chain][tier2]") {
 TEST_CASE("test_perishable_decay_long_transit", "[supply_chain][tier2]") {
     // Longer transit = more decay.
     float quantity = 100.0f;
-    float decay_rate = SupplyChainConfig::default_perishable_decay_rate;
+    float decay_rate = SupplyChainModuleConfig{}.default_perishable_decay_rate;
 
     float short_transit = quantity * std::pow(1.0f - decay_rate, 2.0f);
     float long_transit = quantity * std::pow(1.0f - decay_rate, 10.0f);
@@ -401,14 +401,14 @@ TEST_CASE("test_perishable_decay_long_transit", "[supply_chain][tier2]") {
 TEST_CASE("test_criminal_interception_probability", "[supply_chain][tier2]") {
     // Test that the interception probability formula works correctly.
     // interception_probability = interception_risk_per_tick * (1 - concealment)
-    float risk_per_tick = SupplyChainConfig::base_interception_risk;
+    float risk_per_tick = SupplyChainModuleConfig{}.base_interception_risk;
     float concealment = 0.0f;
 
     float prob = risk_per_tick * (1.0f - concealment);
     REQUIRE_THAT(prob, WithinAbs(0.05f, 0.001f));
 
     // With max concealment.
-    float concealment_max = SupplyChainConfig::max_concealment_modifier;
+    float concealment_max = SupplyChainModuleConfig{}.max_concealment_modifier;
     float prob_concealed = risk_per_tick * (1.0f - concealment_max);
     // Expected: 0.05 * (1 - 0.40) = 0.05 * 0.60 = 0.03
     REQUIRE_THAT(prob_concealed, WithinAbs(0.03f, 0.001f));
@@ -433,7 +433,7 @@ TEST_CASE("test_criminal_interception_high_risk", "[supply_chain][tier2]") {
 TEST_CASE("test_concealment_capped_at_max", "[supply_chain][tier2]") {
     // Verify concealment cannot exceed max_concealment_modifier.
     float raw_concealment = 0.80f;  // exceeds max
-    float capped = std::min(raw_concealment, SupplyChainConfig::max_concealment_modifier);
+    float capped = std::min(raw_concealment, SupplyChainModuleConfig{}.max_concealment_modifier);
     REQUIRE_THAT(capped, WithinAbs(0.40f, 0.001f));
 }
 

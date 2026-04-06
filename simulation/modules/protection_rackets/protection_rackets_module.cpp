@@ -35,14 +35,16 @@ float ProtectionRacketsModule::compute_refusal_probability(bool is_defensive_inc
     return std::clamp(probability, 0.0f, 1.0f);
 }
 
-RacketEscalationStage ProtectionRacketsModule::determine_escalation_stage(uint32_t ticks_overdue) {
-    if (ticks_overdue >= ABANDONMENT_THRESHOLD)
+RacketEscalationStage ProtectionRacketsModule::determine_escalation_stage(
+    uint32_t ticks_overdue, uint32_t warning_threshold, uint32_t property_damage_threshold,
+    uint32_t violence_threshold, uint32_t abandonment_threshold) {
+    if (ticks_overdue >= abandonment_threshold)
         return RacketEscalationStage::abandonment;
-    if (ticks_overdue >= VIOLENCE_THRESHOLD)
+    if (ticks_overdue >= violence_threshold)
         return RacketEscalationStage::violence;
-    if (ticks_overdue >= PROPERTY_DAMAGE_THRESHOLD)
+    if (ticks_overdue >= property_damage_threshold)
         return RacketEscalationStage::property_damage;
-    if (ticks_overdue >= WARNING_THRESHOLD)
+    if (ticks_overdue >= warning_threshold)
         return RacketEscalationStage::warning;
     return RacketEscalationStage::demand_issued;
 }
@@ -89,7 +91,8 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
         }
 
         // Update demand per tick based on current business revenue
-        racket.demand_per_tick = compute_demand_per_tick(target_biz->revenue_per_tick, DEMAND_RATE);
+        racket.demand_per_tick =
+            compute_demand_per_tick(target_biz->revenue_per_tick, cfg_.demand_rate);
 
         // Clamp NaN/negative demand
         if (std::isnan(racket.demand_per_tick) || racket.demand_per_tick < 0.0f) {
@@ -99,7 +102,7 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
 
         // Compute grievance contribution
         racket.community_grievance_contribution =
-            compute_grievance_contribution(racket.demand_per_tick, GRIEVANCE_PER_DEMAND_UNIT);
+            compute_grievance_contribution(racket.demand_per_tick, cfg_.grievance_per_demand_unit);
 
         // Process based on status
         if (racket.status == RacketStatus::active) {
@@ -143,7 +146,9 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
         } else if (racket.status == RacketStatus::refused) {
             // Refused racket: advance escalation based on ticks overdue
             uint32_t ticks_overdue = state.current_tick - racket.demand_issued_tick;
-            RacketEscalationStage new_stage = determine_escalation_stage(ticks_overdue);
+            RacketEscalationStage new_stage = determine_escalation_stage(
+                ticks_overdue, cfg_.warning_threshold, cfg_.property_damage_threshold,
+                cfg_.violence_threshold, cfg_.abandonment_threshold);
 
             if (new_stage != racket.escalation_stage) {
                 RacketEscalationStage old_stage = racket.escalation_stage;
@@ -155,12 +160,13 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
                         // Intimidation: add memory entry to target business owner
                         NPCDelta owner_delta;
                         owner_delta.npc_id = target_biz->owner_id;
-                        owner_delta.new_memory_entry = MemoryEntry{state.current_tick,
-                                                                   MemoryType::employment_negative,
-                                                                   racket.criminal_org_id,
-                                                                   MEMORY_EMOTIONAL_WEIGHT_WARNING,
-                                                                   1.0f,
-                                                                   true};
+                        owner_delta.new_memory_entry =
+                            MemoryEntry{state.current_tick,
+                                        MemoryType::employment_negative,
+                                        racket.criminal_org_id,
+                                        cfg_.memory_emotional_weight_warning,
+                                        1.0f,
+                                        true};
                         province_delta.npc_deltas.push_back(owner_delta);
                         break;
                     }
@@ -176,7 +182,7 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
                                                      EvidenceType::physical,
                                                      racket.criminal_org_id,
                                                      target_biz->owner_id,
-                                                     PROPERTY_DAMAGE_SEVERITY,
+                                                     cfg_.property_damage_severity,
                                                      0.002f,
                                                      state.current_tick,
                                                      province.id,

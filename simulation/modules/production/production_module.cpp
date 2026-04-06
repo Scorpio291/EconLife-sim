@@ -356,7 +356,7 @@ float ProductionModule::get_price_for_business(const NPCBusiness& biz, uint32_t 
                 // Criminal sector uses informal price.
                 // In V1, informal price is approximated as a discount on
                 // spot_price. The full informal market model is expansion scope.
-                return market.spot_price * informal_price_discount;
+                return market.spot_price * cfg_.informal_price_discount;
             }
             return market.spot_price;
         }

@@ -32,7 +32,7 @@ uint32_t SupplyChainModule::compute_transit_ticks(const RouteProfile& route, flo
     //   ticks = ceil(distance_km / (mode_speed * (1 + infrastructure * infra_speed_coeff)))
     // Minimum 1 tick for inter-province shipments.
     float effective_speed =
-        mode_speed * (1.0f + infrastructure_rating * SupplyChainConfig::infra_speed_coeff);
+        mode_speed * (1.0f + infrastructure_rating * SupplyChainModuleConfig{}.infra_speed_coeff);
 
     if (effective_speed <= 0.0f) {
         return 1;
@@ -48,9 +48,9 @@ float SupplyChainModule::compute_transport_cost(const RouteProfile& route, float
     //   cost = base_transport_rate * distance_km * quantity
     //          * (1 + terrain_roughness * terrain_cost_coeff)
     float terrain_factor =
-        1.0f + route.route_terrain_roughness * SupplyChainConfig::terrain_cost_coeff;
+        1.0f + route.route_terrain_roughness * SupplyChainModuleConfig{}.terrain_cost_coeff;
 
-    return SupplyChainConfig::base_transport_rate * route.distance_km * quantity * terrain_factor;
+    return SupplyChainModuleConfig{}.base_transport_rate * route.distance_km * quantity * terrain_factor;
 }
 
 // ===========================================================================
@@ -265,7 +265,7 @@ void SupplyChainModule::dispatch_inter_province(uint32_t province_id, const Worl
             // Compute transit time.
             float infra = state.provinces[src].infrastructure_rating;
             uint32_t transit_ticks =
-                compute_transit_ticks(route, SupplyChainConfig::road_speed, infra);
+                compute_transit_ticks(route, scfg_.road_speed, infra);
 
             // Deduct transport cost from shipper.
             NPCDelta cost_delta{};

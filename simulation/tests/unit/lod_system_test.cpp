@@ -64,10 +64,11 @@ TEST_CASE("LOD: annual tick check", "[lod_system][tier11]") {
     REQUIRE(LodSystemModule::is_annual_tick(180) == false);
 }
 
-TEST_CASE("LOD: constants match spec", "[lod_system][tier11]") {
+TEST_CASE("LOD: config defaults match spec", "[lod_system][tier11]") {
     REQUIRE(LodSystemModule::TICKS_PER_MONTH == 30);
     REQUIRE(LodSystemModule::TICKS_PER_YEAR == 365);
-    REQUIRE_THAT(LodSystemModule::LOD2_MIN_MODIFIER, WithinAbs(0.50f, 0.001f));
-    REQUIRE_THAT(LodSystemModule::LOD2_MAX_MODIFIER, WithinAbs(2.00f, 0.001f));
-    REQUIRE_THAT(LodSystemModule::LOD2_SMOOTHING_RATE, WithinAbs(0.30f, 0.001f));
+    constexpr LodSystemConfig cfg{};
+    REQUIRE_THAT(cfg.lod2_min_modifier, WithinAbs(0.50f, 0.001f));
+    REQUIRE_THAT(cfg.lod2_max_modifier, WithinAbs(2.00f, 0.001f));
+    REQUIRE_THAT(cfg.lod2_smoothing_rate, WithinAbs(0.30f, 0.001f));
 }

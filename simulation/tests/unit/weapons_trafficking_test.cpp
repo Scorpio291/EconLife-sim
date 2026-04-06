@@ -92,14 +92,14 @@ TEST_CASE("WeaponsTrafficking: chain custody actionability clamped",
     REQUIRE_THAT(clamped, WithinAbs(1.0f, 0.01f));
 }
 
-TEST_CASE("WeaponsTrafficking: embargo meter spike constant is 0.25",
+TEST_CASE("WeaponsTrafficking: embargo meter spike default is 0.25",
           "[weapons_trafficking][tier8]") {
-    REQUIRE_THAT(WeaponsTraffickingModule::EMBARGO_METER_SPIKE, WithinAbs(0.25f, 0.001f));
+    REQUIRE_THAT(WeaponsTraffickingConfig{}.embargo_meter_spike, WithinAbs(0.25f, 0.001f));
 }
 
-TEST_CASE("WeaponsTrafficking: max diversion fraction constant is 0.30",
+TEST_CASE("WeaponsTrafficking: max diversion fraction default is 0.30",
           "[weapons_trafficking][tier8]") {
-    REQUIRE_THAT(WeaponsTraffickingModule::MAX_DIVERSION_FRACTION, WithinAbs(0.30f, 0.001f));
+    REQUIRE_THAT(WeaponsTraffickingConfig{}.max_diversion_fraction, WithinAbs(0.30f, 0.001f));
 }
 
 TEST_CASE("WeaponsTrafficking: price with maximum conflict and low supply",

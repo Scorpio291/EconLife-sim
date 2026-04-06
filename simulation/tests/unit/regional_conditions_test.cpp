@@ -54,8 +54,9 @@ TEST_CASE("RegionalConditions: inequality from gini", "[regional_conditions][tie
                  WithinAbs(0.45f, 0.001f));
 }
 
-TEST_CASE("RegionalConditions: constants match spec", "[regional_conditions][tier11]") {
-    REQUIRE_THAT(RegionalConditionsModule::STABILITY_RECOVERY_RATE, WithinAbs(0.001f, 0.0001f));
-    REQUIRE_THAT(RegionalConditionsModule::EVENT_STABILITY_IMPACT, WithinAbs(0.05f, 0.001f));
-    REQUIRE_THAT(RegionalConditionsModule::DROUGHT_RECOVERY_RATE, WithinAbs(0.005f, 0.001f));
+TEST_CASE("RegionalConditions: config defaults match spec", "[regional_conditions][tier11]") {
+    constexpr RegionalConditionsConfig cfg{};
+    REQUIRE_THAT(cfg.stability_recovery_rate, WithinAbs(0.001f, 0.0001f));
+    REQUIRE_THAT(cfg.event_stability_impact, WithinAbs(0.05f, 0.001f));
+    REQUIRE_THAT(cfg.drought_recovery_rate, WithinAbs(0.005f, 0.001f));
 }

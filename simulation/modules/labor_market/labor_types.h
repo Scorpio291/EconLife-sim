@@ -108,23 +108,8 @@ struct NPCSkillEntry {
 // Labor Configuration Constants — §30 / INTERFACE.md
 // =============================================================================
 
-struct LaborConfig {
-    static constexpr float wage_adjustment_rate = 0.03f;
-    static constexpr float wage_floor = 0.01f;
-    static constexpr float wage_ceiling_multiplier = 5.0f;
-    static constexpr uint32_t pool_size_public = 12;
-    static constexpr uint32_t pool_size_professional = 5;
-    static constexpr uint32_t pool_size_referral = 3;
-    static constexpr float reputation_threshold = 0.3f;
-    static constexpr float reputation_pool_penalty_scale = 8.0f;
-    static constexpr float salary_premium_per_rep_point = 0.5f;
-    static constexpr float voluntary_departure_threshold = 0.35f;
-    static constexpr float departure_base_rate = 0.08f;
-    static constexpr float reputation_default = 0.5f;
-    static constexpr uint32_t deferred_salary_max_ticks = 30;
-    static constexpr float personal_referral_trust_min = 0.4f;
-    static constexpr uint32_t monthly_tick_interval = 30;
-};
+// LaborConfig constants have moved to LaborModuleConfig in core/config/package_config.h.
+struct LaborConfig {};
 
 // =============================================================================
 // Per-province wage state — stored in module member state

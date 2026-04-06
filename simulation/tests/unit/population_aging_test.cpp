@@ -65,9 +65,10 @@ TEST_CASE("PopulationAging: monthly tick check", "[population_aging][tier11]") {
     REQUIRE(PopulationAgingModule::is_monthly_tick(15) == false);
 }
 
-TEST_CASE("PopulationAging: constants match spec", "[population_aging][tier11]") {
-    REQUIRE_THAT(PopulationAgingModule::COHORT_INCOME_UPDATE_RATE, WithinAbs(0.05f, 0.001f));
-    REQUIRE_THAT(PopulationAgingModule::COHORT_EMPLOYMENT_UPDATE_RATE, WithinAbs(0.02f, 0.001f));
+TEST_CASE("PopulationAging: config defaults match spec", "[population_aging][tier11]") {
+    constexpr PopulationAgingConfig cfg{};
+    REQUIRE_THAT(cfg.cohort_income_update_rate, WithinAbs(0.05f, 0.001f));
+    REQUIRE_THAT(cfg.cohort_employment_update_rate, WithinAbs(0.02f, 0.001f));
     REQUIRE(PopulationAgingModule::TICKS_PER_MONTH == 30);
     REQUIRE(PopulationAgingModule::TICKS_PER_YEAR == 365);
 }

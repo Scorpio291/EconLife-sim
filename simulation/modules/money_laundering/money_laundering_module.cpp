@@ -141,7 +141,7 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
         switch (op.method) {
             case LaunderingMethod::structuring:
                 generate_evidence = should_generate_structuring_evidence(
-                    state.current_tick, op.started_tick, STRUCTURING_TOKEN_INTERVAL);
+                    state.current_tick, op.started_tick, cfg_.structuring_token_interval);
                 evidence_type = EvidenceType::financial;
                 break;
 
@@ -149,7 +149,7 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
                 // Generate evidence per chain node per interval
                 if (!op.shell_chain_business_ids.empty()) {
                     generate_evidence = should_generate_shell_chain_evidence(
-                        state.current_tick, op.started_tick, SHELL_CHAIN_EVIDENCE_INTERVAL);
+                        state.current_tick, op.started_tick, cfg_.shell_chain_evidence_interval);
                     if (generate_evidence) {
                         // Generate one token per chain node
                         for (size_t i = 1; i < op.shell_chain_business_ids.size(); ++i) {
@@ -174,7 +174,7 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
             case LaunderingMethod::trade_invoice:
                 generate_evidence =
                     (state.current_tick >= op.started_tick) &&
-                    ((state.current_tick - op.started_tick) % TRADE_INVOICE_EVIDENCE_INTERVAL ==
+                    ((state.current_tick - op.started_tick) % cfg_.trade_invoice_evidence_interval ==
                      0) &&
                     ((state.current_tick - op.started_tick) > 0);
                 evidence_type = EvidenceType::documentary;
@@ -191,7 +191,7 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
             case LaunderingMethod::cash_commingling:
                 generate_evidence =
                     (state.current_tick >= op.started_tick) &&
-                    ((state.current_tick - op.started_tick) % COMMINGLING_EVIDENCE_INTERVAL == 0) &&
+                    ((state.current_tick - op.started_tick) % cfg_.commingling_evidence_interval == 0) &&
                     ((state.current_tick - op.started_tick) > 0);
                 evidence_type = EvidenceType::testimonial;
                 break;
@@ -213,7 +213,7 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
     }
 
     // Monthly FIU pattern analysis
-    if (state.current_tick > 0 && state.current_tick % FIU_MONTHLY_INTERVAL == 0) {
+    if (state.current_tick > 0 && state.current_tick % cfg_.fiu_monthly_interval == 0) {
         fiu_results_.clear();
         // Simplified FIU: scan operations for structuring patterns
         // Count sub-threshold deposits per actor in last 30 ticks
@@ -228,8 +228,8 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
 
         for (const auto& [actor_id, count] : actor_deposit_counts) {
             float suspicion =
-                compute_fiu_structuring_suspicion(count, STRUCTURING_DEPOSIT_COUNT_THRESHOLD);
-            if (suspicion > FIU_TOKEN_THRESHOLD) {
+                compute_fiu_structuring_suspicion(count, cfg_.structuring_deposit_count_threshold);
+            if (suspicion > cfg_.fiu_token_threshold) {
                 fiu_results_.push_back(
                     FIUPatternResult{actor_id, suspicion, LaunderingMethod::structuring});
 
