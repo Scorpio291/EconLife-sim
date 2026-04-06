@@ -1,7 +1,7 @@
 // TickOrchestrator — topological sort + tick execution engine.
 // Modules register via ITickModule interface with runs_after()/runs_before().
 // After finalize_registration(), modules are sorted in dependency order.
-// Province-parallel modules dispatch to a thread pool (future: ThreadPool integration).
+// Province-parallel modules dispatch to ThreadPool for concurrent execution.
 
 #include "core/tick/tick_orchestrator.h"
 
@@ -144,12 +144,21 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
     // Step 0: Apply cross-province deltas from previous tick (one-tick propagation delay).
     apply_cross_province_deltas(state);
 
-    // Step 0.5: Reset per-tick flow fields.
+    // Step 0.5: Reset per-tick flow fields and apply supply decay.
     // demand_buffer is a per-tick flow: NPC spending fills it fresh each tick,
     // and the price engine reads it. Without reset, demand accumulates across
     // ticks, breaking the supply/demand ratio.
+    //
+    // Supply decay prevents unbounded accumulation when production exceeds
+    // consumption. The decay rate is configurable (default 2% per tick).
+    // This models spoilage, obsolescence, and wastage.
+    const float surplus_decay_rate =
+        config_ ? config_->supply_chain.surplus_decay_rate : 0.02f;
     for (auto& m : state.regional_markets) {
         m.demand_buffer = 0.0f;
+        if (m.supply > 0.0f) {
+            m.supply *= (1.0f - surplus_decay_rate);
+        }
     }
 
     // Pre-step: Drain deferred work queue — process all items due at current_tick.
@@ -175,13 +184,22 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
 
         if (module->is_province_parallel()) {
             // Province-parallel execution.
-            // Execute sequentially per province in ascending index order
-            // to maintain determinism. This matches the merge order.
+            // Each province writes to its own DeltaBuffer; results are merged
+            // in ascending province index order to maintain determinism.
             const uint32_t province_count = static_cast<uint32_t>(state.provinces.size());
+            std::vector<DeltaBuffer> province_deltas(province_count);
+
+            // ThreadPool::parallel_for dispatches to worker threads when
+            // num_threads > 1, or runs inline when num_threads == 1.
+            // state is passed as const ref — safe for concurrent reads.
+            thread_pool.parallel_for(province_count, [&](uint32_t p) {
+                module->execute_province(p, state, province_deltas[p]);
+            });
+
+            // Merge province deltas in ascending index order (deterministic).
             for (uint32_t p = 0; p < province_count; ++p) {
-                DeltaBuffer province_delta;
-                module->execute_province(p, state, province_delta);
-                // Merge province delta into main delta buffer.
+                auto& province_delta = province_deltas[p];
+                // Merge vector deltas into main delta buffer.
                 delta.npc_deltas.insert(delta.npc_deltas.end(), province_delta.npc_deltas.begin(),
                                         province_delta.npc_deltas.end());
                 // Merge player_delta additively.

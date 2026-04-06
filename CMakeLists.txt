@@ -63,6 +63,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# Threads — required by ThreadPool
+find_package(Threads REQUIRED)
+
 # Protocol Buffers — serialization
 find_package(Protobuf QUIET)
 if(NOT Protobuf_FOUND)

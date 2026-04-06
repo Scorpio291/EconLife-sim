@@ -4,6 +4,7 @@ add_executable(econlife_unit_tests
     rng_test.cpp
     deferred_work_queue_test.cpp
     tick_orchestrator_test.cpp
+    thread_pool_test.cpp
     production_test.cpp
     calendar_test.cpp
     scene_cards_test.cpp
