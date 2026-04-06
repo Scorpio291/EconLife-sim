@@ -3,6 +3,7 @@
 
 #include "core/tick/tick_orchestrator.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <memory>
@@ -10,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_module.h"
 #include "core/world_state/world_state.h"
@@ -310,4 +312,60 @@ TEST_CASE("province-parallel module without post-pass does not call execute",
     REQUIRE(order.size() == 2);
     CHECK(order[0] == "par_p0");
     CHECK(order[1] == "par_p1");
+}
+
+TEST_CASE("supply decay reduces market supply each tick", "[orchestrator][tier0]") {
+    TickOrchestrator orch;
+    orch.finalize_registration();
+
+    WorldState state{};
+    state.current_tick = 0;
+    state.world_seed = 42;
+    state.player.reset();
+    state.lod2_price_index.reset();
+
+    // Create two markets with initial supply.
+    RegionalMarket m1{};
+    m1.good_id = 0;
+    m1.province_id = 0;
+    m1.supply = 100.0f;
+    RegionalMarket m2{};
+    m2.good_id = 1;
+    m2.province_id = 0;
+    m2.supply = 200.0f;
+    state.regional_markets.push_back(m1);
+    state.regional_markets.push_back(m2);
+
+    ThreadPool pool(1);
+    orch.execute_tick(state, pool);
+
+    // Default surplus_decay_rate = 0.02 (2% per tick).
+    // After one tick: supply *= 0.98.
+    REQUIRE(state.regional_markets[0].supply == Catch::Approx(98.0f));
+    REQUIRE(state.regional_markets[1].supply == Catch::Approx(196.0f));
+}
+
+TEST_CASE("supply decay with config override", "[orchestrator][tier0]") {
+    TickOrchestrator orch;
+    PackageConfig config{};
+    config.supply_chain.surplus_decay_rate = 0.10f;  // 10% per tick
+    orch.set_config(config);
+    orch.finalize_registration();
+
+    WorldState state{};
+    state.current_tick = 0;
+    state.world_seed = 42;
+    state.player.reset();
+    state.lod2_price_index.reset();
+
+    RegionalMarket m{};
+    m.good_id = 0;
+    m.province_id = 0;
+    m.supply = 100.0f;
+    state.regional_markets.push_back(m);
+
+    ThreadPool pool(1);
+    orch.execute_tick(state, pool);
+
+    REQUIRE(state.regional_markets[0].supply == Catch::Approx(90.0f));
 }

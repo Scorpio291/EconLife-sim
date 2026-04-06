@@ -4,6 +4,7 @@
 add_library(econlife_core STATIC
     rng/deterministic_rng.cpp
     tick/tick_orchestrator.cpp
+    tick/thread_pool.cpp
     tick/drain_deferred_work.cpp
     world_state/cross_province_delta_buffer.cpp
     world_state/apply_deltas.cpp
@@ -31,4 +32,5 @@ target_link_libraries(econlife_core PUBLIC
     h3
     nlohmann_json::nlohmann_json
     lz4_static
+    Threads::Threads
 )
