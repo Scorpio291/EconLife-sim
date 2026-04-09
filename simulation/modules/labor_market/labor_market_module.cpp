@@ -17,6 +17,28 @@ namespace econlife {
 // LaborMarketModule — tick execution
 // ===========================================================================
 
+void LaborMarketModule::init_for_tick(const WorldState& state) {
+    // Pre-populate employment records for every significant NPC that does not
+    // yet have one.  This runs on the main thread before province-parallel
+    // dispatch, so no synchronisation is needed.  After this call the vector's
+    // size is stable and execute_province() never pushes new elements — it only
+    // mutates fields of records that belong to NPCs in its own province.
+    for (const auto& npc : state.significant_npcs) {
+        if (find_employment(npc.id) == nullptr) {
+            employment_records_.push_back(
+                EmploymentRecord{npc.id, /*employer_business_id=*/0,
+                                 /*offered_wage=*/0.0f, /*hired_tick=*/0, /*deferred_salary_ticks=*/0});
+        }
+    }
+    for (const auto& npc : state.named_background_npcs) {
+        if (find_employment(npc.id) == nullptr) {
+            employment_records_.push_back(
+                EmploymentRecord{npc.id, /*employer_business_id=*/0,
+                                 /*offered_wage=*/0.0f, /*hired_tick=*/0, /*deferred_salary_ticks=*/0});
+        }
+    }
+}
+
 void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
     // Skip provinces not at full LOD.
@@ -201,18 +223,17 @@ void LaborMarketModule::process_hiring_decisions(uint32_t province_id, const Wor
             // Hire the best applicant.
             posting.filled = true;
 
-            // Create or update employment record.
+            // Update employment record (pre-populated by init_for_tick).
             EmploymentRecord* existing = find_employment(best->applicant_npc_id);
-            if (existing) {
-                existing->employer_business_id = posting.business_id;
-                existing->offered_wage = posting.offered_wage;
-                existing->hired_tick = state.current_tick;
-                existing->deferred_salary_ticks = 0;
-            } else {
-                employment_records_.push_back(
-                    EmploymentRecord{best->applicant_npc_id, posting.business_id,
-                                     posting.offered_wage, state.current_tick, 0});
+            if (!existing) {
+                // Record was not pre-populated — skip to avoid pushing into the
+                // shared vector during province-parallel execution.
+                continue;
             }
+            existing->employer_business_id = posting.business_id;
+            existing->offered_wage = posting.offered_wage;
+            existing->hired_tick = state.current_tick;
+            existing->deferred_salary_ticks = 0;
 
             // Emit hiring memory: employment_positive.
             // Emotional weight scaled by overpay ratio.

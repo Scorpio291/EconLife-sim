@@ -29,10 +29,8 @@ jobs:
       - name: Run determinism tests
         run: ctest --test-dir build -C ${{ matrix.build_type }} -L "determinism" --output-on-failure
 
-      # Scenario tests are expected to FAIL during bootstrap.
-      # Uncomment when module implementations are ready:
-      # - name: Run scenario tests
-      #   run: ctest --test-dir build -C ${{ matrix.build_type }} -L "scenario" --output-on-failure
+      - name: Run scenario tests
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "scenario" --output-on-failure
 
   dependency-direction-lint:
     runs-on: ubuntu-latest

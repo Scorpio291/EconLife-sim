@@ -107,11 +107,43 @@ float RealEstateModule::compute_avg_property_value(const std::vector<PropertyLis
 }
 
 // ===========================================================================
+// RealEstateModule — pre-tick initialization (main thread, before dispatch)
+// ===========================================================================
+
+void RealEstateModule::init_for_tick(const WorldState& state) {
+    // Build per-province index so execute_province() only touches properties
+    // belonging to its own province — no cross-province data races.
+    province_property_indices_.clear();
+
+    for (size_t i = 0; i < properties_.size(); ++i) {
+        province_property_indices_[properties_[i].province_id].push_back(i);
+    }
+    // properties_ is already sorted by id ascending (maintained by add_property),
+    // so the per-province index vectors inherit that order — deterministic.
+}
+
+// ===========================================================================
 // RealEstateModule — per-province tick execution
 // ===========================================================================
 
 void RealEstateModule::execute_province(uint32_t province_idx, const WorldState& state,
                                         DeltaBuffer& province_delta) {
+    // Build per-province index if not pre-built by init_for_tick()
+    // (supports direct test calls without orchestrator).
+    if (province_property_indices_.empty() && !properties_.empty()) {
+        for (size_t i = 0; i < properties_.size(); ++i) {
+            province_property_indices_[properties_[i].province_id].push_back(i);
+        }
+    }
+
+    // Look up the pre-built index for this province.
+    auto it = province_property_indices_.find(province_idx);
+    if (it == province_property_indices_.end()) {
+        // No properties in this province — nothing to do.
+        return;
+    }
+    const auto& indices = it->second;
+
     const bool is_monthly_tick =
         (state.current_tick % cfg_.convergence_interval == 0);
 
@@ -129,10 +161,8 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
 
     // --- Step 1: Monthly market value recomputation and price convergence ---
     if (is_monthly_tick && province != nullptr) {
-        for (auto& prop : properties_) {
-            if (prop.province_id != province_idx) {
-                continue;
-            }
+        for (size_t idx : indices) {
+            auto& prop = properties_[idx];
 
             // Recompute market_value from provincial conditions.
             prop.market_value = compute_market_value(prop, *province);
@@ -147,10 +177,8 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
     }
 
     // --- Step 2: Collect rental income for rented properties (every tick) ---
-    for (const auto& prop : properties_) {
-        if (prop.province_id != province_idx) {
-            continue;
-        }
+    for (size_t idx : indices) {
+        const auto& prop = properties_[idx];
 
         if (!prop.rented) {
             continue;
@@ -177,10 +205,9 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
     // --- Step 3: Commercial tenant assignment ---
     // Find unoccupied commercial properties in this province and match them
     // to businesses that lack owned premises.
-    for (auto& prop : properties_) {
-        if (prop.province_id != province_idx) {
-            continue;
-        }
+    for (size_t idx : indices) {
+        auto& prop = properties_[idx];
+
         if (prop.type != PropertyType::commercial || prop.rented) {
             continue;
         }
@@ -192,10 +219,11 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
             }
 
             // Check if this business already occupies a property.
+            // Only search properties in the same province (our own indices).
             bool already_has_premises = false;
-            for (const auto& other_prop : properties_) {
-                if (other_prop.province_id == province_idx &&
-                    other_prop.type == PropertyType::commercial && other_prop.rented &&
+            for (size_t other_idx : indices) {
+                const auto& other_prop = properties_[other_idx];
+                if (other_prop.type == PropertyType::commercial && other_prop.rented &&
                     other_prop.tenant_id == biz.id) {
                     already_has_premises = true;
                     break;

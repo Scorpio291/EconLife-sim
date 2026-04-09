@@ -39,6 +39,8 @@ class FinancialDistributionModule : public ITickModule {
 
     bool is_province_parallel() const noexcept override { return true; }
 
+    void init_for_tick(const WorldState& state) override;
+
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 

@@ -67,6 +67,33 @@ float FacilitySignalsModule::apply_corruption_to_fill_rate(float fill_rate,
 }
 
 // ---------------------------------------------------------------------------
+// Pre-parallel initialization — populate signal entries for all businesses
+// ---------------------------------------------------------------------------
+
+void FacilitySignalsModule::init_for_tick(const WorldState& state) {
+    for (const auto& biz : state.npc_businesses) {
+        bool found = false;
+        for (const auto& fs : facility_signals_) {
+            if (fs.business_id == biz.id) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            FacilitySignals fs{};
+            fs.facility_id = biz.id;
+            fs.business_id = biz.id;
+            fs.power_consumption_anomaly = 0.0f;
+            fs.chemical_waste_signature = 0.0f;
+            fs.foot_traffic_visibility = 0.0f;
+            fs.olfactory_signature = 0.0f;
+            fs.scrutiny_mitigation = 0.0f;
+            facility_signals_.push_back(fs);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Province-parallel execution
 // ---------------------------------------------------------------------------
 
@@ -99,7 +126,7 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
     float criminal_signal_sum = 0.0f;
 
     for (const NPCBusiness* biz : province_businesses) {
-        // Find or create signal entry in module-internal storage
+        // Find signal entry pre-populated by init_for_tick().
         FacilitySignals* sig = nullptr;
         for (auto& fs : facility_signals_) {
             if (fs.business_id == biz->id) {
@@ -108,15 +135,7 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
             }
         }
         if (!sig) {
-            facility_signals_.push_back(FacilitySignals{});
-            sig = &facility_signals_.back();
-            sig->facility_id = biz->id;
-            sig->business_id = biz->id;
-            sig->power_consumption_anomaly = 0.0f;
-            sig->chemical_waste_signature = 0.0f;
-            sig->foot_traffic_visibility = 0.0f;
-            sig->olfactory_signature = 0.0f;
-            sig->scrutiny_mitigation = 0.0f;
+            continue;  // Defensive: skip if not pre-populated (should not happen).
         }
 
         // Apply karst bonus to mitigation

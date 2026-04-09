@@ -13,6 +13,7 @@
 
 #include "../test_world_factory.h"
 #include "core/world_state/apply_deltas.h"
+#include "modules/register_base_game_modules.h"
 
 using namespace econlife;
 using namespace econlife::test;
@@ -261,4 +262,68 @@ TEST_CASE("365-tick determinism with deltas applied", "[determinism][scale]") {
     auto bytes1 = serialize_world_state(world1);
     auto bytes2 = serialize_world_state(world2);
     REQUIRE(bytes1 == bytes2);
+}
+
+// ── Determinism with actual modules ─────────────────────────────────────────
+
+TEST_CASE("30-tick determinism with all base game modules", "[determinism][modules]") {
+    // Register all 43 base game modules and verify identical state after 30 ticks.
+    // This is the end-to-end determinism test that validates the full module pipeline.
+    PackageConfig config{};
+
+    auto world1 = create_test_world(42, 200, 6, 15);
+    auto world2 = create_test_world(42, 200, 6, 15);
+
+    auto init1 = serialize_world_state(world1);
+    auto init2 = serialize_world_state(world2);
+    REQUIRE(init1 == init2);
+
+    TickOrchestrator orch1, orch2;
+    register_base_game_modules(orch1, config);
+    register_base_game_modules(orch2, config);
+    orch1.set_config(config);
+    orch2.set_config(config);
+    orch1.finalize_registration();
+    orch2.finalize_registration();
+
+    // Both run single-threaded — verifies module determinism.
+    ThreadPool pool1(1), pool2(1);
+
+    run_ticks(world1, orch1, pool1, 30);
+    run_ticks(world2, orch2, pool2, 30);
+
+    REQUIRE(world1.current_tick == 30);
+    REQUIRE(world2.current_tick == 30);
+
+    auto final1 = serialize_world_state(world1);
+    auto final2 = serialize_world_state(world2);
+    REQUIRE(final1 == final2);
+}
+
+TEST_CASE("30-tick determinism with modules across thread counts", "[determinism][modules][parallel]") {
+    // Same modules, different thread pool sizes — verifies thread-safe determinism.
+    PackageConfig config{};
+
+    auto world1 = create_test_world(42, 200, 6, 15);
+    auto world6 = create_test_world(42, 200, 6, 15);
+
+    TickOrchestrator orch1, orch6;
+    register_base_game_modules(orch1, config);
+    register_base_game_modules(orch6, config);
+    orch1.set_config(config);
+    orch6.set_config(config);
+    orch1.finalize_registration();
+    orch6.finalize_registration();
+
+    ThreadPool pool1(1), pool6(6);
+
+    run_ticks(world1, orch1, pool1, 30);
+    run_ticks(world6, orch6, pool6, 30);
+
+    REQUIRE(world1.current_tick == 30);
+    REQUIRE(world6.current_tick == 30);
+
+    auto final1 = serialize_world_state(world1);
+    auto final6 = serialize_world_state(world6);
+    REQUIRE(final1 == final6);
 }
