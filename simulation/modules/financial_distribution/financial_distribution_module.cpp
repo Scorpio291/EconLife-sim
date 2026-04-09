@@ -23,6 +23,45 @@
 namespace econlife {
 
 // ===========================================================================
+// FinancialDistributionModule — pre-tick initialization (single-threaded)
+// ===========================================================================
+
+void FinancialDistributionModule::init_for_tick(const WorldState& state) {
+    // Pre-populate compensation records for all businesses so that
+    // execute_province() never mutates compensation_records_ (which would
+    // be a data race under province-parallel dispatch).
+    for (const auto& biz : state.npc_businesses) {
+        if (find_compensation_record(biz.id) != nullptr) {
+            continue;  // Already have a record for this business.
+        }
+
+        BusinessCompensationRecord new_rec{};
+        new_rec.business_id = biz.id;
+        // Scale heuristic: micro < 5 workers, small < 20, medium < 100, large >= 100.
+        // Use revenue_per_tick as proxy: micro < 100, small < 500, medium < 2000.
+        if (biz.revenue_per_tick < 100.0f) {
+            new_rec.scale = BusinessScale::micro;
+            new_rec.compensation.mechanism = CompensationMechanism::owners_draw;
+        } else if (biz.revenue_per_tick < 500.0f) {
+            new_rec.scale = BusinessScale::small;
+            new_rec.compensation.mechanism = CompensationMechanism::salary_only;
+            new_rec.compensation.salary_per_tick = biz.revenue_per_tick * 0.3f;
+        } else if (biz.revenue_per_tick < 2000.0f) {
+            new_rec.scale = BusinessScale::medium;
+            new_rec.compensation.mechanism = CompensationMechanism::salary_bonus;
+            new_rec.compensation.salary_per_tick = biz.revenue_per_tick * 0.25f;
+            new_rec.compensation.bonus_rate = 0.10f;
+        } else {
+            new_rec.scale = BusinessScale::large;
+            new_rec.compensation.mechanism = CompensationMechanism::salary_bonus;
+            new_rec.compensation.salary_per_tick = biz.revenue_per_tick * 0.20f;
+            new_rec.compensation.bonus_rate = 0.15f;
+        }
+        compensation_records_.push_back(new_rec);
+    }
+}
+
+// ===========================================================================
 // FinancialDistributionModule — tick execution
 // ===========================================================================
 
@@ -43,34 +82,12 @@ void FinancialDistributionModule::execute_province(uint32_t province_idx, const 
 
     // Process each business through the distribution pipeline.
     for (const NPCBusiness* biz : province_businesses) {
-        // Find or auto-create compensation record for this business.
+        // Look up the compensation record pre-populated by init_for_tick().
+        // init_for_tick() runs single-threaded before parallel dispatch, so
+        // every business in state.npc_businesses is guaranteed to have a record.
         BusinessCompensationRecord* record = find_compensation_record(biz->id);
         if (!record) {
-            // Auto-create: determine scale from worker count proxy (revenue_per_tick).
-            BusinessCompensationRecord new_rec{};
-            new_rec.business_id = biz->id;
-            // Scale heuristic: micro < 5 workers, small < 20, medium < 100, large >= 100.
-            // Use revenue_per_tick as proxy: micro < 100, small < 500, medium < 2000.
-            if (biz->revenue_per_tick < 100.0f) {
-                new_rec.scale = BusinessScale::micro;
-                new_rec.compensation.mechanism = CompensationMechanism::owners_draw;
-            } else if (biz->revenue_per_tick < 500.0f) {
-                new_rec.scale = BusinessScale::small;
-                new_rec.compensation.mechanism = CompensationMechanism::salary_only;
-                new_rec.compensation.salary_per_tick = biz->revenue_per_tick * 0.3f;
-            } else if (biz->revenue_per_tick < 2000.0f) {
-                new_rec.scale = BusinessScale::medium;
-                new_rec.compensation.mechanism = CompensationMechanism::salary_bonus;
-                new_rec.compensation.salary_per_tick = biz->revenue_per_tick * 0.25f;
-                new_rec.compensation.bonus_rate = 0.10f;
-            } else {
-                new_rec.scale = BusinessScale::large;
-                new_rec.compensation.mechanism = CompensationMechanism::salary_bonus;
-                new_rec.compensation.salary_per_tick = biz->revenue_per_tick * 0.20f;
-                new_rec.compensation.bonus_rate = 0.15f;
-            }
-            compensation_records_.push_back(new_rec);
-            record = &compensation_records_.back();
+            continue;  // Defensive: skip if record is missing (should not happen).
         }
 
         // Validate compensation mechanism for scale; fall back to salary_only

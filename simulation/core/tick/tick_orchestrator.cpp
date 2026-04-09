@@ -189,6 +189,11 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
             const uint32_t province_count = static_cast<uint32_t>(state.provinces.size());
             std::vector<DeltaBuffer> province_deltas(province_count);
 
+            // Pre-parallel initialization: runs on main thread before dispatch.
+            // Modules pre-populate mutable records so execute_province() only
+            // accesses records for entities in its own province.
+            module->init_for_tick(state);
+
             // ThreadPool::parallel_for dispatches to worker threads when
             // num_threads > 1, or runs inline when num_threads == 1.
             // state is passed as const ref — safe for concurrent reads.

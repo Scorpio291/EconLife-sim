@@ -37,6 +37,7 @@ class FacilitySignalsModule : public ITickModule {
 
     std::vector<std::string_view> runs_before() const override { return {"investigator_engine"}; }
 
+    void init_for_tick(const WorldState& state) override;
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
     void execute(const WorldState& state, DeltaBuffer& delta) override;

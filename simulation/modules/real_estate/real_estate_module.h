@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "core/config/package_config.h"
@@ -37,6 +38,8 @@ class RealEstateModule : public ITickModule {
     std::vector<std::string_view> runs_after() const override { return {"price_engine"}; }
 
     std::vector<std::string_view> runs_before() const override { return {"npc_behavior"}; }
+
+    void init_for_tick(const WorldState& state) override;
 
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
@@ -74,6 +77,13 @@ class RealEstateModule : public ITickModule {
     // Internal property storage — WorldState does not hold property listings.
     // Sorted by id ascending for deterministic processing order.
     std::vector<PropertyListing> properties_;
+
+    // Per-province indices into properties_, built by init_for_tick() on the
+    // main thread before parallel dispatch.  Each vector contains indices into
+    // properties_ for that province, in ascending id order.  This allows
+    // execute_province() to touch only its own province's data, eliminating
+    // cross-province data races.
+    std::unordered_map<uint32_t, std::vector<size_t>> province_property_indices_;
 };
 
 }  // namespace econlife

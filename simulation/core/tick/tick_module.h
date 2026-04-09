@@ -35,6 +35,14 @@ class ITickModule {
 
     // Province-parallel capability. Override both to enable parallel dispatch.
     virtual bool is_province_parallel() const noexcept { return false; }
+
+    // Pre-parallel initialization hook. Called on the main thread before
+    // execute_province() is dispatched to the thread pool. Modules that
+    // maintain mutable per-entity records (compensation, employment, etc.)
+    // should pre-populate them here so execute_province() only reads/writes
+    // records for entities in its own province (no cross-province contention).
+    virtual void init_for_tick(const WorldState& state) {}
+
     virtual void execute_province(uint32_t province_idx, const WorldState& state,
                                   DeltaBuffer& province_delta) {}
 

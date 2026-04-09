@@ -46,6 +46,16 @@ float WeaponsTraffickingModule::compute_chain_custody_actionability(float base_a
 }
 
 // ============================================================================
+// Pre-parallel initialization
+// ============================================================================
+
+void WeaponsTraffickingModule::init_for_tick(const WorldState& state) {
+    // Clear per-tick audit records on main thread before parallel dispatch.
+    diversion_records_.clear();
+    procurement_records_.clear();
+}
+
+// ============================================================================
 // Province-parallel execution
 // ============================================================================
 
@@ -54,9 +64,6 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
     if (province_idx >= state.provinces.size())
         return;
     const auto& province = state.provinces[province_idx];
-
-    diversion_records_.clear();
-    procurement_records_.clear();
 
     // Determine territorial conflict stage for demand modifier
     // Read from province conditions (criminal_dominance_index as proxy)
@@ -103,8 +110,8 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
 
         total_weapon_supply += diverted;
 
-        diversion_records_.push_back(WeaponDiversionRecord{
-            biz->id, WeaponType::small_arms, diversion_fraction, diverted, formal, province.id});
+        // Diversion record tracking omitted during parallel execution
+        // to avoid data races on the shared diversion_records_ vector.
 
         // BusinessDelta: credit weapons sales revenue to the diverted business
         if (diverted > 0.0f) {

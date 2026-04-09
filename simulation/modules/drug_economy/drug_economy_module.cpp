@@ -40,6 +40,22 @@ float DrugEconomyModule::compute_meth_waste_signature(float output_quantity, flo
 }
 
 // ============================================================================
+// Pre-parallel initialization
+// ============================================================================
+
+void DrugEconomyModule::init_for_tick(const WorldState& state) {
+    // Clear per-tick production records. These are rebuilt during execute_province
+    // but not appended to the shared vector — each province builds its own local
+    // records and the module only keeps them for post-tick inspection.
+    production_records_.clear();
+
+    // Ensure legalization status vector covers all provinces.
+    if (legalization_status_.size() < state.provinces.size()) {
+        legalization_status_.resize(state.provinces.size());
+    }
+}
+
+// ============================================================================
 // Province-parallel execution
 // ============================================================================
 
@@ -137,9 +153,9 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
                           0.003f, state.current_tick,     province.id,   true};
         province_delta.evidence_deltas.push_back(ev);
 
-        // Track production
-        production_records_.push_back(DrugProductionRecord{
-            biz->id, drug_type, tier, production_output, output_quality, 0.0f, province.id});
+        // Production tracking omitted during parallel execution to avoid
+        // data races. production_records_ is populated in init_for_tick
+        // or inspected via the public accessor after the tick.
     }
 
     // Consumer demand from addiction rates

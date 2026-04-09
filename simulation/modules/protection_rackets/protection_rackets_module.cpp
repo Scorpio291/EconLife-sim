@@ -62,15 +62,17 @@ float ProtectionRacketsModule::compute_violence_le_multiplier(float base_fill_ra
 // Province-parallel execution
 // ============================================================================
 
+void ProtectionRacketsModule::init_for_tick(const WorldState& /*state*/) {
+    // Sort rackets once on the main thread before parallel dispatch.
+    std::sort(rackets_.begin(), rackets_.end(),
+              [](const ProtectionRacket& a, const ProtectionRacket& b) { return a.id < b.id; });
+}
+
 void ProtectionRacketsModule::execute_province(uint32_t province_idx, const WorldState& state,
                                                DeltaBuffer& province_delta) {
     if (province_idx >= state.provinces.size())
         return;
     const auto& province = state.provinces[province_idx];
-
-    // Process rackets sorted by id ascending for determinism
-    std::sort(rackets_.begin(), rackets_.end(),
-              [](const ProtectionRacket& a, const ProtectionRacket& b) { return a.id < b.id; });
 
     for (auto& racket : rackets_) {
         // Only process rackets in this province

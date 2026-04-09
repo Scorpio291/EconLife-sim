@@ -80,6 +80,58 @@ float InvestigatorEngineModule::compute_decay(float current_level, float decay_r
 }
 
 // ============================================================================
+// Pre-tick initialization (runs single-threaded before parallel dispatch)
+// ============================================================================
+
+void InvestigatorEngineModule::init_for_tick(const WorldState& state) {
+    // Pre-populate cases_ for every active investigator NPC so that
+    // execute_province() never pushes to the shared vector.
+    // Existing cases are kept; new investigators get a default case.
+
+    // Build a set of investigator NPC ids that already have a case
+    // so we can skip them when scanning NPCs.
+    std::vector<uint32_t> existing_ids;
+    existing_ids.reserve(cases_.size());
+    for (const auto& c : cases_) {
+        existing_ids.push_back(c.investigator_npc_id);
+    }
+    std::sort(existing_ids.begin(), existing_ids.end());
+
+    // Scan all significant NPCs for investigator roles, sorted by id ascending
+    // for deterministic insertion order.
+    std::vector<const NPC*> all_investigators;
+    for (const auto& npc : state.significant_npcs) {
+        if (npc.status != NPCStatus::active)
+            continue;
+        if (npc.role == NPCRole::law_enforcement || npc.role == NPCRole::regulator ||
+            npc.role == NPCRole::journalist || npc.role == NPCRole::ngo_investigator) {
+            all_investigators.push_back(&npc);
+        }
+    }
+    std::sort(all_investigators.begin(), all_investigators.end(),
+              [](const NPC* a, const NPC* b) { return a->id < b->id; });
+
+    for (const auto* inv : all_investigators) {
+        // Skip if a case already exists for this investigator
+        if (std::binary_search(existing_ids.begin(), existing_ids.end(), inv->id)) {
+            continue;
+        }
+
+        InvestigatorType inv_type = InvestigatorType::law_enforcement;
+        if (inv->role == NPCRole::regulator)
+            inv_type = InvestigatorType::regulator;
+        else if (inv->role == NPCRole::journalist)
+            inv_type = InvestigatorType::journalist;
+        else if (inv->role == NPCRole::ngo_investigator)
+            inv_type = InvestigatorType::ngo_investigator;
+
+        cases_.push_back(InvestigationCase{inv->id, inv_type, 0, 0.0f, 0.0f,
+                                           static_cast<uint8_t>(InvestigatorMeterStatus::inactive),
+                                           0, false, inv->current_province_id});
+    }
+}
+
+// ============================================================================
 // Province-parallel execution
 // ============================================================================
 
@@ -168,7 +220,7 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
                                                   corruption_coverage);
         }
 
-        // Find or create case for this investigator
+        // Find pre-populated case for this investigator (created in init_for_tick)
         InvestigationCase* found_case = nullptr;
         for (auto& c : cases_) {
             if (c.investigator_npc_id == inv->id) {
@@ -177,19 +229,9 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
             }
         }
 
+        // Case must exist — init_for_tick guarantees it. Skip if somehow missing.
         if (!found_case) {
-            InvestigatorType inv_type = InvestigatorType::law_enforcement;
-            if (is_reg)
-                inv_type = InvestigatorType::regulator;
-            else if (is_jrn)
-                inv_type = InvestigatorType::journalist;
-            else if (is_ngo)
-                inv_type = InvestigatorType::ngo_investigator;
-
-            cases_.push_back(InvestigationCase{
-                inv->id, inv_type, 0, 0.0f, 0.0f,
-                static_cast<uint8_t>(InvestigatorMeterStatus::inactive), 0, false, province.id});
-            found_case = &cases_.back();
+            continue;
         }
 
         // If no fill rate signal, decay the meter

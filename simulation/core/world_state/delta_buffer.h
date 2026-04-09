@@ -36,7 +36,7 @@ struct NPCDelta {
     std::optional<NPCTravelStatus> new_travel_status;       // replacement
     std::optional<MemoryEntry> new_memory_entry;            // appended to memory_log
     std::optional<Relationship> updated_relationship;       // upsert by target_npc_id
-    std::optional<float> motivation_delta;                  // additive to specific motivation slot
+    std::optional<float> motivation_delta;                  // additive to financial_gain slot (weights[0]); prefer motivation_replacement for full vector
     std::optional<MotivationVector> motivation_replacement; // replacement; full vector override
 };
 
@@ -151,8 +151,10 @@ struct DeltaBuffer {
     std::vector<CrossProvinceDelta> cross_province_deltas;
 };
 
-// Thread-safe via partitioning: each province worker appends to its own partition.
-// Main thread merges after join. Cleared each tick; not persisted.
+// Cross-province effects are accumulated here during apply_deltas (main thread only).
+// Province-parallel modules write cross-province deltas to their per-province
+// DeltaBuffer, which the orchestrator merges sequentially before apply_deltas.
+// Cleared each tick; not persisted.
 struct CrossProvinceDeltaBuffer {
     std::vector<CrossProvinceDelta> entries;
 
