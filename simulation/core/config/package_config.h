@@ -457,6 +457,7 @@ struct ConsequenceDelayConfig {
     uint32_t obligation_escalation_min = 90;
     uint32_t obligation_escalation_max = 365;
     uint32_t evidence_decay_interval = 7;
+    uint32_t evidence_max_age_ticks = 1000;  // hard expiry: tokens older than this are GC'd
     uint32_t relationship_decay_interval = 30;
     uint32_t npc_business_decision = 90;
     uint32_t charge_to_trial_min = 90;

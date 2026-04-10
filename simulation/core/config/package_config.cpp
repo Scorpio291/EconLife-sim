@@ -251,6 +251,8 @@ PackageConfig load_package_config(const std::string& config_dir) {
         const auto ed = cd.value("evidence_decay", nlohmann::json::object());
         cfg.consequence_delays.evidence_decay_interval =
             ed.value("base_delay", cfg.consequence_delays.evidence_decay_interval);
+        cfg.consequence_delays.evidence_max_age_ticks =
+            ed.value("max_age_ticks", cfg.consequence_delays.evidence_max_age_ticks);
 
         const auto rd = cd.value("relationship_decay", nlohmann::json::object());
         cfg.consequence_delays.relationship_decay_interval =

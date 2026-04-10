@@ -176,7 +176,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
             dcfg.fear_decay_rate_per_batch = config_->relationships.fear_decay_rate_per_batch;
         }
         drain_deferred_work(state, dwq_delta, dcfg);
-        apply_deltas(state, dwq_delta, sc);
+        apply_deltas(state, dwq_delta, sc, config_);
     }
 
     for (auto& module : modules_) {
@@ -272,7 +272,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
 
             // Apply province-parallel deltas before global post-pass so the
             // post-pass sees the accumulated province effects.
-            apply_deltas(state, delta, sc);
+            apply_deltas(state, delta, sc, config_);
 
             // Global post-pass: execute() runs after all province deltas are
             // merged and applied, allowing global coordination (transit arrivals,
@@ -280,7 +280,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
             if (module->has_global_post_pass()) {
                 DeltaBuffer post_delta;
                 module->execute(state, post_delta);
-                apply_deltas(state, post_delta, sc);
+                apply_deltas(state, post_delta, sc, config_);
             }
         } else {
             // Sequential execution on main thread.
@@ -288,16 +288,26 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
 
             // Apply this module's deltas to WorldState immediately.
             // Each module sees the effects of all prior modules in this tick.
-            apply_deltas(state, delta, sc);
+            apply_deltas(state, delta, sc, config_);
         }
     }
 
-    // Garbage collect inactive evidence tokens to prevent unbounded pool growth.
-    // Tokens are marked is_active=false by decay and retirement deltas; remove them
-    // at end of tick so no module sees stale references mid-tick.
-    state.evidence_pool.erase(std::remove_if(state.evidence_pool.begin(), state.evidence_pool.end(),
-                                             [](const EvidenceToken& t) { return !t.is_active; }),
-                              state.evidence_pool.end());
+    // Garbage collect evidence tokens to prevent unbounded pool growth:
+    // (a) Inactive tokens — retired/suppressed via decay or retirement deltas.
+    // (b) Age-expired tokens — older than evidence_max_age_ticks regardless of decay_rate.
+    //     Tokens with decay_rate=0 never self-retire; hard expiry caps the pool size.
+    {
+        const uint32_t max_age =
+            config_ ? config_->consequence_delays.evidence_max_age_ticks : 1000u;
+        state.evidence_pool.erase(
+            std::remove_if(state.evidence_pool.begin(), state.evidence_pool.end(),
+                           [&](const EvidenceToken& t) {
+                               return !t.is_active ||
+                                      (state.current_tick > t.created_tick &&
+                                       state.current_tick - t.created_tick > max_age);
+                           }),
+            state.evidence_pool.end());
+    }
 
     state.current_tick++;
 }

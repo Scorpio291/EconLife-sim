@@ -14,8 +14,9 @@ The module iterates all significant NPCs and all `PopulationCohort` records per 
 - Goods data file (loaded at startup) -- `base_consumer_demand_units`, `income_elasticity`, `price_elasticity`, `quality_weight` per good
 
 ## Outputs (to DeltaBuffer)
-- `MarketDelta.demand_buffer_delta` -- additive consumer demand contribution per `(good_id, province_id)` for tick `t+1` price calculation
-- `NPCDelta.spending_this_tick` -- total spending amount per significant NPC this tick (informational; feeds dashboard)
+- `MarketDelta.demand_buffer_delta` -- additive consumer demand contribution per `(good_id, province_id)` for tick `t+1` price calculation. Always equals full expressed demand (not clamped by supply) so `price_engine` receives the correct price signal.
+- `MarketDelta.supply_delta` -- negative; equals the quantity actually consumed (`min(total_demand, available_supply)`). NPCs are only charged for goods they actually receive.
+- `NPCDelta.capital_delta` -- negative; NPC spending deducted this tick. Computed as `demand * consumption_ratio * spot_price` where `consumption_ratio = consumed / total_demand`. When supply is exhausted, `consumption_ratio = 0` and NPC capital is not drained.
 
 ## Preconditions
 - Production module (tick step 1) has completed and derived demand from industrial consumption is already written to `demand_buffer_delta`.
@@ -34,7 +35,9 @@ The module iterates all significant NPCs and all `PopulationCohort` records per 
 ## Invariants
 - Consumer demand formula: `demand_contribution(npc, g) = good.base_consumer_demand_units * income_factor(npc, g) * price_factor(npc, g) * quality_factor(npc, g)`.
 - `income_factor` = `(npc.disposable_income / config.demand.reference_income) ^ good.income_elasticity`, clamped to `[0.0, config.demand.max_income_factor]` (default max: 5.0).
-- `price_factor` = `(good.base_price / max(spot_price(g, p), 0.01)) ^ |good.price_elasticity|`, clamped to `[config.demand.min_price_factor, inf)` (default min: 0.05). BuyerType modulates elasticity: `necessity_buyer` applies `elasticity * 0.1`, `price_sensitive` applies `elasticity * 1.5`, `quality_seeker` applies `elasticity * 0.6`, `brand_loyal` applies `elasticity * 0.8`.
+- `price_factor` = `(good.base_price / max(spot_price(g, p), 0.01)) ^ |good.price_elasticity|`, clamped to `[config.demand.min_price_factor, inf)` (default min: 0.05). Default `good.base_price = 188.0` (calibrated to typical market equilibrium price). BuyerType modulates elasticity: `necessity_buyer` applies `elasticity * 0.1`, `price_sensitive` applies `elasticity * 1.5`, `quality_seeker` applies `elasticity * 0.6`, `brand_loyal` applies `elasticity * 0.8`.
+- Default `base_consumer_demand_units = 0.003`. At reference_income and equilibrium prices this yields ~79 currency units spent per NPC per tick across 140 markets — approximately 8% of reference_income.
+- NPC capital deduction = `demand * consumption_ratio * spot_price` where `consumption_ratio = min(total_demand, supply) / total_demand`. NPCs are never charged for goods they cannot receive. Full demand signal (not capped) flows to `price_engine`.
 - `quality_factor` = `1.0 + good.quality_weight * (batch_quality - market_quality_avg)`. Quality weight varies by BuyerType: 0.0 for `price_sensitive`, 0.3 for `brand_loyal`, 0.6 for `quality_seeker`, 0.0 for `necessity_buyer`.
 - Background population demand: `demand_contribution(cohort, g) * cohort.population_size`, using cohort-mean disposable income and modal `BuyerType`.
 - Floating-point accumulations use canonical sort order (`good_id` ascending, then `province_id` ascending) for deterministic summation.
@@ -56,6 +59,16 @@ The module iterates all significant NPCs and all `PopulationCohort` records per 
 ## Dependencies
 - runs_after: ["supply_chain"]
 - runs_before: ["price_engine"]
+
+## Config Source
+All tunable constants come from `packages/base_game/config/modules.json` → `npc_spending` section, loaded into `NpcSpendingConfig` by `package_config.cpp`. No hardcoded values in module logic.
+- `default_base_demand_units = 0.003` (was 1.0 — calibrated to avoid phantom spending)
+- `default_base_price = 188.0` (was 10.0 — calibrated to typical equilibrium spot price)
+- `reference_income = 1000.0`
+- `max_income_factor = 5.0`
+- `min_price_factor = 0.05`
+- `default_income_elasticity = 1.0`
+- `default_price_elasticity = -1.0`
 
 ## Test Scenarios
 - `test_basic_consumer_demand_adds_to_demand_buffer`: A province with 5 significant NPCs and a food good. Verify `demand_buffer_delta` for food in that province equals the sum of individual `demand_contribution` values computed from the formula.

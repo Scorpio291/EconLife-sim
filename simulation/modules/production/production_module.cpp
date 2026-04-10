@@ -327,8 +327,8 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         total_revenue += actual_output * price;
     }
 
-    // Operating cost computed for downstream modules.
-    float actual_cost = recipe->base_cost_per_tick * cost_multiplier;
+    // Operating cost scales with bottleneck_ratio: zero production = zero variable cost.
+    float actual_cost = recipe->base_cost_per_tick * cost_multiplier * bottleneck_ratio;
     if (std::isnan(actual_cost) || actual_cost < 0.0f) {
         actual_cost = 0.0f;
     }

@@ -34,13 +34,13 @@ Processes all NPCBusiness entities each tick: consumes input goods from inventor
 - Businesses with `criminal_sector == true` read informal market prices, not formal `spot_price`. Market layer selection is always governed by the `criminal_sector` bool, never by `BusinessSector` enum alone.
 - `BusinessSector::criminal` with `criminal_sector == false` is invalid and must never appear (loader rejects at startup).
 - Output volume formula: `actual_output = recipe_output_per_tick * (1.0 + TECH_TIER_OUTPUT_BONUS_PER_TIER * max(0, facility.tech_tier - recipe.min_tech_tier))` where `TECH_TIER_OUTPUT_BONUS_PER_TIER = 0.08`.
-- Operating cost formula: `actual_cost = recipe_base_cost_per_unit * (1.0 - TECH_TIER_COST_REDUCTION_PER_TIER * max(0, facility.tech_tier - recipe.min_tech_tier))` where `TECH_TIER_COST_REDUCTION_PER_TIER = 0.05`.
+- Operating cost formula: `actual_cost = recipe_base_cost_per_unit * (1.0 - TECH_TIER_COST_REDUCTION_PER_TIER * max(0, facility.tech_tier - recipe.min_tech_tier)) * bottleneck_ratio` where `TECH_TIER_COST_REDUCTION_PER_TIER = 0.05`. When `bottleneck_ratio == 0` (no input supply), `actual_cost == 0` — zero production incurs zero variable cost.
 - Quality ceiling: `quality_ceiling = TECH_QUALITY_CEILING_BASE + TECH_QUALITY_CEILING_STEP * (facility.tech_tier - recipe.min_tech_tier)`, further capped by `actor_tech_state.maturation_of(recipe.key_technology_node)` for technology-intensive recipes. Commodity recipes (`key_technology_node == ""`) are unaffected by maturation cap.
 - Floating-point accumulations use canonical sort order (good_id ascending, then province_id ascending) for deterministic summation.
 - Same seed + same inputs = identical production output regardless of core count.
 
 ## Failure Modes
-- Missing recipe for a business sector: log warning, skip business, continue. Business produces nothing this tick; cash still decremented by fixed operating costs.
+- Missing recipe for a business sector: log warning, skip business, continue. Business produces nothing this tick; no operating cost is charged.
 - Input good unavailable (supply exhausted): production clamped to zero for that recipe; output reduced proportionally. Bottleneck recorded for supply chain propagation in Step 2 next tick.
 - NaN or negative output from floating-point edge case: clamp to 0.0, log diagnostic.
 

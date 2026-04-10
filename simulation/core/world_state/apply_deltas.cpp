@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include "core/config/package_config.h"
+#include "core/tick/deferred_work.h"
 #include "modules/technology/technology_types.h"
 #include "player.h"
 #include "world_state.h"
@@ -293,7 +294,8 @@ static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta
 // ---------------------------------------------------------------------------
 // apply_evidence_deltas
 // ---------------------------------------------------------------------------
-static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceDelta>& deltas) {
+static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceDelta>& deltas,
+                                   uint32_t evidence_decay_interval) {
     for (const auto& d : deltas) {
         if (d.new_token.has_value()) {
             EvidenceToken token = *d.new_token;
@@ -307,6 +309,12 @@ static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceD
                 token.id = max_id + 1;
             }
             world.evidence_pool.push_back(token);
+            // Schedule initial decay. Handler self-reschedules while token stays active.
+            if (token.decay_rate > 0.0f) {
+                world.deferred_work_queue.push({world.current_tick + evidence_decay_interval,
+                                                WorkType::evidence_decay_batch, token.id,
+                                                EvidenceDecayPayload{token.id}});
+            }
         }
         if (d.retired_token_id.has_value()) {
             for (auto& t : world.evidence_pool) {
@@ -472,13 +480,18 @@ static void apply_technology_deltas(WorldState& world, const std::vector<Technol
 // apply_deltas — main entry point
 // ---------------------------------------------------------------------------
 void apply_deltas(WorldState& world, DeltaBuffer& delta,
-                  const SafetyCeilingsConfig* ceilings) {
+                  const SafetyCeilingsConfig* ceilings, const PackageConfig* config) {
     const auto& ceil = ceilings ? *ceilings : DEFAULT_CEILINGS;
+    // Extract evidence_decay_interval from config; fall back to DrainConfig default (7).
+    uint32_t evidence_decay_interval =
+        (config && config->consequence_delays.evidence_decay_interval > 0)
+            ? config->consequence_delays.evidence_decay_interval
+            : 7u;
     apply_npc_deltas(world, delta.npc_deltas, ceil);
     apply_player_delta(world, delta.player_delta);
     apply_business_deltas(world, delta.business_deltas, ceil);
     apply_market_deltas(world, delta.market_deltas, ceil);
-    apply_evidence_deltas(world, delta.evidence_deltas);
+    apply_evidence_deltas(world, delta.evidence_deltas, evidence_decay_interval);
     apply_region_deltas(world, delta.region_deltas);
     apply_currency_deltas(world, delta.currency_deltas);
     apply_technology_deltas(world, delta.technology_deltas);
