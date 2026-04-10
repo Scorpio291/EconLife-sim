@@ -19,7 +19,7 @@ Recalculates spot prices and equilibrium prices for all goods in all regional ma
 - `supply_chain` module has executed: production outputs and transit arrivals have been applied to `RegionalMarket.supply`.
 - `labor_market` module has executed: wage adjustments are reflected in cost structures.
 - `seasonal_agriculture` module has executed: seasonal harvest supply bursts are included in `RegionalMarket.supply`.
-- `demand_buffer` contains accumulated demand from the previous tick (one-tick lag).
+- `npc_spending` module has executed: consumer demand contributions for this tick are in `demand_buffer`. This is the primary demand signal for equilibrium price calculation.
 - `RegionalMarket.supply` includes only local production this tick plus `TransitShipment` arrivals with `arrival_tick == current_tick`; goods in transit are excluded.
 
 ## Postconditions
@@ -54,7 +54,7 @@ Recalculates spot prices and equilibrium prices for all goods in all regional ma
 - Market recomputation can be event-driven: triggered only when supply or demand changes (production step, shipment arrival); static markets skip recomputation.
 
 ## Dependencies
-- runs_after: ["supply_chain", "labor_market", "seasonal_agriculture"]
+- runs_after: ["supply_chain", "labor_market", "seasonal_agriculture", "npc_spending"]
 - runs_before: ["financial_distribution"]
 
 ## Test Scenarios

@@ -26,7 +26,7 @@ Processes all business-to-actor money flows each tick: business revenue collecti
 ## Preconditions
 - price_engine has completed for this tick (spot prices and equilibrium prices are current).
 - All NPCBusiness records have valid owner_id references (0 for independent, valid npc_id or player_id otherwise).
-- BusinessScale is consistent with revenue thresholds (recomputed monthly; may be stale by up to 29 ticks).
+- BusinessScale is recomputed from current revenue_per_tick every tick in init_for_tick().
 - CompensationMechanism is valid for the business's current scale (e.g., owners_draw only on micro, full_package only on large).
 
 ## Postconditions
@@ -45,6 +45,7 @@ Processes all business-to-actor money flows each tick: business revenue collecti
 - Dividend payout never reduces business cash below working_capital_floor (cost_per_tick * cash_surplus_months).
 - Salary payments are deterministic: same business state + same tick = identical payment sequence.
 - Criminal sector businesses use informal market revenue figures, not formal spot prices.
+- `salary_per_tick` converges toward `current revenue_per_tick × scale_fraction` at 5%/tick (SALARY_CONVERGENCE_RATE). This prevents frozen salaries from draining businesses when revenue falls. Scale is re-evaluated every tick in `init_for_tick()` from the current revenue_per_tick thresholds: micro < 100, small < 500, medium < 2000, large >= 2000.
 
 ## Failure Modes
 - Invalid owner_id reference: log warning, skip compensation for that business, continue processing other businesses.

@@ -36,7 +36,7 @@ class PriceEngineModule : public ITickModule {
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
 
     std::vector<std::string_view> runs_after() const override {
-        return {"supply_chain", "labor_market", "seasonal_agriculture"};
+        return {"supply_chain", "labor_market", "seasonal_agriculture", "npc_spending"};
     }
 
     std::vector<std::string_view> runs_before() const override {

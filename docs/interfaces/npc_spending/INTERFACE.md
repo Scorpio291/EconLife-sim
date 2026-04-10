@@ -19,10 +19,11 @@ The module iterates all significant NPCs and all `PopulationCohort` records per 
 
 ## Preconditions
 - Production module (tick step 1) has completed and derived demand from industrial consumption is already written to `demand_buffer_delta`.
-- Price engine (tick step 5) has completed; `spot_price` values in `regional_markets` are current for this tick.
-- NPC behavior module (tick step 7) has completed; NPC disposable income and status are settled for this tick.
+- `supply_chain` module has completed; supply figures are current for this tick.
+- `spot_price` values in `regional_markets` are from the *previous* tick's price_engine run. A one-tick lag between prices and spending is intentional and economically realistic — consumers react to yesterday's prices.
 - Goods data file is loaded and immutable (loaded at startup from package content files).
 - All `NPC.home_province_id` values reference valid provinces.
+- NOTE: This module intentionally does NOT wait for `npc_behavior` to complete. NPC motivations carry over from the previous tick (1-tick lag), which breaks the dependency cycle npc_behavior → npc_spending → price_engine → financial_distribution → npc_behavior.
 
 ## Postconditions
 - Every active significant NPC and every `PopulationCohort` in every province has had its consumer demand contribution computed exactly once for this tick.
@@ -53,8 +54,8 @@ The module iterates all significant NPCs and all `PopulationCohort` records per 
 - Must not exceed tick budget share that would push total tick above 200ms target.
 
 ## Dependencies
-- runs_after: ["npc_behavior", "price_engine"]
-- runs_before: []
+- runs_after: ["supply_chain"]
+- runs_before: ["price_engine"]
 
 ## Test Scenarios
 - `test_basic_consumer_demand_adds_to_demand_buffer`: A province with 5 significant NPCs and a food good. Verify `demand_buffer_delta` for food in that province equals the sum of individual `demand_contribution` values computed from the formula.

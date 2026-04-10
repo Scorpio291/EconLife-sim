@@ -35,7 +35,10 @@ class DrugEconomyModule : public ITickModule {
     }
 
     std::vector<std::string_view> runs_before() const override {
-        return {"npc_spending", "addiction"};
+        // "npc_spending" removed: npc_spending now runs before price_engine (early in
+        // the pipeline), while drug_economy runs after npc_behavior (late). Drug effects
+        // on consumer spending apply with a 1-tick lag, which is acceptable.
+        return {"addiction"};
     }
 
     bool is_province_parallel() const noexcept override { return true; }

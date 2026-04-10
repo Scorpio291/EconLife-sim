@@ -34,7 +34,7 @@ void GovernmentBudgetModule::execute(const WorldState& state, DeltaBuffer& delta
     if (is_quarterly_tick(state.current_tick, cfg_.ticks_per_quarter)) {
         process_quarterly_taxes(state, delta);
         process_intergovernmental_transfers();
-        execute_spending(delta);
+        execute_spending(state, delta);
         check_fiscal_health(delta);
         apply_spending_effects(delta);
         // Infrastructure runs last so its delta merges after spending effects.
@@ -244,7 +244,7 @@ void GovernmentBudgetModule::process_intergovernmental_transfers() {
 // Step 3: Spending Execution
 // ===========================================================================
 
-void GovernmentBudgetModule::execute_spending(DeltaBuffer& /* delta */) {
+void GovernmentBudgetModule::execute_spending(const WorldState& state, DeltaBuffer& delta) {
     // Process budgets sorted by level (national first, then province, then city)
     // and within level by jurisdiction_id ascending.
     std::vector<GovernmentBudget*> sorted_budgets;
@@ -280,6 +280,44 @@ void GovernmentBudgetModule::execute_spending(DeltaBuffer& /* delta */) {
         // Accumulate debt from deficit.
         if (budget->surplus_deficit < 0.0f) {
             budget->accumulated_debt += (-budget->surplus_deficit);
+        }
+
+        // Welfare re-injection: distribute welfare spending to NPC residents of
+        // this province so money collected as taxes returns to the economy.
+        // Province-level budgets only (national and city budgets do not directly
+        // distribute to individual NPCs in V1 bootstrap).
+        if (budget->level != GovernmentLevel::province)
+            continue;
+
+        auto welfare_it = budget->spending_actual.find(SpendingCategory::social_programs);
+        if (welfare_it == budget->spending_actual.end() || welfare_it->second <= 0.0f)
+            continue;
+
+        // Count NPCs resident in this province (significant_npcs only).
+        uint32_t resident_count = 0;
+        for (const auto& npc : state.significant_npcs) {
+            if (npc.home_province_id == budget->jurisdiction_id)
+                ++resident_count;
+        }
+        if (resident_count == 0)
+            continue;
+
+        float per_npc_payment = welfare_it->second / static_cast<float>(resident_count);
+
+        // Emit NPCDelta.capital_delta for each resident NPC (ascending id order for determinism).
+        std::vector<const NPC*> resident_npcs;
+        for (const auto& npc : state.significant_npcs) {
+            if (npc.home_province_id == budget->jurisdiction_id)
+                resident_npcs.push_back(&npc);
+        }
+        std::sort(resident_npcs.begin(), resident_npcs.end(),
+                  [](const NPC* a, const NPC* b) { return a->id < b->id; });
+
+        for (const NPC* npc : resident_npcs) {
+            NPCDelta nd{};
+            nd.npc_id = npc->id;
+            nd.capital_delta = per_npc_payment;
+            delta.npc_deltas.push_back(nd);
         }
     }
 }
