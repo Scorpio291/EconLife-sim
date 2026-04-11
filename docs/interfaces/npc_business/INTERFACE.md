@@ -47,6 +47,7 @@ Executes quarterly strategic decisions for NPC-owned businesses: expansion/contr
 - Board independence_score modifies decision quality: captured boards (< 0.25) rubber-stamp all decisions; independent boards may block risky expansion or excessive spending.
 - Criminal sector businesses follow the same strategic matrix but use informal market prices for revenue and competitive calculations.
 - Quarterly decisions do not produce immediate state changes — they emit deltas that are applied by the engine between tick steps.
+- Market exit (when `hiring_target_change <= -1000` is set by cost_cutter strategy): emits both a `DissolvedBusinessDelta` (removes the entity from `world.npc_businesses` in `apply_deltas`) and a `ConsequenceDelta` (for downstream scene card / NPC memory effects). The business is permanently removed from the simulation on the same tick the delta is applied.
 
 ## Failure Modes
 - Invalid province_id on a business: log warning, skip that business, continue.

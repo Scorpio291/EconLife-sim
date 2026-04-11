@@ -477,6 +477,29 @@ static void apply_technology_deltas(WorldState& world, const std::vector<Technol
 }
 
 // ---------------------------------------------------------------------------
+// apply_dissolved_businesses
+// ---------------------------------------------------------------------------
+static void apply_dissolved_businesses(WorldState& world,
+                                       const std::vector<DissolvedBusinessDelta>& deltas) {
+    for (const auto& d : deltas) {
+        world.npc_businesses.erase(
+            std::remove_if(world.npc_businesses.begin(), world.npc_businesses.end(),
+                           [&](const NPCBusiness& b) { return b.id == d.business_id; }),
+            world.npc_businesses.end());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// apply_new_businesses
+// ---------------------------------------------------------------------------
+static void apply_new_businesses(WorldState& world,
+                                 const std::vector<NewBusinessDelta>& deltas) {
+    for (const auto& d : deltas) {
+        world.npc_businesses.push_back(d.new_business);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_deltas — main entry point
 // ---------------------------------------------------------------------------
 void apply_deltas(WorldState& world, DeltaBuffer& delta,
@@ -495,6 +518,8 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
     apply_region_deltas(world, delta.region_deltas);
     apply_currency_deltas(world, delta.currency_deltas);
     apply_technology_deltas(world, delta.technology_deltas);
+    apply_dissolved_businesses(world, delta.dissolved_businesses);
+    apply_new_businesses(world, delta.new_businesses);
     apply_append_deltas(world, delta);
 
     // Route cross-province deltas into WorldState's CrossProvinceDeltaBuffer
@@ -517,6 +542,8 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
     delta.new_scene_cards.clear();
     delta.new_obligation_nodes.clear();
     delta.cross_province_deltas.clear();
+    delta.dissolved_businesses.clear();
+    delta.new_businesses.clear();
 }
 
 // ---------------------------------------------------------------------------

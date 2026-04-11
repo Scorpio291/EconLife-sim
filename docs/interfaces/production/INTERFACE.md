@@ -31,6 +31,7 @@ Processes all NPCBusiness entities each tick: consumes input goods from inventor
 - No business inventory goes negative; production is clamped to available input supply.
 
 ## Invariants
+- Recipes with `era_available > current_era` are skipped entirely. No output is produced and no operating cost is charged for that facility this tick. This gates new-era production methods until the simulation advances to the appropriate era.
 - Businesses with `criminal_sector == true` read informal market prices, not formal `spot_price`. Market layer selection is always governed by the `criminal_sector` bool, never by `BusinessSector` enum alone.
 - `BusinessSector::criminal` with `criminal_sector == false` is invalid and must never appear (loader rejects at startup).
 - Output volume formula: `actual_output = recipe_output_per_tick * (1.0 + TECH_TIER_OUTPUT_BONUS_PER_TIER * max(0, facility.tech_tier - recipe.min_tech_tier))` where `TECH_TIER_OUTPUT_BONUS_PER_TIER = 0.08`.

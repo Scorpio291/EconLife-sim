@@ -450,8 +450,12 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
     }
 
     // Market exit (hiring_target_change <= -1000 signals full exit).
-    // Generates a consequence delta for the dissolution event (separate from expansion).
+    // Emits DissolvedBusinessDelta to remove entity from world + ConsequenceDelta
+    // for downstream scene card / NPC memory effects.
     if (result.hiring_target_change <= -1000) {
+        DissolvedBusinessDelta dissolve{};
+        dissolve.business_id = biz.id;
+        delta.dissolved_businesses.push_back(dissolve);
         ConsequenceDelta cons_delta{};
         // Use id offset to distinguish exit consequences from expansion consequences.
         cons_delta.new_entry_id = biz.id + 1000000u;

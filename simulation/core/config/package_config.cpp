@@ -693,6 +693,66 @@ PackageConfig load_package_config(const std::string& config_dir) {
         cfg.labor_module.monthly_tick_interval = lm.value("monthly_tick_interval", cfg.labor_module.monthly_tick_interval);
     }
 
+    // -----------------------------------------------------------------
+    // business_lifecycle.json
+    // -----------------------------------------------------------------
+    {
+        auto j = load_json(config_dir + "/business_lifecycle.json");
+
+        cfg.business_lifecycle.stranded_revenue_floor =
+            j.value("stranded_revenue_floor", cfg.business_lifecycle.stranded_revenue_floor);
+
+        // Parse BusinessSector from string.
+        auto parse_sector = [](const std::string& s) -> BusinessSector {
+            if (s == "food_beverage")      return BusinessSector::food_beverage;
+            if (s == "retail")             return BusinessSector::retail;
+            if (s == "services")           return BusinessSector::services;
+            if (s == "real_estate")        return BusinessSector::real_estate;
+            if (s == "agriculture")        return BusinessSector::agriculture;
+            if (s == "energy")             return BusinessSector::energy;
+            if (s == "technology")         return BusinessSector::technology;
+            if (s == "finance")            return BusinessSector::finance;
+            if (s == "transport_logistics") return BusinessSector::transport_logistics;
+            if (s == "media")              return BusinessSector::media;
+            if (s == "security")           return BusinessSector::security;
+            if (s == "research")           return BusinessSector::research;
+            if (s == "criminal")           return BusinessSector::criminal;
+            return BusinessSector::manufacturing;  // default
+        };
+
+        // Parse BusinessProfile from string.
+        auto parse_profile = [](const std::string& s) -> BusinessProfile {
+            if (s == "quality_player")      return BusinessProfile::quality_player;
+            if (s == "fast_expander")       return BusinessProfile::fast_expander;
+            if (s == "defensive_incumbent") return BusinessProfile::defensive_incumbent;
+            return BusinessProfile::cost_cutter;  // default
+        };
+
+        const auto& stranded_j = j.value("stranded_sectors", nlohmann::json::object());
+        for (const auto& [era_str, entries] : stranded_j.items()) {
+            uint8_t era = static_cast<uint8_t>(std::stoi(era_str));
+            for (const auto& e : entries) {
+                StrandedSectorEntry entry{};
+                entry.sector          = parse_sector(e.value("sector", std::string("energy")));
+                entry.revenue_penalty = e.value("revenue_penalty", 0.0f);
+                entry.cost_increase   = e.value("cost_increase", 0.0f);
+                cfg.business_lifecycle.stranded_sectors[era].push_back(entry);
+            }
+        }
+
+        const auto& emerging_j = j.value("emerging_sectors", nlohmann::json::object());
+        for (const auto& [era_str, entries] : emerging_j.items()) {
+            uint8_t era = static_cast<uint8_t>(std::stoi(era_str));
+            for (const auto& e : entries) {
+                EmergingSectorEntry entry{};
+                entry.sector         = parse_sector(e.value("sector", std::string("technology")));
+                entry.spawn_fraction = e.value("spawn_fraction", 0.0f);
+                entry.profile        = parse_profile(e.value("profile", std::string("fast_expander")));
+                cfg.business_lifecycle.emerging_sectors[era].push_back(entry);
+            }
+        }
+    }
+
     return cfg;
 }
 

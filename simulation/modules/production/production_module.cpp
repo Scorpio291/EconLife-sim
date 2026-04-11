@@ -190,6 +190,11 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         return;
     }
 
+    // Skip recipes not yet available in the current era.
+    if (recipe->era_available > static_cast<uint8_t>(state.technology.current_era)) {
+        return;
+    }
+
     // Compute tech tier bonus.
     int32_t tier_diff =
         static_cast<int32_t>(facility.tech_tier) - static_cast<int32_t>(recipe->min_tech_tier);

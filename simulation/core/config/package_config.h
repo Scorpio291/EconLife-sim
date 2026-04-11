@@ -1,7 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
+#include <vector>
+
+#include "modules/economy/economy_types.h"  // BusinessSector, BusinessProfile
 
 // PackageConfig — spec-correct defaults for all data-driven module parameters.
 // Loaded from packages/base_game/config/ JSON files at startup.
@@ -246,6 +250,32 @@ struct NpcBusinessConfig {
     float cost_cutter_layoff_fraction = 0.10f;
     float board_captured_threshold = 0.25f;
     float board_risky_block_threshold = 0.70f;
+};
+
+// ---------------------------------------------------------------------------
+// BusinessLifecycleConfig — era-driven stranded-asset penalties and new entrant spawning.
+// Loaded from business_lifecycle.json.
+// ---------------------------------------------------------------------------
+struct StrandedSectorEntry {
+    BusinessSector sector        = BusinessSector::energy;
+    float          revenue_penalty = 0.0f;  // fractional reduction on revenue_per_tick
+    float          cost_increase   = 0.0f;  // fractional increase on cost_per_tick
+};
+
+struct EmergingSectorEntry {
+    BusinessSector  sector         = BusinessSector::technology;
+    float           spawn_fraction = 0.0f;  // fraction of province biz count to spawn
+    BusinessProfile profile        = BusinessProfile::fast_expander;
+};
+
+struct BusinessLifecycleConfig {
+    // Maps target_era (uint8_t 2–10) → sectors penalised on transition into that era.
+    std::map<uint8_t, std::vector<StrandedSectorEntry>> stranded_sectors;
+    // Maps target_era (uint8_t 2–10) → sectors that spawn new entrants on that era.
+    std::map<uint8_t, std::vector<EmergingSectorEntry>> emerging_sectors;
+    // Revenue floor: no single-era shock can drop a business below this fraction
+    // of its pre-transition revenue (prevents instant death from stacking penalties).
+    float stranded_revenue_floor = 0.20f;
 };
 
 struct GovernmentBudgetConfig {
@@ -681,6 +711,7 @@ struct PackageConfig {
     LodSystemConfig lod_system;
     SupplyChainModuleConfig supply_chain_module;
     LaborModuleConfig labor_module;
+    BusinessLifecycleConfig business_lifecycle;
 };
 
 // Load PackageConfig from a directory containing JSON config files.
