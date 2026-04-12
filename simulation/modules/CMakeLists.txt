@@ -6,6 +6,7 @@
 # Tier 0: Core infrastructure (built as part of econlife_core in simulation/core/)
 
 # Tier 1: No inter-module dependencies
+add_subdirectory(business_lifecycle)
 add_subdirectory(production)
 add_subdirectory(calendar)
 add_subdirectory(scene_cards)
@@ -86,6 +87,7 @@ target_include_directories(econlife_modules PUBLIC
 
 target_link_libraries(econlife_modules PUBLIC
     econlife_core
+    econlife_business_lifecycle
     econlife_calendar
     econlife_production
     econlife_technology

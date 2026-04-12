@@ -33,7 +33,8 @@
     },
     "evidence_decay": {
       "base_delay": 7,
-      "description": "Recurring evidence actionability decay check interval"
+      "max_age_ticks": 1000,
+      "description": "Recurring evidence actionability decay check interval; max_age_ticks = hard expiry for tokens that decay_rate=0 (prevents unbounded pool growth)"
     },
     "relationship_decay": {
       "base_delay": 30,

@@ -190,6 +190,11 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         return;
     }
 
+    // Skip recipes not yet available in the current era.
+    if (recipe->era_available > static_cast<uint8_t>(state.technology.current_era)) {
+        return;
+    }
+
     // Compute tech tier bonus.
     int32_t tier_diff =
         static_cast<int32_t>(facility.tech_tier) - static_cast<int32_t>(recipe->min_tech_tier);
@@ -327,8 +332,8 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         total_revenue += actual_output * price;
     }
 
-    // Operating cost computed for downstream modules.
-    float actual_cost = recipe->base_cost_per_tick * cost_multiplier;
+    // Operating cost scales with bottleneck_ratio: zero production = zero variable cost.
+    float actual_cost = recipe->base_cost_per_tick * cost_multiplier * bottleneck_ratio;
     if (std::isnan(actual_cost) || actual_cost < 0.0f) {
         actual_cost = 0.0f;
     }

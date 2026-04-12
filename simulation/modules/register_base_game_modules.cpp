@@ -5,6 +5,7 @@
 #include "core/tick/tick_orchestrator.h"
 
 // Tier 1: No inter-module dependencies
+#include "modules/business_lifecycle/business_lifecycle_module.h"
 #include "modules/calendar/calendar_module.h"
 #include "modules/production/production_module.h"
 #include "modules/random_events/random_events_module.h"
@@ -77,7 +78,9 @@ namespace econlife {
 void register_base_game_modules(TickOrchestrator& orchestrator, const PackageConfig& config) {
     // Tier 1
     orchestrator.register_module(std::make_unique<CalendarModule>());
-    orchestrator.register_module(std::make_unique<TechnologyModule>());
+    orchestrator.register_module(std::make_unique<TechnologyModule>(config.rnd));
+    orchestrator.register_module(
+        std::make_unique<BusinessLifecycleModule>(config.business_lifecycle));
     orchestrator.register_module(std::make_unique<ProductionModule>(config.production));
     orchestrator.register_module(std::make_unique<SceneCardsModule>(config.scene_cards));
     orchestrator.register_module(std::make_unique<RandomEventsModule>(config.random_events));

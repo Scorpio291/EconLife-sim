@@ -31,8 +31,33 @@ void FinancialDistributionModule::init_for_tick(const WorldState& state) {
     // execute_province() never mutates compensation_records_ (which would
     // be a data race under province-parallel dispatch).
     for (const auto& biz : state.npc_businesses) {
-        if (find_compensation_record(biz.id) != nullptr) {
-            continue;  // Already have a record for this business.
+        BusinessCompensationRecord* existing = find_compensation_record(biz.id);
+        if (existing != nullptr) {
+            // Re-evaluate scale tier from current revenue each tick.
+            BusinessScale new_scale;
+            float salary_fraction = 0.0f;
+            if (biz.revenue_per_tick < 100.0f) {
+                new_scale = BusinessScale::micro;
+            } else if (biz.revenue_per_tick < 500.0f) {
+                new_scale = BusinessScale::small;
+                salary_fraction = 0.30f;
+            } else if (biz.revenue_per_tick < 2000.0f) {
+                new_scale = BusinessScale::medium;
+                salary_fraction = 0.25f;
+            } else {
+                new_scale = BusinessScale::large;
+                salary_fraction = 0.20f;
+            }
+            existing->scale = new_scale;
+            // Smooth salary toward current revenue target at 5%/tick to prevent cliff shocks.
+            if (new_scale != BusinessScale::micro && salary_fraction > 0.0f) {
+                float target_salary = biz.revenue_per_tick * salary_fraction;
+                constexpr float SALARY_CONVERGENCE_RATE = 0.05f;
+                existing->compensation.salary_per_tick +=
+                    SALARY_CONVERGENCE_RATE *
+                    (target_salary - existing->compensation.salary_per_tick);
+            }
+            continue;
         }
 
         BusinessCompensationRecord new_rec{};

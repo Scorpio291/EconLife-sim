@@ -1,0 +1,36 @@
+{
+  "stranded_revenue_floor": 0.20,
+  "stranded_sectors": {
+    "2": [
+      { "sector": "energy",              "revenue_penalty": 0.10, "cost_increase": 0.08 }
+    ],
+    "3": [
+      { "sector": "energy",              "revenue_penalty": 0.15, "cost_increase": 0.12 }
+    ],
+    "4": [
+      { "sector": "energy",              "revenue_penalty": 0.25, "cost_increase": 0.20 },
+      { "sector": "manufacturing",       "revenue_penalty": 0.08, "cost_increase": 0.05 }
+    ],
+    "5": [
+      { "sector": "energy",              "revenue_penalty": 0.30, "cost_increase": 0.25 },
+      { "sector": "transport_logistics", "revenue_penalty": 0.12, "cost_increase": 0.10 }
+    ]
+  },
+  "emerging_sectors": {
+    "2": [
+      { "sector": "technology", "spawn_fraction": 0.05, "profile": "fast_expander" }
+    ],
+    "3": [
+      { "sector": "technology", "spawn_fraction": 0.08, "profile": "fast_expander" },
+      { "sector": "research",   "spawn_fraction": 0.04, "profile": "quality_player" }
+    ],
+    "4": [
+      { "sector": "technology", "spawn_fraction": 0.10, "profile": "fast_expander" },
+      { "sector": "energy",     "spawn_fraction": 0.06, "profile": "quality_player" }
+    ],
+    "5": [
+      { "sector": "technology", "spawn_fraction": 0.12, "profile": "fast_expander" },
+      { "sector": "research",   "spawn_fraction": 0.06, "profile": "quality_player" }
+    ]
+  }
+}

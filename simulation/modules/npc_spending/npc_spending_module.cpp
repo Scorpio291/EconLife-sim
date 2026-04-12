@@ -126,13 +126,18 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
         [](const RegionalMarket* a, const RegionalMarket* b) { return a->good_id < b->good_id; });
 
     // Track total spending per NPC across all markets for NPCDelta emission.
-    // Key: npc_id, value: sum of (demand_units * spot_price) across all goods.
-    // Sorted insertion order matches province_npcs (already sorted by id ascending).
+    // NPCs are charged only for the goods they actually receive (consumed share),
+    // not for their full expressed demand. This prevents capital drain when supply is scarce.
     std::vector<float> npc_total_spending(province_npcs.size(), 0.0f);
+
+    // Per-market demand buffer — pre-allocated outside market loop to avoid per-market allocation.
+    std::vector<float> npc_demand_this_market(province_npcs.size(), 0.0f);
 
     for (const auto* market : province_markets) {
         float total_demand = 0.0f;
+        std::fill(npc_demand_this_market.begin(), npc_demand_this_market.end(), 0.0f);
 
+        // Pass 1: collect per-NPC demand (same formula as before).
         for (size_t ni = 0; ni < province_npcs.size(); ++ni) {
             const auto* npc = province_npcs[ni];
             BuyerType bt = get_buyer_type(npc->id);
@@ -153,24 +158,31 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
                                                        income_f, price_f, quality_f);
 
             total_demand += demand;
+            npc_demand_this_market[ni] = demand;
+        }
 
-            // Accumulate spending for this NPC: cost = demand_units * spot_price.
-            // spot_price is the market clearing price; demand units are the quantity.
-            float spot = std::max(market->spot_price, 0.0f);
-            npc_total_spending[ni] += demand * spot;
+        if (total_demand <= 0.0f)
+            continue;
+
+        float available = std::max(market->supply, 0.0f);
+        float consumed = std::min(total_demand, available);
+        // consumption_ratio: fraction of demand that is actually fulfilled by available supply.
+        // Full demand signal still reaches price_engine (demand_buffer_delta = total_demand).
+        float consumption_ratio = consumed / total_demand;  // in [0, 1]
+        float spot = std::max(market->spot_price, 0.0f);
+
+        // Pass 2: charge each NPC only for their consumed share.
+        for (size_t ni = 0; ni < province_npcs.size(); ++ni) {
+            npc_total_spending[ni] += npc_demand_this_market[ni] * consumption_ratio * spot;
         }
 
         // Write demand contribution and supply consumption to delta buffer.
-        // Consumption cannot exceed available supply.
-        if (total_demand > 0.0f) {
-            float consumed = std::min(total_demand, std::max(market->supply, 0.0f));
-            MarketDelta md;
-            md.good_id = market->good_id;
-            md.region_id = province.id;
-            md.demand_buffer_delta = total_demand;
-            md.supply_delta = -consumed;  // goods consumed leave the market
-            province_delta.market_deltas.push_back(md);
-        }
+        MarketDelta md;
+        md.good_id = market->good_id;
+        md.region_id = province.id;
+        md.demand_buffer_delta = total_demand;  // full demand reaches price_engine
+        md.supply_delta = -consumed;            // only consumed goods leave supply
+        province_delta.market_deltas.push_back(md);
     }
 
     // Emit NPCDelta for each NPC that spent capital this tick.

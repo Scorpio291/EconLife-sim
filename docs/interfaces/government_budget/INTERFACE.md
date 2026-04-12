@@ -40,7 +40,9 @@ Collects taxes at national, provincial, and city levels on a quarterly cycle (ev
   - `stability_delta` (additive) — from public_services underspend/overspend
   - `crime_rate_delta` (additive) — from law_enforcement spending changes
   - `inequality_delta` (additive) — from social_programs spending changes
-- `npc_deltas[]` — NPCDelta with new_memory_entry for government employee NPCs when public_sector_wages are cut (employment_negative memories)
+- `npc_deltas[]` — NPCDelta with:
+  - `capital_delta` (additive) — social_programs spending distributed equally to all significant NPCs resident in each province (`home_province_id == budget.jurisdiction_id`). Province-level budgets only. Amount per NPC = `spending_actual[social_programs] / resident_npc_count`. This re-injects tax revenue back into the NPC economy to prevent permanent money-supply drain.
+  - `new_memory_entry` — for government employee NPCs when public_sector_wages are cut (employment_negative memories)
 - `consequence_deltas[]` — fiscal_pressure_warning, fiscal_crisis, government_insolvency consequences queued when thresholds breached
 - `evidence_deltas[]` — financial EvidenceToken when discretionary spending diversion exceeds corruption_evidence_threshold
 - Province infrastructure_rating updates: decays 0.01/quarter without investment; increases by spending_actual[infrastructure] / infrastructure_investment_scale

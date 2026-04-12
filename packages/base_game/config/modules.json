@@ -230,10 +230,10 @@
     "reference_income": 1000.0,
     "max_income_factor": 5.0,
     "min_price_factor": 0.05,
-    "default_base_demand_units": 1.0,
+    "default_base_demand_units": 0.003,
     "default_income_elasticity": 1.0,
     "default_price_elasticity": -1.0,
-    "default_base_price": 10.0,
+    "default_base_price": 188.0,
     "default_quality_weight": 0.0
   },
   "antitrust": {

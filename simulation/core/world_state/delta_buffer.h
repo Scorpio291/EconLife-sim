@@ -10,6 +10,7 @@
 #include "modules/scene_cards/scene_card_types.h"  // SceneCard
 #include "npc.h"                                   // MemoryEntry, Relationship, NPCStatus
 #include "shared_types.h"                          // EvidenceToken, ObligationNode
+#include "modules/economy/economy_types.h"         // NPCBusiness (for NewBusinessDelta)
 
 namespace econlife {
 
@@ -81,6 +82,16 @@ struct BusinessDelta {
     std::optional<float> output_quality_update;    // replacement; latest production quality [0,1]
 };
 
+// Business dissolved (market exit): removes entity from world.npc_businesses.
+struct DissolvedBusinessDelta {
+    uint32_t business_id;
+};
+
+// New business spawned (era entrant): appends entity to world.npc_businesses.
+struct NewBusinessDelta {
+    NPCBusiness new_business;
+};
+
 struct CurrencyDelta {
     uint32_t nation_id;
     std::optional<float> usd_rate_update;         // replacement; new exchange rate
@@ -149,6 +160,8 @@ struct DeltaBuffer {
     std::vector<SceneCard> new_scene_cards;
     std::vector<ObligationNode> new_obligation_nodes;
     std::vector<CrossProvinceDelta> cross_province_deltas;
+    std::vector<DissolvedBusinessDelta> dissolved_businesses;
+    std::vector<NewBusinessDelta> new_businesses;
 };
 
 // Cross-province effects are accumulated here during apply_deltas (main thread only).

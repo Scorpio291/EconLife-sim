@@ -76,7 +76,7 @@ std::vector<std::string_view> RandomEventsModule::runs_after() const {
 }
 
 bool RandomEventsModule::is_province_parallel() const noexcept {
-    return true;
+    return false;
 }
 
 void RandomEventsModule::execute_province(uint32_t province_idx, const WorldState& state,
@@ -96,8 +96,22 @@ void RandomEventsModule::execute_province(uint32_t province_idx, const WorldStat
     roll_for_new_event(state, province, rng, province_delta);
 }
 
-void RandomEventsModule::execute(const WorldState& /*state*/, DeltaBuffer& /*delta*/) {
-    // Province-parallel module; execute() is unused.
+void RandomEventsModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Prune expired events (end_tick == 0) so active_events_ does not grow without bound.
+    // This runs single-threaded, so the erase is safe.
+    active_events_.erase(
+        std::remove_if(active_events_.begin(), active_events_.end(),
+                       [](const ActiveRandomEvent& e) { return e.end_tick == 0; }),
+        active_events_.end());
+
+    // Process each province sequentially. Previously this module was incorrectly
+    // marked province-parallel, which caused a data race: concurrent execute_province
+    // calls both read and wrote active_events_ (via push_back in roll_for_new_event
+    // and next_event_id_++ in allocate_event_id). A push_back reallocation in one
+    // thread invalidated iterators held by another thread, corrupting the heap.
+    for (uint32_t p = 0; p < static_cast<uint32_t>(state.provinces.size()); ++p) {
+        execute_province(p, state, delta);
+    }
 }
 
 const std::vector<RandomEventTemplate>& RandomEventsModule::templates() const {

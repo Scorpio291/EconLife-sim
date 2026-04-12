@@ -92,7 +92,8 @@ class GovernmentBudgetModule : public ITickModule {
     void process_intergovernmental_transfers();
 
     // Step 3: Execute spending for all budgets (pro-rate if cash constrained).
-    void execute_spending(DeltaBuffer& delta);
+    // Emits NPCDelta.capital_delta for welfare distribution to provincial NPC residents.
+    void execute_spending(const WorldState& state, DeltaBuffer& delta);
 
     // Step 4: Update province infrastructure ratings (decay + investment).
     // Writes RegionDelta.stability_delta proportional to the infrastructure change.

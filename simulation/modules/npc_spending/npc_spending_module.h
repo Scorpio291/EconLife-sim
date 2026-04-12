@@ -37,10 +37,10 @@ class NpcSpendingModule : public ITickModule {
     bool is_province_parallel() const noexcept override { return true; }
 
     std::vector<std::string_view> runs_after() const override {
-        return {"npc_behavior", "price_engine"};
+        return {"supply_chain"};
     }
 
-    std::vector<std::string_view> runs_before() const override { return {}; }
+    std::vector<std::string_view> runs_before() const override { return {"price_engine"}; }
 
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
