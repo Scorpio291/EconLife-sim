@@ -10,15 +10,27 @@
 #include <cstring>
 #include <filesystem>
 
+#include <map>
+#include <string>
+#include <vector>
+
 #include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
 #include "core/world_gen/world_generator.h"
 #include "core/world_state/player.h"
+#include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
 #include "modules/register_base_game_modules.h"
 
 using namespace econlife;
+
+// Parsed player action scheduled at a specific tick.
+struct ScheduledAction {
+    uint32_t tick;
+    PlayerActionType type;
+    PlayerActionPayload payload;
+};
 
 struct CliArgs {
     uint64_t seed = 42;
@@ -32,6 +44,7 @@ struct CliArgs {
     bool use_test_world = false;  // fallback to test_world_factory
     std::string goods_dir;        // path to goods CSVs
     std::string config_dir;       // optional override for config JSON directory
+    std::vector<ScheduledAction> scheduled_actions;
 };
 
 static void print_usage(const char* prog) {
@@ -47,7 +60,49 @@ static void print_usage(const char* prog) {
     std::printf("  --config-dir PATH Path to JSON config directory (default: auto-detect)\n");
     std::printf("  --test-world      Use minimal test world factory instead\n");
     std::printf("  --verbose         Print per-tick timing\n");
+    std::printf("  --action SPEC     Schedule a player action (repeatable)\n");
+    std::printf("                    Formats: travel:<province_id>@<tick>\n");
+    std::printf("                             scene_card_choice:<card_id>:<choice_id>@<tick>\n");
+    std::printf("                             calendar_commit:<entry_id>@<tick>\n");
     std::printf("  --help            Show this message\n");
+}
+
+// Parse an --action spec string like "travel:2@10" or "scene_card_choice:1:3@15".
+// Returns true on success.
+static bool parse_action_spec(const char* spec, ScheduledAction& out) {
+    std::string s(spec);
+
+    // Find @tick suffix.
+    auto at_pos = s.rfind('@');
+    if (at_pos == std::string::npos)
+        return false;
+    out.tick = static_cast<uint32_t>(std::strtoul(s.c_str() + at_pos + 1, nullptr, 10));
+    s = s.substr(0, at_pos);
+
+    if (s.rfind("travel:", 0) == 0) {
+        uint32_t province = static_cast<uint32_t>(std::strtoul(s.c_str() + 7, nullptr, 10));
+        out.type = PlayerActionType::travel;
+        out.payload = TravelAction{province};
+        return true;
+    }
+    if (s.rfind("scene_card_choice:", 0) == 0) {
+        std::string params = s.substr(18);
+        auto colon = params.find(':');
+        if (colon == std::string::npos)
+            return false;
+        uint32_t card_id = static_cast<uint32_t>(std::strtoul(params.c_str(), nullptr, 10));
+        uint32_t choice_id = static_cast<uint32_t>(std::strtoul(params.c_str() + colon + 1, nullptr, 10));
+        out.type = PlayerActionType::scene_card_choice;
+        out.payload = SceneCardChoiceAction{card_id, choice_id};
+        return true;
+    }
+    if (s.rfind("calendar_commit:", 0) == 0) {
+        uint32_t entry_id = static_cast<uint32_t>(std::strtoul(s.c_str() + 16, nullptr, 10));
+        out.type = PlayerActionType::calendar_commit;
+        out.payload = CalendarCommitAction{entry_id, true};
+        return true;
+    }
+    return false;
 }
 
 static CliArgs parse_args(int argc, char* argv[]) {
@@ -78,6 +133,13 @@ static CliArgs parse_args(int argc, char* argv[]) {
             args.use_test_world = true;
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
             args.verbose = true;
+        } else if (std::strcmp(argv[i], "--action") == 0 && i + 1 < argc) {
+            ScheduledAction sa{};
+            if (parse_action_spec(argv[++i], sa)) {
+                args.scheduled_actions.push_back(sa);
+            } else {
+                std::printf("Warning: could not parse --action '%s', skipping.\n", argv[i]);
+            }
         }
     }
     return args;
@@ -259,7 +321,16 @@ int main(int argc, char* argv[]) {
     // 4. Create thread pool
     ThreadPool pool(args.threads);
 
-    // 5. Run ticks
+    // 5. Build scheduled action index (tick -> actions)
+    std::map<uint32_t, std::vector<ScheduledAction>> action_schedule;
+    for (const auto& sa : args.scheduled_actions) {
+        action_schedule[sa.tick].push_back(sa);
+    }
+    if (!args.scheduled_actions.empty()) {
+        std::printf("Scheduled %zu player action(s).\n\n", args.scheduled_actions.size());
+    }
+
+    // 6. Run ticks
     print_header();
     print_metrics(world);  // tick 0 baseline
 
@@ -268,6 +339,18 @@ int main(int argc, char* argv[]) {
     double max_tick_ms = 0.0;
 
     for (uint32_t t = 0; t < args.ticks; ++t) {
+        // Enqueue any player actions scheduled for this tick.
+        auto it = action_schedule.find(world.current_tick);
+        if (it != action_schedule.end()) {
+            for (const auto& sa : it->second) {
+                enqueue_player_action(world, sa.type, sa.payload);
+                if (args.verbose) {
+                    std::printf("  [tick %u] enqueued player action type %u\n",
+                                world.current_tick, static_cast<unsigned>(sa.type));
+                }
+            }
+        }
+
         auto tick_start = std::chrono::steady_clock::now();
         orchestrator.execute_tick(world, pool);
         auto tick_end = std::chrono::steady_clock::now();

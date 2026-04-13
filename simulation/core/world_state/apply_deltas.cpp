@@ -201,6 +201,13 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
             p.relationships.push_back(new_rel);
         }
     }
+    // Player location updates (replacement fields from travel system).
+    if (d.new_province_id.has_value()) {
+        p.current_province_id = *d.new_province_id;
+    }
+    if (d.new_travel_status.has_value()) {
+        p.travel_status = *d.new_travel_status;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -500,6 +507,36 @@ static void apply_new_businesses(WorldState& world,
 }
 
 // ---------------------------------------------------------------------------
+// apply_scene_card_choice_deltas
+// ---------------------------------------------------------------------------
+static void apply_scene_card_choice_deltas(WorldState& world,
+                                           const std::vector<SceneCardChoiceDelta>& deltas) {
+    for (const auto& d : deltas) {
+        for (auto& card : world.pending_scene_cards) {
+            if (card.id == d.scene_card_id) {
+                card.chosen_choice_id = d.chosen_choice_id;
+                break;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// apply_calendar_commit_deltas
+// ---------------------------------------------------------------------------
+static void apply_calendar_commit_deltas(WorldState& world,
+                                         const std::vector<CalendarCommitDelta>& deltas) {
+    for (const auto& d : deltas) {
+        for (auto& entry : world.calendar) {
+            if (entry.id == d.calendar_entry_id) {
+                entry.player_committed = d.committed;
+                break;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_deltas — main entry point
 // ---------------------------------------------------------------------------
 void apply_deltas(WorldState& world, DeltaBuffer& delta,
@@ -521,6 +558,8 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
     apply_dissolved_businesses(world, delta.dissolved_businesses);
     apply_new_businesses(world, delta.new_businesses);
     apply_append_deltas(world, delta);
+    apply_scene_card_choice_deltas(world, delta.scene_card_choice_deltas);
+    apply_calendar_commit_deltas(world, delta.calendar_commit_deltas);
 
     // Route cross-province deltas into WorldState's CrossProvinceDeltaBuffer
     // for application at the start of the next tick.
@@ -544,6 +583,8 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
     delta.cross_province_deltas.clear();
     delta.dissolved_businesses.clear();
     delta.new_businesses.clear();
+    delta.scene_card_choice_deltas.clear();
+    delta.calendar_commit_deltas.clear();
 }
 
 // ---------------------------------------------------------------------------

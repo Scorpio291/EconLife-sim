@@ -73,12 +73,17 @@ struct CommercializePayload {
     uint8_t decision;  // CommercializationDecision enum value
 };
 
+struct PlayerTravelPayload {
+    uint32_t destination_province_id;
+};
+
 struct EmptyPayload {};
 
 using WorkPayload =
     std::variant<EmptyPayload, ConsequencePayload, TransitPayload, NPCRelationshipDecayPayload,
                  EvidenceDecayPayload, NPCBusinessDecisionPayload, MarketRecomputePayload,
-                 InvestigatorMeterPayload, MaturationPayload, CommercializePayload>;
+                 InvestigatorMeterPayload, MaturationPayload, CommercializePayload,
+                 PlayerTravelPayload>;
 
 struct DeferredWorkItem {
     uint32_t due_tick;  // min-heap sort key

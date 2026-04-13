@@ -4,6 +4,9 @@
 
 #include "core/tick/tick_orchestrator.h"
 
+// Core: Player action processing (runs before all domain modules)
+#include "modules/player_actions/player_actions_module.h"
+
 // Tier 1: No inter-module dependencies
 #include "modules/business_lifecycle/business_lifecycle_module.h"
 #include "modules/calendar/calendar_module.h"
@@ -76,6 +79,9 @@
 namespace econlife {
 
 void register_base_game_modules(TickOrchestrator& orchestrator, const PackageConfig& config) {
+    // Core: Player actions
+    orchestrator.register_module(std::make_unique<PlayerActionsModule>());
+
     // Tier 1
     orchestrator.register_module(std::make_unique<CalendarModule>());
     orchestrator.register_module(std::make_unique<TechnologyModule>(config.rnd));

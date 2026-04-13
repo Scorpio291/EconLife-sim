@@ -11,6 +11,7 @@
 #include "npc.h"                                   // MemoryEntry, Relationship, NPCStatus
 #include "shared_types.h"                          // EvidenceToken, ObligationNode
 #include "modules/economy/economy_types.h"         // NPCBusiness (for NewBusinessDelta)
+#include "modules/trade_infrastructure/trade_types.h"  // NPCTravelStatus (complete type for optional)
 
 namespace econlife {
 
@@ -48,6 +49,8 @@ struct PlayerDelta {
     std::optional<uint32_t> new_evidence_awareness;       // evidence token id
     std::optional<float> exhaustion_delta;                // additive
     std::optional<RelationshipDelta> relationship_delta;  // player <-> NPC update
+    std::optional<uint32_t> new_province_id;              // replacement; player location
+    std::optional<NPCTravelStatus> new_travel_status;     // replacement; travel state
 };
 
 struct MarketDelta {
@@ -144,6 +147,20 @@ struct CrossProvinceDelta {
     // EvidenceToken and DeferredWorkItem payloads added in Pass 2
 };
 
+// Scene card choice — sets chosen_choice_id on a pending scene card.
+// Written by player_actions module; applied before scene_cards module reads.
+struct SceneCardChoiceDelta {
+    uint32_t scene_card_id;
+    uint32_t chosen_choice_id;
+};
+
+// Calendar commit — sets player_committed on a calendar entry.
+// Written by player_actions module; applied before calendar module reads.
+struct CalendarCommitDelta {
+    uint32_t calendar_entry_id;
+    bool committed;
+};
+
 // Accumulated state changes for one tick step.
 // Pre-reserve vectors at WorldState initialization using known NPC count.
 struct DeltaBuffer {
@@ -162,6 +179,8 @@ struct DeltaBuffer {
     std::vector<CrossProvinceDelta> cross_province_deltas;
     std::vector<DissolvedBusinessDelta> dissolved_businesses;
     std::vector<NewBusinessDelta> new_businesses;
+    std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;
+    std::vector<CalendarCommitDelta> calendar_commit_deltas;
 };
 
 // Cross-province effects are accumulated here during apply_deltas (main thread only).

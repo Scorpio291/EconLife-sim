@@ -206,10 +206,27 @@ static void handle_npc_travel_arrival(const DeferredWorkItem& item, WorldState& 
 static void handle_player_travel_arrival(const DeferredWorkItem& item, WorldState& world,
                                          DeltaBuffer& delta) {
     // Player arrives at destination province.
-    // Will be wired when player travel is implemented.
-    (void)item;
-    (void)world;
-    (void)delta;
+    if (!world.player)
+        return;
+
+    auto* payload = std::get_if<PlayerTravelPayload>(&item.payload);
+    if (!payload)
+        return;
+
+    // Verify destination province exists.
+    bool province_exists = false;
+    for (const auto& p : world.provinces) {
+        if (p.id == payload->destination_province_id) {
+            province_exists = true;
+            break;
+        }
+    }
+    if (!province_exists)
+        return;
+
+    // Write location change via PlayerDelta (replacement fields).
+    delta.player_delta.new_province_id = payload->destination_province_id;
+    delta.player_delta.new_travel_status = NPCTravelStatus::resident;
 }
 
 static void handle_community_stage_check(const DeferredWorkItem& item, WorldState& world,

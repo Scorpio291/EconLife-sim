@@ -11,6 +11,7 @@
 // Core headers (provide DeltaBuffer, DeferredWorkQueue, and transitive types)
 #include "../tick/deferred_work.h"  // DeferredWorkQueue
 #include "delta_buffer.h"           // DeltaBuffer + npc.h + shared_types.h
+#include "player_action_types.h"    // PlayerAction
 
 // Complete type definitions needed for std::vector/std::map value members and unique_ptr members
 #include "geography.h"                                 // Nation, Province, Region
@@ -109,6 +110,12 @@ struct WorldState {
 
     // --- Cross-Province Delta Buffer ---
     CrossProvinceDeltaBuffer cross_province_delta_buffer;  // scratch; cleared each tick
+
+    // --- Player Action Queue ---
+    // External code enqueues actions between ticks via enqueue_player_action().
+    // The player_actions module drains this queue each tick.
+    std::vector<PlayerAction> player_action_queue;
+    uint32_t next_action_sequence = 0;  // monotonic; deterministic ordering
 };
 
 }  // namespace econlife

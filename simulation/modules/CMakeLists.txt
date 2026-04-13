@@ -5,6 +5,9 @@
 # ── Pass 1: Tier 0–5 Core Modules ───────────────────────────────────────────
 # Tier 0: Core infrastructure (built as part of econlife_core in simulation/core/)
 
+# Player action processing — runs before all domain modules
+add_subdirectory(player_actions)
+
 # Tier 1: No inter-module dependencies
 add_subdirectory(business_lifecycle)
 add_subdirectory(production)
@@ -87,6 +90,7 @@ target_include_directories(econlife_modules PUBLIC
 
 target_link_libraries(econlife_modules PUBLIC
     econlife_core
+    econlife_player_actions
     econlife_business_lifecycle
     econlife_calendar
     econlife_production
