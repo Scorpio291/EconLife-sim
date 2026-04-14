@@ -1,0 +1,606 @@
+/* EconLife UI — Dark theme */
+
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d27;
+  --bg-tertiary: #242836;
+  --bg-card: #1e2230;
+  --border: #2d3348;
+  --text-primary: #e2e4ea;
+  --text-secondary: #8b8fa3;
+  --text-muted: #5d6075;
+  --accent: #4f8eff;
+  --accent-hover: #6ba0ff;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --tone-hostile: #f87171;
+  --tone-neutral: #8b8fa3;
+  --tone-warm: #34d399;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Loading screen */
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* App layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.main-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.side-panel {
+  width: 320px;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Top bar */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.game-date {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tick-count {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.top-bar-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.ctrl-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.ctrl-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.ctrl-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.top-bar-right {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.player-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-value.in-transit {
+  color: var(--warning);
+}
+
+.health-bar {
+  width: 80px;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.health-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+/* Scene cards */
+.scene-card-panel h2,
+.metrics-dashboard h2,
+.business-panel h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.scene-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.scene-card.npc-hostile {
+  border-left: 3px solid var(--danger);
+}
+
+.scene-card.npc-cooperative {
+  border-left: 3px solid var(--success);
+}
+
+.scene-card.npc-neutral {
+  border-left: 3px solid var(--text-muted);
+}
+
+.scene-card-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.scene-type {
+  text-transform: capitalize;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.scene-setting {
+  text-transform: capitalize;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.scene-card-npc {
+  margin-bottom: 12px;
+}
+
+.npc-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.scene-dialogue {
+  margin-bottom: 16px;
+}
+
+.dialogue-line {
+  border-left: 3px solid var(--tone-neutral);
+  padding: 6px 12px;
+  margin-bottom: 6px;
+}
+
+.dialogue-speaker {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.dialogue-text {
+  margin-top: 2px;
+  color: var(--text-primary);
+}
+
+.scene-choices {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.choice-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.choice-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* Calendar */
+.calendar-panel h3,
+.province-panel h3,
+.metrics-dashboard h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.empty-msg {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.calendar-entry {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.calendar-entry.mandatory {
+  border-left: 3px solid var(--warning);
+}
+
+.calendar-entry-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.entry-type-badge {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+}
+
+.type-meeting { color: var(--accent); }
+.type-deadline { color: var(--danger); }
+.type-event { color: var(--success); }
+.type-operation { color: var(--warning); }
+
+.entry-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-entry-body {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.entry-npc {
+  font-weight: 500;
+}
+
+.entry-duration {
+  color: var(--text-muted);
+}
+
+.calendar-entry-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.cal-btn {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+
+.cal-btn.accept:hover {
+  background: var(--success);
+  color: white;
+}
+
+.cal-btn.decline:hover {
+  background: var(--danger);
+  color: white;
+}
+
+.committed-badge {
+  font-size: 12px;
+  color: var(--success);
+  font-weight: 500;
+}
+
+/* Provinces */
+.province-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.province-card.current {
+  border-color: var(--accent);
+}
+
+.province-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.province-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.here-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(79, 142, 255, 0.15);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.province-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.travel-btn {
+  width: 100%;
+  padding: 5px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+
+.travel-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: white;
+}
+
+.travel-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Metrics dashboard */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.metric-value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.province-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.province-table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.province-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.province-table td.warn {
+  color: var(--warning);
+}
+
+/* Business panel */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.panel-header h2 {
+  margin-bottom: 0;
+}
+
+.start-biz-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.start-biz-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.start-biz-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.business-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+
+.biz-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.biz-sector {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.biz-location {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.biz-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.biz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.biz-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.biz-stat-value {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.biz-stat-value.positive { color: var(--success); }
+.biz-stat-value.negative { color: var(--danger); }
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}

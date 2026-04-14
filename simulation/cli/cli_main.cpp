@@ -9,10 +9,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <iostream>
 
 #include <map>
 #include <string>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
@@ -21,6 +24,7 @@
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
+#include "interactive_json.h"
 #include "modules/register_base_game_modules.h"
 
 using namespace econlife;
@@ -41,6 +45,7 @@ struct CliArgs {
     uint32_t report_every = 30;  // print metrics every N ticks
     uint8_t max_good_tier = 1;   // tier 0-1 at game start
     bool verbose = false;
+    bool interactive = false;     // JSON-line IPC mode for UI bridge
     bool use_test_world = false;  // fallback to test_world_factory
     std::string goods_dir;        // path to goods CSVs
     std::string config_dir;       // optional override for config JSON directory
@@ -59,6 +64,7 @@ static void print_usage(const char* prog) {
     std::printf("  --goods-dir PATH  Path to goods CSV directory\n");
     std::printf("  --config-dir PATH Path to JSON config directory (default: auto-detect)\n");
     std::printf("  --test-world      Use minimal test world factory instead\n");
+    std::printf("  --interactive     JSON-line IPC mode for UI bridge\n");
     std::printf("  --verbose         Print per-tick timing\n");
     std::printf("  --action SPEC     Schedule a player action (repeatable)\n");
     std::printf("                    Formats: travel:<province_id>@<tick>\n");
@@ -131,6 +137,8 @@ static CliArgs parse_args(int argc, char* argv[]) {
             args.config_dir = argv[++i];
         } else if (std::strcmp(argv[i], "--test-world") == 0) {
             args.use_test_world = true;
+        } else if (std::strcmp(argv[i], "--interactive") == 0) {
+            args.interactive = true;
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
             args.verbose = true;
         } else if (std::strcmp(argv[i], "--action") == 0 && i + 1 < argc) {
@@ -256,9 +264,12 @@ static bool check_nan_contamination(const WorldState& world) {
 int main(int argc, char* argv[]) {
     CliArgs args = parse_args(argc, argv);
 
-    std::printf("EconLife CLI — seed=%llu, npcs=%u, provinces=%u, ticks=%u, threads=%u\n",
-                static_cast<unsigned long long>(args.seed), args.npc_count, args.province_count,
-                args.ticks, args.threads);
+    // In interactive mode, all diagnostics go to stderr so stdout is clean JSON.
+    FILE* diag = args.interactive ? stderr : stdout;
+
+    std::fprintf(diag, "EconLife CLI — seed=%llu, npcs=%u, provinces=%u, ticks=%u, threads=%u\n",
+                 static_cast<unsigned long long>(args.seed), args.npc_count, args.province_count,
+                 args.ticks, args.threads);
 
     // 1. Create world using WorldGenerator
     WorldGeneratorConfig gen_config{};
@@ -279,24 +290,24 @@ int main(int argc, char* argv[]) {
     gen_config.technology_directory = find_technology_directory();
 
     if (!gen_config.goods_directory.empty()) {
-        std::printf("Goods directory: %s\n", gen_config.goods_directory.c_str());
+        std::fprintf(diag, "Goods directory: %s\n", gen_config.goods_directory.c_str());
     } else {
-        std::printf("Goods directory: not found (using fallback goods)\n");
+        std::fprintf(diag, "Goods directory: not found (using fallback goods)\n");
     }
     if (!gen_config.recipes_directory.empty()) {
-        std::printf("Recipes directory: %s\n", gen_config.recipes_directory.c_str());
+        std::fprintf(diag, "Recipes directory: %s\n", gen_config.recipes_directory.c_str());
     }
     if (!gen_config.facility_types_filepath.empty()) {
-        std::printf("Facility types: %s\n", gen_config.facility_types_filepath.c_str());
+        std::fprintf(diag, "Facility types: %s\n", gen_config.facility_types_filepath.c_str());
     }
     if (!gen_config.technology_directory.empty()) {
-        std::printf("Technology data: %s\n", gen_config.technology_directory.c_str());
+        std::fprintf(diag, "Technology data: %s\n", gen_config.technology_directory.c_str());
     }
 
     auto [world, player] = WorldGenerator::generate_with_player(gen_config);
     world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
-    std::printf(
+    std::fprintf(diag,
         "World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets, "
         "%zu facilities, %zu recipes\n\n",
         world.provinces.size(), world.significant_npcs.size(), world.npc_businesses.size(),
@@ -306,9 +317,9 @@ int main(int argc, char* argv[]) {
     std::string config_dir = args.config_dir.empty() ? find_config_directory() : args.config_dir;
     PackageConfig pkg_config = load_package_config(config_dir);
     if (!config_dir.empty()) {
-        std::printf("Config directory: %s\n", config_dir.c_str());
+        std::fprintf(diag, "Config directory: %s\n", config_dir.c_str());
     } else {
-        std::printf("Config directory: not found (using spec defaults)\n");
+        std::fprintf(diag, "Config directory: not found (using spec defaults)\n");
     }
 
     // 3. Set up orchestrator
@@ -316,10 +327,92 @@ int main(int argc, char* argv[]) {
     register_base_game_modules(orchestrator, pkg_config);
     orchestrator.set_config(pkg_config);
     orchestrator.finalize_registration();
-    std::printf("Registered %zu modules, topological sort OK.\n\n", orchestrator.modules().size());
+    std::fprintf(diag, "Registered %zu modules, topological sort OK.\n\n", orchestrator.modules().size());
 
     // 4. Create thread pool
     ThreadPool pool(args.threads);
+
+    // ── Interactive mode (JSON-line IPC for UI bridge) ──────────────────────
+    if (args.interactive) {
+        // Send diagnostics to stderr so stdout is clean JSON.
+        std::fprintf(stderr, "Interactive mode — waiting for commands on stdin.\n");
+
+        // Emit initial state.
+        {
+            nlohmann::json msg;
+            msg["type"] = "state";
+            msg["state"] = serialize_ui_state(world);
+            std::cout << msg.dump() << '\n';
+            std::cout.flush();
+        }
+
+        std::string line;
+        while (std::getline(std::cin, line)) {
+            if (line.empty())
+                continue;
+
+            nlohmann::json cmd;
+            try {
+                cmd = nlohmann::json::parse(line);
+            } catch (...) {
+                nlohmann::json err;
+                err["type"] = "error";
+                err["message"] = "invalid JSON";
+                std::cout << err.dump() << '\n';
+                std::cout.flush();
+                continue;
+            }
+
+            std::string cmdType = cmd.value("cmd", "");
+
+            if (cmdType == "quit") {
+                break;
+            }
+
+            if (cmdType == "action") {
+                bool ok = parse_and_enqueue_action(cmd, world);
+                nlohmann::json ack;
+                ack["type"] = "ack";
+                ack["success"] = ok;
+                std::cout << ack.dump() << '\n';
+                std::cout.flush();
+                continue;
+            }
+
+            if (cmdType == "tick") {
+                uint32_t count = cmd.value("count", 1u);
+                for (uint32_t i = 0; i < count; ++i) {
+                    orchestrator.execute_tick(world, pool);
+
+                    if (check_nan_contamination(world)) {
+                        nlohmann::json err;
+                        err["type"] = "error";
+                        err["message"] = "NaN contamination at tick " +
+                                         std::to_string(world.current_tick);
+                        std::cout << err.dump() << '\n';
+                        std::cout.flush();
+                        return 1;
+                    }
+
+                    nlohmann::json msg;
+                    msg["type"] = "state";
+                    msg["state"] = serialize_ui_state(world);
+                    std::cout << msg.dump() << '\n';
+                    std::cout.flush();
+                }
+                continue;
+            }
+
+            // Unknown command.
+            nlohmann::json err;
+            err["type"] = "error";
+            err["message"] = "unknown command: " + cmdType;
+            std::cout << err.dump() << '\n';
+            std::cout.flush();
+        }
+
+        return 0;
+    }
 
     // 5. Build scheduled action index (tick -> actions)
     std::map<uint32_t, std::vector<ScheduledAction>> action_schedule;
