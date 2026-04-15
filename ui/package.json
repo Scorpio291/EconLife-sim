@@ -8,7 +8,7 @@
     "dev:ui": "vite",
     "dev:server": "tsx watch server/bridge.ts",
     "build": "tsc -b && vite build",
-    "start": "node server/bridge.js"
+    "start": "npm run build && tsx server/bridge.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
