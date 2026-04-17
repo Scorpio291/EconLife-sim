@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { SimState, SimMessage, Speed } from './types';
 
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 1000;
+
 interface SimStore {
   connected: boolean;
   state: SimState | null;
@@ -23,11 +26,15 @@ export const useSimStore = create<SimStore>((set, get) => ({
   tickPending: false,
 
   connect: () => {
+    const existing = get().ws;
+    if (existing && existing.readyState <= WebSocket.OPEN) return;
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
+      reconnectDelay = 1000;
       set({ connected: true, ws });
     };
 
@@ -37,14 +44,12 @@ export const useSimStore = create<SimStore>((set, get) => ({
         if (msg.type === 'state') {
           set({ state: msg.state, tickPending: false });
 
-          // Auto-tick in play/fast mode
           const { speed } = get();
           if (speed === 'play') {
             setTimeout(() => {
               get().sendTick();
             }, 500);
           } else if (speed === 'fast') {
-            // Send next tick immediately
             get().sendTick();
           }
         }
@@ -55,6 +60,11 @@ export const useSimStore = create<SimStore>((set, get) => ({
 
     ws.onclose = () => {
       set({ connected: false, ws: null, speed: 'paused' });
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        get().connect();
+      }, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 16000);
     };
 
     ws.onerror = () => {
@@ -63,6 +73,10 @@ export const useSimStore = create<SimStore>((set, get) => ({
   },
 
   disconnect: () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     const { ws } = get();
     if (ws) {
       ws.close();
@@ -86,13 +100,10 @@ export const useSimStore = create<SimStore>((set, get) => ({
   setSpeed: (speed) => {
     set({ speed });
     if (speed === 'step') {
-      // Single step: send one tick then go back to paused
+      set({ speed: 'paused', tickPending: false });
       get().sendTick();
-      set({ speed: 'paused' });
     } else if (speed === 'play' || speed === 'fast') {
-      // Start the tick loop
       get().sendTick();
     }
-    // 'paused' — do nothing, the auto-tick callbacks check speed
   },
 }));

@@ -29,7 +29,7 @@ export function SceneCardPanel() {
       {activeCards.map((card) => (
         <div key={card.id} className={`scene-card ${presentationClass(card.npc_presentation_state)}`}>
           <div className="scene-card-header">
-            <span className="scene-type">{card.type.replace('_', ' ')}</span>
+            <span className="scene-type">{card.type.replace(/_/g, ' ')}</span>
             <span className="scene-setting">{card.setting.replace(/_/g, ' ')}</span>
           </div>
 

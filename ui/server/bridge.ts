@@ -78,7 +78,13 @@ function startSim(): ChildProcess {
 
 function serveStatic(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? '/';
-  let filePath = join(DIST_DIR, url === '/' ? 'index.html' : url);
+  let filePath = resolve(DIST_DIR, url === '/' ? 'index.html' : '.' + url);
+
+  if (!filePath.startsWith(DIST_DIR)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
 
   // SPA fallback: if file doesn't exist, serve index.html
   if (!existsSync(filePath) || statSync(filePath).isDirectory()) {

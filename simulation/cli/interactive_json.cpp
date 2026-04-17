@@ -325,6 +325,11 @@ bool parse_and_enqueue_action(const nlohmann::json& cmd, WorldState& world) {
         else if (sector_str == "energy") sector = BusinessSector::energy;
         else if (sector_str == "technology") sector = BusinessSector::technology;
         else if (sector_str == "finance") sector = BusinessSector::finance;
+        else if (sector_str == "transport_logistics") sector = BusinessSector::transport_logistics;
+        else if (sector_str == "media") sector = BusinessSector::media;
+        else if (sector_str == "security") sector = BusinessSector::security;
+        else if (sector_str == "research") sector = BusinessSector::research;
+        else if (sector_str == "criminal") sector = BusinessSector::criminal;
         enqueue_player_action(world, PlayerActionType::start_business,
                               StartBusinessAction{sector, province_id});
         return true;

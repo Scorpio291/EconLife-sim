@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (cmdType == "tick") {
-                uint32_t count = cmd.value("count", 1u);
+                uint32_t count = std::max(1u, cmd.value("count", 1u));
                 for (uint32_t i = 0; i < count; ++i) {
                     orchestrator.execute_tick(world, pool);
 
