@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useSimStore } from '../store';
 
 function formatMoney(n: number): string {
@@ -6,9 +7,27 @@ function formatMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
+const SECTORS = [
+  'retail',
+  'food_beverage',
+  'services',
+  'manufacturing',
+  'agriculture',
+  'real_estate',
+  'energy',
+  'technology',
+  'finance',
+  'transport_logistics',
+  'media',
+  'security',
+  'research',
+  'criminal',
+] as const;
+
 export function BusinessPanel() {
   const state = useSimStore((s) => s.state);
   const sendAction = useSimStore((s) => s.sendAction);
+  const [selectedSector, setSelectedSector] = useState<string>('retail');
 
   if (!state) return null;
 
@@ -16,23 +35,37 @@ export function BusinessPanel() {
 
   const handleStartBusiness = () => {
     sendAction('start_business', {
-      sector: 'retail',
+      sector: selectedSector,
       province_id: player.province_id,
     });
   };
+
+  const canStart = player.travel_status !== 'in_transit' && player.wealth >= 10000;
 
   return (
     <div className="business-panel">
       <div className="panel-header">
         <h2>Your Businesses</h2>
-        <button
-          className="start-biz-btn"
-          onClick={handleStartBusiness}
-          disabled={player.travel_status === 'in_transit' || player.wealth < 10000}
-          title={player.wealth < 10000 ? 'Need at least $10,000' : 'Start a retail business'}
-        >
-          + Start Business
-        </button>
+        <div className="start-biz-controls">
+          <select
+            className="sector-select"
+            value={selectedSector}
+            onChange={(e) => setSelectedSector(e.target.value)}
+            disabled={!canStart}
+          >
+            {SECTORS.map((s) => (
+              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+          <button
+            className="start-biz-btn"
+            onClick={handleStartBusiness}
+            disabled={!canStart}
+            title={player.wealth < 10000 ? 'Need at least $10,000' : `Start a ${selectedSector.replace(/_/g, ' ')} business`}
+          >
+            + Start Business
+          </button>
+        </div>
       </div>
 
       {businesses.length === 0 ? (

@@ -520,6 +520,34 @@ body {
   margin-bottom: 0;
 }
 
+.start-biz-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.sector-select {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.sector-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sector-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .start-biz-btn {
   background: var(--accent);
   color: white;
