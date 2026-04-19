@@ -135,6 +135,24 @@ static std::string npc_display_name(const WorldState& world, uint32_t npc_id) {
 }
 
 // ---------------------------------------------------------------------------
+// Shared metric helpers
+// ---------------------------------------------------------------------------
+
+float compute_avg_npc_capital(const WorldState& world) {
+    if (world.significant_npcs.empty()) return 0.0f;
+    float total = 0.0f;
+    for (const auto& npc : world.significant_npcs) total += npc.capital;
+    return total / static_cast<float>(world.significant_npcs.size());
+}
+
+float compute_avg_spot_price(const WorldState& world) {
+    if (world.regional_markets.empty()) return 0.0f;
+    float total = 0.0f;
+    for (const auto& m : world.regional_markets) total += m.spot_price;
+    return total / static_cast<float>(world.regional_markets.size());
+}
+
+// ---------------------------------------------------------------------------
 // State serialization
 // ---------------------------------------------------------------------------
 
@@ -256,27 +274,11 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
     state["businesses"] = businesses;
 
     // Aggregate metrics
-    float total_capital = 0.0f;
-    for (const auto& npc : world.significant_npcs) {
-        total_capital += npc.capital;
-    }
-    float avg_capital = world.significant_npcs.empty()
-                            ? 0.0f
-                            : total_capital / static_cast<float>(world.significant_npcs.size());
-
-    float total_price = 0.0f;
-    for (const auto& m : world.regional_markets) {
-        total_price += m.spot_price;
-    }
-    float avg_price = world.regional_markets.empty()
-                          ? 0.0f
-                          : total_price / static_cast<float>(world.regional_markets.size());
-
     state["metrics"] = {
         {"npc_count", world.significant_npcs.size()},
         {"business_count", world.npc_businesses.size()},
-        {"avg_npc_capital", avg_capital},
-        {"avg_spot_price", avg_price}
+        {"avg_npc_capital", compute_avg_npc_capital(world)},
+        {"avg_spot_price", compute_avg_spot_price(world)}
     };
 
     return state;

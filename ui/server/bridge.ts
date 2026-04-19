@@ -100,7 +100,12 @@ function serveStatic(req: IncomingMessage, res: ServerResponse) {
   const ext = extname(filePath);
   const contentType = MIME[ext] ?? 'application/octet-stream';
   res.writeHead(200, { 'Content-Type': contentType });
-  createReadStream(filePath).pipe(res);
+  const stream = createReadStream(filePath);
+  stream.on('error', () => {
+    if (!res.headersSent) res.writeHead(500);
+    res.end('Internal server error');
+  });
+  stream.pipe(res);
 }
 
 const httpServer = createServer(serveStatic);

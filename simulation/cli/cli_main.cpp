@@ -200,23 +200,8 @@ static void print_header() {
 }
 
 static void print_metrics(const WorldState& world) {
-    // Average NPC capital
-    float total_capital = 0.0f;
-    for (const auto& npc : world.significant_npcs) {
-        total_capital += npc.capital;
-    }
-    float avg_capital = world.significant_npcs.empty()
-                            ? 0.0f
-                            : total_capital / static_cast<float>(world.significant_npcs.size());
-
-    // Average market spot price
-    float total_price = 0.0f;
-    for (const auto& m : world.regional_markets) {
-        total_price += m.spot_price;
-    }
-    float avg_price = world.regional_markets.empty()
-                          ? 0.0f
-                          : total_price / static_cast<float>(world.regional_markets.size());
+    float avg_capital = compute_avg_npc_capital(world);
+    float avg_price = compute_avg_spot_price(world);
 
     // Province 0 metrics (representative)
     float stability = 0.0f, crime = 0.0f, grievance = 0.0f, cohesion = 0.0f;

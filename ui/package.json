@@ -7,8 +7,8 @@
     "dev": "concurrently -n server,ui -c blue,green \"npm run dev:server\" \"npm run dev:ui\"",
     "dev:ui": "vite",
     "dev:server": "tsx watch server/bridge.ts",
-    "build": "tsc -b && vite build",
-    "start": "npm run build && tsx server/bridge.ts"
+    "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
+    "start": "npm run build && node server-dist/bridge.js"
   },
   "dependencies": {
     "react": "^19.0.0",

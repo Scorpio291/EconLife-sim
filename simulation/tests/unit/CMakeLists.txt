@@ -49,6 +49,7 @@ add_executable(econlife_unit_tests
     lod_system_test.cpp
     persistence_test.cpp
     player_actions_test.cpp
+    interactive_json_test.cpp
     apply_deltas_test.cpp
     drain_deferred_work_test.cpp
     world_generator_test.cpp
@@ -60,6 +61,7 @@ add_executable(econlife_unit_tests
 target_link_libraries(econlife_unit_tests PRIVATE
     Catch2::Catch2WithMain
     econlife_modules
+    econlife_interactive_json
 )
 
 catch_discover_tests(econlife_unit_tests)

@@ -19,4 +19,8 @@ bool parse_and_enqueue_action(const nlohmann::json& cmd, WorldState& world);
 // Convert a tick number to an in-game date string (Jan 1 2000 + tick days).
 std::string tick_to_date(uint32_t tick);
 
+// Shared metric helpers — used by both interactive serialization and CLI output.
+float compute_avg_npc_capital(const WorldState& world);
+float compute_avg_spot_price(const WorldState& world);
+
 }  // namespace econlife
