@@ -101,3 +101,20 @@ export type SimMessage =
 
 // Speed modes
 export type Speed = 'paused' | 'step' | 'play' | 'fast';
+
+export interface MetricsSnapshot {
+  tick: number;
+  avg_npc_capital: number;
+  avg_spot_price: number;
+  npc_count: number;
+  business_count: number;
+}
+
+export interface ActionLogEntry {
+  id: number;
+  tick: number;
+  date: string;
+  actionType: string;
+  payload: Record<string, unknown>;
+  timestamp: number;
+}

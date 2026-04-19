@@ -6,7 +6,12 @@ function formatMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-export function TopBar() {
+interface TopBarProps {
+  showLog: boolean;
+  onToggleLog: () => void;
+}
+
+export function TopBar({ showLog, onToggleLog }: TopBarProps) {
   const state = useSimStore((s) => s.state);
   const speed = useSimStore((s) => s.speed);
   const setSpeed = useSimStore((s) => s.setSpeed);
@@ -18,6 +23,13 @@ export function TopBar() {
   return (
     <header className="top-bar">
       <div className="top-bar-left">
+        <button
+          className={`ctrl-btn ${showLog ? 'active' : ''}`}
+          onClick={onToggleLog}
+          title="Action Log"
+        >
+          Log
+        </button>
         <span className="game-date">{date}</span>
         <span className="tick-count">Day {tick}</span>
       </div>
@@ -26,28 +38,28 @@ export function TopBar() {
         <button
           className={`ctrl-btn ${speed === 'paused' ? 'active' : ''}`}
           onClick={() => setSpeed('paused')}
-          title="Pause"
+          title="Pause (Space)"
         >
           ||
         </button>
         <button
           className="ctrl-btn"
           onClick={() => setSpeed('step')}
-          title="Step"
+          title="Step (Right Arrow)"
         >
           |&gt;
         </button>
         <button
           className={`ctrl-btn ${speed === 'play' ? 'active' : ''}`}
           onClick={() => setSpeed('play')}
-          title="Play"
+          title="Play (Space)"
         >
           &gt;
         </button>
         <button
           className={`ctrl-btn ${speed === 'fast' ? 'active' : ''}`}
           onClick={() => setSpeed('fast')}
-          title="Fast Forward"
+          title="Fast Forward (Up Arrow)"
         >
           &gt;&gt;
         </button>

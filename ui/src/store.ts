@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { SimState, SimMessage, Speed } from './types';
+import type { SimState, SimMessage, Speed, MetricsSnapshot, ActionLogEntry } from './types';
 
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 1000;
+let nextActionId = 0;
 
 interface SimStore {
   connected: boolean;
@@ -10,6 +11,8 @@ interface SimStore {
   speed: Speed;
   ws: WebSocket | null;
   tickPending: boolean;
+  metricsHistory: MetricsSnapshot[];
+  actionLog: ActionLogEntry[];
 
   connect: () => void;
   disconnect: () => void;
@@ -24,6 +27,8 @@ export const useSimStore = create<SimStore>((set, get) => ({
   speed: 'paused',
   ws: null,
   tickPending: false,
+  metricsHistory: [],
+  actionLog: [],
 
   connect: () => {
     const existing = get().ws;
@@ -42,7 +47,15 @@ export const useSimStore = create<SimStore>((set, get) => ({
       try {
         const msg: SimMessage = JSON.parse(event.data as string);
         if (msg.type === 'state') {
-          set({ state: msg.state, tickPending: false });
+          const prev = get().metricsHistory;
+          const entry: MetricsSnapshot = {
+            tick: msg.state.tick,
+            ...msg.state.metrics,
+          };
+          const next = [...prev, entry];
+          if (next.length > 100) next.shift();
+
+          set({ state: msg.state, tickPending: false, metricsHistory: next });
 
           const { speed } = get();
           if (speed === 'play') {
@@ -92,8 +105,17 @@ export const useSimStore = create<SimStore>((set, get) => ({
   },
 
   sendAction: (actionType, payload) => {
-    const { ws, connected } = get();
+    const { ws, connected, state, actionLog } = get();
     if (!ws || !connected) return;
+    const entry: ActionLogEntry = {
+      id: nextActionId++,
+      tick: state?.tick ?? 0,
+      date: state?.date ?? '',
+      actionType,
+      payload,
+      timestamp: Date.now(),
+    };
+    set({ actionLog: [...actionLog, entry].slice(-200) });
     ws.send(JSON.stringify({ cmd: 'action', action_type: actionType, payload }));
   },
 
