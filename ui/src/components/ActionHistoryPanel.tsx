@@ -1,13 +1,21 @@
 import { useSimStore } from '../store';
+import type { Province } from '../types';
 
 function formatActionType(type: string): string {
   return type.replace(/_/g, ' ');
 }
 
-function formatPayload(actionType: string, payload: Record<string, unknown>): string {
+function formatPayload(
+  actionType: string,
+  payload: Record<string, unknown>,
+  provinces: Province[],
+): string {
   switch (actionType) {
-    case 'travel':
-      return `Province ${payload['destination_province_id'] ?? '?'}`;
+    case 'travel': {
+      const id = payload['destination_province_id'];
+      const province = provinces.find(p => p.id === id);
+      return province ? province.name : `Province ${id ?? '?'}`;
+    }
     case 'scene_card_choice':
       return `Card ${payload['scene_card_id'] ?? '?'}, Choice ${payload['choice_id'] ?? '?'}`;
     case 'calendar_commit':
@@ -23,6 +31,7 @@ function formatPayload(actionType: string, payload: Record<string, unknown>): st
 
 export function ActionHistoryPanel({ onClose }: { onClose: () => void }) {
   const actionLog = useSimStore((s) => s.actionLog);
+  const provinces = useSimStore((s) => s.state?.provinces ?? []);
 
   return (
     <div className="action-history-panel">
@@ -41,7 +50,7 @@ export function ActionHistoryPanel({ onClose }: { onClose: () => void }) {
                 <span>{entry.date}</span>
               </div>
               <div className="action-entry-detail">
-                {formatPayload(entry.actionType, entry.payload)}
+                {formatPayload(entry.actionType, entry.payload, provinces)}
               </div>
             </div>
           ))}

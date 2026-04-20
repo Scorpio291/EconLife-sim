@@ -118,3 +118,8 @@ export interface ActionLogEntry {
   payload: Record<string, unknown>;
   timestamp: number;
 }
+
+export interface ToastItem {
+  id: number;
+  message: string;
+}

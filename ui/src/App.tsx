@@ -9,11 +9,7 @@ import { BusinessPanel } from './components/BusinessPanel';
 import { ActionHistoryPanel } from './components/ActionHistoryPanel';
 import { ToastContainer } from './components/Toast';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-
-interface ToastItem {
-  id: number;
-  message: string;
-}
+import type { ToastItem } from './types';
 
 export function App() {
   const connected = useSimStore((s) => s.connected);
@@ -22,6 +18,7 @@ export function App() {
   const [showLog, setShowLog] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const prevCardIdsRef = useRef<Set<number>>(new Set());
+  const isFirstStateRef = useRef(true);
 
   useKeyboardShortcuts();
 
@@ -33,6 +30,11 @@ export function App() {
     if (!state) return;
     const activeCards = state.pending_scene_cards.filter(c => c.chosen_choice_id === 0);
     const currentIds = new Set(activeCards.map(c => c.id));
+    if (isFirstStateRef.current) {
+      isFirstStateRef.current = false;
+      prevCardIdsRef.current = currentIds;
+      return;
+    }
     const newCards = activeCards.filter(c => !prevCardIdsRef.current.has(c.id));
     if (newCards.length > 0) {
       setToasts(prev => [

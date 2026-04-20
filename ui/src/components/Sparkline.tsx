@@ -1,3 +1,5 @@
+import { memo, useId } from 'react';
+
 interface SparklineProps {
   data: number[];
   width?: number;
@@ -5,7 +7,14 @@ interface SparklineProps {
   color?: string;
 }
 
-export function Sparkline({ data, width = 140, height = 40, color = 'var(--accent)' }: SparklineProps) {
+export const Sparkline = memo(function Sparkline({
+  data,
+  width = 140,
+  height = 40,
+  color = 'var(--accent)',
+}: SparklineProps) {
+  const gradientId = useId();
+
   if (data.length < 2) return null;
 
   const min = Math.min(...data);
@@ -26,15 +35,12 @@ export function Sparkline({ data, width = 140, height = 40, color = 'var(--accen
     <div className="sparkline-container">
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         <defs>
-          <linearGradient id={`grad-${color.replace(/[^a-z]/g, '')}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.2" />
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <polygon
-          points={fillPoints}
-          fill={`url(#grad-${color.replace(/[^a-z]/g, '')})`}
-        />
+        <polygon points={fillPoints} fill={`url(#${gradientId})`} />
         <polyline
           points={points}
           fill="none"
@@ -45,4 +51,5 @@ export function Sparkline({ data, width = 140, height = 40, color = 'var(--accen
       </svg>
     </div>
   );
-}
+});
+

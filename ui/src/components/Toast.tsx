@@ -1,9 +1,5 @@
 import { useEffect } from 'react';
-
-interface ToastItem {
-  id: number;
-  message: string;
-}
+import type { ToastItem } from '../types';
 
 interface ToastContainerProps {
   toasts: ToastItem[];
@@ -16,13 +12,13 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
   return (
     <div className="toast-container">
       {toasts.slice(-3).map((t) => (
-        <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
+        <ToastEntry key={t.id} toast={t} onDismiss={onDismiss} />
       ))}
     </div>
   );
 }
 
-function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: number) => void }) {
+function ToastEntry({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: number) => void }) {
   useEffect(() => {
     const timer = setTimeout(() => onDismiss(toast.id), 3000);
     return () => clearTimeout(timer);
