@@ -234,11 +234,11 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
         if (d.cash_delta.has_value()) {
             biz.cash = safe_add(biz.cash, *d.cash_delta);
             if (std::isinf(biz.cash) || std::isnan(biz.cash)) {
-                biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash))
-                               ? ceil.business_cash_ceiling
-                               : -ceil.business_cash_ceiling;
+                biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash)) ? ceil.business_cash_ceiling
+                                                                     : -ceil.business_cash_ceiling;
             }
-            biz.cash = std::clamp(biz.cash, -ceil.business_cash_ceiling, ceil.business_cash_ceiling);
+            biz.cash =
+                std::clamp(biz.cash, -ceil.business_cash_ceiling, ceil.business_cash_ceiling);
         }
         if (d.revenue_per_tick_update.has_value()) {
             biz.revenue_per_tick = std::max(0.0f, *d.revenue_per_tick_update);
@@ -277,12 +277,12 @@ static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta
         auto& m = *it->second;
 
         if (d.supply_delta.has_value()) {
-            m.supply = std::clamp(safe_add(m.supply, *d.supply_delta), 0.0f,
-                                  ceil.market_supply_ceiling);
+            m.supply =
+                std::clamp(safe_add(m.supply, *d.supply_delta), 0.0f, ceil.market_supply_ceiling);
         }
         if (d.demand_buffer_delta.has_value()) {
-            m.demand_buffer = std::clamp(safe_add(m.demand_buffer, *d.demand_buffer_delta),
-                                         0.0f, ceil.market_supply_ceiling);
+            m.demand_buffer = std::clamp(safe_add(m.demand_buffer, *d.demand_buffer_delta), 0.0f,
+                                         ceil.market_supply_ceiling);
         }
         if (d.spot_price_override.has_value()) {
             float price = *d.spot_price_override;
@@ -291,9 +291,8 @@ static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta
         }
         if (d.equilibrium_price_override.has_value()) {
             float price = *d.equilibrium_price_override;
-            m.equilibrium_price =
-                std::clamp(std::isnan(price) ? m.equilibrium_price : price, 0.001f,
-                           ceil.market_price_ceiling);
+            m.equilibrium_price = std::clamp(std::isnan(price) ? m.equilibrium_price : price,
+                                             0.001f, ceil.market_price_ceiling);
         }
     }
 }
@@ -302,7 +301,7 @@ static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta
 // apply_evidence_deltas
 // ---------------------------------------------------------------------------
 static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceDelta>& deltas,
-                                   uint32_t evidence_decay_interval) {
+                                  uint32_t evidence_decay_interval) {
     for (const auto& d : deltas) {
         if (d.new_token.has_value()) {
             EvidenceToken token = *d.new_token;
@@ -499,8 +498,7 @@ static void apply_dissolved_businesses(WorldState& world,
 // ---------------------------------------------------------------------------
 // apply_new_businesses
 // ---------------------------------------------------------------------------
-static void apply_new_businesses(WorldState& world,
-                                 const std::vector<NewBusinessDelta>& deltas) {
+static void apply_new_businesses(WorldState& world, const std::vector<NewBusinessDelta>& deltas) {
     for (const auto& d : deltas) {
         world.npc_businesses.push_back(d.new_business);
     }
@@ -539,8 +537,8 @@ static void apply_calendar_commit_deltas(WorldState& world,
 // ---------------------------------------------------------------------------
 // apply_deltas — main entry point
 // ---------------------------------------------------------------------------
-void apply_deltas(WorldState& world, DeltaBuffer& delta,
-                  const SafetyCeilingsConfig* ceilings, const PackageConfig* config) {
+void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsConfig* ceilings,
+                  const PackageConfig* config) {
     const auto& ceil = ceilings ? *ceilings : DEFAULT_CEILINGS;
     // Extract evidence_decay_interval from config; fall back to DrainConfig default (7).
     uint32_t evidence_decay_interval =

@@ -14,8 +14,8 @@
 #include <string>
 #include <variant>
 
-#include "modules/calendar/calendar_types.h"    // CalendarEntryType
-#include "modules/economy/economy_types.h"      // BusinessSector
+#include "modules/calendar/calendar_types.h"  // CalendarEntryType
+#include "modules/economy/economy_types.h"    // BusinessSector
 
 namespace econlife {
 
@@ -38,7 +38,7 @@ struct CalendarCommitAction {
 // Schedule a new calendar engagement.
 struct CalendarScheduleAction {
     CalendarEntryType type;
-    uint32_t npc_id;              // 0 for non-meeting entries
+    uint32_t npc_id;  // 0 for non-meeting entries
     uint32_t desired_start_tick;
     uint32_t duration_ticks;
 };
@@ -98,17 +98,10 @@ enum class PlayerActionType : uint8_t {
 // PlayerActionPayload — variant of all action structs
 // ---------------------------------------------------------------------------
 
-using PlayerActionPayload = std::variant<
-    SceneCardChoiceAction,
-    CalendarCommitAction,
-    CalendarScheduleAction,
-    TravelAction,
-    StartBusinessAction,
-    SetProductionAction,
-    DelegateAction,
-    CommercializeTechAction,
-    InitiateContactAction
->;
+using PlayerActionPayload =
+    std::variant<SceneCardChoiceAction, CalendarCommitAction, CalendarScheduleAction, TravelAction,
+                 StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
+                 InitiateContactAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action
@@ -117,8 +110,8 @@ using PlayerActionPayload = std::variant<
 struct PlayerAction {
     PlayerActionType type;
     PlayerActionPayload payload;
-    uint32_t submitted_tick;    // tick the action was enqueued at
-    uint32_t sequence_number;   // monotonic counter; deterministic ordering within a tick
+    uint32_t submitted_tick;   // tick the action was enqueued at
+    uint32_t sequence_number;  // monotonic counter; deterministic ordering within a tick
 };
 
 }  // namespace econlife

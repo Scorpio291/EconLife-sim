@@ -10,12 +10,10 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
-
 #include <map>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
-
-#include <nlohmann/json.hpp>
 
 #include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
@@ -97,7 +95,8 @@ static bool parse_action_spec(const char* spec, ScheduledAction& out) {
         if (colon == std::string::npos)
             return false;
         uint32_t card_id = static_cast<uint32_t>(std::strtoul(params.c_str(), nullptr, 10));
-        uint32_t choice_id = static_cast<uint32_t>(std::strtoul(params.c_str() + colon + 1, nullptr, 10));
+        uint32_t choice_id =
+            static_cast<uint32_t>(std::strtoul(params.c_str() + colon + 1, nullptr, 10));
         out.type = PlayerActionType::scene_card_choice;
         out.payload = SceneCardChoiceAction{card_id, choice_id};
         return true;
@@ -293,10 +292,11 @@ int main(int argc, char* argv[]) {
     world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     std::fprintf(diag,
-        "World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets, "
-        "%zu facilities, %zu recipes\n\n",
-        world.provinces.size(), world.significant_npcs.size(), world.npc_businesses.size(),
-        world.regional_markets.size(), world.facilities.size(), world.loaded_recipes.size());
+                 "World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets, "
+                 "%zu facilities, %zu recipes\n\n",
+                 world.provinces.size(), world.significant_npcs.size(), world.npc_businesses.size(),
+                 world.regional_markets.size(), world.facilities.size(),
+                 world.loaded_recipes.size());
 
     // 2. Load config (auto-detect or use override path).
     std::string config_dir = args.config_dir.empty() ? find_config_directory() : args.config_dir;
@@ -312,7 +312,8 @@ int main(int argc, char* argv[]) {
     register_base_game_modules(orchestrator, pkg_config);
     orchestrator.set_config(pkg_config);
     orchestrator.finalize_registration();
-    std::fprintf(diag, "Registered %zu modules, topological sort OK.\n\n", orchestrator.modules().size());
+    std::fprintf(diag, "Registered %zu modules, topological sort OK.\n\n",
+                 orchestrator.modules().size());
 
     // 4. Create thread pool
     ThreadPool pool(args.threads);
@@ -372,8 +373,8 @@ int main(int argc, char* argv[]) {
                     if (check_nan_contamination(world)) {
                         nlohmann::json err;
                         err["type"] = "error";
-                        err["message"] = "NaN contamination at tick " +
-                                         std::to_string(world.current_tick);
+                        err["message"] =
+                            "NaN contamination at tick " + std::to_string(world.current_tick);
                         std::cout << err.dump() << '\n';
                         std::cout.flush();
                         return 1;
@@ -423,8 +424,8 @@ int main(int argc, char* argv[]) {
             for (const auto& sa : it->second) {
                 enqueue_player_action(world, sa.type, sa.payload);
                 if (args.verbose) {
-                    std::printf("  [tick %u] enqueued player action type %u\n",
-                                world.current_tick, static_cast<unsigned>(sa.type));
+                    std::printf("  [tick %u] enqueued player action type %u\n", world.current_tick,
+                                static_cast<unsigned>(sa.type));
                 }
             }
         }

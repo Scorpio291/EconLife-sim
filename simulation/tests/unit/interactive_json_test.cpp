@@ -1,10 +1,11 @@
 // Tests for interactive_json serialization and action parsing.
 
+#include "cli/interactive_json.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <nlohmann/json.hpp>
 
-#include "cli/interactive_json.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
 #include "tests/test_world_factory.h"
@@ -180,10 +181,8 @@ TEST_CASE("parse_and_enqueue_action: unknown type returns false", "[interactive_
 
 TEST_CASE("parse_and_enqueue_action: travel enqueues correctly", "[interactive_json]") {
     auto world = make_world();
-    nlohmann::json cmd = {
-        {"action_type", "travel"},
-        {"payload", {{"destination_province_id", 1u}}}
-    };
+    nlohmann::json cmd = {{"action_type", "travel"},
+                          {"payload", {{"destination_province_id", 1u}}}};
     REQUIRE(parse_and_enqueue_action(cmd, world));
     REQUIRE(world.player_action_queue.size() == 1);
     REQUIRE(world.player_action_queue.front().type == PlayerActionType::travel);
@@ -191,36 +190,29 @@ TEST_CASE("parse_and_enqueue_action: travel enqueues correctly", "[interactive_j
 
 TEST_CASE("parse_and_enqueue_action: scene_card_choice enqueues", "[interactive_json]") {
     auto world = make_world();
-    nlohmann::json cmd = {
-        {"action_type", "scene_card_choice"},
-        {"payload", {{"scene_card_id", 5u}, {"choice_id", 2u}}}
-    };
+    nlohmann::json cmd = {{"action_type", "scene_card_choice"},
+                          {"payload", {{"scene_card_id", 5u}, {"choice_id", 2u}}}};
     REQUIRE(parse_and_enqueue_action(cmd, world));
     REQUIRE(world.player_action_queue.front().type == PlayerActionType::scene_card_choice);
 }
 
 TEST_CASE("parse_and_enqueue_action: calendar_commit enqueues", "[interactive_json]") {
     auto world = make_world();
-    nlohmann::json cmd = {
-        {"action_type", "calendar_commit"},
-        {"payload", {{"calendar_entry_id", 3u}, {"accept", true}}}
-    };
+    nlohmann::json cmd = {{"action_type", "calendar_commit"},
+                          {"payload", {{"calendar_entry_id", 3u}, {"accept", true}}}};
     REQUIRE(parse_and_enqueue_action(cmd, world));
     REQUIRE(world.player_action_queue.front().type == PlayerActionType::calendar_commit);
 }
 
 TEST_CASE("parse_and_enqueue_action: start_business all 14 sectors", "[interactive_json]") {
     const std::vector<std::string> sectors = {
-        "retail", "manufacturing", "food_beverage", "services", "real_estate",
-        "agriculture", "energy", "technology", "finance", "transport_logistics",
-        "media", "security", "research", "criminal"
-    };
+        "retail",      "manufacturing", "food_beverage", "services", "real_estate",
+        "agriculture", "energy",        "technology",    "finance",  "transport_logistics",
+        "media",       "security",      "research",      "criminal"};
     for (const auto& sector : sectors) {
         auto world = make_world();
-        nlohmann::json cmd = {
-            {"action_type", "start_business"},
-            {"payload", {{"sector", sector}, {"province_id", 0u}}}
-        };
+        nlohmann::json cmd = {{"action_type", "start_business"},
+                              {"payload", {{"sector", sector}, {"province_id", 0u}}}};
         INFO("sector: " << sector);
         REQUIRE(parse_and_enqueue_action(cmd, world));
         REQUIRE(world.player_action_queue.front().type == PlayerActionType::start_business);
@@ -234,10 +226,8 @@ TEST_CASE("parse_and_enqueue_action: start_business all 14 sectors", "[interacti
 
 TEST_CASE("parse_and_enqueue_action: initiate_contact enqueues", "[interactive_json]") {
     auto world = make_world();
-    nlohmann::json cmd = {
-        {"action_type", "initiate_contact"},
-        {"payload", {{"target_npc_id", 42u}}}
-    };
+    nlohmann::json cmd = {{"action_type", "initiate_contact"},
+                          {"payload", {{"target_npc_id", 42u}}}};
     REQUIRE(parse_and_enqueue_action(cmd, world));
     REQUIRE(world.player_action_queue.front().type == PlayerActionType::initiate_contact);
 }

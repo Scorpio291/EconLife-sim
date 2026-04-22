@@ -82,8 +82,8 @@ static uint32_t next_calendar_id(const WorldState& state) {
 // Per-action handlers
 // ---------------------------------------------------------------------------
 
-static void handle_scene_card_choice(const SceneCardChoiceAction& action,
-                                     const WorldState& state, DeltaBuffer& delta) {
+static void handle_scene_card_choice(const SceneCardChoiceAction& action, const WorldState& state,
+                                     DeltaBuffer& delta) {
     // Validate: card exists in pending_scene_cards with matching choice_id.
     for (const auto& card : state.pending_scene_cards) {
         if (card.id == action.scene_card_id) {
@@ -111,8 +111,8 @@ static void handle_scene_card_choice(const SceneCardChoiceAction& action,
     // Card not found — silently drop.
 }
 
-static void handle_calendar_commit(const CalendarCommitAction& action,
-                                   const WorldState& state, DeltaBuffer& delta) {
+static void handle_calendar_commit(const CalendarCommitAction& action, const WorldState& state,
+                                   DeltaBuffer& delta) {
     for (const auto& entry : state.calendar) {
         if (entry.id == action.calendar_entry_id) {
             // Don't commit to expired entries.
@@ -129,8 +129,8 @@ static void handle_calendar_commit(const CalendarCommitAction& action,
     // Entry not found — silently drop.
 }
 
-static void handle_calendar_schedule(const CalendarScheduleAction& action,
-                                     const WorldState& state, DeltaBuffer& delta) {
+static void handle_calendar_schedule(const CalendarScheduleAction& action, const WorldState& state,
+                                     DeltaBuffer& delta) {
     // Validate NPC exists for meeting entries.
     if (action.type == CalendarEntryType::meeting && action.npc_id != 0) {
         const NPC* npc = find_npc(state, action.npc_id);
@@ -152,8 +152,7 @@ static void handle_calendar_schedule(const CalendarScheduleAction& action,
     delta.new_calendar_entries.push_back(new_entry);
 }
 
-static void handle_travel(const TravelAction& action, const WorldState& state,
-                          DeltaBuffer& delta) {
+static void handle_travel(const TravelAction& action, const WorldState& state, DeltaBuffer& delta) {
     if (!state.player)
         return;
 
@@ -187,13 +186,12 @@ static void handle_travel(const TravelAction& action, const WorldState& state,
     // We use a const_cast here as a pragmatic compromise; the alternative
     // is moving action processing into the orchestrator itself.
     auto& mutable_queue = const_cast<DeferredWorkQueue&>(state.deferred_work_queue);
-    mutable_queue.push({state.current_tick + TRAVEL_TIME_TICKS,
-                        WorkType::player_travel_arrival, state.player->id,
-                        PlayerTravelPayload{action.destination_province_id}});
+    mutable_queue.push({state.current_tick + TRAVEL_TIME_TICKS, WorkType::player_travel_arrival,
+                        state.player->id, PlayerTravelPayload{action.destination_province_id}});
 }
 
-static void handle_start_business(const StartBusinessAction& action,
-                                  const WorldState& state, DeltaBuffer& delta) {
+static void handle_start_business(const StartBusinessAction& action, const WorldState& state,
+                                  DeltaBuffer& delta) {
     if (!state.player)
         return;
 
@@ -241,8 +239,8 @@ static void handle_start_business(const StartBusinessAction& action,
         delta.player_delta.wealth_delta.value_or(0.0f) - MIN_STARTUP_CAPITAL;
 }
 
-static void handle_set_production(const SetProductionAction& action,
-                                  const WorldState& state, DeltaBuffer& delta) {
+static void handle_set_production(const SetProductionAction& action, const WorldState& state,
+                                  DeltaBuffer& delta) {
     if (!state.player)
         return;
 
@@ -303,9 +301,9 @@ static void handle_delegate(const DelegateAction& action, const WorldState& stat
         state.current_tick,
         MemoryType::interaction,
         state.player->id,
-        0.3f,   // moderate positive emotional weight
-        1.0f,   // fresh memory
-        true    // actionable
+        0.3f,  // moderate positive emotional weight
+        1.0f,  // fresh memory
+        true   // actionable
     };
     delta.npc_deltas.push_back(npc_delta);
 }
@@ -335,8 +333,8 @@ static void handle_commercialize_tech(const CommercializeTechAction& action,
     }
 }
 
-static void handle_initiate_contact(const InitiateContactAction& action,
-                                    const WorldState& state, DeltaBuffer& delta) {
+static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
+                                    DeltaBuffer& delta) {
     if (!state.player)
         return;
 

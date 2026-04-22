@@ -6,12 +6,12 @@
 #include <vector>
 
 // Complete type definitions needed for std::optional and std::vector members.
-#include "modules/calendar/calendar_types.h"       // CalendarEntry
-#include "modules/scene_cards/scene_card_types.h"  // SceneCard
-#include "npc.h"                                   // MemoryEntry, Relationship, NPCStatus
-#include "shared_types.h"                          // EvidenceToken, ObligationNode
-#include "modules/economy/economy_types.h"         // NPCBusiness (for NewBusinessDelta)
+#include "modules/calendar/calendar_types.h"           // CalendarEntry
+#include "modules/economy/economy_types.h"             // NPCBusiness (for NewBusinessDelta)
+#include "modules/scene_cards/scene_card_types.h"      // SceneCard
 #include "modules/trade_infrastructure/trade_types.h"  // NPCTravelStatus (complete type for optional)
+#include "npc.h"                                       // MemoryEntry, Relationship, NPCStatus
+#include "shared_types.h"                              // EvidenceToken, ObligationNode
 
 namespace econlife {
 
@@ -33,13 +33,14 @@ struct RelationshipDelta {
 
 struct NPCDelta {
     uint32_t npc_id;
-    std::optional<float> capital_delta;                     // additive
-    std::optional<NPCStatus> new_status;                    // replacement
-    std::optional<NPCTravelStatus> new_travel_status;       // replacement
-    std::optional<MemoryEntry> new_memory_entry;            // appended to memory_log
-    std::optional<Relationship> updated_relationship;       // upsert by target_npc_id
-    std::optional<float> motivation_delta;                  // additive to financial_gain slot (weights[0]); prefer motivation_replacement for full vector
-    std::optional<MotivationVector> motivation_replacement; // replacement; full vector override
+    std::optional<float> capital_delta;                // additive
+    std::optional<NPCStatus> new_status;               // replacement
+    std::optional<NPCTravelStatus> new_travel_status;  // replacement
+    std::optional<MemoryEntry> new_memory_entry;       // appended to memory_log
+    std::optional<Relationship> updated_relationship;  // upsert by target_npc_id
+    std::optional<float> motivation_delta;  // additive to financial_gain slot (weights[0]); prefer
+                                            // motivation_replacement for full vector
+    std::optional<MotivationVector> motivation_replacement;  // replacement; full vector override
 };
 
 struct PlayerDelta {

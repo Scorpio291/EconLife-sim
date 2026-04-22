@@ -127,9 +127,9 @@ static void handle_evidence_decay(const DeferredWorkItem& item, WorldState& worl
 
     for (const auto& token : world.evidence_pool) {
         if (token.id == payload->evidence_token_id && token.is_active) {
-            float new_actionability =
-                std::max(0.0f, token.actionability -
-                                   token.decay_rate * static_cast<float>(cfg.evidence_decay_interval));
+            float new_actionability = std::max(
+                0.0f, token.actionability -
+                          token.decay_rate * static_cast<float>(cfg.evidence_decay_interval));
 
             EvidenceDelta ed{};
             if (new_actionability < 0.01f) {
@@ -142,9 +142,10 @@ static void handle_evidence_decay(const DeferredWorkItem& item, WorldState& worl
                 ed.updated_token_id = payload->evidence_token_id;
                 ed.updated_actionability = new_actionability;
                 // Reschedule only if still active
-                world.deferred_work_queue.push(
-                    {world.current_tick + cfg.evidence_decay_interval, WorkType::evidence_decay_batch,
-                     payload->evidence_token_id, EvidenceDecayPayload{payload->evidence_token_id}});
+                world.deferred_work_queue.push({world.current_tick + cfg.evidence_decay_interval,
+                                                WorkType::evidence_decay_batch,
+                                                payload->evidence_token_id,
+                                                EvidenceDecayPayload{payload->evidence_token_id}});
             }
             delta.evidence_deltas.push_back(ed);
             break;

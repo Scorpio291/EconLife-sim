@@ -64,8 +64,7 @@ TEST_CASE("Scene card choice sets chosen_choice_id", "[player_actions][unit]") {
     world.pending_scene_cards.push_back(card);
 
     // Enqueue a choice action.
-    enqueue_player_action(world, PlayerActionType::scene_card_choice,
-                          SceneCardChoiceAction{10, 2});
+    enqueue_player_action(world, PlayerActionType::scene_card_choice, SceneCardChoiceAction{10, 2});
 
     // Run the module.
     PlayerActionsModule module;
@@ -135,8 +134,7 @@ TEST_CASE("Calendar commit sets player_committed", "[player_actions][unit]") {
     entry.scene_card_id = 0;
     world.calendar.push_back(entry);
 
-    enqueue_player_action(world, PlayerActionType::calendar_commit,
-                          CalendarCommitAction{20, true});
+    enqueue_player_action(world, PlayerActionType::calendar_commit, CalendarCommitAction{20, true});
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -160,8 +158,7 @@ TEST_CASE("Calendar commit for expired entry is rejected", "[player_actions][uni
     entry.player_committed = false;
     world.calendar.push_back(entry);
 
-    enqueue_player_action(world, PlayerActionType::calendar_commit,
-                          CalendarCommitAction{20, true});
+    enqueue_player_action(world, PlayerActionType::calendar_commit, CalendarCommitAction{20, true});
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -199,8 +196,7 @@ TEST_CASE("Travel to current province is rejected", "[player_actions][unit]") {
     auto world = make_minimal_world();
     // Player starts in province 0.
 
-    enqueue_player_action(world, PlayerActionType::travel,
-                          TravelAction{0});  // same province
+    enqueue_player_action(world, PlayerActionType::travel, TravelAction{0});  // same province
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -214,8 +210,7 @@ TEST_CASE("Travel while in_transit is rejected", "[player_actions][unit]") {
     auto world = make_minimal_world();
     world.player->travel_status = NPCTravelStatus::in_transit;
 
-    enqueue_player_action(world, PlayerActionType::travel,
-                          TravelAction{1});
+    enqueue_player_action(world, PlayerActionType::travel, TravelAction{1});
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -227,8 +222,7 @@ TEST_CASE("Travel while in_transit is rejected", "[player_actions][unit]") {
 TEST_CASE("Travel to nonexistent province is rejected", "[player_actions][unit]") {
     auto world = make_minimal_world();
 
-    enqueue_player_action(world, PlayerActionType::travel,
-                          TravelAction{999});  // doesn't exist
+    enqueue_player_action(world, PlayerActionType::travel, TravelAction{999});  // doesn't exist
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -247,8 +241,7 @@ TEST_CASE("Player travel arrival updates province_id", "[player_actions][unit]")
 
     // Manually push a travel arrival item.
     world.deferred_work_queue.push({world.current_tick, WorkType::player_travel_arrival,
-                                    world.player->id,
-                                    PlayerTravelPayload{1}});
+                                    world.player->id, PlayerTravelPayload{1}});
 
     // Drain deferred work (simulates what tick orchestrator does).
     DeltaBuffer delta;
@@ -291,8 +284,9 @@ TEST_CASE("Start business creates new business and deducts wealth", "[player_act
 TEST_CASE("Start business in wrong province is rejected", "[player_actions][unit]") {
     auto world = make_minimal_world();
 
-    enqueue_player_action(world, PlayerActionType::start_business,
-                          StartBusinessAction{BusinessSector::retail, 1});  // player is in province 0
+    enqueue_player_action(
+        world, PlayerActionType::start_business,
+        StartBusinessAction{BusinessSector::retail, 1});  // player is in province 0
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -343,9 +337,9 @@ TEST_CASE("Actions are processed in sequence_number order", "[player_actions][un
 
     // Enqueue actions — sequence numbers assigned in order.
     uint32_t seq1 = enqueue_player_action(world, PlayerActionType::scene_card_choice,
-                                           SceneCardChoiceAction{10, 1});
+                                          SceneCardChoiceAction{10, 1});
     uint32_t seq2 = enqueue_player_action(world, PlayerActionType::scene_card_choice,
-                                           SceneCardChoiceAction{11, 5});
+                                          SceneCardChoiceAction{11, 5});
     REQUIRE(seq1 < seq2);
 
     PlayerActionsModule module;
@@ -360,8 +354,7 @@ TEST_CASE("Actions are processed in sequence_number order", "[player_actions][un
 TEST_CASE("Queue is cleared after processing", "[player_actions][unit]") {
     auto world = make_minimal_world();
 
-    enqueue_player_action(world, PlayerActionType::travel,
-                          TravelAction{1});
+    enqueue_player_action(world, PlayerActionType::travel, TravelAction{1});
 
     REQUIRE(has_pending_player_actions(world));
 
@@ -393,8 +386,7 @@ TEST_CASE("Empty queue produces no effects", "[player_actions][unit]") {
 TEST_CASE("Initiate contact creates calendar entry", "[player_actions][unit]") {
     auto world = make_minimal_world();
 
-    enqueue_player_action(world, PlayerActionType::initiate_contact,
-                          InitiateContactAction{100});
+    enqueue_player_action(world, PlayerActionType::initiate_contact, InitiateContactAction{100});
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -410,8 +402,7 @@ TEST_CASE("Initiate contact with dead NPC is rejected", "[player_actions][unit]"
     auto world = make_minimal_world();
     world.significant_npcs[0].status = NPCStatus::dead;
 
-    enqueue_player_action(world, PlayerActionType::initiate_contact,
-                          InitiateContactAction{100});
+    enqueue_player_action(world, PlayerActionType::initiate_contact, InitiateContactAction{100});
 
     PlayerActionsModule module;
     DeltaBuffer delta;

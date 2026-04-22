@@ -15,11 +15,11 @@
 
 // Complete type definitions needed for std::vector/std::map value members and unique_ptr members
 #include "geography.h"                                 // Nation, Province, Region
-#include "player.h"                                    // PlayerCharacter (complete type for unique_ptr)
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
 #include "modules/production/production_types.h"       // Facility, Recipe
 #include "modules/trade_infrastructure/trade_types.h"  // TariffSchedule, NationalTradeOffer,
-                                                       //   Lod1NationStats, RouteProfile
+#include "player.h"  // PlayerCharacter (complete type for unique_ptr)
+                     //   Lod1NationStats, RouteProfile
 #include "modules/currency_exchange/currency_exchange_types.h"  // CurrencyRecord
 #include "modules/technology/technology_types.h"                // GlobalTechnologyState
 
@@ -92,7 +92,7 @@ struct WorldState {
 
     // --- Trade and Transport Infrastructure ---
     std::vector<TariffSchedule> tariff_schedules;
-    std::vector<NationalTradeOffer> lod1_trade_offers;  // regenerated monthly
+    std::vector<NationalTradeOffer> lod1_trade_offers;            // regenerated monthly
     std::unique_ptr<GlobalCommodityPriceIndex> lod2_price_index;  // updated annually
     std::map<uint32_t, Lod1NationStats> lod1_national_stats;
     std::map<std::pair<uint32_t, uint32_t>, std::array<RouteProfile, 5>>
