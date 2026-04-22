@@ -480,7 +480,10 @@ TEST_CASE("test_module_name_and_ordering", "[random_events][tier1]") {
     REQUIRE(module.name() == "random_events");
     REQUIRE(module.package_id() == "base_game");
     REQUIRE(module.scope() == ModuleScope::v1);
-    REQUIRE(module.is_province_parallel() == true);
+    // Module is NOT province-parallel: concurrent execute_province calls
+    // would race on active_events_ (push_back) and next_event_id_ (++).
+    // See random_events_module.cpp::execute() for the rationale.
+    REQUIRE(module.is_province_parallel() == false);
 
     auto after = module.runs_after();
     REQUIRE(after.size() == 1);
