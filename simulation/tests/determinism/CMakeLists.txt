@@ -8,4 +8,6 @@ target_link_libraries(econlife_determinism_tests PRIVATE
     econlife_modules
 )
 
-catch_discover_tests(econlife_determinism_tests)
+catch_discover_tests(econlife_determinism_tests
+    PROPERTIES LABELS "determinism"
+)

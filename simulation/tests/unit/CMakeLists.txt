@@ -64,4 +64,6 @@ target_link_libraries(econlife_unit_tests PRIVATE
     econlife_interactive_json
 )
 
-catch_discover_tests(econlife_unit_tests)
+catch_discover_tests(econlife_unit_tests
+    PROPERTIES LABELS "module"
+)
