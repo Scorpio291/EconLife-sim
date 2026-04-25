@@ -202,72 +202,10 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
             });
 
             // Merge province deltas in ascending index order (deterministic).
+            // For PlayerDelta replacement fields this means highest province_id
+            // wins; vector deltas concatenate in ascending province order.
             for (uint32_t p = 0; p < province_count; ++p) {
-                auto& province_delta = province_deltas[p];
-                // Merge vector deltas into main delta buffer.
-                delta.npc_deltas.insert(delta.npc_deltas.end(), province_delta.npc_deltas.begin(),
-                                        province_delta.npc_deltas.end());
-                // Merge player_delta additively.
-                if (province_delta.player_delta.health_delta.has_value()) {
-                    delta.player_delta.health_delta =
-                        delta.player_delta.health_delta.value_or(0.0f) +
-                        *province_delta.player_delta.health_delta;
-                }
-                if (province_delta.player_delta.wealth_delta.has_value()) {
-                    delta.player_delta.wealth_delta =
-                        delta.player_delta.wealth_delta.value_or(0.0f) +
-                        *province_delta.player_delta.wealth_delta;
-                }
-                if (province_delta.player_delta.exhaustion_delta.has_value()) {
-                    delta.player_delta.exhaustion_delta =
-                        delta.player_delta.exhaustion_delta.value_or(0.0f) +
-                        *province_delta.player_delta.exhaustion_delta;
-                }
-                // Replacement fields: last province wins.
-                if (province_delta.player_delta.skill_delta.has_value()) {
-                    delta.player_delta.skill_delta = province_delta.player_delta.skill_delta;
-                }
-                if (province_delta.player_delta.new_evidence_awareness.has_value()) {
-                    delta.player_delta.new_evidence_awareness =
-                        province_delta.player_delta.new_evidence_awareness;
-                }
-                if (province_delta.player_delta.relationship_delta.has_value()) {
-                    delta.player_delta.relationship_delta =
-                        province_delta.player_delta.relationship_delta;
-                }
-                delta.market_deltas.insert(delta.market_deltas.end(),
-                                           province_delta.market_deltas.begin(),
-                                           province_delta.market_deltas.end());
-                delta.evidence_deltas.insert(delta.evidence_deltas.end(),
-                                             province_delta.evidence_deltas.begin(),
-                                             province_delta.evidence_deltas.end());
-                delta.consequence_deltas.insert(delta.consequence_deltas.end(),
-                                                province_delta.consequence_deltas.begin(),
-                                                province_delta.consequence_deltas.end());
-                delta.business_deltas.insert(delta.business_deltas.end(),
-                                             province_delta.business_deltas.begin(),
-                                             province_delta.business_deltas.end());
-                delta.region_deltas.insert(delta.region_deltas.end(),
-                                           province_delta.region_deltas.begin(),
-                                           province_delta.region_deltas.end());
-                delta.currency_deltas.insert(delta.currency_deltas.end(),
-                                             province_delta.currency_deltas.begin(),
-                                             province_delta.currency_deltas.end());
-                delta.technology_deltas.insert(delta.technology_deltas.end(),
-                                               province_delta.technology_deltas.begin(),
-                                               province_delta.technology_deltas.end());
-                delta.new_calendar_entries.insert(delta.new_calendar_entries.end(),
-                                                  province_delta.new_calendar_entries.begin(),
-                                                  province_delta.new_calendar_entries.end());
-                delta.new_scene_cards.insert(delta.new_scene_cards.end(),
-                                             province_delta.new_scene_cards.begin(),
-                                             province_delta.new_scene_cards.end());
-                delta.new_obligation_nodes.insert(delta.new_obligation_nodes.end(),
-                                                  province_delta.new_obligation_nodes.begin(),
-                                                  province_delta.new_obligation_nodes.end());
-                delta.cross_province_deltas.insert(delta.cross_province_deltas.end(),
-                                                    province_delta.cross_province_deltas.begin(),
-                                                    province_delta.cross_province_deltas.end());
+                delta.merge_from(std::move(province_deltas[p]));
             }
 
             // Apply province-parallel deltas before global post-pass so the

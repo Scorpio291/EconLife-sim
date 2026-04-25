@@ -56,6 +56,7 @@ add_executable(econlife_unit_tests
     recipe_catalog_test.cpp
     facility_type_catalog_test.cpp
     technology_catalog_test.cpp
+    delta_buffer_merge_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
