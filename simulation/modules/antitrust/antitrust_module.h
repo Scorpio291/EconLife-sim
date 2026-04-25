@@ -88,6 +88,10 @@ class AntitrustModule : public ITickModule {
     uint32_t next_check_tick_ = 30;
     std::vector<AntitrustProposal> proposals_;
     uint32_t next_proposal_id_ = 1000;
+    // Antitrust-issued evidence token ids start above EvidenceModule's
+    // counter range (which begins at 1000) and any reasonable evidence
+    // pool size, so the two id streams cannot collide.
+    uint32_t next_evidence_token_id_ = 1'000'000;
 
     // Run the monthly antitrust scan.
     void run_monthly_check(const WorldState& state, DeltaBuffer& delta);

@@ -137,7 +137,7 @@ inline NPC create_test_npc(uint32_t id, NPCRole role, uint32_t province_id) {
     npc.movement_follower_count = 0;
     npc.home_province_id = province_id;
     npc.current_province_id = province_id;
-    npc.travel_status = static_cast<NPCTravelStatus>(0);  // resident
+    npc.travel_status = NPCTravelStatus::resident;
     npc.status = NPCStatus::active;
 
     // Balanced motivation vector (sums to 1.0)

@@ -12,6 +12,7 @@
 #include <string>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/supply_chain/supply_chain_module.h"
@@ -345,7 +346,9 @@ TEST_CASE("test_transport_cost_deduction_from_business", "[supply_chain][tier2]"
 
 TEST_CASE("test_transit_arrival_adds_to_supply", "[supply_chain][tier2]") {
     // When an inter-province shipment is dispatched, the supply delta
-    // for the destination province should be created.
+    // for the destination province must be queued as a CrossProvinceDelta
+    // with due_tick = current_tick + transit_ticks. It is NOT applied
+    // in the dispatch tick.
     auto state = make_test_world_state();
 
     state.provinces.push_back(make_test_province(0));
@@ -363,11 +366,80 @@ TEST_CASE("test_transit_arrival_adds_to_supply", "[supply_chain][tier2]") {
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
-    // There should be a supply delta for copper in province 0.
-    auto summary = summarize_market_deltas(delta, "copper", 0);
-    REQUIRE(summary.supply_count >= 1);
+    // Same-tick supply must NOT include the cross-province shipment.
+    auto same_tick = summarize_market_deltas(delta, "copper", 0);
+    REQUIRE(same_tick.supply_count == 0);
+
+    // A CrossProvinceDelta carrying the supply must be queued for arrival.
+    uint32_t copper_id = SupplyChainModule::good_id_from_string("copper");
+    float total_delayed_supply = 0.0f;
+    int delayed_count = 0;
+    for (const auto& cpd : delta.cross_province_deltas) {
+        if (cpd.target_province_id != 0) continue;
+        if (!cpd.market_delta.has_value()) continue;
+        const auto& md = *cpd.market_delta;
+        if (md.good_id != copper_id || md.region_id != 0) continue;
+        REQUIRE(cpd.source_province_id == 1);
+        REQUIRE(cpd.due_tick > state.current_tick);
+        if (md.supply_delta.has_value()) {
+            total_delayed_supply += *md.supply_delta;
+            delayed_count++;
+        }
+    }
+    REQUIRE(delayed_count >= 1);
     // Shipped quantity should match the demand (25 units, limited by demand).
-    REQUIRE_THAT(summary.total_supply_delta, WithinAbs(25.0f, 0.01f));
+    REQUIRE_THAT(total_delayed_supply, WithinAbs(25.0f, 0.01f));
+}
+
+TEST_CASE("test_transit_arrival_applies_at_due_tick", "[supply_chain][tier2]") {
+    // End-to-end check: dispatch an inter-province shipment, then drive the
+    // tick orchestrator forward and verify the destination market.supply
+    // increases only when current_tick reaches the queued due_tick.
+    auto state = make_test_world_state();
+
+    state.provinces.push_back(make_test_province(0));
+    state.provinces.push_back(make_test_province(1));
+
+    add_market(state, "copper", 0, 0.0f, 25.0f, 20.0f);
+    add_market(state, "copper", 1, 50.0f, 0.0f, 18.0f);
+    add_route(state, 1, 0, 400.0f);
+    state.npc_businesses.push_back(make_test_business(1, 0, 10000.0f));
+
+    // Capture the destination supply baseline before dispatch.
+    uint32_t copper_id = SupplyChainModule::good_id_from_string("copper");
+    auto find_market = [&](uint32_t province) -> const RegionalMarket* {
+        for (const auto& m : state.regional_markets) {
+            if (m.province_id == province && m.good_id == copper_id) return &m;
+        }
+        return nullptr;
+    };
+    REQUIRE(find_market(0) != nullptr);
+    float baseline_supply = find_market(0)->supply;
+
+    // Dispatch tick: emit the cross-province delta and stage it on WorldState.
+    SupplyChainModule module;
+    DeltaBuffer dispatch_delta{};
+    module.execute_province(0, state, dispatch_delta);
+    REQUIRE(!dispatch_delta.cross_province_deltas.empty());
+
+    uint32_t due_tick = dispatch_delta.cross_province_deltas.front().due_tick;
+    REQUIRE(due_tick > state.current_tick);
+
+    // Stage on WorldState (mirrors what apply_deltas does for cross-province).
+    for (auto& cpd : dispatch_delta.cross_province_deltas) {
+        state.cross_province_delta_buffer.entries.push_back(std::move(cpd));
+    }
+
+    // Step ticks forward; supply must remain unchanged until due_tick.
+    while (state.current_tick < due_tick) {
+        apply_cross_province_deltas(state);
+        REQUIRE_THAT(find_market(0)->supply, WithinAbs(baseline_supply, 0.001f));
+        state.current_tick++;
+    }
+
+    // On the due tick, the entry releases and supply increases.
+    apply_cross_province_deltas(state);
+    REQUIRE_THAT(find_market(0)->supply, WithinAbs(baseline_supply + 25.0f, 0.01f));
 }
 
 TEST_CASE("test_perishable_decay_formula", "[supply_chain][tier2]") {
