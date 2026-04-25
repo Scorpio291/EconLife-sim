@@ -23,19 +23,25 @@ void LaborMarketModule::init_for_tick(const WorldState& state) {
     // dispatch, so no synchronisation is needed.  After this call the vector's
     // size is stable and execute_province() never pushes new elements — it only
     // mutates fields of records that belong to NPCs in its own province.
+    //
+    // Maintain employment_index_ inline: rebuild once if it is out of sync
+    // (e.g. tests appended directly through the employment_records() accessor),
+    // then update it as we push new records so the per-NPC find is O(1).
+    if (employment_index_.size() != employment_records_.size()) {
+        rebuild_employment_index();
+    }
+    auto ensure_record = [&](uint32_t npc_id) {
+        if (employment_index_.find(npc_id) != employment_index_.end()) return;
+        employment_index_[npc_id] = employment_records_.size();
+        employment_records_.push_back(EmploymentRecord{npc_id, /*employer_business_id=*/0,
+                                                       /*offered_wage=*/0.0f, /*hired_tick=*/0,
+                                                       /*deferred_salary_ticks=*/0});
+    };
     for (const auto& npc : state.significant_npcs) {
-        if (find_employment(npc.id) == nullptr) {
-            employment_records_.push_back(
-                EmploymentRecord{npc.id, /*employer_business_id=*/0,
-                                 /*offered_wage=*/0.0f, /*hired_tick=*/0, /*deferred_salary_ticks=*/0});
-        }
+        ensure_record(npc.id);
     }
     for (const auto& npc : state.named_background_npcs) {
-        if (find_employment(npc.id) == nullptr) {
-            employment_records_.push_back(
-                EmploymentRecord{npc.id, /*employer_business_id=*/0,
-                                 /*offered_wage=*/0.0f, /*hired_tick=*/0, /*deferred_salary_ticks=*/0});
-        }
+        ensure_record(npc.id);
     }
 }
 
@@ -583,22 +589,30 @@ float LaborMarketModule::compute_salary_expectation(float regional_wage, float m
 // LaborMarketModule — lookup helpers
 // ===========================================================================
 
-EmploymentRecord* LaborMarketModule::find_employment(uint32_t npc_id) {
-    for (auto& rec : employment_records_) {
-        if (rec.npc_id == npc_id) {
-            return &rec;
-        }
+void LaborMarketModule::rebuild_employment_index() const {
+    employment_index_.clear();
+    employment_index_.reserve(employment_records_.size());
+    for (std::size_t i = 0; i < employment_records_.size(); ++i) {
+        employment_index_[employment_records_[i].npc_id] = i;
     }
-    return nullptr;
+}
+
+EmploymentRecord* LaborMarketModule::find_employment(uint32_t npc_id) {
+    if (employment_index_.size() != employment_records_.size()) {
+        rebuild_employment_index();
+    }
+    auto it = employment_index_.find(npc_id);
+    if (it == employment_index_.end()) return nullptr;
+    return &employment_records_[it->second];
 }
 
 const EmploymentRecord* LaborMarketModule::find_employment(uint32_t npc_id) const {
-    for (const auto& rec : employment_records_) {
-        if (rec.npc_id == npc_id) {
-            return &rec;
-        }
+    if (employment_index_.size() != employment_records_.size()) {
+        rebuild_employment_index();
     }
-    return nullptr;
+    auto it = employment_index_.find(npc_id);
+    if (it == employment_index_.end()) return nullptr;
+    return &employment_records_[it->second];
 }
 
 const NPC* LaborMarketModule::find_npc(const WorldState& state, uint32_t npc_id) {

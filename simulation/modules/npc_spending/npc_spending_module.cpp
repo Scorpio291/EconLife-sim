@@ -83,11 +83,18 @@ float NpcSpendingModule::buyer_type_quality_weight(BuyerType buyer_type) {
 // ---------------------------------------------------------------------------
 
 BuyerType NpcSpendingModule::get_buyer_type(uint32_t npc_id) const {
-    for (const auto& profile : buyer_profiles_) {
-        if (profile.npc_id == npc_id)
-            return profile.buyer_type;
+    if (buyer_profile_index_.size() != buyer_profiles_.size()) {
+        buyer_profile_index_.clear();
+        buyer_profile_index_.reserve(buyer_profiles_.size());
+        for (std::size_t i = 0; i < buyer_profiles_.size(); ++i) {
+            buyer_profile_index_[buyer_profiles_[i].npc_id] = i;
+        }
     }
-    return BuyerType::necessity_buyer;  // default
+    auto it = buyer_profile_index_.find(npc_id);
+    if (it == buyer_profile_index_.end()) {
+        return BuyerType::necessity_buyer;  // default
+    }
+    return buyer_profiles_[it->second].buyer_type;
 }
 
 // ---------------------------------------------------------------------------

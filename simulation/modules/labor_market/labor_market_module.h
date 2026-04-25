@@ -104,9 +104,17 @@ class LaborMarketModule : public ITickModule {
     LaborModuleConfig lcfg_;
     std::vector<JobPosting> job_postings_;
     std::vector<EmploymentRecord> employment_records_;
+    // npc_id -> index into employment_records_. Rebuilt lazily when its
+    // size diverges from employment_records_ (covers both internal pushes
+    // and external pushes via the employment_records() accessor used by
+    // tests). Mutable so const find_employment can refresh on demand.
+    mutable std::unordered_map<uint32_t, std::size_t> employment_index_;
     std::unordered_map<uint32_t, std::vector<NPCSkillEntry>> npc_skills_;
     RegionalWageMap regional_wages_;
     std::unordered_map<uint32_t, std::vector<WorkerApplication>> applications_;
+
+    // Rebuild employment_index_ from employment_records_. Idempotent.
+    void rebuild_employment_index() const;
 
     // --- Per-province processing ---
 

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 #include <vector>
 
 #include "core/world_state/apply_deltas.h"
@@ -21,14 +22,22 @@ namespace econlife {
 // Reschedule intervals and decay rates are passed via DrainConfig.
 
 // ---------------------------------------------------------------------------
-// Helper: find NPC by id
+// Helpers
 // ---------------------------------------------------------------------------
-static const NPC* find_npc(const WorldState& world, uint32_t npc_id) {
+using NPCIndex = std::unordered_map<uint32_t, const NPC*>;
+
+static const NPC* find_npc(const NPCIndex& index, uint32_t npc_id) {
+    auto it = index.find(npc_id);
+    return it == index.end() ? nullptr : it->second;
+}
+
+static NPCIndex build_npc_index(const WorldState& world) {
+    NPCIndex index;
+    index.reserve(world.significant_npcs.size());
     for (const auto& n : world.significant_npcs) {
-        if (n.id == npc_id)
-            return &n;
+        index[n.id] = &n;
     }
-    return nullptr;
+    return index;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +73,8 @@ static void handle_transit_arrival(const DeferredWorkItem& item, WorldState& wor
 }
 
 static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldState& world,
-                                          DeltaBuffer& delta, const DrainConfig& cfg) {
+                                          DeltaBuffer& delta, const DrainConfig& cfg,
+                                          const NPCIndex& npc_index) {
     // Batch decay for one NPC's relationships.
     // Trust and fear decay toward 0 over time.
     // Write relationship updates via DeltaBuffer (not direct mutation).
@@ -72,7 +82,7 @@ static void handle_npc_relationship_decay(const DeferredWorkItem& item, WorldSta
     if (!payload)
         return;
 
-    const NPC* npc = find_npc(world, payload->npc_id);
+    const NPC* npc = find_npc(npc_index, payload->npc_id);
     if (!npc)
         return;
 
@@ -191,10 +201,10 @@ static void handle_climate_downstream(const DeferredWorkItem& item, WorldState& 
 }
 
 static void handle_npc_travel_arrival(const DeferredWorkItem& item, WorldState& world,
-                                      DeltaBuffer& delta) {
+                                      DeltaBuffer& delta, const NPCIndex& npc_index) {
     // NPC physically arrives at destination province.
     // Write status change via DeltaBuffer (not direct mutation).
-    const NPC* npc = find_npc(world, item.subject_id);
+    const NPC* npc = find_npc(npc_index, item.subject_id);
     if (!npc)
         return;
 
@@ -272,6 +282,11 @@ static void handle_interception_check(const DeferredWorkItem& item, WorldState& 
 void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfig& cfg) {
     auto& queue = world.deferred_work_queue;
 
+    // Build the NPC lookup index once for the whole drain pass; the NPC vector
+    // is not mutated during the drain (mutations go through DeltaBuffer and
+    // apply_deltas runs after).
+    const NPCIndex npc_index = build_npc_index(world);
+
     while (!queue.empty() && queue.top().due_tick <= world.current_tick) {
         DeferredWorkItem item = queue.top();
         queue.pop();
@@ -287,7 +302,7 @@ void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfi
                 handle_interception_check(item, world, delta);
                 break;
             case WorkType::npc_relationship_decay:
-                handle_npc_relationship_decay(item, world, delta, cfg);
+                handle_npc_relationship_decay(item, world, delta, cfg, npc_index);
                 break;
             case WorkType::evidence_decay_batch:
                 handle_evidence_decay(item, world, delta, cfg);
@@ -309,7 +324,7 @@ void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfi
                 // For now, silently skip (no budget tracking yet).
                 break;
             case WorkType::npc_travel_arrival:
-                handle_npc_travel_arrival(item, world, delta);
+                handle_npc_travel_arrival(item, world, delta, npc_index);
                 break;
             case WorkType::player_travel_arrival:
                 handle_player_travel_arrival(item, world, delta);
