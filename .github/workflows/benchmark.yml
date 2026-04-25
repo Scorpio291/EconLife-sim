@@ -19,12 +19,33 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j
 
-      - name: Run benchmarks
+      # Run the contract benchmark only — gating on the full benchmark
+      # suite is too noisy on shared runners. Other benchmarks are still
+      # runnable locally for debugging via `ctest -L benchmark`.
+      - name: Run contract benchmark
         run: |
-          ctest --test-dir build -C Release -L "benchmark" --output-on-failure || true
-          echo "Benchmark results above. Compare against baseline for regressions."
+          mkdir -p benchmark-results
+          ./build/simulation/tests/benchmarks/econlife_benchmarks "[contract]" \
+            --reporter xml --out benchmark-results/results.xml \
+            --reporter console::out=-
 
-      # TODO: When benchmarks produce actual timings, add:
-      # - Baseline comparison against previous main branch results
-      # - PR comment with performance delta
-      # - Fail if any benchmark regresses by > 20%
+      - name: Check threshold
+        # Threshold is 200 ms — the target contract from CLAUDE.md
+        # ("< 200ms on 6 cores"). Local Release runs at ~6 ms, so this
+        # gives ~33x headroom for shared-runner noise while still
+        # asserting the design contract. Loosen if CI runners turn out
+        # noisier than that; tighten once 20+ runs of baseline data
+        # have been collected. The "contract:" substring matches the
+        # benchmark name in tests/benchmarks/tick_benchmark.cpp.
+        run: |
+          python3 .github/scripts/check_benchmark_threshold.py \
+            benchmark-results/results.xml \
+            "contract:" 200
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark-results/results.xml
+          retention-days: 30

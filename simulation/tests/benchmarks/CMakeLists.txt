@@ -8,4 +8,6 @@ target_link_libraries(econlife_benchmarks PRIVATE
     econlife_modules
 )
 
-catch_discover_tests(econlife_benchmarks)
+catch_discover_tests(econlife_benchmarks
+    PROPERTIES LABELS "benchmark"
+)

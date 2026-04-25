@@ -18,6 +18,7 @@
 #include "core/tick/drain_deferred_work.h"
 #include "core/world_state/apply_deltas.h"
 #include "modules/persistence/persistence_module.h"
+#include "modules/register_base_game_modules.h"
 
 using namespace econlife;
 using namespace econlife::test;
@@ -31,6 +32,26 @@ TEST_CASE("full tick performance at 2000 NPCs", "[benchmark][tick]") {
     ThreadPool pool(6);
 
     BENCHMARK("full tick 2000 NPCs 6 provinces (no modules)") {
+        orch.execute_tick(world, pool);
+        return world.current_tick;
+    };
+}
+
+// ── Contract benchmark: all base modules registered ─────────────────────────
+// This is the real performance contract from CLAUDE.md: tick < 500ms at
+// 2000 significant NPCs, target < 200ms on 6 cores. The "no modules" case
+// above measures orchestrator + state management only; this case exercises
+// the full 27-step module pipeline end to end.
+TEST_CASE("full tick with all modules at 2000 NPCs", "[benchmark][tick][contract]") {
+    auto world = create_test_world(42, 2000, 6, 15);
+    TickOrchestrator orch;
+    PackageConfig config{};
+    register_base_game_modules(orch, config);
+    orch.set_config(config);
+    orch.finalize_registration();
+    ThreadPool pool(6);
+
+    BENCHMARK("contract: 2000 NPCs 6 provinces all base modules") {
         orch.execute_tick(world, pool);
         return world.current_tick;
     };
