@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/good_id_hash.h"
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -18,12 +19,7 @@ namespace econlife {
 // ===========================================================================
 
 uint32_t SupplyChainModule::good_id_from_string(const std::string& good_id_str) {
-    // Deterministic hash — must match ProductionModule::good_id_from_string.
-    uint32_t hash = 0;
-    for (char c : good_id_str) {
-        hash = hash * 31 + static_cast<uint32_t>(c);
-    }
-    return hash;
+    return good_id_hash(good_id_str);
 }
 
 uint32_t SupplyChainModule::compute_transit_ticks(const RouteProfile& route, float mode_speed,

@@ -68,35 +68,30 @@ modules:
 **Fix:** No standalone fix; resolved as each consuming module lands.
 Track via the per-handler `// Will be implemented in...` comments.
 
-### L1. `good_id_from_string` uses a weak hash
+### L1. `good_id_from_string` weak hash — partially fixed
 
-**Status:** Open.
-**File:** `simulation/modules/production/production_module.cpp:68-75`.
+**Status:** Quick fix shipped; proper fix still open.
+**File:** `simulation/core/good_id_hash.h` (new).
 
-`hash * 31 + c` (Java string hash). Fine for the current ~252 goods, but
-string collisions are not bounded. If two recipe-referenced good ids
-collide, the bug surfaces as silently merged supply/demand on the wrong
-market — hard to diagnose.
+Quick fix (this branch): the three modules that hashed good_ids
+(production, supply_chain, seasonal_agriculture) were duplicating the
+same Java-style `hash * 31 + c` function with explicit "must match"
+comments. They now route through a single `econlife::good_id_hash`
+helper that uses FNV-1a (32-bit). Verified zero collisions on the
+247-good base_game catalog with both old and new hashes.
 
-**Fix:** Replace with FNV-1a or wyhash; or, better, change `good_id` to
-a stable integer assigned at goods-catalog load time and stored in a
-single source of truth, removing the per-call hash entirely.
+Proper fix (open): change `good_id` to a stable integer assigned at
+goods-catalog load time (`GoodDefinition::numeric_id` already exists)
+and route every Recipe → MarketDelta path through the catalog instead
+of hashing strings. This needs a `GoodsCatalog&` reference threaded
+through ProductionModule / SupplyChainModule / SeasonalAgricultureModule
+and a small migration in their tests. Defer until the goods catalog
+grows past a few hundred entries or until a real collision surfaces.
 
 ### L3. Brittle delta merge in tick_orchestrator
 
 **Status:** Open. Tracked as **B1** in
 `docs/plans/2026-04-25-tier-b-followups.md`.
-
-### L5. Goods CSV not cross-validated against recipe inputs/outputs
-
-**Status:** Open. No load-time check that every recipe `good_id` exists
-in the goods catalog. A typo in a recipe CSV produces a silently-zero
-production rate at runtime.
-
-**Fix:** In `recipe_catalog.cpp` (or a follow-up `validate_packages()`
-call after all catalogs load), iterate every recipe's inputs/outputs
-and assert each `good_id` exists in `GoodsCatalog`. Fail fast at
-package load.
 
 ### L6. Tier comments in `register_base_game_modules.cpp` drift
 
@@ -104,11 +99,6 @@ package load.
 The "Tier N: Depends on X" comments are a registration aid; some no
 longer match the dependency declarations the modules return from
 `runs_after()`. Either update the comments or generate them.
-
-### L8. No CI performance gate
-
-**Status:** Open. Tracked as **B3** in
-`docs/plans/2026-04-25-tier-b-followups.md`.
 
 ---
 
@@ -134,17 +124,17 @@ longer match the dependency declarations the modules return from
 | **L2** CrossProvinceDeltaBuffer thread safety | `a9b3660` | Pushes go through per-province DeltaBuffer; orchestrator merges into `world.cross_province_delta_buffer` from the main thread (apply_deltas.cpp:564). |
 | **L4** player_delta missed merge | (orchestrator refactor) | Merge added at tick_orchestrator.cpp:211-228. |
 | **L7** NPCTravelStatus literal cast | `32ae755` | Tier A. |
+| **L5** recipe ↔ goods cross-validation | `4ed4ebe` | `RecipeCatalog::validate_against_goods`; world_generator logs missing references at load. Verified clean on base_game (247 goods, 102 recipes). |
+| **L1** weak good-id hash (quick) | (this commit) | Three duplicated `hash * 31 + c` implementations consolidated into `core/good_id_hash.h` (FNV-1a). Verified zero collisions on base_game. Long-form fix (catalog numeric ids) still open. |
+| **L8** no CI perf gate | `3e53cd7` | `benchmark.yml` now runs the all-modules contract benchmark and gates on a 200 ms threshold; results uploaded as artifact. |
+| **H5** linear-scan lookups (per-id) | `3a40d34` | drain_deferred_work, labor_market::find_employment, npc_spending::get_buyer_type now use hash-map indices. Filter-shape scans (22 NPC iterations) remain. |
 | Supply chain transit-delay bypass | `32ae755` | Tier A. Was not in the original report but discovered during verification. |
 
 ---
 
 ## Recommended Priority Order (refreshed)
 
-1. **B2 — refresh this report** (this PR).
-2. **H5 — linear-scan lookups.** Largest perf risk; blocks meaningful CI perf gate.
-3. **B1 — `DeltaBuffer::merge_from`.** Mechanical refactor; pays for itself the next time someone adds a delta type.
-4. **L5 — recipe ↔ goods cross-validation.** Cheap, prevents silent typo bugs in modder content.
-5. **L1 — better good-id hash (or integer ids).** Lower risk than L5 today; revisit when goods catalog grows past a few hundred entries.
-6. **B3 — CI perf gate.** After H5; otherwise gate calibrates against known-slow code.
-7. **L6 — register-tier comments.** Cosmetic; do alongside any module-registration touch.
-8. **M3 stub handlers.** Resolve naturally as each consuming module lands.
+1. **L1 catalog migration** — proper fix: thread `GoodsCatalog&` through Production / SupplyChain / SeasonalAgriculture and use `numeric_id` instead of hashing. Removes the hash entirely. Defer until justified by collision or scale.
+2. **H5 filter-shape scans** — 22 `for npc : significant_npcs` iterations. Needs province-bucketed NPC lists or an iteration helper. Design pass first.
+3. **L6 — register-tier comments.** Cosmetic; do alongside any module-registration touch.
+4. **M3 stub handlers.** Resolve naturally as each consuming module lands.
