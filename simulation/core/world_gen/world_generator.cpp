@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include <queue>
 #include <unordered_map>
@@ -264,6 +265,18 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     if (!config.facility_types_filepath.empty()) {
         facility_type_catalog.load_from_csv(config.facility_types_filepath);
     }
+
+    // Cross-validate recipe inputs/outputs against the goods catalog. A typo
+    // in a recipe CSV would otherwise silently zero out the corresponding
+    // supply or demand at runtime — surfaces here as a clear list at world
+    // generation. Logged to stderr so modders see it during package load.
+    if (recipe_catalog.size() > 0 && catalog.size() > 0) {
+        auto errors = recipe_catalog.validate_against_goods(catalog);
+        for (const auto& err : errors) {
+            std::cerr << "[recipe_catalog] " << err << "\n";
+        }
+    }
+
     if (recipe_catalog.size() > 0 && facility_type_catalog.size() > 0) {
         FacilityGenerator::create_facilities(world, rng, recipe_catalog, facility_type_catalog,
                                              config);
