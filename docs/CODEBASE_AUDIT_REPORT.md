@@ -95,10 +95,17 @@ grows past a few hundred entries or until a real collision surfaces.
 
 ### L6. Tier comments in `register_base_game_modules.cpp` drift
 
-**Status:** Open. Cosmetic — topological sort handles the real order.
-The "Tier N: Depends on X" comments are a registration aid; some no
-longer match the dependency declarations the modules return from
-`runs_after()`. Either update the comments or generate them.
+**Status:** Resolved in this commit. The tier-numbered "Depends on X"
+comments invited drift the moment a module added a new
+`runs_after()` entry. They have been replaced with role-based
+groupings (production/markets, finance, NPC behavior, evidence,
+criminal economy, infrastructure) that describe what the section
+*is* rather than where it sits in a dependency hierarchy. The
+header comment at the top of the file points readers to
+`runs_after()` / `runs_before()` as the source of truth and notes
+that registration order only matters as a tiebreaker for the
+topological sort. Verified all 1312 tests still pass after the
+reordering.
 
 ---
 
@@ -128,6 +135,7 @@ longer match the dependency declarations the modules return from
 | **L1** weak good-id hash (quick) | (this commit) | Three duplicated `hash * 31 + c` implementations consolidated into `core/good_id_hash.h` (FNV-1a). Verified zero collisions on base_game. Long-form fix (catalog numeric ids) still open. |
 | **L8** no CI perf gate | `3e53cd7` | `benchmark.yml` now runs the all-modules contract benchmark and gates on a 200 ms threshold; results uploaded as artifact. |
 | **H5** linear-scan lookups (per-id) | `3a40d34` | drain_deferred_work, labor_market::find_employment, npc_spending::get_buyer_type now use hash-map indices. Filter-shape scans (22 NPC iterations) remain. |
+| **L6** register-tier comment drift | (this commit) | Tier-numbered comments replaced with role-based section groupings; runs_after()/runs_before() declared as the source of truth. |
 | Supply chain transit-delay bypass | `32ae755` | Tier A. Was not in the original report but discovered during verification. |
 
 ---
@@ -136,5 +144,4 @@ longer match the dependency declarations the modules return from
 
 1. **L1 catalog migration** — proper fix: thread `GoodsCatalog&` through Production / SupplyChain / SeasonalAgriculture and use `numeric_id` instead of hashing. Removes the hash entirely. Defer until justified by collision or scale.
 2. **H5 filter-shape scans** — 22 `for npc : significant_npcs` iterations. Needs province-bucketed NPC lists or an iteration helper. Design pass first.
-3. **L6 — register-tier comments.** Cosmetic; do alongside any module-registration touch.
-4. **M3 stub handlers.** Resolve naturally as each consuming module lands.
+3. **M3 stub handlers.** Resolve naturally as each consuming module lands.
