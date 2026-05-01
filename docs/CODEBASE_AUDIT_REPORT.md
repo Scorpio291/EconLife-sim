@@ -88,6 +88,16 @@ through ProductionModule / SupplyChainModule / SeasonalAgricultureModule
 and a small migration in their tests. Defer until the goods catalog
 grows past a few hundred entries or until a real collision surfaces.
 
+**Save-compat caveat.** Persistence serializes good_id values as
+uint32 (persistence_module.cpp:302, 633, 669, 941). Because the FNV-1a
+upgrade emits different uint32 values from the old `hash * 31 + c`,
+saves written by any pre-`62cf040` build will load successfully (the
+schema version did not change) but will hold IDs that no longer match
+runtime hashes — supply/demand will route to phantom markets. V1 is
+pre-release so this affects no real users, but the proper-fix migration
+to catalog numeric ids should bump CURRENT_SCHEMA_VERSION and reject
+incompatible saves explicitly.
+
 ### L3. Brittle delta merge in tick_orchestrator
 
 **Status:** Open. Tracked as **B1** in

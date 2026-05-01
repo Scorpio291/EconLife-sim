@@ -238,16 +238,12 @@ TEST_CASE("RecipeCatalog::validate_against_goods - typo surfaces a clear error",
     // from the iron-only goods catalog). Both must be reported by recipe key
     // so the modder can find the offending CSV row.
     REQUIRE(errors.size() == 2);
-    bool found_wheet =
-        std::any_of(errors.begin(), errors.end(), [](const std::string& s) {
-            return s.find("broken_bake") != std::string::npos &&
-                   s.find("wheet") != std::string::npos;
-        });
-    bool found_bread =
-        std::any_of(errors.begin(), errors.end(), [](const std::string& s) {
-            return s.find("broken_bake") != std::string::npos &&
-                   s.find("bread") != std::string::npos;
-        });
+    bool found_wheet = std::any_of(errors.begin(), errors.end(), [](const std::string& s) {
+        return s.find("broken_bake") != std::string::npos && s.find("wheet") != std::string::npos;
+    });
+    bool found_bread = std::any_of(errors.begin(), errors.end(), [](const std::string& s) {
+        return s.find("broken_bake") != std::string::npos && s.find("bread") != std::string::npos;
+    });
     CHECK(found_wheet);
     CHECK(found_bread);
 }

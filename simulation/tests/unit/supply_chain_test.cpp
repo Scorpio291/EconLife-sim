@@ -261,8 +261,8 @@ TEST_CASE("test_transit_time_from_route_profile", "[supply_chain][tier2]") {
     RouteProfile route = make_route(600.0f);  // 600 km
     float infra = 0.5f;
 
-    uint32_t ticks =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, infra);
+    uint32_t ticks = SupplyChainModule::compute_transit_ticks(
+        route, SupplyChainModuleConfig{}.road_speed, infra);
 
     // Expected: ceil(600 / (300 * (1 + 0.5 * 0.5))) = ceil(600 / 375) = ceil(1.6) = 2
     REQUIRE(ticks == 2);
@@ -273,8 +273,8 @@ TEST_CASE("test_transit_time_minimum_one_tick", "[supply_chain][tier2]") {
     RouteProfile route = make_route(10.0f);  // 10 km
     float infra = 1.0f;
 
-    uint32_t ticks =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, infra);
+    uint32_t ticks = SupplyChainModule::compute_transit_ticks(
+        route, SupplyChainModuleConfig{}.road_speed, infra);
 
     // Expected: ceil(10 / (300 * 1.5)) = ceil(0.022) = 1
     REQUIRE(ticks == 1);
@@ -286,10 +286,10 @@ TEST_CASE("test_transit_time_high_infrastructure", "[supply_chain][tier2]") {
     float low_infra = 0.0f;
     float high_infra = 1.0f;
 
-    uint32_t ticks_low =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, low_infra);
-    uint32_t ticks_high =
-        SupplyChainModule::compute_transit_ticks(route, SupplyChainModuleConfig{}.road_speed, high_infra);
+    uint32_t ticks_low = SupplyChainModule::compute_transit_ticks(
+        route, SupplyChainModuleConfig{}.road_speed, low_infra);
+    uint32_t ticks_high = SupplyChainModule::compute_transit_ticks(
+        route, SupplyChainModuleConfig{}.road_speed, high_infra);
 
     // Low infra: ceil(900 / (300 * 1.0)) = 3
     REQUIRE(ticks_low == 3);
@@ -375,10 +375,13 @@ TEST_CASE("test_transit_arrival_adds_to_supply", "[supply_chain][tier2]") {
     float total_delayed_supply = 0.0f;
     int delayed_count = 0;
     for (const auto& cpd : delta.cross_province_deltas) {
-        if (cpd.target_province_id != 0) continue;
-        if (!cpd.market_delta.has_value()) continue;
+        if (cpd.target_province_id != 0)
+            continue;
+        if (!cpd.market_delta.has_value())
+            continue;
         const auto& md = *cpd.market_delta;
-        if (md.good_id != copper_id || md.region_id != 0) continue;
+        if (md.good_id != copper_id || md.region_id != 0)
+            continue;
         REQUIRE(cpd.source_province_id == 1);
         REQUIRE(cpd.due_tick > state.current_tick);
         if (md.supply_delta.has_value()) {
@@ -409,7 +412,8 @@ TEST_CASE("test_transit_arrival_applies_at_due_tick", "[supply_chain][tier2]") {
     uint32_t copper_id = SupplyChainModule::good_id_from_string("copper");
     auto find_market = [&](uint32_t province) -> const RegionalMarket* {
         for (const auto& m : state.regional_markets) {
-            if (m.province_id == province && m.good_id == copper_id) return &m;
+            if (m.province_id == province && m.good_id == copper_id)
+                return &m;
         }
         return nullptr;
     };

@@ -31,7 +31,8 @@ void LaborMarketModule::init_for_tick(const WorldState& state) {
         rebuild_employment_index();
     }
     auto ensure_record = [&](uint32_t npc_id) {
-        if (employment_index_.find(npc_id) != employment_index_.end()) return;
+        if (employment_index_.find(npc_id) != employment_index_.end())
+            return;
         employment_index_[npc_id] = employment_records_.size();
         employment_records_.push_back(EmploymentRecord{npc_id, /*employer_business_id=*/0,
                                                        /*offered_wage=*/0.0f, /*hired_tick=*/0,
@@ -602,7 +603,8 @@ EmploymentRecord* LaborMarketModule::find_employment(uint32_t npc_id) {
         rebuild_employment_index();
     }
     auto it = employment_index_.find(npc_id);
-    if (it == employment_index_.end()) return nullptr;
+    if (it == employment_index_.end())
+        return nullptr;
     return &employment_records_[it->second];
 }
 
@@ -611,7 +613,8 @@ const EmploymentRecord* LaborMarketModule::find_employment(uint32_t npc_id) cons
         rebuild_employment_index();
     }
     auto it = employment_index_.find(npc_id);
-    if (it == employment_index_.end()) return nullptr;
+    if (it == employment_index_.end())
+        return nullptr;
     return &employment_records_[it->second];
 }
 
