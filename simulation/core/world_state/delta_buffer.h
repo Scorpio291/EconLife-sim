@@ -46,12 +46,18 @@ struct NPCDelta {
 struct PlayerDelta {
     std::optional<float> health_delta;                    // additive
     std::optional<float> wealth_delta;                    // additive; liquid cash only
-    std::optional<SkillDelta> skill_delta;                // skill_id + additive value
-    std::optional<uint32_t> new_evidence_awareness;       // evidence token id
+    std::optional<SkillDelta> skill_delta;                // replacement; latest skill update wins
+    std::optional<uint32_t> new_evidence_awareness;       // replacement; latest evidence token wins
     std::optional<float> exhaustion_delta;                // additive
-    std::optional<RelationshipDelta> relationship_delta;  // player <-> NPC update
+    std::optional<RelationshipDelta> relationship_delta;  // replacement; latest update wins
     std::optional<uint32_t> new_province_id;              // replacement; player location
     std::optional<NPCTravelStatus> new_travel_status;     // replacement; travel state
+
+    // Merge another PlayerDelta into this one.
+    // Additive fields sum; replacement fields take the incoming value when set.
+    // Used by DeltaBuffer::merge_from when collapsing per-province deltas in
+    // ascending province order, so "last write wins" means highest province_id.
+    void merge_from(PlayerDelta&& other);
 };
 
 struct MarketDelta {
@@ -164,6 +170,18 @@ struct CalendarCommitDelta {
 
 // Accumulated state changes for one tick step.
 // Pre-reserve vectors at WorldState initialization using known NPC count.
+//
+// Merge policy (see merge_from below):
+// - Every vector field appends (move-extend) — entries from `other` are
+//   moved onto the end of the corresponding vector here.
+// - `player_delta` merges through PlayerDelta::merge_from (additive +
+//   last-write-wins per field).
+//
+// IMPORTANT: When you add a new field to DeltaBuffer, you MUST update
+// merge_from in delta_buffer.cpp, or per-province writes to the new
+// field will be silently dropped during the orchestrator's province
+// merge. The test_delta_buffer_merge_covers_every_field unit test will
+// fail when a new field is added without corresponding merge support.
 struct DeltaBuffer {
     std::vector<NPCDelta> npc_deltas;
     PlayerDelta player_delta;
@@ -182,6 +200,11 @@ struct DeltaBuffer {
     std::vector<NewBusinessDelta> new_businesses;
     std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;
     std::vector<CalendarCommitDelta> calendar_commit_deltas;
+
+    // Merge another DeltaBuffer into this one. Vectors are move-extended;
+    // player_delta merges through PlayerDelta::merge_from. After the call
+    // `other` is in a valid but unspecified (moved-from) state.
+    void merge_from(DeltaBuffer&& other);
 };
 
 // Cross-province effects are accumulated here during apply_deltas (main thread only).

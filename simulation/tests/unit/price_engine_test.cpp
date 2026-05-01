@@ -432,10 +432,11 @@ TEST_CASE("test_module_interface_properties", "[price_engine][tier3]") {
     REQUIRE(module.is_province_parallel() == true);
 
     auto after = module.runs_after();
-    REQUIRE(after.size() == 3);
+    REQUIRE(after.size() == 4);
     REQUIRE(after[0] == "supply_chain");
     REQUIRE(after[1] == "labor_market");
     REQUIRE(after[2] == "seasonal_agriculture");
+    REQUIRE(after[3] == "npc_spending");
 
     auto before = module.runs_before();
     REQUIRE(before.size() == 1);

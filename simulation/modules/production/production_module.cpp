@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/good_id_hash.h"
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -66,13 +67,7 @@ void ProductionModule::init_from_world_state(const WorldState& state) {
 // ===========================================================================
 
 uint32_t ProductionModule::good_id_from_string(const std::string& good_id_str) {
-    // Deterministic hash for V1 prototype.
-    // The goods registry will provide the canonical mapping in full implementation.
-    uint32_t hash = 0;
-    for (char c : good_id_str) {
-        hash = hash * 31 + static_cast<uint32_t>(c);
-    }
-    return hash;
+    return good_id_hash(good_id_str);
 }
 
 // ===========================================================================

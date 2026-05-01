@@ -166,9 +166,7 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
 
             EvidenceDelta hhi_ev;
             EvidenceToken hhi_token;
-            // Synthetic id: encode province + good to avoid collision across markets.
-            hhi_token.id =
-                (state.current_tick * 10000) + (mk.province_id * 100) + (mk.good_id % 100);
+            hhi_token.id = next_evidence_token_id_++;
             hhi_token.type = EvidenceType::financial;
             hhi_token.source_npc_id = 0;  // public market data
             hhi_token.target_npc_id = 0;  // market-level, not actor-specific

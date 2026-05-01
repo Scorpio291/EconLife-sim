@@ -7,6 +7,7 @@ add_library(econlife_core STATIC
     tick/thread_pool.cpp
     tick/drain_deferred_work.cpp
     world_state/cross_province_delta_buffer.cpp
+    world_state/delta_buffer.cpp
     world_state/apply_deltas.cpp
     world_state/player_action_queue.cpp
     world_state/geography.cpp

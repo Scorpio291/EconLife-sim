@@ -2,10 +2,13 @@
 
 #include "core/world_gen/recipe_catalog.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
 #include <string>
+
+#include "core/world_gen/goods_catalog.h"
 
 using namespace econlife;
 namespace fs = std::filesystem;
@@ -154,4 +157,93 @@ TEST_CASE("RecipeCatalog - load from directory", "[module][production]") {
 
     // Cleanup.
     fs::remove_all(dir);
+}
+
+// ---------------------------------------------------------------------------
+// validate_against_goods — recipe ↔ goods cross-check
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Minimal goods CSV with iron_ore, coking_coal, steel — every good_id
+// referenced by VALID_CSV's first recipe ("iron_smelting"). Used to
+// verify the validator silences a clean catalog.
+constexpr const char* IRON_GOODS_CSV =
+    "good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available\n"
+    "iron_ore,Iron Ore,0,tonne,geological,12.00,false,false,1\n"
+    "coking_coal,Coking Coal,0,tonne,geological,40.00,false,false,1\n"
+    "steel,Steel,1,tonne,metals,500.00,false,false,1\n";
+
+// Recipe whose input "wheet" (typo of "wheat") does not exist anywhere.
+constexpr const char* TYPO_RECIPE_CSV =
+    "recipe_key,facility_type_key,display_name,"
+    "input_1_key,input_1_qty,input_2_key,input_2_qty,"
+    "input_3_key,input_3_qty,input_4_key,input_4_qty,"
+    "output_1_key,output_1_qty,output_1_is_byproduct,"
+    "output_2_key,output_2_qty,output_2_is_byproduct,"
+    "labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available\n"
+    "broken_bake,bakery,Broken Bake,"
+    "wheet,2,,,,,,,"
+    "bread,1,0,,,0,"
+    "10,1.0,0,,1\n";
+
+GoodsCatalog load_iron_goods(const std::string& dir_name) {
+    auto dir = fs::temp_directory_path() / dir_name;
+    fs::create_directories(dir);
+    {
+        std::ofstream f(dir / "goods_tier0.csv");
+        f << IRON_GOODS_CSV;
+    }
+    GoodsCatalog goods;
+    REQUIRE(goods.load_from_directory(dir.string()));
+    return goods;
+}
+
+}  // namespace
+
+TEST_CASE("RecipeCatalog::validate_against_goods - clean catalog", "[module][production]") {
+    GoodsCatalog goods = load_iron_goods("econlife_test_recipe_validate_clean_goods");
+
+    // Single iron_smelting recipe; all good_ids exist in the goods catalog.
+    auto recipe_path = write_temp_csv(
+        "recipes_validate_clean.csv",
+        "recipe_key,facility_type_key,display_name,"
+        "input_1_key,input_1_qty,input_2_key,input_2_qty,"
+        "input_3_key,input_3_qty,input_4_key,input_4_qty,"
+        "output_1_key,output_1_qty,output_1_is_byproduct,"
+        "output_2_key,output_2_qty,output_2_is_byproduct,"
+        "labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available\n"
+        "iron_smelting,smelter,Iron Smelting,"
+        "iron_ore,5,coking_coal,2,,,,,"
+        "steel,3,0,,,0,"
+        "80,5.0,2,,1\n");
+    RecipeCatalog recipes;
+    REQUIRE(recipes.load_csv(recipe_path));
+
+    auto errors = recipes.validate_against_goods(goods);
+    CHECK(errors.empty());
+}
+
+TEST_CASE("RecipeCatalog::validate_against_goods - typo surfaces a clear error",
+          "[module][production]") {
+    GoodsCatalog goods = load_iron_goods("econlife_test_recipe_validate_typo_goods");
+
+    auto recipe_path = write_temp_csv("recipes_validate_typo.csv", TYPO_RECIPE_CSV);
+    RecipeCatalog recipes;
+    REQUIRE(recipes.load_csv(recipe_path));
+
+    auto errors = recipes.validate_against_goods(goods);
+
+    // Two missing good_ids: "wheet" (input) and "bread" (output, also absent
+    // from the iron-only goods catalog). Both must be reported by recipe key
+    // so the modder can find the offending CSV row.
+    REQUIRE(errors.size() == 2);
+    bool found_wheet = std::any_of(errors.begin(), errors.end(), [](const std::string& s) {
+        return s.find("broken_bake") != std::string::npos && s.find("wheet") != std::string::npos;
+    });
+    bool found_bread = std::any_of(errors.begin(), errors.end(), [](const std::string& s) {
+        return s.find("broken_bake") != std::string::npos && s.find("bread") != std::string::npos;
+    });
+    CHECK(found_wheet);
+    CHECK(found_bread);
 }

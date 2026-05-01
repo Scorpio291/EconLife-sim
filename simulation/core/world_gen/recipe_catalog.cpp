@@ -8,6 +8,8 @@
 #include <fstream>
 #include <sstream>
 
+#include "core/world_gen/goods_catalog.h"
+
 namespace econlife {
 
 // ---------------------------------------------------------------------------
@@ -226,6 +228,25 @@ std::vector<const Recipe*> RecipeCatalog::recipes_available_at(uint8_t era) cons
         }
     }
     return result;
+}
+
+std::vector<std::string> RecipeCatalog::validate_against_goods(const GoodsCatalog& goods) const {
+    std::vector<std::string> errors;
+    for (const auto& recipe : recipes_) {
+        for (const auto& input : recipe.inputs) {
+            if (goods.find(input.good_id) == nullptr) {
+                errors.push_back("recipe '" + recipe.id + "' references unknown input good_id '" +
+                                 input.good_id + "'");
+            }
+        }
+        for (const auto& output : recipe.outputs) {
+            if (goods.find(output.good_id) == nullptr) {
+                errors.push_back("recipe '" + recipe.id + "' references unknown output good_id '" +
+                                 output.good_id + "'");
+            }
+        }
+    }
+    return errors;
 }
 
 }  // namespace econlife

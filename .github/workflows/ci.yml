@@ -32,6 +32,9 @@ jobs:
       - name: Run scenario tests
         run: ctest --test-dir build -C ${{ matrix.build_type }} -L "scenario" --output-on-failure
 
+      - name: Run integration tests
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "integration" --output-on-failure
+
   dependency-direction-lint:
     runs-on: ubuntu-latest
     steps:

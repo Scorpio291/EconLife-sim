@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/good_id_hash.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -31,12 +32,7 @@ namespace econlife {
 // ===========================================================================
 
 uint32_t SeasonalAgricultureModule::good_id_from_string(const std::string& good_id_str) {
-    // Same deterministic hash as ProductionModule for V1 prototype consistency.
-    uint32_t hash = 0;
-    for (char c : good_id_str) {
-        hash = hash * 31 + static_cast<uint32_t>(c);
-    }
-    return hash;
+    return good_id_hash(good_id_str);
 }
 
 bool SeasonalAgricultureModule::is_annual_cycle(CropCategory category) {

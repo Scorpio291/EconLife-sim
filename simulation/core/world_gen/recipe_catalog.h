@@ -13,6 +13,8 @@
 
 namespace econlife {
 
+class GoodsCatalog;
+
 class RecipeCatalog {
    public:
     // Load all recipes_*.csv files from the given directory.
@@ -37,6 +39,13 @@ class RecipeCatalog {
 
     // Find all recipes available at a given era.
     std::vector<const Recipe*> recipes_available_at(uint8_t era) const;
+
+    // Verify every input/output good_id in every recipe exists in the goods
+    // catalog. Returns a list of error messages, one per missing reference.
+    // Empty vector means valid. Intended to be called once at world generation
+    // after both catalogs have loaded — a typo in a recipe CSV would
+    // otherwise surface only as a silently-zero supply delta at runtime.
+    std::vector<std::string> validate_against_goods(const GoodsCatalog& goods) const;
 
    private:
     std::vector<Recipe> recipes_;

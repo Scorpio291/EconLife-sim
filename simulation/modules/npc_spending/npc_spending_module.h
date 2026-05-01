@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "core/config/package_config.h"
@@ -84,6 +85,10 @@ class NpcSpendingModule : public ITickModule {
    private:
     NpcSpendingConfig cfg_;
     std::vector<NPCBuyerProfile> buyer_profiles_;
+    // npc_id -> index into buyer_profiles_. Rebuilt lazily when its size
+    // diverges from buyer_profiles_, so external pushes through the
+    // accessor stay supported. Mutable so const get_buyer_type can refresh.
+    mutable std::unordered_map<uint32_t, std::size_t> buyer_profile_index_;
 
     // Find buyer type for an NPC. Returns necessity_buyer if no profile found.
     BuyerType get_buyer_type(uint32_t npc_id) const;

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/good_id_hash.h"
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -18,12 +19,7 @@ namespace econlife {
 // ===========================================================================
 
 uint32_t SupplyChainModule::good_id_from_string(const std::string& good_id_str) {
-    // Deterministic hash — must match ProductionModule::good_id_from_string.
-    uint32_t hash = 0;
-    for (char c : good_id_str) {
-        hash = hash * 31 + static_cast<uint32_t>(c);
-    }
-    return hash;
+    return good_id_hash(good_id_str);
 }
 
 uint32_t SupplyChainModule::compute_transit_ticks(const RouteProfile& route, float mode_speed,
@@ -288,9 +284,11 @@ void SupplyChainModule::dispatch_inter_province(uint32_t province_id, const Worl
             arrival_item.subject_id = shipment_id;
             arrival_item.payload = TransitPayload{shipment_id, province_id};
 
-            // Push to cross-province delta buffer for one-tick delay semantics.
-            // The market supply at the destination will increase when the
-            // shipment arrives.
+            // Push to cross-province delta buffer for transit-delay semantics.
+            // The market supply at the destination increases when the shipment
+            // arrives at due_tick. The orchestrator merges province deltas into
+            // WorldState.cross_province_delta_buffer; apply_cross_province_deltas
+            // releases entries on the tick that matches due_tick.
             CrossProvinceDelta cpd{};
             cpd.source_province_id = src;
             cpd.target_province_id = province_id;
@@ -302,15 +300,7 @@ void SupplyChainModule::dispatch_inter_province(uint32_t province_id, const Worl
             arrival_market_delta.supply_delta = ship_qty;
             cpd.market_delta = arrival_market_delta;
 
-            // Note: const WorldState — we cannot push directly.
-            // In the real orchestrator, the cross_province_delta_buffer
-            // is writable. For the V1 prototype, we record the market
-            // delta directly in the DeltaBuffer, tagged for future-tick
-            // application. The orchestrator handles the timing.
-            //
-            // For testability, emit the supply delta as a cross-province
-            // entry. The test framework can verify the delta was created.
-            delta.market_deltas.push_back(arrival_market_delta);
+            delta.cross_province_deltas.push_back(cpd);
 
             remaining -= ship_qty;
         }
