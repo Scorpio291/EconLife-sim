@@ -1344,7 +1344,9 @@ TEST_CASE("WorldGenerator - write_world_json creates file on disk", "[world_gen]
 
     auto world = WorldGenerator::generate(config);
 
-    std::string tmp_path = "/tmp/econlife_test_world_" + std::to_string(config.seed) + ".json";
+    std::string tmp_path = (fs::temp_directory_path() /
+                            ("econlife_test_world_" + std::to_string(config.seed) + ".json"))
+                               .string();
     WorldGenerator::write_world_json(world, tmp_path);
 
     // File should exist and be valid JSON.
@@ -1399,7 +1401,7 @@ TEST_CASE("WorldGenerator - JSON nation fields are present", "[world_gen][json_o
 
 TEST_CASE("WorldGenerator - output_world_file config writes during generate",
           "[world_gen][json_output]") {
-    std::string tmp_path = "/tmp/econlife_test_auto_output.json";
+    std::string tmp_path = (fs::temp_directory_path() / "econlife_test_auto_output.json").string();
     fs::remove(tmp_path);  // clean up any prior run
 
     WorldGeneratorConfig config{};
@@ -3694,7 +3696,8 @@ TEST_CASE("WorldGeneratorConfig: default planetary_params are Earth-analog",
     CHECK(config.planetary_params.hydrology_mode == HydrologyMode::Active);
 }
 
-TEST_CASE("WorldGeneratorConfig: default scenario params match spec §11", "[world_gen][scenario]") {
+TEST_CASE("WorldGeneratorConfig: default scenario params match spec section 11",
+          "[world_gen][scenario]") {
     WorldGeneratorConfig config{};
 
     CHECK(config.tectonic_plate_count == 6);
