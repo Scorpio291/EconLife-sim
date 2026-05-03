@@ -46,7 +46,8 @@ float SupplyChainModule::compute_transport_cost(const RouteProfile& route, float
     float terrain_factor =
         1.0f + route.route_terrain_roughness * SupplyChainModuleConfig{}.terrain_cost_coeff;
 
-    return SupplyChainModuleConfig{}.base_transport_rate * route.distance_km * quantity * terrain_factor;
+    return SupplyChainModuleConfig{}.base_transport_rate * route.distance_km * quantity *
+           terrain_factor;
 }
 
 // ===========================================================================
@@ -260,8 +261,7 @@ void SupplyChainModule::dispatch_inter_province(uint32_t province_id, const Worl
 
             // Compute transit time.
             float infra = state.provinces[src].infrastructure_rating;
-            uint32_t transit_ticks =
-                compute_transit_ticks(route, scfg_.road_speed, infra);
+            uint32_t transit_ticks = compute_transit_ticks(route, scfg_.road_speed, infra);
 
             // Deduct transport cost from shipper.
             NPCDelta cost_delta{};

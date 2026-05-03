@@ -72,7 +72,6 @@ struct PropertyListing {
 // These are compile-time defaults; runtime config overrides may be loaded
 // from simulation_config.json -> realestate.
 
-struct RealEstateConstants {
-};
+struct RealEstateConstants {};
 
 }  // namespace econlife

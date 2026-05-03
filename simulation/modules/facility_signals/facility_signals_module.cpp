@@ -38,7 +38,8 @@ float FacilitySignalsModule::compute_le_fill_rate(float regional_signal, float d
     return std::clamp(rate, 0.0f, fill_rate_max);
 }
 
-InvestigatorMeterStatus FacilitySignalsModule::evaluate_investigator_status(float current_level) const {
+InvestigatorMeterStatus FacilitySignalsModule::evaluate_investigator_status(
+    float current_level) const {
     if (current_level >= cfg_.raid_threshold)
         return InvestigatorMeterStatus::raid_imminent;
     if (current_level >= cfg_.formal_inquiry_threshold)

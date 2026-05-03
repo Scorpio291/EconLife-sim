@@ -144,12 +144,10 @@ uint32_t TradeInfrastructureModule::calculate_transit_ticks(const RouteProfile& 
     const float base_transit = route.distance_km / mode_speed;
 
     // Terrain delay multiplier: 1.0 + terrain_roughness * coeff.
-    const float terrain_delay =
-        1.0f + route.route_terrain_roughness * cfg_.terrain_delay_coeff;
+    const float terrain_delay = 1.0f + route.route_terrain_roughness * cfg_.terrain_delay_coeff;
 
     // Infrastructure delay multiplier: 1.0 + (1 - min_infrastructure) * coeff.
-    const float infra_delay =
-        1.0f + (1.0f - route.min_infrastructure) * cfg_.infra_delay_coeff;
+    const float infra_delay = 1.0f + (1.0f - route.min_infrastructure) * cfg_.infra_delay_coeff;
 
     // Final transit ticks: at least 1.
     const float raw = base_transit * terrain_delay * infra_delay;
@@ -180,8 +178,7 @@ bool TradeInfrastructureModule::check_interception(const TransitShipment& shipme
                                                    DeterministicRNG& rng) const {
     // Cap concealment modifier at the configured maximum.
     const float capped_concealment =
-        std::min(shipment.route_concealment_modifier,
-                 cfg_.max_concealment_modifier);
+        std::min(shipment.route_concealment_modifier, cfg_.max_concealment_modifier);
 
     // Effective risk per tick after concealment reduction.
     const float effective_risk = shipment.interception_risk_per_tick * (1.0f - capped_concealment);

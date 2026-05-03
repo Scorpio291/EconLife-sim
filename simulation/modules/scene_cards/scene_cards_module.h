@@ -20,8 +20,8 @@ struct DeltaBuffer;
 // risk_tolerance is already on [0.0, 1.0].
 //
 // Result: 0.0 = hostile/closed, 1.0 = open/cooperative.
-float compute_presentation_state(float trust, float risk_tolerance,
-                                 float trust_weight = 0.7f, float risk_weight = 0.3f);
+float compute_presentation_state(float trust, float risk_tolerance, float trust_weight = 0.7f,
+                                 float risk_weight = 0.3f);
 
 // Returns true if the given SceneSetting requires physical co-location
 // (player and NPC in the same province).

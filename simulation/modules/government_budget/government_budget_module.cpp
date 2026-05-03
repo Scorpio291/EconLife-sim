@@ -96,8 +96,8 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state,
         // --- Corporate tax ---
         // Sum revenue_per_tick * ticks_per_quarter * corporate_tax_rate
         // for all non-criminal businesses in this province.
-        float prov_corporate =
-            compute_corporate_tax(state.npc_businesses, corporate_tax_rate, prov.id, cfg_.ticks_per_quarter);
+        float prov_corporate = compute_corporate_tax(state.npc_businesses, corporate_tax_rate,
+                                                     prov.id, cfg_.ticks_per_quarter);
         national_corporate_tax += prov_corporate;
 
         // --- Income tax ---
@@ -371,9 +371,9 @@ void GovernmentBudgetModule::update_infrastructure(const WorldState& state, Delt
         float investment_scale =
             (area_km2 > 0.0f) ? area_km2 : cfg_.infrastructure_investment_scale;
 
-        float new_rating = compute_infrastructure_change(
-            province->infrastructure_rating, infra_spend,
-            cfg_.infrastructure_decay_per_quarter, investment_scale);
+        float new_rating =
+            compute_infrastructure_change(province->infrastructure_rating, infra_spend,
+                                          cfg_.infrastructure_decay_per_quarter, investment_scale);
 
         // Province.infrastructure_rating is const on WorldState; write the
         // net change as a stability_delta on the region that owns this
@@ -501,8 +501,7 @@ float GovernmentBudgetModule::compute_corporate_tax(const std::vector<NPCBusines
 
     float total = 0.0f;
     for (const NPCBusiness* biz : sorted) {
-        total +=
-            biz->revenue_per_tick * static_cast<float>(ticks_per_quarter) * tax_rate;
+        total += biz->revenue_per_tick * static_cast<float>(ticks_per_quarter) * tax_rate;
     }
     return total;
 }

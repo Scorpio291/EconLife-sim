@@ -23,9 +23,8 @@ namespace econlife {
 // Static utility functions
 // ===========================================================================
 
-float BankingModule::compute_interest_rate(float credit_score, bool has_collateral,
-                                           float base_rate, float risk_spread,
-                                           float collateral_discount) {
+float BankingModule::compute_interest_rate(float credit_score, bool has_collateral, float base_rate,
+                                           float risk_spread, float collateral_discount) {
     float rate = base_rate + (1.0f - credit_score) * risk_spread -
                  (has_collateral ? collateral_discount : 0.0f);
     if (rate < 0.0f) {
@@ -40,8 +39,7 @@ float BankingModule::compute_max_loan_amount(float revenue_per_tick,
 }
 
 bool BankingModule::evaluate_loan_application(float credit_score, float dti_ratio,
-                                              LoanPurpose purpose,
-                                              float denial_dti_threshold) {
+                                              LoanPurpose purpose, float denial_dti_threshold) {
     if (credit_score < min_credit_score_for_purpose(purpose)) {
         return false;
     }

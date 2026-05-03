@@ -77,15 +77,14 @@ class NpcBusinessModule : public ITickModule {
 
     // Evaluate a quarterly decision for a single business.
     // Returns the decision result. Uses RNG for probabilistic decisions.
-    BusinessDecisionResult evaluate_decision(const NPCBusiness& biz,
-                                             const BoardComposition* board,
+    BusinessDecisionResult evaluate_decision(const NPCBusiness& biz, const BoardComposition* board,
                                              DeterministicRNG& rng) const;
 
     // Check whether the board approves a decision.
     // Captured boards (independence < 0.25) always approve.
     // Independent boards (independence > 0.70) may block risky expansion.
-    bool check_board_approval(const BoardComposition* board,
-                              const BusinessDecisionResult& decision, DeterministicRNG& rng) const;
+    bool check_board_approval(const BoardComposition* board, const BusinessDecisionResult& decision,
+                              DeterministicRNG& rng) const;
 
     // Check if this tick is a decision tick for the given business.
     static bool is_decision_tick(const NPCBusiness& biz, uint32_t current_tick);

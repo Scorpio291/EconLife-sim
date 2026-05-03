@@ -65,11 +65,14 @@ TEST_CASE("test_normalize_trust_to_factor", "[evidence][tier6]") {
     constexpr float kMin = EvidenceConfig{}.trust_factor_min;
     constexpr float kMax = EvidenceConfig{}.trust_factor_max;
     // Negative trust -> minimum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(-0.5f, kMin, kMax), WithinAbs(0.1f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(-0.5f, kMin, kMax),
+                 WithinAbs(0.1f, 0.001f));
     // Zero trust -> minimum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(0.0f, kMin, kMax), WithinAbs(0.1f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(0.0f, kMin, kMax),
+                 WithinAbs(0.1f, 0.001f));
     // Full trust -> maximum factor
-    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(1.0f, kMin, kMax), WithinAbs(1.0f, 0.001f));
+    REQUIRE_THAT(EvidenceModule::normalize_trust_to_factor(1.0f, kMin, kMax),
+                 WithinAbs(1.0f, 0.001f));
     // Half trust -> mid factor
     float mid = EvidenceModule::normalize_trust_to_factor(0.5f, kMin, kMax);
     REQUIRE(mid > 0.1f);
@@ -160,9 +163,8 @@ TEST_CASE("test_criminal_business_generates_evidence", "[evidence][tier6]") {
             REQUIRE(token.target_npc_id == 10);
             REQUIRE(token.province_id == 0);
             REQUIRE(token.is_active == true);
-            REQUIRE_THAT(
-                token.actionability,
-                WithinAbs(EvidenceConfig{}.criminal_evidence_actionability, 0.01f));
+            REQUIRE_THAT(token.actionability,
+                         WithinAbs(EvidenceConfig{}.criminal_evidence_actionability, 0.01f));
             found_new_token = true;
         }
     }

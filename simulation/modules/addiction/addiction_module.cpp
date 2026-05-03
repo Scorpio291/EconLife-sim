@@ -71,7 +71,7 @@ AddictionStage AddictionModule::compute_next_stage(const AddictionState& state,
 }
 
 float AddictionModule::compute_withdrawal_damage(AddictionStage stage, uint32_t supply_gap_ticks,
-                                                  const AddictionConfig& cfg) {
+                                                 const AddictionConfig& cfg) {
     if (stage < AddictionStage::dependent)
         return 0.0f;
     if (supply_gap_ticks == 0)
@@ -214,8 +214,7 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         // High addiction rate degrades regional stability
         // Stability penalty proportional to how much the rate increased
         if (addiction_rate_delta > 0.0f) {
-            rdelta.stability_delta =
-                -addiction_rate_delta * cfg_.grievance_per_addict_fraction;
+            rdelta.stability_delta = -addiction_rate_delta * cfg_.grievance_per_addict_fraction;
         }
         province_delta.region_deltas.push_back(rdelta);
     }

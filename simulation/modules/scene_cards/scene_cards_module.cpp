@@ -33,8 +33,8 @@ bool is_in_person_setting(SceneSetting setting) {
     }
 }
 
-float compute_presentation_state(float trust, float risk_tolerance,
-                                 float trust_weight, float risk_weight) {
+float compute_presentation_state(float trust, float risk_tolerance, float trust_weight,
+                                 float risk_weight) {
     float trust_normalized = (trust + 1.0f) / 2.0f;
     float raw = trust_weight * trust_normalized + risk_weight * risk_tolerance;
     return std::clamp(raw, 0.0f, 1.0f);
@@ -294,40 +294,39 @@ void SceneCardsModule::apply_authored_priority(const WorldState& /* state */,
 
 void SceneCardsModule::finalize_new_cards(const WorldState& state, DeltaBuffer& delta,
                                           uint32_t player_id, uint32_t player_province) const {
-    auto it = std::remove_if(delta.new_scene_cards.begin(), delta.new_scene_cards.end(),
-                             [&](SceneCard& card) -> bool {
-                                 // --- Dead NPC check ---
-                                 if (card.npc_id != 0) {
-                                     const NPC* npc = find_npc(state, card.npc_id);
-                                     if (!npc || npc->status == NPCStatus::dead) {
-                                         return true;  // Discard
-                                     }
+    auto it = std::remove_if(
+        delta.new_scene_cards.begin(), delta.new_scene_cards.end(), [&](SceneCard& card) -> bool {
+            // --- Dead NPC check ---
+            if (card.npc_id != 0) {
+                const NPC* npc = find_npc(state, card.npc_id);
+                if (!npc || npc->status == NPCStatus::dead) {
+                    return true;  // Discard
+                }
 
-                                     // --- Physical presence check for in-person settings ---
-                                     if (is_in_person_setting(card.setting)) {
-                                         if (player_province != npc->current_province_id) {
-                                             return true;  // Not delivered; province mismatch
-                                         }
-                                     }
+                // --- Physical presence check for in-person settings ---
+                if (is_in_person_setting(card.setting)) {
+                    if (player_province != npc->current_province_id) {
+                        return true;  // Not delivered; province mismatch
+                    }
+                }
 
-                                     // --- Compute npc_presentation_state ---
-                                     // news_notification cards have no NPC portrait interaction;
-                                     // skip presentation state computation.
-                                     if (card.type != SceneCardType::news_notification) {
-                                         float trust = find_trust_toward_player(*npc, player_id);
-                                         card.npc_presentation_state =
-                                             compute_presentation_state(trust, npc->risk_tolerance,
-                                                                        cfg_.trust_weight, cfg_.risk_weight);
-                                     } else {
-                                         card.npc_presentation_state = 0.0f;
-                                     }
-                                 } else {
-                                     // No NPC associated (e.g., pure news notification).
-                                     card.npc_presentation_state = 0.0f;
-                                 }
+                // --- Compute npc_presentation_state ---
+                // news_notification cards have no NPC portrait interaction;
+                // skip presentation state computation.
+                if (card.type != SceneCardType::news_notification) {
+                    float trust = find_trust_toward_player(*npc, player_id);
+                    card.npc_presentation_state = compute_presentation_state(
+                        trust, npc->risk_tolerance, cfg_.trust_weight, cfg_.risk_weight);
+                } else {
+                    card.npc_presentation_state = 0.0f;
+                }
+            } else {
+                // No NPC associated (e.g., pure news notification).
+                card.npc_presentation_state = 0.0f;
+            }
 
-                                 return false;  // Keep card
-                             });
+            return false;  // Keep card
+        });
     delta.new_scene_cards.erase(it, delta.new_scene_cards.end());
 
     // Enforce per-tick cap on new cards.

@@ -62,11 +62,11 @@ class EvidenceModule : public ITickModule {
     // Compute propagation confidence when evidence is shared.
     // received_confidence = sharer_confidence * trust_factor
     static float compute_propagation_confidence(float sharer_confidence, float relationship_trust,
-                                                    float trust_factor_min, float trust_factor_max);
+                                                float trust_factor_min, float trust_factor_max);
 
     // Normalize relationship trust [-1.0, 1.0] to trust factor [0.1, 1.0].
     static float normalize_trust_to_factor(float trust, float trust_factor_min,
-                                              float trust_factor_max);
+                                           float trust_factor_max);
 
     // Check if NPC can share evidence with player based on trust threshold.
     static bool can_share_with_player(float trust, float share_threshold);

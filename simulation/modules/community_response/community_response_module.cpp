@@ -166,9 +166,9 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
                     compute_grievance_contribution(npc->memory_log, cfg_.memory_decay_floor);
 
                 // Resource access
-                resource_sum += compute_resource_access_sample(
-                    npc->capital, cfg_.capital_normalizer, npc->social_capital,
-                    cfg_.social_normalizer);
+                resource_sum +=
+                    compute_resource_access_sample(npc->capital, cfg_.capital_normalizer,
+                                                   npc->social_capital, cfg_.social_normalizer);
             }
 
             float npc_count = static_cast<float>(province_npcs.size());
@@ -215,8 +215,8 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
 
         // Check regression cooldown.
         auto& pstate = province_states_[pi];
-        bool can_regress = (state.current_tick - pstate.last_stage_change_tick >=
-                            cfg_.regression_cooldown_ticks);
+        bool can_regress =
+            (state.current_tick - pstate.last_stage_change_tick >= cfg_.regression_cooldown_ticks);
 
         CommunityResponseStage new_stage =
             apply_stage_transition(static_cast<CommunityResponseStage>(current_stage), target,

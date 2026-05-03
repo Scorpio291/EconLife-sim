@@ -172,11 +172,11 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
                 break;
 
             case LaunderingMethod::trade_invoice:
-                generate_evidence =
-                    (state.current_tick >= op.started_tick) &&
-                    ((state.current_tick - op.started_tick) % cfg_.trade_invoice_evidence_interval ==
-                     0) &&
-                    ((state.current_tick - op.started_tick) > 0);
+                generate_evidence = (state.current_tick >= op.started_tick) &&
+                                    ((state.current_tick - op.started_tick) %
+                                         cfg_.trade_invoice_evidence_interval ==
+                                     0) &&
+                                    ((state.current_tick - op.started_tick) > 0);
                 evidence_type = EvidenceType::documentary;
                 break;
 
@@ -191,7 +191,8 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
             case LaunderingMethod::cash_commingling:
                 generate_evidence =
                     (state.current_tick >= op.started_tick) &&
-                    ((state.current_tick - op.started_tick) % cfg_.commingling_evidence_interval == 0) &&
+                    ((state.current_tick - op.started_tick) % cfg_.commingling_evidence_interval ==
+                     0) &&
                     ((state.current_tick - op.started_tick) > 0);
                 evidence_type = EvidenceType::testimonial;
                 break;

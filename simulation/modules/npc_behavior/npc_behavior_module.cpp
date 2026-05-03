@@ -518,9 +518,8 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
             if (mem.is_actionable && mem.decay > cfg_.memory_decay_floor) {
                 size_t target_idx = memory_type_to_outcome_index(mem.type);
                 if (target_idx < shifted_motivations.weights.size()) {
-                    shifted_motivations.weights[target_idx] += cfg_.motivation_shift_rate *
-                                                               std::abs(mem.emotional_weight) *
-                                                               mem.decay;
+                    shifted_motivations.weights[target_idx] +=
+                        cfg_.motivation_shift_rate * std::abs(mem.emotional_weight) * mem.decay;
                 }
             }
         }

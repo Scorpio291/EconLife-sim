@@ -367,8 +367,8 @@ TEST_CASE("test_market_value_multiplier_clamped_to_minimum", "[real_estate][tier
 TEST_CASE("test_residential_yield_rate", "[real_estate][tier4]") {
     RealEstateModule mod;
     float market_value = 100000.0f;
-    float rental = mod.compute_rental_income(
-        market_value, RealEstateConfig{}.residential_yield_rate);
+    float rental =
+        mod.compute_rental_income(market_value, RealEstateConfig{}.residential_yield_rate);
 
     // 100,000 * 0.003 = 300.0
     REQUIRE_THAT(rental, WithinAbs(300.0f, 0.01f));
@@ -377,8 +377,8 @@ TEST_CASE("test_residential_yield_rate", "[real_estate][tier4]") {
 TEST_CASE("test_commercial_yield_rate", "[real_estate][tier4]") {
     RealEstateModule mod;
     float market_value = 100000.0f;
-    float rental = mod.compute_rental_income(
-        market_value, RealEstateConfig{}.commercial_yield_rate);
+    float rental =
+        mod.compute_rental_income(market_value, RealEstateConfig{}.commercial_yield_rate);
 
     // 100,000 * 0.004 = 400.0
     REQUIRE_THAT(rental, WithinAbs(400.0f, 0.01f));
@@ -387,8 +387,8 @@ TEST_CASE("test_commercial_yield_rate", "[real_estate][tier4]") {
 TEST_CASE("test_industrial_yield_rate", "[real_estate][tier4]") {
     RealEstateModule mod;
     float market_value = 100000.0f;
-    float rental = mod.compute_rental_income(
-        market_value, RealEstateConfig{}.industrial_yield_rate);
+    float rental =
+        mod.compute_rental_income(market_value, RealEstateConfig{}.industrial_yield_rate);
 
     // 100,000 * 0.005 = 500.0
     REQUIRE_THAT(rental, WithinAbs(500.0f, 0.01f));
@@ -396,10 +396,8 @@ TEST_CASE("test_industrial_yield_rate", "[real_estate][tier4]") {
 
 TEST_CASE("test_industrial_yield_higher_than_commercial_higher_than_residential",
           "[real_estate][tier4]") {
-    REQUIRE(RealEstateConfig{}.industrial_yield_rate >
-            RealEstateConfig{}.commercial_yield_rate);
-    REQUIRE(RealEstateConfig{}.commercial_yield_rate >
-            RealEstateConfig{}.residential_yield_rate);
+    REQUIRE(RealEstateConfig{}.industrial_yield_rate > RealEstateConfig{}.commercial_yield_rate);
+    REQUIRE(RealEstateConfig{}.commercial_yield_rate > RealEstateConfig{}.residential_yield_rate);
 }
 
 // ===========================================================================

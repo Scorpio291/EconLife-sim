@@ -50,11 +50,11 @@ bool SeasonalAgricultureModule::is_annual_cycle(CropCategory category) {
     return false;  // unreachable; silences MSVC warning
 }
 
-uint32_t SeasonalAgricultureModule::effective_tick_of_year(uint32_t current_tick, float latitude) const {
+uint32_t SeasonalAgricultureModule::effective_tick_of_year(uint32_t current_tick,
+                                                           float latitude) const {
     uint32_t tick_of_year = current_tick % cfg_.ticks_per_year;
     if (latitude < 0.0f) {
-        tick_of_year = (tick_of_year + cfg_.southern_hemisphere_offset) %
-                       cfg_.ticks_per_year;
+        tick_of_year = (tick_of_year + cfg_.southern_hemisphere_offset) % cfg_.ticks_per_year;
     }
     return tick_of_year;
 }
@@ -68,16 +68,14 @@ float SeasonalAgricultureModule::compute_seasonal_multiplier(CropCategory catego
                           static_cast<float>(static_cast<int32_t>(tick_of_year) -
                                              static_cast<int32_t>(peak_tick)) /
                           static_cast<float>(cfg_.ticks_per_year);
-            return cfg_.perennial_base +
-                   cfg_.perennial_amplitude * std::cos(phase);
+            return cfg_.perennial_base + cfg_.perennial_amplitude * std::cos(phase);
         }
         case CropCategory::livestock: {
             float phase = 2.0f * static_cast<float>(LOCAL_PI) *
                           static_cast<float>(static_cast<int32_t>(tick_of_year) -
                                              static_cast<int32_t>(peak_tick)) /
                           static_cast<float>(cfg_.ticks_per_year);
-            return cfg_.livestock_base +
-                   cfg_.livestock_amplitude * std::cos(phase);
+            return cfg_.livestock_base + cfg_.livestock_amplitude * std::cos(phase);
         }
         case CropCategory::timber:
             return cfg_.timber_multiplier;
@@ -213,18 +211,16 @@ void SeasonalAgricultureModule::process_annual_facility(uint32_t facility_id,
     // Planting starts planting_duration_ticks before growing_season_start.
     uint32_t planting_start;
     if (fs.growing_season_start >= cfg_.planting_duration_ticks) {
-        planting_start =
-            fs.growing_season_start - cfg_.planting_duration_ticks;
+        planting_start = fs.growing_season_start - cfg_.planting_duration_ticks;
     } else {
         // Wrap around year boundary.
         planting_start =
-            cfg_.ticks_per_year -
-            (cfg_.planting_duration_ticks - fs.growing_season_start);
+            cfg_.ticks_per_year - (cfg_.planting_duration_ticks - fs.growing_season_start);
     }
 
     // Harvest start tick-of-year.
-    uint32_t harvest_start = (fs.growing_season_start + fs.growing_season_length) %
-                             cfg_.ticks_per_year;
+    uint32_t harvest_start =
+        (fs.growing_season_start + fs.growing_season_length) % cfg_.ticks_per_year;
 
     // --- Climate modifiers ---
     // Use drought_modifier and flood_modifier from RegionConditions if available.
@@ -278,8 +274,7 @@ void SeasonalAgricultureModule::process_annual_facility(uint32_t facility_id,
             // Monoculture penalty: if years_same_crop >= threshold, degrade soil.
             if (fs.years_same_crop >= cfg_.monoculture_penalty_threshold) {
                 soil_health -= cfg_.monoculture_soil_penalty_rate;
-                soil_health = std::max(cfg_.soil_health_min_monoculture,
-                                       soil_health);
+                soil_health = std::max(cfg_.soil_health_min_monoculture, soil_health);
             }
 
             fs.pending_harvest += daily_growth;

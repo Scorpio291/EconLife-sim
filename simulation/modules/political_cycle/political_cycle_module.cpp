@@ -52,8 +52,8 @@ float PoliticalCycleModule::compute_resource_modifier(float resource_deployment,
     return std::clamp(raw, -resource_max_effect, resource_max_effect);
 }
 
-float PoliticalCycleModule::compute_event_modifier_total(
-    const std::vector<float>& event_modifiers, float event_modifier_cap) {
+float PoliticalCycleModule::compute_event_modifier_total(const std::vector<float>& event_modifiers,
+                                                         float event_modifier_cap) {
     float total = 0.0f;
     for (float m : event_modifiers) {
         total += m;
@@ -93,11 +93,10 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
             if (campaign.resolved)
                 continue;
 
-            float event_total = compute_event_modifier_total(campaign.event_modifiers,
-                                                              cfg_.event_modifier_cap);
-            float resource_mod = compute_resource_modifier(campaign.resource_deployment,
-                                                           cfg_.resource_scale,
-                                                           cfg_.resource_max_effect);
+            float event_total =
+                compute_event_modifier_total(campaign.event_modifiers, cfg_.event_modifier_cap);
+            float resource_mod = compute_resource_modifier(
+                campaign.resource_deployment, cfg_.resource_scale, cfg_.resource_max_effect);
 
             // Compute raw share from campaign approval
             float raw_share = 0.5f;
@@ -168,9 +167,8 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
         if (proposal.vote_tick != state.current_tick)
             continue;
 
-        bool passed =
-            compute_vote_passed(proposal.votes_for, proposal.votes_against,
-                               cfg_.majority_threshold);
+        bool passed = compute_vote_passed(proposal.votes_for, proposal.votes_against,
+                                          cfg_.majority_threshold);
         proposal.status =
             passed ? LegislativeProposalStatus::enacted : LegislativeProposalStatus::failed;
     }

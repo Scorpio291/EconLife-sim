@@ -34,11 +34,10 @@ void apply_cost_cutter_strategy(const NPCBusiness& biz, BusinessDecisionResult& 
     if (cash_months < cfg.cash_critical_months) {
         result.contract = true;
         // Negative hiring_target_change = layoffs.
-        result.hiring_target_change = -static_cast<int32_t>(std::max(
-            1.0f, biz.cost_per_tick * cfg.cost_cutter_layoff_fraction * 10.0f));
+        result.hiring_target_change = -static_cast<int32_t>(
+            std::max(1.0f, biz.cost_per_tick * cfg.cost_cutter_layoff_fraction * 10.0f));
         // Cost reduction from layoffs.
-        result.cost_per_tick_delta =
-            biz.cost_per_tick * -cfg.cost_cutter_layoff_fraction;
+        result.cost_per_tick_delta = biz.cost_per_tick * -cfg.cost_cutter_layoff_fraction;
     }
 
     // If market share is below exit threshold, consider market exit.
@@ -88,8 +87,7 @@ void apply_quality_player_strategy(const NPCBusiness& biz, BusinessDecisionResul
     }
 
     // If profitable, consider modest expansion.
-    if (margin > cfg.expansion_return_threshold &&
-        cash_months >= cfg.cash_comfortable_months) {
+    if (margin > cfg.expansion_return_threshold && cash_months >= cfg.cash_comfortable_months) {
         result.expand = true;
         float expansion_spend = available_cash * 0.10f;
         result.cash_spent += expansion_spend;
@@ -274,8 +272,7 @@ const BoardComposition* NpcBusinessModule::get_board_composition(uint32_t busine
 float NpcBusinessModule::compute_working_capital_floor(const NPCBusiness& biz) const {
     // Working capital floor = cost_per_tick * dispatch_period * cash_surplus_months
     // Ensures the business retains enough cash for ongoing operations.
-    return biz.cost_per_tick * static_cast<float>(cfg_.dispatch_period) *
-           cfg_.cash_surplus_months;
+    return biz.cost_per_tick * static_cast<float>(cfg_.dispatch_period) * cfg_.cash_surplus_months;
 }
 
 float NpcBusinessModule::compute_available_cash(const NPCBusiness& biz) const {
@@ -332,11 +329,13 @@ BusinessDecisionResult NpcBusinessModule::evaluate_decision(const NPCBusiness& b
             break;
 
         case BusinessProfile::quality_player:
-            apply_quality_player_strategy(biz, result, margin, cash_months, available_cash, rng, cfg_);
+            apply_quality_player_strategy(biz, result, margin, cash_months, available_cash, rng,
+                                          cfg_);
             break;
 
         case BusinessProfile::fast_expander:
-            apply_fast_expander_strategy(biz, result, margin, cash_months, available_cash, rng, cfg_);
+            apply_fast_expander_strategy(biz, result, margin, cash_months, available_cash, rng,
+                                         cfg_);
             break;
 
         case BusinessProfile::defensive_incumbent:

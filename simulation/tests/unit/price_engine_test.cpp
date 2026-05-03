@@ -9,11 +9,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/config/package_config.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/price_engine/price_engine_module.h"
 #include "modules/price_engine/price_engine_types.h"
-#include "core/config/package_config.h"
 #include "modules/trade_infrastructure/trade_types.h"
 
 using namespace econlife;

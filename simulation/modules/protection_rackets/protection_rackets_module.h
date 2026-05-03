@@ -62,10 +62,10 @@ class ProtectionRacketsModule : public ITickModule {
 
     // Determine escalation stage from ticks overdue
     static RacketEscalationStage determine_escalation_stage(uint32_t ticks_overdue,
-                                                             uint32_t warning_threshold,
-                                                             uint32_t property_damage_threshold,
-                                                             uint32_t violence_threshold,
-                                                             uint32_t abandonment_threshold);
+                                                            uint32_t warning_threshold,
+                                                            uint32_t property_damage_threshold,
+                                                            uint32_t violence_threshold,
+                                                            uint32_t abandonment_threshold);
 
     // Check if business can pay demand
     static bool can_business_pay(float business_cash, float demand_per_tick);

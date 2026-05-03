@@ -26,13 +26,11 @@ class BusinessLifecycleModule : public ITickModule {
    public:
     explicit BusinessLifecycleModule(const BusinessLifecycleConfig& cfg) : cfg_(cfg) {}
 
-    std::string_view name()       const noexcept override { return "business_lifecycle"; }
+    std::string_view name() const noexcept override { return "business_lifecycle"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
-    ModuleScope      scope()      const noexcept override { return ModuleScope::v1; }
+    ModuleScope scope() const noexcept override { return ModuleScope::v1; }
 
-    std::vector<std::string_view> runs_after() const override {
-        return {"technology"};
-    }
+    std::vector<std::string_view> runs_after() const override { return {"technology"}; }
 
     std::vector<std::string_view> runs_before() const override {
         return {"npc_business", "production"};
@@ -50,8 +48,7 @@ class BusinessLifecycleModule : public ITickModule {
                                         uint8_t new_era) const;
 
     // Spawn new businesses in sectors that emerge with new_era.
-    void spawn_era_entrants(const WorldState& state, DeltaBuffer& delta,
-                            uint8_t new_era) const;
+    void spawn_era_entrants(const WorldState& state, DeltaBuffer& delta, uint8_t new_era) const;
 };
 
 }  // namespace econlife

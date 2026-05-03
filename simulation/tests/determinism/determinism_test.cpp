@@ -300,7 +300,8 @@ TEST_CASE("30-tick determinism with all base game modules", "[determinism][modul
     REQUIRE(final1 == final2);
 }
 
-TEST_CASE("30-tick determinism with modules across thread counts", "[determinism][modules][parallel]") {
+TEST_CASE("30-tick determinism with modules across thread counts",
+          "[determinism][modules][parallel]") {
     // Same modules, different thread pool sizes — verifies thread-safe determinism.
     PackageConfig config{};
 

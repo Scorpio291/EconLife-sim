@@ -421,16 +421,11 @@ TEST_CASE("test_module_interface_properties", "[trade_infrastructure][tier3]") {
 
 TEST_CASE("test_mode_speed_constants", "[trade_infrastructure][tier3]") {
     TradeInfrastructureModule module;
-    REQUIRE_THAT(module.speed_for_mode(TransportMode::road),
-                 WithinAbs(800.0f, 0.01f));
-    REQUIRE_THAT(module.speed_for_mode(TransportMode::rail),
-                 WithinAbs(700.0f, 0.01f));
-    REQUIRE_THAT(module.speed_for_mode(TransportMode::sea),
-                 WithinAbs(900.0f, 0.01f));
-    REQUIRE_THAT(module.speed_for_mode(TransportMode::river),
-                 WithinAbs(450.0f, 0.01f));
-    REQUIRE_THAT(module.speed_for_mode(TransportMode::air),
-                 WithinAbs(10000.0f, 0.01f));
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::road), WithinAbs(800.0f, 0.01f));
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::rail), WithinAbs(700.0f, 0.01f));
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::sea), WithinAbs(900.0f, 0.01f));
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::river), WithinAbs(450.0f, 0.01f));
+    REQUIRE_THAT(module.speed_for_mode(TransportMode::air), WithinAbs(10000.0f, 0.01f));
 }
 
 TEST_CASE("test_delay_coefficient_constants", "[trade_infrastructure][tier3]") {

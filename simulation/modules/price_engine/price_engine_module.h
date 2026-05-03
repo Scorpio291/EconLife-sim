@@ -28,7 +28,7 @@ struct GlobalCommodityPriceIndex;
 class PriceEngineModule : public ITickModule {
    public:
     explicit PriceEngineModule(const PriceModelConfig& cfg = {},
-                              const PriceEngineConfig& pe_cfg = {})
+                               const PriceEngineConfig& pe_cfg = {})
         : cfg_(cfg), pe_cfg_(pe_cfg) {}
 
     std::string_view name() const noexcept override { return "price_engine"; }

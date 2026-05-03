@@ -25,7 +25,6 @@ struct DrainConfig {
 
 // Pop all items where due_tick <= current_tick, execute them, and write
 // results to delta. Recurring items are pushed back onto the queue.
-void drain_deferred_work(WorldState& world, DeltaBuffer& delta,
-                         const DrainConfig& cfg = {});
+void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfig& cfg = {});
 
 }  // namespace econlife

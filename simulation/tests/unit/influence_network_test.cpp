@@ -12,17 +12,27 @@ const InfluenceNetworkConfig default_cfg{};
 }
 
 TEST_CASE("InfluenceNetwork: trust classification threshold", "[influence_network][tier10]") {
-    REQUIRE(InfluenceNetworkModule::is_trust_based(0.5f, default_cfg.trust_classification_threshold) == true);
-    REQUIRE(InfluenceNetworkModule::is_trust_based(0.3f, default_cfg.trust_classification_threshold) == false);
-    REQUIRE(InfluenceNetworkModule::is_trust_based(0.4f, default_cfg.trust_classification_threshold) == false);  // not strictly greater
+    REQUIRE(InfluenceNetworkModule::is_trust_based(
+                0.5f, default_cfg.trust_classification_threshold) == true);
+    REQUIRE(InfluenceNetworkModule::is_trust_based(
+                0.3f, default_cfg.trust_classification_threshold) == false);
+    REQUIRE(
+        InfluenceNetworkModule::is_trust_based(0.4f, default_cfg.trust_classification_threshold) ==
+        false);  // not strictly greater
 }
 
 TEST_CASE("InfluenceNetwork: fear classification requires low trust",
           "[influence_network][tier10]") {
     // fear > 0.35 AND trust < 0.20
-    REQUIRE(InfluenceNetworkModule::is_fear_based(0.4f, 0.1f, default_cfg.fear_classification_threshold, default_cfg.fear_trust_ceiling) == true);
-    REQUIRE(InfluenceNetworkModule::is_fear_based(0.4f, 0.3f, default_cfg.fear_classification_threshold, default_cfg.fear_trust_ceiling) == false);  // trust too high
-    REQUIRE(InfluenceNetworkModule::is_fear_based(0.2f, 0.1f, default_cfg.fear_classification_threshold, default_cfg.fear_trust_ceiling) == false);  // fear too low
+    REQUIRE(InfluenceNetworkModule::is_fear_based(0.4f, 0.1f,
+                                                  default_cfg.fear_classification_threshold,
+                                                  default_cfg.fear_trust_ceiling) == true);
+    REQUIRE(InfluenceNetworkModule::is_fear_based(
+                0.4f, 0.3f, default_cfg.fear_classification_threshold,
+                default_cfg.fear_trust_ceiling) == false);  // trust too high
+    REQUIRE(InfluenceNetworkModule::is_fear_based(
+                0.2f, 0.1f, default_cfg.fear_classification_threshold,
+                default_cfg.fear_trust_ceiling) == false);  // fear too low
 }
 
 TEST_CASE("InfluenceNetwork: classify relationship trust priority", "[influence_network][tier10]") {
@@ -96,8 +106,8 @@ TEST_CASE("InfluenceNetwork: composite health saturated counts", "[influence_net
 }
 
 TEST_CASE("InfluenceNetwork: obligation erosion rate", "[influence_network][tier10]") {
-    float erosion = InfluenceNetworkModule::compute_obligation_erosion(
-        default_cfg.obligation_erosion_rate);
+    float erosion =
+        InfluenceNetworkModule::compute_obligation_erosion(default_cfg.obligation_erosion_rate);
     REQUIRE_THAT(erosion, WithinAbs(-0.001f, 0.0001f));
 }
 

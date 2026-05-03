@@ -133,8 +133,7 @@ void FinancialDistributionModule::execute_province(uint32_t province_idx, const 
 
         // Quarterly processing (bonus, dividend) — only on quarter boundaries.
         bool is_quarter_tick =
-            (state.current_tick > 0) &&
-            (state.current_tick % cfg_.ticks_per_quarter == 0);
+            (state.current_tick > 0) && (state.current_tick % cfg_.ticks_per_quarter == 0);
 
         if (is_quarter_tick) {
             // Reset quarterly approval flags at quarter boundary.
@@ -313,8 +312,7 @@ void FinancialDistributionModule::process_owners_draw(const NPCBusiness& busines
         return;
 
     // Reset monthly draw accumulator if we've crossed a month boundary.
-    if (state.current_tick >=
-        record.draw_accumulator_reset_tick + cfg_.ticks_per_month) {
+    if (state.current_tick >= record.draw_accumulator_reset_tick + cfg_.ticks_per_month) {
         record.monthly_draw_accumulator = 0.0f;
         record.draw_accumulator_reset_tick = state.current_tick;
     }
@@ -345,8 +343,7 @@ void FinancialDistributionModule::process_owners_draw(const NPCBusiness& busines
     }
 
     // Check if monthly draw exceeds reporting threshold — generate evidence.
-    if (record.monthly_draw_accumulator >
-        cfg_.draw_reporting_threshold) {
+    if (record.monthly_draw_accumulator > cfg_.draw_reporting_threshold) {
         EvidenceDelta ev_delta{};
         EvidenceToken token{};
         token.id = business.id * 1000 + state.current_tick % 1000;  // deterministic ID
@@ -580,8 +577,7 @@ float FinancialDistributionModule::compute_quarterly_net_profit(float revenue_pe
 
 float FinancialDistributionModule::compute_working_capital_floor(float cost_per_tick) const {
     // Working capital floor = cost_per_tick * cash_surplus_months * ticks_per_month.
-    return cost_per_tick * cfg_.cash_surplus_months *
-           static_cast<float>(cfg_.ticks_per_month);
+    return cost_per_tick * cfg_.cash_surplus_months * static_cast<float>(cfg_.ticks_per_month);
 }
 
 bool FinancialDistributionModule::is_board_approved(const BoardComposition& board,

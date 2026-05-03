@@ -102,7 +102,8 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
             continue;
 
         float diversion_fraction = biz->regulatory_violation_severity * 0.5f;  // proxy
-        diversion_fraction = clamp_diversion_fraction(diversion_fraction, cfg_.max_diversion_fraction);
+        diversion_fraction =
+            clamp_diversion_fraction(diversion_fraction, cfg_.max_diversion_fraction);
 
         float diverted =
             compute_diversion_output(total_output, diversion_fraction, cfg_.max_diversion_fraction);

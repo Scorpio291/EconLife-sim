@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/config/package_config.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
-#include "core/config/package_config.h"
 #include "modules/criminal_operations/criminal_operations_module.h"
 
 using namespace econlife;
@@ -57,29 +57,34 @@ TEST_CASE("Cash level with zero cost", "[criminal_operations][tier7]") {
 }
 
 TEST_CASE("Decision: reduce activity on high heat", "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.70f, 0.20f, 1.0f, CriminalOperationsConfig{});
+    auto decision =
+        CriminalOperationsModule::evaluate_decision(0.70f, 0.20f, 1.0f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::reduce_activity);
 }
 
 TEST_CASE("Decision: initiate conflict on high pressure with cash",
           "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.65f, 1.5f, CriminalOperationsConfig{});
+    auto decision =
+        CriminalOperationsModule::evaluate_decision(0.20f, 0.65f, 1.5f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::initiate_conflict);
 }
 
 TEST_CASE("Decision: reduce headcount on low cash", "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.20f, 0.30f, CriminalOperationsConfig{});
+    auto decision = CriminalOperationsModule::evaluate_decision(0.20f, 0.20f, 0.30f,
+                                                                CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::reduce_headcount);
 }
 
 TEST_CASE("Decision: expand territory when safe", "[criminal_operations][tier7]") {
-    auto decision = CriminalOperationsModule::evaluate_decision(0.10f, 0.15f, 2.0f, CriminalOperationsConfig{});
+    auto decision =
+        CriminalOperationsModule::evaluate_decision(0.10f, 0.15f, 2.0f, CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::expand_territory);
 }
 
 TEST_CASE("Decision: maintain as default", "[criminal_operations][tier7]") {
     // Moderate pressure, moderate heat, sufficient cash
-    auto decision = CriminalOperationsModule::evaluate_decision(0.40f, 0.40f, 0.80f, CriminalOperationsConfig{});
+    auto decision = CriminalOperationsModule::evaluate_decision(0.40f, 0.40f, 0.80f,
+                                                                CriminalOperationsConfig{});
     CHECK(decision == CriminalStrategicDecision::maintain);
 }
 
@@ -114,7 +119,9 @@ TEST_CASE("Conflict stage escalation chain", "[criminal_operations][tier7]") {
 }
 
 TEST_CASE("Initial dominance seed value", "[criminal_operations][tier7]") {
-    CHECK_THAT(CriminalOperationsModule::initial_dominance_seed(CriminalOperationsConfig{}.expansion_initial_dominance), WithinAbs(0.05f, 0.001f));
+    CHECK_THAT(CriminalOperationsModule::initial_dominance_seed(
+                   CriminalOperationsConfig{}.expansion_initial_dominance),
+               WithinAbs(0.05f, 0.001f));
 }
 
 // =============================================================================

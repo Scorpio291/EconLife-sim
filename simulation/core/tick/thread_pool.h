@@ -60,7 +60,8 @@ class ThreadPool {
 
 template <typename F>
 void ThreadPool::parallel_for(uint32_t count, F&& task) {
-    if (count == 0) return;
+    if (count == 0)
+        return;
 
     // Single-threaded fast path: no synchronization overhead.
     if (num_threads_ <= 1) {

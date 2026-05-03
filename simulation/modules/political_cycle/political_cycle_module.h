@@ -29,8 +29,8 @@ class PoliticalCycleModule : public ITickModule {
     static float compute_raw_vote_share(
         const std::unordered_map<std::string, float>& approval_by_demographic,
         const std::vector<DemographicWeight>& demographics);
-    static float compute_resource_modifier(float resource_deployment,
-                                           float resource_scale, float resource_max_effect);
+    static float compute_resource_modifier(float resource_deployment, float resource_scale,
+                                           float resource_max_effect);
     static float compute_event_modifier_total(const std::vector<float>& event_modifiers,
                                               float event_modifier_cap);
     static float compute_final_vote_share(float raw_share, float resource_modifier,

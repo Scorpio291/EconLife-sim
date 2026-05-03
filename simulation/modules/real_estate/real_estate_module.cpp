@@ -144,8 +144,7 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
     }
     const auto& indices = it->second;
 
-    const bool is_monthly_tick =
-        (state.current_tick % cfg_.convergence_interval == 0);
+    const bool is_monthly_tick = (state.current_tick % cfg_.convergence_interval == 0);
 
     // Locate the province for market value computation.
     const Province* province = nullptr;

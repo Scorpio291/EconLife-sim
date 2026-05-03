@@ -3,10 +3,10 @@
 #include <cmath>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
-#include "core/config/package_config.h"
 #include "modules/community_response/community_response_module.h"
 
 using Catch::Matchers::WithinAbs;
@@ -346,8 +346,7 @@ TEST_CASE("test_stage_transition_informal_to_organized", "[community_response][t
 
 TEST_CASE("test_economic_resistance_revenue_penalty", "[community_response][tier6]") {
     // Verify the constant is defined correctly
-    REQUIRE_THAT(CommunityResponseConfig{}.resistance_revenue_penalty,
-                 WithinAbs(-0.15f, 0.001f));
+    REQUIRE_THAT(CommunityResponseConfig{}.resistance_revenue_penalty, WithinAbs(-0.15f, 0.001f));
 }
 
 TEST_CASE("test_historical_trauma_sets_floors", "[community_response][tier6]") {
@@ -355,10 +354,8 @@ TEST_CASE("test_historical_trauma_sets_floors", "[community_response][tier6]") {
     // grievance floor = 0.60 * 0.25 = 0.15
     // trust ceiling = 1.0 - 0.60 * 0.30 = 0.82
     float trauma = 0.60f;
-    float grievance_floor =
-        trauma * CommunityResponseConfig{}.trauma_grievance_floor_scale;
-    float trust_ceiling =
-        1.0f - trauma * CommunityResponseConfig{}.trauma_trust_ceiling_scale;
+    float grievance_floor = trauma * CommunityResponseConfig{}.trauma_grievance_floor_scale;
+    float trust_ceiling = 1.0f - trauma * CommunityResponseConfig{}.trauma_trust_ceiling_scale;
 
     REQUIRE_THAT(grievance_floor, WithinAbs(0.15f, 0.001f));
     REQUIRE_THAT(trust_ceiling, WithinAbs(0.82f, 0.001f));
