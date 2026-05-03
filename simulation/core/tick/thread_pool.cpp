@@ -8,7 +8,8 @@ namespace econlife {
 ThreadPool::ThreadPool(uint32_t num_threads) : num_threads_(num_threads) {
     // Only spawn worker threads when num_threads > 1.
     // With num_threads == 1, parallel_for runs inline on the caller.
-    if (num_threads_ <= 1) return;
+    if (num_threads_ <= 1)
+        return;
 
     workers_.reserve(num_threads_);
     for (uint32_t i = 0; i < num_threads_; ++i) {
@@ -54,7 +55,8 @@ void ThreadPool::worker_loop() {
         {
             std::unique_lock<std::mutex> lock(mutex_);
             cv_.wait(lock, [this]() { return stop_ || !tasks_.empty(); });
-            if (stop_ && tasks_.empty()) return;
+            if (stop_ && tasks_.empty())
+                return;
             task = std::move(tasks_.front());
             tasks_.pop();
         }

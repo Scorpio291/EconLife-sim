@@ -115,8 +115,8 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         float spot_price = 100.0f;  // proxy
         float revenue = 0.0f;
         if (tier == DrugMarketTier::wholesale) {
-            revenue =
-                production_output * compute_wholesale_price(spot_price, cfg_.wholesale_price_fraction);
+            revenue = production_output *
+                      compute_wholesale_price(spot_price, cfg_.wholesale_price_fraction);
         } else {
             revenue = production_output * spot_price;
         }

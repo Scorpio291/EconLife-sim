@@ -56,15 +56,13 @@ float CriminalOperationsModule::compute_le_heat(const CriminalOrganization& org,
     return max_heat;
 }
 
-CriminalStrategicDecision CriminalOperationsModule::evaluate_decision(float le_heat,
-                                                                      float territory_pressure,
-                                                                      float cash_level,
-                                                                      const CriminalOperationsConfig& cfg) {
+CriminalStrategicDecision CriminalOperationsModule::evaluate_decision(
+    float le_heat, float territory_pressure, float cash_level,
+    const CriminalOperationsConfig& cfg) {
     if (le_heat >= cfg.le_heat_threshold) {
         return CriminalStrategicDecision::reduce_activity;
     }
-    if (territory_pressure >= cfg.territory_pressure_conflict_threshold &&
-        cash_level >= 1.0f) {
+    if (territory_pressure >= cfg.territory_pressure_conflict_threshold && cash_level >= 1.0f) {
         return CriminalStrategicDecision::initiate_conflict;
     }
     if (cash_level < cfg.cash_low_threshold) {
@@ -77,7 +75,8 @@ CriminalStrategicDecision CriminalOperationsModule::evaluate_decision(float le_h
     return CriminalStrategicDecision::maintain;
 }
 
-uint8_t CriminalOperationsModule::compute_decision_offset(uint32_t org_id, uint32_t quarterly_interval) {
+uint8_t CriminalOperationsModule::compute_decision_offset(uint32_t org_id,
+                                                          uint32_t quarterly_interval) {
     return static_cast<uint8_t>(org_id % quarterly_interval);
 }
 
@@ -146,10 +145,10 @@ void CriminalOperationsModule::process_strategic_decision(CriminalOrganization& 
         }
     }
 
-    float cash_level =
-        compute_cash_level(org.cash, monthly_cost, cfg_.cash_comfortable_months);
+    float cash_level = compute_cash_level(org.cash, monthly_cost, cfg_.cash_comfortable_months);
 
-    CriminalStrategicDecision decision = evaluate_decision(le_heat, territory_pressure, cash_level, cfg_);
+    CriminalStrategicDecision decision =
+        evaluate_decision(le_heat, territory_pressure, cash_level, cfg_);
 
     switch (decision) {
         case CriminalStrategicDecision::reduce_activity: {

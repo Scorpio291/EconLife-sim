@@ -29,15 +29,15 @@ class TechnologyModule : public ITickModule {
 
     // Config constructor: maps RndConfig fields to TechnologyConfig.
     explicit TechnologyModule(const RndConfig& rnd) {
-        config_.maturation_rate_coeff         = rnd.maturation_rate_coeff;
+        config_.maturation_rate_coeff = rnd.maturation_rate_coeff;
         config_.maturation_difficulty_per_level = rnd.maturation_difficulty_per_level;
-        config_.base_research_success_rate    = rnd.base_research_success_rate;
-        config_.domain_knowledge_bonus_coeff  = rnd.domain_knowledge_bonus_coeff;
+        config_.base_research_success_rate = rnd.base_research_success_rate;
+        config_.domain_knowledge_bonus_coeff = rnd.domain_knowledge_bonus_coeff;
         config_.unexpected_discovery_probability = rnd.unexpected_discovery_probability;
-        config_.patent_preemption_check_rate  = rnd.patent_preemption_check_rate;
-        config_.knowledge_decay_rate          = rnd.knowledge_decay_rate;
-        config_.era_transition_threshold      = rnd.era_transition_threshold;
-        config_.patent_duration_ticks         = rnd.patent_duration_ticks;
+        config_.patent_preemption_check_rate = rnd.patent_preemption_check_rate;
+        config_.knowledge_decay_rate = rnd.knowledge_decay_rate;
+        config_.era_transition_threshold = rnd.era_transition_threshold;
+        config_.patent_duration_ticks = rnd.patent_duration_ticks;
     }
 
     std::string_view name() const noexcept override { return "technology"; }

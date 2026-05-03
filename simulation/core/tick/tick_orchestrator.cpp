@@ -14,7 +14,6 @@
 #include <unordered_set>
 
 #include "core/config/package_config.h"
-
 #include "core/tick/drain_deferred_work.h"
 #include "core/tick/thread_pool.h"
 #include "core/world_state/apply_deltas.h"
@@ -152,8 +151,7 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
     // Supply decay prevents unbounded accumulation when production exceeds
     // consumption. The decay rate is configurable (default 2% per tick).
     // This models spoilage, obsolescence, and wastage.
-    const float surplus_decay_rate =
-        config_ ? config_->supply_chain.surplus_decay_rate : 0.02f;
+    const float surplus_decay_rate = config_ ? config_->supply_chain.surplus_decay_rate : 0.02f;
     for (auto& m : state.regional_markets) {
         m.demand_buffer = 0.0f;
         if (m.supply > 0.0f) {
@@ -170,7 +168,8 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
         DeltaBuffer dwq_delta;
         DrainConfig dcfg;
         if (config_) {
-            dcfg.relationship_decay_interval = config_->consequence_delays.relationship_decay_interval;
+            dcfg.relationship_decay_interval =
+                config_->consequence_delays.relationship_decay_interval;
             dcfg.evidence_decay_interval = config_->consequence_delays.evidence_decay_interval;
             dcfg.trust_decay_rate_per_batch = config_->relationships.trust_decay_rate_per_batch;
             dcfg.fear_decay_rate_per_batch = config_->relationships.fear_decay_rate_per_batch;

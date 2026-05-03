@@ -37,9 +37,7 @@ class NpcSpendingModule : public ITickModule {
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
     bool is_province_parallel() const noexcept override { return true; }
 
-    std::vector<std::string_view> runs_after() const override {
-        return {"supply_chain"};
-    }
+    std::vector<std::string_view> runs_after() const override { return {"supply_chain"}; }
 
     std::vector<std::string_view> runs_before() const override { return {"price_engine"}; }
 

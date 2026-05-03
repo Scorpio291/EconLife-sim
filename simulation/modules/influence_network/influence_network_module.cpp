@@ -34,13 +34,10 @@ InfluenceType InfluenceNetworkModule::classify_relationship(float trust, float f
     return InfluenceType::obligation_based;
 }
 
-float InfluenceNetworkModule::compute_composite_health(uint32_t trust_count, uint32_t fear_count,
-                                                       uint32_t obligation_count,
-                                                       uint32_t movement_count,
-                                                       uint32_t health_target_count,
-                                                       float trust_weight, float obligation_weight,
-                                                       float fear_weight, float movement_weight,
-                                                       float diversity_bonus) {
+float InfluenceNetworkModule::compute_composite_health(
+    uint32_t trust_count, uint32_t fear_count, uint32_t obligation_count, uint32_t movement_count,
+    uint32_t health_target_count, float trust_weight, float obligation_weight, float fear_weight,
+    float movement_weight, float diversity_bonus) {
     float target = static_cast<float>(health_target_count);
 
     float trust_component = std::min(1.0f, static_cast<float>(trust_count) / target);
@@ -133,11 +130,10 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
 
         // Counterpart NPC: motivation_delta reflects continued influence hold
         // (fear-based obligations reinforce compliance motivation)
-        InfluenceType inf_type =
-            classify_relationship(current_rel->trust, current_rel->fear,
-                                  current_rel->is_movement_ally,
-                                  cfg_.trust_classification_threshold,
-                                  cfg_.fear_classification_threshold, cfg_.fear_trust_ceiling);
+        InfluenceType inf_type = classify_relationship(
+            current_rel->trust, current_rel->fear, current_rel->is_movement_ally,
+            cfg_.trust_classification_threshold, cfg_.fear_classification_threshold,
+            cfg_.fear_trust_ceiling);
         if (inf_type == InfluenceType::fear_based || inf_type == InfluenceType::obligation_based) {
             NPCDelta counterpart_nd;
             counterpart_nd.npc_id = counterpart_npc_id;
@@ -174,10 +170,9 @@ void InfluenceNetworkModule::execute(const WorldState& state, DeltaBuffer& delta
 
         // Write motivation_delta for NPCs in trust-based relationships: they
         // receive a small positive nudge reflecting the player's influence.
-        InfluenceType inf_type =
-            classify_relationship(rel.trust, rel.fear, rel.is_movement_ally,
-                                  cfg_.trust_classification_threshold,
-                                  cfg_.fear_classification_threshold, cfg_.fear_trust_ceiling);
+        InfluenceType inf_type = classify_relationship(
+            rel.trust, rel.fear, rel.is_movement_ally, cfg_.trust_classification_threshold,
+            cfg_.fear_classification_threshold, cfg_.fear_trust_ceiling);
         if (inf_type == InfluenceType::trust_based) {
             NPCDelta nd;
             nd.npc_id = rel.target_npc_id;

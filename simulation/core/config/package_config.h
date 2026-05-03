@@ -257,15 +257,15 @@ struct NpcBusinessConfig {
 // Loaded from business_lifecycle.json.
 // ---------------------------------------------------------------------------
 struct StrandedSectorEntry {
-    BusinessSector sector        = BusinessSector::energy;
-    float          revenue_penalty = 0.0f;  // fractional reduction on revenue_per_tick
-    float          cost_increase   = 0.0f;  // fractional increase on cost_per_tick
+    BusinessSector sector = BusinessSector::energy;
+    float revenue_penalty = 0.0f;  // fractional reduction on revenue_per_tick
+    float cost_increase = 0.0f;    // fractional increase on cost_per_tick
 };
 
 struct EmergingSectorEntry {
-    BusinessSector  sector         = BusinessSector::technology;
-    float           spawn_fraction = 0.0f;  // fraction of province biz count to spawn
-    BusinessProfile profile        = BusinessProfile::fast_expander;
+    BusinessSector sector = BusinessSector::technology;
+    float spawn_fraction = 0.0f;  // fraction of province biz count to spawn
+    BusinessProfile profile = BusinessProfile::fast_expander;
 };
 
 struct BusinessLifecycleConfig {

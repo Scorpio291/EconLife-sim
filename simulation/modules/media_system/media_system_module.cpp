@@ -281,9 +281,9 @@ void MediaSystemModule::propagate_stories(const WorldState& state, DeltaBuffer& 
             if (outlet.province_id != story_province)
                 continue;
 
-            float social_amp = compute_social_amplification(
-                story.amplification, outlet.reach, cfg_.social_amplification_multiplier,
-                story.evidence_weight);
+            float social_amp = compute_social_amplification(story.amplification, outlet.reach,
+                                                            cfg_.social_amplification_multiplier,
+                                                            story.evidence_weight);
             story.amplification += social_amp;
         }
     }

@@ -10,8 +10,7 @@
 namespace econlife {
 
 float CurrencyExchangeModule::compute_macro_factor(float trade_balance, float inflation,
-                                                   float credit_rating,
-                                                   float trade_balance_weight,
+                                                   float credit_rating, float trade_balance_weight,
                                                    float inflation_weight,
                                                    float sovereign_risk_weight) {
     return 1.0f + (trade_balance * trade_balance_weight) - (inflation * inflation_weight) -
@@ -77,9 +76,9 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
             }
         }
 
-        float macro_factor = compute_macro_factor(trade_balance, inflation, credit_rating,
-                                                    cfg_.trade_balance_weight, cfg_.inflation_weight,
-                                                    cfg_.sovereign_risk_weight);
+        float macro_factor =
+            compute_macro_factor(trade_balance, inflation, credit_rating, cfg_.trade_balance_weight,
+                                 cfg_.inflation_weight, cfg_.sovereign_risk_weight);
 
         // Add noise term using DeterministicRNG for this nation.
         float noise = 0.0f;

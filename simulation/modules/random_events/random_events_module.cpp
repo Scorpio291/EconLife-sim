@@ -99,10 +99,9 @@ void RandomEventsModule::execute_province(uint32_t province_idx, const WorldStat
 void RandomEventsModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Prune expired events (end_tick == 0) so active_events_ does not grow without bound.
     // This runs single-threaded, so the erase is safe.
-    active_events_.erase(
-        std::remove_if(active_events_.begin(), active_events_.end(),
-                       [](const ActiveRandomEvent& e) { return e.end_tick == 0; }),
-        active_events_.end());
+    active_events_.erase(std::remove_if(active_events_.begin(), active_events_.end(),
+                                        [](const ActiveRandomEvent& e) { return e.end_tick == 0; }),
+                         active_events_.end());
 
     // Process each province sequentially. Previously this module was incorrectly
     // marked province-parallel, which caused a data race: concurrent execute_province
@@ -186,8 +185,9 @@ void RandomEventsModule::apply_natural_per_tick(const WorldState& /*state*/,
                                                 const Province& province,
                                                 const ActiveRandomEvent& event,
                                                 DeltaBuffer& province_delta) {
-    float agri_impact = cfg_.natural_agri_mod_min +
-                        (cfg_.natural_agri_mod_max - cfg_.natural_agri_mod_min) * (1.0f - event.severity);
+    float agri_impact =
+        cfg_.natural_agri_mod_min +
+        (cfg_.natural_agri_mod_max - cfg_.natural_agri_mod_min) * (1.0f - event.severity);
     (void)agri_impact;
 
     RegionDelta rd{};
@@ -255,8 +255,9 @@ void RandomEventsModule::apply_economic_per_tick(const WorldState& state, const 
                                                  const ActiveRandomEvent& event,
                                                  DeltaBuffer& province_delta) {
     if (!province.market_ids.empty()) {
-        float shift = cfg_.economic_price_shift_min +
-                      (cfg_.economic_price_shift_max - cfg_.economic_price_shift_min) * event.severity;
+        float shift =
+            cfg_.economic_price_shift_min +
+            (cfg_.economic_price_shift_max - cfg_.economic_price_shift_min) * event.severity;
         if (event.id % 2 == 0)
             shift = -shift;
 
@@ -301,9 +302,9 @@ void RandomEventsModule::roll_for_new_event(const WorldState& state, const Provi
 
     float economic_volatility = compute_economic_volatility(state, province);
 
-    float adjusted_rate = effective_base_rate() *
-                          (1.0f + climate_stress * cfg_.climate_event_amplifier) *
-                          (1.0f + instability * cfg_.instability_event_amplifier) * economic_volatility;
+    float adjusted_rate =
+        effective_base_rate() * (1.0f + climate_stress * cfg_.climate_event_amplifier) *
+        (1.0f + instability * cfg_.instability_event_amplifier) * economic_volatility;
 
     float p = 1.0f - std::exp(-adjusted_rate / TICKS_PER_MONTH);
 
@@ -430,10 +431,12 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                                                  DeltaBuffer& province_delta) {
     switch (event.category) {
         case EventCategory::natural: {
-            float agri_mod = cfg_.natural_agri_mod_min + (cfg_.natural_agri_mod_max - cfg_.natural_agri_mod_min) *
-                                                        (1.0f - event.severity);
-            float infra_dmg = cfg_.natural_infra_dmg_min +
-                              (cfg_.natural_infra_dmg_max - cfg_.natural_infra_dmg_min) * event.severity;
+            float agri_mod =
+                cfg_.natural_agri_mod_min +
+                (cfg_.natural_agri_mod_max - cfg_.natural_agri_mod_min) * (1.0f - event.severity);
+            float infra_dmg =
+                cfg_.natural_infra_dmg_min +
+                (cfg_.natural_infra_dmg_max - cfg_.natural_infra_dmg_min) * event.severity;
             (void)agri_mod;
             (void)infra_dmg;
 
@@ -445,11 +448,12 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
         }
 
         case EventCategory::accident: {
-            float output_impact =
-                cfg_.accident_output_rate_min +
-                (cfg_.accident_output_rate_max - cfg_.accident_output_rate_min) * (1.0f - event.severity);
-            float infra_dmg = cfg_.accident_infra_dmg_min +
-                              (cfg_.accident_infra_dmg_max - cfg_.accident_infra_dmg_min) * event.severity;
+            float output_impact = cfg_.accident_output_rate_min +
+                                  (cfg_.accident_output_rate_max - cfg_.accident_output_rate_min) *
+                                      (1.0f - event.severity);
+            float infra_dmg =
+                cfg_.accident_infra_dmg_min +
+                (cfg_.accident_infra_dmg_max - cfg_.accident_infra_dmg_min) * event.severity;
             (void)output_impact;
             (void)infra_dmg;
 
@@ -508,9 +512,9 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
 
         case EventCategory::economic: {
             if (!province.market_ids.empty()) {
-                float shift =
-                    cfg_.economic_price_shift_min +
-                    (cfg_.economic_price_shift_max - cfg_.economic_price_shift_min) * event.severity;
+                float shift = cfg_.economic_price_shift_min +
+                              (cfg_.economic_price_shift_max - cfg_.economic_price_shift_min) *
+                                  event.severity;
                 if (event.id % 2 == 0)
                     shift = -shift;
 

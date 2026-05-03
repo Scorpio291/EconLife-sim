@@ -59,20 +59,18 @@ class BankingModule : public ITickModule {
     // rate = base_interest_rate + (1.0 - credit_score) * credit_risk_spread
     //        - (has_collateral ? collateral_rate_discount : 0)
     // Result clamped to >= 0.0.
-    static float compute_interest_rate(float credit_score, bool has_collateral,
-                                          float base_rate, float risk_spread,
-                                          float collateral_discount);
+    static float compute_interest_rate(float credit_score, bool has_collateral, float base_rate,
+                                       float risk_spread, float collateral_discount);
 
     // Compute maximum loan amount from per-tick revenue.
     // max_loan = revenue_per_tick * 365 * max_loan_multiple_of_income / 12
-    static float compute_max_loan_amount(float revenue_per_tick,
-                                            float max_loan_multiple_of_income);
+    static float compute_max_loan_amount(float revenue_per_tick, float max_loan_multiple_of_income);
 
     // Evaluate a loan application: returns true if approved.
     // Deny if credit_score < min_credit_score_for_purpose(purpose)
     // Deny if dti_ratio > denial_dti_threshold
-    static bool evaluate_loan_application(float credit_score, float dti_ratio,
-                                             LoanPurpose purpose, float denial_dti_threshold);
+    static bool evaluate_loan_application(float credit_score, float dti_ratio, LoanPurpose purpose,
+                                          float denial_dti_threshold);
 
     // Compute fixed repayment per tick for an amortizing loan.
     // Simple amortization: (principal * (1 + interest_rate * duration_ticks)) / duration_ticks

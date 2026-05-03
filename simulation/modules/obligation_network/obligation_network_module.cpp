@@ -120,14 +120,13 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
         // Compute demand growth.
         float urgency = compute_creditor_urgency(creditor->motivations.weights.data(),
                                                  creditor->motivations.weights.size());
-        float growth =
-            compute_demand_growth(urgency, cfg_.escalation_rate_base, wealth_factor);
+        float growth = compute_demand_growth(urgency, cfg_.escalation_rate_base, wealth_factor);
         obl.current_demand += growth;
 
         // Evaluate escalation status.
         ObligationStatus new_status =
-            evaluate_escalation(obl.current_demand, obl.original_value,
-                                cfg_.escalation_threshold, cfg_.critical_threshold);
+            evaluate_escalation(obl.current_demand, obl.original_value, cfg_.escalation_threshold,
+                                cfg_.critical_threshold);
 
         // At most one status transition per tick.
         if (new_status > obl.status) {

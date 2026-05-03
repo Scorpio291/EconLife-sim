@@ -139,8 +139,7 @@ SettlementResult CommodityTradingModule::close_position(uint32_t position_id, fl
 
             // Capital gains tax: applied only on positive realized gains.
             float taxable_gain = std::max(0.0f, pnl);
-            result.capital_gains_tax =
-                taxable_gain * cfg_.capital_gains_tax_rate;
+            result.capital_gains_tax = taxable_gain * cfg_.capital_gains_tax_rate;
 
             return result;
         }
@@ -177,8 +176,7 @@ MarketImpact CommodityTradingModule::compute_market_impact(const CommodityPositi
     }
 
     // Impact magnitude: coefficient * quantity beyond the threshold.
-    float excess_quantity =
-        pos.quantity - (market_supply * cfg_.market_impact_threshold);
+    float excess_quantity = pos.quantity - (market_supply * cfg_.market_impact_threshold);
     float impact_magnitude = cfg_.market_impact_coefficient * excess_quantity;
 
     // Long positions increase demand; short positions increase supply pressure.

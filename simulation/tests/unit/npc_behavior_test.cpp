@@ -31,10 +31,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/config/package_config.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
-#include "core/config/package_config.h"
 #include "modules/npc_behavior/npc_behavior_module.h"
 #include "modules/npc_behavior/npc_behavior_types.h"
 
@@ -153,7 +153,7 @@ TEST_CASE("test_high_ev_action_selected_over_inaction", "[npc_behavior][tier5]")
     std::vector<ActionOutcome> work_outcomes = {{OutcomeType::financial_gain, 0.9f, 0.8f}};
 
     ActionEvaluation eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::work,
-                                                               work_outcomes, 0.0f, -2.0f, 0.3f);
+                                                                work_outcomes, 0.0f, -2.0f, 0.3f);
 
     // EV = 0.9 * 0.9 * 0.8 = 0.648, risk_discount = 1.0 (no risk), net = 0.648
     REQUIRE(eval.net_utility > NpcBehaviorModuleConfig{}.inaction_threshold);
@@ -184,7 +184,7 @@ TEST_CASE("test_below_threshold_produces_waiting_status", "[npc_behavior][tier5]
     std::vector<ActionOutcome> tiny_outcomes = {{OutcomeType::financial_gain, 0.01f, 0.01f}};
 
     ActionEvaluation eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::rest,
-                                                               tiny_outcomes, 0.5f, -2.0f, 0.3f);
+                                                                tiny_outcomes, 0.5f, -2.0f, 0.3f);
 
     // EV = (1/8) * 0.01 * 0.01 = 0.0000125
     // risk_discount = max(0.05, 1.0 - (0.5 - 0.0) * 2.0) = max(0.05, 0.0) = 0.05
@@ -209,10 +209,10 @@ TEST_CASE("test_motivation_vector_drives_action_preference", "[npc_behavior][tie
     std::vector<ActionOutcome> rest_outcomes = {{OutcomeType::self_preservation, 0.9f, 0.5f}};
     std::vector<ActionOutcome> work_outcomes = {{OutcomeType::financial_gain, 0.9f, 0.5f}};
 
-    auto rest_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::rest, rest_outcomes, 0.0f,
-                                                        -2.0f, 0.3f);
-    auto work_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::work, work_outcomes, 0.0f,
-                                                        -2.0f, 0.3f);
+    auto rest_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::rest, rest_outcomes,
+                                                         0.0f, -2.0f, 0.3f);
+    auto work_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::work, work_outcomes,
+                                                         0.0f, -2.0f, 0.3f);
 
     // rest EV = 1.0 * 0.9 * 0.5 = 0.45
     // work EV = 0.0 * 0.9 * 0.5 = 0.0
@@ -236,7 +236,8 @@ TEST_CASE("test_memory_decay_archives_old_entries", "[npc_behavior][tier5]") {
     // Apply a small decay that will push the 0.005 entry below floor (0.01).
     // After decay: 0.005 * (1.0 - 0.002) = 0.00499 < 0.01 -> archived
     // After decay: 0.02 * (1.0 - 0.002) = 0.01996 > 0.01 -> kept
-    NpcBehaviorModule::decay_memories(npc, NpcBehaviorConfig{}.memory_decay_rate, NpcBehaviorConfig{}.memory_decay_floor);
+    NpcBehaviorModule::decay_memories(npc, NpcBehaviorConfig{}.memory_decay_rate,
+                                      NpcBehaviorConfig{}.memory_decay_floor);
 
     // The entry with decay 0.005 should have been archived (removed).
     REQUIRE(npc.memory_log.size() == 2);
@@ -257,7 +258,7 @@ TEST_CASE("test_risk_discount_reduces_high_exposure_ev", "[npc_behavior][tier5]"
 
     // High exposure_risk action.
     auto high_risk_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::criminal_activity,
-                                                             outcomes, 0.8f, -2.0f, 0.3f);
+                                                              outcomes, 0.8f, -2.0f, 0.3f);
 
     // High risk should produce lower net_utility.
     REQUIRE(low_risk_eval.net_utility > high_risk_eval.net_utility);
@@ -274,11 +275,11 @@ TEST_CASE("test_relationship_modifier_boosts_cooperative_action", "[npc_behavior
 
     // Without trust bonus.
     auto no_trust_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::socialize, outcomes,
-                                                            0.0f, -2.0f, 0.3f);
+                                                             0.0f, -2.0f, 0.3f);
 
     // With positive trust bonus.
-    auto with_trust_eval =
-        NpcBehaviorModule{}.evaluate_action(npc, DailyAction::socialize, outcomes, 0.0f, 0.8f, 0.3f);
+    auto with_trust_eval = NpcBehaviorModule{}.evaluate_action(npc, DailyAction::socialize,
+                                                               outcomes, 0.0f, 0.8f, 0.3f);
 
     // Trust modifier: net *= (1.0 + 0.8 * 0.3) = 1.24
     REQUIRE(with_trust_eval.net_utility > no_trust_eval.net_utility);
@@ -517,7 +518,8 @@ TEST_CASE("test_memory_decay_below_floor_archived", "[npc_behavior][tier5]") {
     npc.memory_log.push_back(make_test_memory(1, 0.011f));
 
     // After one decay step: 0.011 * (1.0 - 0.002) = 0.010978 > 0.01 -> kept
-    NpcBehaviorModule::decay_memories(npc, NpcBehaviorConfig{}.memory_decay_rate, NpcBehaviorConfig{}.memory_decay_floor);
+    NpcBehaviorModule::decay_memories(npc, NpcBehaviorConfig{}.memory_decay_rate,
+                                      NpcBehaviorConfig{}.memory_decay_floor);
     REQUIRE(npc.memory_log.size() == 1);
 
     // Create a memory entry just below where decay will push it under floor.
@@ -525,7 +527,8 @@ TEST_CASE("test_memory_decay_below_floor_archived", "[npc_behavior][tier5]") {
     npc2.memory_log.push_back(make_test_memory(1, 0.009f));
 
     // After one decay step: 0.009 * (1.0 - 0.002) = 0.008982 < 0.01 -> archived
-    NpcBehaviorModule::decay_memories(npc2, NpcBehaviorConfig{}.memory_decay_rate, NpcBehaviorConfig{}.memory_decay_floor);
+    NpcBehaviorModule::decay_memories(npc2, NpcBehaviorConfig{}.memory_decay_rate,
+                                      NpcBehaviorConfig{}.memory_decay_floor);
     REQUIRE(npc2.memory_log.empty());
 }
 
@@ -847,8 +850,7 @@ TEST_CASE("test_npc_behavior_constants", "[npc_behavior][tier5]") {
     REQUIRE_THAT(NpcBehaviorModuleConfig{}.trust_ev_bonus, WithinAbs(0.3f, 0.001f));
     REQUIRE_THAT(NpcBehaviorConfig{}.memory_decay_rate, WithinAbs(0.002f, 0.0001f));
     REQUIRE_THAT(NpcBehaviorConfig{}.memory_decay_floor, WithinAbs(0.01f, 0.001f));
-    REQUIRE_THAT(NpcBehaviorConfig{}.knowledge_confidence_decay_rate,
-                 WithinAbs(0.001f, 0.0001f));
+    REQUIRE_THAT(NpcBehaviorConfig{}.knowledge_confidence_decay_rate, WithinAbs(0.001f, 0.0001f));
     REQUIRE_THAT(NpcBehaviorConfig{}.motivation_shift_rate, WithinAbs(0.001f, 0.0001f));
     REQUIRE(MAX_MEMORY_ENTRIES == 500);
 }

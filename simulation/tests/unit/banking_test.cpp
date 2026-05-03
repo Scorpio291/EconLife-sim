@@ -184,21 +184,21 @@ TEST_CASE("test_missed_payment_triggers_default_after_grace_period", "[banking][
 
 TEST_CASE("test_loan_denial_on_high_dti", "[banking][tier5]") {
     // DTI above threshold (0.40) should be denied.
-    bool approved =
-        BankingModule::evaluate_loan_application(0.60f, 0.50f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
+    bool approved = BankingModule::evaluate_loan_application(
+        0.60f, 0.50f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_approval_on_acceptable_dti", "[banking][tier5]") {
     // DTI at threshold boundary should be approved.
-    bool approved =
-        BankingModule::evaluate_loan_application(0.60f, 0.40f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
+    bool approved = BankingModule::evaluate_loan_application(
+        0.60f, 0.40f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
     REQUIRE(approved == true);
 }
 
 TEST_CASE("test_loan_approval_on_low_dti", "[banking][tier5]") {
-    bool approved =
-        BankingModule::evaluate_loan_application(0.60f, 0.10f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
+    bool approved = BankingModule::evaluate_loan_application(
+        0.60f, 0.10f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
     REQUIRE(approved == true);
 }
 
@@ -208,28 +208,30 @@ TEST_CASE("test_loan_approval_on_low_dti", "[banking][tier5]") {
 
 TEST_CASE("test_loan_denial_on_low_credit_score_business", "[banking][tier5]") {
     // Business capital requires 0.35; credit score 0.30 should fail.
-    bool approved =
-        BankingModule::evaluate_loan_application(0.30f, 0.10f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
+    bool approved = BankingModule::evaluate_loan_application(
+        0.30f, 0.10f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_denial_on_low_credit_score_property", "[banking][tier5]") {
     // Property purchase requires 0.45; credit score 0.40 should fail.
     bool approved =
-        BankingModule::evaluate_loan_application(0.40f, 0.10f, LoanPurpose::property_purchase, BankingConfig{}.per_tick_denial_dti_threshold);
+        BankingModule::evaluate_loan_application(0.40f, 0.10f, LoanPurpose::property_purchase,
+                                                 BankingConfig{}.per_tick_denial_dti_threshold);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_denial_on_low_credit_score_personal", "[banking][tier5]") {
     // Personal requires 0.25; credit score 0.20 should fail.
-    bool approved = BankingModule::evaluate_loan_application(0.20f, 0.10f, LoanPurpose::personal, BankingConfig{}.per_tick_denial_dti_threshold);
+    bool approved = BankingModule::evaluate_loan_application(
+        0.20f, 0.10f, LoanPurpose::personal, BankingConfig{}.per_tick_denial_dti_threshold);
     REQUIRE(approved == false);
 }
 
 TEST_CASE("test_loan_approval_at_exact_minimum_credit_score", "[banking][tier5]") {
     // Exactly at threshold should pass.
-    bool approved =
-        BankingModule::evaluate_loan_application(0.35f, 0.10f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
+    bool approved = BankingModule::evaluate_loan_application(
+        0.35f, 0.10f, LoanPurpose::business_capital, BankingConfig{}.per_tick_denial_dti_threshold);
     REQUIRE(approved == true);
 }
 
@@ -239,10 +241,14 @@ TEST_CASE("test_loan_approval_at_exact_minimum_credit_score", "[banking][tier5]"
 
 TEST_CASE("test_interest_rate_reflects_credit_risk", "[banking][tier5]") {
     // High credit score (0.9): lower rate.
-    float rate_high = BankingModule::compute_interest_rate(0.9f, false, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate_high = BankingModule::compute_interest_rate(
+        0.9f, false, BankingConfig{}.per_tick_base_interest_rate,
+        BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
 
     // Low credit score (0.3): higher rate.
-    float rate_low = BankingModule::compute_interest_rate(0.3f, false, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate_low = BankingModule::compute_interest_rate(
+        0.3f, false, BankingConfig{}.per_tick_base_interest_rate,
+        BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
 
     REQUIRE(rate_low > rate_high);
 }
@@ -252,8 +258,12 @@ TEST_CASE("test_interest_rate_reflects_credit_risk", "[banking][tier5]") {
 // ===========================================================================
 
 TEST_CASE("test_collateral_reduces_interest_rate", "[banking][tier5]") {
-    float rate_unsecured = BankingModule::compute_interest_rate(0.6f, false, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
-    float rate_secured = BankingModule::compute_interest_rate(0.6f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate_unsecured = BankingModule::compute_interest_rate(
+        0.6f, false, BankingConfig{}.per_tick_base_interest_rate,
+        BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate_secured = BankingModule::compute_interest_rate(
+        0.6f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread,
+        BankingConfig{}.collateral_rate_discount);
 
     REQUIRE(rate_secured < rate_unsecured);
     REQUIRE_THAT(rate_unsecured - rate_secured,
@@ -305,7 +315,9 @@ TEST_CASE("test_criminal_informal_default_no_credit_impact", "[banking][tier5]")
 
 TEST_CASE("test_compute_interest_rate_high_credit", "[banking][tier5]") {
     // credit_score = 1.0: rate = 0.000027 + (1.0 - 1.0) * 0.000082 = 0.000027
-    float rate = BankingModule::compute_interest_rate(1.0f, false, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate = BankingModule::compute_interest_rate(
+        1.0f, false, BankingConfig{}.per_tick_base_interest_rate,
+        BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
     REQUIRE_THAT(rate, WithinAbs(0.000027f, 0.000001f));
 }
 
@@ -315,7 +327,9 @@ TEST_CASE("test_compute_interest_rate_high_credit", "[banking][tier5]") {
 
 TEST_CASE("test_compute_interest_rate_low_credit", "[banking][tier5]") {
     // credit_score = 0.0: rate = 0.000027 + 1.0 * 0.000082 = 0.000109
-    float rate = BankingModule::compute_interest_rate(0.0f, false, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate = BankingModule::compute_interest_rate(
+        0.0f, false, BankingConfig{}.per_tick_base_interest_rate,
+        BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
     REQUIRE_THAT(rate, WithinAbs(0.000109f, 0.000001f));
 }
 
@@ -326,12 +340,14 @@ TEST_CASE("test_compute_interest_rate_low_credit", "[banking][tier5]") {
 TEST_CASE("test_compute_max_loan_amount", "[banking][tier5]") {
     // revenue_per_tick = 100.0
     // max_loan = 100.0 * 365 * 36.0 / 12 = 109,500
-    float max_loan = BankingModule::compute_max_loan_amount(100.0f, BankingConfig{}.max_loan_multiple_of_income);
+    float max_loan =
+        BankingModule::compute_max_loan_amount(100.0f, BankingConfig{}.max_loan_multiple_of_income);
     REQUIRE_THAT(max_loan, WithinAbs(109500.0f, 1.0f));
 }
 
 TEST_CASE("test_compute_max_loan_amount_zero_revenue", "[banking][tier5]") {
-    float max_loan = BankingModule::compute_max_loan_amount(0.0f, BankingConfig{}.max_loan_multiple_of_income);
+    float max_loan =
+        BankingModule::compute_max_loan_amount(0.0f, BankingConfig{}.max_loan_multiple_of_income);
     REQUIRE_THAT(max_loan, WithinAbs(0.0f, 0.001f));
 }
 
@@ -829,8 +845,7 @@ TEST_CASE("test_successful_payment_resets_consecutive_misses", "[banking][tier5]
 TEST_CASE("test_banking_constants", "[banking][tier5]") {
     REQUIRE_THAT(BankingConfig{}.per_tick_base_interest_rate, WithinAbs(0.000027f, 0.000001f));
     REQUIRE_THAT(BankingConfig{}.credit_risk_spread, WithinAbs(0.000082f, 0.000001f));
-    REQUIRE_THAT(BankingConfig{}.collateral_rate_discount,
-                 WithinAbs(0.000014f, 0.000001f));
+    REQUIRE_THAT(BankingConfig{}.collateral_rate_discount, WithinAbs(0.000014f, 0.000001f));
     REQUIRE(BankingConfig{}.default_grace_ticks == 3);
     REQUIRE_THAT(BankingConfig{}.credit_score_payment_gain, WithinAbs(0.002f, 0.0001f));
     REQUIRE_THAT(BankingConfig{}.credit_score_miss_penalty, WithinAbs(0.01f, 0.0001f));
@@ -917,21 +932,29 @@ TEST_CASE("test_zero_balance_loan_skipped", "[banking][tier5]") {
 TEST_CASE("test_interest_rate_with_collateral_at_max_credit", "[banking][tier5]") {
     // credit_score = 1.0, collateral:
     // rate = 0.000027 + (1.0 - 1.0) * 0.000082 - 0.000014 = 0.000013
-    float rate = BankingModule::compute_interest_rate(1.0f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate = BankingModule::compute_interest_rate(
+        1.0f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread,
+        BankingConfig{}.collateral_rate_discount);
     REQUIRE_THAT(rate, WithinAbs(0.000013f, 0.000001f));
 }
 
 TEST_CASE("test_interest_rate_never_negative", "[banking][tier5]") {
     // Even with perfect credit and collateral, rate should not go below 0.
-    float rate = BankingModule::compute_interest_rate(1.0f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    float rate = BankingModule::compute_interest_rate(
+        1.0f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread,
+        BankingConfig{}.collateral_rate_discount);
     REQUIRE(rate >= 0.0f);
 
     // Also test without collateral.
-    rate = BankingModule::compute_interest_rate(1.0f, false, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    rate = BankingModule::compute_interest_rate(
+        1.0f, false, BankingConfig{}.per_tick_base_interest_rate,
+        BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
     REQUIRE(rate >= 0.0f);
 
     // And at zero credit.
-    rate = BankingModule::compute_interest_rate(0.0f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread, BankingConfig{}.collateral_rate_discount);
+    rate = BankingModule::compute_interest_rate(
+        0.0f, true, BankingConfig{}.per_tick_base_interest_rate, BankingConfig{}.credit_risk_spread,
+        BankingConfig{}.collateral_rate_discount);
     REQUIRE(rate >= 0.0f);
 }
 

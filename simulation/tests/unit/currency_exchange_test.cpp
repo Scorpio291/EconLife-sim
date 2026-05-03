@@ -13,14 +13,16 @@ TEST_CASE("CurrencyExchange: macro factor computation", "[currency_exchange][tie
     // 1.0 + (0.10*0.30) - (0.05*0.40) - ((1.0-0.80)*0.30)
     // = 1.0 + 0.03 - 0.02 - 0.06 = 0.95
     float factor = CurrencyExchangeModule::compute_macro_factor(
-        0.10f, 0.05f, 0.80f, cfg.trade_balance_weight, cfg.inflation_weight, cfg.sovereign_risk_weight);
+        0.10f, 0.05f, 0.80f, cfg.trade_balance_weight, cfg.inflation_weight,
+        cfg.sovereign_risk_weight);
     REQUIRE_THAT(factor, WithinAbs(0.95f, 0.01f));
 }
 
 TEST_CASE("CurrencyExchange: macro factor neutral", "[currency_exchange][tier11]") {
     CurrencyExchangeConfig cfg{};
     float factor = CurrencyExchangeModule::compute_macro_factor(
-        0.0f, 0.0f, 1.0f, cfg.trade_balance_weight, cfg.inflation_weight, cfg.sovereign_risk_weight);
+        0.0f, 0.0f, 1.0f, cfg.trade_balance_weight, cfg.inflation_weight,
+        cfg.sovereign_risk_weight);
     REQUIRE_THAT(factor, WithinAbs(1.0f, 0.01f));
 }
 

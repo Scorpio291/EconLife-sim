@@ -169,9 +169,9 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
     // ---------------------------------------------------------------
     // Step 4: Overload Quality Degradation
     // ---------------------------------------------------------------
-    profile.quality_level = compute_overload_quality(
-        profile.quality_level, profile.capacity_utilisation, cfg_.overload_threshold,
-        cfg_.overload_quality_penalty);
+    profile.quality_level =
+        compute_overload_quality(profile.quality_level, profile.capacity_utilisation,
+                                 cfg_.overload_threshold, cfg_.overload_quality_penalty);
 
     // Clamp quality to [0.0, 1.0].
     if (profile.quality_level > 1.0f) {

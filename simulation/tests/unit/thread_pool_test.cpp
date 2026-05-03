@@ -90,11 +90,12 @@ TEST_CASE("parallel_for multi-threaded visits all indices", "[thread_pool][tier0
 
 TEST_CASE("parallel_for propagates first exception", "[thread_pool][tier0]") {
     ThreadPool pool(4);
-    REQUIRE_THROWS_AS(
-        pool.parallel_for(10, [](uint32_t i) {
-            if (i == 5) throw std::runtime_error("task 5 failed");
-        }),
-        std::runtime_error);
+    REQUIRE_THROWS_AS(pool.parallel_for(10,
+                                        [](uint32_t i) {
+                                            if (i == 5)
+                                                throw std::runtime_error("task 5 failed");
+                                        }),
+                      std::runtime_error);
 }
 
 TEST_CASE("parallel_for results are independent per index", "[thread_pool][tier0]") {

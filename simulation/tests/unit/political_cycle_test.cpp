@@ -36,8 +36,10 @@ TEST_CASE("PoliticalCycle: zero weight demographics return 0.5", "[political_cyc
 
 TEST_CASE("PoliticalCycle: resource modifier diminishing returns", "[political_cycle][tier10]") {
     PoliticalCycleConfig cfg{};
-    float low = PoliticalCycleModule::compute_resource_modifier(0.5f, cfg.resource_scale, cfg.resource_max_effect);
-    float high = PoliticalCycleModule::compute_resource_modifier(5.0f, cfg.resource_scale, cfg.resource_max_effect);
+    float low = PoliticalCycleModule::compute_resource_modifier(0.5f, cfg.resource_scale,
+                                                                cfg.resource_max_effect);
+    float high = PoliticalCycleModule::compute_resource_modifier(5.0f, cfg.resource_scale,
+                                                                 cfg.resource_max_effect);
 
     // Both within bounds
     REQUIRE(low >= -cfg.resource_max_effect);
@@ -94,6 +96,7 @@ TEST_CASE("PoliticalCycle: constants match spec", "[political_cycle][tier10]") {
 
 TEST_CASE("PoliticalCycle: resource modifier at zero deployment", "[political_cycle][tier10]") {
     PoliticalCycleConfig cfg{};
-    float mod = PoliticalCycleModule::compute_resource_modifier(0.0f, cfg.resource_scale, cfg.resource_max_effect);
+    float mod = PoliticalCycleModule::compute_resource_modifier(0.0f, cfg.resource_scale,
+                                                                cfg.resource_max_effect);
     REQUIRE_THAT(mod, WithinAbs(0.0f, 0.001f));
 }

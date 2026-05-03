@@ -10,12 +10,12 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 
+#include "core/config/package_config.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/production/production_types.h"
 #include "modules/seasonal_agriculture/agriculture_types.h"
 #include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
-#include "core/config/package_config.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -497,8 +497,7 @@ TEST_CASE("monoculture soil_health floor at 0.5", "[seasonal_agriculture][tier2]
 TEST_CASE("perennial seasonal multiplier follows cosine curve", "[seasonal_agriculture][tier2]") {
     SeasonalAgricultureModule mod;
     // At peak_tick, cos(0) = 1.0, multiplier = 0.85 + 0.25 * 1.0 = 1.1
-    float at_peak = mod.compute_seasonal_multiplier(
-        CropCategory::perennial_tree, 182, 182);
+    float at_peak = mod.compute_seasonal_multiplier(CropCategory::perennial_tree, 182, 182);
     REQUIRE_THAT(at_peak, WithinAbs(1.1f, 0.001f));
 
     // At half-year from peak (offset by 365/2 = 182.5), cos(pi) = -1.0
@@ -506,8 +505,8 @@ TEST_CASE("perennial seasonal multiplier follows cosine curve", "[seasonal_agric
     // But exact half-year is tick 182 + 182 = 364 (mod 365).
     // cos(2*pi*182/365) is approximately cos(pi) = -1.0 (not exactly due to 365 being odd).
     uint32_t opposite_tick = (182 + 182) % 365;  // 364
-    float at_opposite = mod.compute_seasonal_multiplier(
-        CropCategory::perennial_tree, opposite_tick, 182);
+    float at_opposite =
+        mod.compute_seasonal_multiplier(CropCategory::perennial_tree, opposite_tick, 182);
     // phase = 2*pi*(364-182)/365 = 2*pi*182/365 ~ pi * 0.9973
     // cos(0.9973*pi) ~ -0.9999 => multiplier ~ 0.85 + 0.25*(-0.9999) ~ 0.6000
     REQUIRE_THAT(at_opposite, WithinAbs(0.60f, 0.01f));
@@ -516,22 +515,19 @@ TEST_CASE("perennial seasonal multiplier follows cosine curve", "[seasonal_agric
 TEST_CASE("livestock seasonal multiplier has minimal variation", "[seasonal_agriculture][tier2]") {
     SeasonalAgricultureModule mod;
     // At peak: 0.85 + 0.10 * 1.0 = 0.95
-    float at_peak =
-        mod.compute_seasonal_multiplier(CropCategory::livestock, 100, 100);
+    float at_peak = mod.compute_seasonal_multiplier(CropCategory::livestock, 100, 100);
     REQUIRE_THAT(at_peak, WithinAbs(0.95f, 0.001f));
 
     // At trough (half-year): 0.85 + 0.10 * (-1.0) ~ 0.75
     uint32_t trough = (100 + 182) % 365;
-    float at_trough = mod.compute_seasonal_multiplier(
-        CropCategory::livestock, trough, 100);
+    float at_trough = mod.compute_seasonal_multiplier(CropCategory::livestock, trough, 100);
     REQUIRE_THAT(at_trough, WithinAbs(0.75f, 0.01f));
 }
 
 TEST_CASE("timber seasonal multiplier is constant 1.0", "[seasonal_agriculture][tier2]") {
     SeasonalAgricultureModule mod;
     for (uint32_t tick = 0; tick < 365; tick += 73) {
-        float mult =
-            mod.compute_seasonal_multiplier(CropCategory::timber, tick, 182);
+        float mult = mod.compute_seasonal_multiplier(CropCategory::timber, tick, 182);
         REQUIRE_THAT(mult, WithinAbs(1.0f, 0.001f));
     }
 }

@@ -517,10 +517,8 @@ TEST_CASE("capacity utilisation incremented by treatment", "[healthcare][tier5]"
 
     auto* phs = mod.find_province_health(0);
     REQUIRE(phs != nullptr);
-    REQUIRE_THAT(
-        phs->profile.capacity_utilisation,
-        WithinAbs(initial_utilisation + HealthcareConfig{}.capacity_per_treatment,
-                  1e-7f));
+    REQUIRE_THAT(phs->profile.capacity_utilisation,
+                 WithinAbs(initial_utilisation + HealthcareConfig{}.capacity_per_treatment, 1e-7f));
 }
 
 TEST_CASE("execute processes all provinces", "[healthcare][tier5]") {

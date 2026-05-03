@@ -32,7 +32,7 @@ bool EvidenceModule::evaluate_holder_credibility(float public_credibility,
 }
 
 float EvidenceModule::normalize_trust_to_factor(float trust, float trust_factor_min,
-                                                 float trust_factor_max) {
+                                                float trust_factor_max) {
     // Map trust from [-1.0, 1.0] range to [trust_factor_min, trust_factor_max].
     // Negative trust maps to minimum factor.
     if (trust <= 0.0f)
@@ -46,8 +46,8 @@ float EvidenceModule::compute_propagation_confidence(float sharer_confidence,
                                                      float relationship_trust,
                                                      float trust_factor_min,
                                                      float trust_factor_max) {
-    float trust_factor = normalize_trust_to_factor(relationship_trust, trust_factor_min,
-                                                   trust_factor_max);
+    float trust_factor =
+        normalize_trust_to_factor(relationship_trust, trust_factor_min, trust_factor_max);
     float result = sharer_confidence * trust_factor;
     return std::max(0.0f, std::min(1.0f, result));
 }
@@ -85,9 +85,8 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
             }
         }
 
-        float decay =
-            compute_decay_amount(cfg_.base_decay_rate, is_credible,
-                                 cfg_.discredit_decay_multiplier, cfg_.batch_interval);
+        float decay = compute_decay_amount(cfg_.base_decay_rate, is_credible,
+                                           cfg_.discredit_decay_multiplier, cfg_.batch_interval);
 
         float new_actionability =
             apply_actionability_decay(token.actionability, decay, cfg_.actionability_floor);

@@ -200,18 +200,18 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
 
         float fill_rate = 0.0f;
         if (is_le || is_ngo) {
-            fill_rate =
-                compute_fill_rate(regional_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
+            fill_rate = compute_fill_rate(regional_signal, cfg_.detection_to_fill_rate_scale,
+                                          cfg_.fill_rate_max);
         } else if (is_reg) {
             // Regulators: lower signal aggregate (chemical + traffic only)
             float regulator_signal = regional_signal * 0.5f;
-            fill_rate =
-                compute_fill_rate(regulator_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
+            fill_rate = compute_fill_rate(regulator_signal, cfg_.detection_to_fill_rate_scale,
+                                          cfg_.fill_rate_max);
         } else if (is_jrn) {
             // Journalists: evidence-driven, lower rate
             float journalist_signal = regional_signal * 0.25f;
-            fill_rate =
-                compute_fill_rate(journalist_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
+            fill_rate = compute_fill_rate(journalist_signal, cfg_.detection_to_fill_rate_scale,
+                                          cfg_.fill_rate_max);
         }
 
         // Apply corruption modifier (NGO investigators are immune per INTERFACE.md)
@@ -278,8 +278,8 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
             }
             // Scale bonus to fill_rate units: each 1.0 total actionability
             // contributes DETECTION_TO_FILL_RATE_SCALE worth of fill.
-            float bonus_fill =
-                compute_fill_rate(evidence_bonus, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
+            float bonus_fill = compute_fill_rate(evidence_bonus, cfg_.detection_to_fill_rate_scale,
+                                                 cfg_.fill_rate_max);
             found_case->fill_rate = fill_rate + bonus_fill;
             found_case->current_level =
                 std::clamp(found_case->current_level + bonus_fill, 0.0f, 1.0f);
