@@ -1,0 +1,34 @@
+# EconLife clang-tidy configuration.
+#
+# Pinned to the same minimal check list that CI runs in the
+# `clang-tidy-diff` job so local invocations match what the bot will
+# report on a PR. Cleanup of existing warnings is tracked as a
+# follow-up; CI currently treats findings as warnings, not failures.
+#
+# To run locally on a single file once the project has been built with
+# CMAKE_EXPORT_COMPILE_COMMANDS=ON:
+#
+#     clang-tidy -p build path/to/file.cpp
+#
+---
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  cppcoreguidelines-pro-type-*,
+  performance-*,
+  portability-*,
+  readability-misleading-indentation,
+  modernize-use-nullptr,
+  modernize-use-override
+
+WarningsAsErrors: ''
+
+# Only diagnose project headers, never third-party FetchContent deps.
+HeaderFilterRegex: '^(simulation|ui)/.*\.(h|hpp)$'
+
+FormatStyle: file
+
+CheckOptions:
+  - key: readability-identifier-naming.IgnoreMainLikeFunctions
+    value: '1'
