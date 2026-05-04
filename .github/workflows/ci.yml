@@ -147,10 +147,14 @@ jobs:
           # FetchContent deps and generated files are excluded by the
           # HeaderFilterRegex in .clang-tidy and shouldn't drive the
           # diff list either.
+          # `:(glob)` pathspec magic enables `**` recursion. Without it
+          # git's default fnmatch doesn't cross `/`, so plain
+          # `simulation/*.cpp` would miss every nested file and
+          # clang-tidy would silently scan nothing.
           CHANGED=$(git diff --name-only --diff-filter=ACMR \
             "origin/${BASE_REF}...HEAD" -- \
-            'simulation/*.h' 'simulation/*.hpp' 'simulation/*.cpp' \
-            'ui/*.h' 'ui/*.hpp' 'ui/*.cpp' || true)
+            ':(glob)simulation/**/*.h' ':(glob)simulation/**/*.hpp' ':(glob)simulation/**/*.cpp' \
+            ':(glob)ui/**/*.h' ':(glob)ui/**/*.hpp' ':(glob)ui/**/*.cpp' || true)
           echo "files<<EOF" >> "$GITHUB_OUTPUT"
           echo "$CHANGED" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
