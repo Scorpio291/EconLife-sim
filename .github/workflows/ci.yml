@@ -35,6 +35,161 @@ jobs:
       - name: Run integration tests
         run: ctest --test-dir build -C ${{ matrix.build_type }} -L "integration" --output-on-failure
 
+  sanitizers:
+    # Sanitizer matrix: ASan+UBSan for memory/UB coverage, TSan for the
+    # multi-threaded province dispatch + tick orchestrator. Linux only —
+    # the Windows job above already covers cross-platform build health,
+    # and clang/gcc sanitizers are the supported toolchain for this work.
+    name: Sanitizers (${{ matrix.sanitizer }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sanitizer: address-undefined
+            cxx_flags: "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all -g"
+            link_flags: "-fsanitize=address,undefined"
+          - sanitizer: thread
+            cxx_flags: "-fsanitize=thread -fno-omit-frame-pointer -fno-sanitize-recover=all -g"
+            link_flags: "-fsanitize=thread"
+
+    env:
+      # ASan/UBSan: halt on the first real finding so CI fails loudly.
+      # detect_leaks=0 because the simulation intentionally leaks long-
+      # lived module singletons at process exit; LSan support can be
+      # turned on in a follow-up after a baseline scrub.
+      ASAN_OPTIONS: "halt_on_error=1:abort_on_error=1:detect_leaks=0:strict_string_checks=1:detect_stack_use_after_return=1"
+      UBSAN_OPTIONS: "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
+      TSAN_OPTIONS: "halt_on_error=1:second_deadlock_stack=1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake (${{ matrix.sanitizer }})
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DECONLIFE_BUILD_TESTS=ON \
+            -DECONLIFE_BUILD_BENCHMARKS=OFF \
+            -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}" \
+            -DCMAKE_C_FLAGS="${{ matrix.cxx_flags }}" \
+            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.link_flags }}" \
+            -DCMAKE_SHARED_LINKER_FLAGS="${{ matrix.link_flags }}"
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Run unit tests (address-undefined)
+        if: matrix.sanitizer == 'address-undefined'
+        run: ctest --test-dir build -L "module" --output-on-failure --timeout 600
+
+      - name: Run scenario tests (address-undefined)
+        if: matrix.sanitizer == 'address-undefined'
+        run: ctest --test-dir build -L "scenario" --output-on-failure --timeout 600
+
+      - name: Run integration tests (address-undefined)
+        if: matrix.sanitizer == 'address-undefined'
+        run: ctest --test-dir build -L "integration" --output-on-failure --timeout 600
+
+      - name: Run determinism tests (thread)
+        if: matrix.sanitizer == 'thread'
+        run: ctest --test-dir build -L "determinism" --output-on-failure --timeout 600
+
+      - name: Run orchestrator + thread pool tests (thread)
+        # Catch2 + catch_discover_tests publishes one ctest per TEST_CASE
+        # name; the regex below matches every case in
+        # tick_orchestrator_test.cpp and thread_pool_test.cpp, which is
+        # where TSan can actually find races.
+        if: matrix.sanitizer == 'thread'
+        run: ctest --test-dir build -R "thread pool|orchestrator|province-parallel" --output-on-failure --timeout 600
+
+  clang-tidy:
+    # Runs only on PRs and only against files changed vs. the PR base
+    # branch. We deliberately do NOT fail the build on findings yet —
+    # the goal of this first pass is to surface a baseline. Flip
+    # ECONLIFE_CLANG_TIDY_FAIL_ON_WARNING=1 below (or via repo
+    # variables) once the existing warning set has been triaged.
+    name: clang-tidy (changed files)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    env:
+      ECONLIFE_CLANG_TIDY_FAIL_ON_WARNING: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the PR base commit so `git diff` can compute the
+          # changed-file set.
+          fetch-depth: 0
+
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy-18
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
+
+      - name: Configure CMake (compile_commands.json only)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DECONLIFE_BUILD_TESTS=ON -DECONLIFE_BUILD_BENCHMARKS=OFF
+
+      - name: Generate any required code (protobuf, etc.)
+        # Build only the targets clang-tidy needs to resolve generated
+        # headers. Skipping the test/benchmark binaries keeps wall time
+        # predictable on PRs that touch a handful of files.
+        run: cmake --build build --target econlife_modules -j || true
+
+      - name: Compute changed C/C++ files
+        id: changed
+        run: |
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          git fetch origin "$BASE_REF" --depth=1
+          # Restrict to project source under simulation/ and ui/ —
+          # FetchContent deps and generated files are excluded by the
+          # HeaderFilterRegex in .clang-tidy and shouldn't drive the
+          # diff list either.
+          CHANGED=$(git diff --name-only --diff-filter=ACMR \
+            "origin/${BASE_REF}...HEAD" -- \
+            'simulation/*.h' 'simulation/*.hpp' 'simulation/*.cpp' \
+            'ui/*.h' 'ui/*.hpp' 'ui/*.cpp' || true)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [ -z "$CHANGED" ]; then
+            echo "No C/C++ source changes in this PR."
+          else
+            echo "Changed C/C++ files:"
+            echo "$CHANGED"
+          fi
+
+      - name: Run clang-tidy on changed files
+        if: steps.changed.outputs.files != ''
+        run: |
+          set -o pipefail
+          status=0
+          # Use the .clang-tidy at the repo root so checks stay in sync
+          # with what developers see locally.
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ -f "$file" ] || continue
+            echo "::group::clang-tidy $file"
+            if ! clang-tidy -p build --quiet "$file" 2>&1 | tee -a clang-tidy.log; then
+              status=1
+            fi
+            echo "::endgroup::"
+          done <<< "${{ steps.changed.outputs.files }}"
+
+          # Surface a one-line summary at the end of the log so the
+          # GitHub UI shows the count without expanding every group.
+          warning_count=$(grep -cE "warning:" clang-tidy.log || true)
+          echo "clang-tidy emitted $warning_count warning(s)."
+
+          if [ "${ECONLIFE_CLANG_TIDY_FAIL_ON_WARNING}" = "1" ] && [ "$warning_count" -gt 0 ]; then
+            echo "ECONLIFE_CLANG_TIDY_FAIL_ON_WARNING=1 and warnings were found — failing."
+            exit 1
+          fi
+          # Ignore clang-tidy's own non-zero exit until cleanup lands.
+          exit 0
+
   dependency-direction-lint:
     runs-on: ubuntu-latest
     steps:
