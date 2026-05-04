@@ -47,3 +47,6 @@ Testing/
 *.autosave
 *.snapshot
 .worktrees/
+
+# Claude Code agent worktrees (transient, per-session)
+.claude/
