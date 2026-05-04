@@ -24,16 +24,16 @@ jobs:
         run: cmake --build build --config ${{ matrix.build_type }} -j
 
       - name: Run unit tests
-        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "module" --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "module" --output-on-failure --timeout 300
 
       - name: Run determinism tests
-        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "determinism" --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "determinism" --output-on-failure --timeout 300
 
       - name: Run scenario tests
-        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "scenario" --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "scenario" --output-on-failure --timeout 300
 
       - name: Run integration tests
-        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "integration" --output-on-failure
+        run: ctest --test-dir build -C ${{ matrix.build_type }} -L "integration" --output-on-failure --timeout 300
 
   sanitizers:
     # Sanitizer matrix: ASan+UBSan for memory/UB coverage, TSan for the
