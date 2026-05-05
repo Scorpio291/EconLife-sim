@@ -90,3 +90,17 @@ Drains the PlayerActionQueue each tick, validates player actions against current
 - `test_empty_queue_no_effects`: No actions queued, no deltas produced.
 - `test_initiate_contact_creates_calendar_entry`: Creates meeting entry for the NPC.
 - `test_initiate_contact_dead_npc_rejected`: Dead NPC, verify no entry created.
+
+## Design notes
+
+The semantics of `PlayerDelta`, the ingestion ordering, validation
+boundary, replay model, cross-province handling, and batching are
+ratified in
+[`../../design/EconLife_PlayerDelta_Semantics_v1.md`](../../design/EconLife_PlayerDelta_Semantics_v1.md)
+(closes issue #11). That document is the authoritative answer to
+questions of precedence between player input and module deltas.
+
+`next_action_sequence` is part of the persistence schema as of
+`CURRENT_SCHEMA_VERSION = 2`; v1 saves load with a 0 default, which
+is safe because the action queue is never persisted (saves are taken
+between ticks when the queue is drained).

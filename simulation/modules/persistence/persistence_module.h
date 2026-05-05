@@ -58,7 +58,7 @@ class PersistenceModule : public ITickModule {
     static uint8_t compute_disruption_tier(uint32_t restoration_count);
 
     // Constants
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 1;
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 2;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

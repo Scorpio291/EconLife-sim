@@ -1436,6 +1436,11 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
     w.write_u8(static_cast<uint8_t>(state.game_mode));
     w.write_u32(state.current_schema_version);
     w.write_bool(state.network_health_dirty);
+    // Schema v2: monotonic player-action sequence counter. Persisted so saves
+    // do not restart sequence numbering and risk colliding with action ids
+    // already journaled in the same save lineage. See
+    // docs/design/EconLife_PlayerDelta_Semantics_v1.md issue #11.
+    w.write_u32(state.next_action_sequence);
 
     // --- Nations ---
     w.write_u32(static_cast<uint32_t>(state.nations.size()));
@@ -1609,6 +1614,15 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     out_state.game_mode = static_cast<GameMode>(r.read_u8());
     out_state.current_schema_version = r.read_u32();
     out_state.network_health_dirty = r.read_bool();
+    // Schema v2 added next_action_sequence. v1 saves get 0; this is safe
+    // because player_action_queue itself is not persisted (saves are taken
+    // between ticks when the queue is drained), so the next enqueued action
+    // resumes from 0 without colliding with any in-flight queue entries.
+    if (schema_ver >= 2) {
+        out_state.next_action_sequence = r.read_u32();
+    } else {
+        out_state.next_action_sequence = 0;
+    }
 
     // Nations
     uint32_t nation_count = r.read_u32();
