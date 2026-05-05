@@ -2,3 +2,6 @@ add_library(econlife_protection_rackets STATIC
     protection_rackets_module.cpp
 )
 target_link_libraries(econlife_protection_rackets PUBLIC econlife_criminal_operations)
+
+econlife_set_warnings(econlife_protection_rackets)
+econlife_maybe_werror(econlife_protection_rackets)

@@ -2,3 +2,6 @@ add_library(econlife_investigator_engine STATIC
     investigator_engine_module.cpp
 )
 target_link_libraries(econlife_investigator_engine PUBLIC econlife_criminal_operations)
+
+econlife_set_warnings(econlife_investigator_engine)
+econlife_maybe_werror(econlife_investigator_engine)

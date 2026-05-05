@@ -2,3 +2,6 @@ add_library(econlife_currency_exchange STATIC
     currency_exchange_module.cpp
 )
 target_link_libraries(econlife_currency_exchange PUBLIC econlife_commodity_trading econlife_government_budget)
+
+econlife_set_warnings(econlife_currency_exchange)
+econlife_maybe_werror(econlife_currency_exchange)

@@ -2,3 +2,6 @@ add_library(econlife_lod_system STATIC
     lod_system_module.cpp
 )
 target_link_libraries(econlife_lod_system PUBLIC econlife_regional_conditions)
+
+econlife_set_warnings(econlife_lod_system)
+econlife_maybe_werror(econlife_lod_system)

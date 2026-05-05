@@ -2,3 +2,6 @@ add_library(econlife_community_response STATIC
     community_response_module.cpp
 )
 target_link_libraries(econlife_community_response PUBLIC econlife_npc_behavior)
+
+econlife_set_warnings(econlife_community_response)
+econlife_maybe_werror(econlife_community_response)

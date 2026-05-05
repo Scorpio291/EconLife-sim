@@ -9,6 +9,34 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum policy version for Fe
 
 project(EconLife VERSION 0.1.0 LANGUAGES CXX C)
 
+# ── Project warning baseline ─────────────────────────────────────────────────
+# Helpers that are explicitly applied to project targets only — never to
+# FetchContent dependencies (Catch2, lz4, h3, nlohmann_json). Each project
+# library/executable in simulation/** must call econlife_set_warnings() and
+# econlife_maybe_werror().
+function(econlife_set_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target} PRIVATE
+            -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast
+            -Wcast-align -Wunused -Woverloaded-virtual -Wconversion -Wsign-conversion
+            -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough)
+    endif()
+endfunction()
+
+option(ECONLIFE_WARN_AS_ERROR "Treat compiler warnings as errors" OFF)
+function(econlife_maybe_werror target)
+    if(NOT ECONLIFE_WARN_AS_ERROR)
+        return()
+    endif()
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /WX)
+    else()
+        target_compile_options(${target} PRIVATE -Werror)
+    endif()
+endfunction()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

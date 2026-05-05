@@ -137,3 +137,6 @@ target_link_libraries(econlife_modules PUBLIC
     econlife_lod_system
     econlife_persistence
 )
+
+econlife_set_warnings(econlife_modules)
+econlife_maybe_werror(econlife_modules)

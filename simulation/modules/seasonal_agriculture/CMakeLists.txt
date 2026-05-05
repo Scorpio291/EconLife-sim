@@ -2,3 +2,6 @@ add_library(econlife_seasonal_agriculture STATIC
     seasonal_agriculture_module.cpp
 )
 target_link_libraries(econlife_seasonal_agriculture PUBLIC econlife_core econlife_production)
+
+econlife_set_warnings(econlife_seasonal_agriculture)
+econlife_maybe_werror(econlife_seasonal_agriculture)

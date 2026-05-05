@@ -2,3 +2,6 @@ add_library(econlife_informant_system STATIC
     informant_system_module.cpp
 )
 target_link_libraries(econlife_informant_system PUBLIC econlife_investigator_engine)
+
+econlife_set_warnings(econlife_informant_system)
+econlife_maybe_werror(econlife_informant_system)

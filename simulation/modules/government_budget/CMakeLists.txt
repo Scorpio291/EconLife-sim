@@ -2,3 +2,6 @@ add_library(econlife_government_budget STATIC
     government_budget_module.cpp
 )
 target_link_libraries(econlife_government_budget PUBLIC econlife_core econlife_financial_distribution)
+
+econlife_set_warnings(econlife_government_budget)
+econlife_maybe_werror(econlife_government_budget)

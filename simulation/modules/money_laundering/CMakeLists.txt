@@ -2,3 +2,6 @@ add_library(econlife_money_laundering STATIC
     money_laundering_module.cpp
 )
 target_link_libraries(econlife_money_laundering PUBLIC econlife_criminal_operations)
+
+econlife_set_warnings(econlife_money_laundering)
+econlife_maybe_werror(econlife_money_laundering)

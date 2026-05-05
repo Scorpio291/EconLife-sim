@@ -2,3 +2,6 @@ add_library(econlife_political_cycle STATIC
     political_cycle_module.cpp
 )
 target_link_libraries(econlife_political_cycle PUBLIC econlife_community_response)
+
+econlife_set_warnings(econlife_political_cycle)
+econlife_maybe_werror(econlife_political_cycle)

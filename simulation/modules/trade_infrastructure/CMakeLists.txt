@@ -2,3 +2,6 @@ add_library(econlife_trade_infrastructure STATIC
     trade_infrastructure_module.cpp
 )
 target_link_libraries(econlife_trade_infrastructure PUBLIC econlife_core econlife_supply_chain)
+
+econlife_set_warnings(econlife_trade_infrastructure)
+econlife_maybe_werror(econlife_trade_infrastructure)

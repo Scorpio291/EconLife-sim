@@ -2,3 +2,6 @@ add_library(econlife_obligation_network STATIC
     obligation_network_module.cpp
 )
 target_link_libraries(econlife_obligation_network PUBLIC econlife_npc_behavior)
+
+econlife_set_warnings(econlife_obligation_network)
+econlife_maybe_werror(econlife_obligation_network)

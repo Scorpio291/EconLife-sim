@@ -4,3 +4,6 @@ add_library(econlife_persistence STATIC
 target_link_libraries(econlife_persistence PUBLIC econlife_core)
 target_link_libraries(econlife_persistence PRIVATE lz4_static)
 target_include_directories(econlife_persistence PRIVATE ${lz4_SOURCE_DIR}/lib)
+
+econlife_set_warnings(econlife_persistence)
+econlife_maybe_werror(econlife_persistence)

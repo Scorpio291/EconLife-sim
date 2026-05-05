@@ -2,3 +2,6 @@ add_library(econlife_healthcare STATIC
     healthcare_module.cpp
 )
 target_link_libraries(econlife_healthcare PUBLIC econlife_core econlife_financial_distribution)
+
+econlife_set_warnings(econlife_healthcare)
+econlife_maybe_werror(econlife_healthcare)

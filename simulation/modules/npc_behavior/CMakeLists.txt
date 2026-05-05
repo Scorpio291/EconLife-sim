@@ -2,3 +2,6 @@ add_library(econlife_npc_behavior STATIC
     npc_behavior_module.cpp
 )
 target_link_libraries(econlife_npc_behavior PUBLIC econlife_core econlife_financial_distribution)
+
+econlife_set_warnings(econlife_npc_behavior)
+econlife_maybe_werror(econlife_npc_behavior)
