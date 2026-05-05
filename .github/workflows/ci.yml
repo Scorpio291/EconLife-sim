@@ -35,6 +35,90 @@ jobs:
       - name: Run integration tests
         run: ctest --test-dir build -C ${{ matrix.build_type }} -L "integration" --output-on-failure --timeout 300
 
+      # Cross-platform determinism (issue #21). Each matrix cell publishes a
+      # SHA-256 of the post-30-tick WorldState. The cross-platform-determinism
+      # job below downloads all artifacts and asserts they match.
+      - name: Build golden dump tool
+        run: cmake --build build --config ${{ matrix.build_type }} --target econlife_golden_dump -j
+
+      - name: Dump golden hash
+        shell: bash
+        run: |
+          mkdir -p golden
+          # Resolve the tool path across single- and multi-config generators.
+          for candidate in \
+            "build/simulation/tests/determinism/econlife_golden_dump" \
+            "build/simulation/tests/determinism/${{ matrix.build_type }}/econlife_golden_dump.exe" \
+            "build/simulation/tests/determinism/${{ matrix.build_type }}/econlife_golden_dump"; do
+            if [ -x "$candidate" ] || [ -f "$candidate" ]; then
+              "$candidate" --seed 42 --ticks 30 --npcs 200 --provinces 4 --out golden/hash.txt
+              break
+            fi
+          done
+          if [ ! -s golden/hash.txt ]; then
+            echo "::error::econlife_golden_dump did not produce a hash"
+            exit 1
+          fi
+          echo "Hash for ${{ matrix.os }} / ${{ matrix.build_type }}:"
+          cat golden/hash.txt
+
+      - name: Upload golden hash artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-${{ matrix.os }}-${{ matrix.build_type }}
+          path: golden/hash.txt
+          retention-days: 30
+
+  cross-platform-determinism:
+    # Asserts every (os, build_type) cell produced the same post-30-tick
+    # SHA-256. Catches a class of bug the per-platform determinism_test.cpp
+    # cannot see: same-seed-different-bytes across Linux vs Windows or
+    # Debug vs Release. Closes #21.
+    name: Cross-platform determinism
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Download all golden hashes
+        uses: actions/download-artifact@v4
+        with:
+          path: golden
+          pattern: golden-*
+
+      - name: Compare hashes across platforms
+        run: |
+          set -e
+          shopt -s nullglob
+          declare -A SEEN
+          mismatch=0
+          for f in golden/golden-*/hash.txt; do
+            cell=$(basename "$(dirname "$f")")
+            hash=$(tr -d '[:space:]' < "$f")
+            echo "$cell -> $hash"
+            SEEN["$cell"]="$hash"
+          done
+          if [ ${#SEEN[@]} -lt 2 ]; then
+            echo "::error::Expected multiple matrix cells; got ${#SEEN[@]}."
+            exit 1
+          fi
+          # Use the first hash as reference; flag every divergence.
+          ref=""
+          for cell in "${!SEEN[@]}"; do
+            if [ -z "$ref" ]; then
+              ref="${SEEN[$cell]}"
+              ref_cell="$cell"
+              continue
+            fi
+            if [ "${SEEN[$cell]}" != "$ref" ]; then
+              echo "::error::$cell hash ${SEEN[$cell]} != $ref_cell hash $ref"
+              mismatch=1
+            fi
+          done
+          if [ "$mismatch" = "1" ]; then
+            echo "Cross-platform determinism gate FAILED — same seed produced different bytes across cells."
+            exit 1
+          fi
+          echo "All ${#SEEN[@]} cells agree on hash $ref."
+
   sanitizers:
     # Sanitizer matrix: ASan+UBSan for memory/UB coverage, TSan for the
     # multi-threaded province dispatch + tick orchestrator. Linux only —
