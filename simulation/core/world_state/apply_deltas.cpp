@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "core/config/package_config.h"
 #include "core/tick/deferred_work.h"
@@ -302,19 +303,41 @@ static void apply_market_deltas(WorldState& world, const std::vector<MarketDelta
 // ---------------------------------------------------------------------------
 static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceDelta>& deltas,
                                   uint32_t evidence_decay_interval) {
+    if (deltas.empty())
+        return;
+
+    // Reserve pool capacity up-front so push_back doesn't invalidate the
+    // EvidenceToken* pointers cached in by_id.
+    size_t new_token_count = 0;
+    for (const auto& d : deltas) {
+        if (d.new_token.has_value())
+            ++new_token_count;
+    }
+    if (new_token_count > 0) {
+        world.evidence_pool.reserve(world.evidence_pool.size() + new_token_count);
+    }
+
+    // Build index for O(1) token lookup, plus running max_id cursor so the
+    // id == 0 fallback path doesn't rescan the pool per insertion.
+    std::unordered_map<uint32_t, EvidenceToken*> by_id;
+    by_id.reserve(world.evidence_pool.size() + new_token_count);
+    uint32_t max_id = 0;
+    for (auto& t : world.evidence_pool) {
+        by_id[t.id] = &t;
+        if (t.id > max_id)
+            max_id = t.id;
+    }
+
     for (const auto& d : deltas) {
         if (d.new_token.has_value()) {
             EvidenceToken token = *d.new_token;
-            // Assign id if not set
             if (token.id == 0) {
-                uint32_t max_id = 0;
-                for (const auto& t : world.evidence_pool) {
-                    if (t.id > max_id)
-                        max_id = t.id;
-                }
-                token.id = max_id + 1;
+                token.id = ++max_id;
+            } else if (token.id > max_id) {
+                max_id = token.id;
             }
             world.evidence_pool.push_back(token);
+            by_id[token.id] = &world.evidence_pool.back();
             // Schedule initial decay. Handler self-reschedules while token stays active.
             if (token.decay_rate > 0.0f) {
                 world.deferred_work_queue.push({world.current_tick + evidence_decay_interval,
@@ -323,19 +346,15 @@ static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceD
             }
         }
         if (d.retired_token_id.has_value()) {
-            for (auto& t : world.evidence_pool) {
-                if (t.id == *d.retired_token_id) {
-                    t.is_active = false;
-                    break;
-                }
+            auto it = by_id.find(*d.retired_token_id);
+            if (it != by_id.end()) {
+                it->second->is_active = false;
             }
         }
         if (d.updated_token_id.has_value() && d.updated_actionability.has_value()) {
-            for (auto& t : world.evidence_pool) {
-                if (t.id == *d.updated_token_id) {
-                    t.actionability = *d.updated_actionability;
-                    break;
-                }
+            auto it = by_id.find(*d.updated_token_id);
+            if (it != by_id.end()) {
+                it->second->actionability = *d.updated_actionability;
             }
         }
     }
@@ -345,9 +364,25 @@ static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceD
 // apply_region_deltas
 // ---------------------------------------------------------------------------
 static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta>& deltas) {
+    if (deltas.empty())
+        return;
+
+    // Build region_id -> Province* bucket. One region can map to multiple
+    // provinces; bucket vectors are populated in world.provinces order so
+    // iterating a bucket reproduces the original nested-loop iteration order
+    // (determinism).
+    std::unordered_map<uint32_t, std::vector<Province*>> by_region;
+    for (auto& prov : world.provinces) {
+        by_region[prov.region_id].push_back(&prov);
+    }
+
     for (const auto& d : deltas) {
-        for (auto& prov : world.provinces) {
-            if (prov.region_id == d.region_id) {
+        auto bucket = by_region.find(d.region_id);
+        if (bucket == by_region.end())
+            continue;
+        for (Province* prov_ptr : bucket->second) {
+            Province& prov = *prov_ptr;
+            {
                 auto& c = prov.conditions;
                 if (d.stability_delta.has_value()) {
                     c.stability_score = clamp01(safe_add(c.stability_score, *d.stability_delta));
@@ -398,21 +433,29 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
 // apply_currency_deltas
 // ---------------------------------------------------------------------------
 static void apply_currency_deltas(WorldState& world, const std::vector<CurrencyDelta>& deltas) {
+    if (deltas.empty())
+        return;
+
+    std::unordered_map<uint32_t, CurrencyRecord*> by_nation;
+    by_nation.reserve(world.currencies.size());
+    for (auto& cur : world.currencies) {
+        by_nation[cur.nation_id] = &cur;
+    }
+
     for (const auto& d : deltas) {
-        for (auto& cur : world.currencies) {
-            if (cur.nation_id == d.nation_id) {
-                if (d.usd_rate_update.has_value()) {
-                    cur.usd_rate = std::max(0.001f, *d.usd_rate_update);
-                }
-                if (d.pegged_update.has_value()) {
-                    cur.pegged = *d.pegged_update;
-                }
-                if (d.foreign_reserves_delta.has_value()) {
-                    cur.foreign_reserves =
-                        clamp01(safe_add(cur.foreign_reserves, *d.foreign_reserves_delta));
-                }
-                break;
-            }
+        auto it = by_nation.find(d.nation_id);
+        if (it == by_nation.end())
+            continue;
+        CurrencyRecord& cur = *it->second;
+        if (d.usd_rate_update.has_value()) {
+            cur.usd_rate = std::max(0.001f, *d.usd_rate_update);
+        }
+        if (d.pegged_update.has_value()) {
+            cur.pegged = *d.pegged_update;
+        }
+        if (d.foreign_reserves_delta.has_value()) {
+            cur.foreign_reserves =
+                clamp01(safe_add(cur.foreign_reserves, *d.foreign_reserves_delta));
         }
     }
 }
@@ -487,12 +530,20 @@ static void apply_technology_deltas(WorldState& world, const std::vector<Technol
 // ---------------------------------------------------------------------------
 static void apply_dissolved_businesses(WorldState& world,
                                        const std::vector<DissolvedBusinessDelta>& deltas) {
+    if (deltas.empty())
+        return;
+
+    // Single remove_if pass over the dissolved-id set, instead of one pass per
+    // delta.
+    std::unordered_set<uint32_t> dissolved_ids;
+    dissolved_ids.reserve(deltas.size());
     for (const auto& d : deltas) {
-        world.npc_businesses.erase(
-            std::remove_if(world.npc_businesses.begin(), world.npc_businesses.end(),
-                           [&](const NPCBusiness& b) { return b.id == d.business_id; }),
-            world.npc_businesses.end());
+        dissolved_ids.insert(d.business_id);
     }
+    world.npc_businesses.erase(
+        std::remove_if(world.npc_businesses.begin(), world.npc_businesses.end(),
+                       [&](const NPCBusiness& b) { return dissolved_ids.count(b.id) != 0; }),
+        world.npc_businesses.end());
 }
 
 // ---------------------------------------------------------------------------
