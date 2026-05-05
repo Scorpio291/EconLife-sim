@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { resolve, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { URL } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,23 @@ const SIM_SEED = process.env['SIM_SEED'] ?? '42';
 const SIM_NPCS = process.env['SIM_NPCS'] ?? '2000';
 const SIM_PROVINCES = process.env['SIM_PROVINCES'] ?? '6';
 const DIST_DIR = resolve(__dirname, '../dist');
+
+// Network / auth configuration
+//
+// BRIDGE_HOST: interface to bind the HTTP+WS server to. Defaults to loopback so
+//   the bridge is not reachable from the LAN. Opt in to LAN access with
+//   BRIDGE_HOST=0.0.0.0 (and ideally also set BRIDGE_TOKEN below).
+// BRIDGE_ALLOWED_ORIGINS: comma-separated list of allowed Origin: header values
+//   for browser clients. No-origin connections (curl, native test clients,
+//   integration scripts) are always allowed. Defaults to localhost on PORT.
+// BRIDGE_TOKEN: optional shared secret. When set, WebSocket clients must
+//   connect with `?token=<value>` on the upgrade URL. Off by default.
+const BRIDGE_HOST = process.env['BRIDGE_HOST'] ?? '127.0.0.1';
+const ALLOWED_ORIGINS = (
+  process.env['BRIDGE_ALLOWED_ORIGINS']
+  ?? `http://localhost:${PORT},http://127.0.0.1:${PORT}`
+).split(',').map((s) => s.trim()).filter(Boolean);
+const BRIDGE_TOKEN = process.env['BRIDGE_TOKEN'] ?? '';
 
 let simProcess: ChildProcess | null = null;
 let latestState: string | null = null;
@@ -112,7 +130,38 @@ const httpServer = createServer(serveStatic);
 
 // ── WebSocket server (shares HTTP server) ───────────────────────────────────
 
-const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+const wss = new WebSocketServer({
+  server: httpServer,
+  path: '/ws',
+  verifyClient: ({ origin, req }, done) => {
+    // Origin allow-list. Browsers send Origin; native clients (curl, test
+    // scripts) typically don't, so we permit no-origin connections.
+    if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+      console.warn(`[bridge] Rejected WS connection from disallowed origin: ${origin}`);
+      done(false, 403, 'Forbidden origin');
+      return;
+    }
+
+    // Optional shared-secret token check.
+    if (BRIDGE_TOKEN) {
+      let token: string | null = null;
+      try {
+        // req.url is the path+query on the upgrade request, e.g. "/ws?token=abc"
+        const parsed = new URL(req.url ?? '', 'http://localhost');
+        token = parsed.searchParams.get('token');
+      } catch {
+        token = null;
+      }
+      if (token !== BRIDGE_TOKEN) {
+        console.warn('[bridge] Rejected WS connection: missing/invalid token');
+        done(false, 401, 'Unauthorized');
+        return;
+      }
+    }
+
+    done(true);
+  },
+});
 const clients = new Set<WebSocket>();
 
 function broadcast(data: string) {
@@ -132,12 +181,35 @@ wss.on('connection', (ws) => {
   }
 
   ws.on('message', (raw) => {
-    const msg = raw.toString();
+    const text = raw.toString();
+
+    // Validate before forwarding to the sim's stdin. We require valid JSON
+    // describing a plain object with a string `cmd` field. Anything else is
+    // rejected without touching the sim.
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      ws.send(JSON.stringify({ type: 'error', message: 'invalid command' }));
+      return;
+    }
+    if (
+      parsed === null
+      || typeof parsed !== 'object'
+      || Array.isArray(parsed)
+      || typeof (parsed as { cmd?: unknown }).cmd !== 'string'
+    ) {
+      ws.send(JSON.stringify({ type: 'error', message: 'invalid command' }));
+      return;
+    }
+
     if (!simProcess?.stdin?.writable) {
       ws.send(JSON.stringify({ type: 'error', message: 'Simulation not running' }));
       return;
     }
-    simProcess.stdin.write(msg + '\n');
+    // Re-serialise the validated payload so we never forward arbitrary bytes
+    // (newlines, control chars, trailing junk) to the sim.
+    simProcess.stdin.write(JSON.stringify(parsed) + '\n');
   });
 
   ws.on('close', () => {
@@ -148,17 +220,42 @@ wss.on('connection', (ws) => {
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
-httpServer.listen(PORT, () => {
-  console.log(`[bridge] Server listening on http://localhost:${PORT}`);
+httpServer.listen(PORT, BRIDGE_HOST, () => {
+  console.log(`[bridge] Server listening on http://${BRIDGE_HOST}:${PORT}`);
+  if (BRIDGE_HOST === '127.0.0.1' || BRIDGE_HOST === 'localhost') {
+    console.log('[bridge] Loopback only. For LAN access, set BRIDGE_HOST=0.0.0.0 (and consider BRIDGE_TOKEN).');
+  }
+  console.log(`[bridge] Allowed WS origins: ${ALLOWED_ORIGINS.join(', ') || '(none)'}`);
+  if (BRIDGE_TOKEN) {
+    console.log('[bridge] WS token auth: enabled (clients must pass ?token=...)');
+  }
   simProcess = startSim();
 });
 
-process.on('SIGINT', () => {
-  console.log('\n[bridge] Shutting down...');
-  if (simProcess?.stdin?.writable) {
-    simProcess.stdin.write('{"cmd":"quit"}\n');
-  }
+// ── Graceful shutdown ───────────────────────────────────────────────────────
+
+let shuttingDown = false;
+function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n[bridge] Received ${signal}, shutting down...`);
   wss.close();
   httpServer.close();
-  process.exit(0);
-});
+  if (!simProcess) {
+    process.exit(0);
+    return;
+  }
+  if (simProcess.stdin?.writable) {
+    simProcess.stdin.write('{"cmd":"quit"}\n');
+  }
+  const killTimer = setTimeout(() => {
+    console.warn('[bridge] Sim did not exit in 2s; sending SIGKILL.');
+    simProcess?.kill('SIGKILL');
+  }, 2000);
+  simProcess.on('exit', () => {
+    clearTimeout(killTimer);
+    process.exit(0);
+  });
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
