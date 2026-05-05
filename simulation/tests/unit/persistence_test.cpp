@@ -84,7 +84,9 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 1);
+    // Schema v2: added next_action_sequence persistence (issue #11). See
+    // docs/design/EconLife_PlayerDelta_Semantics_v1.md.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 2);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

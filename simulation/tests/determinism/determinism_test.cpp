@@ -13,6 +13,8 @@
 
 #include "../test_world_factory.h"
 #include "core/world_state/apply_deltas.h"
+#include "core/world_state/player_action_queue.h"
+#include "core/world_state/player_action_types.h"
 #include "modules/register_base_game_modules.h"
 
 using namespace econlife;
@@ -327,4 +329,60 @@ TEST_CASE("30-tick determinism with modules across thread counts",
     auto final1 = serialize_world_state(world1);
     auto final6 = serialize_world_state(world6);
     REQUIRE(final1 == final6);
+}
+
+// ── Player-input determinism (issue #11) ────────────────────────────────────
+//
+// Submits a fixed PlayerAction script against a fixed seed and asserts
+// identical output. Confirms the design ratified in
+// docs/design/EconLife_PlayerDelta_Semantics_v1.md: that player input,
+// once enqueued and ordered by sequence_number, is part of the
+// deterministic input set.
+
+TEST_CASE("same seed + same player action script produces identical state",
+          "[determinism][player_actions]") {
+    PackageConfig config{};
+
+    auto world1 = create_test_world(42, 200, 6, 15);
+    auto world2 = create_test_world(42, 200, 6, 15);
+
+    TickOrchestrator orch1, orch2;
+    register_base_game_modules(orch1, config);
+    register_base_game_modules(orch2, config);
+    orch1.set_config(config);
+    orch2.set_config(config);
+    orch1.finalize_registration();
+    orch2.finalize_registration();
+
+    ThreadPool pool1(1), pool2(1);
+
+    // Enqueue the same fixed action script in both worlds, then run ticks.
+    // The exact set is deliberately small — we're proving determinism, not
+    // exercising every action type.
+    auto enqueue_script = [](WorldState& w) {
+        // Tick 0: travel to province 1 (assuming world has at least 2 provinces).
+        if (w.provinces.size() >= 2 && w.player) {
+            uint32_t dst = (w.player->current_province_id == w.provinces[0].id) ? w.provinces[1].id
+                                                                                : w.provinces[0].id;
+            enqueue_player_action(w, PlayerActionType::travel, TravelAction{dst});
+        }
+        // Tick 0: also try a calendar schedule (validates non-conflicting
+        // multi-action ordering within the same tick).
+        enqueue_player_action(w, PlayerActionType::calendar_schedule,
+                              CalendarScheduleAction{CalendarEntryType::personal,
+                                                     /*npc_id=*/0,
+                                                     /*desired_start_tick=*/10,
+                                                     /*duration_ticks=*/2});
+    };
+
+    enqueue_script(world1);
+    enqueue_script(world2);
+
+    run_ticks(world1, orch1, pool1, 15);
+    run_ticks(world2, orch2, pool2, 15);
+
+    auto final1 = serialize_world_state(world1);
+    auto final2 = serialize_world_state(world2);
+    REQUIRE(final1 == final2);
+    REQUIRE(world1.next_action_sequence == world2.next_action_sequence);
 }
