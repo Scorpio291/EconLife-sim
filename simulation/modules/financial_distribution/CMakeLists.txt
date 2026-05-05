@@ -2,3 +2,6 @@ add_library(econlife_financial_distribution STATIC
     financial_distribution_module.cpp
 )
 target_link_libraries(econlife_financial_distribution PUBLIC econlife_core econlife_price_engine)
+
+econlife_set_warnings(econlife_financial_distribution)
+econlife_maybe_werror(econlife_financial_distribution)

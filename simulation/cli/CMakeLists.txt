@@ -24,3 +24,8 @@ target_include_directories(econlife_cli PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+econlife_set_warnings(econlife_interactive_json)
+econlife_maybe_werror(econlife_interactive_json)
+econlife_set_warnings(econlife_cli)
+econlife_maybe_werror(econlife_cli)

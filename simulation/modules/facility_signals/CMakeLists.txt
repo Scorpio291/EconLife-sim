@@ -2,3 +2,6 @@ add_library(econlife_facility_signals STATIC
     facility_signals_module.cpp
 )
 target_link_libraries(econlife_facility_signals PUBLIC econlife_evidence)
+
+econlife_set_warnings(econlife_facility_signals)
+econlife_maybe_werror(econlife_facility_signals)

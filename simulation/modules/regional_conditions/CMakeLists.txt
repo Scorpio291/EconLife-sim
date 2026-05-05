@@ -2,3 +2,6 @@ add_library(econlife_regional_conditions STATIC
     regional_conditions_module.cpp
 )
 target_link_libraries(econlife_regional_conditions PUBLIC econlife_political_cycle econlife_influence_network)
+
+econlife_set_warnings(econlife_regional_conditions)
+econlife_maybe_werror(econlife_regional_conditions)

@@ -7,3 +7,6 @@ target_link_libraries(econlife_price_engine PUBLIC
     econlife_labor_market
     econlife_seasonal_agriculture
 )
+
+econlife_set_warnings(econlife_price_engine)
+econlife_maybe_werror(econlife_price_engine)

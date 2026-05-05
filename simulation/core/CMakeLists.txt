@@ -36,3 +36,6 @@ target_link_libraries(econlife_core PUBLIC
     lz4_static
     Threads::Threads
 )
+
+econlife_set_warnings(econlife_core)
+econlife_maybe_werror(econlife_core)

@@ -2,3 +2,6 @@ add_library(econlife_commodity_trading STATIC
     commodity_trading_module.cpp
 )
 target_link_libraries(econlife_commodity_trading PUBLIC econlife_core econlife_price_engine)
+
+econlife_set_warnings(econlife_commodity_trading)
+econlife_maybe_werror(econlife_commodity_trading)

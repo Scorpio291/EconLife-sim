@@ -2,3 +2,6 @@ add_library(econlife_criminal_operations STATIC
     criminal_operations_module.cpp
 )
 target_link_libraries(econlife_criminal_operations PUBLIC econlife_evidence)
+
+econlife_set_warnings(econlife_criminal_operations)
+econlife_maybe_werror(econlife_criminal_operations)
