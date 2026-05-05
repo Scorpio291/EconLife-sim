@@ -16,7 +16,12 @@ project(EconLife VERSION 0.1.0 LANGUAGES CXX C)
 # econlife_maybe_werror().
 function(econlife_set_warnings target)
     if(MSVC)
-        target_compile_options(${target} PRIVATE /W4 /permissive-)
+        # /permissive- is intentionally NOT enabled here: it surfaces real
+        # conformance issues but our existing code has not been audited for
+        # MSVC-strict mode (typename in dependent contexts, two-phase lookup,
+        # etc.). Add it once the warnings baseline has been triaged and the
+        # codebase compiles cleanly under /W4.
+        target_compile_options(${target} PRIVATE /W4)
     else()
         target_compile_options(${target} PRIVATE
             -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast

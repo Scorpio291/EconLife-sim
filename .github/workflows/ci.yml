@@ -10,6 +10,10 @@ jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
+      # Don't cancel siblings on first failure — we want to see whether a
+      # failure is platform-specific (e.g. Windows Debug only) or
+      # build-type-specific.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         build_type: [Debug, Release]
