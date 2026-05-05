@@ -215,7 +215,6 @@ struct CrossProvinceDeltaBuffer {
     std::vector<CrossProvinceDelta> entries;
 
     void push(CrossProvinceDelta delta);
-    void flush_to_deferred_queue(struct WorldState& world_state);
 };
 
 }  // namespace econlife
