@@ -75,6 +75,15 @@ jobs:
           tail -n 200 build/Testing/Temporary/LastTest.log 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "no LastTest.log" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload Testing/Temporary on any test failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-logs-${{ matrix.os }}-${{ matrix.build_type }}
+          path: build/Testing/Temporary/
+          retention-days: 14
+          if-no-files-found: ignore
+
       # Cross-platform determinism (issue #21). Each matrix cell publishes a
       # SHA-256 of the post-30-tick WorldState. The cross-platform-determinism
       # job below downloads all artifacts and asserts they match.
