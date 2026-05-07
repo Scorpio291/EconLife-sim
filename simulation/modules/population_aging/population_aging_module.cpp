@@ -64,7 +64,6 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
 
     const auto& province = state.provinces[province_idx];
     const auto& demographics = province.demographics;
-    const auto& community = province.community;
 
     RegionDelta rdelta;
     rdelta.region_id = province_idx;

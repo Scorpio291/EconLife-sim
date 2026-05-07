@@ -200,7 +200,7 @@ static void handle_climate_downstream(const DeferredWorkItem& item, WorldState& 
     (void)delta;
 }
 
-static void handle_npc_travel_arrival(const DeferredWorkItem& item, WorldState& world,
+static void handle_npc_travel_arrival(const DeferredWorkItem& item, WorldState& /*world*/,
                                       DeltaBuffer& delta, const NPCIndex& npc_index) {
     // NPC physically arrives at destination province.
     // Write status change via DeltaBuffer (not direct mutation).

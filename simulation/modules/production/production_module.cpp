@@ -176,7 +176,7 @@ void ProductionModule::process_business(const NPCBusiness& biz, const WorldState
 void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& facility,
                                         const WorldState& state, DeltaBuffer& delta,
                                         std::unordered_map<std::string, float>& available_supply,
-                                        DeterministicRNG& rng) {
+                                        DeterministicRNG& /*rng*/) {
     // Look up recipe.
     const Recipe* recipe = recipe_registry_.find(facility.recipe_id);
     if (!recipe) {

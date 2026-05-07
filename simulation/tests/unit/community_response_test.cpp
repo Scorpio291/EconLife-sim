@@ -214,7 +214,7 @@ TEST_CASE("test_cohesion_ema_smoothing", "[community_response][tier6]") {
 
     // Run multiple ticks to see EMA convergence
     float initial_cohesion = 0.5f;
-    for (int tick = 1; tick <= 20; ++tick) {
+    for (uint32_t tick = 1; tick <= 20; ++tick) {
         state.current_tick = tick;
         DeltaBuffer delta{};
         module.execute(state, delta);

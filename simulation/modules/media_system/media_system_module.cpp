@@ -224,7 +224,7 @@ void MediaSystemModule::create_stories_from_journalists(const WorldState& state,
     }
 }
 
-void MediaSystemModule::propagate_stories(const WorldState& state, DeltaBuffer& delta) {
+void MediaSystemModule::propagate_stories(const WorldState& state, DeltaBuffer& /*delta*/) {
     // Sort active stories by id for determinism
     std::sort(active_stories_.begin(), active_stories_.end(),
               [](const Story& a, const Story& b) { return a.id < b.id; });

@@ -127,8 +127,9 @@ Relationship make_test_relationship(uint32_t target_id, float trust = 0.5f, floa
     return rel;
 }
 
-// Create a minimal PlayerCharacter for testing.
-PlayerCharacter make_test_player(uint32_t id = 1) {
+// Create a minimal PlayerCharacter for testing. Scaffolding for player-aware
+// behavior tests; not currently exercised but kept alongside make_test_npc.
+[[maybe_unused]] PlayerCharacter make_test_player(uint32_t id = 1) {
     PlayerCharacter player{};
     player.id = id;
     player.wealth = 100000.0f;

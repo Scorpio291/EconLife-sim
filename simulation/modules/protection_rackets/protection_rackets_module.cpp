@@ -153,7 +153,6 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
                 cfg_.violence_threshold, cfg_.abandonment_threshold);
 
             if (new_stage != racket.escalation_stage) {
-                RacketEscalationStage old_stage = racket.escalation_stage;
                 racket.escalation_stage = new_stage;
 
                 // Stage transition effects

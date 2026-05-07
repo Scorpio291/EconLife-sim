@@ -127,7 +127,7 @@ bool TechnologyCatalog::load_ceilings_csv(const std::string& filepath) {
 
         MaturationCeilingEntry entry;
         entry.node_key = fields[0];
-        for (int i = 0; i < 10 && i + 1 < static_cast<int>(fields.size()); ++i) {
+        for (size_t i = 0; i < 10 && i + 1 < fields.size(); ++i) {
             entry.era_ceilings[i] = std::strtof(fields[i + 1].c_str(), nullptr);
         }
 

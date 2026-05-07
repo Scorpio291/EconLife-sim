@@ -133,6 +133,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         biz_revenue.business_id = biz->id;
         biz_revenue.cash_delta = revenue;
         biz_revenue.revenue_per_tick_update = revenue;
+        biz_revenue.output_quality_update = output_quality;
         province_delta.business_deltas.push_back(biz_revenue);
 
         // Compute precursor consumption (meth requires 2x precursor)

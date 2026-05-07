@@ -28,8 +28,8 @@ inline uint32_t good_id_hash(std::string_view good_id) noexcept {
     constexpr uint32_t FNV_OFFSET_BASIS = 0x811c9dc5u;
     constexpr uint32_t FNV_PRIME = 0x01000193u;
     uint32_t h = FNV_OFFSET_BASIS;
-    for (unsigned char c : good_id) {
-        h ^= c;
+    for (char ch : good_id) {
+        h ^= static_cast<unsigned char>(ch);
         h *= FNV_PRIME;
     }
     return h;

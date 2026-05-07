@@ -122,8 +122,10 @@ PlayerCharacter make_test_player(uint32_t id = 1) {
     return player;
 }
 
-// Find an NPC delta by npc_id in the delta buffer.
-const NPCDelta* find_npc_delta(const DeltaBuffer& delta, uint32_t npc_id) {
+// Find an NPC delta by npc_id in the delta buffer. Kept as scaffolding for
+// per-delta inspection in future tests; current tests use sum_npc_capital_deltas
+// for aggregate checks.
+[[maybe_unused]] const NPCDelta* find_npc_delta(const DeltaBuffer& delta, uint32_t npc_id) {
     for (const auto& nd : delta.npc_deltas) {
         if (nd.npc_id == npc_id) {
             return &nd;

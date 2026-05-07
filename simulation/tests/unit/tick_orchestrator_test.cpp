@@ -36,12 +36,12 @@ class TestModule : public ITickModule {
     std::vector<std::string_view> runs_before() const override { return before_; }
     bool is_province_parallel() const noexcept override { return parallel_; }
 
-    void execute(const WorldState& state, DeltaBuffer& delta) override {
+    void execute(const WorldState& /*state*/, DeltaBuffer& /*delta*/) override {
         execution_order_.push_back(name_);
     }
 
-    void execute_province(uint32_t province_idx, const WorldState& state,
-                          DeltaBuffer& province_delta) override {
+    void execute_province(uint32_t province_idx, const WorldState& /*state*/,
+                          DeltaBuffer& /*province_delta*/) override {
         execution_order_.push_back(name_ + "_p" + std::to_string(province_idx));
     }
 
@@ -71,12 +71,12 @@ class TestModuleWithPostPass : public ITickModule {
     bool is_province_parallel() const noexcept override { return true; }
     bool has_global_post_pass() const noexcept override { return true; }
 
-    void execute(const WorldState& state, DeltaBuffer& delta) override {
+    void execute(const WorldState& /*state*/, DeltaBuffer& /*delta*/) override {
         TestModule::execution_order().push_back(name_ + "_global");
     }
 
-    void execute_province(uint32_t province_idx, const WorldState& state,
-                          DeltaBuffer& province_delta) override {
+    void execute_province(uint32_t province_idx, const WorldState& /*state*/,
+                          DeltaBuffer& /*province_delta*/) override {
         TestModule::execution_order().push_back(name_ + "_p" + std::to_string(province_idx));
     }
 

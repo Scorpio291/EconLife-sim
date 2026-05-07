@@ -217,7 +217,7 @@ TEST_CASE("NPC memory accumulation and cap enforcement", "[integration][npc]") {
         mem.tick_timestamp = tick;
         mem.type = MemoryType::interaction;
         mem.subject_id = 200 + (tick % 50);
-        mem.emotional_weight = 0.1f + (tick % 10) * 0.05f;
+        mem.emotional_weight = 0.1f + static_cast<float>(tick % 10) * 0.05f;
         mem.decay = 1.0f;
         mem.is_actionable = false;
         nd.new_memory_entry = mem;

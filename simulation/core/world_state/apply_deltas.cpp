@@ -424,6 +424,10 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     prov.infrastructure_rating = clamp01(
                         safe_add(prov.infrastructure_rating, *d.infrastructure_rating_delta));
                 }
+                if (d.avg_property_value_update.has_value()) {
+                    float v = *d.avg_property_value_update;
+                    prov.avg_property_value = std::isfinite(v) ? std::max(0.0f, v) : 0.0f;
+                }
             }
         }
     }

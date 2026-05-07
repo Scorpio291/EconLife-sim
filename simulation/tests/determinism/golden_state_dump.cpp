@@ -12,7 +12,7 @@
 // which violates the project's core determinism contract.
 //
 // Usage:
-//   econlife_golden_dump --seed 42 --ticks 30 --npcs 200 --provinces 4 \
+//   econlife_golden_dump --seed 42 --ticks 30 --npcs 200 --provinces 4
 //                        --out hash.txt
 //
 // Notes:
@@ -169,7 +169,7 @@ std::string sha256_hex(const std::vector<uint8_t>& bytes) {
 
     static const char* hex = "0123456789abcdef";
     std::string out(64, '0');
-    for (int i = 0; i < 32; ++i) {
+    for (size_t i = 0; i < 32; ++i) {
         out[i * 2] = hex[(digest[i] >> 4) & 0xF];
         out[i * 2 + 1] = hex[digest[i] & 0xF];
     }

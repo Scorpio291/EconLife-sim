@@ -49,7 +49,7 @@ float WeaponsTraffickingModule::compute_chain_custody_actionability(float base_a
 // Pre-parallel initialization
 // ============================================================================
 
-void WeaponsTraffickingModule::init_for_tick(const WorldState& state) {
+void WeaponsTraffickingModule::init_for_tick(const WorldState& /*state*/) {
     // Clear per-tick audit records on main thread before parallel dispatch.
     diversion_records_.clear();
     procurement_records_.clear();
@@ -107,7 +107,13 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
 
         float diverted =
             compute_diversion_output(total_output, diversion_fraction, cfg_.max_diversion_fraction);
-        float formal = total_output - diverted;
+        // The non-diverted portion (formal_output = total_output - diverted)
+        // continues to flow through the production module's normal supply
+        // path. weapons_trafficking only models the informal-market pile-on.
+        // Once production and weapons_trafficking share a recipe-aware view
+        // of weapon output, formal_output should be subtracted from the
+        // formal-market supply_delta to avoid double-counting.
+        [[maybe_unused]] const float formal_output = total_output - diverted;
 
         total_weapon_supply += diverted;
 

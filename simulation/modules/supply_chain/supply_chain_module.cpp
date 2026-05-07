@@ -133,7 +133,7 @@ void SupplyChainModule::collect_buy_orders(uint32_t province_id, const WorldStat
               [](const BuyOrder& a, const BuyOrder& b) { return a.good_id < b.good_id; });
 }
 
-void SupplyChainModule::match_local(uint32_t province_id, const WorldState& state,
+void SupplyChainModule::match_local(uint32_t province_id, const WorldState& /*state*/,
                                     DeltaBuffer& delta, std::vector<SellOffer>& offers,
                                     std::vector<BuyOrder>& orders) const {
     // Local matching: for each good, match available supply to demand.
@@ -326,8 +326,8 @@ void SupplyChainModule::execute(const WorldState& state, DeltaBuffer& delta) {
     process_lod1_imports(state, delta);
 }
 
-void SupplyChainModule::process_transit_arrivals(const WorldState& state,
-                                                 DeltaBuffer& delta) const {
+void SupplyChainModule::process_transit_arrivals(const WorldState& /*state*/,
+                                                 DeltaBuffer& /*delta*/) const {
     // In V1, transit arrivals are DeferredWorkItems with
     // type == transit_arrival and due_tick <= current_tick.
     //
@@ -353,8 +353,9 @@ void SupplyChainModule::process_transit_arrivals(const WorldState& state,
     // 5. Set shipment status to arrived
 }
 
-void SupplyChainModule::process_interception_checks(const WorldState& state, DeltaBuffer& delta,
-                                                    DeterministicRNG& rng) const {
+void SupplyChainModule::process_interception_checks(const WorldState& /*state*/,
+                                                    DeltaBuffer& /*delta*/,
+                                                    DeterministicRNG& /*rng*/) const {
     // Process interception_check DeferredWorkItems for criminal shipments.
     //
     // For each interception check:
@@ -404,7 +405,10 @@ void SupplyChainModule::process_lod1_imports(const WorldState& state, DeltaBuffe
             // Use geographic centroid distance / sea_speed.
             // For V1, we approximate with a fixed transit time of 5 ticks
             // for LOD 1 imports, since centroid data may not be populated.
-            constexpr uint32_t lod1_default_transit_ticks = 5;
+            // The arrival MarketDelta below currently applies same-tick;
+            // when the DeferredWorkQueue integration lands, this constant
+            // becomes the due_tick offset on a transit_arrival work item.
+            [[maybe_unused]] constexpr uint32_t lod1_default_transit_ticks = 5;
 
             float ship_qty = std::min(export_good.quantity_available, best_demand);
             if (ship_qty <= 0.001f) {

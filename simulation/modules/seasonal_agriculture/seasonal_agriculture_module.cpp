@@ -334,7 +334,7 @@ void SeasonalAgricultureModule::process_annual_facility(uint32_t facility_id,
 // ===========================================================================
 
 void SeasonalAgricultureModule::process_continuous_facility(
-    uint32_t facility_id, const ContinuousFacilityInfo& info, const Facility& facility,
+    uint32_t /*facility_id*/, const ContinuousFacilityInfo& info, const Facility& facility,
     const Province& province, const WorldState& state, DeltaBuffer& delta) {
     const float latitude = province.geography.latitude;
     const uint32_t tick_of_year = effective_tick_of_year(state.current_tick, latitude);

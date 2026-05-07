@@ -138,6 +138,8 @@ struct RegionDelta {
         response_stage_replacement;  // replacement; new community response stage (0-6)
     std::optional<float>
         infrastructure_rating_delta;  // additive; applied to province infrastructure_rating
+    std::optional<float>
+        avg_property_value_update;  // replacement; latest mean PropertyListing.market_value
 };
 
 // --- Cross-province communication ---

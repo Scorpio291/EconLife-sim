@@ -229,8 +229,10 @@ TEST_CASE("ActorTechnologyState query methods", "[technology][state]") {
 // ===========================================================================
 
 TEST_CASE("ActorTechnologyState aggregate init backward compat", "[technology][state]") {
-    // Existing code uses ActorTechnologyState{1.0f} — must still work.
-    ActorTechnologyState state{1.0f};
+    // Aggregate init must let callers set effective_tech_tier without
+    // also specifying every holding. Use {tier, {}} to make the empty-map
+    // intent explicit (silences -Wmissing-field-initializers).
+    ActorTechnologyState state{1.0f, {}};
     CHECK_THAT(state.effective_tech_tier, Catch::Matchers::WithinAbs(1.0f, 0.001f));
     CHECK(state.holdings.empty());
 }

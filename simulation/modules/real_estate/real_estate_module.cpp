@@ -110,7 +110,7 @@ float RealEstateModule::compute_avg_property_value(const std::vector<PropertyLis
 // RealEstateModule — pre-tick initialization (main thread, before dispatch)
 // ===========================================================================
 
-void RealEstateModule::init_for_tick(const WorldState& state) {
+void RealEstateModule::init_for_tick(const WorldState& /*state*/) {
     // Build per-province index so execute_province() only touches properties
     // belonging to its own province — no cross-province data races.
     province_property_indices_.clear();
@@ -238,20 +238,14 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
     }
 
     // --- Step 4: Monthly province avg_property_value update ---
+    // Route through the province's region_id so apply_region_deltas matches
+    // it correctly even if a future world generator decouples region_id
+    // from province_idx (V1 worldgen assigns them 1:1).
     if (is_monthly_tick) {
         float avg_value = compute_avg_property_value(properties_, province_idx);
-
-        // Write to region_deltas. We use province_idx as region_id since
-        // Province.region_id may differ, but the semantic intent is a
-        // per-province metric. Downstream application will route this
-        // to the correct province.
         RegionDelta region_delta{};
-        region_delta.region_id = province_idx;
-        region_delta.stability_delta = 0.0f;  // no stability change from real estate alone
-        // avg_property_value is tracked internally; the RegionDelta is used
-        // to signal that a recomputation occurred. The actual value is stored
-        // in the module's property list and can be queried via
-        // compute_avg_property_value().
+        region_delta.region_id = state.provinces[province_idx].region_id;
+        region_delta.avg_property_value_update = avg_value;
         province_delta.region_deltas.push_back(region_delta);
     }
 }
