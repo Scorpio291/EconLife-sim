@@ -8,6 +8,9 @@ target_link_libraries(econlife_benchmarks PRIVATE
     econlife_modules
 )
 
+econlife_set_warnings(econlife_benchmarks)
+econlife_maybe_werror(econlife_benchmarks)
+
 catch_discover_tests(econlife_benchmarks
     PROPERTIES LABELS "benchmark"
 )
