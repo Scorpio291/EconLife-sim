@@ -21,8 +21,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ECONLIFE_WARN_AS_ERROR is enabled on the Linux Release cell so the
+      # warning baseline added in #16 actually gates merges. Other matrix
+      # cells (Windows / Debug) stay warnings-only until their per-toolchain
+      # baselines are clean.
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DECONLIFE_BUILD_TESTS=ON -DECONLIFE_BUILD_BENCHMARKS=ON
+        run: |
+          WERROR=OFF
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" && "${{ matrix.build_type }}" == "Release" ]]; then
+            WERROR=ON
+          fi
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DECONLIFE_BUILD_TESTS=ON \
+            -DECONLIFE_BUILD_BENCHMARKS=ON \
+            -DECONLIFE_WARN_AS_ERROR=$WERROR
+        shell: bash
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} -j
