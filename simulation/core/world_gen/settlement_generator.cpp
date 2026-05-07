@@ -182,9 +182,8 @@ void SettlementGenerator::create_npcs(WorldState& world, DeterministicRNG& rng,
         // NPCs per province proportional to population.
         float pop_fraction = static_cast<float>(world.provinces[p].demographics.total_population) /
                              static_cast<float>(total_pop);
-        uint32_t npcs_for_province =
-            std::max(1u, static_cast<uint32_t>(static_cast<float>(config.npc_count) * pop_fraction +
-                                               0.5f));
+        uint32_t npcs_for_province = std::max(
+            1u, static_cast<uint32_t>(static_cast<float>(config.npc_count) * pop_fraction + 0.5f));
 
         for (uint32_t i = 0; i < npcs_for_province; ++i) {
             // Select role via weighted random.

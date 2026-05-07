@@ -238,10 +238,13 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
     }
 
     // --- Step 4: Monthly province avg_property_value update ---
+    // Route through the province's region_id so apply_region_deltas matches
+    // it correctly even if a future world generator decouples region_id
+    // from province_idx (V1 worldgen assigns them 1:1).
     if (is_monthly_tick) {
         float avg_value = compute_avg_property_value(properties_, province_idx);
         RegionDelta region_delta{};
-        region_delta.region_id = province_idx;
+        region_delta.region_id = state.provinces[province_idx].region_id;
         region_delta.avg_property_value_update = avg_value;
         province_delta.region_deltas.push_back(region_delta);
     }

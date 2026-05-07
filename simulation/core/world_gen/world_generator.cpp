@@ -3552,10 +3552,9 @@ static std::string generate_feature_name(FeatureType type, DeterministicRNG& rng
             break;
     }
 
-    size_t ri = static_cast<size_t>(rng.next_float() * static_cast<float>(root_count)) %
-                root_count;
-    size_t si = static_cast<size_t>(rng.next_float() * static_cast<float>(suffix_count)) %
-                suffix_count;
+    size_t ri = static_cast<size_t>(rng.next_float() * static_cast<float>(root_count)) % root_count;
+    size_t si =
+        static_cast<size_t>(rng.next_float() * static_cast<float>(suffix_count)) % suffix_count;
     return std::string(roots[ri]) + suffixes[si];
 }
 

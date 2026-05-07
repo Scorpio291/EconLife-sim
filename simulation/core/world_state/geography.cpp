@@ -19,6 +19,7 @@ Province::Province(const Province& other)
       agricultural_productivity(other.agricultural_productivity),
       energy_cost_baseline(other.energy_cost_baseline),
       trade_openness(other.trade_openness),
+      avg_property_value(other.avg_property_value),
       lod_level(other.lod_level),
       community(other.community),
       political(other.political),

@@ -3101,8 +3101,7 @@ TEST_CASE("WorldGenerator  - nations: border_change_count responds to instabilit
     // Border provinces should tend to have more border changes.
     // With 10 seeds × 6 provinces we should have enough data.
     if (border_count > 0 && interior_count > 0) {
-        float border_avg =
-            static_cast<float>(border_total) / static_cast<float>(border_count);
+        float border_avg = static_cast<float>(border_total) / static_cast<float>(border_count);
         float interior_avg =
             static_cast<float>(interior_total) / static_cast<float>(interior_count);
         CHECK(border_avg >= interior_avg);
