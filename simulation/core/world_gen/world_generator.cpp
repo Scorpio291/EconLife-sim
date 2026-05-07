@@ -458,7 +458,7 @@ void WorldGenerator::create_nation(WorldState& world, uint32_t province_count) {
 
 WorldGenerator::ProvinceArchetype WorldGenerator::assign_archetype(DeterministicRNG& rng,
                                                                    uint32_t province_idx,
-                                                                   uint32_t province_count) {
+                                                                   uint32_t /*province_count*/) {
     // Ensure diversity: first 6 provinces get distinct archetypes.
     // Beyond 6, assign randomly.
     if (province_idx < 6) {
@@ -911,7 +911,7 @@ void WorldGenerator::create_markets(WorldState& world, DeterministicRNG& rng,
             float supply_base = 50.0f;
             // Higher supply for goods matching province resources.
             if (good->category == "geological" && !province.deposits.empty()) {
-                supply_base *= 1.0f + province.deposits.size() * 0.2f;
+                supply_base *= 1.0f + static_cast<float>(province.deposits.size()) * 0.2f;
             } else if (good->category == "biological" &&
                        province.agricultural_productivity > 0.5f) {
                 supply_base *= 1.0f + province.agricultural_productivity;
@@ -1254,7 +1254,7 @@ void WorldGenerator::seed_tectonic_deposits(Province& province, DeterministicRNG
 // ===========================================================================
 
 void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rng,
-                                         const WorldGeneratorConfig& config) {
+                                         const WorldGeneratorConfig& /*config*/) {
     // -----------------------------------------------------------------------
     // Radiogenic decay formulas from design spec §8.2.
     // Uses plate_age as proxy for geological age (per-province).
@@ -1384,7 +1384,7 @@ void WorldGenerator::apply_age_modifiers(WorldState& world, DeterministicRNG& rn
 // ===========================================================================
 
 void WorldGenerator::seed_deterministic_resources(WorldState& world, DeterministicRNG& rng,
-                                                  const WorldGeneratorConfig& config) {
+                                                  const WorldGeneratorConfig& /*config*/) {
     // Track next deposit ID.
     uint32_t next_deposit_id = 0;
     for (const auto& prov : world.provinces) {
@@ -2022,7 +2022,6 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     for (auto& prov : world.provinces) {
         KoppenZone kz = prov.climate.koppen_zone;
-        float abs_lat = std::abs(prov.geography.latitude);
         float base_vuln;
 
         // Polar/alpine
@@ -3553,8 +3552,10 @@ static std::string generate_feature_name(FeatureType type, DeterministicRNG& rng
             break;
     }
 
-    uint32_t ri = static_cast<uint32_t>(rng.next_float() * root_count) % root_count;
-    uint32_t si = static_cast<uint32_t>(rng.next_float() * suffix_count) % suffix_count;
+    size_t ri = static_cast<size_t>(rng.next_float() * static_cast<float>(root_count)) %
+                root_count;
+    size_t si = static_cast<size_t>(rng.next_float() * static_cast<float>(suffix_count)) %
+                suffix_count;
     return std::string(roots[ri]) + suffixes[si];
 }
 
@@ -4014,7 +4015,7 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
             HistoricalEvent e{};
             e.type = HistoricalEventType::BorderChange;
             e.years_before_game_start = -static_cast<int32_t>(15 + rng.next_float() * 135);
-            e.magnitude = std::min(1.0f, prov.border_change_count * 0.20f);
+            e.magnitude = std::min(1.0f, static_cast<float>(prov.border_change_count) * 0.20f);
             char buf[128];
             std::snprintf(buf, sizeof(buf),
                           "The province changed national administration %d time%s in the "
@@ -4071,7 +4072,7 @@ void WorldGenerator::generate_province_histories(WorldState& world, Deterministi
 // Stage 10.3 — Pre-game event extraction
 // ===========================================================================
 
-void WorldGenerator::seed_pre_game_events(WorldState& world, DeterministicRNG& rng,
+void WorldGenerator::seed_pre_game_events(WorldState& world, DeterministicRNG& /*rng*/,
                                           const WorldGeneratorConfig& /*config*/) {
     world.pre_game_events.clear();
 
@@ -4155,7 +4156,7 @@ static const NamedFeature* find_best_feature(const WorldState& world, FeatureTyp
     return best;
 }
 
-void WorldGenerator::generate_loading_commentary(WorldState& world, DeterministicRNG& rng,
+void WorldGenerator::generate_loading_commentary(WorldState& world, DeterministicRNG& /*rng*/,
                                                  const WorldGeneratorConfig& /*config*/) {
     LoadingCommentary& lc = world.loading_commentary;
 
@@ -4268,7 +4269,7 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
             std::snprintf(buf, sizeof(buf),
                           "The %s rise to %.0f metres, dividing climates and cultures. "
                           "Passes through the range will become strategic chokepoints.",
-                          mtn->name.c_str(), mtn->peak_elevation_m);
+                          mtn->name.c_str(), static_cast<double>(mtn->peak_elevation_m));
             lc.stage_7_text = buf;
         } else {
             lc.stage_7_text =
@@ -4339,7 +4340,7 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
             case FeatureType::River:
                 if (f.length_km > 0.0f) {
                     std::snprintf(buf, sizeof(buf), "The %s stretches %.0f km. %s", f.name.c_str(),
-                                  f.length_km,
+                                  static_cast<double>(f.length_km),
                                   f.is_navigable ? "It is navigable by barge."
                                                  : "Its rapids prevent navigation.");
                     lc.sidebar_facts.emplace_back(buf);
@@ -4349,14 +4350,14 @@ void WorldGenerator::generate_loading_commentary(WorldState& world, Deterministi
                 if (f.peak_elevation_m > 0.0f) {
                     std::snprintf(buf, sizeof(buf),
                                   "The %s reach %.0f metres at their highest point.",
-                                  f.name.c_str(), f.peak_elevation_m);
+                                  f.name.c_str(), static_cast<double>(f.peak_elevation_m));
                     lc.sidebar_facts.emplace_back(buf);
                 }
                 break;
             case FeatureType::Desert:
                 if (f.area_km2 > 0.0f) {
                     std::snprintf(buf, sizeof(buf), "The %s covers %.0f km\u00B2 of arid terrain.",
-                                  f.name.c_str(), f.area_km2);
+                                  f.name.c_str(), static_cast<double>(f.area_km2));
                     lc.sidebar_facts.emplace_back(buf);
                 }
                 break;
@@ -4573,10 +4574,10 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         char buf[256];
         if (f.type == FeatureType::River && f.length_km > 0.0f) {
             std::snprintf(buf, sizeof(buf), "The %s stretches %.0f km through the region.",
-                          f.name.c_str(), f.length_km);
+                          f.name.c_str(), static_cast<double>(f.length_km));
         } else if (f.type == FeatureType::MountainRange && f.peak_elevation_m > 0.0f) {
             std::snprintf(buf, sizeof(buf), "The %s reach %.0f metres at their highest.",
-                          f.name.c_str(), f.peak_elevation_m);
+                          f.name.c_str(), static_cast<double>(f.peak_elevation_m));
         } else {
             std::snprintf(buf, sizeof(buf), "The %s is a notable %s.", f.name.c_str(),
                           feature_type_str(f.type));
@@ -4860,7 +4861,7 @@ void WorldGenerator::generate_commentary(WorldState& world, DeterministicRNG& rn
         uint8_t ctx_idx = static_cast<uint8_t>(prov.tectonic_context) < 8
                               ? static_cast<uint8_t>(prov.tectonic_context)
                               : 6;  // fallback to CratonInterior
-        uint8_t variant = rng.next_uint(2);
+        uint8_t variant = static_cast<uint8_t>(rng.next_uint(2));
 
         const char* geo = geo_sentences[ctx_idx][variant];
         const char* climate = climate_sentence(prov.climate.koppen_zone);

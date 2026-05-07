@@ -41,7 +41,8 @@ void AlternativeIdentityModule::execute(const WorldState& state, DeltaBuffer& de
         if (state.current_tick > identity.last_maintenance_tick) {
             uint32_t ticks_since = state.current_tick - identity.last_maintenance_tick;
             identity.documentation_quality = decay_documentation_quality(
-                identity.documentation_quality, cfg_.documentation_decay_rate * ticks_since);
+                identity.documentation_quality,
+                cfg_.documentation_decay_rate * static_cast<float>(ticks_since));
         }
 
         if (identity.status == IdentityStatus::active) {

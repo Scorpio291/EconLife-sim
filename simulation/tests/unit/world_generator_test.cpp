@@ -387,6 +387,7 @@ TEST_CASE("WorldGenerator  - businesses have diverse sectors", "[world_gen][busi
         CHECK(biz.cost_per_tick < biz.revenue_per_tick);  // profitable at start
     }
     CHECK(observed_sectors.size() >= 4);  // reasonable sector diversity
+    CHECK(has_criminal);                  // generator should seed at least one criminal business
 }
 
 TEST_CASE("WorldGenerator  - markets created with fallback goods", "[world_gen][markets]") {
@@ -2390,18 +2391,15 @@ TEST_CASE("WorldGenerator  - resources: every province gets Sand and Aggregate",
         auto world = WorldGenerator::generate(config);
 
         for (const auto& prov : world.provinces) {
-            bool has_sand = false;
             bool has_agg = false;
             for (const auto& d : prov.deposits) {
-                if (d.type == ResourceType::Sand)
-                    has_sand = true;
                 if (d.type == ResourceType::Aggregate)
                     has_agg = true;
             }
-            // Most provinces should have at least aggregate (from rock type).
+            // Aggregate is always derivable from rock type. Sand may not
+            // appear on high-elevation landlocked provinces, so the test
+            // name's "and Sand" half is intentionally not asserted.
             CHECK(has_agg);
-            // Sand may not appear on high-elevation landlocked provinces, but
-            // aggregate should always be present.
         }
     }
 }
@@ -3091,10 +3089,10 @@ TEST_CASE("WorldGenerator  - nations: border_change_count responds to instabilit
                 }
             }
             if (is_border) {
-                border_total += prov.border_change_count;
+                border_total += static_cast<uint32_t>(std::max(0, prov.border_change_count));
                 border_count++;
             } else {
-                interior_total += prov.border_change_count;
+                interior_total += static_cast<uint32_t>(std::max(0, prov.border_change_count));
                 interior_count++;
             }
         }
@@ -3103,8 +3101,10 @@ TEST_CASE("WorldGenerator  - nations: border_change_count responds to instabilit
     // Border provinces should tend to have more border changes.
     // With 10 seeds × 6 provinces we should have enough data.
     if (border_count > 0 && interior_count > 0) {
-        float border_avg = static_cast<float>(border_total) / border_count;
-        float interior_avg = static_cast<float>(interior_total) / interior_count;
+        float border_avg =
+            static_cast<float>(border_total) / static_cast<float>(border_count);
+        float interior_avg =
+            static_cast<float>(interior_total) / static_cast<float>(interior_count);
         CHECK(border_avg >= interior_avg);
     }
 }

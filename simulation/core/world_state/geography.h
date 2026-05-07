@@ -666,6 +666,8 @@ struct Province {
     float agricultural_productivity;  // 0.0-1.0; runtime: modified by climate_stress
     float energy_cost_baseline;
     float trade_openness;  // 0.0-1.0; affects LOD 1 trade offer generation
+    float avg_property_value{0.0f};  // mean PropertyListing.market_value across this province;
+                                     // recomputed monthly by real_estate
 
     // Simulation
     SimulationLOD lod_level;  // set by scenario file at load

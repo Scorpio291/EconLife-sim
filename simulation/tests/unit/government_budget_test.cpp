@@ -120,8 +120,11 @@ GovernmentBudget make_provincial_budget(uint32_t province_id, float cash = 50000
     return budget;
 }
 
-// Find a consequence delta by entry ID.
-const ConsequenceDelta* find_consequence(const DeltaBuffer& delta, uint32_t entry_id) {
+// Find a consequence delta by entry ID. Scaffolding for tests that need
+// to inspect a specific consequence record; not currently exercised by
+// any test case but kept symmetric with find_region_delta below.
+[[maybe_unused]] const ConsequenceDelta* find_consequence(const DeltaBuffer& delta,
+                                                          uint32_t entry_id) {
     for (const auto& c : delta.consequence_deltas) {
         if (c.new_entry_id.has_value() && c.new_entry_id.value() == entry_id) {
             return &c;

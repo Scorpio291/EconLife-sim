@@ -193,11 +193,11 @@ TEST_CASE("test_perishable_decay_multiple_ticks", "[trade_infrastructure][tier3]
     }
 
     // quantity = 100 * (1 - 0.01)^10 = 100 * 0.99^10
-    float expected_qty = 100.0f * std::pow(0.99f, 10);
+    float expected_qty = static_cast<float>(100.0 * std::pow(0.99, 10));
     REQUIRE_THAT(shipment.quantity_remaining, WithinAbs(expected_qty, 0.01f));
 
     // quality = 1.0 * (1 - 0.005)^10 = 0.995^10
-    float expected_quality = std::pow(0.995f, 10);
+    float expected_quality = static_cast<float>(std::pow(0.995, 10));
     REQUIRE_THAT(shipment.quality_current, WithinAbs(expected_quality, 0.0001f));
 }
 

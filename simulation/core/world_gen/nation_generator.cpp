@@ -61,23 +61,6 @@ static NationSize classify_nation_size(size_t province_count) {
     return NationSize::Continental;
 }
 
-// Helper: NationSize to string for JSON serialization.
-static const char* nation_size_str(NationSize s) {
-    switch (s) {
-        case NationSize::Microstate:
-            return "microstate";
-        case NationSize::Small:
-            return "small";
-        case NationSize::Medium:
-            return "medium";
-        case NationSize::Large:
-            return "large";
-        case NationSize::Continental:
-            return "continental";
-    }
-    return "small";
-}
-
 // Language families for V1 world generation. On non-Earth worlds all families
 // get equal geographic affinity weight — the list provides naming diversity.
 static const char* v1_language_families[] = {
@@ -740,7 +723,7 @@ void NationGenerator::form_nations(WorldState& world, DeterministicRNG& rng,
 // Stage 9.6 — Nomadic population (WorldGen v0.18 §9.6)
 // ===========================================================================
 
-void NationGenerator::seed_nomadic_population(WorldState& world, DeterministicRNG& rng,
+void NationGenerator::seed_nomadic_population(WorldState& world, DeterministicRNG& /*rng*/,
                                               const WorldGeneratorConfig& config) {
     const float realisation = config.nation_formation.nomadic_realisation_factor;
     for (auto& prov : world.provinces) {

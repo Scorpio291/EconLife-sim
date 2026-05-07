@@ -221,8 +221,10 @@ static void print_metrics(const WorldState& world) {
                              : total_biz_cash / static_cast<float>(world.npc_businesses.size());
 
     std::printf("%-6u | %10.1f | %10.2f | %10.3f | %10.3f | %10.3f | %10.3f | %10.1f\n",
-                world.current_tick, avg_capital, avg_price, stability, crime, grievance, cohesion,
-                avg_biz_cash);
+                world.current_tick, static_cast<double>(avg_capital),
+                static_cast<double>(avg_price), static_cast<double>(stability),
+                static_cast<double>(crime), static_cast<double>(grievance),
+                static_cast<double>(cohesion), static_cast<double>(avg_biz_cash));
 }
 
 static bool check_nan_contamination(const WorldState& world) {
@@ -475,7 +477,8 @@ int main(int argc, char* argv[]) {
     for (const auto& p : world.provinces) {
         std::printf("  [%u] %-20s pop=%u infra=%.2f agri=%.2f deposits=%zu markets=%zu npcs=%zu\n",
                     p.id, p.fictional_name.c_str(), p.demographics.total_population,
-                    p.infrastructure_rating, p.agricultural_productivity, p.deposits.size(),
+                    static_cast<double>(p.infrastructure_rating),
+                    static_cast<double>(p.agricultural_productivity), p.deposits.size(),
                     p.market_ids.size(), p.significant_npc_ids.size());
     }
 

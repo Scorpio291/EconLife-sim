@@ -363,14 +363,10 @@ TEST_CASE("fallow phase recovers soil_health", "[seasonal_agriculture][tier2]") 
     DeltaBuffer delta{};
     module.execute_province(province_id, state, delta);
 
-    // soil_health should increase by 0.003 (from 0.8 to 0.803).
-    // Access the facility's internal soil_health via the module.
-    float expected_health = 0.8f + SeasonalAgricultureConfig{}.fallow_soil_recovery_rate;
-    // We need to check the module's internal facility copy.
-    // The module updates facilities_[1].soil_health.
-    // We can read it indirectly by checking that a second growing tick uses it.
-    // Instead, let's verify via the state machine that we stay in fallow
-    // and that no market deltas are produced.
+    // soil_health should increase by 0.003 (from 0.8 to 0.803). The module
+    // does not currently expose the per-facility soil_health, so verify
+    // indirectly via the state machine: we stay in fallow and produce no
+    // market deltas.
     REQUIRE(module.farm_states().at(1).current_phase == SeasonPhase::fallow);
     REQUIRE(delta.market_deltas.empty());
 }

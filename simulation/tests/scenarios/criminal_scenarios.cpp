@@ -178,8 +178,6 @@ TEST_CASE("OPSEC level affects evidence generation rate",
     auto world_hi = create_test_world(42, 10, 1, 5);
     auto world_lo = create_test_world(42, 10, 1, 5);
 
-    const int ticks = 10;
-
     // High OPSEC — emit 1 token total.
     {
         DeltaBuffer delta{};
@@ -451,7 +449,6 @@ TEST_CASE("laundering exposure increases detection risk",
 
     auto world = create_test_world(42, 10, 1, 5);
 
-    const float amount_per_token = 1000.0f;
     const int token_count = 10;
 
     for (int i = 0; i < token_count; ++i) {

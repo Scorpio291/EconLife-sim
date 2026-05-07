@@ -72,7 +72,7 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
     close_expired_postings(province_idx, state.current_tick);
 }
 
-void LaborMarketModule::execute(const WorldState& state, DeltaBuffer& delta) {
+void LaborMarketModule::execute(const WorldState& state, DeltaBuffer& /*delta*/) {
     // Global post-pass: called by the orchestrator after all province-parallel
     // execute_province() calls have been merged and applied.
     // Monthly wage update runs globally (not per-province).

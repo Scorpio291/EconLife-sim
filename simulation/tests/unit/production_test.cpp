@@ -48,7 +48,7 @@ NPCBusiness make_test_business(uint32_t id, uint32_t province_id, float cash = 1
     biz.market_share = 0.1f;
     biz.strategic_decision_tick = 100;
     biz.dispatch_day_offset = 0;
-    biz.actor_tech_state = ActorTechnologyState{1.0f};
+    biz.actor_tech_state = ActorTechnologyState{1.0f, {}};
     biz.criminal_sector = false;
     biz.province_id = province_id;
     biz.regulatory_violation_severity = 0.0f;
@@ -65,7 +65,7 @@ Recipe make_steel_recipe() {
     recipe.id = "steel_smelting";
     recipe.name = "Steel Smelting";
     recipe.inputs = {RecipeInput{"iron_ore", 10.0f}, RecipeInput{"coking_coal", 5.0f}};
-    recipe.outputs = {RecipeOutput{"steel", 8.0f, 0.6f}};
+    recipe.outputs = {RecipeOutput{"steel", 8.0f, 0.6f, false}};
     recipe.min_tech_tier = 1;
     recipe.base_cost_per_tick = 100.0f;
     recipe.is_technology_intensive = false;
@@ -315,7 +315,7 @@ TEST_CASE("test_criminal_sector_uses_informal_price", "[production][tier1]") {
     drug_recipe.id = "drug_production";
     drug_recipe.name = "Drug Production";
     drug_recipe.inputs = {RecipeInput{"precursor_chemical", 5.0f}};
-    drug_recipe.outputs = {RecipeOutput{"drugs", 10.0f, 0.5f}};
+    drug_recipe.outputs = {RecipeOutput{"drugs", 10.0f, 0.5f, false}};
     drug_recipe.min_tech_tier = 1;
     drug_recipe.base_cost_per_tick = 50.0f;
     drug_recipe.is_technology_intensive = false;
@@ -334,9 +334,6 @@ TEST_CASE("test_criminal_sector_uses_informal_price", "[production][tier1]") {
         make_test_facility(1, 1, province_id, "drug_production"));
     module.facility_registry().register_facility(
         make_test_facility(2, 2, province_id, "drug_production"));
-
-    // Test the price lookup directly.
-    uint32_t drugs_id = ProductionModule::good_id_from_string("drugs");
 
     // Criminal business should get informal price = 100.0 * 0.7 = 70.0
     // We can verify this through the module's behavior — both businesses produce

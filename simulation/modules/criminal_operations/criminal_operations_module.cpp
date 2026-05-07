@@ -276,7 +276,7 @@ void CriminalOperationsModule::process_conflict_states(const WorldState& state,
     }
 }
 
-void CriminalOperationsModule::process_dormant_orgs(const WorldState& state) {
+void CriminalOperationsModule::process_dormant_orgs(const WorldState& /*state*/) {
     for (auto& org : organizations_) {
         if (org.member_npc_ids.empty()) {
             for (auto& [prov_id, dom] : org.dominance_by_province) {

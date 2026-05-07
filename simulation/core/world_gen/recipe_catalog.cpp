@@ -132,8 +132,8 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
         recipe.name = fields[2];
 
         // Parse up to 4 inputs.
-        for (int i = 0; i < 4; ++i) {
-            int base = 3 + i * 2;
+        for (size_t i = 0; i < 4; ++i) {
+            size_t base = 3 + i * 2;
             if (!fields[base].empty()) {
                 RecipeInput input{};
                 input.good_id = fields[base];
@@ -145,8 +145,8 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
         }
 
         // Parse up to 2 outputs.
-        for (int i = 0; i < 2; ++i) {
-            int base = 11 + i * 3;
+        for (size_t i = 0; i < 2; ++i) {
+            size_t base = 11 + i * 3;
             if (!fields[base].empty()) {
                 RecipeOutput output{};
                 output.good_id = fields[base];

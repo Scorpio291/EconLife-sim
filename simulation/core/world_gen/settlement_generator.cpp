@@ -183,7 +183,8 @@ void SettlementGenerator::create_npcs(WorldState& world, DeterministicRNG& rng,
         float pop_fraction = static_cast<float>(world.provinces[p].demographics.total_population) /
                              static_cast<float>(total_pop);
         uint32_t npcs_for_province =
-            std::max(1u, static_cast<uint32_t>(config.npc_count * pop_fraction + 0.5f));
+            std::max(1u, static_cast<uint32_t>(static_cast<float>(config.npc_count) * pop_fraction +
+                                               0.5f));
 
         for (uint32_t i = 0; i < npcs_for_province; ++i) {
             // Select role via weighted random.
@@ -324,7 +325,7 @@ void SettlementGenerator::create_npcs(WorldState& world, DeterministicRNG& rng,
 // ===========================================================================
 
 void SettlementGenerator::create_businesses(WorldState& world, DeterministicRNG& rng,
-                                            const WorldGeneratorConfig& config) {
+                                            const WorldGeneratorConfig& /*config*/) {
     // Business count: roughly 1 per 10 NPCs, minimum 1 per province.
     uint32_t total_businesses = std::max(static_cast<uint32_t>(world.provinces.size()),
                                          static_cast<uint32_t>(world.significant_npcs.size()) / 10);
@@ -357,6 +358,11 @@ void SettlementGenerator::create_businesses(WorldState& world, DeterministicRNG&
         for (const auto& npc : world.significant_npcs) {
             owner_pool.push_back({npc.id, npc.home_province_id});
         }
+    }
+    // No NPCs at all (e.g. test configs with npc_count == 0): bail before
+    // calling rng.next_uint(0) and indexing an empty owner_pool.
+    if (owner_pool.empty()) {
+        return;
     }
 
     // Sector options for formal businesses.

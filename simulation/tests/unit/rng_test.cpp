@@ -175,7 +175,7 @@ TEST_CASE("performance_next_u64", "[rng][tier0][!benchmark]") {
     constexpr int n = 1'000'000;
 
     auto start = std::chrono::high_resolution_clock::now();
-    volatile uint64_t sink = 0;
+    [[maybe_unused]] volatile uint64_t sink = 0;
     for (int i = 0; i < n; ++i) {
         sink = rng.next_u64();
     }
@@ -197,7 +197,7 @@ TEST_CASE("performance_fork", "[rng][tier0][!benchmark]") {
     constexpr int n = 1'000'000;
 
     auto start = std::chrono::high_resolution_clock::now();
-    volatile uint64_t sink = 0;
+    [[maybe_unused]] volatile uint64_t sink = 0;
     for (int i = 0; i < n; ++i) {
         auto forked = rng.fork(static_cast<uint32_t>(i));
         sink = forked.state();

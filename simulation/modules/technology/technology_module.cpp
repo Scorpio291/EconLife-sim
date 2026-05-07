@@ -16,7 +16,7 @@ namespace econlife {
 // TechnologyModule — initialization
 // ===========================================================================
 
-void TechnologyModule::init_from_world_state(const WorldState& state) {
+void TechnologyModule::init_from_world_state(const WorldState& /*state*/) {
     // Catalog is loaded by WorldGenerator and stored in WorldState.
     // We copy the loaded node/ceiling data for fast lookup during ticks.
     // If WorldState has loaded_technology_nodes, populate the catalog.
@@ -327,8 +327,8 @@ void TechnologyModule::decay_domain_knowledge(const WorldState& state, DeltaBuff
 // TechnologyModule — maturation ceiling updates
 // ===========================================================================
 
-void TechnologyModule::update_maturation_ceilings(const WorldState& state,
-                                                  DeltaBuffer& /* delta */) {
+void TechnologyModule::update_maturation_ceilings(const WorldState& /*state*/,
+                                                  DeltaBuffer& /*delta*/) {
     // Maturation ceilings are era-gated. When the era changes, all actors'
     // TechHolding.maturation_ceiling values need updating.
     // For V1, this is handled at the WorldGenerator level (seeding correct
