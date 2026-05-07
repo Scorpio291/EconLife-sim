@@ -2742,7 +2742,7 @@ void WorldGenerator::derive_soils_and_biomes(WorldState& world, DeterministicRNG
 
         // ---- Stage 5b: Soil fertility from geology_type ----
         // Volcanic and alluvial soils are most productive; ancient shields are leached and thin.
-        float soil_multiplier;
+        float soil_multiplier = 1.0f;
         switch (prov.geology_type) {
             case GeologyType::VolcanicArc:
                 // Young volcanic (andisols): highest natural fertility; great CEC, mineralogy.

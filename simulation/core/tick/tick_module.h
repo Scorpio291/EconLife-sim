@@ -41,10 +41,10 @@ class ITickModule {
     // maintain mutable per-entity records (compensation, employment, etc.)
     // should pre-populate them here so execute_province() only reads/writes
     // records for entities in its own province (no cross-province contention).
-    virtual void init_for_tick(const WorldState& state) {}
+    virtual void init_for_tick(const WorldState& /*state*/) {}
 
-    virtual void execute_province(uint32_t province_idx, const WorldState& state,
-                                  DeltaBuffer& province_delta) {}
+    virtual void execute_province(uint32_t /*province_idx*/, const WorldState& /*state*/,
+                                  DeltaBuffer& /*province_delta*/) {}
 
     // Global post-pass for province-parallel modules. When true, execute()
     // is called after all province deltas are merged and applied, allowing

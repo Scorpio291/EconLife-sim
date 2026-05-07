@@ -55,12 +55,16 @@ option(ECONLIFE_BUILD_TOOLS "Build developer tools" ON)
 # ── Dependencies via FetchContent ────────────────────────────────────────────
 include(FetchContent)
 
-# Catch2 v3 — test framework
+# Catch2 v3 — test framework.
+# SYSTEM on each FetchContent_Declare marks the dep's include dirs as system
+# headers, so the project warning baseline (-Wall/-Wextra/...) does not flag
+# third-party code we don't own.
 if(ECONLIFE_BUILD_TESTS)
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
         GIT_TAG        v3.5.2
+        SYSTEM
     )
     FetchContent_MakeAvailable(Catch2)
     list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
@@ -74,6 +78,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/lz4/lz4.git
     GIT_TAG        v1.9.4
     SOURCE_SUBDIR  build/cmake
+    SYSTEM
 )
 FetchContent_MakeAvailable(lz4)
 
@@ -84,6 +89,7 @@ FetchContent_Declare(
     h3
     GIT_REPOSITORY https://github.com/uber/h3.git
     GIT_TAG        v4.4.1
+    SYSTEM
 )
 FetchContent_MakeAvailable(h3)
 
@@ -93,6 +99,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_TAG        v3.11.3
     GIT_SHALLOW    TRUE
+    SYSTEM
 )
 FetchContent_MakeAvailable(nlohmann_json)
 

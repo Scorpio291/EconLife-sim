@@ -12,7 +12,7 @@
 // which violates the project's core determinism contract.
 //
 // Usage:
-//   econlife_golden_dump --seed 42 --ticks 30 --npcs 200 --provinces 4 \
+//   econlife_golden_dump --seed 42 --ticks 30 --npcs 200 --provinces 4
 //                        --out hash.txt
 //
 // Notes:
