@@ -185,23 +185,23 @@ struct CalendarCommitDelta {
 // merge. The test_delta_buffer_merge_covers_every_field unit test will
 // fail when a new field is added without corresponding merge support.
 struct DeltaBuffer {
-    std::vector<NPCDelta> npc_deltas;
-    PlayerDelta player_delta;
-    std::vector<MarketDelta> market_deltas;
-    std::vector<EvidenceDelta> evidence_deltas;
-    std::vector<ConsequenceDelta> consequence_deltas;
-    std::vector<BusinessDelta> business_deltas;
-    std::vector<RegionDelta> region_deltas;
-    std::vector<CurrencyDelta> currency_deltas;
-    std::vector<TechnologyDelta> technology_deltas;
-    std::vector<CalendarEntry> new_calendar_entries;
-    std::vector<SceneCard> new_scene_cards;
-    std::vector<ObligationNode> new_obligation_nodes;
-    std::vector<CrossProvinceDelta> cross_province_deltas;
-    std::vector<DissolvedBusinessDelta> dissolved_businesses;
-    std::vector<NewBusinessDelta> new_businesses;
-    std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;
-    std::vector<CalendarCommitDelta> calendar_commit_deltas;
+    std::vector<NPCDelta> npc_deltas;                            // merge: append
+    PlayerDelta player_delta;                                    // merge: PlayerDelta::merge_from
+    std::vector<MarketDelta> market_deltas;                      // merge: append
+    std::vector<EvidenceDelta> evidence_deltas;                  // merge: append
+    std::vector<ConsequenceDelta> consequence_deltas;            // merge: append
+    std::vector<BusinessDelta> business_deltas;                  // merge: append
+    std::vector<RegionDelta> region_deltas;                      // merge: append
+    std::vector<CurrencyDelta> currency_deltas;                  // merge: append
+    std::vector<TechnologyDelta> technology_deltas;              // merge: append
+    std::vector<CalendarEntry> new_calendar_entries;             // merge: append
+    std::vector<SceneCard> new_scene_cards;                      // merge: append
+    std::vector<ObligationNode> new_obligation_nodes;            // merge: append
+    std::vector<CrossProvinceDelta> cross_province_deltas;       // merge: append
+    std::vector<DissolvedBusinessDelta> dissolved_businesses;    // merge: append
+    std::vector<NewBusinessDelta> new_businesses;                // merge: append
+    std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
+    std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

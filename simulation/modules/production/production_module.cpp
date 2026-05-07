@@ -177,11 +177,11 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
                                         const WorldState& state, DeltaBuffer& delta,
                                         std::unordered_map<std::string, float>& available_supply,
                                         DeterministicRNG& /*rng*/) {
-    // Look up recipe.
+    // Look up recipe. Recipe ↔ facility cross-validation runs at world load
+    // (RecipeCatalog::validate_against_goods); silently skipping here keeps
+    // a stale or mod-introduced recipe_id from breaking determinism.
     const Recipe* recipe = recipe_registry_.find(facility.recipe_id);
     if (!recipe) {
-        // Missing recipe: skip facility. Business still incurs fixed operating
-        // costs but produces nothing. (TODO: proper logging)
         return;
     }
 
