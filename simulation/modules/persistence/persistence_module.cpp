@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "core/world_gen/goods_catalog.h"
 #include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
@@ -1390,6 +1391,12 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 }
 
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
+    // Schema v3 introduced catalog-backed good_ids (was FNV-1a hashes in v2).
+    // A v2 save loaded by v3 code would silently route market deltas to
+    // phantom markets, so we reject anything below v3 outright. V1 is
+    // pre-release so this affects no real users.
+    if (saved_version < 3u)
+        return false;
     return saved_version <= current_version;
 }
 
@@ -1442,6 +1449,30 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
     // already journaled in the same save lineage. See
     // docs/design/EconLife_PlayerDelta_Semantics_v1.md issue #11.
     w.write_u32(state.next_action_sequence);
+
+    // --- Goods catalog (schema v3) ---
+    // Embedded so deserialised worlds hold the same string→numeric_id
+    // mapping as when they were saved, which is what the modules' market
+    // deltas key on. Empty catalog (e.g. test worlds without CSV data)
+    // serialises as a 0-count.
+    if (state.goods_catalog) {
+        const auto& goods = state.goods_catalog->goods();
+        w.write_u32(static_cast<uint32_t>(goods.size()));
+        for (const auto& g : goods) {
+            w.write_u32(g.numeric_id);
+            w.write_string(g.good_id);
+            w.write_string(g.display_name);
+            w.write_u8(g.tier);
+            w.write_string(g.unit);
+            w.write_string(g.category);
+            w.write_float(g.base_price);
+            w.write_bool(g.perishable);
+            w.write_bool(g.illegal);
+            w.write_u8(g.era_available);
+        }
+    } else {
+        w.write_u32(0u);
+    }
 
     // --- Nations ---
     w.write_u32(static_cast<uint32_t>(state.nations.size()));
@@ -1623,6 +1654,36 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         out_state.next_action_sequence = r.read_u32();
     } else {
         out_state.next_action_sequence = 0;
+    }
+
+    // Goods catalog (schema v3+).
+    if (schema_ver >= 3) {
+        uint32_t goods_count = r.read_u32();
+        if (goods_count > 0) {
+            auto catalog = std::make_unique<GoodsCatalog>();
+            // GoodsCatalog::goods_ is private; the v3 embed simply replays
+            // the entries via load_csv-equivalent direct insertion. We use
+            // a lightweight friend-free path: pre-size and emplace via a
+            // helper. Since GoodsCatalog has no public bulk-insert, we
+            // reconstruct entries on a temporary vector and the catalog
+            // exposes its goods() vector as a const& only — so we add a
+            // small public helper there instead.
+            for (uint32_t i = 0; i < goods_count; ++i) {
+                GoodDefinition g{};
+                g.numeric_id = r.read_u32();
+                g.good_id = r.read_string();
+                g.display_name = r.read_string();
+                g.tier = r.read_u8();
+                g.unit = r.read_string();
+                g.category = r.read_string();
+                g.base_price = r.read_float();
+                g.perishable = r.read_bool();
+                g.illegal = r.read_bool();
+                g.era_available = r.read_u8();
+                catalog->push_back_loaded(std::move(g));
+            }
+            out_state.goods_catalog = std::move(catalog);
+        }
     }
 
     // Nations

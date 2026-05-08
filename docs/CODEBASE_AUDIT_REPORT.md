@@ -119,9 +119,36 @@ modules:
 **Fix:** No standalone fix; resolved as each consuming module lands.
 Track via the per-handler `// Will be implemented in...` comments.
 
-### L1. `good_id_from_string` weak hash — partially fixed
+### L1. `good_id_from_string` weak hash — proper fix shipped
 
-**Status:** Quick fix shipped; proper fix still open.
+**Status:** Resolved.
+
+`WorldState::goods_catalog` (unique_ptr<GoodsCatalog>) now holds the
+catalog at runtime; `world_generator` transfers ownership after
+`create_markets()`, and persistence embeds the catalog in saves
+(schema v3+). Modules resolve string good_ids through
+`lookup_good_id(state, str)` in `apply_deltas.h`, which returns the
+catalog `numeric_id` — the same value that `RegionalMarket.good_id`
+was assigned at world generation. The FNV-1a fallback only fires when
+no catalog is present (unit tests that build state piecemeal).
+
+Migrated runtime callsites: ProductionModule (3 sites: input/output
+recipe walk, demand delta, supply delta), SeasonalAgricultureModule
+(3 sites: continuous output and the two annual-harvest branches).
+SupplyChainModule's runtime path already passed catalog ids through
+unchanged (it reads `market.good_id` and forwards it); the per-module
+static `good_id_from_string` helpers remain only for tests.
+
+Schema v2 → v3 cutover: `is_schema_compatible` rejects anything below
+v3 explicitly, since v2 saves hold FNV hashes that would silently
+route to phantom markets if loaded by v3 code. V1 is pre-release so
+this affects no real users.
+
+Tests: 6 new — `lookup_good_id` catalog-wins / FNV-fallback semantics,
+empty-catalog round-trip, populated-catalog field-by-field round-trip,
+`lookup_good_id` preservation across round-trip, and bit-identical
+serialise → deserialise → serialise. Schema rejection has its own
+unit test (`Persistence: schema rejects pre-v3 saves`).
 **File:** `simulation/core/good_id_hash.h` (new).
 
 Quick fix (this branch): the three modules that hashed good_ids

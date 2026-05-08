@@ -102,15 +102,17 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
     std::unordered_map<std::string, float> available_supply;
 
     // Pre-populate available supply from regional markets for this province.
-    // We need to map from uint32_t market.good_id back to string keys.
-    // Build reverse lookup from registered recipes' input/output good_id strings.
+    // Build a numeric_id → string reverse lookup from registered recipes,
+    // routing through lookup_good_id() so the ids match RegionalMarket.good_id
+    // (catalog numeric_id when WorldState has a catalog; FNV-1a hash in tests
+    // that build markets without one).
     std::unordered_map<uint32_t, std::string> id_to_string;
     for (const auto& [recipe_id, recipe] : recipe_registry_.all()) {
         for (const auto& input : recipe.inputs) {
-            id_to_string[good_id_from_string(input.good_id)] = input.good_id;
+            id_to_string[lookup_good_id(state, input.good_id)] = input.good_id;
         }
         for (const auto& output : recipe.outputs) {
-            id_to_string[good_id_from_string(output.good_id)] = output.good_id;
+            id_to_string[lookup_good_id(state, output.good_id)] = output.good_id;
         }
     }
     for (uint32_t i : markets_in_province(state, province_idx)) {
@@ -249,7 +251,7 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
         // Write demand_buffer_delta for derived demand.
         MarketDelta demand_delta{};
-        demand_delta.good_id = good_id_from_string(input->good_id);
+        demand_delta.good_id = lookup_good_id(state, input->good_id);
         demand_delta.region_id = biz.province_id;
         demand_delta.demand_buffer_delta = consumed;
         delta.market_deltas.push_back(demand_delta);
@@ -317,7 +319,7 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
         // Write supply_delta.
         MarketDelta supply_delta{};
-        supply_delta.good_id = good_id_from_string(output->good_id);
+        supply_delta.good_id = lookup_good_id(state, output->good_id);
         supply_delta.region_id = biz.province_id;
         supply_delta.supply_delta = actual_output;
         delta.market_deltas.push_back(supply_delta);

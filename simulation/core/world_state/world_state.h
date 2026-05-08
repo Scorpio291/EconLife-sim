@@ -14,6 +14,7 @@
 #include "player_action_types.h"    // PlayerAction
 
 // Complete type definitions needed for std::vector/std::map value members and unique_ptr members
+#include "core/world_gen/goods_catalog.h"              // GoodsCatalog (unique_ptr member)
 #include "geography.h"                                 // Nation, Province, Region
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
 #include "modules/production/production_types.h"       // Facility, Recipe
@@ -61,6 +62,16 @@ struct WorldState {
 
     // --- Player ---
     std::unique_ptr<PlayerCharacter> player;  // see §11; unique ownership
+
+    // --- Goods Catalog ---
+    // Loaded from CSV at world generation; transferred to WorldState so
+    // modules can resolve string good_ids to the same numeric_id that
+    // RegionalMarket.good_id was assigned at create_markets() time.
+    // Persisted across save/load (schema v3+) so deserialised worlds
+    // hold the same id mapping as when they were saved.
+    // May be nullptr in unit tests that build WorldState piecemeal — the
+    // lookup helpers fall back to the FNV-1a hash in that case.
+    std::unique_ptr<GoodsCatalog> goods_catalog;
 
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)

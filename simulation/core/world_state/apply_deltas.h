@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 // apply_deltas — applies accumulated DeltaBuffer changes to WorldState.
@@ -52,6 +53,18 @@ const RegionalMarket* lookup_market(const WorldState& world, uint32_t good_id,
 // lookup_npc_by_id. Bucket-built indices are returned by reference for
 // zero-copy iteration; the fallback path materialises a fresh vector.
 std::vector<uint32_t> markets_in_province(const WorldState& world, uint32_t province_id);
+
+// Resolve a string good_id to the numeric id stored on RegionalMarket.good_id.
+// Prefers WorldState::goods_catalog; falls back to the FNV-1a hash in
+// good_id_hash.h when the catalog is unset (unit tests that construct
+// WorldState piecemeal). Production paths always have the catalog populated
+// by the world generator / persistence load. Returning the catalog's
+// numeric_id makes the result match the markets that create_markets() built;
+// the FNV fallback exists only to keep the long tail of legacy unit tests
+// that built markets and deltas with the same hash function in lockstep.
+//
+// Returns 0 when neither catalog nor good_id_hash() resolves the string.
+uint32_t lookup_good_id(const WorldState& world, const std::string& good_id_str);
 
 // Rebuild the computed NPC indices on WorldState from significant_npcs:
 //   - npc_index_by_id (id → significant_npcs index) for O(1) per-id lookup.

@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_gen/goods_catalog.h"
+#include "core/world_state/apply_deltas.h"  // lookup_good_id
 #include "modules/persistence/persistence_module.h"
 #include "tests/test_world_factory.h"
 
@@ -29,11 +31,15 @@ TEST_CASE("Persistence: checksum empty data", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: schema compatible same version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 1) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(3, 3) == true);
 }
 
-TEST_CASE("Persistence: schema compatible older version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 3) == true);
+// v2 saves are explicitly rejected by the v3 build because good_id semantics
+// changed (FNV-1a hash → catalog numeric_id). Loading a v2 save with v3
+// code would silently route market deltas to phantom markets.
+TEST_CASE("Persistence: schema rejects pre-v3 saves", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(1, 3) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(2, 3) == false);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
@@ -41,7 +47,7 @@ TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier1
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(1, 3) == true);
+    REQUIRE(PersistenceModule::needs_migration(3, 4) == true);
     REQUIRE(PersistenceModule::needs_migration(3, 3) == false);
 }
 
@@ -86,7 +92,7 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // Schema v2: added next_action_sequence persistence (issue #11). See
     // docs/design/EconLife_PlayerDelta_Semantics_v1.md.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 2);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 3);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -321,5 +327,139 @@ TEST_CASE("Persistence: serialize-deserialize-serialize is byte-identical",
 
     // serialize(deserialize(serialize(state))) == serialize(state)
     REQUIRE(bytes1.size() == bytes2.size());
+    REQUIRE(bytes1 == bytes2);
+}
+
+// --- Goods catalog round-trip (schema v3) ----------------------------------
+
+namespace {
+
+GoodDefinition make_good(uint32_t id, const std::string& key, float price, uint8_t tier,
+                         const std::string& category, bool perishable, bool illegal, uint8_t era) {
+    GoodDefinition g{};
+    g.numeric_id = id;
+    g.good_id = key;
+    g.display_name = key + " (display)";
+    g.tier = tier;
+    g.unit = "tonne";
+    g.category = category;
+    g.base_price = price;
+    g.perishable = perishable;
+    g.illegal = illegal;
+    g.era_available = era;
+    return g;
+}
+
+}  // namespace
+
+TEST_CASE("Persistence: empty catalog round-trips as empty",
+          "[persistence][tier12][goods_catalog]") {
+    WorldState world{};
+    world.current_tick = 0;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+    REQUIRE(!world.goods_catalog);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    auto result = PersistenceModule::deserialize(bytes, restored);
+    REQUIRE(result == RestoreResult::success);
+
+    // Either nullptr or an empty catalog is acceptable; both mean "no
+    // catalog", and lookup_good_id() behaves identically (FNV fallback).
+    if (restored.goods_catalog) {
+        REQUIRE(restored.goods_catalog->size() == 0);
+    }
+    REQUIRE(lookup_good_id(restored, "steel") == lookup_good_id(world, "steel"));
+}
+
+TEST_CASE("Persistence: populated catalog round-trips field-by-field",
+          "[persistence][tier12][goods_catalog]") {
+    WorldState world{};
+    world.current_tick = 42;
+    world.world_seed = 99;
+    world.game_mode = GameMode::standard;
+
+    auto cat = std::make_unique<GoodsCatalog>();
+    // Mix of fields covering every member of GoodDefinition.
+    cat->push_back_loaded(make_good(0, "wheat", 25.0f, /*tier=*/0, "biological", /*perish=*/true,
+                                    /*illegal=*/false, /*era=*/1));
+    cat->push_back_loaded(make_good(7, "steel", 80.0f, /*tier=*/2, "metals", /*perish=*/false,
+                                    /*illegal=*/false, /*era=*/2));
+    cat->push_back_loaded(make_good(42, "coca_leaf", 200.0f, /*tier=*/1, "biological",
+                                    /*perish=*/true, /*illegal=*/true, /*era=*/3));
+    world.goods_catalog = std::move(cat);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    auto result = PersistenceModule::deserialize(bytes, restored);
+    REQUIRE(result == RestoreResult::success);
+
+    REQUIRE(restored.goods_catalog);
+    REQUIRE(restored.goods_catalog->size() == 3);
+
+    const auto& orig = world.goods_catalog->goods();
+    const auto& copy = restored.goods_catalog->goods();
+    for (size_t i = 0; i < orig.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE(copy[i].numeric_id == orig[i].numeric_id);
+        REQUIRE(copy[i].good_id == orig[i].good_id);
+        REQUIRE(copy[i].display_name == orig[i].display_name);
+        REQUIRE(copy[i].tier == orig[i].tier);
+        REQUIRE(copy[i].unit == orig[i].unit);
+        REQUIRE(copy[i].category == orig[i].category);
+        REQUIRE_THAT(copy[i].base_price, WithinAbs(orig[i].base_price, 0.0001f));
+        REQUIRE(copy[i].perishable == orig[i].perishable);
+        REQUIRE(copy[i].illegal == orig[i].illegal);
+        REQUIRE(copy[i].era_available == orig[i].era_available);
+    }
+}
+
+TEST_CASE("Persistence: catalog round-trip preserves lookup_good_id results",
+          "[persistence][tier12][goods_catalog]") {
+    // The whole point of embedding the catalog is so deserialised worlds
+    // resolve string good_ids to the same numeric_id the original world used.
+    // If serialize/deserialize swapped a field or read in wrong order, the
+    // ids would still come back as some uint32 — but they would not match.
+    WorldState world{};
+    world.current_tick = 0;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    auto cat = std::make_unique<GoodsCatalog>();
+    cat->push_back_loaded(make_good(11, "steel", 80.0f, 2, "metals", false, false, 2));
+    cat->push_back_loaded(make_good(22, "iron_ore", 15.0f, 0, "geological", false, false, 1));
+    world.goods_catalog = std::move(cat);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(lookup_good_id(restored, "steel") == 11u);
+    REQUIRE(lookup_good_id(restored, "iron_ore") == 22u);
+    REQUIRE(lookup_good_id(restored, "steel") == lookup_good_id(world, "steel"));
+    REQUIRE(lookup_good_id(restored, "iron_ore") == lookup_good_id(world, "iron_ore"));
+}
+
+TEST_CASE("Persistence: catalog round-trip is bit-identical",
+          "[persistence][tier12][goods_catalog]") {
+    // serialize → deserialize → serialize must be byte-equal to the first
+    // serialise. Catches any non-canonical ordering or leftover state
+    // (e.g. next_numeric_id_ drift after replay) that survives the field-
+    // level checks above.
+    WorldState world{};
+    world.current_tick = 7;
+    world.world_seed = 3;
+    world.game_mode = GameMode::standard;
+
+    auto cat = std::make_unique<GoodsCatalog>();
+    cat->push_back_loaded(make_good(0, "wheat", 25.0f, 0, "biological", true, false, 1));
+    cat->push_back_loaded(make_good(1, "iron_ore", 15.0f, 0, "geological", false, false, 1));
+    world.goods_catalog = std::move(cat);
+
+    auto bytes1 = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes1, restored) == RestoreResult::success);
+    auto bytes2 = PersistenceModule::serialize(restored);
     REQUIRE(bytes1 == bytes2);
 }

@@ -354,3 +354,43 @@ TEST_CASE("apply_deltas refreshes market indices after a market_deltas pass",
     REQUIRE(w.market_index_by_good_province.size() == w.regional_markets.size());
     REQUIRE(w.market_indices_by_province.size() == w.provinces.size());
 }
+
+// --- Goods catalog lookup ---------------------------------------------------
+
+TEST_CASE("lookup_good_id: catalog wins when present", "[world_state][goods_catalog]") {
+    WorldState w{};
+    auto cat = std::make_unique<GoodsCatalog>();
+    GoodDefinition g0{};
+    g0.numeric_id = 7;
+    g0.good_id = "steel";
+    cat->push_back_loaded(g0);
+    GoodDefinition g1{};
+    g1.numeric_id = 8;
+    g1.good_id = "iron_ore";
+    cat->push_back_loaded(g1);
+    w.goods_catalog = std::move(cat);
+
+    REQUIRE(lookup_good_id(w, "steel") == 7u);
+    REQUIRE(lookup_good_id(w, "iron_ore") == 8u);
+    // Unknown good with catalog set: returns 0 (does NOT fall through to
+    // FNV — that would silently route deltas to phantom markets).
+    REQUIRE(lookup_good_id(w, "nonexistent") == 0u);
+}
+
+TEST_CASE("lookup_good_id: falls back to FNV when no catalog", "[world_state][goods_catalog]") {
+    // The fallback is the same hash modules used pre-migration (good_id_hash
+    // in core/good_id_hash.h). Tests that built markets with that hash
+    // continue to work without setting up a catalog.
+    WorldState w{};
+    REQUIRE(!w.goods_catalog);
+
+    // Two distinct strings hash to distinct values.
+    const uint32_t steel = lookup_good_id(w, "steel");
+    const uint32_t iron = lookup_good_id(w, "iron_ore");
+    REQUIRE(steel != 0u);
+    REQUIRE(iron != 0u);
+    REQUIRE(steel != iron);
+
+    // And the fallback is deterministic.
+    REQUIRE(lookup_good_id(w, "steel") == steel);
+}

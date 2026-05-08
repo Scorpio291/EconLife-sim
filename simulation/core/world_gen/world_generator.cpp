@@ -244,12 +244,15 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
     detect_special_features(world, rng, config);
 
-    // Step 4: Markets from goods catalog
-    GoodsCatalog catalog;
+    // Step 4: Markets from goods catalog. Transfer catalog ownership to
+    // WorldState so runtime modules can resolve string good_ids to the
+    // same numeric_id that create_markets() stamped onto RegionalMarket.
+    auto catalog_owned = std::make_unique<GoodsCatalog>();
     if (!config.goods_directory.empty()) {
-        catalog.load_from_directory(config.goods_directory);
+        catalog_owned->load_from_directory(config.goods_directory);
     }
-    create_markets(world, rng, catalog, config);
+    create_markets(world, rng, *catalog_owned, config);
+    world.goods_catalog = std::move(catalog_owned);
 
     // Step 5: NPC population
     SettlementGenerator::create_npcs(world, rng, config);
@@ -271,8 +274,8 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // in a recipe CSV would otherwise silently zero out the corresponding
     // supply or demand at runtime — surfaces here as a clear list at world
     // generation. Logged to stderr so modders see it during package load.
-    if (recipe_catalog.size() > 0 && catalog.size() > 0) {
-        auto errors = recipe_catalog.validate_against_goods(catalog);
+    if (recipe_catalog.size() > 0 && world.goods_catalog && world.goods_catalog->size() > 0) {
+        auto errors = recipe_catalog.validate_against_goods(*world.goods_catalog);
         for (const auto& err : errors) {
             std::cerr << "[recipe_catalog] " << err << "\n";
         }

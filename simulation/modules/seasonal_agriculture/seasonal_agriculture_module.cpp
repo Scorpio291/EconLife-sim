@@ -15,6 +15,7 @@
 #include <cmath>
 
 #include "core/good_id_hash.h"
+#include "core/world_state/apply_deltas.h"  // lookup_good_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -299,9 +300,9 @@ void SeasonalAgricultureModule::process_annual_facility(uint32_t facility_id,
                 MarketDelta supply_delta{};
                 auto good_it = annual_output_goods_.find(facility_id);
                 if (good_it != annual_output_goods_.end()) {
-                    supply_delta.good_id = good_id_from_string(good_it->second);
+                    supply_delta.good_id = lookup_good_id(state, good_it->second);
                 } else {
-                    supply_delta.good_id = good_id_from_string(facility.recipe_id);
+                    supply_delta.good_id = lookup_good_id(state, facility.recipe_id);
                 }
                 supply_delta.region_id = facility.province_id;
                 supply_delta.supply_delta = release_per_tick;
@@ -358,7 +359,7 @@ void SeasonalAgricultureModule::process_continuous_facility(
 
     // Write supply delta.
     MarketDelta supply_delta{};
-    supply_delta.good_id = good_id_from_string(info.output_good_id);
+    supply_delta.good_id = lookup_good_id(state, info.output_good_id);
     supply_delta.region_id = facility.province_id;
     supply_delta.supply_delta = output;
     delta.market_deltas.push_back(supply_delta);

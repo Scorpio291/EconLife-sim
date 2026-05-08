@@ -14,7 +14,9 @@
 #include <unordered_set>
 
 #include "core/config/package_config.h"
+#include "core/good_id_hash.h"
 #include "core/tick/deferred_work.h"
+#include "core/world_gen/goods_catalog.h"
 #include "modules/technology/technology_types.h"
 #include "player.h"
 #include "world_state.h"
@@ -679,6 +681,23 @@ void apply_cross_province_deltas(WorldState& world) {
     // Cross-province NPC deltas can change current_province_id; refresh the
     // bucket index so the first module of the new tick sees a consistent view.
     rebuild_npc_indices(world);
+}
+
+// ---------------------------------------------------------------------------
+// lookup_good_id
+// ---------------------------------------------------------------------------
+uint32_t lookup_good_id(const WorldState& world, const std::string& good_id_str) {
+    if (world.goods_catalog) {
+        if (const GoodDefinition* def = world.goods_catalog->find(good_id_str)) {
+            return def->numeric_id;
+        }
+        // Catalog is set but doesn't know this good — return 0 rather than
+        // a hash that would silently route to a phantom market.
+        return 0u;
+    }
+    // No catalog (typically a unit test). Fall back to the FNV-1a hash so
+    // tests that built their markets with the same hash continue to work.
+    return good_id_hash(good_id_str);
 }
 
 // ---------------------------------------------------------------------------
