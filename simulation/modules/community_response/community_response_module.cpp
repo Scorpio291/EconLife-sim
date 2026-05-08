@@ -131,11 +131,15 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
     for (uint32_t pi = 0; pi < state.provinces.size(); ++pi) {
         const auto& province = state.provinces[pi];
 
-        // Collect active NPCs in this province, sorted by id ascending.
+        // Collect active residents of this province via the home_province
+        // bucket index, sorted by id ascending.
         std::vector<const NPC*> province_npcs;
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.home_province_id == province.id && npc.status == NPCStatus::active) {
-                province_npcs.push_back(&npc);
+        if (province.id < state.npc_indices_by_home_province.size()) {
+            for (uint32_t idx : state.npc_indices_by_home_province[province.id]) {
+                const NPC& npc = state.significant_npcs[idx];
+                if (npc.status == NPCStatus::active) {
+                    province_npcs.push_back(&npc);
+                }
             }
         }
         std::sort(province_npcs.begin(), province_npcs.end(),

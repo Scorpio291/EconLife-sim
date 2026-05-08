@@ -28,29 +28,50 @@ managed by smart pointers, and CI actually runs all 1300+ tests.
 
 ### H5. Linear scan lookups will exceed performance budget at scale
 
-**Status:** Infrastructure landed; one consumer migrated.
-**Per-id lookups:** Resolved (`3a40d34`).
-**Filter-shape scans:** Substrate added in this commit. `WorldState`
-now carries `npc_indices_by_province` (province → significant_npcs
-indices), maintained by `rebuild_npc_indices()` at world generation,
-persistence load, and after every `apply_deltas`. `npc_behavior_module`
-— the single heaviest filter-shape consumer — reads through the index.
+**Status:** Resolved.
 
-**Remaining migrations:** ~21 modules still scan
-`for (const auto& npc : state.significant_npcs)` and filter by province
-manually (addiction, antitrust, banking, business_lifecycle, calendar,
-community_response, evidence, facility_signals, government_budget,
-healthcare, informant_system, investigator_engine, labor_market,
-media_system, npc_spending, obligation_network, persistence,
-player_actions, random_events, scene_cards, trust_updates,
-weapons_trafficking). Migrating them is mechanical: replace the loop
-with `state.npc_indices_by_province[province_idx]` and apply the
-existing per-element filter. Migrating them all in one PR violates
-"one module per session"; split across PRs.
+`WorldState` now carries three computed indices, maintained by
+`rebuild_npc_indices()` at world generation, persistence load, and after
+every `apply_deltas`:
 
-**Priority:** Sequencing before B3 (CI perf gate) is now satisfied —
-the index exists and the headline benchmark is healthy
-(~5.5 ms/tick at 2000 NPCs / 6 provinces / all base modules).
+- `npc_index_by_id` — id → significant_npcs index, used by every
+  `find_npc(id)` site that previously did a linear scan.
+- `npc_indices_by_province` — keyed by `current_province_id`, used by
+  modules whose contract is "people physically in this province".
+- `npc_indices_by_home_province` — keyed by `home_province_id`, used by
+  modules whose contract is "residents of this province" (taxes,
+  community grievance, founder selection).
+
+`lookup_npc_by_id()` in `apply_deltas.h` is the canonical accessor for
+the per-id case; it transparently falls back to a linear scan only when
+the index is empty (i.e. unit tests that build `WorldState` piecemeal
+without calling `rebuild_npc_indices`). Production paths always read
+through the index.
+
+**Migrated modules** (no remaining filter-by-province linear scans
+across `state.significant_npcs`): addiction, antitrust, banking,
+business_lifecycle, calendar, community_response, evidence,
+facility_signals, government_budget, healthcare, informant_system,
+investigator_engine, labor_market::find_npc, media_system, npc_behavior,
+npc_spending, obligation_network, player_actions, random_events,
+scene_cards, trust_updates, weapons_trafficking.
+
+**Excluded by design:**
+- `persistence_module.cpp:1469` — serializes the full vector; iteration
+  is the contract.
+- `labor_market_module.cpp:41` — `init_for_tick` walks both
+  `significant_npcs` and `named_background_npcs` once per tick to seed
+  employment records; not a filter-shape scan.
+- `labor_market_module.cpp:461` — global memory search across all NPCs
+  for a business reputation score; intentionally global, no province
+  filter.
+- `investigator_engine_module.cpp:103` — global investigator collection
+  for the cross-province pass; not a filter-shape scan.
+
+**Performance:** Headline benchmark "full tick with all modules at 2000
+NPCs" mean ~7-8 ms — ~25× under the 200 ms target. With B1 (delta merge
+policy) and the H5 substrate landed, B3 (CI perf gate) is now safe to
+tune against this baseline.
 
 ### M3. Many `drain_deferred_work` handlers are stubs
 

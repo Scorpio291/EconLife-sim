@@ -184,15 +184,16 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
 
             if (is_tier1_triggered(share)) {
                 // Find regulator NPC in this province
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.role == NPCRole::regulator &&
-                        npc.current_province_id == mk.province_id &&
-                        npc.status == NPCStatus::active) {
-                        NPCDelta npc_delta;
-                        npc_delta.npc_id = npc.id;
-                        npc_delta.motivation_delta = compute_meter_fill_increment();
-                        delta.npc_deltas.push_back(npc_delta);
-                        break;  // one regulator per province
+                if (mk.province_id < state.npc_indices_by_province.size()) {
+                    for (uint32_t idx : state.npc_indices_by_province[mk.province_id]) {
+                        const NPC& npc = state.significant_npcs[idx];
+                        if (npc.role == NPCRole::regulator && npc.status == NPCStatus::active) {
+                            NPCDelta npc_delta;
+                            npc_delta.npc_id = npc.id;
+                            npc_delta.motivation_delta = compute_meter_fill_increment();
+                            delta.npc_deltas.push_back(npc_delta);
+                            break;  // one regulator per province
+                        }
                     }
                 }
 
@@ -260,11 +261,13 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
         if (should_generate_proposal(pressure)) {
             // Find a legislator NPC in this province
             uint32_t proposer = 0;
-            for (const auto& npc : state.significant_npcs) {
-                if (npc.role == NPCRole::politician && npc.current_province_id == prov_id &&
-                    npc.status == NPCStatus::active) {
-                    proposer = npc.id;
-                    break;
+            if (prov_id < state.npc_indices_by_province.size()) {
+                for (uint32_t idx : state.npc_indices_by_province[prov_id]) {
+                    const NPC& npc = state.significant_npcs[idx];
+                    if (npc.role == NPCRole::politician && npc.status == NPCStatus::active) {
+                        proposer = npc.id;
+                        break;
+                    }
                 }
             }
 

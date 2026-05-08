@@ -3,6 +3,7 @@
 #include <cmath>
 #include <vector>
 
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -165,6 +166,7 @@ TEST_CASE("test_basic_consumer_demand_adds_to_demand_buffer", "[npc_spending][ti
     market.spot_price = 10.0f;  // == base_price -> price_factor = 1.0
     state.regional_markets.push_back(market);
 
+    rebuild_npc_indices(state);
     DeltaBuffer delta{};
     module.execute(state, delta);
 
@@ -214,6 +216,7 @@ TEST_CASE("test_inactive_npc_excluded", "[npc_spending][tier6]") {
     market.spot_price = 10.0f;
     state.regional_markets.push_back(market);
 
+    rebuild_npc_indices(state);
     DeltaBuffer delta{};
     module.execute(state, delta);
 

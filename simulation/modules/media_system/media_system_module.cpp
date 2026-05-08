@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -87,11 +88,10 @@ void MediaSystemModule::create_stories_from_journalists(const WorldState& state,
         for (uint32_t journalist_id : sorted_journalist_ids) {
             // Find journalist NPC
             const NPC* journalist = nullptr;
-            for (const auto& npc : state.significant_npcs) {
-                if (npc.id == journalist_id && npc.role == NPCRole::journalist &&
-                    npc.status == NPCStatus::active) {
-                    journalist = &npc;
-                    break;
+            if (const NPC* candidate = lookup_npc_by_id(state, journalist_id)) {
+                if (candidate->role == NPCRole::journalist &&
+                    candidate->status == NPCStatus::active) {
+                    journalist = candidate;
                 }
             }
             if (!journalist)

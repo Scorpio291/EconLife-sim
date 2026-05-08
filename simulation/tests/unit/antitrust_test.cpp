@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/antitrust/antitrust_module.h"
@@ -186,6 +187,7 @@ TEST_CASE("Tier 1 triggers regulator meter fill", "[antitrust][tier7]") {
     AntitrustModule module;
     module.next_check_tick() = 30;
 
+    rebuild_npc_indices(state);
     DeltaBuffer delta{};
     module.execute(state, delta);
 

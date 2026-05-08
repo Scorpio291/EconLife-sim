@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include "core/tick/deferred_work.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
@@ -45,11 +46,7 @@ std::vector<std::string_view> PlayerActionsModule::runs_before() const {
 // ---------------------------------------------------------------------------
 
 static const NPC* find_npc(const WorldState& state, uint32_t npc_id) {
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.id == npc_id)
-            return &npc;
-    }
-    return nullptr;
+    return lookup_npc_by_id(state, npc_id);
 }
 
 static bool province_exists(const WorldState& state, uint32_t province_id) {

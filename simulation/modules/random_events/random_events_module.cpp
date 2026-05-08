@@ -231,22 +231,22 @@ void RandomEventsModule::apply_accident_per_tick(const WorldState& state, const 
     rd.stability_delta = -0.005f * event.severity;
     province_delta.region_deltas.push_back(rd);
 
-    for (uint32_t npc_id : province.significant_npc_ids) {
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.id == npc_id && npc.status == NPCStatus::active) {
-                NPCDelta nd{};
-                nd.npc_id = npc.id;
-                MemoryEntry mem{};
-                mem.tick_timestamp = state.current_tick;
-                mem.type = MemoryType::physical_hazard;
-                mem.subject_id = province.id;
-                mem.emotional_weight = -0.3f * event.severity;
-                mem.decay = 1.0f;
-                mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
-                nd.new_memory_entry = mem;
-                province_delta.npc_deltas.push_back(nd);
-                break;
-            }
+    if (province.id < state.npc_indices_by_province.size()) {
+        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.status != NPCStatus::active)
+                continue;
+            NPCDelta nd{};
+            nd.npc_id = npc.id;
+            MemoryEntry mem{};
+            mem.tick_timestamp = state.current_tick;
+            mem.type = MemoryType::physical_hazard;
+            mem.subject_id = province.id;
+            mem.emotional_weight = -0.3f * event.severity;
+            mem.decay = 1.0f;
+            mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
+            nd.new_memory_entry = mem;
+            province_delta.npc_deltas.push_back(nd);
         }
     }
 }
@@ -489,22 +489,22 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                 event.evidence_generated = true;
             }
 
-            for (uint32_t npc_id : province.significant_npc_ids) {
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.id == npc_id && npc.status == NPCStatus::active) {
-                        NPCDelta nd{};
-                        nd.npc_id = npc.id;
-                        MemoryEntry mem{};
-                        mem.tick_timestamp = state.current_tick;
-                        mem.type = MemoryType::physical_hazard;
-                        mem.subject_id = province.id;
-                        mem.emotional_weight = -0.5f * event.severity;
-                        mem.decay = 1.0f;
-                        mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
-                        nd.new_memory_entry = mem;
-                        province_delta.npc_deltas.push_back(nd);
-                        break;
-                    }
+            if (province.id < state.npc_indices_by_province.size()) {
+                for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+                    const NPC& npc = state.significant_npcs[idx];
+                    if (npc.status != NPCStatus::active)
+                        continue;
+                    NPCDelta nd{};
+                    nd.npc_id = npc.id;
+                    MemoryEntry mem{};
+                    mem.tick_timestamp = state.current_tick;
+                    mem.type = MemoryType::physical_hazard;
+                    mem.subject_id = province.id;
+                    mem.emotional_weight = -0.5f * event.severity;
+                    mem.decay = 1.0f;
+                    mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
+                    nd.new_memory_entry = mem;
+                    province_delta.npc_deltas.push_back(nd);
                 }
             }
             break;
@@ -530,22 +530,22 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                 }
             }
 
-            for (uint32_t npc_id : province.significant_npc_ids) {
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.id == npc_id && npc.status == NPCStatus::active) {
-                        NPCDelta nd{};
-                        nd.npc_id = npc.id;
-                        MemoryEntry mem{};
-                        mem.tick_timestamp = state.current_tick;
-                        mem.type = MemoryType::event;
-                        mem.subject_id = province.id;
-                        mem.emotional_weight = -0.2f * event.severity;
-                        mem.decay = 1.0f;
-                        mem.is_actionable = false;
-                        nd.new_memory_entry = mem;
-                        province_delta.npc_deltas.push_back(nd);
-                        break;
-                    }
+            if (province.id < state.npc_indices_by_province.size()) {
+                for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+                    const NPC& npc = state.significant_npcs[idx];
+                    if (npc.status != NPCStatus::active)
+                        continue;
+                    NPCDelta nd{};
+                    nd.npc_id = npc.id;
+                    MemoryEntry mem{};
+                    mem.tick_timestamp = state.current_tick;
+                    mem.type = MemoryType::event;
+                    mem.subject_id = province.id;
+                    mem.emotional_weight = -0.2f * event.severity;
+                    mem.decay = 1.0f;
+                    mem.is_actionable = false;
+                    nd.new_memory_entry = mem;
+                    province_delta.npc_deltas.push_back(nd);
                 }
             }
             break;

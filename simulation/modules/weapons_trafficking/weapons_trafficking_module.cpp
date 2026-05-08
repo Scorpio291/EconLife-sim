@@ -179,9 +179,13 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
             // If business has very high violation severity, proxy for heavy weapons
             if (biz.regulatory_violation_severity > 0.8f) {
                 // Heavy weapons embargo: spike all LE NPCs in province
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.current_province_id == province.id &&
-                        npc.role == NPCRole::law_enforcement && npc.status == NPCStatus::active) {
+                if (province.id < state.npc_indices_by_province.size()) {
+                    for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+                        const NPC& npc = state.significant_npcs[idx];
+                        if (npc.role != NPCRole::law_enforcement ||
+                            npc.status != NPCStatus::active) {
+                            continue;
+                        }
                         // InvestigatorMeter spike — cannot be suppressed by corruption
                         // In full impl, directly modifies InvestigatorMeter.current_level
                         // Here, emit evidence with high actionability to represent the spike

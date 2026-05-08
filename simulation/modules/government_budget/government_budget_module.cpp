@@ -293,23 +293,19 @@ void GovernmentBudgetModule::execute_spending(const WorldState& state, DeltaBuff
         if (welfare_it == budget->spending_actual.end() || welfare_it->second <= 0.0f)
             continue;
 
-        // Count NPCs resident in this province (significant_npcs only).
-        uint32_t resident_count = 0;
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.home_province_id == budget->jurisdiction_id)
-                ++resident_count;
+        // Resident NPCs of this province via the home_province bucket.
+        std::vector<const NPC*> resident_npcs;
+        if (budget->jurisdiction_id < state.npc_indices_by_home_province.size()) {
+            for (uint32_t idx : state.npc_indices_by_home_province[budget->jurisdiction_id]) {
+                resident_npcs.push_back(&state.significant_npcs[idx]);
+            }
         }
-        if (resident_count == 0)
+        if (resident_npcs.empty())
             continue;
 
-        float per_npc_payment = welfare_it->second / static_cast<float>(resident_count);
+        const float per_npc_payment = welfare_it->second / static_cast<float>(resident_npcs.size());
 
         // Emit NPCDelta.capital_delta for each resident NPC (ascending id order for determinism).
-        std::vector<const NPC*> resident_npcs;
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.home_province_id == budget->jurisdiction_id)
-                resident_npcs.push_back(&npc);
-        }
         std::sort(resident_npcs.begin(), resident_npcs.end(),
                   [](const NPC* a, const NPC* b) { return a->id < b->id; });
 

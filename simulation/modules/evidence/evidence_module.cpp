@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/tick/deferred_work.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -77,12 +78,9 @@ void EvidenceModule::process_decay_batches(const WorldState& state, DeltaBuffer&
 
         // Evaluate holder credibility using social_capital as proxy.
         bool is_credible = true;
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.id == token.source_npc_id) {
-                float credibility = std::min(npc.social_capital / 100.0f, 1.0f);
-                is_credible = evaluate_holder_credibility(credibility, cfg_.credibility_threshold);
-                break;
-            }
+        if (const NPC* npc = lookup_npc_by_id(state, token.source_npc_id)) {
+            float credibility = std::min(npc->social_capital / 100.0f, 1.0f);
+            is_credible = evaluate_holder_credibility(credibility, cfg_.credibility_threshold);
         }
 
         float decay = compute_decay_amount(cfg_.base_decay_rate, is_credible,

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -62,13 +63,7 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
         if (rec.status != InformantStatus::not_cooperating)
             continue;
 
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == rec.npc_id) {
-                npc = &n;
-                break;
-            }
-        }
+        const NPC* npc = lookup_npc_by_id(state, rec.npc_id);
         if (!npc || npc->status != NPCStatus::imprisoned)
             continue;
 

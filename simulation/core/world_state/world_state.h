@@ -134,6 +134,25 @@ struct WorldState {
     // province-parallel workers because the rebuild runs single-threaded
     // between modules.
     std::vector<std::vector<uint32_t>> npc_indices_by_province;
+
+    // --- Computed: NPC id → significant_npcs index ---
+    // O(1) lookup for "give me the NPC with id X". Many modules previously
+    // walked significant_npcs linearly to resolve a single id (find_npc
+    // helpers in calendar, banking, healthcare, informant_system, scene_cards,
+    // player_actions, media_system, evidence, obligation_network, ...).
+    // Maintained by the same rebuild_npc_indices() call as the province
+    // bucket; the value is an index into significant_npcs.
+    std::unordered_map<uint32_t, uint32_t> npc_index_by_id;
+
+    // --- Computed: NPC bucket index by home_province_id ---
+    // Distinct from npc_indices_by_province (which is keyed by
+    // current_province_id). Used by modules whose semantics are "residents
+    // of this province" rather than "people physically in this province" —
+    // e.g. community_response (grievance is felt by residents wherever they
+    // are), government_budget (tax base is residents), business_lifecycle
+    // (founders draw from local population). NPCs with home_province_id
+    // out of range are skipped.
+    std::vector<std::vector<uint32_t>> npc_indices_by_home_province;
 };
 
 }  // namespace econlife

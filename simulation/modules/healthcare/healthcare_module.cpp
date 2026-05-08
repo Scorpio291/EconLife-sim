@@ -15,6 +15,7 @@
 #include <cmath>
 #include <vector>
 
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
@@ -39,14 +40,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
     // for deterministic processing order.
     std::vector<NpcHealthRecord*> province_npcs;
     for (auto& record : npc_health_records_) {
-        // Look up the NPC in WorldState to check province and status.
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == record.npc_id) {
-                npc = &n;
-                break;
-            }
-        }
+        const NPC* npc = lookup_npc_by_id(state, record.npc_id);
         if (!npc)
             continue;
         if (npc->current_province_id != province_idx)
@@ -78,13 +72,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
         }
 
         // Look up NPC for capital check.
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == hr->npc_id) {
-                npc = &n;
-                break;
-            }
-        }
+        const NPC* npc = lookup_npc_by_id(state, hr->npc_id);
         if (!npc)
             continue;
 

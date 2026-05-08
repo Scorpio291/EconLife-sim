@@ -11,7 +11,8 @@
 #include <cmath>
 #include <unordered_map>
 
-#include "core/world_state/player.h"  // PlayerCharacter (complete type for state.player->)
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
+#include "core/world_state/player.h"        // PlayerCharacter (complete type for state.player->)
 #include "core/world_state/world_state.h"
 
 namespace econlife {
@@ -57,12 +58,7 @@ static float find_trust_toward_player(const NPC& npc, uint32_t player_id) {
 
 // Finds the NPC by id in the significant_npcs vector. Returns nullptr if not found.
 static const NPC* find_npc(const WorldState& state, uint32_t npc_id) {
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.id == npc_id) {
-            return &npc;
-        }
-    }
-    return nullptr;
+    return lookup_npc_by_id(state, npc_id);
 }
 
 // Finds a PlayerChoice within a SceneCard by choice id. Returns nullptr if not found.

@@ -682,9 +682,41 @@ void apply_cross_province_deltas(WorldState& world) {
 }
 
 // ---------------------------------------------------------------------------
+// lookup_npc_by_id
+// ---------------------------------------------------------------------------
+const NPC* lookup_npc_by_id(const WorldState& world, uint32_t npc_id) {
+    auto it = world.npc_index_by_id.find(npc_id);
+    if (it != world.npc_index_by_id.end()) {
+        return &world.significant_npcs[it->second];
+    }
+    // Index built and id not present — absence is real.
+    if (!world.npc_index_by_id.empty()) {
+        return nullptr;
+    }
+    // Index not built (typically a unit test that constructed WorldState
+    // piecemeal). Fall back to a linear scan so the helper is safe to call
+    // before rebuild_npc_indices() has run.
+    for (const auto& npc : world.significant_npcs) {
+        if (npc.id == npc_id) {
+            return &npc;
+        }
+    }
+    return nullptr;
+}
+
+// ---------------------------------------------------------------------------
 // rebuild_npc_indices
 // ---------------------------------------------------------------------------
 void rebuild_npc_indices(WorldState& world) {
+    // Rebuild the id → index map first; it is independent of province count
+    // and used by callers that don't care about the province bucket.
+    auto& by_id = world.npc_index_by_id;
+    by_id.clear();
+    by_id.reserve(world.significant_npcs.size());
+    for (size_t i = 0; i < world.significant_npcs.size(); ++i) {
+        by_id[world.significant_npcs[i].id] = static_cast<uint32_t>(i);
+    }
+
     const size_t province_count = world.provinces.size();
     auto& buckets = world.npc_indices_by_province;
     buckets.assign(province_count, {});
@@ -716,6 +748,27 @@ void rebuild_npc_indices(WorldState& world) {
         }
         // NPCs with out-of-range province_id are skipped silently — they
         // would already be invisible to province-filtered scans today.
+    }
+
+    // home_province bucket: same shape as the current_province bucket but
+    // keyed by home_province_id. Used by modules whose contract is
+    // "residents of this province".
+    auto& home_buckets = world.npc_indices_by_home_province;
+    home_buckets.assign(province_count, {});
+    std::vector<size_t> home_counts(province_count, 0);
+    for (const auto& npc : world.significant_npcs) {
+        if (npc.home_province_id < province_count) {
+            ++home_counts[npc.home_province_id];
+        }
+    }
+    for (size_t p = 0; p < province_count; ++p) {
+        home_buckets[p].reserve(home_counts[p]);
+    }
+    for (size_t i = 0; i < world.significant_npcs.size(); ++i) {
+        const auto& npc = world.significant_npcs[i];
+        if (npc.home_province_id < province_count) {
+            home_buckets[npc.home_province_id].push_back(static_cast<uint32_t>(i));
+        }
     }
 }
 

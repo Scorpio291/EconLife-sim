@@ -149,3 +149,93 @@ TEST_CASE("apply_deltas refreshes npc_indices_by_province",
 
     REQUIRE(w.npc_indices_by_province == brute_force(w));
 }
+
+TEST_CASE("rebuild_npc_indices: builds npc_index_by_id", "[world_state][npc_index]") {
+    auto w = make_world(/*province_count=*/2, /*npc_count=*/4);
+    rebuild_npc_indices(w);
+
+    REQUIRE(w.npc_index_by_id.size() == 4);
+    for (size_t i = 0; i < w.significant_npcs.size(); ++i) {
+        auto it = w.npc_index_by_id.find(w.significant_npcs[i].id);
+        REQUIRE(it != w.npc_index_by_id.end());
+        REQUIRE(it->second == i);
+    }
+}
+
+TEST_CASE("rebuild_npc_indices: id index covers out-of-range province NPCs",
+          "[world_state][npc_index]") {
+    // The province bucket skips NPCs whose current_province_id is out of
+    // range; the id index must still reach them so callers that only need
+    // "find NPC by id" don't lose entries.
+    auto w = make_world(/*province_count=*/2, /*npc_count=*/2);
+    NPC orphan{};
+    orphan.id = 9999;
+    orphan.current_province_id = 42;  // out of range
+    w.significant_npcs.push_back(orphan);
+
+    rebuild_npc_indices(w);
+
+    REQUIRE(w.npc_index_by_id.count(9999) == 1);
+    REQUIRE(w.npc_index_by_id[9999] == w.significant_npcs.size() - 1);
+}
+
+TEST_CASE("apply_deltas refreshes npc_index_by_id", "[world_state][npc_index][apply_deltas]") {
+    auto w = make_world(/*province_count=*/2, /*npc_count=*/2);
+    rebuild_npc_indices(w);
+    w.npc_index_by_id.clear();
+
+    DeltaBuffer delta{};
+    NPCDelta nd{};
+    nd.npc_id = w.significant_npcs[0].id;
+    nd.capital_delta = 1.0f;
+    delta.npc_deltas.push_back(nd);
+
+    apply_deltas(w, delta);
+
+    REQUIRE(w.npc_index_by_id.size() == 2);
+    for (size_t i = 0; i < w.significant_npcs.size(); ++i) {
+        REQUIRE(w.npc_index_by_id[w.significant_npcs[i].id] == i);
+    }
+}
+
+TEST_CASE("rebuild_npc_indices: builds home_province bucket independently of current_province",
+          "[world_state][npc_index]") {
+    // NPC 0 lives in province 0 but is currently in province 1 (e.g. mid-trip).
+    // The two buckets must reflect the two semantics.
+    auto w = make_world(/*province_count=*/2, /*npc_count=*/0);
+    NPC npc{};
+    npc.id = 100;
+    npc.home_province_id = 0;
+    npc.current_province_id = 1;
+    npc.status = NPCStatus::active;
+    w.significant_npcs.push_back(npc);
+
+    rebuild_npc_indices(w);
+
+    // current_province bucket: under province 1.
+    REQUIRE(w.npc_indices_by_province[0].empty());
+    REQUIRE(w.npc_indices_by_province[1] == std::vector<uint32_t>{0});
+
+    // home_province bucket: under province 0.
+    REQUIRE(w.npc_indices_by_home_province[0] == std::vector<uint32_t>{0});
+    REQUIRE(w.npc_indices_by_home_province[1].empty());
+}
+
+TEST_CASE("lookup_npc_by_id: prefers index, falls back when index is empty",
+          "[world_state][npc_index]") {
+    auto w = make_world(/*province_count=*/1, /*npc_count=*/3);
+
+    // No rebuild yet: id index is empty, fallback path triggers.
+    REQUIRE(w.npc_index_by_id.empty());
+    const NPC* npc = lookup_npc_by_id(w, w.significant_npcs[1].id);
+    REQUIRE(npc != nullptr);
+    REQUIRE(npc->id == w.significant_npcs[1].id);
+
+    // Now rebuild and assert the index is consulted (we mutate the index
+    // out-of-band to a wrong value and the fallback must NOT kick in — once
+    // the index is populated, absence is real).
+    rebuild_npc_indices(w);
+    w.npc_index_by_id.erase(w.significant_npcs[1].id);
+    // Index is non-empty (still has the other entries) so absence is real.
+    REQUIRE(lookup_npc_by_id(w, w.significant_npcs[1].id) == nullptr);
+}

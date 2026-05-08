@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -70,11 +71,7 @@ float ObligationNetworkModule::compute_trust_erosion(uint32_t overdue_ticks,
 
 const NPC* ObligationNetworkModule::find_creditor(const WorldState& state,
                                                   uint32_t creditor_npc_id) const {
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.id == creditor_npc_id)
-            return &npc;
-    }
-    return nullptr;
+    return lookup_npc_by_id(state, creditor_npc_id);
 }
 
 // ---------------------------------------------------------------------------

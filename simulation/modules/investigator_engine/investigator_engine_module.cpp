@@ -168,14 +168,15 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
 
     // Phase 2: Process investigator NPCs in this province
     std::vector<const NPC*> investigators;
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.current_province_id != province.id)
-            continue;
-        if (npc.status != NPCStatus::active)
-            continue;
-        if (npc.role == NPCRole::law_enforcement || npc.role == NPCRole::regulator ||
-            npc.role == NPCRole::journalist || npc.role == NPCRole::ngo_investigator) {
-            investigators.push_back(&npc);
+    if (province.id < state.npc_indices_by_province.size()) {
+        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.status != NPCStatus::active)
+                continue;
+            if (npc.role == NPCRole::law_enforcement || npc.role == NPCRole::regulator ||
+                npc.role == NPCRole::journalist || npc.role == NPCRole::ngo_investigator) {
+                investigators.push_back(&npc);
+            }
         }
     }
     std::sort(investigators.begin(), investigators.end(),

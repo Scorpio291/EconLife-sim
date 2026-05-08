@@ -101,21 +101,22 @@ void BusinessLifecycleModule::spawn_era_entrants(const WorldState& state, DeltaB
                 1.0f, std::round(static_cast<float>(province_biz_count) * entry.spawn_fraction)));
 
             for (uint32_t s = 0; s < to_spawn; ++s) {
-                // Find the first province NPC that does not already own a business.
+                // Find the first province resident that does not already own a business.
                 uint32_t owner_id = 0;
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.home_province_id != pi)
-                        continue;
-                    bool already_owns = false;
-                    for (const auto& b : state.npc_businesses) {
-                        if (b.owner_id == npc.id) {
-                            already_owns = true;
+                if (pi < state.npc_indices_by_home_province.size()) {
+                    for (uint32_t idx : state.npc_indices_by_home_province[pi]) {
+                        const NPC& npc = state.significant_npcs[idx];
+                        bool already_owns = false;
+                        for (const auto& b : state.npc_businesses) {
+                            if (b.owner_id == npc.id) {
+                                already_owns = true;
+                                break;
+                            }
+                        }
+                        if (!already_owns) {
+                            owner_id = npc.id;
                             break;
                         }
-                    }
-                    if (!already_owns) {
-                        owner_id = npc.id;
-                        break;
                     }
                 }
                 // owner_id == 0 means no free NPC; financial_distribution will

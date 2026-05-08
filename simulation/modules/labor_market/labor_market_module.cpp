@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -619,11 +620,10 @@ const EmploymentRecord* LaborMarketModule::find_employment(uint32_t npc_id) cons
 }
 
 const NPC* LaborMarketModule::find_npc(const WorldState& state, uint32_t npc_id) {
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.id == npc_id) {
-            return &npc;
-        }
-    }
+    if (const NPC* npc = lookup_npc_by_id(state, npc_id))
+        return npc;
+    // Background NPCs are not in the id index; the labor market does maintain
+    // employment records for them, so fall back to a linear scan.
     for (const auto& npc : state.named_background_npcs) {
         if (npc.id == npc_id) {
             return &npc;

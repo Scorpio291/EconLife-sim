@@ -119,24 +119,23 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
     if (province_idx >= state.provinces.size())
         return;
 
-    const auto& province = state.provinces[province_idx];
     float addiction_rate_delta = 0.0f;
 
-    // Process NPCs in id ascending order
-    auto npc_ids = province.significant_npc_ids;
-    std::sort(npc_ids.begin(), npc_ids.end());
+    // Iterate NPCs in this province via the live bucket index. Replaces the
+    // older Province::significant_npc_ids snapshot (built at world generation
+    // and not refreshed on cross-province migration) plus linear find_npc.
+    if (province_idx >= state.npc_indices_by_province.size())
+        return;
+    std::vector<uint32_t> npc_indices(state.npc_indices_by_province[province_idx].begin(),
+                                      state.npc_indices_by_province[province_idx].end());
+    std::sort(npc_indices.begin(), npc_indices.end(), [&](uint32_t a, uint32_t b) {
+        return state.significant_npcs[a].id < state.significant_npcs[b].id;
+    });
 
-    for (uint32_t npc_id : npc_ids) {
-        // Find NPC
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == npc_id) {
-                npc = &n;
-                break;
-            }
-        }
-        if (!npc)
-            continue;
+    for (uint32_t idx : npc_indices) {
+        const NPC& npc_ref = state.significant_npcs[idx];
+        const NPC* npc = &npc_ref;
+        const uint32_t npc_id = npc_ref.id;
         if (npc->status != NPCStatus::active)
             continue;
 

@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
@@ -103,14 +104,8 @@ void BankingModule::process_loan_repayment(LoanRecord& loan, const WorldState& s
     if (state.player != nullptr && loan.borrower_id == state.player->id) {
         borrower_cash = state.player->wealth;
         is_player = true;
-    } else {
-        // Look up NPC capital in significant_npcs.
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.id == loan.borrower_id) {
-                borrower_cash = npc.capital;
-                break;
-            }
-        }
+    } else if (const NPC* npc = lookup_npc_by_id(state, loan.borrower_id)) {
+        borrower_cash = npc->capital;
     }
 
     // Find or create borrower credit record.

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // apply_deltas — applies accumulated DeltaBuffer changes to WorldState.
 // Called by TickOrchestrator after each module (or after all modules in a step).
 //
@@ -26,21 +28,33 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
 // Apply cross-province deltas that were deferred from the previous tick.
 void apply_cross_province_deltas(WorldState& world);
 
-// Rebuild WorldState::npc_indices_by_province from significant_npcs.
+struct NPC;
+
+// Lookup an NPC by id. Prefers the precomputed npc_index_by_id (O(1));
+// falls back to a linear scan of significant_npcs only when the index is
+// empty and significant_npcs is not — i.e. in unit tests that construct
+// WorldState piecemeal and never call rebuild_npc_indices(). Production
+// paths always have the index populated by the tick orchestrator.
+const NPC* lookup_npc_by_id(const WorldState& world, uint32_t npc_id);
+
+// Rebuild the computed NPC indices on WorldState from significant_npcs:
+//   - npc_index_by_id (id → significant_npcs index) for O(1) per-id lookup.
+//   - npc_indices_by_province (province → indices) for the province bucket.
 //
-// Outer vector is resized to provinces.size(); inner vectors are cleared and
-// repopulated with significant_npcs indices grouped by current_province_id,
-// preserving ascending vector order (which is id-ascending after world
-// generation).
+// The province bucket's outer vector is resized to provinces.size(); inner
+// vectors are cleared and repopulated with significant_npcs indices grouped
+// by current_province_id, preserving ascending vector order (which is
+// id-ascending after world generation).
 //
 // O(N) in significant_npcs. Single-threaded; called by:
 //  - WorldGenerator after NPC generation completes
 //  - PersistenceModule after deserialization
-//  - TickOrchestrator after every apply_deltas() call (so the index reflects
+//  - TickOrchestrator after every apply_deltas() call (so the indices reflect
 //    the WorldState the next module will see)
 //
 // NPCs whose current_province_id is out of range relative to provinces.size()
-// are skipped (logged in debug builds).
+// are skipped from the province bucket; they remain reachable through
+// npc_index_by_id.
 void rebuild_npc_indices(WorldState& world);
 
 }  // namespace econlife
