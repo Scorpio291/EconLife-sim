@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_state/apply_deltas.h"  // lookup_market
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -58,14 +59,9 @@ void CommodityTradingModule::execute(const WorldState& state, DeltaBuffer& delta
             continue;
         }
 
-        // Find the regional market for this position's good and province.
-        const RegionalMarket* market = nullptr;
-        for (const auto& rm : state.regional_markets) {
-            if (rm.good_id == pos.good_id && rm.province_id == pos.province_id) {
-                market = &rm;
-                break;
-            }
-        }
+        // Find the regional market for this position's good and province
+        // via the composite-key index (with linear-scan fallback for tests).
+        const RegionalMarket* market = lookup_market(state, pos.good_id, pos.province_id);
 
         if (market == nullptr) {
             // Invalid market reference; skip position (failure mode per spec).

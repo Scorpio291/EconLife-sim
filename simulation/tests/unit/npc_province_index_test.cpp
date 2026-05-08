@@ -239,3 +239,118 @@ TEST_CASE("lookup_npc_by_id: prefers index, falls back when index is empty",
     // Index is non-empty (still has the other entries) so absence is real.
     REQUIRE(lookup_npc_by_id(w, w.significant_npcs[1].id) == nullptr);
 }
+
+// --- Market indices ---------------------------------------------------------
+
+namespace {
+
+WorldState make_market_world(uint32_t province_count, uint32_t goods_per_province) {
+    WorldState w{};
+    w.current_tick = 0;
+    w.world_seed = 1;
+    w.game_mode = GameMode::standard;
+
+    for (uint32_t p = 0; p < province_count; ++p) {
+        Province prov{};
+        prov.id = p;
+        w.provinces.push_back(prov);
+    }
+    for (uint32_t p = 0; p < province_count; ++p) {
+        for (uint32_t g = 0; g < goods_per_province; ++g) {
+            RegionalMarket m{};
+            m.good_id = g;
+            m.province_id = p;
+            m.spot_price = 10.0f + static_cast<float>(g);
+            m.equilibrium_price = m.spot_price;
+            m.supply = 100.0f;
+            w.regional_markets.push_back(m);
+        }
+    }
+    return w;
+}
+
+}  // namespace
+
+TEST_CASE("rebuild_npc_indices: builds market_indices_by_province", "[world_state][market_index]") {
+    auto w = make_market_world(/*province_count=*/3, /*goods_per_province=*/4);
+    rebuild_npc_indices(w);
+
+    REQUIRE(w.market_indices_by_province.size() == w.provinces.size());
+    for (uint32_t p = 0; p < w.provinces.size(); ++p) {
+        REQUIRE(w.market_indices_by_province[p].size() == 4);
+        for (uint32_t i : w.market_indices_by_province[p]) {
+            REQUIRE(w.regional_markets[i].province_id == p);
+        }
+    }
+}
+
+TEST_CASE("rebuild_npc_indices: builds market_index_by_good_province",
+          "[world_state][market_index]") {
+    auto w = make_market_world(/*province_count=*/2, /*goods_per_province=*/3);
+    rebuild_npc_indices(w);
+
+    REQUIRE(w.market_index_by_good_province.size() == w.regional_markets.size());
+    for (size_t i = 0; i < w.regional_markets.size(); ++i) {
+        const auto& m = w.regional_markets[i];
+        const uint64_t key = (static_cast<uint64_t>(m.good_id) << 32) | m.province_id;
+        auto it = w.market_index_by_good_province.find(key);
+        REQUIRE(it != w.market_index_by_good_province.end());
+        REQUIRE(it->second == i);
+    }
+}
+
+TEST_CASE("lookup_market: prefers index, falls back when empty", "[world_state][market_index]") {
+    auto w = make_market_world(/*province_count=*/2, /*goods_per_province=*/2);
+
+    // Pre-rebuild: index is empty, fallback triggers.
+    REQUIRE(w.market_index_by_good_province.empty());
+    const RegionalMarket* m = lookup_market(w, /*good=*/1, /*province=*/1);
+    REQUIRE(m != nullptr);
+    REQUIRE(m->good_id == 1);
+    REQUIRE(m->province_id == 1);
+
+    // Post-rebuild: a missing key returns nullptr (no fallback).
+    rebuild_npc_indices(w);
+    REQUIRE(lookup_market(w, /*good=*/99, /*province=*/0) == nullptr);
+}
+
+TEST_CASE("markets_in_province: prefers bucket, falls back when empty",
+          "[world_state][market_index]") {
+    auto w = make_market_world(/*province_count=*/2, /*goods_per_province=*/3);
+
+    // Pre-rebuild: bucket is empty, fallback materialises a fresh vector.
+    REQUIRE(w.market_indices_by_province.empty());
+    auto fallback = markets_in_province(w, /*province=*/1);
+    REQUIRE(fallback.size() == 3);
+    for (uint32_t i : fallback) {
+        REQUIRE(w.regional_markets[i].province_id == 1);
+    }
+
+    rebuild_npc_indices(w);
+    auto via_index = markets_in_province(w, /*province=*/1);
+    REQUIRE(via_index.size() == 3);
+    REQUIRE(via_index == w.market_indices_by_province[1]);
+
+    // Province with no markets (out-of-range) returns empty.
+    REQUIRE(markets_in_province(w, /*province=*/42).empty());
+}
+
+TEST_CASE("apply_deltas refreshes market indices after a market_deltas pass",
+          "[world_state][market_index][apply_deltas]") {
+    auto w = make_market_world(/*province_count=*/2, /*goods_per_province=*/2);
+    rebuild_npc_indices(w);
+    w.market_index_by_good_province.clear();
+    w.market_indices_by_province.clear();
+
+    DeltaBuffer delta{};
+    MarketDelta md{};
+    md.good_id = 0;
+    md.region_id = 0;
+    md.supply_delta = 5.0f;
+    delta.market_deltas.push_back(md);
+
+    apply_deltas(w, delta);
+
+    REQUIRE(w.market_index_by_good_province.size() == w.regional_markets.size());
+    REQUIRE(w.market_indices_by_province.size() == w.provinces.size());
+}

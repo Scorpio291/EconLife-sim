@@ -13,6 +13,7 @@
 #include <cmath>
 #include <vector>
 
+#include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/trade_infrastructure/trade_types.h"
@@ -25,13 +26,14 @@ namespace econlife {
 
 void PriceEngineModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
-    // Collect regional markets for this province, then sort by good_id ascending
-    // for deterministic floating-point accumulation order.
+    // Collect regional markets for this province via the bucket index, then
+    // sort by good_id ascending for deterministic floating-point accumulation
+    // order.
     std::vector<const RegionalMarket*> province_markets;
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province_idx) {
-            province_markets.push_back(&market);
-        }
+    const auto bucket = markets_in_province(state, province_idx);
+    province_markets.reserve(bucket.size());
+    for (uint32_t i : bucket) {
+        province_markets.push_back(&state.regional_markets[i]);
     }
 
     // Sort by good_id ascending (canonical order per CLAUDE.md).

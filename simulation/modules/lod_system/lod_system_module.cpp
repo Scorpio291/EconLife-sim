@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -81,9 +82,8 @@ void LodSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
                 // Write a supply delta for each regional market in this province.
                 // V1 simplified: apply net production surplus/deficit across all markets.
-                for (const auto& market : state.regional_markets) {
-                    if (market.province_id != prov_id)
-                        continue;
+                for (uint32_t i : markets_in_province(state, prov_id)) {
+                    const auto& market = state.regional_markets[i];
 
                     float net_surplus = lod1_production - lod1_consumption;
                     if (net_surplus == 0.0f)

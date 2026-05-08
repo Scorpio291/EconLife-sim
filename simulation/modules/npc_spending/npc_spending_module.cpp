@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -126,10 +127,10 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
     // For each regional market in this province, compute consumer demand.
     // Markets sorted by good_id ascending for deterministic accumulation.
     std::vector<const RegionalMarket*> province_markets;
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province.id) {
-            province_markets.push_back(&market);
-        }
+    const auto bucket = markets_in_province(state, province.id);
+    province_markets.reserve(bucket.size());
+    for (uint32_t i : bucket) {
+        province_markets.push_back(&state.regional_markets[i]);
     }
     std::sort(
         province_markets.begin(), province_markets.end(),

@@ -69,9 +69,35 @@ scene_cards, trust_updates, weapons_trafficking.
   for the cross-province pass; not a filter-shape scan.
 
 **Performance:** Headline benchmark "full tick with all modules at 2000
-NPCs" mean ~7-8 ms — ~25× under the 200 ms target. With B1 (delta merge
-policy) and the H5 substrate landed, B3 (CI perf gate) is now safe to
-tune against this baseline.
+NPCs" mean ~7-13 ms (CI runner variance) — ~15-30× under the 200 ms
+target. With B1 (delta merge policy) and the H5 substrate landed,
+B3 (CI perf gate, threshold 200 ms in `benchmark.yml`) is now active.
+
+### H5b. Filter-shape regional_markets scans
+
+**Status:** Resolved. Mirroring H5 for the markets axis, `WorldState`
+now carries:
+- `market_indices_by_province` — bucket index for "all markets in
+  province p" iterations.
+- `market_index_by_good_province` — composite-key map for "the market
+  for (good_id, province_id)" lookups.
+
+Both maintained by `rebuild_npc_indices()` (the helper is named for
+its primary axis but updates all four indices in one O(N+M) pass).
+`lookup_market()` and `markets_in_province()` in `apply_deltas.h` are
+the canonical accessors with the same fallback contract as
+`lookup_npc_by_id`.
+
+Migrated consumers: `price_engine`, `npc_spending`, `production`
+(supply table + price lookup), `supply_chain` (sell offers, buy orders,
+inter-province source supply), `commodity_trading`, `antitrust`
+(per-key supply lookup), `random_events` (×3), `lod_system`.
+
+The original audit count of "16 occurrences of
+`for (... : state.regional_markets)`" is now 4 — all global non-filter
+sites: persistence serialize, antitrust market-keys collection (single
+O(M) pass), and supply_chain's "find best demand globally" maximum
+search.
 
 ### M3. Many `drain_deferred_work` handlers are stubs
 

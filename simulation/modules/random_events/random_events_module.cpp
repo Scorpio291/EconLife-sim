@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
-#include "core/world_state/player.h"  // PlayerCharacter (complete type for state.player->)
+#include "core/world_state/apply_deltas.h"  // markets_in_province
+#include "core/world_state/player.h"        // PlayerCharacter (complete type for state.player->)
 
 namespace econlife {
 
@@ -261,15 +262,14 @@ void RandomEventsModule::apply_economic_per_tick(const WorldState& state, const 
         if (event.id % 2 == 0)
             shift = -shift;
 
-        for (const auto& market : state.regional_markets) {
-            if (market.province_id == province.id) {
-                MarketDelta md{};
-                md.good_id = market.good_id;
-                md.region_id = province.region_id;
-                md.spot_price_override = market.spot_price + shift;
-                province_delta.market_deltas.push_back(md);
-                break;
-            }
+        for (uint32_t i : markets_in_province(state, province.id)) {
+            const auto& market = state.regional_markets[i];
+            MarketDelta md{};
+            md.good_id = market.good_id;
+            md.region_id = province.region_id;
+            md.spot_price_override = market.spot_price + shift;
+            province_delta.market_deltas.push_back(md);
+            break;
         }
     }
 }
@@ -349,8 +349,9 @@ float RandomEventsModule::compute_economic_volatility(const WorldState& state,
                                                       const Province& province) const {
     float total_deviation = 0.0f;
     uint32_t count = 0;
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province.id && market.equilibrium_price > 0.0f) {
+    for (uint32_t i : markets_in_province(state, province.id)) {
+        const auto& market = state.regional_markets[i];
+        if (market.equilibrium_price > 0.0f) {
             float deviation =
                 std::abs(market.spot_price - market.equilibrium_price) / market.equilibrium_price;
             total_deviation += deviation;
@@ -518,15 +519,14 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                 if (event.id % 2 == 0)
                     shift = -shift;
 
-                for (const auto& market : state.regional_markets) {
-                    if (market.province_id == province.id) {
-                        MarketDelta md{};
-                        md.good_id = market.good_id;
-                        md.region_id = province.region_id;
-                        md.spot_price_override = market.spot_price + shift;
-                        province_delta.market_deltas.push_back(md);
-                        break;
-                    }
+                for (uint32_t i : markets_in_province(state, province.id)) {
+                    const auto& market = state.regional_markets[i];
+                    MarketDelta md{};
+                    md.good_id = market.good_id;
+                    md.region_id = province.region_id;
+                    md.spot_price_override = market.spot_price + shift;
+                    province_delta.market_deltas.push_back(md);
+                    break;
                 }
             }
 

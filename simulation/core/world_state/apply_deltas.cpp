@@ -682,6 +682,55 @@ void apply_cross_province_deltas(WorldState& world) {
 }
 
 // ---------------------------------------------------------------------------
+// lookup_market / markets_in_province
+// ---------------------------------------------------------------------------
+const RegionalMarket* lookup_market(const WorldState& world, uint32_t good_id,
+                                    uint32_t province_id) {
+    const uint64_t key = (static_cast<uint64_t>(good_id) << 32) | province_id;
+    if (auto it = world.market_index_by_good_province.find(key);
+        it != world.market_index_by_good_province.end()) {
+        return &world.regional_markets[it->second];
+    }
+    if (!world.market_index_by_good_province.empty()) {
+        return nullptr;  // index built; absence is real
+    }
+    for (const auto& m : world.regional_markets) {
+        if (m.good_id == good_id && m.province_id == province_id) {
+            return &m;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<uint32_t> markets_in_province(const WorldState& world, uint32_t province_id) {
+    if (province_id < world.market_indices_by_province.size() &&
+        !world.market_indices_by_province[province_id].empty()) {
+        return world.market_indices_by_province[province_id];
+    }
+    // Fallback only when the index is empty AND there are markets — otherwise
+    // an empty result is real.
+    if (!world.market_indices_by_province.empty() && !world.regional_markets.empty()) {
+        bool any_bucket_populated = false;
+        for (const auto& bucket : world.market_indices_by_province) {
+            if (!bucket.empty()) {
+                any_bucket_populated = true;
+                break;
+            }
+        }
+        if (any_bucket_populated) {
+            return {};  // index built; this province genuinely has no markets
+        }
+    }
+    std::vector<uint32_t> out;
+    for (size_t i = 0; i < world.regional_markets.size(); ++i) {
+        if (world.regional_markets[i].province_id == province_id) {
+            out.push_back(static_cast<uint32_t>(i));
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // lookup_npc_by_id
 // ---------------------------------------------------------------------------
 const NPC* lookup_npc_by_id(const WorldState& world, uint32_t npc_id) {
@@ -769,6 +818,43 @@ void rebuild_npc_indices(WorldState& world) {
         if (npc.home_province_id < province_count) {
             home_buckets[npc.home_province_id].push_back(static_cast<uint32_t>(i));
         }
+    }
+
+    // --- regional_markets indices ---
+    //
+    // Buckets and the (good_id, province_id) composite-key map are rebuilt
+    // alongside the NPC indices. Markets do not migrate between provinces, so
+    // these would be stable after world generation in practice — but era
+    // transitions and mod hot-loads can append new markets, and the rebuild
+    // cost is O(M) ≈ 1500 ops at V1 scale, negligible next to the rebuild's
+    // existing NPC pass.
+    auto& market_buckets = world.market_indices_by_province;
+    market_buckets.assign(province_count, {});
+    auto& market_kv = world.market_index_by_good_province;
+    market_kv.clear();
+    market_kv.reserve(world.regional_markets.size());
+
+    if (province_count > 0) {
+        std::vector<size_t> market_counts(province_count, 0);
+        for (const auto& m : world.regional_markets) {
+            if (m.province_id < province_count) {
+                ++market_counts[m.province_id];
+            }
+        }
+        for (size_t p = 0; p < province_count; ++p) {
+            market_buckets[p].reserve(market_counts[p]);
+        }
+    }
+
+    for (size_t i = 0; i < world.regional_markets.size(); ++i) {
+        const auto& m = world.regional_markets[i];
+        if (m.province_id < province_count) {
+            market_buckets[m.province_id].push_back(static_cast<uint32_t>(i));
+        }
+        // The composite-key map keeps every market regardless of bucket
+        // eligibility — the contract is "id → index", not "in some bucket".
+        const uint64_t key = (static_cast<uint64_t>(m.good_id) << 32) | m.province_id;
+        market_kv[key] = static_cast<uint32_t>(i);
     }
 }
 

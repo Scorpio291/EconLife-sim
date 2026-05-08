@@ -9,6 +9,7 @@
 
 #include "core/good_id_hash.h"
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_market, markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -112,12 +113,11 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
             id_to_string[good_id_from_string(output.good_id)] = output.good_id;
         }
     }
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province_idx) {
-            auto it = id_to_string.find(market.good_id);
-            if (it != id_to_string.end()) {
-                available_supply[it->second] = market.supply;
-            }
+    for (uint32_t i : markets_in_province(state, province_idx)) {
+        const auto& market = state.regional_markets[i];
+        auto it = id_to_string.find(market.good_id);
+        if (it != id_to_string.end()) {
+            available_supply[it->second] = market.supply;
         }
     }
 
@@ -349,17 +349,17 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
 float ProductionModule::get_price_for_business(const NPCBusiness& biz, uint32_t good_id,
                                                const WorldState& state) const {
-    // Find the regional market for this good in this province.
-    for (const auto& market : state.regional_markets) {
-        if (market.good_id == good_id && market.province_id == biz.province_id) {
-            if (biz.criminal_sector) {
-                // Criminal sector uses informal price.
-                // In V1, informal price is approximated as a discount on
-                // spot_price. The full informal market model is expansion scope.
-                return market.spot_price * cfg_.informal_price_discount;
-            }
-            return market.spot_price;
+    // Find the regional market for this good in this province via the
+    // (good_id, province_id) composite-key index (with linear-scan fallback
+    // for unit tests that build state piecemeal).
+    if (const RegionalMarket* market = lookup_market(state, good_id, biz.province_id)) {
+        if (biz.criminal_sector) {
+            // Criminal sector uses informal price.
+            // In V1, informal price is approximated as a discount on
+            // spot_price. The full informal market model is expansion scope.
+            return market->spot_price * cfg_.informal_price_discount;
         }
+        return market->spot_price;
     }
     // No market found; return 0 to avoid uninitialized access.
     return 0.0f;

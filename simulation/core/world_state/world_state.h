@@ -153,6 +153,21 @@ struct WorldState {
     // (founders draw from local population). NPCs with home_province_id
     // out of range are skipped.
     std::vector<std::vector<uint32_t>> npc_indices_by_home_province;
+
+    // --- Computed: regional_markets bucket index by province_id ---
+    // Indices into regional_markets grouped by province_id. Replaces the
+    // "for (auto& m : state.regional_markets) if (m.province_id == p)"
+    // pattern in price_engine, supply_chain, production, npc_spending,
+    // antitrust, commodity_trading, random_events, lod_system.
+    std::vector<std::vector<uint32_t>> market_indices_by_province;
+
+    // --- Computed: regional_markets composite-key index ---
+    // (good_id, province_id) → regional_markets index, packed as
+    // (good_id << 32) | province_id. O(1) "find the market for this good in
+    // this province" lookup. Mirrors the per-call map that apply_market_deltas
+    // already builds; modules that read markets by composite key route
+    // through this index instead of building their own.
+    std::unordered_map<uint64_t, uint32_t> market_index_by_good_province;
 };
 
 }  // namespace econlife

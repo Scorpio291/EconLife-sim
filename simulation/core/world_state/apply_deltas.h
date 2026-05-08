@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 // apply_deltas — applies accumulated DeltaBuffer changes to WorldState.
 // Called by TickOrchestrator after each module (or after all modules in a step).
@@ -29,6 +30,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
 void apply_cross_province_deltas(WorldState& world);
 
 struct NPC;
+struct RegionalMarket;
 
 // Lookup an NPC by id. Prefers the precomputed npc_index_by_id (O(1));
 // falls back to a linear scan of significant_npcs only when the index is
@@ -36,6 +38,20 @@ struct NPC;
 // WorldState piecemeal and never call rebuild_npc_indices(). Production
 // paths always have the index populated by the tick orchestrator.
 const NPC* lookup_npc_by_id(const WorldState& world, uint32_t npc_id);
+
+// Lookup the regional market for (good_id, province_id). Prefers
+// market_index_by_good_province (O(1)); falls back to a linear scan of
+// regional_markets when the index is empty — same fallback contract as
+// lookup_npc_by_id.
+const RegionalMarket* lookup_market(const WorldState& world, uint32_t good_id,
+                                    uint32_t province_id);
+
+// Returns indices into regional_markets for the given province. Prefers
+// market_indices_by_province; falls back to an O(M) linear scan when the
+// bucket is empty AND regional_markets is not — same fallback contract as
+// lookup_npc_by_id. Bucket-built indices are returned by reference for
+// zero-copy iteration; the fallback path materialises a fresh vector.
+std::vector<uint32_t> markets_in_province(const WorldState& world, uint32_t province_id);
 
 // Rebuild the computed NPC indices on WorldState from significant_npcs:
 //   - npc_index_by_id (id → significant_npcs index) for O(1) per-id lookup.

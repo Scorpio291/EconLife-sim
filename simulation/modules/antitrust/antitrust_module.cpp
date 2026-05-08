@@ -5,6 +5,7 @@
 #include <map>
 #include <set>
 
+#include "core/world_state/apply_deltas.h"  // lookup_market
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -81,13 +82,11 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
     std::set<uint32_t> provinces_with_tier2;
 
     for (const auto& mk : market_keys) {
-        // Find total supply for this good in this province
+        // Find total supply for this good in this province via the composite-
+        // key index (with linear-scan fallback for tests).
         float total_supply = 0.0f;
-        for (const auto& rm : state.regional_markets) {
-            if (rm.good_id == mk.good_id && rm.province_id == mk.province_id) {
-                total_supply = rm.supply;
-                break;
-            }
+        if (const RegionalMarket* m = lookup_market(state, mk.good_id, mk.province_id)) {
+            total_supply = m->supply;
         }
 
         // Skip goods with zero supply (avoid division by zero)
