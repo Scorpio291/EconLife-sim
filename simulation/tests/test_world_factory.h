@@ -12,6 +12,7 @@
 #include "core/rng/deterministic_rng.h"
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -313,6 +314,10 @@ inline WorldState create_test_world(uint64_t seed, uint32_t npc_count = 100,
         biz.cash = 50000.0f + static_cast<float>(rng.next_uint(200000));
         world.npc_businesses.push_back(std::move(biz));
     }
+
+    // Build the province → significant_npcs index. Modules read this between
+    // ticks; the orchestrator + apply_deltas keep it fresh thereafter.
+    rebuild_npc_indices(world);
 
     return world;
 }

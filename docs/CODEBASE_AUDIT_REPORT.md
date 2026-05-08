@@ -28,25 +28,29 @@ managed by smart pointers, and CI actually runs all 1300+ tests.
 
 ### H5. Linear scan lookups will exceed performance budget at scale
 
-**Status:** Open.
-**Files:** Multiple modules use O(N) linear scan for NPC/business lookups:
+**Status:** Infrastructure landed; one consumer migrated.
+**Per-id lookups:** Resolved (`3a40d34`).
+**Filter-shape scans:** Substrate added in this commit. `WorldState`
+now carries `npc_indices_by_province` (province → significant_npcs
+indices), maintained by `rebuild_npc_indices()` at world generation,
+persistence load, and after every `apply_deltas`. `npc_behavior_module`
+— the single heaviest filter-shape consumer — reads through the index.
 
-- `simulation/core/world_state/apply_deltas.cpp:47` — per-NPCDelta scan over `world.significant_npcs`.
-- `simulation/core/tick/drain_deferred_work.cpp:26-32` — `find_npc` linear scan, called from every relationship/travel/evidence handler.
-- 22 occurrences of `for (const auto& npc : state.significant_npcs)` across modules (count via `grep -rc`).
-- 16 occurrences of `for (... : state.regional_markets)` across modules.
+**Remaining migrations:** ~21 modules still scan
+`for (const auto& npc : state.significant_npcs)` and filter by province
+manually (addiction, antitrust, banking, business_lifecycle, calendar,
+community_response, evidence, facility_signals, government_budget,
+healthcare, informant_system, investigator_engine, labor_market,
+media_system, npc_spending, obligation_network, persistence,
+player_actions, random_events, scene_cards, trust_updates,
+weapons_trafficking). Migrating them is mechanical: replace the loop
+with `state.npc_indices_by_province[province_idx]` and apply the
+existing per-element filter. Migrating them all in one PR violates
+"one module per session"; split across PRs.
 
-With 2000 NPCs and thousands of deltas per tick, `apply_npc_deltas` is
-O(N·M). The 500ms tick budget at V1 scale will be exceeded.
-
-**Fix:** Build `std::unordered_map<uint32_t, size_t>` indices at tick
-start (or maintain them as the NPC vector is mutated) and route lookups
-through them. Alternative: sort NPCs by id and use `std::lower_bound`.
-Decide once a benchmark profile shows which paths dominate.
-
-**Priority:** This is the single largest remaining engineering risk. Do
-before tightening B3 (CI perf gate), otherwise the gate locks in a bad
-baseline.
+**Priority:** Sequencing before B3 (CI perf gate) is now satisfied —
+the index exists and the headline benchmark is healthy
+(~5.5 ms/tick at 2000 NPCs / 6 provinces / all base modules).
 
 ### M3. Many `drain_deferred_work` handlers are stubs
 

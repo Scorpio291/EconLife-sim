@@ -620,6 +620,13 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.cross_province_delta_buffer.entries.push_back(std::move(cpd));
     }
 
+    // Refresh the province → significant_npcs index. Most apply_deltas calls
+    // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
+    // a conditional rebuild buys little. The orchestrator separately calls
+    // rebuild_npc_indices when it knows the index is needed; doing it here too
+    // keeps callers that invoke apply_deltas directly (drain, tests) honest.
+    rebuild_npc_indices(world);
+
     // Clear the delta buffer for next step
     delta.npc_deltas.clear();
     delta.player_delta = PlayerDelta{};
@@ -668,6 +675,48 @@ void apply_cross_province_deltas(WorldState& world) {
 
     // Retain only entries not yet due.
     cpd.entries = std::move(pending);
+
+    // Cross-province NPC deltas can change current_province_id; refresh the
+    // bucket index so the first module of the new tick sees a consistent view.
+    rebuild_npc_indices(world);
+}
+
+// ---------------------------------------------------------------------------
+// rebuild_npc_indices
+// ---------------------------------------------------------------------------
+void rebuild_npc_indices(WorldState& world) {
+    const size_t province_count = world.provinces.size();
+    auto& buckets = world.npc_indices_by_province;
+    buckets.assign(province_count, {});
+
+    if (province_count == 0)
+        return;
+
+    // First pass: count to size each bucket exactly. Avoids growth churn at
+    // the 2k-NPC scale where the per-bucket vectors might otherwise reallocate
+    // a few times.
+    std::vector<size_t> counts(province_count, 0);
+    for (const auto& npc : world.significant_npcs) {
+        if (npc.current_province_id < province_count) {
+            ++counts[npc.current_province_id];
+        }
+    }
+    for (size_t p = 0; p < province_count; ++p) {
+        buckets[p].reserve(counts[p]);
+    }
+
+    // Second pass: populate. Iterating significant_npcs in vector order means
+    // each bucket is filled in the same order as the underlying vector, so
+    // bucket entries are id-ascending when significant_npcs is id-ascending
+    // (the standard invariant after world generation and apply_deltas).
+    for (size_t i = 0; i < world.significant_npcs.size(); ++i) {
+        const auto& npc = world.significant_npcs[i];
+        if (npc.current_province_id < province_count) {
+            buckets[npc.current_province_id].push_back(static_cast<uint32_t>(i));
+        }
+        // NPCs with out-of-range province_id are skipped silently — they
+        // would already be invisible to province-filtered scans today.
+    }
 }
 
 }  // namespace econlife

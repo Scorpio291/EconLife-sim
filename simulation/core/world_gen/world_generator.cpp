@@ -21,6 +21,7 @@
 #include "core/world_gen/h3_utils.h"
 #include "core/world_gen/nation_generator.h"
 #include "core/world_gen/settlement_generator.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 
 namespace econlife {
 
@@ -378,6 +379,11 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
         config.commentary_depth != CommentaryDepth::none) {
         write_encyclopedia_json(world, config, config.output_encyclopedia_file);
     }
+
+    // Build the province → significant_npcs index. From here on, modules and
+    // tests can read world.npc_indices_by_province directly; the orchestrator
+    // and apply_deltas keep it fresh between ticks.
+    rebuild_npc_indices(world);
 
     return world;
 }

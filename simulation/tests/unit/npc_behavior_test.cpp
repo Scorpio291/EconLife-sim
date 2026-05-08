@@ -32,6 +32,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/config/package_config.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -627,6 +628,7 @@ TEST_CASE("test_execute_processes_all_provinces", "[npc_behavior][tier5]") {
     // Add NPCs to both provinces.
     state.significant_npcs.push_back(make_test_npc(1, 0));
     state.significant_npcs.push_back(make_test_npc(2, 1));
+    rebuild_npc_indices(state);
 
     NpcBehaviorModule module;
     DeltaBuffer delta{};
@@ -652,6 +654,7 @@ TEST_CASE("test_execute_province_skips_inactive_npcs", "[npc_behavior][tier5]") 
     state.significant_npcs.push_back(active_npc);
     state.significant_npcs.push_back(dead_npc);
     state.significant_npcs.push_back(imprisoned_npc);
+    rebuild_npc_indices(state);
 
     NpcBehaviorModule module;
     DeltaBuffer delta{};
@@ -805,6 +808,7 @@ TEST_CASE("test_npcs_processed_in_id_ascending_order", "[npc_behavior][tier5]") 
     state.significant_npcs.push_back(make_test_npc(30, 0));
     state.significant_npcs.push_back(make_test_npc(10, 0));
     state.significant_npcs.push_back(make_test_npc(20, 0));
+    rebuild_npc_indices(state);
 
     NpcBehaviorModule module;
     DeltaBuffer delta{};
@@ -829,6 +833,7 @@ TEST_CASE("test_npcs_from_other_provinces_not_processed", "[npc_behavior][tier5]
     state.significant_npcs.push_back(make_test_npc(1, 0));  // province 0
     state.significant_npcs.push_back(make_test_npc(2, 1));  // province 1
     state.significant_npcs.push_back(make_test_npc(3, 0));  // province 0
+    rebuild_npc_indices(state);
 
     NpcBehaviorModule module;
     DeltaBuffer delta{};

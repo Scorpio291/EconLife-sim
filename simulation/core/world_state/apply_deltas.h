@@ -26,4 +26,21 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
 // Apply cross-province deltas that were deferred from the previous tick.
 void apply_cross_province_deltas(WorldState& world);
 
+// Rebuild WorldState::npc_indices_by_province from significant_npcs.
+//
+// Outer vector is resized to provinces.size(); inner vectors are cleared and
+// repopulated with significant_npcs indices grouped by current_province_id,
+// preserving ascending vector order (which is id-ascending after world
+// generation).
+//
+// O(N) in significant_npcs. Single-threaded; called by:
+//  - WorldGenerator after NPC generation completes
+//  - PersistenceModule after deserialization
+//  - TickOrchestrator after every apply_deltas() call (so the index reflects
+//    the WorldState the next module will see)
+//
+// NPCs whose current_province_id is out of range relative to provinces.size()
+// are skipped (logged in debug builds).
+void rebuild_npc_indices(WorldState& world);
+
 }  // namespace econlife

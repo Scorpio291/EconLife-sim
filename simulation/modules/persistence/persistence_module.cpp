@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -1783,6 +1784,10 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
 
     if (r.has_error())
         return RestoreResult::io_error;
+
+    // Computed indices are not serialized; rebuild from significant_npcs.
+    rebuild_npc_indices(out_state);
+
     return RestoreResult::success;
 }
 

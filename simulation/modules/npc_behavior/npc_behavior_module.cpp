@@ -208,15 +208,24 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
     const auto& province = state.provinces[province_idx];
 
     // Collect NPCs in this province — both active and waiting are evaluated.
+    // Read through the precomputed bucket index instead of scanning all NPCs;
+    // the orchestrator and apply_deltas keep the index fresh.
     std::vector<const NPC*> province_npcs;
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.current_province_id == province_idx &&
-            (npc.status == NPCStatus::active || npc.status == NPCStatus::waiting)) {
-            province_npcs.push_back(&npc);
+    if (province_idx < state.npc_indices_by_province.size()) {
+        const auto& bucket = state.npc_indices_by_province[province_idx];
+        province_npcs.reserve(bucket.size());
+        for (uint32_t i : bucket) {
+            const NPC& npc = state.significant_npcs[i];
+            if (npc.status == NPCStatus::active || npc.status == NPCStatus::waiting) {
+                province_npcs.push_back(&npc);
+            }
         }
     }
 
-    // Sort by id ascending for deterministic processing order.
+    // Sort by id ascending for deterministic processing order. Bucket order
+    // already matches significant_npcs vector order (which is id-ascending in
+    // practice), but the explicit sort keeps determinism robust against any
+    // future change that lets significant_npcs hold non-monotonic ids.
     std::sort(province_npcs.begin(), province_npcs.end(),
               [](const NPC* a, const NPC* b) { return a->id < b->id; });
 

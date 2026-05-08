@@ -116,6 +116,24 @@ struct WorldState {
     // The player_actions module drains this queue each tick.
     std::vector<PlayerAction> player_action_queue;
     uint32_t next_action_sequence = 0;  // monotonic; deterministic ordering
+
+    // --- Computed: NPC province bucket index ---
+    // Indices into significant_npcs grouped by current_province_id. Outer
+    // vector is sized to provinces.size(); inner vectors hold significant_npcs
+    // indices in ascending order (matches the order of significant_npcs, which
+    // is id-ascending after world generation). Modules iterating "NPCs in
+    // province p" should read npc_indices_by_province[p] instead of scanning
+    // significant_npcs.
+    //
+    // Maintained by rebuild_npc_indices() in apply_deltas.cpp:
+    //  - Built at world generation and persistence load.
+    //  - Rebuilt by tick_orchestrator after every apply_deltas() call so the
+    //    index always reflects the WorldState a module is about to read.
+    //
+    // Not serialized (rebuilt on load). Safe to read concurrently from
+    // province-parallel workers because the rebuild runs single-threaded
+    // between modules.
+    std::vector<std::vector<uint32_t>> npc_indices_by_province;
 };
 
 }  // namespace econlife
