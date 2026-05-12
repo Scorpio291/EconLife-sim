@@ -339,6 +339,119 @@ TEST_CASE("30-tick determinism with modules across thread counts",
 // once enqueued and ordered by sequence_number, is part of the
 // deterministic input set.
 
+// ── Tripwire coverage for previously-omitted fields ────────────────────────
+//
+// The legacy harness compared only NPC.id / capital / status / risk_tolerance
+// / motivations. Migration (current_province_id), relationship graph mutation
+// (trust/fear), and memory-log changes all passed silently. These tests force
+// each kind of mutation on two parallel worlds and assert the expanded
+// harness now sees the divergence — or, where the mutation is deterministic,
+// confirms it round-trips identically.
+
+TEST_CASE("NPC cross-province migration is deterministic across runs", "[determinism][migration]") {
+    // Two worlds, same seed. Apply identical cross-province deltas that flip
+    // an NPC's current_province_id, then compare. With the pre-fix harness,
+    // current_province_id was not serialised — divergence would have passed.
+    auto world1 = create_test_world(42, 50, 3);
+    auto world2 = create_test_world(42, 50, 3);
+
+    const uint32_t mover_id = world1.significant_npcs[0].id;
+    const uint32_t new_province = (world1.significant_npcs[0].current_province_id == 0u) ? 1u : 0u;
+
+    // Apply the migration via a direct field write (the cross-province
+    // pipeline routes through apply_deltas, which already rebuilds indices).
+    for (auto* w : {&world1, &world2}) {
+        for (auto& npc : w->significant_npcs) {
+            if (npc.id == mover_id) {
+                npc.current_province_id = new_province;
+                break;
+            }
+        }
+        rebuild_npc_indices(*w);
+    }
+
+    auto bytes1 = serialize_world_state(world1);
+    auto bytes2 = serialize_world_state(world2);
+    REQUIRE(bytes1 == bytes2);
+}
+
+TEST_CASE("serialization captures NPC migration (regression: legacy harness missed it)",
+          "[determinism][migration][serialization]") {
+    // Move an NPC and verify the serialised bytes actually change. This is
+    // the tripwire: if a future refactor drops current_province_id from
+    // serialize_world_state, this test fails.
+    auto world = create_test_world(42, 10, 2);
+    auto bytes_before = serialize_world_state(world);
+
+    world.significant_npcs[0].current_province_id =
+        (world.significant_npcs[0].current_province_id == 0u) ? 1u : 0u;
+    rebuild_npc_indices(world);
+
+    auto bytes_after = serialize_world_state(world);
+    REQUIRE(bytes_before != bytes_after);
+}
+
+TEST_CASE("serialization captures relationship graph mutation",
+          "[determinism][relationships][serialization]") {
+    // Mutate trust on one NPC's relationship to another. Pre-fix harness
+    // would have missed this; expanded harness must catch it.
+    auto world = create_test_world(42, 10, 2);
+
+    // Seed a relationship: NPC[0] → NPC[1] with some trust.
+    Relationship rel{};
+    rel.target_npc_id = world.significant_npcs[1].id;
+    rel.trust = 0.3f;
+    rel.fear = 0.0f;
+    rel.obligation_balance = 0.0f;
+    rel.last_interaction_tick = 0;
+    rel.is_movement_ally = false;
+    rel.recovery_ceiling = 1.0f;
+    world.significant_npcs[0].relationships.push_back(rel);
+
+    auto bytes_before = serialize_world_state(world);
+
+    // Mutate trust.
+    world.significant_npcs[0].relationships[0].trust = 0.8f;
+
+    auto bytes_after = serialize_world_state(world);
+    REQUIRE(bytes_before != bytes_after);
+}
+
+TEST_CASE("serialization captures memory_log additions", "[determinism][memory][serialization]") {
+    auto world = create_test_world(42, 10, 2);
+    auto bytes_before = serialize_world_state(world);
+
+    MemoryEntry mem{};
+    mem.tick_timestamp = 5;
+    mem.type = MemoryType::interaction;
+    mem.subject_id = 200;
+    mem.emotional_weight = 0.5f;
+    mem.decay = 1.0f;
+    mem.is_actionable = true;
+    world.significant_npcs[0].memory_log.push_back(mem);
+
+    auto bytes_after = serialize_world_state(world);
+    REQUIRE(bytes_before != bytes_after);
+}
+
+TEST_CASE("serialization captures goods_catalog drift",
+          "[determinism][goods_catalog][serialization]") {
+    auto world = create_test_world(42, 10, 2);
+    auto bytes_before = serialize_world_state(world);
+
+    // Inject a catalog where there wasn't one. Pre-fix harness wouldn't
+    // notice; expanded harness must.
+    world.goods_catalog = std::make_unique<GoodsCatalog>();
+    GoodDefinition g{};
+    g.numeric_id = 0;
+    g.good_id = "steel";
+    g.base_price = 80.0f;
+    world.goods_catalog->push_back_loaded(g);
+
+    auto bytes_after = serialize_world_state(world);
+    REQUIRE(bytes_before != bytes_after);
+}
+
 TEST_CASE("same seed + same player action script produces identical state",
           "[determinism][player_actions]") {
     PackageConfig config{};

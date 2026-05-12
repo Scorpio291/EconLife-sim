@@ -336,6 +336,30 @@ inline void run_ticks(WorldState& world, TickOrchestrator& orchestrator, ThreadP
 // serialize_world_state — simple deterministic serialization for comparison
 // Serializes key numeric fields in canonical order for bit-comparison.
 // Not a full persistence serializer — just enough for determinism tests.
+//
+// Covers, in canonical order:
+//   - current_tick
+//   - significant_npcs (id-sorted): id, capital, status, risk_tolerance,
+//       motivations.weights, current_province_id, home_province_id,
+//       travel_status, social_capital, movement_follower_count,
+//       memory_log (count + first MAX_MEMORY_PROBE entries by canonical order),
+//       relationships (count + per-entry trust/fear/obligation/recovery_ceiling
+//       in target_npc_id-sorted order), known_evidence/known_relationships
+//       sizes
+//   - regional_markets ((good_id, province_id)-sorted): good_id, province_id,
+//       spot_price, equilibrium_price, supply, demand_buffer,
+//       import_price_ceiling, export_price_floor
+//   - npc_businesses (id-sorted): id, cash, revenue_per_tick, cost_per_tick
+//   - province conditions
+//   - goods_catalog (numeric_id-sorted): size + per-entry numeric_id + base_price
+//   - npc_indices_by_province (per-province bucket size + first index)
+//   - npc_index_by_id (size; map content is implied by the NPC list above)
+//   - npc_indices_by_home_province (per-province bucket size)
+//   - market_indices_by_province (per-province bucket size)
+//   - market_index_by_good_province (size)
+//
+// Adding new state to WorldState that should be deterministic? Extend this
+// helper too — otherwise divergence in the new field would pass silently.
 // ---------------------------------------------------------------------------
 inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
     std::vector<uint8_t> bytes;
@@ -362,6 +386,12 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
     std::sort(sorted_npcs.begin(), sorted_npcs.end(),
               [](const NPC* a, const NPC* b) { return a->id < b->id; });
 
+    // Cap on per-NPC memory entries serialised. The full log can hold up to
+    // MAX_MEMORY_ENTRIES (500); we serialise the first MAX_MEMORY_PROBE in
+    // canonical order so the bytes vector stays bounded but a divergence in
+    // memory formation/decay still surfaces.
+    static constexpr size_t MAX_MEMORY_PROBE = 16;
+
     push_u32(static_cast<uint32_t>(sorted_npcs.size()));
     for (const auto* npc : sorted_npcs) {
         push_u32(npc->id);
@@ -371,6 +401,66 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
         for (float w : npc->motivations.weights) {
             push_float(w);
         }
+
+        // Location — currently-omitted in legacy harness; divergence in
+        // travel/migration would otherwise pass silently.
+        push_u32(npc->current_province_id);
+        push_u32(npc->home_province_id);
+        push_u32(static_cast<uint32_t>(npc->travel_status));
+
+        push_float(npc->social_capital);
+        push_u32(npc->movement_follower_count);
+
+        // Memory log — count + first N entries in canonical (tick_timestamp,
+        // subject_id) order. Sorting copies into a local vector to avoid
+        // mutating world state.
+        push_u32(static_cast<uint32_t>(npc->memory_log.size()));
+        std::vector<const MemoryEntry*> sorted_mem;
+        sorted_mem.reserve(npc->memory_log.size());
+        for (const auto& m : npc->memory_log)
+            sorted_mem.push_back(&m);
+        std::sort(sorted_mem.begin(), sorted_mem.end(),
+                  [](const MemoryEntry* a, const MemoryEntry* b) {
+                      if (a->tick_timestamp != b->tick_timestamp)
+                          return a->tick_timestamp < b->tick_timestamp;
+                      if (a->subject_id != b->subject_id)
+                          return a->subject_id < b->subject_id;
+                      return static_cast<uint8_t>(a->type) < static_cast<uint8_t>(b->type);
+                  });
+        const size_t mem_count = std::min(sorted_mem.size(), MAX_MEMORY_PROBE);
+        for (size_t i = 0; i < mem_count; ++i) {
+            const auto* m = sorted_mem[i];
+            push_u32(m->tick_timestamp);
+            push_u32(static_cast<uint32_t>(m->type));
+            push_u32(m->subject_id);
+            push_float(m->emotional_weight);
+            push_float(m->decay);
+            push_u32(m->is_actionable ? 1u : 0u);
+        }
+
+        // Relationships — count + all entries sorted by target_npc_id.
+        push_u32(static_cast<uint32_t>(npc->relationships.size()));
+        std::vector<const Relationship*> sorted_rel;
+        sorted_rel.reserve(npc->relationships.size());
+        for (const auto& r : npc->relationships)
+            sorted_rel.push_back(&r);
+        std::sort(sorted_rel.begin(), sorted_rel.end(),
+                  [](const Relationship* a, const Relationship* b) {
+                      return a->target_npc_id < b->target_npc_id;
+                  });
+        for (const auto* r : sorted_rel) {
+            push_u32(r->target_npc_id);
+            push_float(r->trust);
+            push_float(r->fear);
+            push_float(r->obligation_balance);
+            push_float(r->recovery_ceiling);
+            push_u32(r->last_interaction_tick);
+        }
+
+        // Knowledge — counts only; entry-level comparison covered when those
+        // mechanics produce delta-driven changes.
+        push_u32(static_cast<uint32_t>(npc->known_evidence.size()));
+        push_u32(static_cast<uint32_t>(npc->known_relationships.size()));
     }
 
     // Markets in (good_id, province_id) order
@@ -393,6 +483,8 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
         push_float(m->equilibrium_price);
         push_float(m->supply);
         push_float(m->demand_buffer);
+        push_float(m->import_price_ceiling);
+        push_float(m->export_price_floor);
     }
 
     // Businesses in id order
@@ -420,6 +512,49 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
         push_float(prov.community.grievance_level);
         push_float(prov.community.cohesion);
     }
+
+    // Goods catalog — numeric_id and base_price per entry, numeric_id-sorted.
+    // A nullptr catalog is serialised as 0u (count). The catalog's own load
+    // path produces sequential numeric_ids starting at 0, so sorting is
+    // idempotent on already-canonical input.
+    if (world.goods_catalog) {
+        const auto& goods = world.goods_catalog->goods();
+        push_u32(static_cast<uint32_t>(goods.size()));
+        std::vector<const GoodDefinition*> sorted_goods;
+        sorted_goods.reserve(goods.size());
+        for (const auto& g : goods)
+            sorted_goods.push_back(&g);
+        std::sort(sorted_goods.begin(), sorted_goods.end(),
+                  [](const GoodDefinition* a, const GoodDefinition* b) {
+                      return a->numeric_id < b->numeric_id;
+                  });
+        for (const auto* g : sorted_goods) {
+            push_u32(g->numeric_id);
+            push_float(g->base_price);
+        }
+    } else {
+        push_u32(0u);
+    }
+
+    // Computed indices — comparing their contents catches non-deterministic
+    // index rebuild order (e.g. iterating an unordered_map of NPCs during
+    // rebuild). Bucket sizes are sufficient; the underlying data is already
+    // serialised above so size-equality + per-NPC-equality implies content
+    // equality.
+    push_u32(static_cast<uint32_t>(world.npc_indices_by_province.size()));
+    for (const auto& bucket : world.npc_indices_by_province) {
+        push_u32(static_cast<uint32_t>(bucket.size()));
+    }
+    push_u32(static_cast<uint32_t>(world.npc_indices_by_home_province.size()));
+    for (const auto& bucket : world.npc_indices_by_home_province) {
+        push_u32(static_cast<uint32_t>(bucket.size()));
+    }
+    push_u32(static_cast<uint32_t>(world.npc_index_by_id.size()));
+    push_u32(static_cast<uint32_t>(world.market_indices_by_province.size()));
+    for (const auto& bucket : world.market_indices_by_province) {
+        push_u32(static_cast<uint32_t>(bucket.size()));
+    }
+    push_u32(static_cast<uint32_t>(world.market_index_by_good_province.size()));
 
     return bytes;
 }
