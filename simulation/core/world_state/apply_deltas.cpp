@@ -454,7 +454,14 @@ static void apply_currency_deltas(WorldState& world, const std::vector<CurrencyD
             continue;
         CurrencyRecord& cur = *it->second;
         if (d.usd_rate_update.has_value()) {
-            cur.usd_rate = std::max(0.001f, *d.usd_rate_update);
+            const float requested = *d.usd_rate_update;
+            // std::max with NaN returns NaN — guard explicitly. Matches
+            // safe_add()'s NaN policy: drop the delta, keep the previous
+            // value. Inf is also rejected since clamping it would yield
+            // either +Inf or the floor depending on sign.
+            if (!std::isnan(requested) && !std::isinf(requested)) {
+                cur.usd_rate = std::max(0.001f, requested);
+            }
         }
         if (d.pegged_update.has_value()) {
             cur.pegged = *d.pegged_update;

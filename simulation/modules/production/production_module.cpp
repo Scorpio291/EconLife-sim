@@ -109,10 +109,19 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
     std::unordered_map<uint32_t, std::string> id_to_string;
     for (const auto& [recipe_id, recipe] : recipe_registry_.all()) {
         for (const auto& input : recipe.inputs) {
-            id_to_string[lookup_good_id(state, input.good_id)] = input.good_id;
+            // Skip unknown goods so we don't stamp id 0 onto a real market.
+            // lookup_good_id() returns 0 when WorldState has a catalog but
+            // doesn't know the string — typically a recipe-CSV typo. The
+            // recipe ↔ goods cross-validation in world_generator surfaces
+            // these at load; this guard is defence-in-depth.
+            const uint32_t gid = lookup_good_id(state, input.good_id);
+            if (gid != 0)
+                id_to_string[gid] = input.good_id;
         }
         for (const auto& output : recipe.outputs) {
-            id_to_string[lookup_good_id(state, output.good_id)] = output.good_id;
+            const uint32_t gid = lookup_good_id(state, output.good_id);
+            if (gid != 0)
+                id_to_string[gid] = output.good_id;
         }
     }
     for (uint32_t i : markets_in_province(state, province_idx)) {
@@ -249,12 +258,17 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             it->second = std::max(0.0f, it->second - consumed);
         }
 
-        // Write demand_buffer_delta for derived demand.
-        MarketDelta demand_delta{};
-        demand_delta.good_id = lookup_good_id(state, input->good_id);
-        demand_delta.region_id = biz.province_id;
-        demand_delta.demand_buffer_delta = consumed;
-        delta.market_deltas.push_back(demand_delta);
+        // Write demand_buffer_delta for derived demand. Skip if the good is
+        // unknown to the catalog (lookup returns 0) so we don't corrupt
+        // whichever market happens to hold id 0.
+        const uint32_t input_gid = lookup_good_id(state, input->good_id);
+        if (input_gid != 0) {
+            MarketDelta demand_delta{};
+            demand_delta.good_id = input_gid;
+            demand_delta.region_id = biz.province_id;
+            demand_delta.demand_buffer_delta = consumed;
+            delta.market_deltas.push_back(demand_delta);
+        }
     }
 
     // Compute outputs — sort by good_id ascending for deterministic accumulation.
@@ -317,15 +331,21 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             continue;
         }
 
-        // Write supply_delta.
-        MarketDelta supply_delta{};
-        supply_delta.good_id = lookup_good_id(state, output->good_id);
-        supply_delta.region_id = biz.province_id;
-        supply_delta.supply_delta = actual_output;
-        delta.market_deltas.push_back(supply_delta);
+        // Write supply_delta. Skip unknown goods (id 0) — same defence as the
+        // demand path above. Revenue still accrues even when we suppress the
+        // delta, since the business produced the goods; the suppression is
+        // purely about not corrupting an unrelated market.
+        const uint32_t output_gid = lookup_good_id(state, output->good_id);
+        if (output_gid != 0) {
+            MarketDelta supply_delta{};
+            supply_delta.good_id = output_gid;
+            supply_delta.region_id = biz.province_id;
+            supply_delta.supply_delta = actual_output;
+            delta.market_deltas.push_back(supply_delta);
+        }
 
         // Calculate revenue using appropriate price.
-        float price = get_price_for_business(biz, supply_delta.good_id, state);
+        float price = get_price_for_business(biz, output_gid, state);
         total_revenue += actual_output * price;
     }
 

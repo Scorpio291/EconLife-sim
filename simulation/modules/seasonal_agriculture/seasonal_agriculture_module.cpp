@@ -296,17 +296,20 @@ void SeasonalAgricultureModule::process_annual_facility(uint32_t facility_id,
                 float release_per_tick =
                     fs.pending_harvest / static_cast<float>(fs.harvest_remaining_ticks);
 
-                // Write supply delta to market.
-                MarketDelta supply_delta{};
+                // Write supply delta to market. Skip if the good is unknown
+                // to the catalog (id 0) so we don't corrupt whichever market
+                // happens to hold id 0.
                 auto good_it = annual_output_goods_.find(facility_id);
-                if (good_it != annual_output_goods_.end()) {
-                    supply_delta.good_id = lookup_good_id(state, good_it->second);
-                } else {
-                    supply_delta.good_id = lookup_good_id(state, facility.recipe_id);
+                const uint32_t gid = (good_it != annual_output_goods_.end())
+                                         ? lookup_good_id(state, good_it->second)
+                                         : lookup_good_id(state, facility.recipe_id);
+                if (gid != 0) {
+                    MarketDelta supply_delta{};
+                    supply_delta.good_id = gid;
+                    supply_delta.region_id = facility.province_id;
+                    supply_delta.supply_delta = release_per_tick;
+                    delta.market_deltas.push_back(supply_delta);
                 }
-                supply_delta.region_id = facility.province_id;
-                supply_delta.supply_delta = release_per_tick;
-                delta.market_deltas.push_back(supply_delta);
 
                 fs.pending_harvest -= release_per_tick;
                 fs.harvest_remaining_ticks--;
@@ -357,9 +360,13 @@ void SeasonalAgricultureModule::process_continuous_facility(
         return;
     }
 
-    // Write supply delta.
+    // Write supply delta. Skip unknown goods (id 0) — defence-in-depth for
+    // the catalog ↔ recipe ↔ facility chain.
+    const uint32_t gid = lookup_good_id(state, info.output_good_id);
+    if (gid == 0)
+        return;
     MarketDelta supply_delta{};
-    supply_delta.good_id = lookup_good_id(state, info.output_good_id);
+    supply_delta.good_id = gid;
     supply_delta.region_id = facility.province_id;
     supply_delta.supply_delta = output;
     delta.market_deltas.push_back(supply_delta);

@@ -7,6 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_gen/goods_catalog.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/production/production_module.h"
@@ -678,4 +680,74 @@ TEST_CASE("test_business_delta_written", "[production][tier1]") {
     // Cash delta = revenue - cost = 120.0 - 100.0 = 20.0
     REQUIRE(delta.business_deltas[0].cash_delta.has_value());
     REQUIRE_THAT(*delta.business_deltas[0].cash_delta, WithinAbs(20.0f, 0.01f));
+}
+
+// --- Phase-3 guard: don't emit MarketDelta for unknown goods --------------
+//
+// When WorldState has a catalog and a recipe references a string the catalog
+// doesn't know, lookup_good_id() returns 0. Without the guard, production
+// would push MarketDelta { good_id = 0, ... } onto whichever real market
+// happens to hold good_id == 0 — typically the first tier-0 good in the
+// catalog. The guard skips the delta instead.
+
+TEST_CASE("test_unknown_good_suppresses_market_deltas", "[production][tier1]") {
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    Province prov{};
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    // Catalog with two real goods, neither matching the recipe.
+    auto cat = std::make_unique<GoodsCatalog>();
+    GoodDefinition g0{};
+    g0.numeric_id = 0;
+    g0.good_id = "wheat";
+    g0.base_price = 25.0f;
+    cat->push_back_loaded(g0);
+    GoodDefinition g7{};
+    g7.numeric_id = 7;
+    g7.good_id = "steel";
+    g7.base_price = 80.0f;
+    cat->push_back_loaded(g7);
+    state.goods_catalog = std::move(cat);
+
+    // Pre-existing market for the wheat good with known supply.
+    RegionalMarket wheat_market{};
+    wheat_market.good_id = 0;  // catalog's "wheat"
+    wheat_market.province_id = province_id;
+    wheat_market.spot_price = 25.0f;
+    wheat_market.equilibrium_price = 25.0f;
+    wheat_market.supply = 100.0f;
+    wheat_market.demand_buffer = 0.0f;
+    state.regional_markets.push_back(wheat_market);
+    rebuild_npc_indices(state);
+
+    // Business and recipe referencing a good the catalog doesn't know.
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+
+    Recipe orphan_recipe{};
+    orphan_recipe.id = "mystery_thing";
+    orphan_recipe.name = "Mystery Thing";
+    orphan_recipe.inputs = {};
+    orphan_recipe.outputs = {RecipeOutput{"unicorn_horn", 5.0f, 0.6f, false}};
+    orphan_recipe.min_tech_tier = 1;
+    orphan_recipe.base_cost_per_tick = 0.0f;
+    orphan_recipe.is_technology_intensive = false;
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(orphan_recipe);
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "mystery_thing"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // No MarketDelta should be emitted (the only output is the orphan good).
+    // Specifically: nothing should have stamped good_id == 0 onto the wheat
+    // market, even though "unicorn_horn" hashes to 0 via lookup_good_id.
+    for (const auto& md : delta.market_deltas) {
+        REQUIRE(md.good_id != 0);
+    }
 }

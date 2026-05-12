@@ -83,7 +83,12 @@ float NpcSpendingModule::buyer_type_quality_weight(BuyerType buyer_type) {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-BuyerType NpcSpendingModule::get_buyer_type(uint32_t npc_id) const {
+void NpcSpendingModule::init_for_tick(const WorldState& /*state*/) {
+    // Eagerly rebuild the buyer_profile_index_ on the main thread before
+    // province-parallel dispatch. The index can be out of sync if tests or
+    // external code pushed buyer_profiles_ entries directly through the
+    // accessor; rebuilding here guarantees execute_province() reads a
+    // consistent map with no concurrent mutation.
     if (buyer_profile_index_.size() != buyer_profiles_.size()) {
         buyer_profile_index_.clear();
         buyer_profile_index_.reserve(buyer_profiles_.size());
@@ -91,6 +96,11 @@ BuyerType NpcSpendingModule::get_buyer_type(uint32_t npc_id) const {
             buyer_profile_index_[buyer_profiles_[i].npc_id] = i;
         }
     }
+}
+
+BuyerType NpcSpendingModule::get_buyer_type(uint32_t npc_id) const {
+    // Read-only lookup. init_for_tick() is responsible for keeping the
+    // index in sync with buyer_profiles_; this method must not mutate.
     auto it = buyer_profile_index_.find(npc_id);
     if (it == buyer_profile_index_.end()) {
         return BuyerType::necessity_buyer;  // default

@@ -41,6 +41,12 @@ class NpcSpendingModule : public ITickModule {
 
     std::vector<std::string_view> runs_before() const override { return {"price_engine"}; }
 
+    // Pre-parallel hook: rebuild buyer_profile_index_ on the main thread so
+    // province-parallel execute_province() calls see a consistent index
+    // without racing on the lazy rebuild that used to live inside the
+    // const get_buyer_type().
+    void init_for_tick(const WorldState& state) override;
+
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
@@ -83,10 +89,12 @@ class NpcSpendingModule : public ITickModule {
    private:
     NpcSpendingConfig cfg_;
     std::vector<NPCBuyerProfile> buyer_profiles_;
-    // npc_id -> index into buyer_profiles_. Rebuilt lazily when its size
-    // diverges from buyer_profiles_, so external pushes through the
-    // accessor stay supported. Mutable so const get_buyer_type can refresh.
-    mutable std::unordered_map<uint32_t, std::size_t> buyer_profile_index_;
+    // npc_id -> index into buyer_profiles_. Maintained by init_for_tick()
+    // on the main thread before parallel dispatch; read-only during
+    // province-parallel execution. Previously rebuilt lazily inside the
+    // const get_buyer_type(), which raced when two workers entered the
+    // rebuild branch concurrently.
+    std::unordered_map<uint32_t, std::size_t> buyer_profile_index_;
 
     // Find buyer type for an NPC. Returns necessity_buyer if no profile found.
     BuyerType get_buyer_type(uint32_t npc_id) const;
