@@ -223,13 +223,32 @@ reordering.
 | **L1** weak good-id hash (quick) | (this commit) | Three duplicated `hash * 31 + c` implementations consolidated into `core/good_id_hash.h` (FNV-1a). Verified zero collisions on base_game. Long-form fix (catalog numeric ids) still open. |
 | **L8** no CI perf gate | `3e53cd7` | `benchmark.yml` now runs the all-modules contract benchmark and gates on a 200 ms threshold; results uploaded as artifact. |
 | **H5** linear-scan lookups (per-id) | `3a40d34` | drain_deferred_work, labor_market::find_employment, npc_spending::get_buyer_type now use hash-map indices. Filter-shape scans (22 NPC iterations) remain. |
-| **L6** register-tier comment drift | (this commit) | Tier-numbered comments replaced with role-based section groupings; runs_after()/runs_before() declared as the source of truth. |
+| **L6** register-tier comment drift | (earlier session) | Tier-numbered comments replaced with role-based section groupings; runs_after()/runs_before() declared as the source of truth. |
 | Supply chain transit-delay bypass | `32ae755` | Tier A. Was not in the original report but discovered during verification. |
+| **B1** delta merge policy | `5af57ed` | Per-field `// merge: append` / `// merge: PlayerDelta::merge_from` annotations on `DeltaBuffer` members; pairs with `delta_buffer_merge_test.cpp` tripwire. |
+| **H5** filter-shape NPC scans | `6f12ed2`, `0beaecf`, `0f4e726` | Province-bucket index `npc_indices_by_province`, per-id `npc_index_by_id`, home-province bucket `npc_indices_by_home_province`; 22 modules migrated; `lookup_npc_by_id` helper with FNV fallback for piecemeal-state tests. |
+| **H5b** filter-shape market scans | `ee9574c` | Bucket index `market_indices_by_province` + composite-key `market_index_by_good_province`; 8 modules / 10 sites migrated; `lookup_market`, `markets_in_province` helpers with same fallback contract. |
+| **L1** weak good-id hash (proper fix) | `1340861` | `WorldState::goods_catalog` (unique_ptr<GoodsCatalog>) holds the catalog at runtime; persistence embeds it (schema v3+); `lookup_good_id` resolves through catalog with FNV fallback; Production/SeasonalAgriculture migrated. v2 saves explicitly rejected. |
+| Determinism harness gaps | `b528601` | `serialize_world_state` now covers NPC location/graph (current_province_id, home_province_id, memory_log, relationships), the five computed indices, and `goods_catalog`. 5 new determinism tests including migration + relationship + memory + catalog tripwires. |
+| Addiction module never-seeded state | `8e4a4cf` | `AddictionModule::set_addiction_state()` seeder API + 3 state tests proving the existing state machine advances given a seed. Cross-module seeding (drug_economy → addiction) flagged for human review in `docs/session_logs/flagged_issues.md`. |
+| `npc_spending::get_buyer_type` lazy-rebuild race | `a1562fa` | `init_for_tick()` rebuilds `buyer_profile_index_` on the main thread before parallel dispatch; `get_buyer_type` is now a pure const lookup. |
+| Production/Seasonal `lookup_good_id == 0` unguarded | `a1562fa` | Six MarketDelta emit sites now skip when the catalog doesn't know the good (vs. corrupting whichever market holds id 0). |
+| Currency `usd_rate_update` NaN/Inf poisoning | `a1562fa` | `apply_currency_deltas` drops NaN/Inf updates instead of letting `std::max(0.001f, NaN)` poison the rate. |
 
 ---
 
 ## Recommended Priority Order (refreshed)
 
-1. **L1 catalog migration** — proper fix: thread `GoodsCatalog&` through Production / SupplyChain / SeasonalAgriculture and use `numeric_id` instead of hashing. Removes the hash entirely. Defer until justified by collision or scale.
-2. **H5 filter-shape scans** — 22 `for npc : significant_npcs` iterations. Needs province-bucketed NPC lists or an iteration helper. Design pass first.
-3. **M3 stub handlers.** Resolve naturally as each consuming module lands.
+The audit's original Open list is functionally empty after the
+2026-05-12 deep-review sweep. Items flagged for human review (not
+autonomous fixes) live in `docs/session_logs/flagged_issues.md`:
+
+- Addiction state location — spec says `NPC.addiction_state`, code has a private map (architecture decision).
+- Cross-module addiction seeding — no module currently calls `AddictionModule::set_addiction_state()`.
+- Tick step "27 vs 28 steps" — open design question, code comment says "do not change drain position without design approval".
+- CLAUDE.md CI gate vs ceiling — 200 ms target vs 500 ms ceiling, defensible but unclear.
+- `world_gen_integration_test.cpp` silent SKIP — goods CSV test never runs in CI.
+
+Remaining deferred items (no driver to start now):
+
+1. **M3 stub handlers.** Resolve naturally as each consuming module lands.

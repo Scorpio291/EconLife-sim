@@ -326,9 +326,16 @@ TEST_CASE("WorldGenerator: no orphaned market references", "[integration][world_
 TEST_CASE("GoodsCatalog loads all tier 0-4 goods from base_game CSVs",
           "[integration][world_gen][csv]") {
     std::string goods_dir = find_goods_dir();
-    if (goods_dir.empty()) {
-        SKIP("Goods CSV directory not found");
-    }
+    // The CSVs live in packages/base_game/goods/ and ARE checked in. A
+    // missing directory means the test was launched from a working
+    // directory that the relative-path search in find_goods_dir() can't
+    // reach. Failing loud is the right call — silently SKIPping let the
+    // CSV-load path regress unobserved in CI for several PRs (see the
+    // goods CSV skip entry in docs/session_logs/flagged_issues.md).
+    INFO("find_goods_dir() returned empty — relative-path search from cwd "
+         "failed; expected one of packages/base_game/goods (or up to 3 "
+         "parents) to resolve");
+    REQUIRE_FALSE(goods_dir.empty());
 
     GoodsCatalog catalog;
     REQUIRE(catalog.load_from_directory(goods_dir));
