@@ -65,7 +65,13 @@ class PersistenceModule : public ITickModule {
     //  v3: good_id values are catalog numeric_ids (sequential, stable across
     //      saves of the same goods CSV). The catalog itself is now embedded
     //      in the save so deserialised worlds hold the same id mapping.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 3;
+    //  v4: per-NPC AddictionState (stage, substance_key, tolerance, craving,
+    //      consecutive_use_ticks, clean_ticks, supply_gap_ticks,
+    //      relapse_probability) now lives on NPC::addiction_state and is
+    //      embedded in each NPC record. Pre-v4 saves are rejected because
+    //      the v3 NPC record has no addiction footer — reading one with v4
+    //      code would consume the next record's bytes.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 4;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

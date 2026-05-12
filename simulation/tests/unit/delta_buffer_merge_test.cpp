@@ -25,6 +25,10 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
     {
         NPCDelta d{};
         d.npc_id = tag;
+        AddictionState as{};
+        as.stage = AddictionStage::casual;
+        as.craving = 0.1f * static_cast<float>(tag);
+        d.set_addiction_state = as;
         db.npc_deltas.push_back(d);
     }
 

@@ -139,14 +139,13 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         if (npc->status != NPCStatus::active)
             continue;
 
-        // Check module-internal addiction state
-        auto it = addiction_states_.find(npc_id);
-        if (it == addiction_states_.end())
-            continue;
-        if (it->second.stage == AddictionStage::none)
+        // Per-NPC addiction state lives on NPC::addiction_state.
+        // Stage `none` means the NPC isn't in the state machine yet
+        // (no substance pathway has seeded them); skip without emitting.
+        if (npc->addiction_state.stage == AddictionStage::none)
             continue;
 
-        AddictionState current = it->second;
+        AddictionState current = npc->addiction_state;
         AddictionStage old_stage = current.stage;
 
         // Increment craving
@@ -194,15 +193,16 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
             default:
                 break;
         }
+        // Persist the stepped addiction state through NPCDelta. Bundling
+        // capital_delta in the same NPCDelta keeps emissions per NPC to one;
+        // apply_deltas applies both fields in a single pass.
+        NPCDelta npc_delta;
+        npc_delta.npc_id = npc_id;
         if (spend > 0.0f) {
-            NPCDelta npc_delta;
-            npc_delta.npc_id = npc_id;
             npc_delta.capital_delta = -spend;
-            province_delta.npc_deltas.push_back(npc_delta);
         }
-
-        // Update internal state
-        it->second = current;
+        npc_delta.set_addiction_state = current;
+        province_delta.npc_deltas.push_back(npc_delta);
     }
 
     // Province-level addiction rate delta

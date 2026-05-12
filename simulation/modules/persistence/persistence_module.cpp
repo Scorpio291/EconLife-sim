@@ -276,6 +276,19 @@ void write_npc(ByteWriter& w, const NPC& npc) {
     w.write_u32(npc.current_province_id);
     w.write_u8(static_cast<uint8_t>(npc.travel_status));
     w.write_u8(static_cast<uint8_t>(npc.status));
+
+    // Addiction state (schema v4). Empty AddictionState (stage=none,
+    // everything else 0/empty) serialises as a fixed-size footer so saves
+    // produced from worlds with no addiction system loaded still encode
+    // cleanly.
+    w.write_u8(static_cast<uint8_t>(npc.addiction_state.stage));
+    w.write_string(npc.addiction_state.substance_key);
+    w.write_float(npc.addiction_state.tolerance);
+    w.write_float(npc.addiction_state.craving);
+    w.write_u32(npc.addiction_state.consecutive_use_ticks);
+    w.write_u32(npc.addiction_state.clean_ticks);
+    w.write_u32(npc.addiction_state.supply_gap_ticks);
+    w.write_float(npc.addiction_state.relapse_probability);
 }
 
 void write_evidence_token(ByteWriter& w, const EvidenceToken& e) {
@@ -909,6 +922,17 @@ NPC read_npc(ByteReader& r) {
     npc.current_province_id = r.read_u32();
     npc.travel_status = static_cast<NPCTravelStatus>(r.read_u8());
     npc.status = static_cast<NPCStatus>(r.read_u8());
+
+    // Addiction state (schema v4+). Pre-v4 saves are rejected outright by
+    // is_schema_compatible, so this read is unconditional.
+    npc.addiction_state.stage = static_cast<AddictionStage>(r.read_u8());
+    npc.addiction_state.substance_key = r.read_string();
+    npc.addiction_state.tolerance = r.read_float();
+    npc.addiction_state.craving = r.read_float();
+    npc.addiction_state.consecutive_use_ticks = r.read_u32();
+    npc.addiction_state.clean_ticks = r.read_u32();
+    npc.addiction_state.supply_gap_ticks = r.read_u32();
+    npc.addiction_state.relapse_probability = r.read_float();
     return npc;
 }
 
@@ -1392,10 +1416,12 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
     // Schema v3 introduced catalog-backed good_ids (was FNV-1a hashes in v2).
-    // A v2 save loaded by v3 code would silently route market deltas to
-    // phantom markets, so we reject anything below v3 outright. V1 is
-    // pre-release so this affects no real users.
-    if (saved_version < 3u)
+    // Schema v4 added per-NPC AddictionState to each NPC record. Both bumps
+    // are breaking: a v3 save loaded by v4 code would short-read every NPC
+    // (missing the addiction footer), and a v2 save loaded by v3 code would
+    // silently route market deltas to phantom markets. Reject anything below
+    // the current floor; V1 is pre-release so this affects no real users.
+    if (saved_version < 4u)
         return false;
     return saved_version <= current_version;
 }

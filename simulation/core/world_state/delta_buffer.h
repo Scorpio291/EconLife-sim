@@ -41,6 +41,9 @@ struct NPCDelta {
     std::optional<float> motivation_delta;  // additive to financial_gain slot (weights[0]); prefer
                                             // motivation_replacement for full vector
     std::optional<MotivationVector> motivation_replacement;  // replacement; full vector override
+    std::optional<AddictionState> set_addiction_state;  // replacement; full AddictionState override
+                                                        // (drug_economy seeds; AddictionModule
+                                                        // writes back each tick)
 };
 
 struct PlayerDelta {

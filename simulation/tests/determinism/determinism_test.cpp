@@ -434,6 +434,23 @@ TEST_CASE("serialization captures memory_log additions", "[determinism][memory][
     REQUIRE(bytes_before != bytes_after);
 }
 
+TEST_CASE("serialization captures NPC.addiction_state mutation",
+          "[determinism][addiction][serialization]") {
+    // Schema v4 added per-NPC addiction state. Mutating stage / craving /
+    // tolerance must surface in the harness; otherwise an addiction-step
+    // determinism regression would slip through.
+    auto world = create_test_world(42, 5, 1);
+    auto bytes_before = serialize_world_state(world);
+
+    world.significant_npcs[0].addiction_state.stage = AddictionStage::casual;
+    world.significant_npcs[0].addiction_state.craving = 0.42f;
+    world.significant_npcs[0].addiction_state.tolerance = 0.13f;
+    world.significant_npcs[0].addiction_state.consecutive_use_ticks = 7;
+
+    auto bytes_after = serialize_world_state(world);
+    REQUIRE(bytes_before != bytes_after);
+}
+
 TEST_CASE("serialization captures goods_catalog drift",
           "[determinism][goods_catalog][serialization]") {
     auto world = create_test_world(42, 10, 2);

@@ -31,24 +31,25 @@ TEST_CASE("Persistence: checksum empty data", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: schema compatible same version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(3, 3) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(4, 4) == true);
 }
 
-// v2 saves are explicitly rejected by the v3 build because good_id semantics
-// changed (FNV-1a hash → catalog numeric_id). Loading a v2 save with v3
-// code would silently route market deltas to phantom markets.
-TEST_CASE("Persistence: schema rejects pre-v3 saves", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 3) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(2, 3) == false);
+// v4 builds reject pre-v4 saves: v3 NPC records lack the addiction footer,
+// and v2 saves still have FNV-hash good_ids that would route to phantom
+// markets. Either pre-v4 schema fed to v4 code is unsafe.
+TEST_CASE("Persistence: schema rejects pre-v4 saves", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(1, 4) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(2, 4) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(3, 4) == false);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(5, 3) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(5, 4) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(3, 4) == true);
-    REQUIRE(PersistenceModule::needs_migration(3, 3) == false);
+    REQUIRE(PersistenceModule::needs_migration(4, 5) == true);
+    REQUIRE(PersistenceModule::needs_migration(4, 4) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -92,7 +93,7 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // Schema v2: added next_action_sequence persistence (issue #11). See
     // docs/design/EconLife_PlayerDelta_Semantics_v1.md.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 3);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 4);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

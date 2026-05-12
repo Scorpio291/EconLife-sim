@@ -143,6 +143,19 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
                 }
             }
         }
+
+        // set_addiction_state: full AddictionState replacement. Used by
+        // AddictionModule each tick to persist stage/craving/tolerance
+        // changes, and by drug_economy (or similar) to seed an NPC into
+        // the state machine. Clamping the floats keeps tolerance/craving
+        // in [0, 1] even if the delta wrote out-of-range values.
+        if (d.set_addiction_state.has_value()) {
+            npc->addiction_state = *d.set_addiction_state;
+            npc->addiction_state.tolerance = clamp01(npc->addiction_state.tolerance);
+            npc->addiction_state.craving = clamp01(npc->addiction_state.craving);
+            npc->addiction_state.relapse_probability =
+                clamp01(npc->addiction_state.relapse_probability);
+        }
     }
 }
 

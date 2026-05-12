@@ -478,6 +478,18 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
         // mechanics produce delta-driven changes.
         push_u32(static_cast<uint32_t>(npc->known_evidence.size()));
         push_u32(static_cast<uint32_t>(npc->known_relationships.size()));
+
+        // Addiction state. Stage + the four float fields catch any
+        // divergence in state-machine stepping. substance_key length is
+        // a cheap content fingerprint without bloating the bytes vector.
+        push_u32(static_cast<uint32_t>(npc->addiction_state.stage));
+        push_u32(static_cast<uint32_t>(npc->addiction_state.substance_key.size()));
+        push_float(npc->addiction_state.tolerance);
+        push_float(npc->addiction_state.craving);
+        push_u32(npc->addiction_state.consecutive_use_ticks);
+        push_u32(npc->addiction_state.clean_ticks);
+        push_u32(npc->addiction_state.supply_gap_ticks);
+        push_float(npc->addiction_state.relapse_probability);
     }
 
     // Markets in (good_id, province_id) order
