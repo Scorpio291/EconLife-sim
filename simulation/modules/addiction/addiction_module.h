@@ -26,6 +26,23 @@ class AddictionModule : public ITickModule {
                           DeltaBuffer& province_delta) override;
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Seed (or replace) the per-NPC addiction state. Used by tests and by
+    // the future cross-module hookup that introduces an NPC into the
+    // addiction state machine (drug_economy → addiction). The state machine
+    // in execute_province advances any NPC whose seeded stage != none, so
+    // until this seeder is called for an NPC, that NPC is invisible to the
+    // module. See docs/session_logs/flagged_issues.md for the open
+    // architectural question on whether per-NPC state should live on the
+    // NPC struct directly (per addiction/INTERFACE.md) rather than this
+    // module-private map.
+    void set_addiction_state(uint32_t npc_id, AddictionState state) {
+        addiction_states_[npc_id] = std::move(state);
+    }
+    const AddictionState* find_addiction_state(uint32_t npc_id) const {
+        auto it = addiction_states_.find(npc_id);
+        return it == addiction_states_.end() ? nullptr : &it->second;
+    }
+
     // --- Static utilities for testing ---
     static AddictionStage compute_next_stage(const AddictionState& state,
                                              const AddictionConfig& cfg = {});
