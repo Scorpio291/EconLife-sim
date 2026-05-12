@@ -3,6 +3,23 @@
 // Test World Factory — creates valid WorldState instances for scenario and
 // determinism tests. Every field is initialized to a consistent, non-zero state
 // so that modules have meaningful data to process.
+//
+// PREFERRED PATTERN: use create_test_world(seed, npc_count, province_count, …)
+// — it populates all five computed indices via rebuild_npc_indices() before
+// returning, so module.execute*() calls immediately hit the bucket fast path
+// instead of the lookup_npc_by_id / lookup_market FNV/linear-scan fallback.
+//
+// PIECEMEAL CONSTRUCTION: if a test builds WorldState manually (push_back
+// NPCs / markets / provinces directly) and then calls module.execute*(),
+// it MUST call rebuild_npc_indices(state) after the pushes and before the
+// execute. Otherwise the test silently relies on the fallback paths in
+// apply_deltas.h — which work correctly but are documented as a safety net,
+// not the contract. A future PR tightening those fallbacks (e.g. making
+// lookup_npc_by_id return nullptr instead of scanning when the index is
+// empty) would regress every such test in lockstep without the test code
+// changing. About 21 unit-test files in simulation/tests/unit/ currently
+// rely on the fallback; the contract is described in
+// docs/CODEBASE_AUDIT_REPORT.md under "Resolved Issues".
 
 #include <algorithm>
 #include <cmath>

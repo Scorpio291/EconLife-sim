@@ -5,6 +5,7 @@ add_executable(econlife_scenario_tests
     tdd_scenarios.cpp
     criminal_scenarios.cpp
     political_social_scenarios.cpp
+    persistence_scenarios.cpp
 )
 
 target_link_libraries(econlife_scenario_tests PRIVATE

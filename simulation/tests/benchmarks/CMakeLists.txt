@@ -1,6 +1,7 @@
 # Benchmark tests — performance regression detection
 add_executable(econlife_benchmarks
     tick_benchmark.cpp
+    index_benchmark.cpp
 )
 
 target_link_libraries(econlife_benchmarks PRIVATE
