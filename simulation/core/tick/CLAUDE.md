@@ -4,7 +4,8 @@
 Tick orchestration and scheduling infrastructure. Contains:
 - `ITickModule` — interface all simulation modules implement
 - `TickOrchestrator` — topological sort and dispatch of modules each tick
-- `DeferredWorkQueue` — unified min-heap for scheduled work (Step 2)
+- `DeferredWorkQueue` — unified min-heap for scheduled work, drained once
+  per tick before the module loop
 - `PackageManager` — loads base_game, expansions, mods in order
 
 ## Key Files
@@ -18,6 +19,10 @@ Tick orchestration and scheduling infrastructure. Contains:
 - Province-parallel modules merge results in ascending province index order
 - Same seed + same inputs = identical tick output regardless of core count
 - Mod module exceptions are caught and the module is disabled; base game exceptions propagate
+- Step-number references in design docs ("Step 2: drain queue", "27 steps")
+  describe the V1 base-game module set as a guideline. The contract is the
+  topological ordering (runs_after / runs_before), not the step number.
+  Additional packages append to the effective tick.
 
 ## Dependency Direction
 This is core infrastructure. Everything depends on this; this depends on nothing.
