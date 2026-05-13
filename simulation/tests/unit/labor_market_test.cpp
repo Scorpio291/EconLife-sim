@@ -40,6 +40,8 @@ WorldState make_test_world_state() {
 
 Province make_test_province(uint32_t id) {
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.lod_level = SimulationLOD::full;
     prov.demographics.total_population = 100000;
@@ -49,7 +51,6 @@ Province make_test_province(uint32_t id) {
     prov.demographics.income_middle_fraction = 1.0f;  // base wage reference
     prov.demographics.income_high_fraction = 0.1f;
     prov.demographics.political_lean = 0.0f;
-    prov.cohort_stats.reset();
     return prov;
 }
 
@@ -696,6 +697,8 @@ TEST_CASE("test_skips_non_full_lod_provinces", "[labor_market][tier2]") {
     auto state = make_test_world_state();
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     prov.lod_level = SimulationLOD::simplified;
     state.provinces.push_back(prov);

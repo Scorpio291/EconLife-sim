@@ -146,6 +146,8 @@ TEST_CASE("test_basic_consumer_demand_adds_to_demand_buffer", "[npc_spending][ti
 
     // Create one province
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     state.provinces.push_back(p);
 
@@ -191,6 +193,8 @@ TEST_CASE("test_inactive_npc_excluded", "[npc_spending][tier6]") {
     state.world_seed = 42;
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     state.provinces.push_back(p);
 
@@ -238,6 +242,8 @@ TEST_CASE("test_zero_population_province_no_crash", "[npc_spending][tier6]") {
     state.world_seed = 42;
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     state.provinces.push_back(p);
 
@@ -295,6 +301,8 @@ TEST_CASE("npc_spending: init_for_tick rebuilds buyer_profile_index_ from buyer_
     // markets and NPCs configured so price_factor differs by BuyerType.
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     w.provinces.push_back(prov);
 

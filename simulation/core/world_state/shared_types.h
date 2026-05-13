@@ -178,15 +178,51 @@ struct PlayerChoice {
 };
 
 // ---------------------------------------------------------------------------
-// RegionCohortStats — aggregated demographic statistics per region
-// Used in Province (as pointer). Updated by population_aging module.
-// Will be expanded during population_aging module implementation (Tier 11).
+// RegionCohortStats — aggregated demographic statistics per region.
+// Single home for all population-fraction monitors. Fields previously
+// scattered across `RegionConditions` (addiction_rate, crime_rate,
+// formal_employment_rate, criminal_dominance_index) were consolidated here
+// in schema v5; new monitors (sick_rate, homeless_rate, unemployment_rate)
+// were added at the same time. The denominator for every *_rate field is
+// the base population (`total_population`), not the named-NPC sample.
+//
+// Updated each tick by domain modules through `RegionDelta` (the field-name
+// mapping is identical: `addiction_rate_delta` writes into `addiction_rate`,
+// `sick_rate_delta` writes into `sick_rate`, etc.). Modules emit additive
+// deltas; `apply_region_deltas` accumulates and clamps to [0,1].
 // ---------------------------------------------------------------------------
 struct RegionCohortStats {
-    uint32_t total_population;
-    float median_age;
-    float working_age_fraction;  // 0.0-1.0; fraction of population 18-65
-    float dependency_ratio;      // dependents / working_age
+    // --- Population scalar ---
+    uint32_t total_population = 0;
+
+    // --- Age structure ---
+    float median_age = 0.0f;
+    float working_age_fraction = 0.0f;  // 0.0-1.0; fraction of population 18-65
+    float dependency_ratio = 0.0f;      // dependents / working_age
+
+    // --- Problem-state monitors (population fractions, 0.0-1.0) ---
+    // Migrated from RegionConditions in schema v5:
+    float addiction_rate = 0.0f;            // dependent + active + terminal stages
+    float crime_rate = 0.0f;                // adults engaged in criminal activity
+    float criminal_dominance_index = 0.0f;  // criminal economy's share of activity
+    float formal_employment_rate = 0.0f;    // working-age in formal/taxed employment
+
+    // New in schema v5:
+    float sick_rate = 0.0f;          // fraction whose health is below the
+                                     // illness threshold (config.healthcare.
+                                     // illness_health_threshold, default 0.4).
+                                     // Updated by healthcare module.
+    float homeless_rate = 0.0f;      // fraction without stable housing.
+                                     // Owner module TBD; field allocated so
+                                     // consumers can read without re-plumbing.
+    float unemployment_rate = 0.0f;  // working-age neither in formal nor
+                                     // informal employment. Updated by
+                                     // labor_market; distinct from
+                                     // `formal_employment_rate` (which
+                                     // excludes the informal economy).
+
+    // Zero all fields. Use after construction or when resetting a province.
+    void reset() { *this = RegionCohortStats{}; }
 };
 
 }  // namespace econlife

@@ -44,6 +44,15 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     const auto& community = province.community;
     const auto& demographics = province.demographics;
 
+    // Population-fraction monitors now live on cohort_stats (post schema-v5
+    // consolidation). Read through this local pointer alias; the rest of
+    // the module body uses `cohort_stats->X`. The invariant from
+    // world_generator / test_world_factory is that cohort_stats is
+    // non-null after construction.
+    if (!province.cohort_stats)
+        return;
+    const RegionCohortStats* cohort_stats = province.cohort_stats.get();
+
     RegionDelta rdelta;
     rdelta.region_id = province_idx;
 
@@ -78,9 +87,10 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     // Drift toward (criminal_dominance * (1 - stability)) at slow rate.
     {
         float target_crime =
-            conditions.criminal_dominance_index * (1.0f - conditions.stability_score);
+            cohort_stats->criminal_dominance_index * (1.0f - conditions.stability_score);
         constexpr float CRIME_CONVERGENCE_RATE = 0.002f;
-        rdelta.crime_rate_delta = CRIME_CONVERGENCE_RATE * (target_crime - conditions.crime_rate);
+        rdelta.crime_rate_delta =
+            CRIME_CONVERGENCE_RATE * (target_crime - cohort_stats->crime_rate);
     }
 
     // --- Addiction rate ---
@@ -89,20 +99,20 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     {
         constexpr float ADDICTION_DECAY_RATE = 0.0005f;
         constexpr float ADDICTION_CRIME_COUPLING = 0.001f;
-        rdelta.addiction_rate_delta = ADDICTION_CRIME_COUPLING * conditions.crime_rate -
-                                      ADDICTION_DECAY_RATE * conditions.addiction_rate;
+        rdelta.addiction_rate_delta = ADDICTION_CRIME_COUPLING * cohort_stats->crime_rate -
+                                      ADDICTION_DECAY_RATE * cohort_stats->addiction_rate;
     }
 
     // --- Criminal dominance ---
     // Criminal revenue proxy: crime_rate as fraction of all economic activity.
     // Recalculate criminal dominance from current conditions.
     {
-        float criminal_revenue_proxy = conditions.crime_rate;
+        float criminal_revenue_proxy = cohort_stats->crime_rate;
         // Total revenue proxy = 1.0 (normalised); criminal share is the crime rate itself.
         float new_dominance = compute_criminal_dominance(criminal_revenue_proxy, 1.0f);
         constexpr float DOMINANCE_CONVERGENCE_RATE = 0.002f;
         rdelta.criminal_dominance_delta =
-            DOMINANCE_CONVERGENCE_RATE * (new_dominance - conditions.criminal_dominance_index);
+            DOMINANCE_CONVERGENCE_RATE * (new_dominance - cohort_stats->criminal_dominance_index);
     }
 
     // --- Social cohesion ---
@@ -127,7 +137,7 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
                 ? static_cast<float>(community.response_stage - 2) * GRIEVANCE_STAGE_WEIGHT
                 : 0.0f;
         rdelta.grievance_delta = GRIEVANCE_INEQUALITY_WEIGHT * conditions.inequality_index +
-                                 GRIEVANCE_CRIME_WEIGHT * conditions.crime_rate +
+                                 GRIEVANCE_CRIME_WEIGHT * cohort_stats->crime_rate +
                                  stage_contribution -
                                  GRIEVANCE_DECAY_RATE * community.grievance_level;
     }
@@ -140,7 +150,7 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
         constexpr float TRUST_STABILITY_WEIGHT = 0.0005f;
         rdelta.institutional_trust_delta =
             TRUST_CORRUPTION_WEIGHT * province.political.corruption_index +
-            TRUST_CRIME_WEIGHT * conditions.crime_rate +
+            TRUST_CRIME_WEIGHT * cohort_stats->crime_rate +
             TRUST_STABILITY_WEIGHT * conditions.stability_score;
     }
 

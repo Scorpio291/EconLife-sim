@@ -69,13 +69,13 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
     // Read from province conditions (criminal_dominance_index as proxy)
     // In full impl, reads from CriminalOrganization conflict_state
     uint8_t conflict_stage = 0;
-    if (province.conditions.criminal_dominance_index > 0.8f) {
+    if (province.cohort_stats->criminal_dominance_index > 0.8f) {
         conflict_stage = 5;  // open_warfare
-    } else if (province.conditions.criminal_dominance_index > 0.6f) {
+    } else if (province.cohort_stats->criminal_dominance_index > 0.6f) {
         conflict_stage = 4;  // personnel_violence
-    } else if (province.conditions.criminal_dominance_index > 0.4f) {
+    } else if (province.cohort_stats->criminal_dominance_index > 0.4f) {
         conflict_stage = 3;  // property_violence
-    } else if (province.conditions.criminal_dominance_index > 0.2f) {
+    } else if (province.cohort_stats->criminal_dominance_index > 0.2f) {
         conflict_stage = 1;  // economic
     }
 

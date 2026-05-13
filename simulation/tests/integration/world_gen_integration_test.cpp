@@ -97,7 +97,7 @@ TEST_CASE("WorldGenerator world runs 365 ticks at V1 scale", "[integration][worl
     }
     for (const auto& p : world.provinces) {
         REQUIRE_FALSE(std::isnan(p.conditions.stability_score));
-        REQUIRE_FALSE(std::isnan(p.conditions.crime_rate));
+        REQUIRE_FALSE(std::isnan(p.cohort_stats->crime_rate));
         REQUIRE_FALSE(std::isnan(p.community.grievance_level));
         REQUIRE_FALSE(std::isnan(p.community.cohesion));
     }
@@ -126,14 +126,14 @@ TEST_CASE("WorldGenerator world: province conditions stay in [0,1] over 365 tick
     for (const auto& p : world.provinces) {
         CHECK(p.conditions.stability_score >= 0.0f);
         CHECK(p.conditions.stability_score <= 1.0f);
-        CHECK(p.conditions.crime_rate >= 0.0f);
-        CHECK(p.conditions.crime_rate <= 1.0f);
+        CHECK(p.cohort_stats->crime_rate >= 0.0f);
+        CHECK(p.cohort_stats->crime_rate <= 1.0f);
         CHECK(p.conditions.inequality_index >= 0.0f);
         CHECK(p.conditions.inequality_index <= 1.0f);
-        CHECK(p.conditions.addiction_rate >= 0.0f);
-        CHECK(p.conditions.addiction_rate <= 1.0f);
-        CHECK(p.conditions.criminal_dominance_index >= 0.0f);
-        CHECK(p.conditions.criminal_dominance_index <= 1.0f);
+        CHECK(p.cohort_stats->addiction_rate >= 0.0f);
+        CHECK(p.cohort_stats->addiction_rate <= 1.0f);
+        CHECK(p.cohort_stats->criminal_dominance_index >= 0.0f);
+        CHECK(p.cohort_stats->criminal_dominance_index <= 1.0f);
         CHECK(p.community.grievance_level >= 0.0f);
         CHECK(p.community.grievance_level <= 1.0f);
         CHECK(p.community.cohesion >= 0.0f);

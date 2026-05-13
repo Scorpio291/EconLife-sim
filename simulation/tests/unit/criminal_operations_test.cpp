@@ -158,6 +158,8 @@ TEST_CASE("Personnel violence generates evidence", "[criminal_operations][tier7]
     state.current_tick = 100;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 

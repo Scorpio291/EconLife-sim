@@ -55,7 +55,7 @@ float RealEstateModule::compute_market_value(const PropertyListing& prop,
 
     // Criminal dominance penalty: reduces value by penalty_rate * dominance_index.
     // criminal_dominance_index is on RegionConditions.
-    float dominance = province.conditions.criminal_dominance_index;
+    float dominance = province.cohort_stats->criminal_dominance_index;
     float dominance_penalty = dominance * cfg_.criminal_dominance_penalty;
 
     // Laundering premium: inflates value for launder-eligible properties.

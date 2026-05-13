@@ -160,7 +160,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
     }
 
     // Consumer demand from addiction rates
-    float addiction_rate = province.conditions.addiction_rate;
+    float addiction_rate = province.cohort_stats->addiction_rate;
     if (addiction_rate > 0.0f && province.cohort_stats) {
         float demand = compute_addiction_demand(
             addiction_rate, province.cohort_stats->total_population, cfg_.demand_per_addict);

@@ -405,15 +405,37 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                 if (d.inequality_delta.has_value()) {
                     c.inequality_index = clamp01(safe_add(c.inequality_index, *d.inequality_delta));
                 }
+
+                // Population-fraction monitors live on cohort_stats since the
+                // schema-v5 consolidation. Initialise lazily if missing.
+                if (!prov.cohort_stats) {
+                    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+                }
+                auto& cs = *prov.cohort_stats;
                 if (d.crime_rate_delta.has_value()) {
-                    c.crime_rate = clamp01(safe_add(c.crime_rate, *d.crime_rate_delta));
+                    cs.crime_rate = clamp01(safe_add(cs.crime_rate, *d.crime_rate_delta));
                 }
                 if (d.addiction_rate_delta.has_value()) {
-                    c.addiction_rate = clamp01(safe_add(c.addiction_rate, *d.addiction_rate_delta));
+                    cs.addiction_rate =
+                        clamp01(safe_add(cs.addiction_rate, *d.addiction_rate_delta));
                 }
                 if (d.criminal_dominance_delta.has_value()) {
-                    c.criminal_dominance_index =
-                        clamp01(safe_add(c.criminal_dominance_index, *d.criminal_dominance_delta));
+                    cs.criminal_dominance_index =
+                        clamp01(safe_add(cs.criminal_dominance_index, *d.criminal_dominance_delta));
+                }
+                if (d.formal_employment_rate_delta.has_value()) {
+                    cs.formal_employment_rate = clamp01(
+                        safe_add(cs.formal_employment_rate, *d.formal_employment_rate_delta));
+                }
+                if (d.sick_rate_delta.has_value()) {
+                    cs.sick_rate = clamp01(safe_add(cs.sick_rate, *d.sick_rate_delta));
+                }
+                if (d.homeless_rate_delta.has_value()) {
+                    cs.homeless_rate = clamp01(safe_add(cs.homeless_rate, *d.homeless_rate_delta));
+                }
+                if (d.unemployment_rate_delta.has_value()) {
+                    cs.unemployment_rate =
+                        clamp01(safe_add(cs.unemployment_rate, *d.unemployment_rate_delta));
                 }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =

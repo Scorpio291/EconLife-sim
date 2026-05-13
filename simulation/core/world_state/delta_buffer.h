@@ -128,11 +128,22 @@ struct TechnologyDelta {
 
 struct RegionDelta {
     uint32_t region_id;
-    std::optional<float> stability_delta;            // additive
-    std::optional<float> inequality_delta;           // additive
-    std::optional<float> crime_rate_delta;           // additive
-    std::optional<float> addiction_rate_delta;       // additive
-    std::optional<float> criminal_dominance_delta;   // additive
+    std::optional<float> stability_delta;   // additive; conditions.stability_score
+    std::optional<float> inequality_delta;  // additive; conditions.inequality_index
+
+    // Population-fraction monitors — all live on RegionCohortStats since
+    // the schema-v5 demographics consolidation. apply_region_deltas routes
+    // these into province.cohort_stats->*.
+    std::optional<float> crime_rate_delta;      // additive; cohort_stats->crime_rate
+    std::optional<float> addiction_rate_delta;  // additive; cohort_stats->addiction_rate
+    std::optional<float>
+        criminal_dominance_delta;  // additive; cohort_stats->criminal_dominance_index
+    std::optional<float>
+        formal_employment_rate_delta;              // additive; cohort_stats->formal_employment_rate
+    std::optional<float> sick_rate_delta;          // additive; cohort_stats->sick_rate
+    std::optional<float> homeless_rate_delta;      // additive; cohort_stats->homeless_rate
+    std::optional<float> unemployment_rate_delta;  // additive; cohort_stats->unemployment_rate
+
     std::optional<float> cohesion_delta;             // additive
     std::optional<float> grievance_delta;            // additive
     std::optional<float> institutional_trust_delta;  // additive

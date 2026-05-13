@@ -51,14 +51,16 @@ WorldState make_test_world_state(uint32_t tick = 1) {
 // Create a Province with sensible defaults.
 Province make_test_province(uint32_t id, float criminal_dominance = 0.0f) {
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.region_id = 0;
     prov.nation_id = 0;
-    prov.conditions.criminal_dominance_index = criminal_dominance;
+    prov.cohort_stats->criminal_dominance_index = criminal_dominance;
     prov.conditions.stability_score = 0.5f;
     prov.conditions.inequality_index = 0.3f;
-    prov.conditions.crime_rate = 0.1f;
-    prov.conditions.formal_employment_rate = 0.7f;
+    prov.cohort_stats->crime_rate = 0.1f;
+    prov.cohort_stats->formal_employment_rate = 0.7f;
     prov.infrastructure_rating = 0.6f;
     prov.demographics.total_population = 100000;
     prov.demographics.income_high_fraction = 0.15f;
@@ -349,7 +351,7 @@ TEST_CASE("test_market_value_multiplier_clamped_to_minimum", "[real_estate][tier
     RealEstateModule mod;
     // Extreme criminal dominance that would push multiplier below 0.1
     Province prov = make_test_province(0, 0.0f);
-    prov.conditions.criminal_dominance_index = 10.0f;  // extreme value
+    prov.cohort_stats->criminal_dominance_index = 10.0f;  // extreme value
 
     PropertyListing prop = make_test_property(1, PropertyType::residential, 0, 100, 200000.0f);
 

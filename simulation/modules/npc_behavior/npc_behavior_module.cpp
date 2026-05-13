@@ -230,9 +230,9 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
               [](const NPC* a, const NPC* b) { return a->id < b->id; });
 
     // Read province conditions for context-sensitive candidate generation.
-    float crime_rate = province.conditions.crime_rate;
+    float crime_rate = province.cohort_stats->crime_rate;
     float stability = province.conditions.stability_score;
-    float employment_rate = province.conditions.formal_employment_rate;
+    float employment_rate = province.cohort_stats->formal_employment_rate;
 
     // Process each NPC.
     for (const NPC* npc_ptr : province_npcs) {

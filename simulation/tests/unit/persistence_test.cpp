@@ -31,25 +31,27 @@ TEST_CASE("Persistence: checksum empty data", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: schema compatible same version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(4, 4) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(5, 5) == true);
 }
 
-// v4 builds reject pre-v4 saves: v3 NPC records lack the addiction footer,
-// and v2 saves still have FNV-hash good_ids that would route to phantom
-// markets. Either pre-v4 schema fed to v4 code is unsafe.
-TEST_CASE("Persistence: schema rejects pre-v4 saves", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 4) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(2, 4) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(3, 4) == false);
+// v5 builds reject pre-v5 saves: v4 RegionConditions has 4 trailing fields
+// (population-fraction monitors) that v5 reads as part of the next struct;
+// pre-v4 has older layout problems too. Either pre-v5 schema fed to v5
+// code is unsafe.
+TEST_CASE("Persistence: schema rejects pre-v5 saves", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(1, 5) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(2, 5) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(3, 5) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(4, 5) == false);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(5, 4) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(6, 5) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(4, 5) == true);
-    REQUIRE(PersistenceModule::needs_migration(4, 4) == false);
+    REQUIRE(PersistenceModule::needs_migration(5, 6) == true);
+    REQUIRE(PersistenceModule::needs_migration(5, 5) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -93,7 +95,7 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // Schema v2: added next_action_sequence persistence (issue #11). See
     // docs/design/EconLife_PlayerDelta_Semantics_v1.md.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 4);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 5);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -220,8 +222,8 @@ TEST_CASE("Persistence: round-trip preserves provinces", "[persistence][tier12][
         REQUIRE(restored.provinces[i].id == world.provinces[i].id);
         REQUIRE_THAT(restored.provinces[i].conditions.stability_score,
                      WithinAbs(world.provinces[i].conditions.stability_score, 0.001));
-        REQUIRE_THAT(restored.provinces[i].conditions.crime_rate,
-                     WithinAbs(world.provinces[i].conditions.crime_rate, 0.001));
+        REQUIRE_THAT(restored.provinces[i].cohort_stats->crime_rate,
+                     WithinAbs(world.provinces[i].cohort_stats->crime_rate, 0.001));
         REQUIRE(restored.provinces[i].links.size() == world.provinces[i].links.size());
     }
 }

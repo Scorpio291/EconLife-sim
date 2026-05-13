@@ -32,6 +32,8 @@ namespace {
 Province make_test_province(uint32_t id, float climate_stress = 0.0f, float stability = 1.0f,
                             float infrastructure = 0.5f) {
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = id;
     p.h3_index = 0;
     p.region_id = 0;
@@ -44,10 +46,10 @@ Province make_test_province(uint32_t id, float climate_stress = 0.0f, float stab
     p.climate.climate_stress_current = climate_stress;
     p.conditions.stability_score = stability;
     p.conditions.inequality_index = 0.0f;
-    p.conditions.crime_rate = 0.0f;
-    p.conditions.addiction_rate = 0.0f;
-    p.conditions.criminal_dominance_index = 0.0f;
-    p.conditions.formal_employment_rate = 0.8f;
+    p.cohort_stats->crime_rate = 0.0f;
+    p.cohort_stats->addiction_rate = 0.0f;
+    p.cohort_stats->criminal_dominance_index = 0.0f;
+    p.cohort_stats->formal_employment_rate = 0.8f;
     p.conditions.regulatory_compliance_index = 0.9f;
     p.conditions.drought_modifier = 1.0f;
     p.conditions.flood_modifier = 1.0f;
@@ -56,7 +58,6 @@ Province make_test_province(uint32_t id, float climate_stress = 0.0f, float stab
     p.community.institutional_trust = 0.6f;
     p.community.resource_access = 0.5f;
     p.community.response_stage = 0;
-    p.cohort_stats.reset();
     return p;
 }
 

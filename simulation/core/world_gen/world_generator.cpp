@@ -659,11 +659,11 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
 
     province.conditions.stability_score = 0.6f + rng.next_float() * 0.3f;
     province.conditions.inequality_index = 0.2f + rng.next_float() * 0.3f;
-    province.conditions.crime_rate = 0.05f + rng.next_float() * 0.1f;
-    province.conditions.addiction_rate = 0.02f + rng.next_float() * 0.05f;
-    province.conditions.criminal_dominance_index =
+    province.cohort_stats->crime_rate = 0.05f + rng.next_float() * 0.1f;
+    province.cohort_stats->addiction_rate = 0.02f + rng.next_float() * 0.05f;
+    province.cohort_stats->criminal_dominance_index =
         config.criminal_baseline + rng.next_float() * 0.05f;
-    province.conditions.formal_employment_rate = 0.6f + rng.next_float() * 0.25f;
+    province.cohort_stats->formal_employment_rate = 0.6f + rng.next_float() * 0.25f;
     province.conditions.regulatory_compliance_index = 0.7f + rng.next_float() * 0.2f;
     province.conditions.drought_modifier = 1.0f;
     province.conditions.flood_modifier = 1.0f;
@@ -704,7 +704,11 @@ void WorldGenerator::create_provinces(WorldState& world, DeterministicRNG& rng,
         province.region_id = p;
         province.nation_id = 0;
         province.lod_level = SimulationLOD::full;
-        province.cohort_stats.reset();
+        // Invariant: cohort_stats is non-null after world generation so the
+        // population-fraction monitor reads (`cohort_stats->addiction_rate`,
+        // etc.) don't need null guards. population_aging fills in the
+        // demographic numbers when the module runs.
+        province.cohort_stats = std::make_unique<RegionCohortStats>();
 
         ProvinceArchetype archetype = assign_archetype(rng, p, config.province_count);
         province.province_archetype_index = static_cast<uint8_t>(archetype);
@@ -2693,9 +2697,9 @@ void WorldGenerator::seed_economic_geography(WorldState& world,
         float infra_bonus = (prov.infrastructure_rating - 0.50f) * e.employment_infra_scale;
         float corruption_penalty = prov.political.corruption_index * e.employment_corruption_scale;
         float inequality_penalty = prov.conditions.inequality_index * e.employment_inequality_scale;
-        prov.conditions.formal_employment_rate =
-            std::max(0.20f, std::min(0.95f, prov.conditions.formal_employment_rate + infra_bonus -
-                                                corruption_penalty - inequality_penalty));
+        prov.cohort_stats->formal_employment_rate = std::max(
+            0.20f, std::min(0.95f, prov.cohort_stats->formal_employment_rate + infra_bonus -
+                                       corruption_penalty - inequality_penalty));
     }
 }
 
@@ -5460,10 +5464,10 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         p["conditions"] = {
             {"stability_score", prov.conditions.stability_score},
             {"inequality_index", prov.conditions.inequality_index},
-            {"crime_rate", prov.conditions.crime_rate},
-            {"addiction_rate", prov.conditions.addiction_rate},
-            {"criminal_dominance_index", prov.conditions.criminal_dominance_index},
-            {"formal_employment_rate", prov.conditions.formal_employment_rate},
+            {"crime_rate", prov.cohort_stats->crime_rate},
+            {"addiction_rate", prov.cohort_stats->addiction_rate},
+            {"criminal_dominance_index", prov.cohort_stats->criminal_dominance_index},
+            {"formal_employment_rate", prov.cohort_stats->formal_employment_rate},
             {"regulatory_compliance_index", prov.conditions.regulatory_compliance_index},
             {"drought_modifier", prov.conditions.drought_modifier},
             {"flood_modifier", prov.conditions.flood_modifier},

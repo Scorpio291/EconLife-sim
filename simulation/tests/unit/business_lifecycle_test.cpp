@@ -28,6 +28,8 @@ WorldState make_world_with_business(uint32_t business_id, BusinessSector sector,
     w.technology.era_started_tick = era_started_tick;
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = province_id;
     w.provinces.push_back(p);
 

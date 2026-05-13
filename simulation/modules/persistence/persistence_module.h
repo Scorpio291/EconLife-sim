@@ -71,7 +71,16 @@ class PersistenceModule : public ITickModule {
     //      embedded in each NPC record. Pre-v4 saves are rejected because
     //      the v3 NPC record has no addiction footer — reading one with v4
     //      code would consume the next record's bytes.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 4;
+    //  v5: demographics consolidation. Population-fraction monitors
+    //      (addiction_rate, crime_rate, criminal_dominance_index,
+    //      formal_employment_rate) migrated from RegionConditions to
+    //      RegionCohortStats; sick_rate, homeless_rate, unemployment_rate
+    //      added to RegionCohortStats. The RegionConditions block is 4
+    //      floats shorter; the cohort_stats block is 7 floats longer.
+    //      Pre-v5 saves are rejected because reading a v4 RegionConditions
+    //      with v5 code would consume the trailing v4 fields as if they
+    //      were the next struct's bytes.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 5;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

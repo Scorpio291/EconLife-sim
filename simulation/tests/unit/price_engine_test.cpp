@@ -263,6 +263,8 @@ TEST_CASE("test_execute_province_writes_market_deltas", "[price_engine][tier3]")
     constexpr uint32_t province_id = 0;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -292,6 +294,8 @@ TEST_CASE("test_execute_province_high_demand", "[price_engine][tier3]") {
     constexpr uint32_t province_id = 0;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -315,6 +319,8 @@ TEST_CASE("test_execute_province_with_lod2_modifier", "[price_engine][tier3]") {
     constexpr uint32_t province_id = 0;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -343,6 +349,8 @@ TEST_CASE("test_execute_province_multiple_goods_canonical_order", "[price_engine
     constexpr uint32_t province_id = 0;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -367,8 +375,10 @@ TEST_CASE("test_execute_fallback_processes_all_provinces", "[price_engine][tier3
     auto state = make_test_world_state();
 
     Province prov0{};
+    prov0.cohort_stats = std::make_unique<RegionCohortStats>();
     prov0.id = 0;
     Province prov1{};
+    prov1.cohort_stats = std::make_unique<RegionCohortStats>();
     prov1.id = 1;
     state.provinces.push_back(prov0);
     state.provinces.push_back(prov1);
@@ -402,6 +412,8 @@ TEST_CASE("test_default_adjustment_rate_used_when_market_rate_zero", "[price_eng
     constexpr uint32_t province_id = 0;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 

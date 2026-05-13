@@ -44,9 +44,10 @@ WorldState make_test_world_state() {
 
     // Add one province.
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     prov.infrastructure_rating = 0.80f;
-    prov.cohort_stats.reset();
     state.provinces.push_back(prov);
 
     // Add one nation with tax rates.
@@ -859,13 +860,13 @@ TEST_CASE("test_multiple_provinces_intergovernmental", "[government_budget][tier
 
     // Add more provinces to WorldState.
     Province prov1{};
+    prov1.cohort_stats = std::make_unique<RegionCohortStats>();
     prov1.id = 1;
-    prov1.cohort_stats.reset();
     state.provinces.push_back(prov1);
 
     Province prov2{};
+    prov2.cohort_stats = std::make_unique<RegionCohortStats>();
     prov2.id = 2;
-    prov2.cohort_stats.reset();
     state.provinces.push_back(prov2);
 
     GovernmentBudgetModule module;

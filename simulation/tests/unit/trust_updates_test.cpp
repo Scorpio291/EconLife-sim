@@ -110,8 +110,10 @@ WorldState make_two_province_world(uint32_t current_tick) {
     w.game_mode = GameMode::standard;
 
     Province p0{};
+    p0.cohort_stats = std::make_unique<RegionCohortStats>();
     p0.id = 0;
     Province p1{};
+    p1.cohort_stats = std::make_unique<RegionCohortStats>();
     p1.id = 1;
     w.provinces.push_back(p0);
     w.provinces.push_back(p1);

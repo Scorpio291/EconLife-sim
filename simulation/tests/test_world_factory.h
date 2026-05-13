@@ -72,6 +72,7 @@ inline PlayerCharacter create_test_player(uint32_t home_province_id) {
 // ---------------------------------------------------------------------------
 inline Province create_test_province(uint32_t id, uint32_t region_id, uint32_t nation_id) {
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = id;
     p.h3_index = static_cast<H3Index>(0x840000000 + id);
     p.fictional_name = "Province_" + std::to_string(id);
@@ -124,20 +125,27 @@ inline Province create_test_province(uint32_t id, uint32_t region_id, uint32_t n
     p.community = {0.6f, 0.2f, 0.6f, 0.5f, 0};
     p.political = {0, 0.5f, 365, 0.2f};
     p.conditions = {
-        0.7f,   // stability_score
-        0.3f,   // inequality_index
-        0.1f,   // crime_rate
-        0.05f,  // addiction_rate
-        0.05f,  // criminal_dominance_index
-        0.7f,   // formal_employment_rate
-        0.8f,   // regulatory_compliance_index
-        1.0f,   // drought_modifier (no drought)
-        1.0f    // flood_modifier (no flood)
+        0.7f,  // stability_score
+        0.3f,  // inequality_index
+        0.8f,  // regulatory_compliance_index
+        1.0f,  // drought_modifier (no drought)
+        1.0f   // flood_modifier (no flood)
     };
 
     p.has_karst = false;
     p.historical_trauma_index = 0.1f;
-    p.cohort_stats.reset();
+    // Seed the population-fraction monitors to non-trivial defaults so
+    // existing tests that read e.g. addiction_rate see the same numbers
+    // they did pre-consolidation. cohort_stats was already initialised at
+    // the top of the function (matches world_generator's non-null
+    // invariant).
+    p.cohort_stats->total_population = 100000;
+    p.cohort_stats->working_age_fraction = 0.6f;
+    p.cohort_stats->dependency_ratio = 0.67f;
+    p.cohort_stats->addiction_rate = 0.05f;
+    p.cohort_stats->crime_rate = 0.1f;
+    p.cohort_stats->criminal_dominance_index = 0.05f;
+    p.cohort_stats->formal_employment_rate = 0.7f;
 
     return p;
 }
@@ -532,14 +540,34 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
         push_float(b->cost_per_tick);
     }
 
-    // Province conditions
+    // Province conditions + cohort_stats. Schema-v5 consolidation moved
+    // crime_rate / addiction_rate / formal_employment_rate /
+    // criminal_dominance_index from conditions to cohort_stats; the new
+    // monitors (sick_rate / homeless_rate / unemployment_rate) live there
+    // too. The serializer covers all of them so a divergence in any
+    // population-fraction monitor surfaces in the determinism suite.
     for (const auto& prov : world.provinces) {
         push_u32(prov.id);
         push_float(prov.conditions.stability_score);
-        push_float(prov.conditions.crime_rate);
         push_float(prov.conditions.inequality_index);
         push_float(prov.community.grievance_level);
         push_float(prov.community.cohesion);
+        if (prov.cohort_stats) {
+            push_u32(1u);
+            push_u32(prov.cohort_stats->total_population);
+            push_float(prov.cohort_stats->median_age);
+            push_float(prov.cohort_stats->working_age_fraction);
+            push_float(prov.cohort_stats->dependency_ratio);
+            push_float(prov.cohort_stats->addiction_rate);
+            push_float(prov.cohort_stats->crime_rate);
+            push_float(prov.cohort_stats->criminal_dominance_index);
+            push_float(prov.cohort_stats->formal_employment_rate);
+            push_float(prov.cohort_stats->sick_rate);
+            push_float(prov.cohort_stats->homeless_rate);
+            push_float(prov.cohort_stats->unemployment_rate);
+        } else {
+            push_u32(0u);
+        }
     }
 
     // Goods catalog — numeric_id and base_price per entry, numeric_id-sorted.

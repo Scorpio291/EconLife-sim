@@ -105,6 +105,8 @@ TEST_CASE("test_business_skipped_when_not_on_decision_tick", "[npc_business][tie
     state.current_tick = 50;  // before decision tick
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -133,6 +135,8 @@ TEST_CASE("test_business_executes_decision_on_quarterly_tick", "[npc_business][t
     state.current_tick = 100;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -164,6 +168,8 @@ TEST_CASE("test_player_owned_business_skipped", "[npc_business][tier4]") {
     state.player = std::make_unique<PlayerCharacter>(player);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -378,6 +384,8 @@ TEST_CASE("test_dispatch_day_offset_staggers_decisions", "[npc_business][tier4]"
     auto state = make_test_world_state();
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -585,8 +593,10 @@ TEST_CASE("test_execute_processes_all_provinces", "[npc_business][tier4]") {
     state.current_tick = 100;
 
     Province prov0{};
+    prov0.cohort_stats = std::make_unique<RegionCohortStats>();
     prov0.id = 0;
     Province prov1{};
+    prov1.cohort_stats = std::make_unique<RegionCohortStats>();
     prov1.id = 1;
     state.provinces.push_back(prov0);
     state.provinces.push_back(prov1);

@@ -173,12 +173,12 @@ void write_political(ByteWriter& w, const RegionalPoliticalState& p) {
 }
 
 void write_conditions(ByteWriter& w, const RegionConditions& c) {
+    // Schema v5: population-fraction monitors (crime_rate, addiction_rate,
+    // criminal_dominance_index, formal_employment_rate) moved to
+    // RegionCohortStats. This struct now holds only the non-demographic
+    // policy/event scalars.
     w.write_float(c.stability_score);
     w.write_float(c.inequality_index);
-    w.write_float(c.crime_rate);
-    w.write_float(c.addiction_rate);
-    w.write_float(c.criminal_dominance_index);
-    w.write_float(c.formal_employment_rate);
     w.write_float(c.regulatory_compliance_index);
     w.write_float(c.drought_modifier);
     w.write_float(c.flood_modifier);
@@ -375,7 +375,11 @@ void write_province(ByteWriter& w, const Province& p) {
     for (uint32_t id : p.significant_npc_ids)
         w.write_u32(id);
 
-    // cohort_stats presence flag + data
+    // cohort_stats presence flag + data. Schema v5 added all the
+    // population-fraction monitors (migrated from RegionConditions plus
+    // sick_rate / homeless_rate / unemployment_rate). The presence flag is
+    // retained for backward-compat with the in-memory invariant — production
+    // worlds always have cohort_stats populated by world_generator.
     bool has_cohort = (p.cohort_stats != nullptr);
     w.write_bool(has_cohort);
     if (has_cohort) {
@@ -383,6 +387,14 @@ void write_province(ByteWriter& w, const Province& p) {
         w.write_float(p.cohort_stats->median_age);
         w.write_float(p.cohort_stats->working_age_fraction);
         w.write_float(p.cohort_stats->dependency_ratio);
+        // v5 additions:
+        w.write_float(p.cohort_stats->addiction_rate);
+        w.write_float(p.cohort_stats->crime_rate);
+        w.write_float(p.cohort_stats->criminal_dominance_index);
+        w.write_float(p.cohort_stats->formal_employment_rate);
+        w.write_float(p.cohort_stats->sick_rate);
+        w.write_float(p.cohort_stats->homeless_rate);
+        w.write_float(p.cohort_stats->unemployment_rate);
     }
 
     w.write_bool(p.has_karst);
@@ -804,10 +816,6 @@ RegionConditions read_conditions(ByteReader& r) {
     RegionConditions c{};
     c.stability_score = r.read_float();
     c.inequality_index = r.read_float();
-    c.crime_rate = r.read_float();
-    c.addiction_rate = r.read_float();
-    c.criminal_dominance_index = r.read_float();
-    c.formal_employment_rate = r.read_float();
     c.regulatory_compliance_index = r.read_float();
     c.drought_modifier = r.read_float();
     c.flood_modifier = r.read_float();
@@ -1036,6 +1044,14 @@ Province read_province(ByteReader& r) {
         p.cohort_stats->median_age = r.read_float();
         p.cohort_stats->working_age_fraction = r.read_float();
         p.cohort_stats->dependency_ratio = r.read_float();
+        // v5 additions — migrated population-fraction monitors:
+        p.cohort_stats->addiction_rate = r.read_float();
+        p.cohort_stats->crime_rate = r.read_float();
+        p.cohort_stats->criminal_dominance_index = r.read_float();
+        p.cohort_stats->formal_employment_rate = r.read_float();
+        p.cohort_stats->sick_rate = r.read_float();
+        p.cohort_stats->homeless_rate = r.read_float();
+        p.cohort_stats->unemployment_rate = r.read_float();
     } else {
         p.cohort_stats.reset();
     }
@@ -1421,7 +1437,7 @@ bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t cu
     // (missing the addiction footer), and a v2 save loaded by v3 code would
     // silently route market deltas to phantom markets. Reject anything below
     // the current floor; V1 is pre-release so this affects no real users.
-    if (saved_version < 4u)
+    if (saved_version < 5u)
         return false;
     return saved_version <= current_version;
 }
