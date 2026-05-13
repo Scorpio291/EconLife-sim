@@ -581,6 +581,15 @@ struct DrugEconomyConfig {
     float demand_per_addict = 1.0f;
     float precursor_ratio_meth = 2.0f;
     float designer_legal_margin_mult = 1.5f;
+    // Per-tick probability that an active stage==none NPC in a province with
+    // drug supply (or pre-existing addiction_rate > 0) is seeded into the
+    // addiction state machine at stage=casual. Scaled up by the province's
+    // current addiction_rate; clamped by addiction_seeding_saturation_cap.
+    float addiction_seeding_probability = 0.00005f;
+    // Once cohort_stats.addiction_rate reaches this fraction, drug_economy
+    // stops seeding new NPCs this tick. Keeps growth bounded; further
+    // progression is driven by AddictionModule's stage transitions.
+    float addiction_seeding_saturation_cap = 0.05f;
 };
 
 struct RegionalConditionsConfig {

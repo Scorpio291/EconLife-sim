@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -160,7 +161,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
     }
 
     // Consumer demand from addiction rates
-    float addiction_rate = province.cohort_stats->addiction_rate;
+    float addiction_rate = province.cohort_stats ? province.cohort_stats->addiction_rate : 0.0f;
     if (addiction_rate > 0.0f && province.cohort_stats) {
         float demand = compute_addiction_demand(
             addiction_rate, province.cohort_stats->total_population, cfg_.demand_per_addict);
@@ -179,6 +180,73 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         region.region_id = province.id;
         region.addiction_rate_delta = demand * ADDICTION_GROWTH_PER_UNIT;
         province_delta.region_deltas.push_back(region);
+    }
+
+    // ---------------------------------------------------------------
+    // Per-NPC addiction seeding
+    // When supply exists in this province (drug businesses producing) or the
+    // province already has an addiction rate > 0, roll a small per-tick
+    // probability for active NPCs whose AddictionState.stage == none to enter
+    // the addiction pipeline at stage=casual. AddictionModule advances stage
+    // on subsequent ticks; the documented 1-tick lag is acceptable since
+    // drug_economy `runs_before: ["addiction"]`.
+    //
+    // Saturation cap: once addiction_rate reaches SEED_SATURATION_CAP we
+    // stop seeding new NPCs this tick — keeps growth bounded without further
+    // population-level accounting.
+    // ---------------------------------------------------------------
+    const bool has_supply = !drug_businesses.empty();
+    constexpr uint32_t SEED_RNG_CONTEXT = 0xD20EC04;  // "drug economy" namespace
+    if ((has_supply || addiction_rate > 0.0f) &&
+        addiction_rate < cfg_.addiction_seeding_saturation_cap &&
+        province_idx < state.npc_indices_by_province.size()) {
+        // Pick a substance key based on which drug type is being produced
+        // locally. Default to cannabis: it's the V1 baseline and is the only
+        // type emitted by the simplified production loop above. If multiple
+        // drug types are produced, future work can weight selection by
+        // per-type supply; for V1 cannabis is sufficient.
+        const std::string substance_key = "cannabis";
+
+        // Fork the RNG deterministically per (tick, province) so seeding is
+        // reproducible. The seed mixes world_seed, current_tick, province.id,
+        // and a module-specific context tag.
+        const uint64_t rng_seed = state.world_seed ^
+                                  (static_cast<uint64_t>(state.current_tick) << 16) ^
+                                  static_cast<uint64_t>(province.id) ^
+                                  (static_cast<uint64_t>(SEED_RNG_CONTEXT) << 32);
+        DeterministicRNG rng(rng_seed);
+
+        // Iterate NPC bucket for this province in npc_id ascending order.
+        std::vector<uint32_t> npc_indices(state.npc_indices_by_province[province_idx].begin(),
+                                          state.npc_indices_by_province[province_idx].end());
+        std::sort(npc_indices.begin(), npc_indices.end(), [&](uint32_t a, uint32_t b) {
+            return state.significant_npcs[a].id < state.significant_npcs[b].id;
+        });
+
+        // Scale seeding probability with addiction_rate so seeding accelerates
+        // once a province is established but stays low at zero.
+        const float scaled_probability =
+            cfg_.addiction_seeding_probability * (1.0f + addiction_rate * 10.0f);
+
+        for (uint32_t idx : npc_indices) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.status != NPCStatus::active)
+                continue;
+            if (npc.addiction_state.stage != AddictionStage::none)
+                continue;
+            if (rng.next_float() >= scaled_probability)
+                continue;
+
+            AddictionState seeded{};
+            seeded.stage = AddictionStage::casual;
+            seeded.substance_key = substance_key;
+            seeded.consecutive_use_ticks = 1;
+
+            NPCDelta seed_delta;
+            seed_delta.npc_id = npc.id;
+            seed_delta.set_addiction_state = seeded;
+            province_delta.npc_deltas.push_back(seed_delta);
+        }
     }
 }
 
