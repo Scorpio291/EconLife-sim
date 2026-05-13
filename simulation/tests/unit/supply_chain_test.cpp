@@ -47,7 +47,6 @@ WorldState make_test_world_state() {
 Province make_test_province(uint32_t id, float infrastructure = 0.5f) {
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.h3_index = 0;
     prov.fictional_name = "TestProvince" + std::to_string(id);

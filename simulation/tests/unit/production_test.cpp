@@ -160,7 +160,6 @@ TEST_CASE("test_basic_recipe_output", "[production][tier1]") {
     // Set up province (needed for execute_province to work).
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -205,7 +204,6 @@ TEST_CASE("test_tech_tier_bonus", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
@@ -284,7 +282,6 @@ TEST_CASE("test_bankrupt_business_skipped", "[production][tier1]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -334,7 +331,6 @@ TEST_CASE("test_criminal_sector_uses_informal_price", "[production][tier1]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -380,7 +376,6 @@ TEST_CASE("test_derived_demand", "[production][tier1]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -418,7 +413,6 @@ TEST_CASE("test_insufficient_input_clamps_output", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
@@ -459,7 +453,6 @@ TEST_CASE("test_no_facilities_produces_nothing", "[production][tier1]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -486,7 +479,6 @@ TEST_CASE("test_non_operational_facility_skipped", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
@@ -571,7 +563,6 @@ TEST_CASE("test_multiple_businesses_deterministic_order", "[production][tier1]")
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -610,7 +601,6 @@ TEST_CASE("test_worker_count_throughput_effect", "[production][tier1]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -644,7 +634,6 @@ TEST_CASE("test_zero_workers_no_production", "[production][tier1]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -676,7 +665,6 @@ TEST_CASE("test_business_delta_written", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
@@ -719,7 +707,6 @@ TEST_CASE("test_unknown_good_suppresses_market_deltas", "[production][tier1]") {
     constexpr uint32_t province_id = 0;
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);

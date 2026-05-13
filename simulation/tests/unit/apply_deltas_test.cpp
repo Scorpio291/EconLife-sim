@@ -21,7 +21,6 @@ static WorldState make_minimal_world() {
 
     Province p{};
     p.cohort_stats = std::make_unique<RegionCohortStats>();
-    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     p.region_id = 0;
     // RegionConditions (post schema-v5): 5 fields. Population-fraction

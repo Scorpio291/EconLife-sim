@@ -343,7 +343,6 @@ TEST_CASE("test_execute_emits_market_deltas_for_large_positions", "[commodity_tr
     // Add a province.
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -375,7 +374,6 @@ TEST_CASE("test_execute_skips_closed_positions", "[commodity_trading][tier4]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -402,7 +400,6 @@ TEST_CASE("test_execute_updates_current_value", "[commodity_trading][tier4]") {
     auto state = make_test_world_state();
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
@@ -449,7 +446,6 @@ TEST_CASE("test_execute_emits_npc_delta_for_settlement", "[commodity_trading][ti
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
     state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
@@ -487,7 +483,6 @@ TEST_CASE("test_execute_no_npc_delta_for_old_settlement", "[commodity_trading][t
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
     state.regional_markets.push_back(make_test_market(5, 0, 10000.0f, 50.0f));
@@ -518,7 +513,6 @@ TEST_CASE("test_execute_garbage_collects_old_positions", "[commodity_trading][ti
     state.current_tick = 200;
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);

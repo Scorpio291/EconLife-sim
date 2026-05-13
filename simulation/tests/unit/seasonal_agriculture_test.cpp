@@ -49,7 +49,6 @@ WorldState make_test_world_state(uint32_t tick = 1) {
 Province make_test_province(uint32_t id, float latitude = 45.0f) {
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.lod_level = SimulationLOD::full;
     prov.geography.latitude = latitude;

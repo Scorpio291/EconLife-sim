@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -46,7 +47,6 @@ WorldState make_test_world_state(uint32_t tick = 1) {
 // Create a Province with sensible defaults.
 Province make_test_province(uint32_t id) {
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.region_id = 0;
@@ -861,4 +861,79 @@ TEST_CASE("NPC health does not go below zero from clamping", "[healthcare][tier5
     REQUIRE(hr != nullptr);
     REQUIRE(hr->health >= 0.0f);
     REQUIRE(hr->health <= 1.0f);
+}
+
+// --- sick_rate monitor ---------------------------------------------------
+//
+// healthcare emits a sick_rate_delta sized by the convergence rate (0.05)
+// times (sample_sick_fraction - current_sick_rate). With a single sick NPC
+// out of one in the province, sample = 1.0 and the delta is positive
+// (pulling stored rate upward). All healthy → sample = 0 and the delta is
+// negative.
+
+TEST_CASE("healthcare: sick_rate_delta is positive when sample fraction exceeds stored",
+          "[healthcare][tier5][sick_rate]") {
+    WorldState state = make_test_world_state();
+    state.provinces.push_back(make_test_province(0));
+
+    HealthcareModule mod;
+    mod.province_health_states().push_back(
+        make_test_province_health(0, make_test_profile(0.8f, 0.9f, 500.0f, 0.5f)));
+
+    NPC npc = make_test_npc(1, 0, 100.0f);
+    state.significant_npcs.push_back(npc);
+    rebuild_npc_indices(state);
+
+    // Single sick NPC (health 0.2 < labour_impairment_threshold 0.5).
+    mod.npc_health_records().push_back(make_test_health_record(1, 0.2f));
+
+    // Pre-state: cohort_stats->sick_rate starts at 0.
+    state.provinces[0].cohort_stats->sick_rate = 0.0f;
+
+    DeltaBuffer delta{};
+    mod.execute_province(0, state, delta);
+
+    bool found = false;
+    for (const auto& rd : delta.region_deltas) {
+        if (rd.sick_rate_delta.has_value()) {
+            // sample = 1.0, current = 0.0, conv = 0.05 → delta = 0.05.
+            REQUIRE(*rd.sick_rate_delta > 0.0f);
+            REQUIRE(*rd.sick_rate_delta <= 0.05f + 1e-4f);
+            found = true;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("healthcare: sick_rate_delta is negative when stored rate exceeds healthy sample",
+          "[healthcare][tier5][sick_rate]") {
+    WorldState state = make_test_world_state();
+    state.provinces.push_back(make_test_province(0));
+
+    HealthcareModule mod;
+    mod.province_health_states().push_back(
+        make_test_province_health(0, make_test_profile(0.8f, 0.9f, 500.0f, 0.5f)));
+
+    NPC npc = make_test_npc(1, 0, 100.0f);
+    state.significant_npcs.push_back(npc);
+    rebuild_npc_indices(state);
+
+    // Healthy NPC (health 0.9 >= threshold) → sample fraction = 0.
+    mod.npc_health_records().push_back(make_test_health_record(1, 0.9f));
+
+    // Pre-state: artificially high stored sick_rate so the delta must pull
+    // downward.
+    state.provinces[0].cohort_stats->sick_rate = 0.5f;
+
+    DeltaBuffer delta{};
+    mod.execute_province(0, state, delta);
+
+    bool found = false;
+    for (const auto& rd : delta.region_deltas) {
+        if (rd.sick_rate_delta.has_value()) {
+            REQUIRE(*rd.sick_rate_delta < 0.0f);
+            found = true;
+        }
+    }
+    REQUIRE(found);
 }

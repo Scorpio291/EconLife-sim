@@ -177,12 +177,42 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
         labour_force, phs->sick_leave_fraction, cfg_.labour_supply_impact);
 
     // ---------------------------------------------------------------
-    // Step 6: Health Crisis — RegionDelta
-    // If sick leave fraction exceeds the crisis threshold, apply a
-    // stability penalty to the region containing this province.
+    // Step 6: Health Crisis + sick_rate monitor — RegionDelta
+    // The province-level sick_rate (cohort_stats->sick_rate) tracks the
+    // fraction of the working-age population whose health is below the
+    // labour-impairment threshold (default 0.5). Per-tick sample noise is
+    // smoothed by converging at SICK_RATE_CONVERGENCE_RATE rather than
+    // overwriting outright. If the resulting sick fraction crosses the
+    // crisis threshold, apply the stability penalty (existing behavior).
     // ---------------------------------------------------------------
     constexpr float kHealthCrisisThreshold = 0.15f;
-    if (phs->sick_leave_fraction > kHealthCrisisThreshold) {
+    constexpr float SICK_RATE_CONVERGENCE_RATE = 0.05f;
+
+    // labour_force is the number of NPCs in this province that the module
+    // processed (built earlier in execute_province). Treat it as the
+    // sample denominator — using significant_npcs as a proxy for the
+    // working-age share of cohort_stats.total_population is acceptable
+    // for V1; the stored rate converges to the true sample over many
+    // ticks regardless of sampling skew.
+    if (labour_force > 0) {
+        const float sample_sick_fraction =
+            static_cast<float>(sick_count) / static_cast<float>(labour_force);
+        const float current_sick_rate = state.provinces[province_idx].cohort_stats
+                                            ? state.provinces[province_idx].cohort_stats->sick_rate
+                                            : 0.0f;
+        const float sick_rate_delta_value =
+            SICK_RATE_CONVERGENCE_RATE * (sample_sick_fraction - current_sick_rate);
+
+        RegionDelta region_delta{};
+        region_delta.region_id = state.provinces[province_idx].region_id;
+        region_delta.sick_rate_delta = sick_rate_delta_value;
+        if (phs->sick_leave_fraction > kHealthCrisisThreshold) {
+            region_delta.stability_delta = -0.01f * phs->sick_leave_fraction;
+        }
+        province_delta.region_deltas.push_back(region_delta);
+    } else if (phs->sick_leave_fraction > kHealthCrisisThreshold) {
+        // Edge case: zero labour force but crisis flag (shouldn't happen,
+        // but preserves the prior unconditional emission shape).
         RegionDelta region_delta{};
         region_delta.region_id = state.provinces[province_idx].region_id;
         region_delta.stability_delta = -0.01f * phs->sick_leave_fraction;

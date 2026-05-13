@@ -27,7 +27,6 @@ WorldState make_world_with_tech(SimulationEra era, uint32_t current_tick) {
 
     Province p{};
     p.cohort_stats = std::make_unique<RegionCohortStats>();
-    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     w.provinces.push_back(p);
     rebuild_npc_indices(w);

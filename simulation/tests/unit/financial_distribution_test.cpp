@@ -46,7 +46,6 @@ WorldState make_test_world_state() {
     // Add one province.
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 

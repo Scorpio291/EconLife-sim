@@ -24,7 +24,6 @@ WorldState make_world(uint32_t province_count, uint32_t npc_count) {
     for (uint32_t p = 0; p < province_count; ++p) {
         Province prov{};
         prov.cohort_stats = std::make_unique<RegionCohortStats>();
-        prov.cohort_stats = std::make_unique<RegionCohortStats>();
         prov.id = p;
         w.provinces.push_back(prov);
     }
@@ -254,7 +253,6 @@ WorldState make_market_world(uint32_t province_count, uint32_t goods_per_provinc
 
     for (uint32_t p = 0; p < province_count; ++p) {
         Province prov{};
-        prov.cohort_stats = std::make_unique<RegionCohortStats>();
         prov.cohort_stats = std::make_unique<RegionCohortStats>();
         prov.id = p;
         w.provinces.push_back(prov);

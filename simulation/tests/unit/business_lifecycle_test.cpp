@@ -29,7 +29,6 @@ WorldState make_world_with_business(uint32_t business_id, BusinessSector sector,
 
     Province p{};
     p.cohort_stats = std::make_unique<RegionCohortStats>();
-    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = province_id;
     w.provinces.push_back(p);
 

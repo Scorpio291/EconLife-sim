@@ -160,7 +160,6 @@ WorldState make_world_with_npc(uint32_t npc_id, uint32_t province_id) {
 
     Province p{};
     p.cohort_stats = std::make_unique<RegionCohortStats>();
-    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = province_id;
     w.provinces.push_back(p);
 

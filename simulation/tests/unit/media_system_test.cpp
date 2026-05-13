@@ -91,7 +91,6 @@ TEST_CASE("Journalist publishes story from evidence", "[media_system][tier7]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 

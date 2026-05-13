@@ -52,7 +52,6 @@ WorldState make_test_world_state(uint32_t tick = 1) {
 Province make_test_province(uint32_t id, float criminal_dominance = 0.0f) {
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.region_id = 0;
     prov.nation_id = 0;

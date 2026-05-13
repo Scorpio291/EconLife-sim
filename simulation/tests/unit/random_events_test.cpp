@@ -33,7 +33,6 @@ Province make_test_province(uint32_t id, float climate_stress = 0.0f, float stab
                             float infrastructure = 0.5f) {
     Province p{};
     p.cohort_stats = std::make_unique<RegionCohortStats>();
-    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = id;
     p.h3_index = 0;
     p.region_id = 0;

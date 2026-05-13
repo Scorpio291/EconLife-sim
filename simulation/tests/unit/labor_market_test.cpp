@@ -9,6 +9,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -40,7 +41,6 @@ WorldState make_test_world_state() {
 
 Province make_test_province(uint32_t id) {
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.lod_level = SimulationLOD::full;
@@ -698,7 +698,6 @@ TEST_CASE("test_skips_non_full_lod_provinces", "[labor_market][tier2]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     prov.lod_level = SimulationLOD::simplified;
     state.provinces.push_back(prov);
@@ -810,4 +809,57 @@ TEST_CASE("test_salary_expectation_with_money_motivation", "[labor_market][tier2
 
     // 2.0 * (1.0 + 0.5 * 0.3) = 2.0 * 1.15 = 2.3
     REQUIRE_THAT(expectation, WithinAbs(2.3f, 0.001f));
+}
+
+// --- unemployment_rate / formal_employment_rate monitors -----------------
+//
+// labor_market::execute_province emits a RegionDelta carrying both rates
+// converging at 0.05 toward the per-province sample. With one active NPC
+// and no employment record, sample employed = 0 → unemployment delta
+// pulls upward, formal_employment delta pulls downward.
+
+TEST_CASE("labor_market: emits unemployment + formal_employment deltas converging on sample",
+          "[labor_market][tier2][unemployment]") {
+    WorldState state = make_test_world_state();
+    state.provinces.push_back(make_test_province(0));
+
+    NPC npc{};
+    npc.id = 100;
+    npc.current_province_id = 0;
+    npc.home_province_id = 0;
+    npc.status = NPCStatus::active;
+    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
+    state.significant_npcs.push_back(npc);
+    rebuild_npc_indices(state);
+
+    // Pre-state on cohort_stats: 70% formal employment, 30% unemployment.
+    // The single unemployed NPC drives the sample to 100% unemployed; the
+    // emitted deltas should drag the stored rates toward that.
+    auto& cs = *state.provinces[0].cohort_stats;
+    cs.formal_employment_rate = 0.7f;
+    cs.unemployment_rate = 0.3f;
+
+    LaborMarketModule module;
+    module.init_for_tick(state);  // seeds employment_records_ for all NPCs
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    bool found_unemp = false;
+    bool found_formal = false;
+    for (const auto& rd : delta.region_deltas) {
+        if (rd.unemployment_rate_delta.has_value()) {
+            // sample = 1.0, current = 0.3 → 0.05 * 0.7 = +0.035.
+            REQUIRE(*rd.unemployment_rate_delta > 0.0f);
+            REQUIRE_THAT(*rd.unemployment_rate_delta, WithinAbs(0.035f, 0.001f));
+            found_unemp = true;
+        }
+        if (rd.formal_employment_rate_delta.has_value()) {
+            // sample = 0.0, current = 0.7 → 0.05 * -0.7 = -0.035.
+            REQUIRE(*rd.formal_employment_rate_delta < 0.0f);
+            REQUIRE_THAT(*rd.formal_employment_rate_delta, WithinAbs(-0.035f, 0.001f));
+            found_formal = true;
+        }
+    }
+    REQUIRE(found_unemp);
+    REQUIRE(found_formal);
 }

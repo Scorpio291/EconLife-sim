@@ -117,7 +117,6 @@ TEST_CASE("Facility signals execute province computes signals", "[facility_signa
     // Create a province with karst
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     prov.has_karst = true;
     state.provinces.push_back(prov);
@@ -181,7 +180,6 @@ TEST_CASE("Regulator reads chemical and traffic only", "[facility_signals][tier7
     state.current_tick = 100;
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     prov.has_karst = false;

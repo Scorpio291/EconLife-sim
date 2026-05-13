@@ -264,7 +264,6 @@ TEST_CASE("test_execute_province_writes_market_deltas", "[price_engine][tier3]")
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -295,7 +294,6 @@ TEST_CASE("test_execute_province_high_demand", "[price_engine][tier3]") {
 
     Province prov{};
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -319,7 +317,6 @@ TEST_CASE("test_execute_province_with_lod2_modifier", "[price_engine][tier3]") {
     constexpr uint32_t province_id = 0;
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
@@ -349,7 +346,6 @@ TEST_CASE("test_execute_province_multiple_goods_canonical_order", "[price_engine
     constexpr uint32_t province_id = 0;
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
@@ -412,7 +408,6 @@ TEST_CASE("test_default_adjustment_rate_used_when_market_rate_zero", "[price_eng
     constexpr uint32_t province_id = 0;
 
     Province prov{};
-    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
