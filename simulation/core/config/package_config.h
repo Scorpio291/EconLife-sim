@@ -353,6 +353,14 @@ struct RealEstateConfig {
     float criminal_dominance_penalty = 0.15f;
     float laundering_premium = 0.10f;
     float transaction_evidence_threshold = 50000.0f;
+    // Homeless-rate accounting (drives cohort_stats.homeless_rate via
+    // RegionDelta.homeless_rate_delta). An NPC is considered "housed" when
+    // their capital covers `homeless_rent_buffer_months` of the province's
+    // mean residential rent. Provinces with no residential listings fall
+    // back to the configured baseline rent_floor for the comparison.
+    float homeless_rent_buffer_months = 3.0f;
+    float homeless_rent_floor = 50.0f;
+    float homeless_rate_convergence = 0.05f;
 };
 
 struct FinancialDistributionConfig {

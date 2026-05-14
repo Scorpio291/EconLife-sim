@@ -18,6 +18,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -767,4 +768,124 @@ TEST_CASE("test_real_estate_constants", "[real_estate][tier4]") {
     REQUIRE_THAT(RealEstateConfig{}.criminal_dominance_penalty, WithinAbs(0.15f, 0.0001f));
     REQUIRE_THAT(RealEstateConfig{}.laundering_premium, WithinAbs(0.10f, 0.0001f));
     REQUIRE_THAT(RealEstateConfig{}.transaction_evidence_threshold, WithinAbs(50000.0f, 0.01f));
+}
+
+// ===========================================================================
+// Homeless rate tests (cohort_stats.homeless_rate)
+// ===========================================================================
+//
+// real_estate samples per-tick "fraction of active NPCs whose capital can't
+// cover homeless_rent_buffer_months of mean residential rent" and emits a
+// convergence delta. Provinces with no residential listings use the
+// configured rent_floor.
+
+namespace {
+
+NPC make_homeless_test_npc(uint32_t id, uint32_t province_id, float capital) {
+    NPC npc{};
+    npc.id = id;
+    npc.role = NPCRole::worker;
+    npc.status = NPCStatus::active;
+    npc.current_province_id = province_id;
+    npc.home_province_id = province_id;
+    npc.capital = capital;
+    return npc;
+}
+
+float find_homeless_delta(const DeltaBuffer& delta, uint32_t region_id) {
+    for (const auto& rd : delta.region_deltas) {
+        if (rd.region_id == region_id && rd.homeless_rate_delta.has_value()) {
+            return *rd.homeless_rate_delta;
+        }
+    }
+    return 0.0f;
+}
+
+}  // namespace
+
+TEST_CASE("test_homeless_rate_all_affordable_emits_negative_or_zero_delta",
+          "[real_estate][homeless][tier4]") {
+    auto state = make_test_world_state(1);
+    state.provinces.push_back(make_test_province(0));
+    // Pre-set homeless_rate so a sample of 0 produces a clear negative delta.
+    state.provinces[0].cohort_stats->homeless_rate = 0.2f;
+
+    // Wealthy NPCs: capital easily covers 3 months of floor rent (50 * 3 = 150).
+    state.significant_npcs.push_back(make_homeless_test_npc(1, 0, 10000.0f));
+    state.significant_npcs.push_back(make_homeless_test_npc(2, 0, 10000.0f));
+    rebuild_npc_indices(state);
+
+    RealEstateModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    float homeless_delta = find_homeless_delta(delta, 0);
+    // sample 0.0, current 0.2, convergence 0.05 → delta = 0.05 * (0 - 0.2) = -0.01
+    REQUIRE_THAT(homeless_delta, WithinAbs(-0.01f, 0.0001f));
+}
+
+TEST_CASE("test_homeless_rate_all_unaffordable_emits_positive_delta",
+          "[real_estate][homeless][tier4]") {
+    auto state = make_test_world_state(1);
+    state.provinces.push_back(make_test_province(0));
+    state.provinces[0].cohort_stats->homeless_rate = 0.0f;
+
+    // Penniless NPCs: capital below threshold.
+    state.significant_npcs.push_back(make_homeless_test_npc(1, 0, 0.0f));
+    state.significant_npcs.push_back(make_homeless_test_npc(2, 0, 5.0f));
+    rebuild_npc_indices(state);
+
+    RealEstateModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    float homeless_delta = find_homeless_delta(delta, 0);
+    // sample 1.0, current 0.0, convergence 0.05 → delta = 0.05 * (1 - 0) = +0.05
+    REQUIRE_THAT(homeless_delta, WithinAbs(0.05f, 0.0001f));
+}
+
+TEST_CASE("test_homeless_rate_uses_residential_listings_when_present",
+          "[real_estate][homeless][tier4]") {
+    auto state = make_test_world_state(1);
+    state.provinces.push_back(make_test_province(0));
+    state.provinces[0].cohort_stats->homeless_rate = 0.0f;
+
+    // Two NPCs: one with capital = 1000, one with capital = 100.
+    state.significant_npcs.push_back(make_homeless_test_npc(1, 0, 1000.0f));
+    state.significant_npcs.push_back(make_homeless_test_npc(2, 0, 100.0f));
+    rebuild_npc_indices(state);
+
+    RealEstateModule module;
+    // Residential property with market_value=200,000 → rent_per_tick = 600.
+    // 3 months buffer = 1800. NPC1 (1000) is below; NPC2 (100) is below.
+    module.add_property(make_test_property(1, PropertyType::residential, 0, 99, 200000.0f));
+
+    DeltaBuffer delta{};
+    module.init_for_tick(state);
+    module.execute_province(0, state, delta);
+
+    float homeless_delta = find_homeless_delta(delta, 0);
+    // Both NPCs below threshold → sample 1.0 → delta = 0.05 * (1 - 0) = +0.05.
+    REQUIRE_THAT(homeless_delta, WithinAbs(0.05f, 0.0001f));
+}
+
+TEST_CASE("test_homeless_rate_skips_dead_npcs", "[real_estate][homeless][tier4]") {
+    auto state = make_test_world_state(1);
+    state.provinces.push_back(make_test_province(0));
+    state.provinces[0].cohort_stats->homeless_rate = 0.0f;
+
+    // Two NPCs: dead pauper, living wealthy.
+    NPC dead = make_homeless_test_npc(1, 0, 0.0f);
+    dead.status = NPCStatus::dead;
+    state.significant_npcs.push_back(dead);
+    state.significant_npcs.push_back(make_homeless_test_npc(2, 0, 10000.0f));
+    rebuild_npc_indices(state);
+
+    RealEstateModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    float homeless_delta = find_homeless_delta(delta, 0);
+    // Only the wealthy NPC is counted → sample 0.0 → delta = 0.
+    REQUIRE_THAT(homeless_delta, WithinAbs(0.0f, 0.0001f));
 }

@@ -136,13 +136,13 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
         }
     }
 
-    // Look up the pre-built index for this province.
+    // Look up the pre-built index for this province. May be absent if no
+    // properties exist in this province; Step 5 (homeless rate) still runs
+    // against an empty `indices` vector so the rent_floor fallback path is
+    // exercised whenever there are NPCs to sample.
     auto it = province_property_indices_.find(province_idx);
-    if (it == province_property_indices_.end()) {
-        // No properties in this province — nothing to do.
-        return;
-    }
-    const auto& indices = it->second;
+    static const std::vector<size_t> kEmptyIndices;
+    const auto& indices = (it == province_property_indices_.end()) ? kEmptyIndices : it->second;
 
     const bool is_monthly_tick = (state.current_tick % cfg_.convergence_interval == 0);
 
@@ -247,6 +247,58 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
         region_delta.region_id = state.provinces[province_idx].region_id;
         region_delta.avg_property_value_update = avg_value;
         province_delta.region_deltas.push_back(region_delta);
+    }
+
+    // --- Step 5: Homeless rate sample (cohort_stats.homeless_rate) ---
+    // An NPC is "housed" when their capital covers `homeless_rent_buffer_months`
+    // of the province's mean residential rent. Provinces without residential
+    // listings fall back to the configured rent_floor. Sample is converged
+    // toward the stored rate to smooth per-tick sampling noise, matching the
+    // pattern used by healthcare (sick_rate) and labor_market (unemployment).
+    if (province_idx < state.npc_indices_by_province.size()) {
+        float mean_residential_rent = 0.0f;
+        uint32_t residential_count = 0;
+        for (size_t i : indices) {
+            const auto& prop = properties_[i];
+            if (prop.type != PropertyType::residential)
+                continue;
+            mean_residential_rent += prop.rental_income_per_tick;
+            ++residential_count;
+        }
+        if (residential_count > 0) {
+            mean_residential_rent /= static_cast<float>(residential_count);
+        } else {
+            mean_residential_rent = cfg_.homeless_rent_floor;
+        }
+        const float affordability_threshold =
+            mean_residential_rent * cfg_.homeless_rent_buffer_months;
+
+        uint32_t active_count = 0;
+        uint32_t unhoused_count = 0;
+        for (uint32_t npc_idx : state.npc_indices_by_province[province_idx]) {
+            if (npc_idx >= state.significant_npcs.size())
+                continue;
+            const NPC& npc = state.significant_npcs[npc_idx];
+            if (npc.status != NPCStatus::active)
+                continue;
+            ++active_count;
+            if (npc.capital < affordability_threshold) {
+                ++unhoused_count;
+            }
+        }
+        if (active_count > 0) {
+            const float sample_homeless_fraction =
+                static_cast<float>(unhoused_count) / static_cast<float>(active_count);
+            const float current_homeless_rate =
+                state.provinces[province_idx].cohort_stats
+                    ? state.provinces[province_idx].cohort_stats->homeless_rate
+                    : 0.0f;
+            RegionDelta homeless_delta{};
+            homeless_delta.region_id = state.provinces[province_idx].region_id;
+            homeless_delta.homeless_rate_delta = cfg_.homeless_rate_convergence *
+                                                 (sample_homeless_fraction - current_homeless_rate);
+            province_delta.region_deltas.push_back(homeless_delta);
+        }
     }
 }
 

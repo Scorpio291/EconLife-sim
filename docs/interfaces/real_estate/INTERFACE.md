@@ -20,6 +20,7 @@ Manages per-province property markets each tick: collects rental income for occu
 - Property listing state updates via delta: market_value recomputed monthly, asking_price converged monthly, owner_id/purchase_price/purchased_tick updated on transactions, rented/tenant_id updated on tenant assignment/departure
 - Province state updates via delta: avg_property_value recomputed monthly as mean of all PropertyListing.market_value in province
 - Business cost_per_tick reduction when NPCBusiness occupies owned commercial premises (reduction rate: commercial_cost_reduction_rate = 0.10)
+- `RegionDelta.homeless_rate_delta` — additive convergence delta toward the per-tick sample fraction of active NPCs whose `capital` falls below `homeless_rent_buffer_months * mean_residential_rent_per_tick`. Provinces with no residential listings use `homeless_rent_floor` as the rent baseline. Convergence rate is `homeless_rate_convergence` (default 0.05). Routes into `cohort_stats.homeless_rate` via `apply_region_deltas`.
 
 ## Preconditions
 - price_engine has completed for this tick (economic conditions used in market_value formula are current).
