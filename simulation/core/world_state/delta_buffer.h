@@ -112,6 +112,17 @@ struct CurrencyDelta {
     std::optional<float> foreign_reserves_delta;  // additive; reserve depletion
 };
 
+// LOD 2 global commodity price index update. Emitted annually by
+// lod_system_module aggregating supply/demand across LOD 2 nations.
+// lod_system is the sole writer; apply_lod2_price_deltas applies lerp
+// smoothing using LodSystemConfig::lod2_smoothing_rate. Reading modules
+// (price_engine, commodity_trading) read the smoothed value from
+// `WorldState::lod2_price_index->lod2_price_modifier[good_id]`.
+struct Lod2PriceIndexDelta {
+    uint32_t good_id;
+    float raw_modifier;  // unsmoothed ratio: consumption / max(production, supply_floor)
+};
+
 struct TechnologyDelta {
     // Era transition: replacement. Only one per tick (from TechnologyModule).
     std::optional<uint8_t> new_era;  // SimulationEra cast to uint8_t
@@ -208,6 +219,7 @@ struct DeltaBuffer {
     std::vector<RegionDelta> region_deltas;                      // merge: append
     std::vector<CurrencyDelta> currency_deltas;                  // merge: append
     std::vector<TechnologyDelta> technology_deltas;              // merge: append
+    std::vector<Lod2PriceIndexDelta> lod2_price_index_deltas;    // merge: append
     std::vector<CalendarEntry> new_calendar_entries;             // merge: append
     std::vector<SceneCard> new_scene_cards;                      // merge: append
     std::vector<ObligationNode> new_obligation_nodes;            // merge: append

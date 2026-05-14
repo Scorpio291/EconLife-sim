@@ -55,13 +55,15 @@ In V1, LOD assignments are set at game start by the scenario file and do not cha
   - Technology tier advancement: `current_tier += 1` when `research_investment > tier_advance_cost[current_tier]`
   - Simplified political event queued when `abs(stability_delta_this_month) > lod1_stability_event_threshold`
 - **LOD 2 Annual Batch** (on annual ticks, across all LOD 2 nations):
-  - `GlobalCommodityPriceIndex` update per good:
-    - Aggregate production and consumption across all LOD 2 nations
-    - `ratio = aggregate_consumption / max(aggregate_production, SUPPLY_FLOOR)`
+  - `Lod2PriceIndexDelta` (one per good touched by LOD 2 markets):
+    - Walk `state.regional_markets`, restrict to markets whose `province_id` is a LOD 2 (`SimulationLOD::statistical`) province.
+    - Bucket by `good_id`: `production += market.supply`, `consumption += market.demand_buffer`.
+    - `ratio = consumption / max(production, supply_floor)`
     - `raw_modifier = clamp(ratio, lod2_min_modifier, lod2_max_modifier)`
-    - `smoothed_modifier = lerp(old_modifier, raw_modifier, lod2_smoothing_rate)`
+    - Emission order is `good_id` ascending (canonical `std::map` traversal); deterministic.
+    - `apply_lod2_price_deltas` smooths via `lerp(prior_modifier, raw_modifier, lod2_smoothing_rate)` and writes `world.lod2_price_index->lod2_price_modifier[good_id]`. Goods absent from the index default to a prior modifier of 1.0. `last_updated_tick` is set to the current tick on every annual application.
+    - NaN/Inf `raw_modifier` deltas are dropped; the existing modifier is preserved.
   - Era transition contribution: if global aggregate conditions meet era N+1 thresholds, queue era transition event
-  - `last_updated_tick` set to `current_tick`
 
 ## Preconditions
 - `regional_conditions` has completed (RegionConditions are current for all LOD 0 provinces).

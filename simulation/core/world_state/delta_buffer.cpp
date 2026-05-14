@@ -64,6 +64,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(region_deltas, std::move(other.region_deltas));
     move_extend(currency_deltas, std::move(other.currency_deltas));
     move_extend(technology_deltas, std::move(other.technology_deltas));
+    move_extend(lod2_price_index_deltas, std::move(other.lod2_price_index_deltas));
     move_extend(new_calendar_entries, std::move(other.new_calendar_entries));
     move_extend(new_scene_cards, std::move(other.new_scene_cards));
     move_extend(new_obligation_nodes, std::move(other.new_obligation_nodes));

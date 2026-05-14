@@ -532,6 +532,34 @@ static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
 }
 
 // ---------------------------------------------------------------------------
+// apply_lod2_price_deltas
+// ---------------------------------------------------------------------------
+// LOD 2 emits raw_modifier values per good_id; this routine applies lerp
+// smoothing against the existing stored modifier (default 1.0 when the good
+// is new) using LodSystemConfig::lod2_smoothing_rate. The smoothing rate is
+// read from the per-tick config when supplied; otherwise the LodSystemConfig
+// default (0.30) is used.
+static void apply_lod2_price_deltas(WorldState& world,
+                                    const std::vector<Lod2PriceIndexDelta>& deltas,
+                                    float smoothing_rate) {
+    if (deltas.empty())
+        return;
+    if (!world.lod2_price_index)
+        world.lod2_price_index = std::make_unique<GlobalCommodityPriceIndex>();
+
+    auto& index = *world.lod2_price_index;
+    for (const auto& d : deltas) {
+        if (std::isnan(d.raw_modifier) || std::isinf(d.raw_modifier))
+            continue;  // reject pathological inputs
+        auto it = index.lod2_price_modifier.find(d.good_id);
+        const float old_modifier = (it == index.lod2_price_modifier.end()) ? 1.0f : it->second;
+        const float smoothed = old_modifier + smoothing_rate * (d.raw_modifier - old_modifier);
+        index.lod2_price_modifier[d.good_id] = smoothed;
+    }
+    index.last_updated_tick = world.current_tick;
+}
+
+// ---------------------------------------------------------------------------
 // apply_technology_deltas
 // ---------------------------------------------------------------------------
 static void apply_technology_deltas(WorldState& world, const std::vector<TechnologyDelta>& deltas) {
@@ -652,6 +680,9 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_region_deltas(world, delta.region_deltas);
     apply_currency_deltas(world, delta.currency_deltas);
     apply_technology_deltas(world, delta.technology_deltas);
+    const float lod2_smoothing_rate =
+        config ? config->lod_system.lod2_smoothing_rate : LodSystemConfig{}.lod2_smoothing_rate;
+    apply_lod2_price_deltas(world, delta.lod2_price_index_deltas, lod2_smoothing_rate);
     apply_dissolved_businesses(world, delta.dissolved_businesses);
     apply_new_businesses(world, delta.new_businesses);
     apply_append_deltas(world, delta);
