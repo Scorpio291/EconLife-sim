@@ -52,6 +52,9 @@ See docs/session_logs/ for AI session history.
 Tick must complete in < 500ms at 2,000 significant NPCs.
 Target: < 200ms on 6 cores.
 Benchmarks are in simulation/tests/benchmarks/.
+CI enforces the 200 ms target — not the 500 ms ceiling — to catch
+regressions early. A failing benchmark gate means "we regressed below
+target", not "we breached the ceiling".
 Do not merge code that regresses benchmarks without explicit approval.
 
 ## Coding Standards
