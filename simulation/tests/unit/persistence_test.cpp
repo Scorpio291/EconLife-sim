@@ -31,27 +31,28 @@ TEST_CASE("Persistence: checksum empty data", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: schema compatible same version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(5, 5) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(6, 6) == true);
 }
 
-// v5 builds reject pre-v5 saves: v4 RegionConditions has 4 trailing fields
-// (population-fraction monitors) that v5 reads as part of the next struct;
-// pre-v4 has older layout problems too. Either pre-v5 schema fed to v5
-// code is unsafe.
-TEST_CASE("Persistence: schema rejects pre-v5 saves", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 5) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(2, 5) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(3, 5) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(4, 5) == false);
+// v6 builds reject pre-v6 saves: every prior bump (v3 catalog, v4 addiction
+// state, v5 cohort_stats migration, v6 currency/facility/technology footers)
+// changes the byte stream layout, so reading an older save with v6 code
+// short-reads at the new trailing blocks or misaligns mid-stream.
+TEST_CASE("Persistence: schema rejects pre-v6 saves", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(1, 6) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(2, 6) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(3, 6) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(4, 6) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(5, 6) == false);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(6, 5) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 6) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(5, 6) == true);
-    REQUIRE(PersistenceModule::needs_migration(5, 5) == false);
+    REQUIRE(PersistenceModule::needs_migration(6, 7) == true);
+    REQUIRE(PersistenceModule::needs_migration(6, 6) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -93,9 +94,9 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
-    // Schema v2: added next_action_sequence persistence (issue #11). See
-    // docs/design/EconLife_PlayerDelta_Semantics_v1.md.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 5);
+    // Schema v6: currencies + facilities + GlobalTechnologyState footers.
+    // Prior bumps documented in persistence_module.h:CURRENT_SCHEMA_VERSION.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 6);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -465,4 +466,146 @@ TEST_CASE("Persistence: catalog round-trip is bit-identical",
     REQUIRE(PersistenceModule::deserialize(bytes1, restored) == RestoreResult::success);
     auto bytes2 = PersistenceModule::serialize(restored);
     REQUIRE(bytes1 == bytes2);
+}
+
+// ── v6: currencies, facilities, technology round-trip ──────────────────────
+
+TEST_CASE("Persistence: round-trip preserves currencies",
+          "[persistence][tier12][v6][serialization]") {
+    WorldState world{};
+    world.current_tick = 1;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    CurrencyRecord usd{};
+    usd.nation_id = 1;
+    usd.iso_code = "USD";
+    usd.usd_rate = 1.0f;
+    usd.usd_rate_baseline = 1.0f;
+    usd.volatility = 0.01f;
+    usd.foreign_reserves = 0.9f;
+    usd.pegged = false;
+    usd.peg_rate = 1.0f;
+    world.currencies.push_back(usd);
+
+    CurrencyRecord eur{};
+    eur.nation_id = 2;
+    eur.iso_code = "EUR";
+    eur.usd_rate = 0.92f;
+    eur.usd_rate_baseline = 0.95f;
+    eur.volatility = 0.02f;
+    eur.foreign_reserves = 0.75f;
+    eur.pegged = true;
+    eur.peg_rate = 0.93f;
+    world.currencies.push_back(eur);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.currencies.size() == 2);
+    REQUIRE(restored.currencies[0].iso_code == "USD");
+    REQUIRE(restored.currencies[0].usd_rate == 1.0f);
+    REQUIRE(restored.currencies[1].iso_code == "EUR");
+    REQUIRE(restored.currencies[1].pegged == true);
+    REQUIRE(restored.currencies[1].peg_rate == 0.93f);
+}
+
+TEST_CASE("Persistence: round-trip preserves facilities",
+          "[persistence][tier12][v6][serialization]") {
+    WorldState world{};
+    world.current_tick = 1;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    Facility f1{};
+    f1.id = 100;
+    f1.business_id = 50;
+    f1.province_id = 0;
+    f1.recipe_id = "wheat_to_flour";
+    f1.tech_tier = 1;
+    f1.output_rate_modifier = 1.2f;
+    f1.soil_health = 0.85f;
+    f1.worker_count = 12;
+    f1.is_operational = true;
+    world.facilities.push_back(f1);
+
+    Facility f2{};
+    f2.id = 101;
+    f2.business_id = 51;
+    f2.province_id = 1;
+    f2.recipe_id = "iron_ore_smelt";
+    f2.tech_tier = 2;
+    f2.output_rate_modifier = 0.95f;
+    f2.soil_health = 1.0f;
+    f2.worker_count = 8;
+    f2.is_operational = false;
+    world.facilities.push_back(f2);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.facilities.size() == 2);
+    REQUIRE(restored.facilities[0].id == 100);
+    REQUIRE(restored.facilities[0].recipe_id == "wheat_to_flour");
+    REQUIRE(restored.facilities[0].worker_count == 12);
+    REQUIRE(restored.facilities[0].soil_health == 0.85f);
+    REQUIRE(restored.facilities[1].id == 101);
+    REQUIRE(restored.facilities[1].is_operational == false);
+    REQUIRE(restored.facilities[1].tech_tier == 2);
+}
+
+TEST_CASE("Persistence: round-trip preserves GlobalTechnologyState",
+          "[persistence][tier12][v6][serialization]") {
+    WorldState world{};
+    world.current_tick = 1;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    world.technology.current_era = SimulationEra::era_3_acceleration;
+    world.technology.era_started_tick = 4380;  // ~ year 12
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
+        world.technology.domain_knowledge[i] = 0.1f * static_cast<float>(i + 1);
+
+    ResearchProject rp{};
+    rp.project_key = "fusion_v1";
+    rp.business_id = 7;
+    rp.facility_id = 12;
+    rp.domain = "energy";
+    rp.target_node_key = "fusion_node";
+    rp.difficulty = 1.8f;
+    rp.progress = 0.45f;
+    rp.researchers_assigned = 3;
+    rp.funding_per_tick = 250.0f;
+    rp.success_probability = 0.4f;
+    rp.started_tick = 100;
+    rp.is_secret = true;
+    world.technology.active_research_projects.push_back(rp);
+
+    MaturationProject mp{};
+    mp.node_key = "ai_optimization";
+    mp.business_id = 9;
+    mp.facility_id = 0;
+    mp.researchers_assigned = 2;
+    mp.funding_per_tick = 100.0f;
+    mp.progress = 0.62f;
+    world.technology.active_maturation_projects.push_back(mp);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.technology.current_era == SimulationEra::era_3_acceleration);
+    REQUIRE(restored.technology.era_started_tick == 4380);
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
+        REQUIRE(restored.technology.domain_knowledge[i] == 0.1f * static_cast<float>(i + 1));
+    }
+    REQUIRE(restored.technology.active_research_projects.size() == 1);
+    REQUIRE(restored.technology.active_research_projects[0].project_key == "fusion_v1");
+    REQUIRE(restored.technology.active_research_projects[0].is_secret == true);
+    REQUIRE(restored.technology.active_research_projects[0].progress == 0.45f);
+    REQUIRE(restored.technology.active_maturation_projects.size() == 1);
+    REQUIRE(restored.technology.active_maturation_projects[0].node_key == "ai_optimization");
+    REQUIRE(restored.technology.active_maturation_projects[0].progress == 0.62f);
 }

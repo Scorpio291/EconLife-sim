@@ -80,7 +80,16 @@ class PersistenceModule : public ITickModule {
     //      Pre-v5 saves are rejected because reading a v4 RegionConditions
     //      with v5 code would consume the trailing v4 fields as if they
     //      were the next struct's bytes.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 5;
+    //   6: state.currencies (vector<CurrencyRecord>) is now serialized after
+    //      route_table; state.facilities (vector<Facility>) follows; then a
+    //      GlobalTechnologyState footer covers current_era, era_started_tick,
+    //      domain_knowledge[19], active_research_projects, and
+    //      active_maturation_projects. era_triggers stays config-loaded
+    //      reference data (reloaded on startup; not persisted).
+    //      Pre-v6 saves are rejected because the new trailing blocks change
+    //      the byte stream layout — a v5 save loaded by v6 code would
+    //      short-read at end of file.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 6;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

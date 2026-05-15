@@ -11,9 +11,8 @@ Recalculates spot prices and equilibrium prices for all goods in all regional ma
 - `SUPPLY_FLOOR` — engine constant = 0.01; division-by-zero guard.
 
 ## Outputs (to DeltaBuffer)
-- `MarketDelta.spot_price_override` — replacement value for `RegionalMarket.spot_price` after the 3-step computation.
-- `MarketDelta.equilibrium_price_override` — replacement value for `RegionalMarket.equilibrium_price` computed in Step 1.
-- Both are per (good_id, province_id) pair. These are replacement fields (not additive).
+- `MarketDelta.spot_price_override` — replacement value for `RegionalMarket.spot_price` after the 3-step computation. Per (good_id, province_id) pair; replacement (not additive).
+- `MarketDelta.equilibrium_price_override` — **intentionally NOT emitted by V1.** The equilibrium price acts as the stable base reference for the sticky-adjustment formula in Step 2; overwriting it each tick would create a self-referential decay spiral where the price floor erodes downward indefinitely. The field is reserved on `MarketDelta` for future use (e.g. explicit policy resets), but the price_engine module leaves it unset. See `simulation/modules/price_engine/price_engine_module.cpp:66-69`.
 
 ## Preconditions
 - `supply_chain` module has executed: production outputs and transit arrivals have been applied to `RegionalMarket.supply`.

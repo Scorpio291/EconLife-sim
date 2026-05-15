@@ -726,6 +726,142 @@ void write_lod1_stats(ByteWriter& w, const std::map<uint32_t, Lod1NationStats>& 
     }
 }
 
+// Schema v6: currencies, facilities, and core GlobalTechnologyState fields.
+void write_currency_record(ByteWriter& w, const CurrencyRecord& c) {
+    w.write_u32(c.nation_id);
+    w.write_string(c.iso_code);
+    w.write_float(c.usd_rate);
+    w.write_float(c.usd_rate_baseline);
+    w.write_float(c.volatility);
+    w.write_float(c.foreign_reserves);
+    w.write_bool(c.pegged);
+    w.write_float(c.peg_rate);
+}
+
+CurrencyRecord read_currency_record(ByteReader& r) {
+    CurrencyRecord c{};
+    c.nation_id = r.read_u32();
+    c.iso_code = r.read_string();
+    c.usd_rate = r.read_float();
+    c.usd_rate_baseline = r.read_float();
+    c.volatility = r.read_float();
+    c.foreign_reserves = r.read_float();
+    c.pegged = r.read_bool();
+    c.peg_rate = r.read_float();
+    return c;
+}
+
+void write_facility(ByteWriter& w, const Facility& f) {
+    w.write_u32(f.id);
+    w.write_u32(f.business_id);
+    w.write_u32(f.province_id);
+    w.write_string(f.recipe_id);
+    w.write_u32(f.tech_tier);
+    w.write_float(f.output_rate_modifier);
+    w.write_float(f.soil_health);
+    w.write_u32(f.worker_count);
+    w.write_bool(f.is_operational);
+}
+
+Facility read_facility(ByteReader& r) {
+    Facility f{};
+    f.id = r.read_u32();
+    f.business_id = r.read_u32();
+    f.province_id = r.read_u32();
+    f.recipe_id = r.read_string();
+    f.tech_tier = r.read_u32();
+    f.output_rate_modifier = r.read_float();
+    f.soil_health = r.read_float();
+    f.worker_count = r.read_u32();
+    f.is_operational = r.read_bool();
+    return f;
+}
+
+void write_research_project(ByteWriter& w, const ResearchProject& p) {
+    w.write_string(p.project_key);
+    w.write_u32(p.business_id);
+    w.write_u32(p.facility_id);
+    w.write_string(p.domain);
+    w.write_string(p.target_node_key);
+    w.write_float(p.difficulty);
+    w.write_float(p.progress);
+    w.write_u32(p.researchers_assigned);
+    w.write_float(p.funding_per_tick);
+    w.write_float(p.success_probability);
+    w.write_u32(p.started_tick);
+    w.write_bool(p.is_secret);
+}
+
+ResearchProject read_research_project(ByteReader& r) {
+    ResearchProject p{};
+    p.project_key = r.read_string();
+    p.business_id = r.read_u32();
+    p.facility_id = r.read_u32();
+    p.domain = r.read_string();
+    p.target_node_key = r.read_string();
+    p.difficulty = r.read_float();
+    p.progress = r.read_float();
+    p.researchers_assigned = r.read_u32();
+    p.funding_per_tick = r.read_float();
+    p.success_probability = r.read_float();
+    p.started_tick = r.read_u32();
+    p.is_secret = r.read_bool();
+    return p;
+}
+
+void write_maturation_project(ByteWriter& w, const MaturationProject& p) {
+    w.write_string(p.node_key);
+    w.write_u32(p.business_id);
+    w.write_u32(p.facility_id);
+    w.write_u32(p.researchers_assigned);
+    w.write_float(p.funding_per_tick);
+    w.write_float(p.progress);
+}
+
+MaturationProject read_maturation_project(ByteReader& r) {
+    MaturationProject p{};
+    p.node_key = r.read_string();
+    p.business_id = r.read_u32();
+    p.facility_id = r.read_u32();
+    p.researchers_assigned = r.read_u32();
+    p.funding_per_tick = r.read_float();
+    p.progress = r.read_float();
+    return p;
+}
+
+// Writes the runtime-mutable subset of GlobalTechnologyState. era_triggers
+// is config-loaded reference data and not persisted; the engine reloads it
+// from packages/base_game/config/rnd_config.json on startup.
+void write_global_technology_state(ByteWriter& w, const GlobalTechnologyState& g) {
+    w.write_u8(static_cast<uint8_t>(g.current_era));
+    w.write_u32(g.era_started_tick);
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
+        w.write_float(g.domain_knowledge[i]);
+    w.write_u32(static_cast<uint32_t>(g.active_research_projects.size()));
+    for (const auto& p : g.active_research_projects)
+        write_research_project(w, p);
+    w.write_u32(static_cast<uint32_t>(g.active_maturation_projects.size()));
+    for (const auto& p : g.active_maturation_projects)
+        write_maturation_project(w, p);
+}
+
+void read_global_technology_state(ByteReader& r, GlobalTechnologyState& g) {
+    g.current_era = static_cast<SimulationEra>(r.read_u8());
+    g.era_started_tick = r.read_u32();
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
+        g.domain_knowledge[i] = r.read_float();
+    uint32_t rp_count = r.read_u32();
+    g.active_research_projects.clear();
+    g.active_research_projects.reserve(rp_count);
+    for (uint32_t i = 0; i < rp_count; ++i)
+        g.active_research_projects.push_back(read_research_project(r));
+    uint32_t mp_count = r.read_u32();
+    g.active_maturation_projects.clear();
+    g.active_maturation_projects.reserve(mp_count);
+    for (uint32_t i = 0; i < mp_count; ++i)
+        g.active_maturation_projects.push_back(read_maturation_project(r));
+}
+
 void write_route_table(
     ByteWriter& w,
     const std::map<std::pair<uint32_t, uint32_t>, std::array<RouteProfile, 5>>& table) {
@@ -1432,12 +1568,12 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
     // Schema v3 introduced catalog-backed good_ids (was FNV-1a hashes in v2).
-    // Schema v4 added per-NPC AddictionState to each NPC record. Both bumps
-    // are breaking: a v3 save loaded by v4 code would short-read every NPC
-    // (missing the addiction footer), and a v2 save loaded by v3 code would
-    // silently route market deltas to phantom markets. Reject anything below
-    // the current floor; V1 is pre-release so this affects no real users.
-    if (saved_version < 5u)
+    // Schema v4 added per-NPC AddictionState to each NPC record. v5 migrated
+    // population-fraction monitors from RegionConditions to RegionCohortStats.
+    // v6 added currencies + facilities + GlobalTechnologyState footers, so a
+    // v5 save loaded by v6 code would short-read at the trailing blocks.
+    // Each bump is breaking and V1 is pre-release; reject anything older.
+    if (saved_version < 6u)
         return false;
     return saved_version <= current_version;
 }
@@ -1607,6 +1743,17 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
 
     write_lod1_stats(w, state.lod1_national_stats);
     write_route_table(w, state.province_route_table);
+
+    // --- v6: currencies, facilities, technology ---
+    w.write_u32(static_cast<uint32_t>(state.currencies.size()));
+    for (const auto& c : state.currencies)
+        write_currency_record(w, c);
+
+    w.write_u32(static_cast<uint32_t>(state.facilities.size()));
+    for (const auto& f : state.facilities)
+        write_facility(w, f);
+
+    write_global_technology_state(w, state.technology);
 
     // --- Uncompressed data ready ---
     const auto& raw = w.data();
@@ -1881,6 +2028,21 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         }
         out_state.province_route_table[{from, to}] = routes;
     }
+
+    // --- v6: currencies, facilities, technology ---
+    uint32_t cur_count = r.read_u32();
+    out_state.currencies.clear();
+    out_state.currencies.reserve(cur_count);
+    for (uint32_t i = 0; i < cur_count; ++i)
+        out_state.currencies.push_back(read_currency_record(r));
+
+    uint32_t fac_count = r.read_u32();
+    out_state.facilities.clear();
+    out_state.facilities.reserve(fac_count);
+    for (uint32_t i = 0; i < fac_count; ++i)
+        out_state.facilities.push_back(read_facility(r));
+
+    read_global_technology_state(r, out_state.technology);
 
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();
