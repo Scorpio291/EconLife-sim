@@ -46,6 +46,13 @@ class RealEstateModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence: properties_ holds genuine world state — every PropertyListing
+    // with its owner, tenant, asking price, market value, and rental yield.
+    // See ITickModule. Note: on deserialize the per-province index is invalidated;
+    // it gets rebuilt by the next init_for_tick or by execute_province itself.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Property management (exposed for testing) ---
 
     void add_property(PropertyListing listing);

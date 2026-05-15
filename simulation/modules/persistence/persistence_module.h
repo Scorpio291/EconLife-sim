@@ -29,10 +29,26 @@ class PersistenceModule : public ITickModule {
     // Deterministic: same state always produces identical bytes.
     static std::vector<uint8_t> serialize(const WorldState& state);
 
+    // Same as above, plus serializes module-private state for each module
+    // in `modules` via ITickModule::serialize_state. Modules appear in the
+    // save as name-keyed length-prefixed blocks; order in the save matches
+    // `modules` order. The base WorldState body is byte-identical to the
+    // no-modules call when `modules` is empty.
+    static std::vector<uint8_t> serialize(const WorldState& state,
+                                          const std::vector<const ITickModule*>& modules);
+
     // Deserialize LZ4-compressed flat binary back to WorldState.
     // Validates magic, schema, and checksum. Overwrites all fields in out_state.
     // Returns RestoreResult::success on success, error code otherwise.
     static RestoreResult deserialize(const std::vector<uint8_t>& data, WorldState& out_state);
+
+    // Same as above, plus restores module-private state for each module in
+    // `modules` whose name() matches a block in the save. Modules in the
+    // save but absent from `modules` are skipped (forward compatibility);
+    // modules in `modules` but absent from the save keep default state.
+    // Returns parse_error if any module's deserialize_state returns false.
+    static RestoreResult deserialize(const std::vector<uint8_t>& data, WorldState& out_state,
+                                     const std::vector<ITickModule*>& modules);
 
     // --- Static utilities for testing ---
 
@@ -89,7 +105,16 @@ class PersistenceModule : public ITickModule {
     //      Pre-v6 saves are rejected because the new trailing blocks change
     //      the byte stream layout — a v5 save loaded by v6 code would
     //      short-read at end of file.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 6;
+    //   7: module-private state hook. After the v6 technology footer, a
+    //      module-state section: u32 count, then per module a length-prefixed
+    //      string name + u32 byte size + payload bytes. Modules opt in by
+    //      overriding ITickModule::serialize_state and deserialize_state.
+    //      The count is always written (0 when no modules participate), so
+    //      v6 saves lack the trailing section and are rejected by
+    //      is_schema_compatible. Modules using this hook in V1:
+    //      random_events.active_events_, protection_rackets.rackets_,
+    //      real_estate.properties_ (more to follow per session_logs).
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 7;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -56,6 +57,20 @@ class ITickModule {
     // Also called as a global post-pass if both is_province_parallel() and
     // has_global_post_pass() return true (after province deltas are applied).
     virtual void execute(const WorldState& state, DeltaBuffer& delta) = 0;
+
+    // Optional save/load hooks for module-private state.
+    //
+    // Modules holding run-relevant state in their own private members
+    // (e.g. open legal cases, active protection rackets, in-flight random
+    // events) override these to participate in persistence. Default: no-op.
+    //
+    // serialize_state appends to `out`. deserialize_state consumes `size`
+    // bytes starting at `data` and returns true on success, false on parse
+    // error or invalid input — a false return causes the load to fail.
+    // Modules absent from the save file keep their default state; modules
+    // present in the save but absent from the module list are skipped.
+    virtual void serialize_state(std::vector<uint8_t>& /*out*/) const {}
+    virtual bool deserialize_state(const uint8_t* /*data*/, size_t /*size*/) { return true; }
 };
 
 }  // namespace econlife

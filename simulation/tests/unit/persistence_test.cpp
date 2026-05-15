@@ -31,28 +31,29 @@ TEST_CASE("Persistence: checksum empty data", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: schema compatible same version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(6, 6) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 7) == true);
 }
 
-// v6 builds reject pre-v6 saves: every prior bump (v3 catalog, v4 addiction
-// state, v5 cohort_stats migration, v6 currency/facility/technology footers)
-// changes the byte stream layout, so reading an older save with v6 code
-// short-reads at the new trailing blocks or misaligns mid-stream.
-TEST_CASE("Persistence: schema rejects pre-v6 saves", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 6) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(2, 6) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(3, 6) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(4, 6) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(5, 6) == false);
+// v7 builds reject pre-v7 saves: every prior bump (v3 catalog, v4 addiction
+// state, v5 cohort_stats migration, v6 currency/facility/technology footers,
+// v7 module-state section) changes the byte-stream layout, so reading an
+// older save with v7 code short-reads at the new trailing blocks.
+TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(1, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(2, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(3, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(4, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(5, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(7, 6) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(8, 7) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(6, 7) == true);
-    REQUIRE(PersistenceModule::needs_migration(6, 6) == false);
+    REQUIRE(PersistenceModule::needs_migration(7, 8) == true);
+    REQUIRE(PersistenceModule::needs_migration(7, 7) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -96,7 +97,7 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // Schema v6: currencies + facilities + GlobalTechnologyState footers.
     // Prior bumps documented in persistence_module.h:CURRENT_SCHEMA_VERSION.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 6);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 7);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
@@ -308,6 +309,119 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
     for (uint32_t p = 0; p < static_cast<uint32_t>(state.provinces.size()); ++p) {
         execute_province(p, state, delta);
     }
+}
+
+// ─── Persistence helpers ────────────────────────────────────────────────────
+//
+// Encodes properties_ as a self-contained byte block. Format (little-endian):
+//   u32 schema_tag (1 == this layout)
+//   u32 count
+//   for each PropertyListing:
+//     u32 id, u8 type, u32 province_id, u32 owner_id
+//     f32 asking_price, f32 market_value, f32 rental_yield_rate, f32 rental_income_per_tick
+//     u8 rented, u32 tenant_id, u8 launder_eligible
+//     u32 purchased_tick, f32 purchase_price
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(properties_.size()));
+    for (const auto& p : properties_) {
+        put_u32(out, p.id);
+        out.push_back(static_cast<uint8_t>(p.type));
+        put_u32(out, p.province_id);
+        put_u32(out, p.owner_id);
+        put_f32(out, p.asking_price);
+        put_f32(out, p.market_value);
+        put_f32(out, p.rental_yield_rate);
+        put_f32(out, p.rental_income_per_tick);
+        out.push_back(p.rented ? 1u : 0u);
+        put_u32(out, p.tenant_id);
+        out.push_back(p.launder_eligible ? 1u : 0u);
+        put_u32(out, p.purchased_tick);
+        put_f32(out, p.purchase_price);
+    }
+}
+
+bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    properties_.clear();
+    properties_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        PropertyListing p{};
+        p.id = r.u32();
+        p.type = static_cast<PropertyType>(r.u8());
+        p.province_id = r.u32();
+        p.owner_id = r.u32();
+        p.asking_price = r.f32();
+        p.market_value = r.f32();
+        p.rental_yield_rate = r.f32();
+        p.rental_income_per_tick = r.f32();
+        p.rented = (r.u8() != 0);
+        p.tenant_id = r.u32();
+        p.launder_eligible = (r.u8() != 0);
+        p.purchased_tick = r.u32();
+        p.purchase_price = r.f32();
+        if (r.error)
+            return false;
+        properties_.push_back(p);
+    }
+    // Restoring properties invalidates the per-province index; clear it so
+    // the next init_for_tick (or execute_province's fallback) rebuilds.
+    province_property_indices_.clear();
+    return !r.error;
 }
 
 }  // namespace econlife

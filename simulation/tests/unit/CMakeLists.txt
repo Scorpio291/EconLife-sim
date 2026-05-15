@@ -60,6 +60,7 @@ add_executable(econlife_unit_tests
     npc_province_index_test.cpp
     business_lifecycle_test.cpp
     technology_test.cpp
+    persistence_module_state_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE

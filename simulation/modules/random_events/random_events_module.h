@@ -26,6 +26,11 @@ class RandomEventsModule : public ITickModule {
                           DeltaBuffer& province_delta) override;
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence: active_events_ and next_event_id_ hold genuine run state
+    // (mid-flight events with end_tick > current_tick). See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // Template access for testing
     const std::vector<RandomEventTemplate>& templates() const;
     void set_templates(std::vector<RandomEventTemplate> t);

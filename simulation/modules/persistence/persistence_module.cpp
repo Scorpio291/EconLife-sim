@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <unordered_map>
+#include <utility>
 
 #include "core/world_gen/goods_catalog.h"
 #include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
@@ -1567,13 +1569,12 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 }
 
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
-    // Schema v3 introduced catalog-backed good_ids (was FNV-1a hashes in v2).
-    // Schema v4 added per-NPC AddictionState to each NPC record. v5 migrated
-    // population-fraction monitors from RegionConditions to RegionCohortStats.
-    // v6 added currencies + facilities + GlobalTechnologyState footers, so a
-    // v5 save loaded by v6 code would short-read at the trailing blocks.
-    // Each bump is breaking and V1 is pre-release; reject anything older.
-    if (saved_version < 6u)
+    // Each schema bump (v3 catalog, v4 addiction footer, v5 cohort_stats
+    // migration, v6 currency/facility/technology footers, v7 module-state
+    // section) changes the byte-stream layout, so older saves short-read
+    // when loaded by newer code. V1 is pre-release; reject anything older
+    // than the current floor outright.
+    if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
 }
@@ -1613,6 +1614,12 @@ uint8_t PersistenceModule::compute_disruption_tier(uint32_t restoration_count) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
+    static const std::vector<const ITickModule*> kNoModules{};
+    return serialize(state, kNoModules);
+}
+
+std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
+                                                  const std::vector<const ITickModule*>& modules) {
     ByteWriter w;
 
     // --- Global scalars ---
@@ -1755,6 +1762,33 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
 
     write_global_technology_state(w, state.technology);
 
+    // --- v7: module-private state section ---
+    // Each module that overrides serialize_state appends its payload here.
+    // Format: u32 count, then per module: string name + u32 payload size +
+    // payload bytes. The count is always written (0 when modules is empty
+    // or no module emits state), so the section header is present even
+    // when there's no opt-in.
+    {
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> blocks;
+        blocks.reserve(modules.size());
+        for (const ITickModule* mod : modules) {
+            if (!mod)
+                continue;
+            std::vector<uint8_t> payload;
+            mod->serialize_state(payload);
+            if (!payload.empty()) {
+                blocks.emplace_back(std::string(mod->name()), std::move(payload));
+            }
+        }
+        w.write_u32(static_cast<uint32_t>(blocks.size()));
+        for (const auto& [n, p] : blocks) {
+            w.write_string(n);
+            w.write_u32(static_cast<uint32_t>(p.size()));
+            for (uint8_t b : p)
+                w.write_u8(b);
+        }
+    }
+
     // --- Uncompressed data ready ---
     const auto& raw = w.data();
     uint32_t raw_size = static_cast<uint32_t>(raw.size());
@@ -1790,6 +1824,13 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
 
 RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
                                              WorldState& out_state) {
+    static const std::vector<ITickModule*> kNoModules{};
+    return deserialize(data, out_state, kNoModules);
+}
+
+RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
+                                             WorldState& out_state,
+                                             const std::vector<ITickModule*>& modules) {
     if (data.size() < HEADER_SIZE)
         return RestoreResult::io_error;
 
@@ -2043,6 +2084,36 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         out_state.facilities.push_back(read_facility(r));
 
     read_global_technology_state(r, out_state.technology);
+
+    // --- v7: module-private state section ---
+    // Build a name → module lookup for O(1) dispatch. Modules in the save
+    // but absent from `modules` are skipped (forward compatibility). A
+    // module's deserialize_state returning false aborts the load.
+    {
+        uint32_t block_count = r.read_u32();
+        std::unordered_map<std::string, ITickModule*> by_name;
+        by_name.reserve(modules.size());
+        for (ITickModule* mod : modules) {
+            if (mod)
+                by_name[std::string(mod->name())] = mod;
+        }
+        for (uint32_t i = 0; i < block_count; ++i) {
+            std::string mname = r.read_string();
+            uint32_t psize = r.read_u32();
+            if (r.has_error())
+                return RestoreResult::io_error;
+            std::vector<uint8_t> payload(psize);
+            for (uint32_t j = 0; j < psize; ++j)
+                payload[j] = r.read_u8();
+            if (r.has_error())
+                return RestoreResult::io_error;
+            auto it = by_name.find(mname);
+            if (it != by_name.end()) {
+                if (!it->second->deserialize_state(payload.data(), payload.size()))
+                    return RestoreResult::io_error;
+            }
+        }
+    }
 
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();

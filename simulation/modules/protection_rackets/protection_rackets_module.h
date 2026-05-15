@@ -44,6 +44,15 @@ class ProtectionRacketsModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence: rackets_ holds genuine run state — mid-escalation
+    // racket records that must survive save/load. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Test/setup helpers for populating racket state directly.
+    const std::vector<ProtectionRacket>& rackets() const { return rackets_; }
+    std::vector<ProtectionRacket>& rackets_mut() { return rackets_; }
+
     // --- Static utility functions (public for testing) ---
 
     // Compute demand per tick from business revenue
