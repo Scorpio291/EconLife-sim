@@ -51,10 +51,12 @@ struct LegalCase {
     float defense_quality;         // 0.0-1.0; from defense counsel skill
     float conviction_probability;  // computed each tick
     uint32_t opened_tick;
-    uint32_t sentence_ticks;         // severity * 365
+    uint32_t stage_entered_tick;     // tick when the case last transitioned stages
+    uint32_t sentence_ticks;         // severity * 365 (or per config)
     uint32_t release_tick;           // opened_tick + sentence_ticks
     uint32_t double_jeopardy_until;  // tick after which re-filing is allowed (1825 ticks cooldown)
     bool is_player_case;
+    bool bail_posted;  // arrested defendant has posted bail; awaits trial out of custody
 };
 
 }  // namespace econlife

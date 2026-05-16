@@ -43,6 +43,42 @@ class LegalProcessModule : public ITickModule {
     static LegalCaseStage advance_stage(LegalCaseStage current, bool conviction);
     static float compute_evidence_weight(const std::vector<float>& token_actionabilities);
 
+    // --- v7 state-machine transition gates (legal_process INTERFACE.md) ---
+
+    // investigation -> arrested: evidence has reached the threshold for an
+    // arrest. Spec also calls for the lead investigator's meter to be at
+    // raid_imminent ("critical"); that check lives at the call site since
+    // InvestigatorMeter records are not on WorldState yet (deferred — see
+    // flagged_issues).
+    static bool should_arrest(float evidence_weight, float arrest_evidence_threshold);
+
+    // arrested/charged -> acquitted: evidence has decayed below the dismissal
+    // threshold. Closes the case without trial.
+    static bool should_dismiss(float evidence_weight, float dismissal_evidence_threshold);
+
+    // arrested -> charged: enough time has elapsed since arrest AND evidence
+    // has held above the charge threshold. Acquitted via should_dismiss
+    // before this triggers.
+    static bool should_charge(uint32_t current_tick, uint32_t stage_entered_tick,
+                              uint32_t investigation_to_charge_ticks, float evidence_weight,
+                              float charge_evidence_threshold);
+
+    // charged -> trial: enough time has elapsed since charges were filed.
+    static bool should_proceed_to_trial(uint32_t current_tick, uint32_t stage_entered_tick,
+                                        uint32_t charge_to_trial_ticks);
+
+    // convicted -> imprisoned (true) or convicted -> fined (false). Custodial
+    // floor is in CaseSeverity terms: severity_value (= enum + 1) >= floor.
+    static bool is_custodial(CaseSeverity severity, uint32_t custodial_sentence_severity_floor);
+
+    // imprisoned -> paroled eligibility based on fraction of sentence served.
+    static bool is_parole_eligible(uint32_t current_tick, uint32_t release_tick,
+                                   uint32_t sentence_ticks, float parole_eligibility_fraction);
+
+    // Fine outcome amount for severity < floor. Linear in severity (severity 1
+    // = base, severity 2 = 2x base, etc.).
+    static float compute_fine_amount(CaseSeverity severity, float fine_amount_per_severity);
+
    private:
     LegalProcessConfig cfg_;
     std::vector<LegalCase> cases_;

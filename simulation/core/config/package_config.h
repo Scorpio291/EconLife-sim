@@ -120,6 +120,27 @@ struct LegalProcessConfig {
     uint32_t double_jeopardy_cooldown = 1825;
     uint32_t charge_to_trial_min = 90;
     uint32_t charge_to_trial_max = 365;
+
+    // --- v7 state-machine thresholds (legal_process INTERFACE.md) ---
+    // Evidence-weight thresholds gating stage transitions.
+    float arrest_evidence_threshold = 0.35f;      // investigation -> arrested
+    float charge_evidence_threshold = 0.55f;      // arrested -> charged
+    float dismissal_evidence_threshold = 0.25f;   // arrested/charged -> acquitted
+    // Time-in-stage minimums (ticks).
+    uint32_t investigation_to_charge_ticks = 60;  // ~2 months arrested -> charged
+    uint32_t charge_to_trial_ticks = 180;         // ~6 months charged -> trial
+    // Sentencing branch: severity-floor for custodial vs fine outcome.
+    // CaseSeverity::serious = enum value 2 = severity 3 in spec terminology
+    // (severity = static_cast<uint32_t>(enum) + 1).
+    uint32_t custodial_sentence_severity_floor = 3;
+    // Parole: defendant eligible once this fraction of sentence has been served.
+    float parole_eligibility_fraction = 0.50f;
+    // Bail amount auto-posted by player defendants with sufficient liquidity.
+    // Reduces player wealth on post; no refund modelled at this stage.
+    float bail_amount = 50000.0f;
+    // Fine amount for non-custodial convictions (severity below floor).
+    // Applied as a one-shot wealth deduction on transition convicted -> fined.
+    float fine_amount_per_severity = 10000.0f;
 };
 
 struct EvidenceConfig {

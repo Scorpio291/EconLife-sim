@@ -73,3 +73,249 @@ TEST_CASE("LegalProcess: constants match spec", "[legal_process][tier9]") {
     REQUIRE(1825u == 1825);
     REQUIRE_THAT(0.40f, WithinAbs(0.40f, 0.001f));
 }
+
+// ─── State-machine transition gates ──────────────────────────────────────────
+
+TEST_CASE("LegalProcess: should_arrest threshold", "[legal_process][tier9][state_machine]") {
+    REQUIRE(LegalProcessModule::should_arrest(0.36f, 0.35f) == true);
+    REQUIRE(LegalProcessModule::should_arrest(0.35f, 0.35f) == true);  // boundary inclusive
+    REQUIRE(LegalProcessModule::should_arrest(0.34f, 0.35f) == false);
+}
+
+TEST_CASE("LegalProcess: should_dismiss threshold", "[legal_process][tier9][state_machine]") {
+    REQUIRE(LegalProcessModule::should_dismiss(0.20f, 0.25f) == true);
+    REQUIRE(LegalProcessModule::should_dismiss(0.25f, 0.25f) == false);  // boundary exclusive
+    REQUIRE(LegalProcessModule::should_dismiss(0.30f, 0.25f) == false);
+}
+
+TEST_CASE("LegalProcess: should_charge requires time + evidence",
+          "[legal_process][tier9][state_machine]") {
+    // Time elapsed since stage_entered = current - stage_entered.
+    // Required: elapsed >= 60 AND evidence >= 0.55.
+    REQUIRE(LegalProcessModule::should_charge(100, 30, 60, 0.6f, 0.55f) == true);
+    // Time gate fails: only 30 ticks elapsed.
+    REQUIRE(LegalProcessModule::should_charge(100, 70, 60, 0.6f, 0.55f) == false);
+    // Evidence gate fails.
+    REQUIRE(LegalProcessModule::should_charge(100, 30, 60, 0.50f, 0.55f) == false);
+    // Boundary: exactly 60 ticks elapsed is sufficient.
+    REQUIRE(LegalProcessModule::should_charge(90, 30, 60, 0.55f, 0.55f) == true);
+}
+
+TEST_CASE("LegalProcess: should_proceed_to_trial timing only",
+          "[legal_process][tier9][state_machine]") {
+    REQUIRE(LegalProcessModule::should_proceed_to_trial(280, 100, 180) == true);
+    REQUIRE(LegalProcessModule::should_proceed_to_trial(279, 100, 180) == false);
+    REQUIRE(LegalProcessModule::should_proceed_to_trial(280, 100, 180) == true);
+}
+
+TEST_CASE("LegalProcess: is_custodial respects severity floor",
+          "[legal_process][tier9][state_machine]") {
+    // floor = 3 in spec (CaseSeverity::serious = enum 2 = severity value 3).
+    REQUIRE(LegalProcessModule::is_custodial(CaseSeverity::minor, 3) == false);     // sev 1
+    REQUIRE(LegalProcessModule::is_custodial(CaseSeverity::moderate, 3) == false);  // sev 2
+    REQUIRE(LegalProcessModule::is_custodial(CaseSeverity::serious, 3) == true);    // sev 3
+    REQUIRE(LegalProcessModule::is_custodial(CaseSeverity::major, 3) == true);      // sev 4
+    REQUIRE(LegalProcessModule::is_custodial(CaseSeverity::capital, 3) == true);    // sev 6
+}
+
+TEST_CASE("LegalProcess: parole eligibility at 50% served",
+          "[legal_process][tier9][state_machine]") {
+    // sentence_ticks = 1000, release_tick = 1500 (started at tick 500).
+    // 50% served when current_tick = 1000 (500 remaining, 500 served).
+    REQUIRE(LegalProcessModule::is_parole_eligible(1000, 1500, 1000, 0.5f) == true);
+    REQUIRE(LegalProcessModule::is_parole_eligible(999, 1500, 1000, 0.5f) == false);
+    // After release_tick: definitely eligible (served > 100%).
+    REQUIRE(LegalProcessModule::is_parole_eligible(1600, 1500, 1000, 0.5f) == true);
+    // Zero sentence: never eligible (defensive).
+    REQUIRE(LegalProcessModule::is_parole_eligible(100, 0, 0, 0.5f) == false);
+}
+
+TEST_CASE("LegalProcess: fine amount scales linearly with severity",
+          "[legal_process][tier9][state_machine]") {
+    REQUIRE_THAT(LegalProcessModule::compute_fine_amount(CaseSeverity::minor, 10000.0f),
+                 WithinAbs(10000.0f, 0.01f));
+    REQUIRE_THAT(LegalProcessModule::compute_fine_amount(CaseSeverity::moderate, 10000.0f),
+                 WithinAbs(20000.0f, 0.01f));
+}
+
+// ─── Integration of state machine via execute() ──────────────────────────────
+
+namespace {
+
+LegalCase make_case(uint32_t id, LegalCaseStage stage, CaseSeverity sev, float evidence,
+                    uint32_t opened_tick, uint32_t stage_entered_tick = 0) {
+    LegalCase c{};
+    c.id = id;
+    c.defendant_npc_id = 100;
+    c.prosecutor_npc_id = 200;
+    c.judge_npc_id = 300;
+    c.stage = stage;
+    c.severity = sev;
+    c.evidence_weight = evidence;
+    c.defense_quality = 0.0f;
+    c.opened_tick = opened_tick;
+    c.stage_entered_tick = stage_entered_tick != 0 ? stage_entered_tick : opened_tick;
+    return c;
+}
+
+WorldState empty_world(uint32_t current_tick) {
+    WorldState w{};
+    w.current_tick = current_tick;
+    w.world_seed = 42;
+    return w;
+}
+
+}  // namespace
+
+TEST_CASE("LegalProcess: investigation -> arrested on evidence threshold",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
+                                        0.36f, /*opened*/ 10));
+    WorldState world = empty_world(15);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::arrested);
+    REQUIRE(mod.cases()[0].stage_entered_tick == 15);
+    // Public arrest record evidence delta emitted.
+    REQUIRE_FALSE(delta.evidence_deltas.empty());
+}
+
+TEST_CASE("LegalProcess: investigation stays put below threshold",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
+                                        0.20f, 10));
+    WorldState world = empty_world(15);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::investigation);
+}
+
+TEST_CASE("LegalProcess: arrested -> charged after investigation period",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    auto c = make_case(1, LegalCaseStage::arrested, CaseSeverity::serious, 0.60f, /*opened*/ 5,
+                       /*stage_entered*/ 10);
+    mod.cases_mut().push_back(c);
+    // 60 ticks elapsed since stage_entered=10; threshold met.
+    WorldState world = empty_world(70);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::charged);
+    REQUIRE(mod.cases()[0].stage_entered_tick == 70);
+}
+
+TEST_CASE("LegalProcess: arrested -> acquitted on evidence collapse",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    mod.cases_mut().push_back(make_case(1, LegalCaseStage::arrested, CaseSeverity::serious, 0.20f,
+                                        5, 10));
+    WorldState world = empty_world(70);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::acquitted);
+    // Double-jeopardy cooldown applied.
+    REQUIRE(mod.cases()[0].double_jeopardy_until == 70u + cfg.double_jeopardy_cooldown);
+}
+
+TEST_CASE("LegalProcess: charged -> trial after charge_to_trial_ticks",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    auto c = make_case(1, LegalCaseStage::charged, CaseSeverity::serious, 0.0f, 5,
+                       /*stage_entered*/ 100);
+    mod.cases_mut().push_back(c);
+    // 180 ticks elapsed since stage_entered=100.
+    WorldState world = empty_world(280);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    // Evidence weight is 0 in this fixture so trial converts to acquittal in
+    // the same tick (cascade through trial). Both outcomes are acceptable
+    // proof we left the charged stage.
+    REQUIRE((mod.cases()[0].stage == LegalCaseStage::trial ||
+             mod.cases()[0].stage == LegalCaseStage::acquitted));
+}
+
+TEST_CASE("LegalProcess: convicted custodial branch -> imprisoned",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    // Force a trial with extremely high evidence + no defense so conviction
+    // probability ≈ 1.0 and the case is reliably convicted.
+    auto c = make_case(1, LegalCaseStage::trial, CaseSeverity::serious, 1.0f, 5, 280);
+    mod.cases_mut().push_back(c);
+    WorldState world = empty_world(280);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    // Cascade: trial -> convicted -> imprisoned in one tick.
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::imprisoned);
+    REQUIRE(mod.cases()[0].sentence_ticks == 3u * cfg.ticks_per_severity);
+    REQUIRE(mod.cases()[0].release_tick == 280u + mod.cases()[0].sentence_ticks);
+    // NPCStatus flip to imprisoned.
+    REQUIRE_FALSE(delta.npc_deltas.empty());
+    REQUIRE(delta.npc_deltas.back().new_status.has_value());
+    REQUIRE(*delta.npc_deltas.back().new_status == NPCStatus::imprisoned);
+}
+
+TEST_CASE("LegalProcess: convicted non-custodial branch -> fined",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    // severity moderate (enum 1, value 2) is below floor 3 → fined.
+    auto c = make_case(1, LegalCaseStage::trial, CaseSeverity::moderate, 1.0f, 5, 280);
+    c.is_player_case = true;
+    c.defendant_npc_id = 0;
+    mod.cases_mut().push_back(c);
+    WorldState world = empty_world(280);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::fined);
+    // Wealth delta applied to player_delta (additive).
+    REQUIRE(delta.player_delta.wealth_delta.has_value());
+    REQUIRE(*delta.player_delta.wealth_delta < 0.0f);
+}
+
+TEST_CASE("LegalProcess: imprisoned -> paroled at 50% served",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    LegalCase c{};
+    c.id = 1;
+    c.defendant_npc_id = 100;
+    c.stage = LegalCaseStage::imprisoned;
+    c.severity = CaseSeverity::serious;
+    c.sentence_ticks = 1000;
+    c.release_tick = 1500;
+    c.opened_tick = 400;
+    c.stage_entered_tick = 500;
+    mod.cases_mut().push_back(c);
+    // 50% served reached at current_tick = 1000.
+    WorldState world = empty_world(1000);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::paroled);
+    REQUIRE_FALSE(delta.npc_deltas.empty());
+    REQUIRE(*delta.npc_deltas.back().new_status == NPCStatus::active);
+}
+
+TEST_CASE("LegalProcess: bail auto-posted for player arrest",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    auto c = make_case(1, LegalCaseStage::investigation, CaseSeverity::serious, 0.40f, 10, 10);
+    c.is_player_case = true;
+    c.defendant_npc_id = 0;
+    mod.cases_mut().push_back(c);
+    WorldState world = empty_world(15);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::arrested);
+    REQUIRE(mod.cases()[0].bail_posted == true);
+    REQUIRE(delta.player_delta.wealth_delta.has_value());
+    REQUIRE(*delta.player_delta.wealth_delta < 0.0f);
+}
