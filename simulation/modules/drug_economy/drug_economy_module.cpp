@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/player.h"
@@ -255,6 +256,127 @@ void DrugEconomyModule::execute(const WorldState& state, DeltaBuffer& delta) {
     for (uint32_t i = 0; i < state.provinces.size(); ++i) {
         execute_province(i, state, delta);
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 prod_count
+//   for each DrugProductionRecord:
+//     u32 business_id, u8 drug_type, u8 market_tier
+//     f32 output_quantity, f32 output_quality, f32 precursor_consumed
+//     u32 province_id
+//   u32 legalization_count
+//   for each DrugLegalizationStatus (one per province):
+//     u8 cannabis_legal, u8 methamphetamine_legal,
+//     u8 synthetic_opioid_legal, u8 designer_drug_legal
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void DrugEconomyModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(production_records_.size()));
+    for (const auto& p : production_records_) {
+        put_u32(out, p.business_id);
+        out.push_back(static_cast<uint8_t>(p.drug_type));
+        out.push_back(static_cast<uint8_t>(p.market_tier));
+        put_f32(out, p.output_quantity);
+        put_f32(out, p.output_quality);
+        put_f32(out, p.precursor_consumed);
+        put_u32(out, p.province_id);
+    }
+    put_u32(out, static_cast<uint32_t>(legalization_status_.size()));
+    for (const auto& s : legalization_status_) {
+        out.push_back(s.cannabis_legal ? 1u : 0u);
+        out.push_back(s.methamphetamine_legal ? 1u : 0u);
+        out.push_back(s.synthetic_opioid_legal ? 1u : 0u);
+        out.push_back(s.designer_drug_legal ? 1u : 0u);
+    }
+}
+
+bool DrugEconomyModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t prod_count = r.u32();
+    production_records_.clear();
+    production_records_.reserve(prod_count);
+    for (uint32_t i = 0; i < prod_count; ++i) {
+        DrugProductionRecord p{};
+        p.business_id = r.u32();
+        p.drug_type = static_cast<DrugType>(r.u8());
+        p.market_tier = static_cast<DrugMarketTier>(r.u8());
+        p.output_quantity = r.f32();
+        p.output_quality = r.f32();
+        p.precursor_consumed = r.f32();
+        p.province_id = r.u32();
+        if (r.error)
+            return false;
+        production_records_.push_back(p);
+    }
+    uint32_t leg_count = r.u32();
+    legalization_status_.clear();
+    legalization_status_.reserve(leg_count);
+    for (uint32_t i = 0; i < leg_count; ++i) {
+        DrugLegalizationStatus s{};
+        s.cannabis_legal = (r.u8() != 0);
+        s.methamphetamine_legal = (r.u8() != 0);
+        s.synthetic_opioid_legal = (r.u8() != 0);
+        s.designer_drug_legal = (r.u8() != 0);
+        if (r.error)
+            return false;
+        legalization_status_.push_back(s);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

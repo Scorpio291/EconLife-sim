@@ -38,6 +38,13 @@ class BankingModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): active_loans_ and borrower_credits_ hold the
+    // entire loan book — outstanding balances, in-flight defaults, credit
+    // scores. Without persistence every loan resets to non-existent and
+    // every credit history disappears on load. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Internal loan storage ---
     // WorldState doesn't carry active_loans in V1 bootstrap, so the module
     // owns its own loan vector. Sorted by id ascending for determinism.

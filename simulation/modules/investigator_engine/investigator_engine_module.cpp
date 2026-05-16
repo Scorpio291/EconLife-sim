@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <map>
 
 #include "core/world_state/player.h"
@@ -343,6 +344,107 @@ void InvestigatorEngineModule::execute(const WorldState& state, DeltaBuffer& del
     for (uint32_t i = 0; i < state.provinces.size(); ++i) {
         execute_province(i, state, delta);
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 count
+//   for each InvestigationCase:
+//     u32 investigator_npc_id, u8 investigator_type, u32 target_id
+//     f32 current_level, f32 fill_rate, u8 status
+//     u32 opened_tick, u8 formally_opened, u32 province_id
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void InvestigatorEngineModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(cases_.size()));
+    for (const auto& c : cases_) {
+        put_u32(out, c.investigator_npc_id);
+        out.push_back(static_cast<uint8_t>(c.investigator_type));
+        put_u32(out, c.target_id);
+        put_f32(out, c.current_level);
+        put_f32(out, c.fill_rate);
+        out.push_back(c.status);
+        put_u32(out, c.opened_tick);
+        out.push_back(c.formally_opened ? 1u : 0u);
+        put_u32(out, c.province_id);
+    }
+}
+
+bool InvestigatorEngineModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    cases_.clear();
+    cases_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        InvestigationCase c{};
+        c.investigator_npc_id = r.u32();
+        c.investigator_type = static_cast<InvestigatorType>(r.u8());
+        c.target_id = r.u32();
+        c.current_level = r.f32();
+        c.fill_rate = r.f32();
+        c.status = r.u8();
+        c.opened_tick = r.u32();
+        c.formally_opened = (r.u8() != 0);
+        c.province_id = r.u32();
+        if (r.error)
+            return false;
+        cases_.push_back(c);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

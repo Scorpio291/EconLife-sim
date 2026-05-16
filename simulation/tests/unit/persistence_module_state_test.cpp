@@ -2,13 +2,21 @@
 // ITickModule::serialize_state / deserialize_state hook through
 // PersistenceModule's optional-modules overload.
 //
-// Covers all six V1 opt-ins: random_events, protection_rackets, real_estate,
-// legal_process, money_laundering, labor_market.
+// Covers eleven V1 opt-ins. Round 1 (6 modules): random_events,
+// protection_rackets, real_estate, legal_process, money_laundering,
+// labor_market. Round 2 (5 modules): investigator_engine, banking,
+// criminal_operations, informant_system, drug_economy.
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "core/world_state/player.h"  // SkillDomain
 #include "core/world_state/world_state.h"
+#include "modules/banking/banking_module.h"
+#include "modules/criminal_operations/criminal_operations_module.h"
+#include "modules/drug_economy/drug_economy_module.h"
+#include "modules/facility_signals/facility_signals_types.h"  // InvestigatorMeterStatus
+#include "modules/informant_system/informant_system_module.h"
+#include "modules/investigator_engine/investigator_engine_module.h"
 #include "modules/labor_market/labor_market_module.h"
 #include "modules/legal_process/legal_process_module.h"
 #include "modules/money_laundering/money_laundering_module.h"
@@ -507,4 +515,264 @@ TEST_CASE("v7 module-state: labor_market serialization is deterministic across r
     auto bytes_a = PersistenceModule::serialize(world, {&a});
     auto bytes_b = PersistenceModule::serialize(world, {&b});
     REQUIRE(bytes_a == bytes_b);
+}
+
+// ─── Round 2 modules ────────────────────────────────────────────────────────
+
+TEST_CASE("v7 module-state: investigator_engine cases round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    InvestigatorEngineModule mod;
+
+    InvestigationCase c1{};
+    c1.investigator_npc_id = 700;
+    c1.investigator_type = InvestigatorType::law_enforcement;
+    c1.target_id = 1000;
+    c1.current_level = 0.65f;
+    c1.fill_rate = 0.012f;
+    c1.status = static_cast<uint8_t>(InvestigatorMeterStatus::formal_inquiry);
+    c1.opened_tick = 50;
+    c1.formally_opened = true;
+    c1.province_id = 2;
+    mod.cases_mut().push_back(c1);
+
+    InvestigationCase c2{};
+    c2.investigator_npc_id = 701;
+    c2.investigator_type = InvestigatorType::journalist;
+    c2.target_id = 2000;
+    c2.current_level = 0.15f;
+    c2.fill_rate = 0.003f;
+    c2.status = static_cast<uint8_t>(InvestigatorMeterStatus::surveillance);
+    c2.opened_tick = 100;
+    c2.formally_opened = false;
+    c2.province_id = 0;
+    mod.cases_mut().push_back(c2);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    InvestigatorEngineModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.cases().size() == 2);
+    REQUIRE(restored_mod.cases()[0].investigator_npc_id == 700);
+    REQUIRE(restored_mod.cases()[0].current_level == 0.65f);
+    REQUIRE(restored_mod.cases()[0].formally_opened == true);
+    REQUIRE(restored_mod.cases()[1].investigator_type == InvestigatorType::journalist);
+    REQUIRE(restored_mod.cases()[1].fill_rate == 0.003f);
+}
+
+TEST_CASE("v7 module-state: banking loans + credit profiles round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    BankingModule mod;
+
+    LoanRecord l1{};
+    l1.id = 1;
+    l1.borrower_id = 500;
+    l1.lender_id = 99;
+    l1.purpose = LoanPurpose::property_purchase;
+    l1.principal = 200000.0f;
+    l1.outstanding_balance = 150000.0f;
+    l1.interest_rate = 0.00005f;
+    l1.repayment_per_tick = 50.0f;
+    l1.originated_tick = 100;
+    l1.maturity_tick = 11100;
+    l1.in_default = false;
+    l1.collateral_id = 42;
+    mod.active_loans().push_back(l1);
+
+    LoanRecord l2{};
+    l2.id = 2;
+    l2.borrower_id = 501;
+    l2.lender_id = 99;
+    l2.purpose = LoanPurpose::personal;
+    l2.principal = 5000.0f;
+    l2.outstanding_balance = 4800.0f;
+    l2.interest_rate = 0.0002f;
+    l2.repayment_per_tick = 5.0f;
+    l2.originated_tick = 150;
+    l2.maturity_tick = 1150;
+    l2.in_default = true;
+    l2.collateral_id = 0;
+    mod.active_loans().push_back(l2);
+
+    BankingModule::BorrowerCredit bc{};
+    bc.borrower_id = 500;
+    bc.consecutive_misses = 0;
+    bc.profile.credit_score = 0.75f;
+    bc.profile.total_debt_outstanding = 150000.0f;
+    bc.profile.debt_service_per_tick = 50.0f;
+    bc.profile.debt_to_income_ratio = 0.3f;
+    mod.borrower_credits().push_back(bc);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    BankingModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.active_loans().size() == 2);
+    REQUIRE(restored_mod.active_loans()[0].id == 1);
+    REQUIRE(restored_mod.active_loans()[0].outstanding_balance == 150000.0f);
+    REQUIRE(restored_mod.active_loans()[0].purpose == LoanPurpose::property_purchase);
+    REQUIRE(restored_mod.active_loans()[1].in_default == true);
+    REQUIRE(restored_mod.active_loans()[1].collateral_id == 0);
+
+    REQUIRE(restored_mod.borrower_credits().size() == 1);
+    REQUIRE(restored_mod.borrower_credits()[0].borrower_id == 500);
+    REQUIRE(restored_mod.borrower_credits()[0].profile.credit_score == 0.75f);
+}
+
+TEST_CASE("v7 module-state: criminal_operations orgs + expansions round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    CriminalOperationsModule mod;
+
+    CriminalOrganization o1{};
+    o1.id = 10;
+    o1.leadership_npc_id = 600;
+    o1.member_npc_ids = {601, 602, 603};
+    o1.income_source_ids = {1000, 1001};
+    o1.cash = 250000.0f;
+    o1.strategic_decision_tick = 90;
+    o1.decision_day_offset = 7;
+    o1.dominance_by_province[1] = 0.6f;
+    o1.dominance_by_province[2] = 0.4f;
+    o1.conflict_state = TerritorialConflictStage::personnel_violence;
+    o1.conflict_rival_org_id = 11;
+    mod.organizations().push_back(o1);
+
+    ExpansionTeam e1{};
+    e1.org_id = 10;
+    e1.target_province_id = 3;
+    e1.member_npc_ids = {604, 605};
+    e1.investment = 50000.0f;
+    e1.arrival_tick = 200;
+    mod.active_expansions().push_back(e1);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    CriminalOperationsModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.organizations().size() == 1);
+    REQUIRE(restored_mod.organizations()[0].id == 10);
+    REQUIRE(restored_mod.organizations()[0].member_npc_ids ==
+            std::vector<uint32_t>{601, 602, 603});
+    REQUIRE(restored_mod.organizations()[0].income_source_ids ==
+            std::vector<uint32_t>{1000, 1001});
+    REQUIRE(restored_mod.organizations()[0].dominance_by_province.size() == 2);
+    REQUIRE(restored_mod.organizations()[0].dominance_by_province.at(1) == 0.6f);
+    REQUIRE(restored_mod.organizations()[0].dominance_by_province.at(2) == 0.4f);
+    REQUIRE(restored_mod.organizations()[0].conflict_state ==
+            TerritorialConflictStage::personnel_violence);
+    REQUIRE(restored_mod.organizations()[0].conflict_rival_org_id == 11);
+
+    REQUIRE(restored_mod.active_expansions().size() == 1);
+    REQUIRE(restored_mod.active_expansions()[0].member_npc_ids ==
+            std::vector<uint32_t>{604, 605});
+    REQUIRE(restored_mod.active_expansions()[0].arrival_tick == 200);
+}
+
+TEST_CASE("v7 module-state: informant_system records round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    InformantSystemModule mod;
+
+    InformantRecord r1{};
+    r1.npc_id = 800;
+    r1.status = InformantStatus::cooperating;
+    r1.flip_probability = 0.18f;
+    r1.base_flip_rate = 0.10f;
+    r1.arrest_tick = 50;
+    r1.cooperation_start_tick = 60;
+    r1.compartmentalization_level = 2;
+    mod.records_mut().push_back(r1);
+
+    InformantRecord r2{};
+    r2.npc_id = 801;
+    r2.status = InformantStatus::silenced;
+    r2.flip_probability = 0.0f;
+    r2.base_flip_rate = 0.10f;
+    r2.arrest_tick = 0;
+    r2.cooperation_start_tick = 0;
+    r2.compartmentalization_level = 0;
+    mod.records_mut().push_back(r2);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    InformantSystemModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.records().size() == 2);
+    REQUIRE(restored_mod.records()[0].npc_id == 800);
+    REQUIRE(restored_mod.records()[0].status == InformantStatus::cooperating);
+    REQUIRE(restored_mod.records()[0].flip_probability == 0.18f);
+    REQUIRE(restored_mod.records()[1].status == InformantStatus::silenced);
+}
+
+TEST_CASE("v7 module-state: drug_economy production + legalization round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    DrugEconomyModule mod;
+
+    DrugProductionRecord p1{};
+    p1.business_id = 2000;
+    p1.drug_type = DrugType::cannabis;
+    p1.market_tier = DrugMarketTier::retail;
+    p1.output_quantity = 150.0f;
+    p1.output_quality = 0.8f;
+    p1.precursor_consumed = 50.0f;
+    p1.province_id = 1;
+    mod.production_records_mut().push_back(p1);
+
+    DrugProductionRecord p2{};
+    p2.business_id = 2001;
+    p2.drug_type = DrugType::synthetic_opioid;
+    p2.market_tier = DrugMarketTier::wholesale;
+    p2.output_quantity = 50.0f;
+    p2.output_quality = 0.6f;
+    p2.precursor_consumed = 200.0f;
+    p2.province_id = 0;
+    mod.production_records_mut().push_back(p2);
+
+    DrugLegalizationStatus s0{};
+    s0.cannabis_legal = true;
+    s0.methamphetamine_legal = false;
+    s0.synthetic_opioid_legal = false;
+    s0.designer_drug_legal = false;
+    mod.legalization_status_mut().push_back(s0);
+
+    DrugLegalizationStatus s1{};
+    s1.cannabis_legal = false;
+    s1.methamphetamine_legal = false;
+    s1.synthetic_opioid_legal = false;
+    s1.designer_drug_legal = true;
+    mod.legalization_status_mut().push_back(s1);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    DrugEconomyModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.production_records().size() == 2);
+    REQUIRE(restored_mod.production_records()[0].drug_type == DrugType::cannabis);
+    REQUIRE(restored_mod.production_records()[0].output_quantity == 150.0f);
+    REQUIRE(restored_mod.production_records()[1].market_tier == DrugMarketTier::wholesale);
+    REQUIRE(restored_mod.production_records()[1].precursor_consumed == 200.0f);
+
+    REQUIRE(restored_mod.legalization_status().size() == 2);
+    REQUIRE(restored_mod.legalization_status()[0].cannabis_legal == true);
+    REQUIRE(restored_mod.legalization_status()[0].designer_drug_legal == false);
+    REQUIRE(restored_mod.legalization_status()[1].cannabis_legal == false);
+    REQUIRE(restored_mod.legalization_status()[1].designer_drug_legal == true);
 }

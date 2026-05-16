@@ -43,6 +43,14 @@ class CriminalOperationsModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): organizations_ and active_expansions_ carry
+    // the entire criminal-org topology — leadership, member rosters, per-
+    // province dominance, conflict state, and in-flight expansion teams.
+    // Without persistence the world's crime structure resets on load. See
+    // ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Module-internal org storage ---
     std::vector<CriminalOrganization>& organizations() { return organizations_; }
     const std::vector<CriminalOrganization>& organizations() const { return organizations_; }

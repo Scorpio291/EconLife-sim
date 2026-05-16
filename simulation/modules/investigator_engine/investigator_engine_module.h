@@ -50,6 +50,18 @@ class InvestigatorEngineModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): cases_ holds active investigations including
+    // their accumulated meter level, fill_rate, formally_opened flag, and
+    // current status. Without persistence, every investigation resets to
+    // inactive on load — long-running cases vanish and arrests never fire
+    // even after months of meter buildup. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Test helpers.
+    const std::vector<InvestigationCase>& cases() const { return cases_; }
+    std::vector<InvestigationCase>& cases_mut() { return cases_; }
+
     // --- Static utility functions (public for testing) ---
 
     // Compute regional signal from criminal facilities in a province

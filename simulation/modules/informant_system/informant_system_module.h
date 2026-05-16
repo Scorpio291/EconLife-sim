@@ -24,6 +24,17 @@ class InformantSystemModule : public ITickModule {
     bool is_province_parallel() const noexcept override { return false; }
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): records_ tracks every NPC's cooperation
+    // status, flip_probability, and timing (arrest_tick, cooperation_start).
+    // Without persistence informants who already flipped on a previous save
+    // forget their cooperation on load. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Test helpers.
+    const std::vector<InformantRecord>& records() const { return records_; }
+    std::vector<InformantRecord>& records_mut() { return records_; }
+
     // --- Static utilities ---
     static float compute_flip_probability(float base_flip_rate, float risk_tolerance, float trust,
                                           uint32_t mutual_incrimination_count,

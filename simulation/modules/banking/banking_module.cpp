@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
@@ -366,6 +367,142 @@ void BankingModule::execute(const WorldState& state, DeltaBuffer& delta) {
         }
         update_derived_credit_fields(credit, revenue_per_tick);
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 loan_count
+//   for each LoanRecord:
+//     u32 id, u32 borrower_id, u32 lender_id, u8 purpose
+//     f32 principal, f32 outstanding_balance, f32 interest_rate, f32 repayment_per_tick
+//     u32 originated_tick, u32 maturity_tick, u8 in_default, u32 collateral_id
+//   u32 credit_count
+//   for each BorrowerCredit:
+//     u32 borrower_id, u32 consecutive_misses
+//     f32 credit_score, f32 total_debt_outstanding, f32 debt_service_per_tick,
+//     f32 debt_to_income_ratio
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void BankingModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(active_loans_.size()));
+    for (const auto& l : active_loans_) {
+        put_u32(out, l.id);
+        put_u32(out, l.borrower_id);
+        put_u32(out, l.lender_id);
+        out.push_back(static_cast<uint8_t>(l.purpose));
+        put_f32(out, l.principal);
+        put_f32(out, l.outstanding_balance);
+        put_f32(out, l.interest_rate);
+        put_f32(out, l.repayment_per_tick);
+        put_u32(out, l.originated_tick);
+        put_u32(out, l.maturity_tick);
+        out.push_back(l.in_default ? 1u : 0u);
+        put_u32(out, l.collateral_id);
+    }
+    put_u32(out, static_cast<uint32_t>(borrower_credits_.size()));
+    for (const auto& bc : borrower_credits_) {
+        put_u32(out, bc.borrower_id);
+        put_u32(out, bc.consecutive_misses);
+        put_f32(out, bc.profile.credit_score);
+        put_f32(out, bc.profile.total_debt_outstanding);
+        put_f32(out, bc.profile.debt_service_per_tick);
+        put_f32(out, bc.profile.debt_to_income_ratio);
+    }
+}
+
+bool BankingModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t loan_count = r.u32();
+    active_loans_.clear();
+    active_loans_.reserve(loan_count);
+    for (uint32_t i = 0; i < loan_count; ++i) {
+        LoanRecord l{};
+        l.id = r.u32();
+        l.borrower_id = r.u32();
+        l.lender_id = r.u32();
+        l.purpose = static_cast<LoanPurpose>(r.u8());
+        l.principal = r.f32();
+        l.outstanding_balance = r.f32();
+        l.interest_rate = r.f32();
+        l.repayment_per_tick = r.f32();
+        l.originated_tick = r.u32();
+        l.maturity_tick = r.u32();
+        l.in_default = (r.u8() != 0);
+        l.collateral_id = r.u32();
+        if (r.error)
+            return false;
+        active_loans_.push_back(l);
+    }
+    uint32_t credit_count = r.u32();
+    borrower_credits_.clear();
+    borrower_credits_.reserve(credit_count);
+    for (uint32_t i = 0; i < credit_count; ++i) {
+        BorrowerCredit bc{};
+        bc.borrower_id = r.u32();
+        bc.consecutive_misses = r.u32();
+        bc.profile.credit_score = r.f32();
+        bc.profile.total_debt_outstanding = r.f32();
+        bc.profile.debt_service_per_tick = r.f32();
+        bc.profile.debt_to_income_ratio = r.f32();
+        if (r.error)
+            return false;
+        borrower_credits_.push_back(bc);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife
