@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 #include "core/world_state/delta_buffer.h"
@@ -624,6 +625,148 @@ const NPCBusiness* FinancialDistributionModule::find_business(const WorldState& 
         }
     }
     return nullptr;
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void FinancialDistributionModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(compensation_records_.size()));
+    for (const auto& r : compensation_records_) {
+        put_u32(out, r.business_id);
+        out.push_back(static_cast<uint8_t>(r.scale));
+        // ExecutiveCompensation
+        out.push_back(static_cast<uint8_t>(r.compensation.mechanism));
+        put_f32(out, r.compensation.salary_per_tick);
+        put_f32(out, r.compensation.bonus_rate);
+        put_f32(out, r.compensation.dividend_yield_target);
+        put_u32(out, static_cast<uint32_t>(r.compensation.equity_grants.size()));
+        for (const auto& g : r.compensation.equity_grants) {
+            put_u32(out, g.business_id);
+            put_f32(out, g.shares_granted);
+            put_f32(out, g.shares_vested);
+            put_f32(out, g.vesting_rate);
+            put_u32(out, g.grant_tick);
+            put_u32(out, g.cliff_tick);
+            put_u32(out, g.full_vest_tick);
+            put_f32(out, g.strike_price);
+        }
+        // BoardComposition
+        put_u32(out, static_cast<uint32_t>(r.board.member_npc_ids.size()));
+        for (uint32_t m : r.board.member_npc_ids)
+            put_u32(out, m);
+        put_f32(out, r.board.independence_score);
+        put_u32(out, r.board.next_approval_tick);
+        // Per-tick state
+        put_f32(out, r.monthly_draw_accumulator);
+        put_u32(out, r.draw_accumulator_reset_tick);
+        put_u32(out, r.deferred_salary_ticks);
+        put_f32(out, r.retained_earnings);
+        out.push_back(r.bonus_approved_this_quarter ? 1u : 0u);
+        out.push_back(r.dividend_approved_this_quarter ? 1u : 0u);
+    }
+}
+
+bool FinancialDistributionModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    compensation_records_.clear();
+    compensation_records_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        BusinessCompensationRecord bc{};
+        bc.business_id = r.u32();
+        bc.scale = static_cast<BusinessScale>(r.u8());
+        bc.compensation.mechanism = static_cast<CompensationMechanism>(r.u8());
+        bc.compensation.salary_per_tick = r.f32();
+        bc.compensation.bonus_rate = r.f32();
+        bc.compensation.dividend_yield_target = r.f32();
+        uint32_t gn = r.u32();
+        if (r.error)
+            return false;
+        bc.compensation.equity_grants.reserve(gn);
+        for (uint32_t j = 0; j < gn; ++j) {
+            EquityGrant g{};
+            g.business_id = r.u32();
+            g.shares_granted = r.f32();
+            g.shares_vested = r.f32();
+            g.vesting_rate = r.f32();
+            g.grant_tick = r.u32();
+            g.cliff_tick = r.u32();
+            g.full_vest_tick = r.u32();
+            g.strike_price = r.f32();
+            bc.compensation.equity_grants.push_back(g);
+        }
+        uint32_t mn = r.u32();
+        if (r.error)
+            return false;
+        bc.board.member_npc_ids.reserve(mn);
+        for (uint32_t j = 0; j < mn; ++j)
+            bc.board.member_npc_ids.push_back(r.u32());
+        bc.board.independence_score = r.f32();
+        bc.board.next_approval_tick = r.u32();
+        bc.monthly_draw_accumulator = r.f32();
+        bc.draw_accumulator_reset_tick = r.u32();
+        bc.deferred_salary_ticks = r.u32();
+        bc.retained_earnings = r.f32();
+        bc.bonus_approved_this_quarter = (r.u8() != 0);
+        bc.dividend_approved_this_quarter = (r.u8() != 0);
+        if (r.error)
+            return false;
+        compensation_records_.push_back(std::move(bc));
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

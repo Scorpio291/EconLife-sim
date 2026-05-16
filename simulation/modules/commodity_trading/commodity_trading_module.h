@@ -44,6 +44,12 @@ class CommodityTradingModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): positions_ tracks open and recently-closed
+    // commodity positions — entry_price, quantity, realised_pnl. Without
+    // persistence every speculative position vanishes on load.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // Province-parallel not used; no-op.
     void execute_province(uint32_t /*province_idx*/, const WorldState& /*state*/,
                           DeltaBuffer& /*province_delta*/) override {}

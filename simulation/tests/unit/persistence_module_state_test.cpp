@@ -11,11 +11,15 @@
 
 #include "core/world_state/player.h"  // SkillDomain
 #include "core/world_state/world_state.h"
+#include "modules/antitrust/antitrust_module.h"
 #include "modules/banking/banking_module.h"
+#include "modules/commodity_trading/commodity_trading_module.h"
 #include "modules/community_response/community_response_module.h"
 #include "modules/criminal_operations/criminal_operations_module.h"
+#include "modules/designer_drug/designer_drug_module.h"
 #include "modules/drug_economy/drug_economy_module.h"
 #include "modules/facility_signals/facility_signals_types.h"  // InvestigatorMeterStatus
+#include "modules/financial_distribution/financial_distribution_module.h"
 #include "modules/government_budget/government_budget_module.h"
 #include "modules/healthcare/healthcare_module.h"
 #include "modules/informant_system/informant_system_module.h"
@@ -943,4 +947,170 @@ TEST_CASE("v7 module-state: government_budget round-trip",
     REQUIRE(restored_mod.budgets()[0].spending_actual.at(
                 SpendingCategory::law_enforcement) == 200000.0f);
     REQUIRE(restored_mod.budgets()[0].cash == 150000.0f);
+}
+
+// ─── Round 4 modules ────────────────────────────────────────────────────────
+
+TEST_CASE("v7 module-state: designer_drug compounds round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    DesignerDrugModule mod;
+
+    DesignerDrugCompound c1{};
+    c1.compound_id = 1;
+    c1.creator_actor_id = 99;
+    c1.goods_key = "designer_drug_1";
+    c1.stage = SchedulingStage::review_initiated;
+    c1.cumulative_evidence_weight = 2.7f;
+    c1.detection_threshold = 2.5f;
+    c1.review_start_tick = 100;
+    c1.review_duration = 180;
+    c1.market_margin_multiplier = 2.5f;
+    c1.province_id = 0;
+    c1.has_successor = true;
+    mod.compounds_mut().push_back(c1);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    DesignerDrugModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.compounds().size() == 1);
+    REQUIRE(restored_mod.compounds()[0].goods_key == "designer_drug_1");
+    REQUIRE(restored_mod.compounds()[0].stage == SchedulingStage::review_initiated);
+    REQUIRE(restored_mod.compounds()[0].cumulative_evidence_weight == 2.7f);
+    REQUIRE(restored_mod.compounds()[0].review_start_tick == 100);
+    REQUIRE(restored_mod.compounds()[0].has_successor == true);
+}
+
+TEST_CASE("v7 module-state: antitrust proposals round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    AntitrustModule mod;
+
+    AntitrustProposal p1{};
+    p1.id = 1;
+    p1.province_id = 2;
+    p1.proposer_npc_id = 700;
+    p1.created_tick = 250;
+    p1.target_market_share_cap = 0.30f;
+    mod.proposals().push_back(p1);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    AntitrustModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.proposals().size() == 1);
+    REQUIRE(restored_mod.proposals()[0].id == 1);
+    REQUIRE(restored_mod.proposals()[0].created_tick == 250);
+    REQUIRE(restored_mod.proposals()[0].target_market_share_cap == 0.30f);
+}
+
+TEST_CASE("v7 module-state: commodity_trading positions round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    CommodityTradingModule mod;
+
+    CommodityPosition cp1{};
+    cp1.id = 1;
+    cp1.actor_id = 99;
+    cp1.good_id = 5;
+    cp1.province_id = 1;
+    cp1.position_type = PositionType::long_position;
+    cp1.quantity = 1000.0f;
+    cp1.entry_price = 50.0f;
+    cp1.current_value = 55000.0f;
+    cp1.opened_tick = 100;
+    cp1.exit_tick = 0;
+    cp1.realised_pnl = 0.0f;
+    mod.open_position(cp1);
+
+    CommodityPosition cp2{};
+    cp2.id = 2;
+    cp2.actor_id = 100;
+    cp2.good_id = 6;
+    cp2.position_type = PositionType::short_position;
+    cp2.quantity = 500.0f;
+    cp2.entry_price = 100.0f;
+    cp2.opened_tick = 50;
+    mod.open_position(cp2);
+    // open_position seeds exit_tick=0/realised_pnl=0; close it explicitly to
+    // exercise the closed-position path through serialization.
+    mod.close_position(2, /*exit_price=*/90.0f, /*tick=*/150);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    CommodityTradingModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.positions().size() == 2);
+    REQUIRE(restored_mod.positions()[0].id == 1);
+    REQUIRE(restored_mod.positions()[0].position_type == PositionType::long_position);
+    REQUIRE(restored_mod.positions()[0].quantity == 1000.0f);
+    REQUIRE(restored_mod.positions()[1].exit_tick == 150);
+    // realised_pnl for short = (entry - exit) * quantity = (100 - 90) * 500 = 5000
+    REQUIRE(restored_mod.positions()[1].realised_pnl == 5000.0f);
+}
+
+TEST_CASE("v7 module-state: financial_distribution compensation records round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    FinancialDistributionModule mod;
+
+    BusinessCompensationRecord bc{};
+    bc.business_id = 100;
+    bc.scale = BusinessScale::medium;
+    bc.compensation.mechanism = CompensationMechanism::full_package;
+    bc.compensation.salary_per_tick = 500.0f;
+    bc.compensation.bonus_rate = 0.15f;
+    bc.compensation.dividend_yield_target = 0.30f;
+
+    EquityGrant g1{};
+    g1.business_id = 100;
+    g1.shares_granted = 10000.0f;
+    g1.shares_vested = 2500.0f;
+    g1.vesting_rate = 6.85f;
+    g1.grant_tick = 100;
+    g1.cliff_tick = 465;
+    g1.full_vest_tick = 1560;
+    g1.strike_price = 5.0f;
+    bc.compensation.equity_grants.push_back(g1);
+
+    bc.board.member_npc_ids = {801, 802, 803, 804, 805};
+    bc.board.independence_score = 0.6f;
+    bc.board.next_approval_tick = 1170;
+    bc.monthly_draw_accumulator = 25000.0f;
+    bc.draw_accumulator_reset_tick = 1000;
+    bc.deferred_salary_ticks = 5;
+    bc.retained_earnings = 100000.0f;
+    bc.bonus_approved_this_quarter = true;
+    bc.dividend_approved_this_quarter = false;
+    mod.compensation_records().push_back(bc);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    FinancialDistributionModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.compensation_records().size() == 1);
+    REQUIRE(restored_mod.compensation_records()[0].business_id == 100);
+    REQUIRE(restored_mod.compensation_records()[0].compensation.mechanism ==
+            CompensationMechanism::full_package);
+    REQUIRE(restored_mod.compensation_records()[0].compensation.equity_grants.size() == 1);
+    REQUIRE(restored_mod.compensation_records()[0].compensation.equity_grants[0].shares_vested ==
+            2500.0f);
+    REQUIRE(restored_mod.compensation_records()[0].board.member_npc_ids ==
+            std::vector<uint32_t>{801, 802, 803, 804, 805});
+    REQUIRE(restored_mod.compensation_records()[0].board.independence_score == 0.6f);
+    REQUIRE(restored_mod.compensation_records()[0].deferred_salary_ticks == 5);
+    REQUIRE(restored_mod.compensation_records()[0].bonus_approved_this_quarter == true);
 }

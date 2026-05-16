@@ -24,6 +24,17 @@ class DesignerDrugModule : public ITickModule {
     bool is_province_parallel() const noexcept override { return false; }
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): compounds_ tracks every designer drug R&D
+    // project through the scheduling lifecycle. Without persistence
+    // multi-quarter compounds in review_initiated stage forget when
+    // their review started, and accumulated evidence_weight resets.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Test helpers.
+    const std::vector<DesignerDrugCompound>& compounds() const { return compounds_; }
+    std::vector<DesignerDrugCompound>& compounds_mut() { return compounds_; }
+
     // --- Static utilities ---
     static bool is_detection_triggered(float cumulative_evidence, float threshold);
     static uint32_t compute_review_duration(uint32_t base_duration, float political_delay);

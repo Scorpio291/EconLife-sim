@@ -46,6 +46,12 @@ class AntitrustModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): proposals_ tracks auto-generated antitrust
+    // legislation in flight. Without persistence, in-progress proposals
+    // disappear on load.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Module-internal state ---
     // Antitrust proposal pressure per province
     std::map<uint32_t, float>& proposal_pressure() { return proposal_pressure_; }

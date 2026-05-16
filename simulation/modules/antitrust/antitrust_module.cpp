@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <map>
 #include <set>
 
@@ -282,6 +283,86 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
             pressure = 0.0f;
         }
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void AntitrustModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(proposals_.size()));
+    for (const auto& p : proposals_) {
+        put_u32(out, p.id);
+        put_u32(out, p.province_id);
+        put_u32(out, p.proposer_npc_id);
+        put_u32(out, p.created_tick);
+        put_f32(out, p.target_market_share_cap);
+    }
+}
+
+bool AntitrustModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    proposals_.clear();
+    proposals_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        AntitrustProposal p{};
+        p.id = r.u32();
+        p.province_id = r.u32();
+        p.proposer_npc_id = r.u32();
+        p.created_tick = r.u32();
+        p.target_market_share_cap = r.f32();
+        if (r.error)
+            return false;
+        proposals_.push_back(p);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife
