@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/player.h"
@@ -125,6 +126,119 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
         }
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 count
+//   for each LegalCase:
+//     u32 id, u32 defendant_npc_id, u32 prosecutor_npc_id, u32 judge_npc_id
+//     u8 stage, u8 severity
+//     f32 evidence_weight, f32 defense_quality, f32 conviction_probability
+//     u32 opened_tick, u32 sentence_ticks, u32 release_tick, u32 double_jeopardy_until
+//     u8 is_player_case
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void LegalProcessModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(cases_.size()));
+    for (const auto& c : cases_) {
+        put_u32(out, c.id);
+        put_u32(out, c.defendant_npc_id);
+        put_u32(out, c.prosecutor_npc_id);
+        put_u32(out, c.judge_npc_id);
+        out.push_back(static_cast<uint8_t>(c.stage));
+        out.push_back(static_cast<uint8_t>(c.severity));
+        put_f32(out, c.evidence_weight);
+        put_f32(out, c.defense_quality);
+        put_f32(out, c.conviction_probability);
+        put_u32(out, c.opened_tick);
+        put_u32(out, c.sentence_ticks);
+        put_u32(out, c.release_tick);
+        put_u32(out, c.double_jeopardy_until);
+        out.push_back(c.is_player_case ? 1u : 0u);
+    }
+}
+
+bool LegalProcessModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    cases_.clear();
+    cases_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        LegalCase c{};
+        c.id = r.u32();
+        c.defendant_npc_id = r.u32();
+        c.prosecutor_npc_id = r.u32();
+        c.judge_npc_id = r.u32();
+        c.stage = static_cast<LegalCaseStage>(r.u8());
+        c.severity = static_cast<CaseSeverity>(r.u8());
+        c.evidence_weight = r.f32();
+        c.defense_quality = r.f32();
+        c.conviction_probability = r.f32();
+        c.opened_tick = r.u32();
+        c.sentence_ticks = r.u32();
+        c.release_tick = r.u32();
+        c.double_jeopardy_until = r.u32();
+        c.is_player_case = (r.u8() != 0);
+        if (r.error)
+            return false;
+        cases_.push_back(c);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

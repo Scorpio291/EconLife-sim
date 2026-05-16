@@ -46,6 +46,14 @@ class LaborMarketModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): job_postings_, employment_records_, npc_skills_,
+    // regional_wages_, and applications_ together comprise the deployed labor
+    // market. employment_records_ in particular drives wage payments on the
+    // next tick — without persistence, every NPC reverts to unemployed on
+    // load. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- State access (for test injection and module initialization) ---
 
     // Active job postings. Postings are created externally (by NPC business

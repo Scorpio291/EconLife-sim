@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -243,6 +244,146 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
             }
         }
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 op_count
+//   for each LaunderingOperation:
+//     u32 id, u32 actor_id, u8 method
+//     f32 dirty_amount, f32 laundered_so_far
+//     f32 launder_rate_per_tick, f32 conversion_loss_rate
+//     u32 started_tick, u32 destination_business_id
+//     u32 shell_chain_count, u32[shell_chain_count]
+//     f32 evidence_generated_total, u8 paused, u8 completed
+//   u32 fiu_count
+//   for each FIUPatternResult:
+//     u32 target_actor_id, f32 suspicion_score, u8 inferred_method
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void MoneyLaunderingModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(operations_.size()));
+    for (const auto& op : operations_) {
+        put_u32(out, op.id);
+        put_u32(out, op.actor_id);
+        out.push_back(static_cast<uint8_t>(op.method));
+        put_f32(out, op.dirty_amount);
+        put_f32(out, op.laundered_so_far);
+        put_f32(out, op.launder_rate_per_tick);
+        put_f32(out, op.conversion_loss_rate);
+        put_u32(out, op.started_tick);
+        put_u32(out, op.destination_business_id);
+        put_u32(out, static_cast<uint32_t>(op.shell_chain_business_ids.size()));
+        for (uint32_t id : op.shell_chain_business_ids)
+            put_u32(out, id);
+        put_f32(out, op.evidence_generated_total);
+        out.push_back(op.paused ? 1u : 0u);
+        out.push_back(op.completed ? 1u : 0u);
+    }
+    put_u32(out, static_cast<uint32_t>(fiu_results_.size()));
+    for (const auto& f : fiu_results_) {
+        put_u32(out, f.target_actor_id);
+        put_f32(out, f.suspicion_score);
+        out.push_back(static_cast<uint8_t>(f.inferred_method));
+    }
+}
+
+bool MoneyLaunderingModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t op_count = r.u32();
+    operations_.clear();
+    operations_.reserve(op_count);
+    for (uint32_t i = 0; i < op_count; ++i) {
+        LaunderingOperation op{};
+        op.id = r.u32();
+        op.actor_id = r.u32();
+        op.method = static_cast<LaunderingMethod>(r.u8());
+        op.dirty_amount = r.f32();
+        op.laundered_so_far = r.f32();
+        op.launder_rate_per_tick = r.f32();
+        op.conversion_loss_rate = r.f32();
+        op.started_tick = r.u32();
+        op.destination_business_id = r.u32();
+        uint32_t chain_n = r.u32();
+        if (r.error)
+            return false;
+        op.shell_chain_business_ids.reserve(chain_n);
+        for (uint32_t j = 0; j < chain_n; ++j)
+            op.shell_chain_business_ids.push_back(r.u32());
+        op.evidence_generated_total = r.f32();
+        op.paused = (r.u8() != 0);
+        op.completed = (r.u8() != 0);
+        if (r.error)
+            return false;
+        operations_.push_back(std::move(op));
+    }
+    uint32_t fiu_count = r.u32();
+    fiu_results_.clear();
+    fiu_results_.reserve(fiu_count);
+    for (uint32_t i = 0; i < fiu_count; ++i) {
+        FIUPatternResult f{};
+        f.target_actor_id = r.u32();
+        f.suspicion_score = r.f32();
+        f.inferred_method = static_cast<LaunderingMethod>(r.u8());
+        if (r.error)
+            return false;
+        fiu_results_.push_back(f);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

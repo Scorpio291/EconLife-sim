@@ -39,6 +39,18 @@ class MoneyLaunderingModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): operations_ tracks in-flight laundering across
+    // multi-tick conversions; fiu_results_ accumulates the latest FIU monthly
+    // pattern hits (consumed by investigator_engine). See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Test helpers.
+    const std::vector<LaunderingOperation>& operations() const { return operations_; }
+    std::vector<LaunderingOperation>& operations_mut() { return operations_; }
+    const std::vector<FIUPatternResult>& fiu_results() const { return fiu_results_; }
+    std::vector<FIUPatternResult>& fiu_results_mut() { return fiu_results_; }
+
     // --- Static utility functions (public for testing) ---
 
     // Compute transfer amount for this tick

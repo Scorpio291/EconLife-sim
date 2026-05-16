@@ -23,6 +23,16 @@ class LegalProcessModule : public ITickModule {
     bool is_province_parallel() const noexcept override { return false; }
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): cases_ holds genuine run state — open
+    // proceedings mid-trial, paroled-but-not-released NPCs, double-jeopardy
+    // cooldowns. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Test helpers.
+    const std::vector<LegalCase>& cases() const { return cases_; }
+    std::vector<LegalCase>& cases_mut() { return cases_; }
+
     // --- Static utilities ---
     static float compute_conviction_probability(float evidence_weight, float defense_quality,
                                                 float judge_bias, float witness_reliability,
