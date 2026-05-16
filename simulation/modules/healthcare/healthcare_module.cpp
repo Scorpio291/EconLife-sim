@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
@@ -303,6 +304,113 @@ const HealthcareModule::ProvinceHealthState* HealthcareModule::find_province_hea
         }
     }
     return nullptr;
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void HealthcareModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(province_health_states_.size()));
+    for (const auto& p : province_health_states_) {
+        put_u32(out, p.province_id);
+        put_f32(out, p.profile.access_level);
+        put_f32(out, p.profile.quality_level);
+        put_f32(out, p.profile.cost_per_treatment);
+        put_f32(out, p.profile.capacity_utilisation);
+        put_f32(out, p.sick_leave_fraction);
+        put_f32(out, p.effective_labour_supply);
+    }
+    put_u32(out, static_cast<uint32_t>(npc_health_records_.size()));
+    for (const auto& n : npc_health_records_) {
+        put_u32(out, n.npc_id);
+        put_f32(out, n.health);
+        put_u32(out, n.last_treatment_tick);
+    }
+}
+
+bool HealthcareModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t pc = r.u32();
+    province_health_states_.clear();
+    province_health_states_.reserve(pc);
+    for (uint32_t i = 0; i < pc; ++i) {
+        ProvinceHealthState p{};
+        p.province_id = r.u32();
+        p.profile.access_level = r.f32();
+        p.profile.quality_level = r.f32();
+        p.profile.cost_per_treatment = r.f32();
+        p.profile.capacity_utilisation = r.f32();
+        p.sick_leave_fraction = r.f32();
+        p.effective_labour_supply = r.f32();
+        if (r.error)
+            return false;
+        province_health_states_.push_back(p);
+    }
+    uint32_t nc = r.u32();
+    npc_health_records_.clear();
+    npc_health_records_.reserve(nc);
+    for (uint32_t i = 0; i < nc; ++i) {
+        NpcHealthRecord n{};
+        n.npc_id = r.u32();
+        n.health = r.f32();
+        n.last_treatment_tick = r.u32();
+        if (r.error)
+            return false;
+        npc_health_records_.push_back(n);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

@@ -12,11 +12,15 @@
 #include "core/world_state/player.h"  // SkillDomain
 #include "core/world_state/world_state.h"
 #include "modules/banking/banking_module.h"
+#include "modules/community_response/community_response_module.h"
 #include "modules/criminal_operations/criminal_operations_module.h"
 #include "modules/drug_economy/drug_economy_module.h"
 #include "modules/facility_signals/facility_signals_types.h"  // InvestigatorMeterStatus
+#include "modules/government_budget/government_budget_module.h"
+#include "modules/healthcare/healthcare_module.h"
 #include "modules/informant_system/informant_system_module.h"
 #include "modules/investigator_engine/investigator_engine_module.h"
+#include "modules/media_system/media_system_module.h"
 #include "modules/labor_market/labor_market_module.h"
 #include "modules/legal_process/legal_process_module.h"
 #include "modules/money_laundering/money_laundering_module.h"
@@ -775,4 +779,168 @@ TEST_CASE("v7 module-state: drug_economy production + legalization round-trip",
     REQUIRE(restored_mod.legalization_status()[0].designer_drug_legal == false);
     REQUIRE(restored_mod.legalization_status()[1].cannabis_legal == false);
     REQUIRE(restored_mod.legalization_status()[1].designer_drug_legal == true);
+}
+
+// ─── Round 3 modules ────────────────────────────────────────────────────────
+
+TEST_CASE("v7 module-state: healthcare province + npc records round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    HealthcareModule mod;
+
+    HealthcareModule::ProvinceHealthState p0{};
+    p0.province_id = 0;
+    p0.profile.access_level = 0.7f;
+    p0.profile.quality_level = 0.6f;
+    p0.profile.cost_per_treatment = 250.0f;
+    p0.profile.capacity_utilisation = 0.85f;
+    p0.sick_leave_fraction = 0.05f;
+    p0.effective_labour_supply = 0.95f;
+    mod.province_health_states().push_back(p0);
+
+    HealthcareModule::NpcHealthRecord n0{};
+    n0.npc_id = 500;
+    n0.health = 0.65f;
+    n0.last_treatment_tick = 200;
+    mod.npc_health_records().push_back(n0);
+    HealthcareModule::NpcHealthRecord n1{};
+    n1.npc_id = 501;
+    n1.health = 0.92f;
+    n1.last_treatment_tick = 0;
+    mod.npc_health_records().push_back(n1);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    HealthcareModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.province_health_states().size() == 1);
+    REQUIRE(restored_mod.province_health_states()[0].profile.quality_level == 0.6f);
+    REQUIRE(restored_mod.province_health_states()[0].sick_leave_fraction == 0.05f);
+    REQUIRE(restored_mod.npc_health_records().size() == 2);
+    REQUIRE(restored_mod.npc_health_records()[0].health == 0.65f);
+    REQUIRE(restored_mod.npc_health_records()[0].last_treatment_tick == 200);
+    REQUIRE(restored_mod.npc_health_records()[1].npc_id == 501);
+}
+
+TEST_CASE("v7 module-state: community_response province states round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    CommunityResponseModule mod;
+
+    CommunityResponseModule::ProvinceOppositionState s0{};
+    s0.opposition_org_exists = true;
+    s0.last_stage_change_tick = 200;
+    mod.province_states().push_back(s0);
+
+    CommunityResponseModule::ProvinceOppositionState s1{};
+    s1.opposition_org_exists = false;
+    s1.last_stage_change_tick = 0;
+    mod.province_states().push_back(s1);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    CommunityResponseModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.province_states().size() == 2);
+    REQUIRE(restored_mod.province_states()[0].opposition_org_exists == true);
+    REQUIRE(restored_mod.province_states()[0].last_stage_change_tick == 200);
+    REQUIRE(restored_mod.province_states()[1].opposition_org_exists == false);
+}
+
+TEST_CASE("v7 module-state: media_system outlets + stories round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    MediaSystemModule mod;
+
+    MediaOutlet o1{};
+    o1.id = 1;
+    o1.province_id = 0;
+    o1.type = MediaOutletType::newspaper;
+    o1.credibility = 0.7f;
+    o1.reach = 0.45f;
+    o1.editorial_independence = 0.6f;
+    o1.owner_npc_id = 800;
+    o1.journalist_ids = {900, 901, 902};
+    mod.outlets().push_back(o1);
+
+    Story s1{};
+    s1.id = 10;
+    s1.subject_id = 1500;
+    s1.journalist_id = 900;
+    s1.outlet_id = 1;
+    s1.tone = StoryTone::damaging;
+    s1.evidence_weight = 0.7f;
+    s1.amplification = 2.5f;
+    s1.published_tick = 300;
+    s1.evidence_token_ids = {50, 51};
+    s1.is_active = true;
+    mod.active_stories().push_back(s1);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    MediaSystemModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.outlets().size() == 1);
+    REQUIRE(restored_mod.outlets()[0].journalist_ids ==
+            std::vector<uint32_t>{900, 901, 902});
+    REQUIRE(restored_mod.outlets()[0].type == MediaOutletType::newspaper);
+    REQUIRE(restored_mod.outlets()[0].credibility == 0.7f);
+
+    REQUIRE(restored_mod.active_stories().size() == 1);
+    REQUIRE(restored_mod.active_stories()[0].tone == StoryTone::damaging);
+    REQUIRE(restored_mod.active_stories()[0].evidence_token_ids ==
+            std::vector<uint32_t>{50, 51});
+    REQUIRE(restored_mod.active_stories()[0].amplification == 2.5f);
+}
+
+TEST_CASE("v7 module-state: government_budget round-trip",
+          "[persistence][v7][module_state][serialization]") {
+    auto world = minimal_world();
+    GovernmentBudgetModule mod;
+
+    GovernmentBudget b{};
+    b.level = GovernmentLevel::national;
+    b.jurisdiction_id = 0;
+    b.revenue_own_taxes = 1000000.0f;
+    b.revenue_transfers_in = 0.0f;
+    b.revenue_other = 50000.0f;
+    b.total_revenue = 1050000.0f;
+    b.spending_allocations[SpendingCategory::public_services] = 400000.0f;
+    b.spending_allocations[SpendingCategory::law_enforcement] = 200000.0f;
+    b.spending_actual[SpendingCategory::public_services] = 380000.0f;
+    b.spending_actual[SpendingCategory::law_enforcement] = 200000.0f;
+    b.total_expenditure = 580000.0f;
+    b.surplus_deficit = 470000.0f;
+    b.accumulated_debt = 2000000.0f;
+    b.cash = 150000.0f;
+    b.debt_to_revenue_ratio = 1.9f;
+    b.deficit_to_revenue_ratio = -0.45f;
+    mod.budgets().push_back(b);
+
+    auto bytes = PersistenceModule::serialize(world, {&mod});
+
+    GovernmentBudgetModule restored_mod;
+    WorldState restored;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.budgets().size() == 1);
+    REQUIRE(restored_mod.budgets()[0].level == GovernmentLevel::national);
+    REQUIRE(restored_mod.budgets()[0].revenue_own_taxes == 1000000.0f);
+    REQUIRE(restored_mod.budgets()[0].accumulated_debt == 2000000.0f);
+    REQUIRE(restored_mod.budgets()[0].spending_allocations.size() == 2);
+    REQUIRE(restored_mod.budgets()[0].spending_allocations.at(
+                SpendingCategory::public_services) == 400000.0f);
+    REQUIRE(restored_mod.budgets()[0].spending_actual.at(
+                SpendingCategory::law_enforcement) == 200000.0f);
+    REQUIRE(restored_mod.budgets()[0].cash == 150000.0f);
 }

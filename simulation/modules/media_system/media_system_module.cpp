@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <numeric>
 
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
@@ -339,6 +340,143 @@ void MediaSystemModule::expire_old_stories(uint32_t current_tick) {
             story.is_active = false;
         }
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void MediaSystemModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(outlets_.size()));
+    for (const auto& o : outlets_) {
+        put_u32(out, o.id);
+        put_u32(out, o.province_id);
+        out.push_back(static_cast<uint8_t>(o.type));
+        put_f32(out, o.credibility);
+        put_f32(out, o.reach);
+        put_f32(out, o.editorial_independence);
+        put_u32(out, o.owner_npc_id);
+        put_u32(out, static_cast<uint32_t>(o.journalist_ids.size()));
+        for (uint32_t j : o.journalist_ids)
+            put_u32(out, j);
+    }
+    put_u32(out, static_cast<uint32_t>(active_stories_.size()));
+    for (const auto& s : active_stories_) {
+        put_u32(out, s.id);
+        put_u32(out, s.subject_id);
+        put_u32(out, s.journalist_id);
+        put_u32(out, s.outlet_id);
+        out.push_back(static_cast<uint8_t>(s.tone));
+        put_f32(out, s.evidence_weight);
+        put_f32(out, s.amplification);
+        put_u32(out, s.published_tick);
+        put_u32(out, static_cast<uint32_t>(s.evidence_token_ids.size()));
+        for (uint32_t e : s.evidence_token_ids)
+            put_u32(out, e);
+        out.push_back(s.is_active ? 1u : 0u);
+    }
+}
+
+bool MediaSystemModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t oc = r.u32();
+    outlets_.clear();
+    outlets_.reserve(oc);
+    for (uint32_t i = 0; i < oc; ++i) {
+        MediaOutlet o{};
+        o.id = r.u32();
+        o.province_id = r.u32();
+        o.type = static_cast<MediaOutletType>(r.u8());
+        o.credibility = r.f32();
+        o.reach = r.f32();
+        o.editorial_independence = r.f32();
+        o.owner_npc_id = r.u32();
+        uint32_t jn = r.u32();
+        if (r.error)
+            return false;
+        o.journalist_ids.reserve(jn);
+        for (uint32_t j = 0; j < jn; ++j)
+            o.journalist_ids.push_back(r.u32());
+        if (r.error)
+            return false;
+        outlets_.push_back(std::move(o));
+    }
+    uint32_t sc = r.u32();
+    active_stories_.clear();
+    active_stories_.reserve(sc);
+    for (uint32_t i = 0; i < sc; ++i) {
+        Story s{};
+        s.id = r.u32();
+        s.subject_id = r.u32();
+        s.journalist_id = r.u32();
+        s.outlet_id = r.u32();
+        s.tone = static_cast<StoryTone>(r.u8());
+        s.evidence_weight = r.f32();
+        s.amplification = r.f32();
+        s.published_tick = r.u32();
+        uint32_t en = r.u32();
+        if (r.error)
+            return false;
+        s.evidence_token_ids.reserve(en);
+        for (uint32_t j = 0; j < en; ++j)
+            s.evidence_token_ids.push_back(r.u32());
+        s.is_active = (r.u8() != 0);
+        if (r.error)
+            return false;
+        active_stories_.push_back(std::move(s));
+    }
+    return !r.error;
 }
 
 }  // namespace econlife
