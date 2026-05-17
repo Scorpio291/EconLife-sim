@@ -10,7 +10,8 @@ Rolls for random occurrences each tick per province using a Poisson probability 
 - `regional_markets` — spot prices for economic event effects (price spikes/crashes)
 - `npc_businesses` — business state for accident event targeting (facility disruption, owner identification)
 - `significant_npcs` — NPC state for human event effects (memory entries, scene card generation)
-- `active_random_events` — currently active events being tracked for per-tick effects and expiry
+- `active_random_events` — currently active events being tracked for per-tick effects and expiry (V1: held in `RandomEventsModule::active_events_` rather than on WorldState; persistence v7 round-trips them via the ITickModule serialize_state hook)
+- `pending_random_event_triggers[]` — cross-module trigger queue on WorldState. Drained at the very start of `execute()` (before expiry pruning and Poisson rolls). Each entry instantiates one `ActiveRandomEvent` from the named template; severity is clamped to the template's `[severity_min, severity_max]` range and duration is the integer midpoint of `[duration_ticks_min, duration_ticks_max]` (no RNG draw here). Triggers with an unknown `template_key` are silently dropped (the producer is at fault and the module never throws mid-tick). The queue is cleared via const_cast after processing.
 
 ## Outputs (to DeltaBuffer)
 - `RegionDelta` — agricultural_output_modifier (natural events), infrastructure_damage (natural/accident events), stability impact

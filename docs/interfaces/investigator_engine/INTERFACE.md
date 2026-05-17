@@ -30,6 +30,7 @@ Province-parallel execution: each province's investigators operate independently
 - `EvidenceTokenDelta` — new physical EvidenceToken generated when status transitions to surveillance; new evidence tokens from formal inquiry warrant execution
 - `ConsequenceDelta(investigation_opens)` — queued when status first reaches formal_inquiry
 - `ConsequenceDelta(raid_imminent)` — queued when status reaches raid_imminent; delay 7-30 ticks (seed-deterministic)
+- `LegalCaseSeedDelta` — emitted on the same first-time transition into raid_imminent when `target_id != 0`. Severity scales with meter level: 0.80–0.85 → moderate, 0.85–0.90 → serious, 0.90–0.95 → major, 0.95–1.00 → severe. `initial_evidence_weight` is set from `current_level` so the case clears legal_process's arrest threshold (0.35) in the same tick. Consumed by legal_process at Tier 9 from `state.pending_legal_case_seeds`.
 - `NPCDelta.knowledge_map` — KnowledgeEntry additions for investigators who discover evidence tokens or activity knowledge during surveillance
 
 ## Preconditions

@@ -23,6 +23,14 @@ The master simulation state container. Holds all simulation data and provides th
 - `world_seed` is immutable after initialization.
 - `game_mode` is immutable after game creation.
 - `cross_province_delta_buffer` is empty at save time.
+- `pending_legal_case_seeds` is empty at save time (in-tick consumer
+  contract: producer at Tier ≤ N emits, legal_process at Tier 9 drains
+  in the same tick).
+- `pending_random_event_triggers` MAY be non-empty at save time
+  (cross-tick consumer contract: tier-late producers like
+  currency_exchange at Tier 11 emit triggers that random_events at
+  Tier 1 cannot consume until the next tick). Persisted by schema
+  v8+.
 - At V1 scale (~2,000 NPCs, 6 provinces, ~50 goods): ~10-15MB. Always pass by reference.
 
 ## Failure Modes
@@ -42,3 +50,9 @@ The master simulation state container. Holds all simulation data and provides th
 - `delta_replacement_last_write_wins`: Apply two MarketDeltas with spot_price_override. Verify last value.
 - `worldstate_survives_serialization_roundtrip`: Serialize, deserialize, compare all fields.
 - `cross_province_buffer_empty_at_save`: Run tick, save, verify buffer is empty.
+- `pending_legal_case_seeds_empty_at_save`: Run tick where investigator
+  emits a seed, save, verify queue is empty (consumer drained in same
+  tick).
+- `pending_random_event_triggers_roundtrips`: Populate queue with two
+  triggers, save, load, verify both entries restored in order with
+  exact template_key / province_id / severity.
