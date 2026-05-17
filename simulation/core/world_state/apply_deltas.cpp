@@ -695,6 +695,14 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.cross_province_delta_buffer.entries.push_back(std::move(cpd));
     }
 
+    // Route legal case seeds into WorldState's pending queue. legal_process
+    // drains them at the start of its execute() within the same tick (it
+    // runs at Tier 9, after investigator_engine at Tier 8 which is the
+    // primary producer). The queue must be empty at save time.
+    for (auto& seed : delta.new_legal_case_seeds) {
+        world.pending_legal_case_seeds.push_back(std::move(seed));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -720,6 +728,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_businesses.clear();
     delta.scene_card_choice_deltas.clear();
     delta.calendar_commit_deltas.clear();
+    delta.new_legal_case_seeds.clear();
 }
 
 // ---------------------------------------------------------------------------

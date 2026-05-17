@@ -195,6 +195,22 @@ struct CalendarCommitDelta {
     bool committed;
 };
 
+// Legal case seed — request to open a new LegalCase at the investigation
+// stage. Emitted by any module observing a triggering event (e.g.
+// investigator_engine when its meter crosses raid_imminent). Routed by
+// apply_deltas into WorldState.pending_legal_case_seeds; legal_process
+// drains the queue at the start of its execute() within the same tick.
+//
+// severity is the underlying value of CaseSeverity (kept as u8 here so
+// delta_buffer.h does not depend on legal_process_types.h).
+struct LegalCaseSeedDelta {
+    uint32_t defendant_npc_id;     // 0 = player defendant
+    uint32_t lead_investigator_id; // NPC opening the case; 0 if none
+    uint8_t severity;              // CaseSeverity enum value
+    uint32_t province_id;
+    float initial_evidence_weight; // starting evidence accumulated so far
+};
+
 // Accumulated state changes for one tick step.
 // Pre-reserve vectors at WorldState initialization using known NPC count.
 //
@@ -228,6 +244,7 @@ struct DeltaBuffer {
     std::vector<NewBusinessDelta> new_businesses;                // merge: append
     std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
     std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
+    std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

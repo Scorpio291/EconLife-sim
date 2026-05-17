@@ -122,6 +122,21 @@ struct WorldState {
     // --- Cross-Province Delta Buffer ---
     CrossProvinceDeltaBuffer cross_province_delta_buffer;  // scratch; cleared each tick
 
+    // --- Cross-Module Trigger Queues ---
+    // Scratch queues populated by apply_deltas from DeltaBuffer's new_*_seeds
+    // vectors and drained by their consumer module within the same tick.
+    // Must be empty at save time (consumer always runs within tick of emit;
+    // any leftover entry would indicate a missing consumer or broken
+    // topological ordering). Not persisted.
+    //
+    // pending_legal_case_seeds: written by any module observing an event
+    // worth opening a legal investigation (e.g. investigator_engine when
+    // its meter reaches raid_imminent). Drained by legal_process at the
+    // start of its execute() — see legal_process_module.cpp for the
+    // const_cast carve-out paralleling how player_actions writes to the
+    // deferred_work_queue.
+    std::vector<LegalCaseSeedDelta> pending_legal_case_seeds;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.

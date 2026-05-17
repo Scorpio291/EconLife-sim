@@ -132,6 +132,15 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
         d.committed = true;
         db.calendar_commit_deltas.push_back(d);
     }
+    {
+        LegalCaseSeedDelta d{};
+        d.defendant_npc_id = tag;
+        d.lead_investigator_id = tag + 1u;
+        d.severity = 2u;
+        d.province_id = tag;
+        d.initial_evidence_weight = 0.4f;
+        db.new_legal_case_seeds.push_back(d);
+    }
 }
 
 }  // namespace
@@ -165,6 +174,7 @@ TEST_CASE("test_delta_buffer_merge_covers_every_field", "[world_state][delta_buf
     REQUIRE(dst.new_businesses.size() == 2);
     REQUIRE(dst.scene_card_choice_deltas.size() == 2);
     REQUIRE(dst.calendar_commit_deltas.size() == 2);
+    REQUIRE(dst.new_legal_case_seeds.size() == 2);
 
     // Append order is preserved: the dst-tagged entry comes first.
     REQUIRE(dst.npc_deltas[0].npc_id == 1);

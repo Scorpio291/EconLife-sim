@@ -330,12 +330,42 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
             province_delta.consequence_deltas.push_back(cons);
         }
 
-        // Raid imminent transition: queue raid consequence
+        // Raid imminent transition: queue raid consequence and request a
+        // new legal case at investigation stage for the resolved target.
+        // legal_process drains pending_legal_case_seeds within the same
+        // tick (runs at Tier 9, after this module at Tier 8) and the new
+        // case typically advances investigation→arrested immediately
+        // because the meter level (>= 0.80) seeds enough evidence to clear
+        // the arrest threshold (0.35).
         if (new_status >= InvestigatorMeterStatus::raid_imminent &&
             old_status < static_cast<uint8_t>(InvestigatorMeterStatus::raid_imminent)) {
             ConsequenceDelta cons;
             cons.new_entry_id = inv->id;
             province_delta.consequence_deltas.push_back(cons);
+
+            if (found_case->target_id != 0u) {
+                LegalCaseSeedDelta seed{};
+                seed.defendant_npc_id = found_case->target_id;
+                seed.lead_investigator_id = inv->id;
+                // Map meter level to severity: 0.80–0.85 → moderate(1),
+                // 0.85–0.90 → serious(2), 0.90–0.95 → major(3),
+                // 0.95–1.00 → severe(4). Linear bucket; severity_value =
+                // enum + 1 in legal_process.
+                float lvl = found_case->current_level;
+                uint8_t sev = 1;  // CaseSeverity::moderate
+                if (lvl >= 0.95f)
+                    sev = 4;  // severe
+                else if (lvl >= 0.90f)
+                    sev = 3;  // major
+                else if (lvl >= 0.85f)
+                    sev = 2;  // serious
+                seed.severity = sev;
+                seed.province_id = found_case->province_id;
+                // Map meter to evidence weight so legal_process's
+                // should_arrest gate (0.35) passes immediately.
+                seed.initial_evidence_weight = found_case->current_level;
+                province_delta.new_legal_case_seeds.push_back(seed);
+            }
         }
     }
 }

@@ -111,6 +111,43 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Tick-level RNG seed: world_seed mixed with current tick, forked per case.
     DeterministicRNG tick_rng(state.world_seed ^ static_cast<uint64_t>(state.current_tick));
 
+    // Drain cross-module seed queue: any module observing a triggering event
+    // (e.g. investigator_engine's meter reaching raid_imminent) emits a
+    // LegalCaseSeedDelta which apply_deltas routes into
+    // state.pending_legal_case_seeds. We instantiate a fresh LegalCase per
+    // seed at the investigation stage with a freshly-allocated case id, then
+    // clear the queue via const_cast — same carve-out player_actions uses
+    // for state.deferred_work_queue. State must be const otherwise (WorldState
+    // invariant). The queue is documented as "must be empty at save time".
+    if (!state.pending_legal_case_seeds.empty()) {
+        // Allocate case ids starting from max(existing id) + 1 so the new
+        // cases sort after pre-existing ones in deterministic order.
+        uint32_t next_id = 1;
+        for (const auto& c : cases_) {
+            if (c.id >= next_id)
+                next_id = c.id + 1;
+        }
+        for (const auto& seed : state.pending_legal_case_seeds) {
+            LegalCase c{};
+            c.id = next_id++;
+            c.defendant_npc_id = seed.defendant_npc_id;
+            c.is_player_case = (seed.defendant_npc_id == 0);
+            c.severity = static_cast<CaseSeverity>(seed.severity);
+            c.stage = LegalCaseStage::investigation;
+            c.evidence_weight = seed.initial_evidence_weight;
+            c.opened_tick = state.current_tick;
+            c.stage_entered_tick = state.current_tick;
+            // Investigator hint: stash on prosecutor slot until investigator
+            // assignment is fully wired. The real prosecutor_npc_id is set
+            // by the charge filing stage in a follow-up.
+            c.prosecutor_npc_id = seed.lead_investigator_id;
+            cases_.push_back(c);
+        }
+        auto& mutable_queue =
+            const_cast<std::vector<LegalCaseSeedDelta>&>(state.pending_legal_case_seeds);
+        mutable_queue.clear();
+    }
+
     std::sort(cases_.begin(), cases_.end(),
               [](const LegalCase& a, const LegalCase& b) { return a.id < b.id; });
 

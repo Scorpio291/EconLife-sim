@@ -319,3 +319,85 @@ TEST_CASE("LegalProcess: bail auto-posted for player arrest",
     REQUIRE(delta.player_delta.wealth_delta.has_value());
     REQUIRE(*delta.player_delta.wealth_delta < 0.0f);
 }
+
+// ─── Cross-module trigger ────────────────────────────────────────────────────
+
+TEST_CASE("LegalProcess: drains pending_legal_case_seeds and creates investigation case",
+          "[legal_process][tier9][cross_module]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    WorldState world = empty_world(50);
+
+    LegalCaseSeedDelta seed{};
+    seed.defendant_npc_id = 999;
+    seed.lead_investigator_id = 700;
+    seed.severity = static_cast<uint8_t>(CaseSeverity::serious);
+    seed.province_id = 1;
+    seed.initial_evidence_weight = 0.85f;  // above arrest threshold 0.35
+    world.pending_legal_case_seeds.push_back(seed);
+
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+
+    // Queue drained.
+    REQUIRE(world.pending_legal_case_seeds.empty());
+    // Case created.
+    REQUIRE(mod.cases().size() == 1);
+    REQUIRE(mod.cases()[0].defendant_npc_id == 999);
+    REQUIRE(mod.cases()[0].severity == CaseSeverity::serious);
+    // High initial evidence + same-tick processing cascades
+    // investigation → arrested (should_arrest(0.85, 0.35) == true).
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::arrested);
+    REQUIRE(mod.cases()[0].opened_tick == 50);
+    REQUIRE(mod.cases()[0].prosecutor_npc_id == 700);  // stashed investigator hint
+}
+
+TEST_CASE("LegalProcess: low-evidence seed stays at investigation stage",
+          "[legal_process][tier9][cross_module]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    WorldState world = empty_world(50);
+
+    LegalCaseSeedDelta seed{};
+    seed.defendant_npc_id = 1000;
+    seed.lead_investigator_id = 701;
+    seed.severity = static_cast<uint8_t>(CaseSeverity::moderate);
+    seed.province_id = 0;
+    seed.initial_evidence_weight = 0.20f;  // below arrest threshold
+    world.pending_legal_case_seeds.push_back(seed);
+
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+
+    REQUIRE(mod.cases().size() == 1);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::investigation);
+    REQUIRE(world.pending_legal_case_seeds.empty());
+}
+
+TEST_CASE("LegalProcess: seed ids do not collide with existing case ids",
+          "[legal_process][tier9][cross_module]") {
+    LegalProcessConfig cfg;
+    LegalProcessModule mod(cfg);
+    WorldState world = empty_world(50);
+
+    auto existing = make_case(42, LegalCaseStage::charged, CaseSeverity::serious, 0.0f, 5, 10);
+    mod.cases_mut().push_back(existing);
+
+    LegalCaseSeedDelta seed{};
+    seed.defendant_npc_id = 1000;
+    seed.severity = static_cast<uint8_t>(CaseSeverity::moderate);
+    seed.initial_evidence_weight = 0.4f;
+    world.pending_legal_case_seeds.push_back(seed);
+
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+
+    REQUIRE(mod.cases().size() == 2);
+    // New case id should be > 42 (max existing id + 1 = 43).
+    uint32_t new_case_id = 0;
+    for (const auto& c : mod.cases()) {
+        if (c.defendant_npc_id == 1000)
+            new_case_id = c.id;
+    }
+    REQUIRE(new_case_id == 43u);
+}
