@@ -114,7 +114,12 @@ class PersistenceModule : public ITickModule {
     //      is_schema_compatible. Modules using this hook in V1:
     //      random_events.active_events_, protection_rackets.rackets_,
     //      real_estate.properties_ (more to follow per session_logs).
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 7;
+    //   v8: trailing pending_random_event_triggers vector (u32 count,
+    //      per entry: string template_key + u32 province_id + float
+    //      severity). Persists cross-tick triggers emitted by tier-late
+    //      producers (currency_exchange peg break) so a save mid-cycle
+    //      does not drop them. v7 saves load with the queue empty.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 8;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

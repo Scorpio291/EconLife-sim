@@ -141,6 +141,13 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
         d.initial_evidence_weight = 0.4f;
         db.new_legal_case_seeds.push_back(d);
     }
+    {
+        RandomEventTriggerDelta d{};
+        d.template_key = "currency_crisis";
+        d.province_id = tag;
+        d.severity = 0.5f;
+        db.new_random_event_triggers.push_back(d);
+    }
 }
 
 }  // namespace
@@ -175,6 +182,7 @@ TEST_CASE("test_delta_buffer_merge_covers_every_field", "[world_state][delta_buf
     REQUIRE(dst.scene_card_choice_deltas.size() == 2);
     REQUIRE(dst.calendar_commit_deltas.size() == 2);
     REQUIRE(dst.new_legal_case_seeds.size() == 2);
+    REQUIRE(dst.new_random_event_triggers.size() == 2);
 
     // Append order is preserved: the dst-tagged entry comes first.
     REQUIRE(dst.npc_deltas[0].npc_id == 1);

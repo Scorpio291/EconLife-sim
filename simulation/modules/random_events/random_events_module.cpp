@@ -47,6 +47,12 @@ static std::vector<RandomEventTemplate> get_default_templates() {
                          false});
     templates.push_back({"credit_tightening", "credit_tightening", EventCategory::economic,
                          "Credit Tightening", 0.5f, 0.30f, 0.70f, 10, 30, 1.0f, 1.5f, 1.0f, false});
+    // Triggered (not rolled): currency_exchange emits a
+    // RandomEventTriggerDelta on peg break. base_weight = 0 keeps it out
+    // of the random selection pool — the only path to fire is the
+    // pending_random_event_triggers drain in execute().
+    templates.push_back({"currency_crisis", "currency_crisis", EventCategory::economic,
+                         "Currency Crisis", 0.0f, 0.40f, 0.95f, 20, 90, 1.0f, 1.0f, 1.0f, false});
 
     templates.push_back({"political_crisis", "political_crisis", EventCategory::human,
                          "Political Crisis", 0.8f, 0.25f, 0.65f, 5, 20, 1.0f, 2.5f, 1.0f, false});
@@ -101,6 +107,47 @@ void RandomEventsModule::execute_province(uint32_t province_idx, const WorldStat
 }
 
 void RandomEventsModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Drain cross-module triggers first. Any module emits a
+    // RandomEventTriggerDelta -> apply_deltas routes it into
+    // state.pending_random_event_triggers. We instantiate the named
+    // template here, then clear the queue via const_cast (same carve-out
+    // legal_process uses for state.pending_legal_case_seeds). Triggers
+    // with an unknown template_key are dropped silently — the producer
+    // is at fault and we never want to throw mid-tick. Severity is
+    // clamped to the template's [severity_min, severity_max] range.
+    if (!state.pending_random_event_triggers.empty()) {
+        for (const auto& trig : state.pending_random_event_triggers) {
+            const RandomEventTemplate* tmpl = nullptr;
+            for (const auto& t : templates_) {
+                if (t.id == trig.template_key) {
+                    tmpl = &t;
+                    break;
+                }
+            }
+            if (!tmpl)
+                continue;
+            // Duration: midpoint of [min, max]. Deterministic, no RNG draw
+            // (we are at the very top of execute(), before any roll). For
+            // currency_crisis (20..90) that is 55 ticks.
+            uint32_t duration = (tmpl->duration_ticks_min + tmpl->duration_ticks_max) / 2u;
+            ActiveRandomEvent ev{};
+            ev.id = allocate_event_id();
+            ev.template_id = tmpl->id;
+            ev.template_key = tmpl->template_key;
+            ev.province_id = trig.province_id;
+            ev.category = tmpl->category;
+            ev.severity = std::clamp(trig.severity, tmpl->severity_min, tmpl->severity_max);
+            ev.started_tick = state.current_tick;
+            ev.end_tick = state.current_tick + duration;
+            ev.evidence_generated = false;
+            ev.effects_applied_this_tick = false;
+            active_events_.push_back(ev);
+        }
+        auto& mutable_queue = const_cast<std::vector<RandomEventTriggerDelta>&>(
+            state.pending_random_event_triggers);
+        mutable_queue.clear();
+    }
+
     // Prune expired events (end_tick == 0) so active_events_ does not grow without bound.
     // This runs single-threaded, so the erase is safe.
     active_events_.erase(std::remove_if(active_events_.begin(), active_events_.end(),

@@ -137,6 +137,18 @@ struct WorldState {
     // deferred_work_queue.
     std::vector<LegalCaseSeedDelta> pending_legal_case_seeds;
 
+    // pending_random_event_triggers: written by any module observing a
+    // condition that should start a specific ActiveRandomEvent (e.g.
+    // currency_exchange when a currency's foreign reserves drop below
+    // the peg-break threshold). Drained by random_events at the start
+    // of its execute(). This queue MAY hold entries across tick
+    // boundaries because typical producers (currency_exchange Tier 11,
+    // government_budget Tier 7) run after random_events (Tier 1) and
+    // their emits do not see consumption until the next tick. Persisted
+    // by persistence schema v8+ so a save mid-cycle does not drop the
+    // pending trigger.
+    std::vector<RandomEventTriggerDelta> pending_random_event_triggers;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.

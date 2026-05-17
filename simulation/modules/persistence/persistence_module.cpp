@@ -1571,9 +1571,11 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
     // Each schema bump (v3 catalog, v4 addiction footer, v5 cohort_stats
     // migration, v6 currency/facility/technology footers, v7 module-state
-    // section) changes the byte-stream layout, so older saves short-read
-    // when loaded by newer code. V1 is pre-release; reject anything older
-    // than the current floor outright.
+    // section, v8 pending_random_event_triggers footer) changes the
+    // byte-stream layout. V1 is pre-release; reject anything older than
+    // the current floor outright. v7 saves remain loadable: the v8
+    // section is gated on saved_version >= 8 and absent v8 leaves the
+    // queue empty (no cross-tick triggers in flight at save time).
     if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
@@ -1786,6 +1788,20 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
             w.write_u32(static_cast<uint32_t>(p.size()));
             for (uint8_t b : p)
                 w.write_u8(b);
+        }
+    }
+
+    // --- v8: pending_random_event_triggers ---
+    // Cross-tick trigger queue. Written even when empty so the section
+    // header is always present. Entry order is preserved (consumer
+    // processes them in insertion order).
+    {
+        const auto& queue = state.pending_random_event_triggers;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& t : queue) {
+            w.write_string(t.template_key);
+            w.write_u32(t.province_id);
+            w.write_float(t.severity);
         }
     }
 
@@ -2114,6 +2130,27 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             }
         }
     }
+
+    // --- v8: pending_random_event_triggers ---
+    // v7 saves omit this section: leave the queue empty (no cross-tick
+    // triggers in flight at save time). v8+ saves carry the queue.
+    out_state.pending_random_event_triggers.clear();
+    if (schema_ver >= 8u) {
+        uint32_t trig_count = r.read_u32();
+        out_state.pending_random_event_triggers.reserve(trig_count);
+        for (uint32_t i = 0; i < trig_count; ++i) {
+            RandomEventTriggerDelta t{};
+            t.template_key = r.read_string();
+            t.province_id = r.read_u32();
+            t.severity = r.read_float();
+            out_state.pending_random_event_triggers.push_back(std::move(t));
+        }
+    }
+
+    // pending_legal_case_seeds is documented as "must be empty at save
+    // time" (consumer drains within the same tick as the producer).
+    // Defensively reset on load.
+    out_state.pending_legal_case_seeds.clear();
 
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();

@@ -761,3 +761,82 @@ TEST_CASE("test_different_seeds_different_events", "[random_events][tier1]") {
     }
     REQUIRE(any_difference);
 }
+
+// ─── Cross-module trigger: pending_random_event_triggers drain ──────────────
+
+TEST_CASE("RandomEvents: drains pending_random_event_triggers and creates ActiveRandomEvent",
+          "[random_events][tier1][cross_module]") {
+    RandomEventsConfig cfg{};
+    RandomEventsModule module(cfg);
+
+    WorldState world{};
+    world.current_tick = 100;
+    world.world_seed = 12345;
+
+    RandomEventTriggerDelta trig{};
+    trig.template_key = "currency_crisis";
+    trig.province_id = 5;
+    trig.severity = 0.75f;
+    world.pending_random_event_triggers.push_back(trig);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    // Queue drained.
+    REQUIRE(world.pending_random_event_triggers.empty());
+    REQUIRE(module.active_events().size() == 1);
+    const auto& ev = module.active_events()[0];
+    REQUIRE(ev.template_id == "currency_crisis");
+    REQUIRE(ev.province_id == 5);
+    REQUIRE(std::fabs(ev.severity - 0.75f) < 0.001f);
+    REQUIRE(ev.started_tick == 100);
+    // Duration midpoint of currency_crisis (20..90) = 55 ticks.
+    REQUIRE(ev.end_tick == 100 + 55);
+    REQUIRE(ev.category == EventCategory::economic);
+}
+
+TEST_CASE("RandomEvents: drains pending triggers and clamps severity to template range",
+          "[random_events][tier1][cross_module]") {
+    RandomEventsConfig cfg{};
+    RandomEventsModule module(cfg);
+
+    WorldState world{};
+    world.current_tick = 50;
+    world.world_seed = 1;
+
+    // severity above template max (0.95) — should clamp.
+    RandomEventTriggerDelta trig{};
+    trig.template_key = "currency_crisis";
+    trig.province_id = 1;
+    trig.severity = 5.0f;
+    world.pending_random_event_triggers.push_back(trig);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.active_events().size() == 1);
+    REQUIRE(std::fabs(module.active_events()[0].severity - 0.95f) < 0.001f);
+}
+
+TEST_CASE("RandomEvents: unknown template_key is silently dropped",
+          "[random_events][tier1][cross_module]") {
+    RandomEventsConfig cfg{};
+    RandomEventsModule module(cfg);
+
+    WorldState world{};
+    world.current_tick = 10;
+    world.world_seed = 1;
+
+    RandomEventTriggerDelta trig{};
+    trig.template_key = "nonexistent_event_xyz";
+    trig.province_id = 1;
+    trig.severity = 0.5f;
+    world.pending_random_event_triggers.push_back(trig);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    // Bad template: no event created, but queue still drained.
+    REQUIRE(world.pending_random_event_triggers.empty());
+    REQUIRE(module.active_events().empty());
+}

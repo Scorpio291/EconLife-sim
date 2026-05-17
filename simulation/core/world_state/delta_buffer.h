@@ -211,6 +211,23 @@ struct LegalCaseSeedDelta {
     float initial_evidence_weight; // starting evidence accumulated so far
 };
 
+// Random event trigger — request to start a specific ActiveRandomEvent
+// from any module observing a triggering condition (e.g.
+// currency_exchange when a peg breaks). Routed by apply_deltas into
+// WorldState.pending_random_event_triggers; random_events drains the
+// queue at the start of its execute() and instantiates the event using
+// the named template.
+//
+// Unlike LegalCaseSeedDelta, this trigger may cross tick boundaries:
+// producers later in the tick order (e.g. currency_exchange Tier 11)
+// emit triggers that random_events (Tier 1) cannot consume until the
+// next tick. The pending queue is therefore persisted (schema v8+).
+struct RandomEventTriggerDelta {
+    std::string template_key;  // matches RandomEventTemplate.id
+    uint32_t province_id;
+    float severity;            // 0.0–1.0; clamped to template's [min,max] range
+};
+
 // Accumulated state changes for one tick step.
 // Pre-reserve vectors at WorldState initialization using known NPC count.
 //
@@ -245,6 +262,7 @@ struct DeltaBuffer {
     std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
     std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
     std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
+    std::vector<RandomEventTriggerDelta> new_random_event_triggers;  // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

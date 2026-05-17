@@ -703,6 +703,16 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_legal_case_seeds.push_back(std::move(seed));
     }
 
+    // Route random event triggers into WorldState's pending queue.
+    // random_events drains them at the start of its execute(). Unlike
+    // legal_case_seeds this queue MAY persist across tick boundaries
+    // because typical producers (currency_exchange at Tier 11) run after
+    // the consumer (random_events at Tier 1), and is therefore persisted
+    // by persistence schema v8+.
+    for (auto& trig : delta.new_random_event_triggers) {
+        world.pending_random_event_triggers.push_back(std::move(trig));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -729,6 +739,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.scene_card_choice_deltas.clear();
     delta.calendar_commit_deltas.clear();
     delta.new_legal_case_seeds.clear();
+    delta.new_random_event_triggers.clear();
 }
 
 // ---------------------------------------------------------------------------

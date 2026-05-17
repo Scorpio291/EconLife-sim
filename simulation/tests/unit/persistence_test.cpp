@@ -47,13 +47,20 @@ TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
     REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
 }
 
+TEST_CASE("Persistence: schema accepts v7 and v8", "[persistence][tier12]") {
+    // v8 is current; v7 is still loadable (the v8 pending-trigger
+    // section is gated on saved_version >= 8 and is absent in v7 saves).
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 8) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(8, 8) == true);
+}
+
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(8, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(9, 8) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
     REQUIRE(PersistenceModule::needs_migration(7, 8) == true);
-    REQUIRE(PersistenceModule::needs_migration(7, 7) == false);
+    REQUIRE(PersistenceModule::needs_migration(8, 8) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -95,9 +102,11 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
-    // Schema v6: currencies + facilities + GlobalTechnologyState footers.
-    // Prior bumps documented in persistence_module.h:CURRENT_SCHEMA_VERSION.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 7);
+    // Schema v8: pending_random_event_triggers footer. Earlier bumps
+    // (v3 catalog, v4 addiction, v5 cohort, v6 currency/facility/tech,
+    // v7 module-state, v8 trigger queue) documented in
+    // persistence_module.h:CURRENT_SCHEMA_VERSION.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 8);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -609,4 +618,63 @@ TEST_CASE("Persistence: round-trip preserves GlobalTechnologyState",
     REQUIRE(restored.technology.active_maturation_projects.size() == 1);
     REQUIRE(restored.technology.active_maturation_projects[0].node_key == "ai_optimization");
     REQUIRE(restored.technology.active_maturation_projects[0].progress == 0.62f);
+}
+
+// ── Schema v8: pending_random_event_triggers round-trip ────────────────────
+
+TEST_CASE("Persistence: round-trip preserves pending_random_event_triggers (v8)",
+          "[persistence][tier12][serialization][v8]") {
+    auto world = test::create_test_world(99, 10, 2, 5);
+
+    RandomEventTriggerDelta t1{};
+    t1.template_key = "currency_crisis";
+    t1.province_id = 2;
+    t1.severity = 0.72f;
+    world.pending_random_event_triggers.push_back(t1);
+
+    RandomEventTriggerDelta t2{};
+    t2.template_key = "market_shock";
+    t2.province_id = 4;
+    t2.severity = 0.31f;
+    world.pending_random_event_triggers.push_back(t2);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    auto result = PersistenceModule::deserialize(bytes, restored);
+    REQUIRE(result == RestoreResult::success);
+
+    REQUIRE(restored.pending_random_event_triggers.size() == 2);
+    REQUIRE(restored.pending_random_event_triggers[0].template_key == "currency_crisis");
+    REQUIRE(restored.pending_random_event_triggers[0].province_id == 2);
+    REQUIRE_THAT(restored.pending_random_event_triggers[0].severity, WithinAbs(0.72f, 0.001f));
+    REQUIRE(restored.pending_random_event_triggers[1].template_key == "market_shock");
+    REQUIRE(restored.pending_random_event_triggers[1].province_id == 4);
+    REQUIRE_THAT(restored.pending_random_event_triggers[1].severity, WithinAbs(0.31f, 0.001f));
+}
+
+TEST_CASE("Persistence: empty trigger queue round-trips cleanly (v8)",
+          "[persistence][tier12][serialization][v8]") {
+    auto world = test::create_test_world(99, 10, 2, 5);
+    REQUIRE(world.pending_random_event_triggers.empty());
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+    REQUIRE(restored.pending_random_event_triggers.empty());
+}
+
+TEST_CASE("Persistence: pending_legal_case_seeds defensively cleared on load (v8)",
+          "[persistence][tier12][serialization][v8]") {
+    auto world = test::create_test_world(99, 10, 2, 5);
+    // The producer→consumer pair runs within one tick so this queue is
+    // documented as "must be empty at save time". Serializer does not
+    // write it; loader defensively resets it.
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    // Pre-populate to verify loader clears.
+    LegalCaseSeedDelta stale{};
+    stale.defendant_npc_id = 999;
+    restored.pending_legal_case_seeds.push_back(stale);
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+    REQUIRE(restored.pending_legal_case_seeds.empty());
 }
