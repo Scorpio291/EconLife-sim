@@ -176,12 +176,17 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
                 // Emit a public_arrest_record EvidenceToken (documentary type
                 // since shared_types has no dedicated public_arrest variant).
+                // Weight = case evidence + arrest_exposure_hit (additive
+                // PR damage of public arrest, per player.h:159 "exposure
+                // is the set of awareness entries, not a scalar").
+                float public_weight = std::clamp(
+                    lcase.evidence_weight + cfg_.arrest_exposure_hit, 0.0f, 1.0f);
                 EvidenceDelta arrest_record;
                 arrest_record.new_token = EvidenceToken{0,
                                                         EvidenceType::documentary,
                                                         lcase.prosecutor_npc_id,
                                                         lcase.defendant_npc_id,
-                                                        lcase.evidence_weight,
+                                                        public_weight,
                                                         0.0f,  // public record does not decay
                                                         state.current_tick,
                                                         /*province_id=*/0u,

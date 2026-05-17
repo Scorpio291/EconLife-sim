@@ -182,6 +182,38 @@ TEST_CASE("LegalProcess: investigation -> arrested on evidence threshold",
     REQUIRE_FALSE(delta.evidence_deltas.empty());
 }
 
+TEST_CASE("LegalProcess: arrest_exposure_hit adds to public arrest token weight",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;
+    // case at exactly the arrest threshold (0.35) — public token weight
+    // should be 0.35 + 0.15 = 0.50.
+    LegalProcessModule mod(cfg);
+    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
+                                        0.35f, /*opened*/ 10));
+    WorldState world = empty_world(15);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(mod.cases()[0].stage == LegalCaseStage::arrested);
+    REQUIRE(delta.evidence_deltas.size() == 1);
+    REQUIRE(delta.evidence_deltas[0].new_token.has_value());
+    REQUIRE_THAT(delta.evidence_deltas[0].new_token->actionability, WithinAbs(0.50f, 0.001f));
+}
+
+TEST_CASE("LegalProcess: arrest_exposure_hit clamps token weight at 1.0",
+          "[legal_process][tier9][state_machine]") {
+    LegalProcessConfig cfg;  // arrest_exposure_hit = 0.15
+    LegalProcessModule mod(cfg);
+    // case with strong evidence (0.95): 0.95 + 0.15 = 1.10 → clamped to 1.0.
+    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
+                                        0.95f, /*opened*/ 10));
+    WorldState world = empty_world(15);
+    DeltaBuffer delta;
+    mod.execute(world, delta);
+    REQUIRE(delta.evidence_deltas.size() == 1);
+    REQUIRE(delta.evidence_deltas[0].new_token.has_value());
+    REQUIRE_THAT(delta.evidence_deltas[0].new_token->actionability, WithinAbs(1.0f, 0.001f));
+}
+
 TEST_CASE("LegalProcess: investigation stays put below threshold",
           "[legal_process][tier9][state_machine]") {
     LegalProcessConfig cfg;

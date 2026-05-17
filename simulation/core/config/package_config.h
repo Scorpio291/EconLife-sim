@@ -141,6 +141,13 @@ struct LegalProcessConfig {
     // Fine amount for non-custodial convictions (severity below floor).
     // Applied as a one-shot wealth deduction on transition convicted -> fined.
     float fine_amount_per_severity = 10000.0f;
+    // Additive bump to the public_arrest_record EvidenceToken's weight on
+    // arrest. Per player.h:159, "exposure" is not a scalar — it's the set
+    // of evidence tokens the player is aware of. This config models the
+    // PR damage of being publicly arrested on top of the underlying
+    // case's evidence: token_weight = clamp(case.evidence_weight +
+    // arrest_exposure_hit, 0.0, 1.0).
+    float arrest_exposure_hit = 0.15f;
 };
 
 struct EvidenceConfig {

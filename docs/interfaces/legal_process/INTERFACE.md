@@ -22,7 +22,7 @@ Manages court proceedings, sentencing, appeals, and the full legal case lifecycl
 - `config.legal.prison_delegation_efficiency` — 0.60; delegate performance during imprisonment
 - `config.legal.parole_eligibility_fraction` — 0.50; eligible after 50% of sentence
 - `config.legal.double_jeopardy_cooldown_ticks` — 1825; ~5 years before re-filing
-- `config.legal.arrest_exposure_hit` — 0.15; immediate exposure increase on arrest
+- `config.legal.arrest_exposure_hit` — 0.15; additive bump on the public_arrest_record EvidenceToken's `actionability` weight when emitted at investigation→arrested. Per `player.h:159`, exposure is not a scalar — it is the set of EvidenceAwarenessEntry records the player knows about. This config models the PR damage of being publicly arrested on top of the underlying case strength: `token.actionability = clamp(case.evidence_weight + arrest_exposure_hit, 0.0, 1.0)`.
 - `current_tick` — for stage duration checks and sentence countdown
 
 ## Outputs (to DeltaBuffer)
