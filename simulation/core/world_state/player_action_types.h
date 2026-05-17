@@ -78,6 +78,29 @@ struct InitiateContactAction {
     uint32_t target_npc_id;
 };
 
+// List an owned PropertyListing for sale at a specified asking price.
+// Validates ownership in real_estate's drain step. Player must own the
+// property and asking_price must be > 0.
+struct ListPropertyForSaleAction {
+    uint32_t property_id;
+    float asking_price;
+};
+
+// Remove an owned PropertyListing from the market (sets listed_for_sale
+// = false). Player must own the property.
+struct UnlistPropertyAction {
+    uint32_t property_id;
+};
+
+// Make a cash offer on a listed property. Phase 1: only at-or-above
+// asking price offers are accepted; below-asking offers are dropped
+// (negotiation lands in Phase 3). Settles instantly within the same
+// tick (multi-tick lifecycle lands in Phase 2).
+struct MakePropertyOfferAction {
+    uint32_t property_id;
+    float offer_price;
+};
+
 // ---------------------------------------------------------------------------
 // PlayerActionType enum — mirrors variant index for type dispatch
 // ---------------------------------------------------------------------------
@@ -92,6 +115,9 @@ enum class PlayerActionType : uint8_t {
     delegate = 6,
     commercialize_tech = 7,
     initiate_contact = 8,
+    list_property_for_sale = 9,
+    unlist_property = 10,
+    make_property_offer = 11,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,7 +127,8 @@ enum class PlayerActionType : uint8_t {
 using PlayerActionPayload =
     std::variant<SceneCardChoiceAction, CalendarCommitAction, CalendarScheduleAction, TravelAction,
                  StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
-                 InitiateContactAction>;
+                 InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
+                 MakePropertyOfferAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

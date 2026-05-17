@@ -31,6 +31,9 @@ The master simulation state container. Holds all simulation data and provides th
   currency_exchange at Tier 11 emit triggers that random_events at
   Tier 1 cannot consume until the next tick). Persisted by schema
   v8+.
+- `pending_property_transactions` is empty at save time (in-tick
+  consumer contract: player_actions at Tier 0 emits, real_estate at
+  Tier 4 drains in the same tick's global post-pass).
 - At V1 scale (~2,000 NPCs, 6 provinces, ~50 goods): ~10-15MB. Always pass by reference.
 
 ## Failure Modes
@@ -56,3 +59,6 @@ The master simulation state container. Holds all simulation data and provides th
 - `pending_random_event_triggers_roundtrips`: Populate queue with two
   triggers, save, load, verify both entries restored in order with
   exact template_key / province_id / severity.
+- `pending_property_transactions_empty_at_save`: Run a tick where
+  player_actions emits a buy request; verify real_estate drains it in
+  the same tick's global post-pass and the queue is empty on save.

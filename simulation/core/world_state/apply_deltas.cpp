@@ -713,6 +713,14 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_random_event_triggers.push_back(std::move(trig));
     }
 
+    // Route property transaction requests into WorldState's pending
+    // queue. real_estate drains them at the start of its execute()
+    // within the same tick (real_estate Tier 4 follows player_actions
+    // Tier 0). Queue is empty at save time.
+    for (auto& tx : delta.new_property_transactions) {
+        world.pending_property_transactions.push_back(std::move(tx));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -740,6 +748,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.calendar_commit_deltas.clear();
     delta.new_legal_case_seeds.clear();
     delta.new_random_event_triggers.clear();
+    delta.new_property_transactions.clear();
 }
 
 // ---------------------------------------------------------------------------

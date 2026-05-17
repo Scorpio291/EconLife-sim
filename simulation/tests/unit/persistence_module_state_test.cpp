@@ -161,6 +161,7 @@ TEST_CASE("v7 module-state: real_estate properties round-trip",
     p1.launder_eligible = false;
     p1.purchased_tick = 100;
     p1.purchase_price = 200000.0f;
+    p1.listed_for_sale = true;
     mod.add_property(p1);
 
     PropertyListing p2{};
@@ -177,6 +178,7 @@ TEST_CASE("v7 module-state: real_estate properties round-trip",
     p2.launder_eligible = true;
     p2.purchased_tick = 200;
     p2.purchase_price = 600000.0f;
+    p2.listed_for_sale = false;
     mod.add_property(p2);
 
     auto bytes = PersistenceModule::serialize(world, {&mod});
@@ -193,9 +195,11 @@ TEST_CASE("v7 module-state: real_estate properties round-trip",
     REQUIRE(restored_props[0].rented == true);
     REQUIRE(restored_props[0].tenant_id == 1500);
     REQUIRE(restored_props[0].market_value == 230000.0f);
+    REQUIRE(restored_props[0].listed_for_sale == true);
     REQUIRE(restored_props[1].id == 2);
     REQUIRE(restored_props[1].launder_eligible == true);
     REQUIRE(restored_props[1].rental_income_per_tick == 3000.0f);
+    REQUIRE(restored_props[1].listed_for_sale == false);
 }
 
 TEST_CASE("v7 module-state: all three modules in one save",

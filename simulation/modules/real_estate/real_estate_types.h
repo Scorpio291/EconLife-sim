@@ -49,6 +49,10 @@ struct PropertyListing {
                                    // enables real_estate LaunderingMethod (§32.4)
     uint32_t purchased_tick;       // tick of last ownership transfer
     float purchase_price;          // price paid at last transfer; used for capital gain calc
+    bool listed_for_sale = false;  // owner has flagged the property as on the market;
+                                   // set by ListPropertyForSaleAction (player) or by NPC
+                                   // sale-intent logic (future). Buyers can only target
+                                   // properties where listed_for_sale == true.
 
     // Invariants:
     //   asking_price >= 0.0
@@ -56,6 +60,7 @@ struct PropertyListing {
     //   rental_yield_rate >= 0.0
     //   rental_income_per_tick == market_value * rental_yield_rate (derived)
     //   If rented == false: tenant_id == 0
+    //   If listed_for_sale == false: property is not a valid buy target
     //
     // Monthly asking price convergence:
     //   asking_price += (market_value - asking_price) * config.realestate.price_convergence_rate

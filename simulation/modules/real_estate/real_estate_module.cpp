@@ -17,6 +17,8 @@
 #include <cmath>
 #include <cstring>
 
+#include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
@@ -303,11 +305,223 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
     }
 }
 
+// ─── Phase 1 market — drain + NPC opportunistic buy ────────────────────────
+
+namespace {
+
+// Locate a PropertyListing by id within properties_. Returns nullptr if
+// not found. O(N) linear scan — N is bounded by world's property count
+// (hundreds to low thousands at V1 scale).
+PropertyListing* find_property(std::vector<PropertyListing>& props, uint32_t id) {
+    for (auto& p : props) {
+        if (p.id == id)
+            return &p;
+    }
+    return nullptr;
+}
+
+// Emit an EvidenceToken for a property transaction when its dollar
+// amount crosses the institutional-visibility reporting threshold.
+// Documentary type, public scope; source = seller, target = buyer.
+void emit_transaction_evidence(DeltaBuffer& delta, uint32_t seller_id, uint32_t buyer_id,
+                               uint32_t province_id, float price, float threshold,
+                               uint32_t current_tick) {
+    if (price < threshold)
+        return;
+    EvidenceDelta ev{};
+    EvidenceToken token{};
+    token.id = 0;  // assigned by evidence module
+    token.type = EvidenceType::documentary;
+    token.source_npc_id = seller_id;
+    token.target_npc_id = buyer_id;
+    // Actionability scaled by how far above threshold the transaction
+    // is (bigger transactions = louder paper trail), capped at 0.50.
+    token.actionability = std::clamp(0.20f + (price / threshold - 1.0f) * 0.10f, 0.20f, 0.50f);
+    token.decay_rate = 0.0f;  // public registry records do not decay
+    token.created_tick = current_tick;
+    token.province_id = province_id;
+    token.is_active = true;
+    ev.new_token = token;
+    delta.evidence_deltas.push_back(ev);
+}
+
+}  // namespace
+
 void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    // Province-parallel modules dispatch through execute_province().
-    // This fallback processes all provinces sequentially if called directly.
-    for (uint32_t p = 0; p < static_cast<uint32_t>(state.provinces.size()); ++p) {
-        execute_province(p, state, delta);
+    // Global post-pass for province-parallel modules. Phase 1: drain
+    // pending_property_transactions emitted by player_actions, then run
+    // the NPC opportunistic-buy scan over player-listed properties.
+    // Both touch properties_ and must run single-threaded.
+
+    // ── 1. Drain player-initiated transactions ──
+    //
+    // Running player wealth tracks deductions across multiple buys in
+    // the same tick (prevents over-commit when state.player->wealth
+    // hasn't yet been updated by apply_deltas).
+    float running_player_wealth =
+        (state.player ? state.player->wealth : 0.0f) +
+        delta.player_delta.wealth_delta.value_or(0.0f);
+
+    for (const auto& req : state.pending_property_transactions) {
+        PropertyListing* prop = find_property(properties_, req.property_id);
+        if (!prop)
+            continue;  // unknown property id
+
+        switch (req.kind) {
+            case PropertyTransactionKind::list: {
+                // Ownership + positive-price are the only validations.
+                // Negative/zero prices were already filtered by
+                // player_actions; double-check defensively.
+                if (prop->owner_id != req.actor_id)
+                    break;
+                if (req.price <= 0.0f)
+                    break;
+                prop->listed_for_sale = true;
+                prop->asking_price = req.price;
+                break;
+            }
+            case PropertyTransactionKind::unlist: {
+                if (prop->owner_id != req.actor_id)
+                    break;
+                prop->listed_for_sale = false;
+                break;
+            }
+            case PropertyTransactionKind::buy: {
+                // Phase 1: at-or-above asking only; below-asking
+                // offers are dropped (Phase 3 wires negotiation).
+                if (!prop->listed_for_sale)
+                    break;
+                if (req.price < prop->asking_price)
+                    break;
+                // Buyer cannot buy from themselves (no self-sale).
+                if (prop->owner_id == req.actor_id)
+                    break;
+                // Running-wealth check (handles multi-buy in one tick).
+                if (running_player_wealth < req.price)
+                    break;
+
+                uint32_t seller_id = prop->owner_id;
+                uint32_t buyer_id = req.actor_id;
+
+                // Money flow: buyer (player) loses cash; seller (NPC or
+                // player) gains it. If seller is the player (self-sale
+                // is blocked above, so this only fires for hypothetical
+                // future NPC-emitted buys), credit appropriately.
+                delta.player_delta.wealth_delta =
+                    delta.player_delta.wealth_delta.value_or(0.0f) - req.price;
+                running_player_wealth -= req.price;
+
+                if (seller_id != 0u && seller_id != (state.player ? state.player->id : 0u)) {
+                    NPCDelta seller_delta{};
+                    seller_delta.npc_id = seller_id;
+                    seller_delta.capital_delta = req.price;
+                    delta.npc_deltas.push_back(seller_delta);
+                }
+
+                emit_transaction_evidence(delta, seller_id, buyer_id, prop->province_id,
+                                          req.price, cfg_.transaction_evidence_threshold,
+                                          state.current_tick);
+
+                // Ownership transfer + close out the listing.
+                prop->owner_id = buyer_id;
+                prop->listed_for_sale = false;
+                prop->purchased_tick = state.current_tick;
+                prop->purchase_price = req.price;
+                // Tenancy survives owner change; rent stream redirects
+                // to new owner from this tick onward.
+                break;
+            }
+        }
+    }
+
+    // ── 2. Clear queue via const_cast ──
+    //
+    // Same carve-out player_actions uses on deferred_work_queue.
+    auto& mutable_queue =
+        const_cast<std::vector<PropertyTransactionRequest>&>(state.pending_property_transactions);
+    mutable_queue.clear();
+
+    // ── 3. NPC opportunistic buy scan ──
+    //
+    // For each property listed by the player at a meaningful discount,
+    // find the first NPC in the same province (id ascending) with
+    // sufficient capital who passes a deal-strength roll.
+    if (!state.player)
+        return;
+    const uint32_t player_id = state.player->id;
+    DeterministicRNG rng(state.world_seed ^ (static_cast<uint64_t>(state.current_tick) * 0xB7E1u));
+
+    // Track per-NPC running capital so multi-buy in one tick respects
+    // the NPC's actual cash position (analogous to running_player_wealth).
+    std::unordered_map<uint32_t, float> running_npc_capital;
+    auto npc_cash = [&](const NPC& n) -> float& {
+        auto it = running_npc_capital.find(n.id);
+        if (it != running_npc_capital.end())
+            return it->second;
+        return running_npc_capital.emplace(n.id, n.capital).first->second;
+    };
+
+    // Iterate properties in id-ascending order (already maintained).
+    for (auto& prop : properties_) {
+        if (prop.owner_id != player_id)
+            continue;
+        if (!prop.listed_for_sale)
+            continue;
+        if (prop.market_value <= 0.0f)
+            continue;
+        float deal_ratio = prop.asking_price / prop.market_value;
+        if (deal_ratio >= cfg_.npc_buyer_deal_max_ratio)
+            continue;  // not a deal — no opportunistic buyers
+        float deal_strength = std::clamp(1.0f - deal_ratio, 0.0f, 1.0f);
+        float p_buy_per_npc = std::clamp(deal_strength * cfg_.npc_opportunistic_buy_rate,
+                                         0.0f, 1.0f);
+
+        // Iterate NPCs in this province in id ascending order. First
+        // successful roll wins. RNG is forked deterministically per
+        // (tick, property_id) so the buyer is reproducible.
+        DeterministicRNG prop_rng(rng.next_uint(0xFFFFFFFFu) ^
+                                  (static_cast<uint64_t>(prop.id) * 0x9E37u));
+
+        // Build a sorted view of NPCs in this province.
+        std::vector<const NPC*> candidates;
+        for (const auto& n : state.significant_npcs) {
+            if (n.home_province_id != prop.province_id)
+                continue;
+            if (n.id == player_id)
+                continue;
+            candidates.push_back(&n);
+        }
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const NPC* a, const NPC* b) { return a->id < b->id; });
+
+        for (const NPC* n : candidates) {
+            float& cash = npc_cash(*n);
+            if (cash < prop.asking_price)
+                continue;
+            float roll = prop_rng.next_float();
+            if (roll >= p_buy_per_npc)
+                continue;
+
+            // Match: NPC buys at asking_price.
+            cash -= prop.asking_price;
+            // Player wealth credited; deltas accumulated.
+            delta.player_delta.wealth_delta =
+                delta.player_delta.wealth_delta.value_or(0.0f) + prop.asking_price;
+            NPCDelta buyer_delta{};
+            buyer_delta.npc_id = n->id;
+            buyer_delta.capital_delta = -prop.asking_price;
+            delta.npc_deltas.push_back(buyer_delta);
+
+            emit_transaction_evidence(delta, player_id, n->id, prop.province_id,
+                                      prop.asking_price, cfg_.transaction_evidence_threshold,
+                                      state.current_tick);
+
+            prop.owner_id = n->id;
+            prop.listed_for_sale = false;
+            prop.purchased_tick = state.current_tick;
+            prop.purchase_price = prop.asking_price;
+            break;  // one buyer per property per tick
+        }
     }
 }
 
@@ -373,7 +587,9 @@ struct Reader {
 }  // namespace
 
 void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
-    put_u32(out, 1u);
+    // schema_tag = 2 adds trailing `listed_for_sale` byte per record
+    // (Phase 1 market). v1 records have an implicit listed_for_sale = false.
+    put_u32(out, 2u);
     put_u32(out, static_cast<uint32_t>(properties_.size()));
     for (const auto& p : properties_) {
         put_u32(out, p.id);
@@ -389,12 +605,14 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
         out.push_back(p.launder_eligible ? 1u : 0u);
         put_u32(out, p.purchased_tick);
         put_f32(out, p.purchase_price);
+        out.push_back(p.listed_for_sale ? 1u : 0u);
     }
 }
 
 bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
-    if (r.u32() != 1u)
+    uint32_t schema_tag = r.u32();
+    if (schema_tag != 1u && schema_tag != 2u)
         return false;
     uint32_t count = r.u32();
     properties_.clear();
@@ -414,6 +632,10 @@ bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
         p.launder_eligible = (r.u8() != 0);
         p.purchased_tick = r.u32();
         p.purchase_price = r.f32();
+        if (schema_tag >= 2u)
+            p.listed_for_sale = (r.u8() != 0);
+        else
+            p.listed_for_sale = false;
         if (r.error)
             return false;
         properties_.push_back(p);

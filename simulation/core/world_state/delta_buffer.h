@@ -228,6 +228,32 @@ struct RandomEventTriggerDelta {
     float severity;            // 0.0–1.0; clamped to template's [min,max] range
 };
 
+// Property transaction request — player_actions (and future NPC seller
+// logic) emit these to drive real-estate market state changes. Routed
+// by apply_deltas into WorldState.pending_property_transactions;
+// real_estate drains the queue at the start of its execute() within
+// the same tick (real_estate runs at Tier 4, after player_actions at
+// Tier 0). Validation (ownership, listing state, sufficient cash) is
+// performed by real_estate; player_actions emits requests without
+// touching the module-private properties_ vector.
+//
+// Phase 1 (symmetric at-asking cash market, instant settle): supports
+// list / unlist / buy. Below-asking buy requests are dropped during
+// drain. Pending state, financing, negotiation, subdivision, raw_land,
+// and business acquisition come in later phases.
+enum class PropertyTransactionKind : uint8_t {
+    list = 0,   // owner flags property listed_for_sale = true; updates asking_price
+    unlist = 1, // owner flags property listed_for_sale = false
+    buy = 2,    // buyer offers >= asking_price; instant cash settle
+};
+
+struct PropertyTransactionRequest {
+    PropertyTransactionKind kind;
+    uint32_t property_id;
+    uint32_t actor_id;  // player.id for player-initiated; NPC.id for NPC-initiated
+    float price;        // asking_price for list, offer_price for buy, ignored for unlist
+};
+
 // Accumulated state changes for one tick step.
 // Pre-reserve vectors at WorldState initialization using known NPC count.
 //
@@ -263,6 +289,7 @@ struct DeltaBuffer {
     std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
     std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
     std::vector<RandomEventTriggerDelta> new_random_event_triggers;  // merge: append
+    std::vector<PropertyTransactionRequest> new_property_transactions;  // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

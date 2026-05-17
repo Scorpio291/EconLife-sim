@@ -75,6 +75,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(calendar_commit_deltas, std::move(other.calendar_commit_deltas));
     move_extend(new_legal_case_seeds, std::move(other.new_legal_case_seeds));
     move_extend(new_random_event_triggers, std::move(other.new_random_event_triggers));
+    move_extend(new_property_transactions, std::move(other.new_property_transactions));
 }
 
 }  // namespace econlife

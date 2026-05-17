@@ -148,6 +148,14 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
         d.severity = 0.5f;
         db.new_random_event_triggers.push_back(d);
     }
+    {
+        PropertyTransactionRequest r{};
+        r.kind = PropertyTransactionKind::buy;
+        r.property_id = tag;
+        r.actor_id = tag + 100u;
+        r.price = 250000.0f;
+        db.new_property_transactions.push_back(r);
+    }
 }
 
 }  // namespace
@@ -183,6 +191,7 @@ TEST_CASE("test_delta_buffer_merge_covers_every_field", "[world_state][delta_buf
     REQUIRE(dst.calendar_commit_deltas.size() == 2);
     REQUIRE(dst.new_legal_case_seeds.size() == 2);
     REQUIRE(dst.new_random_event_triggers.size() == 2);
+    REQUIRE(dst.new_property_transactions.size() == 2);
 
     // Append order is preserved: the dst-tagged entry comes first.
     REQUIRE(dst.npc_deltas[0].npc_id == 1);

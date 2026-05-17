@@ -34,6 +34,12 @@ class RealEstateModule : public ITickModule {
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
     bool is_province_parallel() const noexcept override { return true; }
+    // The global post-pass runs after province-parallel work merges.
+    // Used by Phase 1 to drain pending_property_transactions (player-
+    // initiated list/unlist/buy) and to scan player listings for
+    // opportunistic NPC buyers — both touch the module-private
+    // properties_ vector and must run single-threaded.
+    bool has_global_post_pass() const noexcept override { return true; }
 
     std::vector<std::string_view> runs_after() const override { return {"price_engine"}; }
 

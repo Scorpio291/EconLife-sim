@@ -389,6 +389,22 @@ struct RealEstateConfig {
     float homeless_rent_buffer_months = 3.0f;
     float homeless_rent_floor = 50.0f;
     float homeless_rate_convergence = 0.05f;
+
+    // Phase 1 market — symmetric at-asking cash, instant settle.
+    // NPCs opportunistically buy player-listed properties when the
+    // asking price is meaningfully below the property's market value
+    // (a deal). Per-tick scan: for each player-listed property with
+    // asking_price < market_value * npc_buyer_deal_max_ratio, evaluate
+    // NPCs in same province with capital >= asking_price; deal_strength
+    // = (1 - asking/market), each candidate NPC rolls
+    //   p = deal_strength * npc_opportunistic_buy_rate
+    // against the per-tick deterministic RNG. First successful roll
+    // (in NPC id ascending order) wins. Below-market listings are the
+    // only buy trigger in Phase 1; market-rate or above-market
+    // listings produce no NPC buyers (extends in Phase 4 with
+    // demand-driven NPC offers and counter-offer flow).
+    float npc_buyer_deal_max_ratio = 0.90f;     // asking/market under this = "a deal"
+    float npc_opportunistic_buy_rate = 0.02f;   // base rate (multiplied by deal_strength)
 };
 
 struct FinancialDistributionConfig {

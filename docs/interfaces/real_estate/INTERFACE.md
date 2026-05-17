@@ -4,7 +4,8 @@
 Manages per-province property markets each tick: collects rental income for occupied properties, recomputes monthly market values from provincial conditions, converges asking prices toward market value, processes property sale/purchase transactions, assigns commercial tenants to unoccupied properties, and updates province-level avg_property_value. Province-parallel.
 
 ## Inputs (from WorldState)
-- `property_listings[]` — id, type (residential/commercial/industrial), province_id, owner_id, asking_price, market_value, rental_yield_rate, rental_income_per_tick, rented, tenant_id, launder_eligible, purchased_tick, purchase_price
+- `property_listings[]` — id, type (residential/commercial/industrial), province_id, owner_id, asking_price, market_value, rental_yield_rate, rental_income_per_tick, rented, tenant_id, launder_eligible, purchased_tick, purchase_price, **listed_for_sale** (V1 storage: held in `RealEstateModule::properties_` rather than on WorldState; round-tripped via the v7 module-state hook; schema_tag bumped 1→2 to carry `listed_for_sale`)
+- `pending_property_transactions[]` — cross-module trigger queue on WorldState carrying `PropertyTransactionRequest{kind, property_id, actor_id, price}`. Emitted by `player_actions` (Tier 0) when the player issues `ListPropertyForSaleAction`, `UnlistPropertyAction`, or `MakePropertyOfferAction`. Drained at the start of `execute()` (global post-pass). Validation (ownership for list/unlist; listed state + offer ≥ asking + sufficient running cash for buy) is performed during the drain; invalid requests are silently dropped.
 - `provinces[]` — demographics.total_population, demographics.income_high_fraction, infrastructure_rating, conditions.criminal_dominance_index, conditions.inequality_index, provincial_business_tax_rate, avg_property_value
 - `npc_businesses[]` — province_id, owner_id, cost_per_tick (for commercial tenant assignment: businesses without owned premises benefit from cost reduction)
 - `player_character` — wealth (for rental income deposits and transaction settlements)
@@ -16,7 +17,7 @@ Manages per-province property markets each tick: collects rental income for occu
 ## Outputs (to DeltaBuffer)
 - `PlayerDelta.wealth_delta` — additive; rental_income_per_tick for each rented property owned by player; sale proceeds on player sell; debited on player buy
 - `NPCDelta.capital_delta` — additive; rental income for NPC-owned rented properties
-- `EvidenceDelta.new_token` — financial EvidenceToken at VisibilityScope::institutional on every property buy/sell transaction (property registry record)
+- `EvidenceDelta.new_token` — financial EvidenceToken at VisibilityScope::institutional on every property buy/sell transaction whose price ≥ `config.realestate.transaction_evidence_threshold` (default 50000). `actionability = clamp(0.20 + (price/threshold − 1) × 0.10, 0.20, 0.50)` — larger transactions leave a louder paper trail. `decay_rate = 0` (public registry records do not fade). Phase 1: emitted for both player-initiated buys (drain path) and NPC opportunistic buys of player listings.
 - Property listing state updates via delta: market_value recomputed monthly, asking_price converged monthly, owner_id/purchase_price/purchased_tick updated on transactions, rented/tenant_id updated on tenant assignment/departure
 - Province state updates via delta: avg_property_value recomputed monthly as mean of all PropertyListing.market_value in province
 - Business cost_per_tick reduction when NPCBusiness occupies owned commercial premises (reduction rate: commercial_cost_reduction_rate = 0.10)
@@ -42,8 +43,31 @@ Manages per-province property markets each tick: collects rental income for occu
 - If rented == false, then tenant_id == 0.
 - prosperity_multiplier in market_value formula is clamped to [0.1, 5.0] (prevents negative or extreme values).
 - Monthly asking price convergence: asking_price += (market_value - asking_price) * price_convergence_rate. Prices never jump discontinuously.
-- Property transactions generate exactly one financial EvidenceToken at institutional visibility per transaction.
+- Property transactions whose price ≥ `transaction_evidence_threshold` generate exactly one financial EvidenceToken at institutional visibility per transaction; sub-threshold transactions emit none.
 - Criminal dominance suppresses property values (criminal_dominance_discount = 0.50); laundering pressure inflates them. Both effects can coexist in the same province.
+- `listed_for_sale == false` ⇒ property is not a valid target for `MakePropertyOfferAction`.
+
+## Phase 1 Market Mechanics
+Phase 1 ships a symmetric at-asking cash market with instant settlement. Both directions (player-buys-from-NPC, NPC-buys-from-player) are live from day one. Multi-tick lifecycle, financing, and negotiation arrive in later phases.
+
+**Player-initiated transactions** flow through `pending_property_transactions`:
+1. `player_actions` validates the action shape (positive prices, owner sanity check, upfront wealth check for buys) and emits a `PropertyTransactionRequest` into the DeltaBuffer.
+2. `apply_deltas` routes it into `state.pending_property_transactions`.
+3. `real_estate.execute()` drains the queue at the start of its global post-pass, performing the authoritative validation against `properties_`:
+   - `list`: requires `actor_id == property.owner_id` and `price > 0`. Sets `listed_for_sale = true`, `asking_price = price`.
+   - `unlist`: requires `actor_id == property.owner_id`. Sets `listed_for_sale = false`.
+   - `buy`: requires `property.listed_for_sale`, `offer_price >= asking_price`, `actor_id != property.owner_id`, and running player wealth ≥ offer_price. Transfers ownership, debits buyer, credits NPC seller, emits evidence, clears the listing.
+4. Below-asking offers are dropped silently (Phase 3 wires relationship-driven negotiation).
+5. Running-wealth tracking across the drain prevents over-commit when one tick contains multiple buys.
+
+**NPC opportunistic buys** of player-listed properties run after the drain in the same post-pass:
+1. Scan `properties_` for entries owned by the player with `listed_for_sale == true`.
+2. Skip listings where `asking_price / market_value >= npc_buyer_deal_max_ratio` (default 0.90) — only "deals" attract opportunistic buyers in Phase 1.
+3. `deal_strength = clamp(1 - asking/market, 0, 1)`; per-NPC accept probability `p = deal_strength × npc_opportunistic_buy_rate` (base rate 0.02).
+4. Iterate NPCs in same province (`home_province_id == property.province_id`, excluding the player) in id-ascending order. The first NPC with sufficient running capital whose deterministic roll passes wins. Per-tick RNG is forked from `world_seed ^ (tick × salt)`, then per-property from `tick_rng.next ^ (property_id × salt)` — fully reproducible across runs.
+5. On match: NPC capital debited, player wealth credited, ownership transferred, listing cleared, evidence emitted.
+
+Phase 2 (PendingTransaction lifecycle) replaces both instant-settle paths with multi-tick offer → response → close. Phase 4 extends NPC initiative beyond opportunistic deals to true demand-driven offers with counter-offer flow. Phases 3/5 layer negotiation and financing on top.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

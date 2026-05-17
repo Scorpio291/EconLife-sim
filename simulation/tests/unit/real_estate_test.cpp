@@ -17,6 +17,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
@@ -704,8 +705,15 @@ TEST_CASE("test_execute_processes_all_provinces", "[real_estate][tier4]") {
     prop1.tenant_id = 51;
     module.add_property(prop1);
 
+    // Mirror the orchestrator dispatch for a province-parallel module:
+    // init_for_tick on main thread, then execute_province per province.
+    // execute() is now reserved for the global post-pass (drain of
+    // pending_property_transactions + NPC opportunistic buy scan).
+    module.init_for_tick(state);
     DeltaBuffer delta{};
-    module.execute(state, delta);
+    for (uint32_t p = 0; p < state.provinces.size(); ++p) {
+        module.execute_province(p, state, delta);
+    }
 
     // Both provinces should have generated NPC deltas.
     REQUIRE(delta.npc_deltas.size() == 2);
@@ -888,4 +896,335 @@ TEST_CASE("test_homeless_rate_skips_dead_npcs", "[real_estate][homeless][tier4]"
     float homeless_delta = find_homeless_delta(delta, 0);
     // Only the wealthy NPC is counted → sample 0.0 → delta = 0.
     REQUIRE_THAT(homeless_delta, WithinAbs(0.0f, 0.0001f));
+}
+
+// ===========================================================================
+// Phase 1: Symmetric at-asking cash market — listing + transaction drain
+// ===========================================================================
+
+namespace {
+
+NPC make_buyer_npc(uint32_t id, uint32_t province_id, float capital) {
+    NPC n{};
+    n.id = id;
+    n.home_province_id = province_id;
+    n.current_province_id = province_id;
+    n.capital = capital;
+    n.status = NPCStatus::active;
+    return n;
+}
+
+}  // namespace
+
+TEST_CASE("Phase1: list action flips listed_for_sale on owned property",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 150000.0f);
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::list;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 175000.0f;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.properties()[0].listed_for_sale == true);
+    REQUIRE_THAT(module.properties()[0].asking_price, WithinAbs(175000.0f, 0.01f));
+    REQUIRE(state.pending_property_transactions.empty());
+}
+
+TEST_CASE("Phase1: list action rejected when actor is not owner",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    // Property owned by NPC 42, not the player.
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::list;
+    req.property_id = 1;
+    req.actor_id = 99;  // player trying to list someone else's property
+    req.price = 175000.0f;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.properties()[0].listed_for_sale == false);
+}
+
+TEST_CASE("Phase1: unlist action flips flag back",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 150000.0f);
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::unlist;
+    req.property_id = 1;
+    req.actor_id = 99;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.properties()[0].listed_for_sale == false);
+}
+
+TEST_CASE("Phase1: buy at asking transfers ownership, deducts player wealth, emits evidence",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 150000.0f;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE(module.properties()[0].listed_for_sale == false);
+    REQUIRE(module.properties()[0].purchased_tick == 10);
+    REQUIRE_THAT(module.properties()[0].purchase_price, WithinAbs(150000.0f, 0.01f));
+    REQUIRE(delta.player_delta.wealth_delta.has_value());
+    REQUIRE_THAT(*delta.player_delta.wealth_delta, WithinAbs(-150000.0f, 0.01f));
+    // NPC seller credited.
+    bool seller_credited = false;
+    for (const auto& nd : delta.npc_deltas) {
+        if (nd.npc_id == 42 && nd.capital_delta.has_value() &&
+            std::fabs(*nd.capital_delta - 150000.0f) < 0.01f) {
+            seller_credited = true;
+        }
+    }
+    REQUIRE(seller_credited);
+    // Evidence token emitted (price > default threshold 50000).
+    REQUIRE(delta.evidence_deltas.size() == 1);
+    REQUIRE(delta.evidence_deltas[0].new_token.has_value());
+}
+
+TEST_CASE("Phase1: buy above asking accepted at offer price",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 175000.0f;  // 25k above asking
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE_THAT(module.properties()[0].purchase_price, WithinAbs(175000.0f, 0.01f));
+    REQUIRE_THAT(*delta.player_delta.wealth_delta, WithinAbs(-175000.0f, 0.01f));
+}
+
+TEST_CASE("Phase1: buy below asking rejected — no state change",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 100000.0f;  // below asking
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.properties()[0].owner_id == 42);
+    REQUIRE(module.properties()[0].listed_for_sale == true);
+    REQUIRE_FALSE(delta.player_delta.wealth_delta.has_value());
+    REQUIRE(delta.npc_deltas.empty());
+    REQUIRE(delta.evidence_deltas.empty());
+}
+
+TEST_CASE("Phase1: buy on unlisted property rejected",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.listed_for_sale = false;
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 150000.0f;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.properties()[0].owner_id == 42);
+}
+
+TEST_CASE("Phase1: buy with insufficient running cash rejected (multi-buy guard)",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 200000.0f;  // can afford one but not two
+
+    RealEstateModule module;
+    auto prop1 = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    prop1.asking_price = 150000.0f;
+    prop1.listed_for_sale = true;
+    module.add_property(prop1);
+    auto prop2 = make_test_property(2, PropertyType::residential, 0, 43, 150000.0f);
+    prop2.asking_price = 150000.0f;
+    prop2.listed_for_sale = true;
+    module.add_property(prop2);
+
+    PropertyTransactionRequest req1{PropertyTransactionKind::buy, 1, 99, 150000.0f};
+    PropertyTransactionRequest req2{PropertyTransactionKind::buy, 2, 99, 150000.0f};
+    state.pending_property_transactions.push_back(req1);
+    state.pending_property_transactions.push_back(req2);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // First buy succeeds; second fails (running wealth = 50000 < 150000).
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE(module.properties()[1].owner_id == 43);
+}
+
+TEST_CASE("Phase1: NPC opportunistic buy fires on below-market player listing",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    // Spawn a wealthy NPC to be the buyer.
+    state.significant_npcs.push_back(make_buyer_npc(7, /*province=*/0, /*capital=*/500000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 200000.0f);
+    prop.asking_price = 100000.0f;  // 50% off — guaranteed deal
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Run many ticks until purchase fires (probabilistic, but seeded).
+    bool sold = false;
+    for (int t = 0; t < 500 && !sold; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        DeltaBuffer delta{};
+        module.execute(state, delta);
+        if (module.properties()[0].owner_id == 7) {
+            sold = true;
+            REQUIRE_THAT(*delta.player_delta.wealth_delta, WithinAbs(100000.0f, 0.01f));
+        }
+    }
+    REQUIRE(sold);
+    REQUIRE(module.properties()[0].listed_for_sale == false);
+    REQUIRE_THAT(module.properties()[0].purchase_price, WithinAbs(100000.0f, 0.01f));
+}
+
+TEST_CASE("Phase1: NPC opportunistic buy does NOT fire at market-rate listing",
+          "[real_estate][market_phase1]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 200000.0f);
+    prop.asking_price = 200000.0f;  // exactly market; ratio = 1.0 (no deal)
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    for (int t = 0; t < 500; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        DeltaBuffer delta{};
+        module.execute(state, delta);
+    }
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE(module.properties()[0].listed_for_sale == true);
+}
+
+TEST_CASE("Phase1: NPC opportunistic buy is deterministic across runs",
+          "[real_estate][market_phase1][determinism]") {
+    auto run_once = [](uint32_t seed) {
+        auto state = make_test_world_state(10);
+        state.world_seed = seed;
+        state.provinces.push_back(make_test_province(0));
+        state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+        state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+        state.significant_npcs.push_back(make_buyer_npc(8, 0, 500000.0f));
+
+        RealEstateModule module;
+        auto prop = make_test_property(1, PropertyType::residential, 0, 99, 200000.0f);
+        prop.asking_price = 100000.0f;
+        prop.listed_for_sale = true;
+        module.add_property(prop);
+
+        std::vector<uint32_t> buyer_history;
+        for (int t = 0; t < 200; ++t) {
+            state.current_tick = 10u + static_cast<uint32_t>(t);
+            DeltaBuffer delta{};
+            module.execute(state, delta);
+            buyer_history.push_back(module.properties()[0].owner_id);
+            if (module.properties()[0].owner_id != 99)
+                break;
+        }
+        return buyer_history;
+    };
+
+    auto run_a = run_once(42);
+    auto run_b = run_once(42);
+    REQUIRE(run_a == run_b);
 }

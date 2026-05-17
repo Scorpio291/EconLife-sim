@@ -2152,6 +2152,11 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // Defensively reset on load.
     out_state.pending_legal_case_seeds.clear();
 
+    // pending_property_transactions follows the same same-tick consumer
+    // contract (player_actions emits at Tier 0, real_estate drains at
+    // Tier 4 within the same tick). Defensively reset on load.
+    out_state.pending_property_transactions.clear();
+
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();
 

@@ -330,6 +330,59 @@ static void handle_commercialize_tech(const CommercializeTechAction& action,
     }
 }
 
+// Real-estate market actions — Phase 1 (symmetric at-asking cash market,
+// instant settle). player_actions emits PropertyTransactionRequest into
+// the DeltaBuffer; apply_deltas routes into
+// state.pending_property_transactions; real_estate drains the queue at
+// the start of its execute() within the same tick (Tier 4 follows
+// Tier 0). Validation that depends on the module-private properties_
+// vector (ownership, listing state) is performed in real_estate.
+
+static void handle_list_property_for_sale(const ListPropertyForSaleAction& action,
+                                          const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.asking_price <= 0.0f)
+        return;
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::list;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = action.asking_price;
+    delta.new_property_transactions.push_back(req);
+}
+
+static void handle_unlist_property(const UnlistPropertyAction& action, const WorldState& state,
+                                   DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::unlist;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = 0.0f;
+    delta.new_property_transactions.push_back(req);
+}
+
+static void handle_make_property_offer(const MakePropertyOfferAction& action,
+                                       const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.offer_price <= 0.0f)
+        return;
+    // Cheap upfront wealth check; real_estate re-checks at drain time
+    // using running-wealth tracking to avoid over-committing across
+    // multiple buys in one tick.
+    if (state.player->wealth < action.offer_price)
+        return;
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = action.offer_price;
+    delta.new_property_transactions.push_back(req);
+}
+
 static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -400,6 +453,12 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_commercialize_tech(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, InitiateContactAction>) {
                     handle_initiate_contact(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, ListPropertyForSaleAction>) {
+                    handle_list_property_for_sale(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, UnlistPropertyAction>) {
+                    handle_unlist_property(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, MakePropertyOfferAction>) {
+                    handle_make_property_offer(payload, state, delta);
                 }
             },
             action.payload);

@@ -149,6 +149,16 @@ struct WorldState {
     // pending trigger.
     std::vector<RandomEventTriggerDelta> pending_random_event_triggers;
 
+    // pending_property_transactions: written by player_actions (Tier 0)
+    // and future NPC seller-intent logic. Drained by real_estate at the
+    // start of its execute() (Tier 4) within the same tick. Validation
+    // (ownership for list/unlist, listed state + offer >= asking +
+    // sufficient cash for buy) is performed during the drain — invalid
+    // requests are silently dropped. The queue is expected to be empty
+    // at save time (same-tick consumer contract); defensively cleared on
+    // load to match the legal_case_seeds invariant.
+    std::vector<PropertyTransactionRequest> pending_property_transactions;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.

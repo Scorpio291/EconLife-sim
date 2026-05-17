@@ -70,6 +70,11 @@ Drains the PlayerActionQueue each tick, validates player actions against current
 | delegate | DelegateAction | Delegate business management |
 | commercialize_tech | CommercializeTechAction | Commercialize researched technology |
 | initiate_contact | InitiateContactAction | Request meeting with an NPC |
+| list_property_for_sale | ListPropertyForSaleAction | Phase 1 market: flag an owned property listed_for_sale at the given asking price |
+| unlist_property | UnlistPropertyAction | Phase 1 market: remove an owned property from the market |
+| make_property_offer | MakePropertyOfferAction | Phase 1 market: make a cash offer on a listed property (Phase 1: only at-or-above asking accepted) |
+
+The three market actions emit a `PropertyTransactionRequest` into `DeltaBuffer.new_property_transactions`. `apply_deltas` routes the entry into `WorldState.pending_property_transactions`; `real_estate` (Tier 4) drains the queue at the start of its global post-pass and performs the authoritative validation against the module-private `properties_` vector. `player_actions` only does cheap upfront checks (positive prices, sufficient wealth) — ownership and listed-state validation happen in the drain.
 
 ## Test Scenarios
 - `test_scene_card_choice_sets_chosen_id`: Enqueue SceneCardChoiceAction, verify chosen_choice_id is set on the card after delta application.

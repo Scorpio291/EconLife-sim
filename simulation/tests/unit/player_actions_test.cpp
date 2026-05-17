@@ -410,3 +410,95 @@ TEST_CASE("Initiate contact with dead NPC is rejected", "[player_actions][unit]"
 
     REQUIRE(delta.new_calendar_entries.empty());
 }
+
+// ---------------------------------------------------------------------------
+// Phase 1 real-estate market actions — emit PropertyTransactionRequest
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ListPropertyForSaleAction emits list request", "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::list_property_for_sale,
+                          ListPropertyForSaleAction{42, 250000.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::list);
+    REQUIRE(delta.new_property_transactions[0].property_id == 42);
+    REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
+    REQUIRE_THAT(delta.new_property_transactions[0].price, WithinAbs(250000.0f, 0.01f));
+}
+
+TEST_CASE("ListPropertyForSaleAction rejects non-positive asking price",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::list_property_for_sale,
+                          ListPropertyForSaleAction{42, -100.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.empty());
+}
+
+TEST_CASE("UnlistPropertyAction emits unlist request", "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::unlist_property,
+                          UnlistPropertyAction{42});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::unlist);
+    REQUIRE(delta.new_property_transactions[0].property_id == 42);
+    REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
+}
+
+TEST_CASE("MakePropertyOfferAction emits buy request when wealth sufficient",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    world.player->wealth = 300000.0f;
+    enqueue_player_action(world, PlayerActionType::make_property_offer,
+                          MakePropertyOfferAction{42, 250000.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::buy);
+    REQUIRE_THAT(delta.new_property_transactions[0].price, WithinAbs(250000.0f, 0.01f));
+}
+
+TEST_CASE("MakePropertyOfferAction rejected when player cannot afford",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    world.player->wealth = 100000.0f;  // less than offer
+    enqueue_player_action(world, PlayerActionType::make_property_offer,
+                          MakePropertyOfferAction{42, 250000.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.empty());
+}
+
+TEST_CASE("MakePropertyOfferAction rejects non-positive offer price",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    world.player->wealth = 300000.0f;
+    enqueue_player_action(world, PlayerActionType::make_property_offer,
+                          MakePropertyOfferAction{42, 0.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.empty());
+}
