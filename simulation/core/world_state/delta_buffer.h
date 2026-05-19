@@ -242,9 +242,14 @@ struct RandomEventTriggerDelta {
 // drain. Pending state, financing, negotiation, subdivision, raw_land,
 // and business acquisition come in later phases.
 enum class PropertyTransactionKind : uint8_t {
-    list = 0,   // owner flags property listed_for_sale = true; updates asking_price
-    unlist = 1, // owner flags property listed_for_sale = false
-    buy = 2,    // buyer offers >= asking_price; instant cash settle
+    list = 0,    // owner flags property listed_for_sale = true; updates asking_price
+    unlist = 1,  // owner flags property listed_for_sale = false
+    buy = 2,     // buyer offers >= asking_price; creates a PendingTransaction
+                 // awaiting close_tick (Phase 2). Below-asking buys are dropped
+                 // (negotiation lands in Phase 3).
+    cancel = 3,  // buyer or seller aborts the active PendingTransaction on a
+                 // property. property_id identifies the under-contract property
+                 // (at most one active pending_transaction per property).
 };
 
 struct PropertyTransactionRequest {

@@ -34,6 +34,9 @@ The master simulation state container. Holds all simulation data and provides th
 - `pending_property_transactions` is empty at save time (in-tick
   consumer contract: player_actions at Tier 0 emits, real_estate at
   Tier 4 drains in the same tick's global post-pass).
+- `pending_transactions` MAY be non-empty at save time (multi-tick
+  property buy contracts; settlement occurs at each entry's
+  `close_tick`). Persisted by schema v9+.
 - At V1 scale (~2,000 NPCs, 6 provinces, ~50 goods): ~10-15MB. Always pass by reference.
 
 ## Failure Modes

@@ -1571,11 +1571,11 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
     // Each schema bump (v3 catalog, v4 addiction footer, v5 cohort_stats
     // migration, v6 currency/facility/technology footers, v7 module-state
-    // section, v8 pending_random_event_triggers footer) changes the
-    // byte-stream layout. V1 is pre-release; reject anything older than
-    // the current floor outright. v7 saves remain loadable: the v8
-    // section is gated on saved_version >= 8 and absent v8 leaves the
-    // queue empty (no cross-tick triggers in flight at save time).
+    // section, v8 pending_random_event_triggers footer, v9
+    // pending_transactions footer) changes the byte-stream layout. V1 is
+    // pre-release; reject anything older than the current floor outright.
+    // v7/v8 saves remain loadable: each footer is gated on saved_version
+    // checks and absent footers leave the queues empty.
     if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
@@ -1802,6 +1802,25 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
             w.write_string(t.template_key);
             w.write_u32(t.province_id);
             w.write_float(t.severity);
+        }
+    }
+
+    // --- v9: pending_transactions (real-estate Phase 2) ---
+    // Multi-tick property buy contracts. Persisted so a save mid-cycle
+    // does not drop in-flight transactions. Order preserved (real_estate
+    // settles in iteration order at close_tick).
+    {
+        const auto& queue = state.pending_transactions;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& t : queue) {
+            w.write_u32(t.id);
+            w.write_u32(t.property_id);
+            w.write_u32(t.buyer_id);
+            w.write_u32(t.seller_id);
+            w.write_float(t.offer_price);
+            w.write_u32(t.offered_tick);
+            w.write_u32(t.close_tick);
+            w.write_u8(static_cast<uint8_t>(t.stage));
         }
     }
 
@@ -2144,6 +2163,27 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             t.province_id = r.read_u32();
             t.severity = r.read_float();
             out_state.pending_random_event_triggers.push_back(std::move(t));
+        }
+    }
+
+    // --- v9: pending_transactions (real-estate Phase 2) ---
+    // v7/v8 saves omit this section: leave the queue empty (no in-flight
+    // property transactions at save time). v9+ saves carry the queue.
+    out_state.pending_transactions.clear();
+    if (schema_ver >= 9u) {
+        uint32_t tx_count = r.read_u32();
+        out_state.pending_transactions.reserve(tx_count);
+        for (uint32_t i = 0; i < tx_count; ++i) {
+            PendingTransaction t{};
+            t.id = r.read_u32();
+            t.property_id = r.read_u32();
+            t.buyer_id = r.read_u32();
+            t.seller_id = r.read_u32();
+            t.offer_price = r.read_float();
+            t.offered_tick = r.read_u32();
+            t.close_tick = r.read_u32();
+            t.stage = static_cast<PendingTxStage>(r.read_u8());
+            out_state.pending_transactions.push_back(t);
         }
     }
 

@@ -502,3 +502,19 @@ TEST_CASE("MakePropertyOfferAction rejects non-positive offer price",
 
     REQUIRE(delta.new_property_transactions.empty());
 }
+
+TEST_CASE("CancelPendingTransactionAction emits cancel request",
+          "[player_actions][market_phase2]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::cancel_pending_transaction,
+                          CancelPendingTransactionAction{42});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::cancel);
+    REQUIRE(delta.new_property_transactions[0].property_id == 42);
+    REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
+}

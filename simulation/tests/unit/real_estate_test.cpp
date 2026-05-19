@@ -23,6 +23,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/persistence/persistence_module.h"
 #include "modules/real_estate/real_estate_module.h"
 #include "modules/real_estate/real_estate_types.h"
 
@@ -988,8 +989,9 @@ TEST_CASE("Phase1: unlist action flips flag back",
     REQUIRE(module.properties()[0].listed_for_sale == false);
 }
 
-TEST_CASE("Phase1: buy at asking transfers ownership, deducts player wealth, emits evidence",
-          "[real_estate][market_phase1]") {
+TEST_CASE("Phase2: buy at asking transfers ownership at close_tick, "
+          "deducts player wealth, emits evidence",
+          "[real_estate][market_phase2]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1008,15 +1010,27 @@ TEST_CASE("Phase1: buy at asking transfers ownership, deducts player wealth, emi
     req.price = 150000.0f;
     state.pending_property_transactions.push_back(req);
 
+    // Phase 2: offer creates a pending_transaction; no ownership change yet.
+    DeltaBuffer delta_offer{};
+    module.execute(state, delta_offer);
+    REQUIRE(module.properties()[0].owner_id == 42);
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE(state.pending_transactions[0].buyer_id == 99);
+    REQUIRE(state.pending_transactions[0].seller_id == 42);
+    REQUIRE(state.pending_transactions[0].close_tick == 10u + 7u);  // residential delay
+
+    // Tick forward to close_tick; settlement runs in the next post-pass.
+    state.current_tick = 17;
     DeltaBuffer delta{};
     module.execute(state, delta);
 
     REQUIRE(module.properties()[0].owner_id == 99);
     REQUIRE(module.properties()[0].listed_for_sale == false);
-    REQUIRE(module.properties()[0].purchased_tick == 10);
+    REQUIRE(module.properties()[0].purchased_tick == 17);
     REQUIRE_THAT(module.properties()[0].purchase_price, WithinAbs(150000.0f, 0.01f));
     REQUIRE(delta.player_delta.wealth_delta.has_value());
     REQUIRE_THAT(*delta.player_delta.wealth_delta, WithinAbs(-150000.0f, 0.01f));
+    REQUIRE(state.pending_transactions.empty());  // pruned after settle
     // NPC seller credited.
     bool seller_credited = false;
     for (const auto& nd : delta.npc_deltas) {
@@ -1031,8 +1045,8 @@ TEST_CASE("Phase1: buy at asking transfers ownership, deducts player wealth, emi
     REQUIRE(delta.evidence_deltas[0].new_token.has_value());
 }
 
-TEST_CASE("Phase1: buy above asking accepted at offer price",
-          "[real_estate][market_phase1]") {
+TEST_CASE("Phase2: buy above asking settles at offer price after close delay",
+          "[real_estate][market_phase2]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1051,6 +1065,13 @@ TEST_CASE("Phase1: buy above asking accepted at offer price",
     req.price = 175000.0f;  // 25k above asking
     state.pending_property_transactions.push_back(req);
 
+    // Offer tick: creates pending tx.
+    DeltaBuffer delta0{};
+    module.execute(state, delta0);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    // Close tick.
+    state.current_tick = 17;
     DeltaBuffer delta{};
     module.execute(state, delta);
 
@@ -1114,8 +1135,8 @@ TEST_CASE("Phase1: buy on unlisted property rejected",
     REQUIRE(module.properties()[0].owner_id == 42);
 }
 
-TEST_CASE("Phase1: buy with insufficient running cash rejected (multi-buy guard)",
-          "[real_estate][market_phase1]") {
+TEST_CASE("Phase2: buy with insufficient running cash creates only one pending tx",
+          "[real_estate][market_phase2]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1136,10 +1157,19 @@ TEST_CASE("Phase1: buy with insufficient running cash rejected (multi-buy guard)
     state.pending_property_transactions.push_back(req1);
     state.pending_property_transactions.push_back(req2);
 
+    DeltaBuffer delta_offer{};
+    module.execute(state, delta_offer);
+
+    // Phase 2: first buy creates a pending_tx reserving 150000 in
+    // running wealth; the second buy sees running wealth = 50000 and is
+    // rejected at create time.
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE(state.pending_transactions[0].property_id == 1);
+
+    // Settle at close_tick: ownership transfers on prop 1 only.
+    state.current_tick = 17;
     DeltaBuffer delta{};
     module.execute(state, delta);
-
-    // First buy succeeds; second fails (running wealth = 50000 < 150000).
     REQUIRE(module.properties()[0].owner_id == 99);
     REQUIRE(module.properties()[1].owner_id == 43);
 }
@@ -1227,4 +1257,327 @@ TEST_CASE("Phase1: NPC opportunistic buy is deterministic across runs",
     auto run_a = run_once(42);
     auto run_b = run_once(42);
     REQUIRE(run_a == run_b);
+}
+
+// ===========================================================================
+// Phase 2: PendingTransaction lifecycle — multi-tick close, cancel, expiry
+// ===========================================================================
+
+TEST_CASE("Phase2: buy creates pending tx and does not settle before close_tick",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+
+    // Offer tick: pending tx created, no settlement.
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE(state.pending_transactions[0].stage == PendingTxStage::pending);
+    REQUIRE(state.pending_transactions[0].close_tick == 17u);
+    REQUIRE(module.properties()[0].owner_id == 42);
+    REQUIRE_FALSE(d_offer.player_delta.wealth_delta.has_value());
+
+    // One tick before close: still no settle.
+    state.current_tick = 16;
+    DeltaBuffer d_pre{};
+    module.execute(state, d_pre);
+    REQUIRE(module.properties()[0].owner_id == 42);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    // At close_tick: settles, prunes.
+    state.current_tick = 17;
+    DeltaBuffer d_close{};
+    module.execute(state, d_close);
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE(state.pending_transactions.empty());
+}
+
+TEST_CASE("Phase2: close delay matches property type",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(100);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto resi = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    resi.asking_price = 150000.0f;
+    resi.listed_for_sale = true;
+    module.add_property(resi);
+    auto comm = make_test_property(2, PropertyType::commercial, 0, 42, 300000.0f);
+    comm.asking_price = 300000.0f;
+    comm.listed_for_sale = true;
+    module.add_property(comm);
+    auto indu = make_test_property(3, PropertyType::industrial, 0, 42, 400000.0f);
+    indu.asking_price = 400000.0f;
+    indu.listed_for_sale = true;
+    module.add_property(indu);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 2, 99, 300000.0f});
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 3, 99, 400000.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.pending_transactions.size() == 3);
+    // residential = 7, commercial = 30, industrial = 30.
+    uint32_t resi_close = 0, comm_close = 0, indu_close = 0;
+    for (const auto& tx : state.pending_transactions) {
+        if (tx.property_id == 1) resi_close = tx.close_tick;
+        if (tx.property_id == 2) comm_close = tx.close_tick;
+        if (tx.property_id == 3) indu_close = tx.close_tick;
+    }
+    REQUIRE(resi_close == 107u);
+    REQUIRE(comm_close == 130u);
+    REQUIRE(indu_close == 130u);
+}
+
+TEST_CASE("Phase2: under-contract guard rejects second buy on same property",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 1000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // First buy creates the pending tx.
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+    DeltaBuffer d1{};
+    module.execute(state, d1);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    // Second buy on same property next tick — should be rejected.
+    state.current_tick = 11;
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 175000.0f});
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE_THAT(state.pending_transactions[0].offer_price, WithinAbs(150000.0f, 0.01f));
+}
+
+TEST_CASE("Phase2: cancel by buyer removes pending tx before close",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+    DeltaBuffer d1{};
+    module.execute(state, d1);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    // Cancel next tick (buyer is player 99 — authorized).
+    state.current_tick = 12;
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::cancel, 1, 99, 0.0f});
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+    REQUIRE(state.pending_transactions.empty());
+
+    // Past original close_tick: no settle (already cancelled).
+    state.current_tick = 17;
+    DeltaBuffer d3{};
+    module.execute(state, d3);
+    REQUIRE(module.properties()[0].owner_id == 42);
+    REQUIRE_FALSE(d3.player_delta.wealth_delta.has_value());
+}
+
+TEST_CASE("Phase2: cancel by seller-NPC works (NPC opportunistic buy on player listing)",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 200000.0f);
+    prop.asking_price = 100000.0f;  // 50% off — guaranteed deal
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Loop until NPC creates a pending tx.
+    bool pending_created = false;
+    for (int t = 0; t < 500 && !pending_created; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        DeltaBuffer d{};
+        module.execute(state, d);
+        if (!state.pending_transactions.empty())
+            pending_created = true;
+    }
+    REQUIRE(pending_created);
+    REQUIRE(state.pending_transactions[0].buyer_id == 7);
+    REQUIRE(state.pending_transactions[0].seller_id == 99);
+
+    // Player (seller) cancels — should be allowed.
+    state.current_tick += 1;
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::cancel, 1, 99, 0.0f});
+    DeltaBuffer d_cancel{};
+    module.execute(state, d_cancel);
+    REQUIRE(state.pending_transactions.empty());
+    REQUIRE(module.properties()[0].owner_id == 99);
+}
+
+TEST_CASE("Phase2: cancel by unrelated actor rejected",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+    DeltaBuffer d1{};
+    module.execute(state, d1);
+
+    // Cancel attempt by random NPC id 555 (not buyer 99, not seller 42).
+    state.current_tick = 12;
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::cancel, 1, 555, 0.0f});
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE(state.pending_transactions[0].stage == PendingTxStage::pending);
+}
+
+TEST_CASE("Phase2: buy expires (no transfer) when buyer cannot afford at close",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 150000.0f;  // just enough for one buy
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    // Between offer and close, the player loses cash via some other path
+    // (simulated by directly mutating wealth — in practice this could be
+    // a bail payment, a fine, or a competing purchase).
+    state.player->wealth = 50000.0f;
+
+    // At close_tick: insufficient funds → expired, no transfer.
+    state.current_tick = 17;
+    DeltaBuffer d_close{};
+    module.execute(state, d_close);
+    REQUIRE(module.properties()[0].owner_id == 42);
+    REQUIRE_FALSE(d_close.player_delta.wealth_delta.has_value());
+    REQUIRE(state.pending_transactions.empty());  // pruned
+}
+
+TEST_CASE("Phase2: NPC opportunistic buy creates pending tx (not instant)",
+          "[real_estate][market_phase2]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 200000.0f);
+    prop.asking_price = 100000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Loop until pending tx created; ownership must NOT change in
+    // that tick — only at close_tick.
+    bool pending_seen = false;
+    uint32_t pending_tick = 0;
+    for (int t = 0; t < 500 && !pending_seen; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        DeltaBuffer d{};
+        module.execute(state, d);
+        if (!state.pending_transactions.empty()) {
+            pending_seen = true;
+            pending_tick = state.current_tick;
+            REQUIRE(module.properties()[0].owner_id == 99);  // not yet transferred
+        }
+    }
+    REQUIRE(pending_seen);
+
+    // Settle at close_tick.
+    state.current_tick = pending_tick + 7;
+    DeltaBuffer d_settle{};
+    module.execute(state, d_settle);
+    REQUIRE(module.properties()[0].owner_id == 7);
+    REQUIRE(state.pending_transactions.empty());
+}
+
+TEST_CASE("Phase2: settled pending tx survives serialization round-trip via persistence v9",
+          "[real_estate][market_phase2][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    // Round-trip the WorldState.
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    RealEstateModule restored_mod;
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored.pending_transactions.size() == 1);
+    const auto& tx = restored.pending_transactions[0];
+    REQUIRE(tx.property_id == 1);
+    REQUIRE(tx.buyer_id == 99);
+    REQUIRE(tx.seller_id == 42);
+    REQUIRE_THAT(tx.offer_price, WithinAbs(150000.0f, 0.01f));
+    REQUIRE(tx.offered_tick == 10);
+    REQUIRE(tx.close_tick == 17);
+    REQUIRE(tx.stage == PendingTxStage::pending);
 }

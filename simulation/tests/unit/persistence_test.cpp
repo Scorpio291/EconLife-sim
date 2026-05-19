@@ -47,20 +47,23 @@ TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
     REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
 }
 
-TEST_CASE("Persistence: schema accepts v7 and v8", "[persistence][tier12]") {
-    // v8 is current; v7 is still loadable (the v8 pending-trigger
-    // section is gated on saved_version >= 8 and is absent in v7 saves).
-    REQUIRE(PersistenceModule::is_schema_compatible(7, 8) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(8, 8) == true);
+TEST_CASE("Persistence: schema accepts v7, v8, and v9", "[persistence][tier12]") {
+    // v9 is current; v7 and v8 are still loadable (each trailing footer
+    // section is gated on saved_version checks and absent footers leave
+    // their queues empty).
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 9) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(8, 9) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(9, 9) == true);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(9, 8) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(10, 9) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(7, 8) == true);
-    REQUIRE(PersistenceModule::needs_migration(8, 8) == false);
+    REQUIRE(PersistenceModule::needs_migration(7, 9) == true);
+    REQUIRE(PersistenceModule::needs_migration(8, 9) == true);
+    REQUIRE(PersistenceModule::needs_migration(9, 9) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -102,11 +105,12 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
-    // Schema v8: pending_random_event_triggers footer. Earlier bumps
-    // (v3 catalog, v4 addiction, v5 cohort, v6 currency/facility/tech,
-    // v7 module-state, v8 trigger queue) documented in
+    // Schema v9: pending_transactions footer (real-estate Phase 2).
+    // Earlier bumps (v3 catalog, v4 addiction, v5 cohort, v6
+    // currency/facility/tech, v7 module-state, v8 trigger queue, v9
+    // pending_transactions) documented in
     // persistence_module.h:CURRENT_SCHEMA_VERSION.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 8);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 9);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

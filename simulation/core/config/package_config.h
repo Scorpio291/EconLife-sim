@@ -405,6 +405,16 @@ struct RealEstateConfig {
     // demand-driven NPC offers and counter-offer flow).
     float npc_buyer_deal_max_ratio = 0.90f;     // asking/market under this = "a deal"
     float npc_opportunistic_buy_rate = 0.02f;   // base rate (multiplied by deal_strength)
+
+    // Phase 2 — multi-tick close delays per PropertyType. A buy accepted
+    // at-or-above asking creates a PendingTransaction whose close_tick is
+    // (current_tick + delay). The transaction settles when real_estate's
+    // global post-pass observes close_tick <= current_tick, transferring
+    // ownership and money. Defaults model rough due-diligence time:
+    // residential closes fast, commercial/industrial slower.
+    uint32_t close_delay_residential = 7;
+    uint32_t close_delay_commercial = 30;
+    uint32_t close_delay_industrial = 30;
 };
 
 struct FinancialDistributionConfig {

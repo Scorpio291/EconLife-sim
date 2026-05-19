@@ -11,6 +11,7 @@
 // Core headers (provide DeltaBuffer, DeferredWorkQueue, and transitive types)
 #include "../tick/deferred_work.h"  // DeferredWorkQueue
 #include "delta_buffer.h"           // DeltaBuffer + npc.h + shared_types.h
+#include "pending_transaction.h"    // PendingTransaction
 #include "player_action_types.h"    // PlayerAction
 
 // Complete type definitions needed for std::vector/std::map value members and unique_ptr members
@@ -158,6 +159,15 @@ struct WorldState {
     // at save time (same-tick consumer contract); defensively cleared on
     // load to match the legal_case_seeds invariant.
     std::vector<PropertyTransactionRequest> pending_property_transactions;
+
+    // Active (multi-tick) property transactions awaiting settlement at
+    // their close_tick. Created by real_estate when a player-initiated
+    // buy is accepted at-or-above asking, and by real_estate's NPC
+    // opportunistic-buy scan. Settled / cancelled / expired entries are
+    // pruned the same tick they reach a terminal state. Persisted
+    // (schema v9+) so that mid-cycle saves do not drop in-flight
+    // transactions.
+    std::vector<PendingTransaction> pending_transactions;
 
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().

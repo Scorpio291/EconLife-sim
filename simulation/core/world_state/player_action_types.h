@@ -92,13 +92,20 @@ struct UnlistPropertyAction {
     uint32_t property_id;
 };
 
-// Make a cash offer on a listed property. Phase 1: only at-or-above
-// asking price offers are accepted; below-asking offers are dropped
-// (negotiation lands in Phase 3). Settles instantly within the same
-// tick (multi-tick lifecycle lands in Phase 2).
+// Make a cash offer on a listed property. Phase 2: at-or-above asking
+// creates a PendingTransaction that settles after a per-type close
+// delay (residential 7 ticks, commercial/industrial 30 ticks).
+// Below-asking offers are dropped (negotiation lands in Phase 3).
 struct MakePropertyOfferAction {
     uint32_t property_id;
     float offer_price;
+};
+
+// Cancel the currently-active PendingTransaction on a property. The
+// player must be either the buyer or the seller. Aborts the deal
+// before its close_tick; no transfer occurs. Phase 2.
+struct CancelPendingTransactionAction {
+    uint32_t property_id;
 };
 
 // ---------------------------------------------------------------------------
@@ -118,6 +125,7 @@ enum class PlayerActionType : uint8_t {
     list_property_for_sale = 9,
     unlist_property = 10,
     make_property_offer = 11,
+    cancel_pending_transaction = 12,
 };
 
 // ---------------------------------------------------------------------------
@@ -128,7 +136,7 @@ using PlayerActionPayload =
     std::variant<SceneCardChoiceAction, CalendarCommitAction, CalendarScheduleAction, TravelAction,
                  StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
-                 MakePropertyOfferAction>;
+                 MakePropertyOfferAction, CancelPendingTransactionAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

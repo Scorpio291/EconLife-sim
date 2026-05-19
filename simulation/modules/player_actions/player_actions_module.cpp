@@ -383,6 +383,18 @@ static void handle_make_property_offer(const MakePropertyOfferAction& action,
     delta.new_property_transactions.push_back(req);
 }
 
+static void handle_cancel_pending_transaction(const CancelPendingTransactionAction& action,
+                                              const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::cancel;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = 0.0f;
+    delta.new_property_transactions.push_back(req);
+}
+
 static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -459,6 +471,8 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_unlist_property(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, MakePropertyOfferAction>) {
                     handle_make_property_offer(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, CancelPendingTransactionAction>) {
+                    handle_cancel_pending_transaction(payload, state, delta);
                 }
             },
             action.payload);

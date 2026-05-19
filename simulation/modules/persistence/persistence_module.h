@@ -119,7 +119,13 @@ class PersistenceModule : public ITickModule {
     //      severity). Persists cross-tick triggers emitted by tier-late
     //      producers (currency_exchange peg break) so a save mid-cycle
     //      does not drop them. v7 saves load with the queue empty.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 8;
+    //   v9: trailing pending_transactions vector (u32 count, per entry:
+    //      u32 id + u32 property_id + u32 buyer_id + u32 seller_id +
+    //      f32 offer_price + u32 offered_tick + u32 close_tick + u8 stage).
+    //      Persists multi-tick property buy contracts so mid-cycle saves
+    //      do not drop in-flight transactions. v7/v8 saves load with the
+    //      queue empty.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 9;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"
