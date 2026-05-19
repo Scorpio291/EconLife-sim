@@ -18,6 +18,8 @@
 
 #include <cstdint>
 
+#include "delta_buffer.h"  // PaymentMethod
+
 namespace econlife {
 
 enum class PendingTxStage : uint8_t {
@@ -36,6 +38,16 @@ struct PendingTransaction {
     uint32_t offered_tick;
     uint32_t close_tick;
     PendingTxStage stage;
+
+    // Phase 4 — payment fields. Cash uses payment_method=cash and
+    // down_payment_fraction=1.0 (entire price paid at close).
+    // Mortgage uses payment_method=mortgage and down_payment_fraction=0
+    // (full price financed; LoanRecord created at close). Mixed uses
+    // payment_method=mixed and down_payment_fraction in (0, 1).
+    PaymentMethod payment_method = PaymentMethod::cash;
+    float down_payment_fraction = 1.0f;
+    float interest_rate = 0.0f;       // captured at offer time so close uses approved rate
+    uint32_t loan_maturity_ticks = 0; // 0 = N/A for cash; non-zero for mortgage/mixed
 };
 
 }  // namespace econlife

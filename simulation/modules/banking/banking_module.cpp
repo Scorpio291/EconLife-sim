@@ -341,6 +341,34 @@ void BankingModule::process_loan_origination(const WorldState& state, DeltaBuffe
 // ===========================================================================
 
 void BankingModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Phase 4 — drain pending_loan_requests emitted at settlement by
+    // real_estate (mortgage / mixed property buys). Each request becomes
+    // a new LoanRecord; counters/credit are initialised by
+    // process_loan_repayment on the next tick when the loan is first
+    // visited. Queue cleared via const_cast (same carve-out as
+    // pending_property_transactions in real_estate).
+    if (!state.pending_loan_requests.empty()) {
+        for (const auto& req : state.pending_loan_requests) {
+            LoanRecord loan{};
+            loan.id = next_loan_id_++;
+            loan.borrower_id = req.borrower_id;
+            loan.lender_id = req.lender_id;
+            loan.purpose = static_cast<LoanPurpose>(req.purpose);
+            loan.principal = req.principal;
+            loan.outstanding_balance = req.principal;
+            loan.interest_rate = req.interest_rate;
+            loan.repayment_per_tick = req.repayment_per_tick;
+            loan.originated_tick = state.current_tick;
+            loan.maturity_tick = req.maturity_tick;
+            loan.in_default = false;
+            loan.collateral_id = req.collateral_id;
+            active_loans_.push_back(loan);
+        }
+        auto& mutable_queue =
+            const_cast<std::vector<NewLoanRequest>&>(state.pending_loan_requests);
+        mutable_queue.clear();
+    }
+
     // Step 0: Evaluate NPC businesses for new loan applications (quarterly).
     process_loan_origination(state, delta);
 

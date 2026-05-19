@@ -22,6 +22,8 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
+#include "modules/banking/banking_module.h"        // Loan helpers (static methods)
+#include "modules/banking/banking_types.h"         // LoanPurpose
 #include "modules/scene_cards/scene_card_types.h"  // SceneCard, SceneSetting, SceneCardType
 
 namespace econlife {
@@ -445,6 +447,54 @@ uint32_t next_scene_card_id(const WorldState& state, const DeltaBuffer& delta) {
 constexpr uint32_t CHOICE_ACCEPT_OFFER = 1;
 constexpr uint32_t CHOICE_DECLINE_OFFER = 2;
 
+// Phase 4 — minimum down-payment fraction by property type.
+float min_down_payment_for_type(const RealEstateConfig& cfg, PropertyType type) {
+    switch (type) {
+        case PropertyType::residential:
+            return cfg.min_down_payment_residential;
+        case PropertyType::commercial:
+            return cfg.min_down_payment_commercial;
+        case PropertyType::industrial:
+            return cfg.min_down_payment_industrial;
+    }
+    return cfg.min_down_payment_residential;
+}
+
+// Phase 4 — mortgage approval check for the player. Cash and at-or-
+// above-asking buys never call this; mortgage / mixed buys do. Returns
+// true iff:
+//   * down_payment_fraction >= min_down_payment_for_type
+//   * principal <= player.wealth × player_max_loan_multiplier_of_wealth
+//   * credit_score >= banking's min for property_purchase (default 0.5
+//     for borrowers with no prior loans; we assume the player baseline
+//     until banking starts tracking it)
+//   * banking's evaluate_loan_application accepts the (score, dti=0)
+bool approve_player_mortgage(const PlayerCharacter& player, float offer_price,
+                             float down_payment_fraction, PropertyType type,
+                             const RealEstateConfig& cfg) {
+    if (down_payment_fraction < min_down_payment_for_type(cfg, type))
+        return false;
+    float principal = offer_price * (1.0f - down_payment_fraction);
+    if (principal <= 0.0f)
+        return true;  // 100% cash equivalent — no loan needed
+    if (player.wealth <= 0.0f)
+        return false;  // negative wealth means insolvent; no underwriting
+    float max_loan = player.wealth * cfg.player_max_loan_multiplier_of_wealth;
+    if (principal > max_loan)
+        return false;
+    // Use banking's static helper for credit-score / DTI gate. The
+    // player's credit score defaults to 0.5 (same as banking's
+    // BorrowerCredit initialiser) until they take a loan. dti = 0
+    // approximation since the player has no recurring income stream
+    // tracked in V1; debt service is bounded by player_max_loan
+    // independently.
+    constexpr float kPlayerBaselineCreditScore = 0.5f;
+    constexpr float kBankingDenialDtiThreshold = 0.40f;  // matches BankingConfig default
+    return BankingModule::evaluate_loan_application(
+        kPlayerBaselineCreditScore, /*dti=*/0.0f, LoanPurpose::property_purchase,
+        kBankingDenialDtiThreshold);
+}
+
 // Emit an EvidenceToken for a property transaction when its dollar
 // amount crosses the institutional-visibility reporting threshold.
 // Documentary type, public scope; source = seller, target = buyer.
@@ -639,27 +689,50 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     break;
                 if (prop->owner_id == req.actor_id)
                     break;
-                if (running_player_wealth < req.price)
-                    break;
                 // Under-contract guard: at most one active pending_tx
                 // per property. Subsequent buys are rejected until the
                 // first settles, expires, or is cancelled.
                 if (find_active_pending_tx(pending_txs, prop->id) != nullptr)
                     break;
 
+                // Phase 4: derive cash-portion required from payment
+                // method. Cash → full price; mortgage → type-minimum
+                // down payment (max financing); mixed → caller-supplied
+                // down_payment_fraction (clamped to >= type minimum).
+                float type_min_dp = min_down_payment_for_type(cfg_, prop->type);
+                float dpf;
+                if (req.payment_method == PaymentMethod::cash) {
+                    dpf = 1.0f;
+                } else if (req.payment_method == PaymentMethod::mortgage) {
+                    dpf = type_min_dp;
+                } else {
+                    dpf = std::clamp(req.down_payment_fraction, type_min_dp, 1.0f);
+                    // For mixed: if caller asked below type minimum, reject
+                    // rather than silently bumping (so the caller knows their
+                    // structure is non-conforming).
+                    if (req.down_payment_fraction < type_min_dp - 1e-6f)
+                        break;
+                }
+                float cash_required = req.price * dpf;
+                if (running_player_wealth < cash_required)
+                    break;
+
+                // Phase 4: mortgage / mixed offers must clear underwriting
+                // for the player at offer time.
+                if (req.payment_method != PaymentMethod::cash) {
+                    if (!state.player || req.actor_id != state.player->id)
+                        break;  // NPCs don't have player-style mortgages in V1
+                    if (!approve_player_mortgage(*state.player, req.price, dpf, prop->type, cfg_))
+                        break;  // underwriting denied
+                }
+
                 // Phase 3: below-asking offers roll the relationship-
                 // driven accept formula against the seller NPC. At-or-
-                // above asking continues to auto-accept (Phase 1/2
-                // behavior). Player-owned-seller path also auto-accepts
-                // since there is no NPC to roll (player is selling to
-                // an NPC buyer — only happens via the opportunistic
-                // scan, never via this drain).
+                // above asking continues to auto-accept.
                 if (req.price < prop->asking_price) {
                     const NPC* seller = lookup_npc_by_id(state, prop->owner_id);
                     if (!seller)
                         break;  // state-owned or unknown — no negotiation
-                    // Fork RNG per (tick, property, buyer) so the
-                    // outcome is reproducible.
                     DeterministicRNG roll_rng(state.world_seed ^
                                               (static_cast<uint64_t>(state.current_tick) *
                                                0x9E37u) ^
@@ -671,8 +744,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                         break;  // rejected
                 }
 
-                // Reserve buyer's wealth for the running check.
-                running_player_wealth -= req.price;
+                // Reserve buyer's cash portion only (not the full price
+                // when mortgaged).
+                running_player_wealth -= cash_required;
 
                 PendingTransaction tx{};
                 tx.id = next_pending_tx_id(pending_txs);
@@ -683,6 +757,11 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 tx.offered_tick = state.current_tick;
                 tx.close_tick = state.current_tick + close_delay_for_type(cfg_, prop->type);
                 tx.stage = PendingTxStage::pending;
+                tx.payment_method = req.payment_method;
+                tx.down_payment_fraction = dpf;
+                tx.interest_rate = cfg_.mortgage_interest_rate;
+                tx.loan_maturity_ticks =
+                    (req.payment_method == PaymentMethod::cash) ? 0u : cfg_.mortgage_term_ticks;
                 pending_txs.push_back(tx);
                 break;
             }
@@ -724,25 +803,74 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             tx.stage = PendingTxStage::cancelled;
             continue;
         }
-        // Re-check buyer can still afford. Reservations from the offer
-        // tick do not carry across tick boundaries (player.wealth is
-        // authoritative; the pending_transaction list is the only
-        // record of in-flight commitments). At close we simply check
-        // whether the buyer's current cash covers the offer.
+        // Phase 4: cash-portion is what the buyer must cover at close.
+        // Mortgage/mixed deals are financed by a loan that covers the
+        // remainder; the LoanRecord is created via NewLoanRequest.
+        float cash_portion = tx.offer_price * tx.down_payment_fraction;
+        float loan_principal = tx.offer_price - cash_portion;
+
         bool buyer_can_pay = false;
         if (tx.buyer_id == player_id) {
-            buyer_can_pay = running_player_wealth >= tx.offer_price;
+            buyer_can_pay = running_player_wealth >= cash_portion;
         } else {
             const NPC* n = lookup_npc_by_id(state, tx.buyer_id);
             if (n)
-                buyer_can_pay = npc_cash(tx.buyer_id, n->capital) >= tx.offer_price;
+                buyer_can_pay = npc_cash(tx.buyer_id, n->capital) >= cash_portion;
         }
 
         if (!buyer_can_pay) {
             tx.stage = PendingTxStage::expired;
             continue;
         }
-        settle_transfer(*prop, tx.buyer_id, tx.seller_id, tx.offer_price);
+        // settle_transfer handles the cash debit / seller credit /
+        // evidence / ownership transfer for the entire offer_price.
+        // For mortgaged deals the buyer-debit must only be the
+        // down-payment; we override by passing cash_portion as the
+        // buyer-side debit, then separately credit the seller for the
+        // full price (loan-funded portion). To keep settle_transfer
+        // simple, we inline the split here when financing is involved.
+        if (loan_principal <= 0.0f) {
+            settle_transfer(*prop, tx.buyer_id, tx.seller_id, tx.offer_price);
+        } else {
+            // Buyer pays only the cash portion.
+            if (tx.buyer_id == player_id) {
+                delta.player_delta.wealth_delta =
+                    delta.player_delta.wealth_delta.value_or(0.0f) - cash_portion;
+                running_player_wealth -= cash_portion;
+            }
+            // Seller is credited the full offer price (bank funds the gap).
+            if (tx.seller_id == player_id) {
+                delta.player_delta.wealth_delta =
+                    delta.player_delta.wealth_delta.value_or(0.0f) + tx.offer_price;
+                running_player_wealth += tx.offer_price;
+            } else if (tx.seller_id != 0u) {
+                NPCDelta seller_delta{};
+                seller_delta.npc_id = tx.seller_id;
+                seller_delta.capital_delta = tx.offer_price;
+                delta.npc_deltas.push_back(seller_delta);
+            }
+            emit_transaction_evidence(delta, tx.seller_id, tx.buyer_id, prop->province_id,
+                                      tx.offer_price, cfg_.transaction_evidence_threshold,
+                                      state.current_tick);
+            prop->owner_id = tx.buyer_id;
+            prop->listed_for_sale = false;
+            prop->purchased_tick = state.current_tick;
+            prop->purchase_price = tx.offer_price;
+
+            // Emit the new loan request — banking creates the LoanRecord
+            // at the start of its execute() in this same tick.
+            NewLoanRequest loan_req{};
+            loan_req.borrower_id = tx.buyer_id;
+            loan_req.lender_id = 0u;  // anonymous bank
+            loan_req.purpose = static_cast<uint8_t>(LoanPurpose::property_purchase);
+            loan_req.principal = loan_principal;
+            loan_req.interest_rate = tx.interest_rate;
+            loan_req.repayment_per_tick = BankingModule::compute_repayment_per_tick(
+                loan_principal, tx.interest_rate, tx.loan_maturity_ticks);
+            loan_req.maturity_tick = state.current_tick + tx.loan_maturity_ticks;
+            loan_req.collateral_id = prop->id;
+            delta.new_loan_requests.push_back(loan_req);
+        }
         tx.stage = PendingTxStage::settled;
     }
 

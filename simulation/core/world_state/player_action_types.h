@@ -14,6 +14,7 @@
 #include <string>
 #include <variant>
 
+#include "core/world_state/delta_buffer.h"    // PaymentMethod
 #include "modules/calendar/calendar_types.h"  // CalendarEntryType
 #include "modules/economy/economy_types.h"    // BusinessSector
 
@@ -92,13 +93,18 @@ struct UnlistPropertyAction {
     uint32_t property_id;
 };
 
-// Make a cash offer on a listed property. Phase 2: at-or-above asking
-// creates a PendingTransaction that settles after a per-type close
-// delay (residential 7 ticks, commercial/industrial 30 ticks).
-// Below-asking offers are dropped (negotiation lands in Phase 3).
+// Make an offer on a listed property. Phase 2 wires the close-delay
+// lifecycle; Phase 3 wires below-asking negotiation; Phase 4 wires
+// mortgage financing. Cash + Phase 4 mortgage use the same action; the
+// payment_method field selects the payment path. Default
+// payment_method=cash + down_payment_fraction=1.0 preserves Phase 1-3
+// caller semantics. For mortgage: down_payment_fraction = 0.0
+// (full-principal loan); for mixed: down_payment_fraction in (0, 1).
 struct MakePropertyOfferAction {
     uint32_t property_id;
     float offer_price;
+    PaymentMethod payment_method = PaymentMethod::cash;
+    float down_payment_fraction = 1.0f;
 };
 
 // Cancel the currently-active PendingTransaction on a property. The

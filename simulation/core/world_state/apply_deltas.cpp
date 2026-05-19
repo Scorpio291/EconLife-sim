@@ -721,6 +721,14 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_property_transactions.push_back(std::move(tx));
     }
 
+    // Route new loan requests (Phase 4 — mortgage origination) into
+    // pending_loan_requests. Banking drains them at the start of its
+    // execute() (Tier 5 follows real_estate Tier 4). Queue empty at
+    // save time.
+    for (auto& req : delta.new_loan_requests) {
+        world.pending_loan_requests.push_back(std::move(req));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -749,6 +757,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_legal_case_seeds.clear();
     delta.new_random_event_triggers.clear();
     delta.new_property_transactions.clear();
+    delta.new_loan_requests.clear();
 }
 
 // ---------------------------------------------------------------------------

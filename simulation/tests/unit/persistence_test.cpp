@@ -47,23 +47,23 @@ TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
     REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
 }
 
-TEST_CASE("Persistence: schema accepts v7, v8, and v9", "[persistence][tier12]") {
-    // v9 is current; v7 and v8 are still loadable (each trailing footer
-    // section is gated on saved_version checks and absent footers leave
-    // their queues empty).
-    REQUIRE(PersistenceModule::is_schema_compatible(7, 9) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(8, 9) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(9, 9) == true);
+TEST_CASE("Persistence: schema accepts v7..v10", "[persistence][tier12]") {
+    // v10 is current; v7-v9 are still loadable (each trailing footer or
+    // field extension is gated on saved_version checks).
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 10) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(8, 10) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(9, 10) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(10, 10) == true);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(10, 9) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(11, 10) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(7, 9) == true);
-    REQUIRE(PersistenceModule::needs_migration(8, 9) == true);
-    REQUIRE(PersistenceModule::needs_migration(9, 9) == false);
+    REQUIRE(PersistenceModule::needs_migration(7, 10) == true);
+    REQUIRE(PersistenceModule::needs_migration(9, 10) == true);
+    REQUIRE(PersistenceModule::needs_migration(10, 10) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -105,12 +105,11 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
-    // Schema v9: pending_transactions footer (real-estate Phase 2).
-    // Earlier bumps (v3 catalog, v4 addiction, v5 cohort, v6
-    // currency/facility/tech, v7 module-state, v8 trigger queue, v9
-    // pending_transactions) documented in
-    // persistence_module.h:CURRENT_SCHEMA_VERSION.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 9);
+    // Schema v10: pending_transactions Phase 4 mortgage extension
+    // (payment_method, down_payment_fraction, interest_rate,
+    // loan_maturity_ticks per entry). Earlier bumps (v3..v10) documented
+    // in persistence_module.h:CURRENT_SCHEMA_VERSION.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 10);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

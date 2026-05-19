@@ -1572,10 +1572,11 @@ bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t cu
     // Each schema bump (v3 catalog, v4 addiction footer, v5 cohort_stats
     // migration, v6 currency/facility/technology footers, v7 module-state
     // section, v8 pending_random_event_triggers footer, v9
-    // pending_transactions footer) changes the byte-stream layout. V1 is
+    // pending_transactions footer, v10 pending_transactions Phase 4
+    // mortgage extension) changes the byte-stream layout. V1 is
     // pre-release; reject anything older than the current floor outright.
-    // v7/v8 saves remain loadable: each footer is gated on saved_version
-    // checks and absent footers leave the queues empty.
+    // v7/v8/v9 saves remain loadable: each footer or trailing-field
+    // extension is gated on saved_version checks.
     if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
@@ -1806,9 +1807,7 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
     }
 
     // --- v9: pending_transactions (real-estate Phase 2) ---
-    // Multi-tick property buy contracts. Persisted so a save mid-cycle
-    // does not drop in-flight transactions. Order preserved (real_estate
-    // settles in iteration order at close_tick).
+    //         Extended in v10 with Phase 4 mortgage payment fields.
     {
         const auto& queue = state.pending_transactions;
         w.write_u32(static_cast<uint32_t>(queue.size()));
@@ -1821,6 +1820,11 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
             w.write_u32(t.offered_tick);
             w.write_u32(t.close_tick);
             w.write_u8(static_cast<uint8_t>(t.stage));
+            // v10: Phase 4 mortgage fields.
+            w.write_u8(static_cast<uint8_t>(t.payment_method));
+            w.write_float(t.down_payment_fraction);
+            w.write_float(t.interest_rate);
+            w.write_u32(t.loan_maturity_ticks);
         }
     }
 
@@ -2166,9 +2170,11 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         }
     }
 
-    // --- v9: pending_transactions (real-estate Phase 2) ---
+    // --- v9: pending_transactions (real-estate Phase 2/4) ---
     // v7/v8 saves omit this section: leave the queue empty (no in-flight
-    // property transactions at save time). v9+ saves carry the queue.
+    // property transactions at save time). v9 saves carry the queue.
+    // v10 saves carry the queue with extended Phase 4 payment fields;
+    // v9 saves load with the cash defaults.
     out_state.pending_transactions.clear();
     if (schema_ver >= 9u) {
         uint32_t tx_count = r.read_u32();
@@ -2183,6 +2189,17 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             t.offered_tick = r.read_u32();
             t.close_tick = r.read_u32();
             t.stage = static_cast<PendingTxStage>(r.read_u8());
+            if (schema_ver >= 10u) {
+                t.payment_method = static_cast<PaymentMethod>(r.read_u8());
+                t.down_payment_fraction = r.read_float();
+                t.interest_rate = r.read_float();
+                t.loan_maturity_ticks = r.read_u32();
+            } else {
+                t.payment_method = PaymentMethod::cash;
+                t.down_payment_fraction = 1.0f;
+                t.interest_rate = 0.0f;
+                t.loan_maturity_ticks = 0u;
+            }
             out_state.pending_transactions.push_back(t);
         }
     }
@@ -2196,6 +2213,10 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // contract (player_actions emits at Tier 0, real_estate drains at
     // Tier 4 within the same tick). Defensively reset on load.
     out_state.pending_property_transactions.clear();
+
+    // pending_loan_requests also same-tick (real_estate emits at Tier 4
+    // settlement, banking drains at Tier 5). Defensively reset on load.
+    out_state.pending_loan_requests.clear();
 
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();

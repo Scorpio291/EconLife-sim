@@ -443,6 +443,21 @@ struct RealEstateConfig {
     float npc_offer_min_ratio = 0.85f;
     float npc_offer_max_ratio = 0.95f;
     uint32_t negotiation_deadline_ticks = 14;
+
+    // Phase 4 — mortgage financing. Down-payment minimums per property
+    // type (offers with down_payment_fraction below the floor are
+    // rejected at the drain). Player-mortgage approval uses banking's
+    // min_credit_score_for_purpose (LoanPurpose::property_purchase)
+    // and a player-specific max-loan rule:
+    //     max_loan = player.wealth × player_max_loan_multiplier_of_wealth
+    // The loan's repayment cadence uses mortgage_term_ticks and the
+    // banking-supplied compute_repayment_per_tick.
+    float min_down_payment_residential = 0.10f;
+    float min_down_payment_commercial = 0.25f;
+    float min_down_payment_industrial = 0.35f;
+    float player_max_loan_multiplier_of_wealth = 10.0f;
+    float mortgage_interest_rate = 0.00025f;   // per-tick rate ≈ ~9% annual
+    uint32_t mortgage_term_ticks = 10950u;     // ~30 years at 365 ticks/year
 };
 
 struct FinancialDistributionConfig {

@@ -169,6 +169,13 @@ struct WorldState {
     // transactions.
     std::vector<PendingTransaction> pending_transactions;
 
+    // pending_loan_requests: written by real_estate at settlement time
+    // for mortgage / mixed-payment transactions. Drained by banking at
+    // the start of its execute() (Tier 5 follows real_estate Tier 4).
+    // Empty at save time (same-tick consumer contract); defensively
+    // cleared on load.
+    std::vector<NewLoanRequest> pending_loan_requests;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.

@@ -370,16 +370,24 @@ static void handle_make_property_offer(const MakePropertyOfferAction& action,
         return;
     if (action.offer_price <= 0.0f)
         return;
-    // Cheap upfront wealth check; real_estate re-checks at drain time
-    // using running-wealth tracking to avoid over-committing across
-    // multiple buys in one tick.
-    if (state.player->wealth < action.offer_price)
+
+    // Phase 4: down_payment_fraction in [0, 1]; mortgage uses 0, cash
+    // uses 1, mixed uses something in between. Sanity-clamp.
+    float dpf = std::clamp(action.down_payment_fraction, 0.0f, 1.0f);
+    // Cheap upfront wealth check: player must at least cover the cash
+    // portion of the deal. The mortgage path is approved by real_estate
+    // against banking helpers, so we do not gate that here.
+    float cash_required = action.offer_price * dpf;
+    if (state.player->wealth < cash_required)
         return;
+
     PropertyTransactionRequest req{};
     req.kind = PropertyTransactionKind::buy;
     req.property_id = action.property_id;
     req.actor_id = state.player->id;
     req.price = action.offer_price;
+    req.payment_method = action.payment_method;
+    req.down_payment_fraction = dpf;
     delta.new_property_transactions.push_back(req);
 }
 

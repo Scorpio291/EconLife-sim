@@ -116,7 +116,37 @@ Properties with an active negotiation are skipped by both Path A and Path B in s
 
 **Persistence**: `active_negotiations_` round-trips via the v7 module-state hook with `schema_tag = 3` (trailing block per record: scene_card_id, property_id, buyer_id, seller_id, offer_price, offered_tick, deadline_tick). v2 saves load with the queue empty; v1 saves predate `listed_for_sale` and load with that flag false.
 
-Phase 4 extends NPC initiative beyond opportunistic to demand-driven offers. Phase 5 layers mortgage financing on top. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 4 Mortgage Financing
+**Phase 4** lets the player finance a property buy through a banking-managed `LoanRecord` with the property as collateral. A new `PaymentMethod` field on `PropertyTransactionRequest` selects cash / mortgage / mixed:
+
+- **cash**: down_payment_fraction = 1.0; entire offer paid at close (Phase 1-3 behavior).
+- **mortgage**: maximum-financing; down_payment_fraction is forced to the type minimum (residential 0.10, commercial 0.25, industrial 0.35).
+- **mixed**: caller-supplied down_payment_fraction (must be >= type minimum; sub-minimum requests are rejected at the drain so callers know their structure was non-conforming).
+
+**Underwriting at offer-time** (drain pass):
+- down_payment_fraction must meet the type minimum.
+- principal (= offer_price × (1 - dpf)) must be <= player.wealth × `player_max_loan_multiplier_of_wealth` (default 10x).
+- `BankingModule::evaluate_loan_application(credit=0.5 baseline, dti=0, LoanPurpose::property_purchase, denial_dti=0.40)` must pass — the player's effective credit score is the banking default (0.5) until they take a loan.
+- Failure → request silently dropped (same shape as below-asking rejection).
+
+**Settlement** (close_tick reached):
+- Buyer is debited only `offer_price × down_payment_fraction` (the cash portion).
+- Seller is credited the full `offer_price` — the bank funds the remainder.
+- Evidence token emitted for the full transaction (institutional visibility).
+- A `NewLoanRequest` is pushed into `delta.new_loan_requests` with:
+  - `borrower_id = buyer_id`, `purpose = property_purchase`, `principal = price × (1 - dpf)`
+  - `interest_rate = config.realestate.mortgage_interest_rate`
+  - `repayment_per_tick = BankingModule::compute_repayment_per_tick(principal, rate, term_ticks)`
+  - `maturity_tick = current_tick + config.realestate.mortgage_term_ticks` (default 10950 ≈ 30y)
+  - `collateral_id = property_id`
+- `apply_deltas` routes new_loan_requests into `state.pending_loan_requests`.
+
+**Banking integration** (Tier 5, same tick):
+- Banking drains `pending_loan_requests` at the start of `execute()` and creates `LoanRecord` entries with `next_loan_id_`. From the next tick onward, banking's existing repayment lifecycle handles per-tick deductions from the borrower's wealth. Default detection (`consecutive_misses` → `in_default`) and collateral-seizure `ConsequenceDelta` emission are already in place; Phase 5 wires the foreclosure → owner-transfer half.
+
+**Persistence**: schema v9→v10 extends each `pending_transaction` record with `payment_method`, `down_payment_fraction`, `interest_rate`, `loan_maturity_ticks`. v9 saves load with cash defaults (payment_method=cash, dpf=1.0, others zero). `pending_loan_requests` is defensively cleared on load (same-tick contract).
+
+Phase 5 wires foreclosure on default (collateral seizure → owner transfer + lender policy). Phase 6 layers auctions on top. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

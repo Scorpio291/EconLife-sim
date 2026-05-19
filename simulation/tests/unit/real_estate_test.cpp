@@ -1912,3 +1912,236 @@ TEST_CASE("Phase3: active negotiations round-trip via persistence (schema_tag 3)
     REQUIRE(r.offered_tick == 10);
     REQUIRE(r.deadline_tick == 24);
 }
+
+// ===========================================================================
+// Phase 4: mortgage financing (banking integration)
+// ===========================================================================
+
+#include "modules/banking/banking_module.h"
+#include "modules/banking/banking_types.h"
+
+TEST_CASE("Phase4: mortgage offer creates pending tx with payment_method=mortgage",
+          "[real_estate][market_phase4]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 50000.0f;  // small wealth — only down payment cash on hand
+
+    // Seller NPC.
+    state.significant_npcs.push_back(make_seller_npc(42, 0, 100000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 200000.0f;
+    req.payment_method = PaymentMethod::mortgage;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE(state.pending_transactions[0].payment_method == PaymentMethod::mortgage);
+    // mortgage method defaults to type-minimum down payment (residential = 0.10).
+    REQUIRE_THAT(state.pending_transactions[0].down_payment_fraction, WithinAbs(0.10f, 0.001f));
+    REQUIRE(state.pending_transactions[0].loan_maturity_ticks > 0u);
+    // Player wealth not debited at offer time.
+    REQUIRE_FALSE(d_offer.player_delta.wealth_delta.has_value());
+}
+
+TEST_CASE("Phase4: mortgage rejected when down payment below type minimum",
+          "[real_estate][market_phase4]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 100000.0f;
+
+    state.significant_npcs.push_back(make_seller_npc(42, 0, 100000.0f));
+
+    RealEstateModule module;
+    // Commercial property — minimum down payment is 0.25.
+    auto prop = make_test_property(1, PropertyType::commercial, 0, 42, 500000.0f);
+    prop.asking_price = 500000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Offer with 10% down — below commercial minimum.
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 500000.0f;
+    req.payment_method = PaymentMethod::mixed;
+    req.down_payment_fraction = 0.10f;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    REQUIRE(state.pending_transactions.empty());
+}
+
+TEST_CASE("Phase4: mortgage rejected when principal exceeds player's max-loan multiplier",
+          "[real_estate][market_phase4]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 10000.0f;  // max loan = 10x = 100k
+
+    state.significant_npcs.push_back(make_seller_npc(42, 0, 100000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 500000.0f);
+    prop.asking_price = 500000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // 100% mortgage on 500k > 100k limit → rejected.
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 500000.0f;
+    req.payment_method = PaymentMethod::mortgage;
+    req.down_payment_fraction = 0.0f;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    REQUIRE(state.pending_transactions.empty());
+}
+
+TEST_CASE("Phase4: mortgage settle debits only down payment + emits NewLoanRequest",
+          "[real_estate][market_phase4]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 100000.0f;
+
+    state.significant_npcs.push_back(make_seller_npc(42, 0, 100000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // 25% down on 200k → 50k cash, 150k loan.
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = 1;
+    req.actor_id = 99;
+    req.price = 200000.0f;
+    req.payment_method = PaymentMethod::mixed;
+    req.down_payment_fraction = 0.25f;
+    state.pending_property_transactions.push_back(req);
+
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    // Close tick — settlement.
+    state.current_tick = 17;
+    DeltaBuffer d_close{};
+    module.execute(state, d_close);
+
+    // Ownership transferred.
+    REQUIRE(module.properties()[0].owner_id == 99);
+    // Player loses only 50k (the down payment) net at close.
+    REQUIRE(d_close.player_delta.wealth_delta.has_value());
+    REQUIRE_THAT(*d_close.player_delta.wealth_delta, WithinAbs(-50000.0f, 0.01f));
+    // Seller credited full 200k.
+    bool seller_credited = false;
+    for (const auto& nd : d_close.npc_deltas) {
+        if (nd.npc_id == 42 && nd.capital_delta.has_value() &&
+            std::fabs(*nd.capital_delta - 200000.0f) < 0.01f) {
+            seller_credited = true;
+        }
+    }
+    REQUIRE(seller_credited);
+    // NewLoanRequest emitted for the 150k principal.
+    REQUIRE(d_close.new_loan_requests.size() == 1);
+    const auto& lr = d_close.new_loan_requests[0];
+    REQUIRE(lr.borrower_id == 99);
+    REQUIRE(lr.purpose == static_cast<uint8_t>(LoanPurpose::property_purchase));
+    REQUIRE_THAT(lr.principal, WithinAbs(150000.0f, 0.01f));
+    REQUIRE(lr.collateral_id == 1u);
+    REQUIRE(lr.maturity_tick > state.current_tick);
+}
+
+TEST_CASE("Phase4: banking drains pending_loan_requests into active_loans_",
+          "[banking][market_phase4]") {
+    WorldState state{};
+    state.current_tick = 10;
+    state.world_seed = 1;
+    state.game_mode = GameMode::standard;
+
+    BankingModule banking;
+    REQUIRE(banking.active_loans().empty());
+
+    NewLoanRequest req{};
+    req.borrower_id = 99;
+    req.lender_id = 0;
+    req.purpose = static_cast<uint8_t>(LoanPurpose::property_purchase);
+    req.principal = 150000.0f;
+    req.interest_rate = 0.00025f;
+    req.repayment_per_tick = 50.0f;
+    req.maturity_tick = state.current_tick + 10950u;
+    req.collateral_id = 1u;
+    state.pending_loan_requests.push_back(req);
+
+    DeltaBuffer d{};
+    banking.execute(state, d);
+
+    REQUIRE(state.pending_loan_requests.empty());
+    REQUIRE(banking.active_loans().size() == 1);
+    const auto& l = banking.active_loans()[0];
+    REQUIRE(l.borrower_id == 99);
+    REQUIRE(l.purpose == LoanPurpose::property_purchase);
+    REQUIRE_THAT(l.principal, WithinAbs(150000.0f, 0.01f));
+    REQUIRE_THAT(l.outstanding_balance, WithinAbs(150000.0f, 0.01f));
+    REQUIRE(l.collateral_id == 1u);
+    REQUIRE_FALSE(l.in_default);
+}
+
+TEST_CASE("Phase4: pending tx Phase 4 fields round-trip via persistence v10",
+          "[real_estate][market_phase4][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    PendingTransaction tx{};
+    tx.id = 7;
+    tx.property_id = 1;
+    tx.buyer_id = 99;
+    tx.seller_id = 42;
+    tx.offer_price = 200000.0f;
+    tx.offered_tick = 10;
+    tx.close_tick = 17;
+    tx.stage = PendingTxStage::pending;
+    tx.payment_method = PaymentMethod::mixed;
+    tx.down_payment_fraction = 0.25f;
+    tx.interest_rate = 0.00025f;
+    tx.loan_maturity_ticks = 10950u;
+    state.pending_transactions.push_back(tx);
+
+    RealEstateModule module;
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored.pending_transactions.size() == 1);
+    const auto& r = restored.pending_transactions[0];
+    REQUIRE(r.payment_method == PaymentMethod::mixed);
+    REQUIRE_THAT(r.down_payment_fraction, WithinAbs(0.25f, 0.001f));
+    REQUIRE_THAT(r.interest_rate, WithinAbs(0.00025f, 0.0001f));
+    REQUIRE(r.loan_maturity_ticks == 10950u);
+}

@@ -244,12 +244,39 @@ struct RandomEventTriggerDelta {
 enum class PropertyTransactionKind : uint8_t {
     list = 0,    // owner flags property listed_for_sale = true; updates asking_price
     unlist = 1,  // owner flags property listed_for_sale = false
-    buy = 2,     // buyer offers >= asking_price; creates a PendingTransaction
-                 // awaiting close_tick (Phase 2). Below-asking buys are dropped
-                 // (negotiation lands in Phase 3).
+    buy = 2,     // buyer offers; creates a PendingTransaction awaiting close_tick
     cancel = 3,  // buyer or seller aborts the active PendingTransaction on a
                  // property. property_id identifies the under-contract property
                  // (at most one active pending_transaction per property).
+};
+
+// Phase 4 — payment method for a buy request. Cash settles in full at
+// close. Mortgage finances the full price; buyer pays only the down
+// payment in cash at close, the remainder is a LoanRecord created in
+// banking with collateral_id = property_id. Mixed splits the difference
+// using a caller-supplied down_payment_fraction.
+enum class PaymentMethod : uint8_t {
+    cash = 0,
+    mortgage = 1,
+    mixed = 2,
+};
+
+// Phase 4 — cross-module request from real_estate at settlement time to
+// banking to originate a LoanRecord with the supplied parameters. Routed
+// via apply_deltas into WorldState.pending_loan_requests; banking
+// drains the queue at the start of its execute() within the same tick
+// (banking Tier 5 follows real_estate Tier 4). purpose is the underlying
+// banking LoanPurpose enum encoded as u8 to keep delta_buffer.h free of
+// per-module includes.
+struct NewLoanRequest {
+    uint32_t borrower_id;
+    uint32_t lender_id;       // 0 = anonymous bank (V1 default)
+    uint8_t purpose;          // LoanPurpose enum value (property_purchase = 1)
+    float principal;
+    float interest_rate;
+    float repayment_per_tick;
+    uint32_t maturity_tick;
+    uint32_t collateral_id;   // PropertyListing.id for property_purchase loans
 };
 
 struct PropertyTransactionRequest {
@@ -257,6 +284,8 @@ struct PropertyTransactionRequest {
     uint32_t property_id;
     uint32_t actor_id;  // player.id for player-initiated; NPC.id for NPC-initiated
     float price;        // asking_price for list, offer_price for buy, ignored for unlist
+    PaymentMethod payment_method = PaymentMethod::cash;
+    float down_payment_fraction = 1.0f;  // cash → 1.0; mortgage → 0.0; mixed → in (0, 1)
 };
 
 // Accumulated state changes for one tick step.
@@ -295,6 +324,7 @@ struct DeltaBuffer {
     std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
     std::vector<RandomEventTriggerDelta> new_random_event_triggers;  // merge: append
     std::vector<PropertyTransactionRequest> new_property_transactions;  // merge: append
+    std::vector<NewLoanRequest> new_loan_requests;                      // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call
