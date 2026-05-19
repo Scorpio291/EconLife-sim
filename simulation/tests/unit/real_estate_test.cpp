@@ -2145,3 +2145,175 @@ TEST_CASE("Phase4: pending tx Phase 4 fields round-trip via persistence v10",
     REQUIRE_THAT(r.interest_rate, WithinAbs(0.00025f, 0.0001f));
     REQUIRE(r.loan_maturity_ticks == 10950u);
 }
+
+// ===========================================================================
+// Phase 5: foreclosure on default
+// ===========================================================================
+
+TEST_CASE("Phase5: banking default on property_purchase loan emits foreclosure request",
+          "[banking][market_phase5]") {
+    WorldState state{};
+    state.current_tick = 100;
+    state.world_seed = 1;
+    state.game_mode = GameMode::standard;
+    state.player = std::make_unique<PlayerCharacter>();
+    state.player->id = 99;
+    state.player->wealth = 0.0f;  // can't pay → default
+
+    BankingModule banking;
+    LoanRecord loan{};
+    loan.id = 1;
+    loan.borrower_id = 99;
+    loan.lender_id = 0;
+    loan.purpose = LoanPurpose::property_purchase;
+    loan.principal = 100000.0f;
+    loan.outstanding_balance = 100000.0f;
+    loan.interest_rate = 0.0001f;
+    loan.repayment_per_tick = 50.0f;
+    loan.originated_tick = 50;
+    loan.maturity_tick = 1000;
+    loan.in_default = false;
+    loan.collateral_id = 42;  // property id
+    banking.active_loans().push_back(loan);
+
+    // Run banking enough ticks to exceed default_grace_ticks
+    // (BankingConfig default is 60). Player has 0 wealth so each
+    // process_loan_repayment increments consecutive_misses.
+    bool foreclosure_seen = false;
+    for (int t = 0; t < 200 && !foreclosure_seen; ++t) {
+        state.current_tick = 100u + static_cast<uint32_t>(t);
+        DeltaBuffer d{};
+        banking.execute(state, d);
+        if (!d.new_property_foreclosures.empty()) {
+            REQUIRE(d.new_property_foreclosures[0].property_id == 42);
+            REQUIRE(d.new_property_foreclosures[0].borrower_id == 99);
+            REQUIRE(d.new_property_foreclosures[0].loan_id == 1);
+            foreclosure_seen = true;
+        }
+    }
+    REQUIRE(foreclosure_seen);
+}
+
+TEST_CASE("Phase5: real_estate drains foreclosure → property ownership transfers",
+          "[real_estate][market_phase5]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 150000.0f);
+    prop.listed_for_sale = true;  // was on market before foreclosure
+    module.add_property(prop);
+
+    PropertyForeclosureRequest fc{};
+    fc.loan_id = 1;
+    fc.property_id = 1;
+    fc.borrower_id = 99;
+    fc.lender_id = 0;  // anonymous bank
+    state.pending_property_foreclosures.push_back(fc);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(module.properties()[0].owner_id == 0);  // seized to bank
+    REQUIRE(module.properties()[0].listed_for_sale == false);
+    REQUIRE(module.properties()[0].purchased_tick == 10);
+    REQUIRE(state.pending_property_foreclosures.empty());  // queue drained
+}
+
+TEST_CASE("Phase5: foreclosure cancels active pending tx and active negotiation",
+          "[real_estate][market_phase5]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 150000.0f);
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Active pending tx (someone was buying from player).
+    PendingTransaction tx{};
+    tx.id = 1;
+    tx.property_id = 1;
+    tx.buyer_id = 50;
+    tx.seller_id = 99;
+    tx.offer_price = 150000.0f;
+    tx.offered_tick = 5;
+    tx.close_tick = 20;
+    tx.stage = PendingTxStage::pending;
+    state.pending_transactions.push_back(tx);
+
+    // Active negotiation (an NPC offer pending player decision).
+    NegotiationContext neg{};
+    neg.scene_card_id = 100;
+    neg.property_id = 1;
+    neg.buyer_id = 51;
+    neg.seller_id = 99;
+    neg.offer_price = 140000.0f;
+    neg.offered_tick = 5;
+    neg.deadline_tick = 30;
+    module.active_negotiations_mut().push_back(neg);
+
+    // Foreclosure arrives.
+    PropertyForeclosureRequest fc{1, 1, 99, 0};
+    state.pending_property_foreclosures.push_back(fc);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Pending tx cancelled (and pruned).
+    REQUIRE(state.pending_transactions.empty());
+    // Negotiation dropped.
+    REQUIRE(module.active_negotiations().empty());
+    // Property seized.
+    REQUIRE(module.properties()[0].owner_id == 0);
+}
+
+TEST_CASE("Phase5: foreclosure on property the borrower no longer owns is a no-op",
+          "[real_estate][market_phase5]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    // Property already owned by NPC 200 (player sold it mid-default).
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/200, 150000.0f);
+    module.add_property(prop);
+
+    PropertyForeclosureRequest fc{};
+    fc.loan_id = 1;
+    fc.property_id = 1;
+    fc.borrower_id = 99;  // borrower no longer owner
+    fc.lender_id = 0;
+    state.pending_property_foreclosures.push_back(fc);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // New owner protected from old borrower's default.
+    REQUIRE(module.properties()[0].owner_id == 200);
+}
+
+TEST_CASE("Phase5: pending_property_foreclosures round-trips via persistence v11",
+          "[real_estate][market_phase5][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    PropertyForeclosureRequest fc{42, 7, 99, 0};
+    state.pending_property_foreclosures.push_back(fc);
+
+    RealEstateModule module;
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored.pending_property_foreclosures.size() == 1);
+    REQUIRE(restored.pending_property_foreclosures[0].loan_id == 42);
+    REQUIRE(restored.pending_property_foreclosures[0].property_id == 7);
+    REQUIRE(restored.pending_property_foreclosures[0].borrower_id == 99);
+    REQUIRE(restored.pending_property_foreclosures[0].lender_id == 0);
+}

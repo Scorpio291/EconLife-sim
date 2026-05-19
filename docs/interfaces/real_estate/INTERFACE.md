@@ -146,7 +146,23 @@ Properties with an active negotiation are skipped by both Path A and Path B in s
 
 **Persistence**: schema v9→v10 extends each `pending_transaction` record with `payment_method`, `down_payment_fraction`, `interest_rate`, `loan_maturity_ticks`. v9 saves load with cash defaults (payment_method=cash, dpf=1.0, others zero). `pending_loan_requests` is defensively cleared on load (same-tick contract).
 
-Phase 5 wires foreclosure on default (collateral seizure → owner transfer + lender policy). Phase 6 layers auctions on top. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 5 Foreclosure
+**Phase 5** wires mortgage default to physical-asset transfer. When a `property_purchase` LoanRecord in `BankingModule::active_loans_` transitions to `in_default` (existing banking behavior: `consecutive_misses > default_grace_ticks`), banking's `process_loan_default` now also emits a `PropertyForeclosureRequest{loan_id, property_id, borrower_id, lender_id}` and immediately winds down the loan (`outstanding_balance = 0`, `maturity_tick = originated_tick`) so banking's existing `retire_matured_loans` removes it at the end of `execute()`.
+
+`apply_deltas` routes the foreclosure request into `WorldState.pending_property_foreclosures` (cross-tick: banking is Tier 5, real_estate is Tier 4 — consumption lands the following tick).
+
+real_estate drains the queue at the very top of `execute()` (before negotiation resolution and before any other pass). For each request:
+- If `property.owner_id != borrower_id` → no-op (innocent new owner protected; player sold the property before default crystalised).
+- Otherwise:
+  - Any active `PendingTransaction` on the property is marked `cancelled`.
+  - Any active `NegotiationContext` on the property is removed.
+  - `property.owner_id` is transferred to `lender_id` (0 = anonymous bank — the property becomes state/bank-held).
+  - `property.listed_for_sale` is set to false. Phase 6 will introduce the auction path that re-lists seized properties; for V1 the property simply sits in bank inventory.
+  - `purchased_tick` is updated; `purchase_price` is set to 0 (involuntary transfer).
+
+**Persistence**: schema v10→v11 adds the `pending_property_foreclosures` footer (u32 count + per-entry record of loan_id, property_id, borrower_id, lender_id). v7..v10 saves load with the queue empty.
+
+Phase 6 layers an open auction system on top of seized properties (and tax sales). Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

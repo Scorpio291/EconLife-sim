@@ -176,6 +176,14 @@ struct WorldState {
     // cleared on load.
     std::vector<NewLoanRequest> pending_loan_requests;
 
+    // pending_property_foreclosures: written by banking when a
+    // collateralised loan transitions to in_default; drained by
+    // real_estate at the start of its execute() on the *next* tick
+    // (banking Tier 5 emits, real_estate Tier 4 consumes — cross-tick).
+    // Persisted by schema v11+ so a save mid-cycle does not drop the
+    // pending foreclosure.
+    std::vector<PropertyForeclosureRequest> pending_property_foreclosures;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.

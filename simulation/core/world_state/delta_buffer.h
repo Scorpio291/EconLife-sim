@@ -261,6 +261,23 @@ enum class PaymentMethod : uint8_t {
     mixed = 2,
 };
 
+// Phase 5 — cross-module foreclosure trigger. Emitted by banking when a
+// property_purchase loan transitions to in_default; routed by
+// apply_deltas into WorldState.pending_property_foreclosures;
+// real_estate drains at the start of its execute() (banking Tier 5 →
+// real_estate Tier 4 next tick) and transfers the collateral
+// PropertyListing's ownership to the lender (lender_id; 0 = anonymous
+// bank → unowned). In-flight pending_transactions on the property are
+// marked cancelled; active negotiations are dropped. The loan itself
+// is wound down by banking (outstanding_balance set to 0 → next
+// retire_matured_loans pass removes it).
+struct PropertyForeclosureRequest {
+    uint32_t loan_id;
+    uint32_t property_id;
+    uint32_t borrower_id;
+    uint32_t lender_id;
+};
+
 // Phase 4 — cross-module request from real_estate at settlement time to
 // banking to originate a LoanRecord with the supplied parameters. Routed
 // via apply_deltas into WorldState.pending_loan_requests; banking
@@ -325,6 +342,7 @@ struct DeltaBuffer {
     std::vector<RandomEventTriggerDelta> new_random_event_triggers;  // merge: append
     std::vector<PropertyTransactionRequest> new_property_transactions;  // merge: append
     std::vector<NewLoanRequest> new_loan_requests;                      // merge: append
+    std::vector<PropertyForeclosureRequest> new_property_foreclosures;  // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

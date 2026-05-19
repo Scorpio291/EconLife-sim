@@ -211,6 +211,22 @@ void BankingModule::process_loan_default(LoanRecord& loan, DeltaBuffer& delta) {
         ConsequenceDelta consequence{};
         consequence.new_entry_id = loan.id;
         delta.consequence_deltas.push_back(consequence);
+
+        // Phase 5 — property_purchase loans additionally trigger
+        // foreclosure: real_estate transfers ownership of the
+        // collateral PropertyListing to the lender next tick. The
+        // loan itself is wound down here (outstanding_balance = 0)
+        // so retire_matured_loans removes it at end of next pass.
+        if (loan.purpose == LoanPurpose::property_purchase) {
+            PropertyForeclosureRequest fc{};
+            fc.loan_id = loan.id;
+            fc.property_id = loan.collateral_id;
+            fc.borrower_id = loan.borrower_id;
+            fc.lender_id = loan.lender_id;
+            delta.new_property_foreclosures.push_back(fc);
+            loan.outstanding_balance = 0.0f;
+            loan.maturity_tick = loan.originated_tick;  // make retire pick it up
+        }
     }
     // Standard unsecured loans: credit score already penalized; no further action.
 }

@@ -128,9 +128,13 @@ class PersistenceModule : public ITickModule {
     //   v10: pending_transactions entries extended (Phase 4 mortgage) —
     //      same fields as v9 plus trailing u8 payment_method, f32
     //      down_payment_fraction, f32 interest_rate, u32 loan_maturity_ticks.
-    //      v9 saves load the cash defaults (payment_method=cash,
-    //      down_payment_fraction=1, interest_rate=0, loan_maturity_ticks=0).
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 10;
+    //      v9 saves load the cash defaults.
+    //   v11: trailing pending_property_foreclosures vector (Phase 5)
+    //      (u32 count, per entry: u32 loan_id + u32 property_id + u32
+    //      borrower_id + u32 lender_id). Cross-tick: banking emits on
+    //      default; real_estate drains next tick. v10 saves load with
+    //      the queue empty.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 11;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

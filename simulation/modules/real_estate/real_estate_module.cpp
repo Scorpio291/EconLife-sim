@@ -602,6 +602,48 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         prop.purchase_price = price;
     };
 
+    // ── 0a. Phase 5: drain pending_property_foreclosures ──
+    //
+    // Banking (Tier 5 previous tick) emitted PropertyForeclosureRequests
+    // when secured property_purchase loans defaulted. Apply each:
+    //   * Transfer property ownership to lender (lender_id; 0 = bank
+    //     sentinel → unowned-state).
+    //   * Clear listed_for_sale (Phase 6 auctions will re-list separately).
+    //   * Cancel any active PendingTransaction on the property
+    //     (under-contract guard does not apply to involuntary seizures).
+    //   * Drop any active negotiation on the property.
+    if (!state.pending_property_foreclosures.empty()) {
+        for (const auto& fc : state.pending_property_foreclosures) {
+            PropertyListing* prop = find_property(properties_, fc.property_id);
+            if (!prop)
+                continue;
+            // Only seize if the borrower is still the owner — if the
+            // property was sold between default and this drain, the
+            // foreclosure is a no-op (the new owner is innocent).
+            if (prop->owner_id != fc.borrower_id)
+                continue;
+            // Cancel any pending tx on this property.
+            if (auto* tx = find_active_pending_tx(pending_txs, prop->id)) {
+                tx->stage = PendingTxStage::cancelled;
+            }
+            // Drop active negotiation, if any.
+            active_negotiations_.erase(
+                std::remove_if(active_negotiations_.begin(), active_negotiations_.end(),
+                               [&](const NegotiationContext& n) {
+                                   return n.property_id == prop->id;
+                               }),
+                active_negotiations_.end());
+            // Transfer ownership to lender (0 = anonymous bank).
+            prop->owner_id = fc.lender_id;
+            prop->listed_for_sale = false;
+            prop->purchased_tick = state.current_tick;
+            prop->purchase_price = 0.0f;  // seizure, not a sale
+        }
+        auto& mutable_queue = const_cast<std::vector<PropertyForeclosureRequest>&>(
+            state.pending_property_foreclosures);
+        mutable_queue.clear();
+    }
+
     // ── 0. Phase 3: resolve active negotiations ──
     //
     // For each active NegotiationContext, look up the linked SceneCard

@@ -729,6 +729,13 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_loan_requests.push_back(std::move(req));
     }
 
+    // Route foreclosure requests (Phase 5) into pending_property_foreclosures.
+    // Cross-tick: banking (Tier 5) emits, real_estate (Tier 4) drains
+    // next tick. Persisted by schema v11+.
+    for (auto& fc : delta.new_property_foreclosures) {
+        world.pending_property_foreclosures.push_back(std::move(fc));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -758,6 +765,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_random_event_triggers.clear();
     delta.new_property_transactions.clear();
     delta.new_loan_requests.clear();
+    delta.new_property_foreclosures.clear();
 }
 
 // ---------------------------------------------------------------------------

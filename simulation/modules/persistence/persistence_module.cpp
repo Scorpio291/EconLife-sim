@@ -1573,10 +1573,11 @@ bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t cu
     // migration, v6 currency/facility/technology footers, v7 module-state
     // section, v8 pending_random_event_triggers footer, v9
     // pending_transactions footer, v10 pending_transactions Phase 4
-    // mortgage extension) changes the byte-stream layout. V1 is
-    // pre-release; reject anything older than the current floor outright.
-    // v7/v8/v9 saves remain loadable: each footer or trailing-field
-    // extension is gated on saved_version checks.
+    // mortgage extension, v11 pending_property_foreclosures footer)
+    // changes the byte-stream layout. V1 is pre-release; reject
+    // anything older than the current floor outright. v7..v10 saves
+    // remain loadable: each footer or trailing-field extension is
+    // gated on saved_version checks.
     if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
@@ -1825,6 +1826,19 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
             w.write_float(t.down_payment_fraction);
             w.write_float(t.interest_rate);
             w.write_u32(t.loan_maturity_ticks);
+        }
+    }
+
+    // --- v11: pending_property_foreclosures (real-estate Phase 5) ---
+    // Cross-tick queue. Order preserved.
+    {
+        const auto& queue = state.pending_property_foreclosures;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& f : queue) {
+            w.write_u32(f.loan_id);
+            w.write_u32(f.property_id);
+            w.write_u32(f.borrower_id);
+            w.write_u32(f.lender_id);
         }
     }
 
@@ -2217,6 +2231,21 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // pending_loan_requests also same-tick (real_estate emits at Tier 4
     // settlement, banking drains at Tier 5). Defensively reset on load.
     out_state.pending_loan_requests.clear();
+
+    // --- v11: pending_property_foreclosures (cross-tick, persisted) ---
+    out_state.pending_property_foreclosures.clear();
+    if (schema_ver >= 11u) {
+        uint32_t fc_count = r.read_u32();
+        out_state.pending_property_foreclosures.reserve(fc_count);
+        for (uint32_t i = 0; i < fc_count; ++i) {
+            PropertyForeclosureRequest f{};
+            f.loan_id = r.read_u32();
+            f.property_id = r.read_u32();
+            f.borrower_id = r.read_u32();
+            f.lender_id = r.read_u32();
+            out_state.pending_property_foreclosures.push_back(f);
+        }
+    }
 
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();
