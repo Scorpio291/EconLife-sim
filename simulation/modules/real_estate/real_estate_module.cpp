@@ -22,6 +22,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
+#include "modules/scene_cards/scene_card_types.h"  // SceneCard, SceneSetting, SceneCardType
 
 namespace econlife {
 
@@ -357,6 +358,93 @@ uint32_t close_delay_for_type(const RealEstateConfig& cfg, PropertyType type) {
     return cfg.close_delay_residential;  // default for new types in later phases
 }
 
+// Phase 3 helpers — read trust/fear from an NPC's relationships toward a
+// specific target. Returns 0.0 (neutral) when no relationship exists.
+float find_trust_toward(const NPC& src, uint32_t target_id) {
+    for (const auto& rel : src.relationships) {
+        if (rel.target_npc_id == target_id)
+            return rel.trust;
+    }
+    return 0.0f;
+}
+
+float find_fear_toward(const NPC& src, uint32_t target_id) {
+    for (const auto& rel : src.relationships) {
+        if (rel.target_npc_id == target_id)
+            return rel.fear;
+    }
+    return 0.0f;
+}
+
+float logistic(float x) {
+    return 1.0f / (1.0f + std::exp(-x));
+}
+
+// Phase 3 — NPC seller's accept probability for a below-asking buyer offer.
+// See RealEstateConfig comments for the formula.
+float npc_accept_probability(const NPC& seller, uint32_t buyer_id, float offer_price,
+                             float market_value, const RealEstateConfig& cfg) {
+    if (market_value <= 0.0f)
+        return 0.0f;
+    float price_ratio = offer_price / market_value;
+    float trust = find_trust_toward(seller, buyer_id);
+    float fear = find_fear_toward(seller, buyer_id);
+    float pressure = 0.0f;
+    if (cfg.distress_capital_threshold > 0.0f) {
+        pressure = std::clamp(1.0f - seller.capital / cfg.distress_capital_threshold, 0.0f, 1.0f);
+    }
+    float score = price_ratio + cfg.trust_accept_weight * trust +
+                  cfg.fear_accept_weight * fear + cfg.capital_pressure_weight * pressure;
+    return logistic((score - 1.0f) * cfg.sigmoid_steepness);
+}
+
+// Phase 3 — find the active negotiation for a given scene_card_id, if any.
+NegotiationContext* find_negotiation_by_card(std::vector<NegotiationContext>& negs,
+                                             uint32_t scene_card_id) {
+    for (auto& n : negs) {
+        if (n.scene_card_id == scene_card_id)
+            return &n;
+    }
+    return nullptr;
+}
+
+// Phase 3 — true if any active negotiation references the given property.
+bool has_active_negotiation_for_property(const std::vector<NegotiationContext>& negs,
+                                         uint32_t property_id) {
+    for (const auto& n : negs) {
+        if (n.property_id == property_id)
+            return true;
+    }
+    return false;
+}
+
+// Phase 3 — locate a SceneCard by id within pending_scene_cards.
+const SceneCard* find_scene_card(const WorldState& state, uint32_t scene_card_id) {
+    for (const auto& c : state.pending_scene_cards) {
+        if (c.id == scene_card_id)
+            return &c;
+    }
+    return nullptr;
+}
+
+// Phase 3 — allocate the next SceneCard id from existing pending cards.
+uint32_t next_scene_card_id(const WorldState& state, const DeltaBuffer& delta) {
+    uint32_t max_id = 0;
+    for (const auto& c : state.pending_scene_cards) {
+        if (c.id > max_id)
+            max_id = c.id;
+    }
+    for (const auto& c : delta.new_scene_cards) {
+        if (c.id > max_id)
+            max_id = c.id;
+    }
+    return max_id + 1;
+}
+
+// Phase 3 — choice ids for accept/decline on NPC-offer SceneCards.
+constexpr uint32_t CHOICE_ACCEPT_OFFER = 1;
+constexpr uint32_t CHOICE_DECLINE_OFFER = 2;
+
 // Emit an EvidenceToken for a property transaction when its dollar
 // amount crosses the institutional-visibility reporting threshold.
 // Documentary type, public scope; source = seller, target = buyer.
@@ -386,11 +474,16 @@ void emit_transaction_evidence(DeltaBuffer& delta, uint32_t seller_id, uint32_t 
 
 void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Global post-pass for province-parallel modules.
-    //   1. Drain pending_property_transactions (player-initiated
-    //      list/unlist/buy/cancel).
+    //   0. Phase 3: resolve active negotiations from player SceneCard
+    //      choices (accept → PendingTransaction; decline/expire → drop).
+    //   1. Drain pending_property_transactions. List/unlist apply
+    //      immediately; buys at-or-above asking create a pending tx;
+    //      buys below asking go through the NPC accept-roll (Phase 3);
+    //      cancel marks an active pending tx cancelled.
     //   2. Settle PendingTransactions whose close_tick has arrived.
-    //   3. Scan player listings for opportunistic NPC buyers; create
-    //      PendingTransactions (not instant settles in Phase 2).
+    //   3. Scan player listings for opportunistic NPC buyers; at-asking
+    //      deal buys create pending txs; otherwise NPCs may offer below
+    //      asking via a SceneCard (Phase 3, tracked in active_negotiations_).
     //   4. Prune terminal-state PendingTransactions.
 
     // pending_transactions is logically write-side staging from the
@@ -459,6 +552,66 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         prop.purchase_price = price;
     };
 
+    // ── 0. Phase 3: resolve active negotiations ──
+    //
+    // For each active NegotiationContext, look up the linked SceneCard
+    // in pending_scene_cards. If the player has chosen, act on the
+    // choice. Otherwise check deadline. Resolved/expired contexts are
+    // removed from active_negotiations_.
+    {
+        std::vector<NegotiationContext> survivors;
+        survivors.reserve(active_negotiations_.size());
+        for (const auto& neg : active_negotiations_) {
+            const SceneCard* card = find_scene_card(state, neg.scene_card_id);
+            if (!card) {
+                // Card vanished (defensive — no path removes them in V1).
+                continue;
+            }
+            if (card->chosen_choice_id == CHOICE_ACCEPT_OFFER) {
+                // Validate the buyer can still afford and there's no
+                // active pending tx on the property (e.g. player already
+                // sold to someone else in the meantime).
+                PropertyListing* prop = find_property(properties_, neg.property_id);
+                if (!prop)
+                    continue;
+                if (find_active_pending_tx(pending_txs, prop->id) != nullptr)
+                    continue;  // already under contract; drop
+                if (prop->owner_id != neg.seller_id)
+                    continue;  // ownership changed mid-negotiation; drop
+                const NPC* buyer = lookup_npc_by_id(state, neg.buyer_id);
+                if (!buyer)
+                    continue;
+                if (npc_cash(buyer->id, buyer->capital) < neg.offer_price)
+                    continue;  // buyer broke; drop
+
+                // Reserve buyer's cash and create pending tx at the
+                // offer_price (the offer was below the asking, so this
+                // settles at the negotiated discount).
+                npc_cash(buyer->id, buyer->capital) -= neg.offer_price;
+                PendingTransaction tx{};
+                tx.id = next_pending_tx_id(pending_txs);
+                tx.property_id = prop->id;
+                tx.buyer_id = neg.buyer_id;
+                tx.seller_id = neg.seller_id;
+                tx.offer_price = neg.offer_price;
+                tx.offered_tick = state.current_tick;
+                tx.close_tick = state.current_tick + close_delay_for_type(cfg_, prop->type);
+                tx.stage = PendingTxStage::pending;
+                pending_txs.push_back(tx);
+                continue;  // negotiation consumed
+            }
+            if (card->chosen_choice_id == CHOICE_DECLINE_OFFER) {
+                continue;  // player rejected; drop
+            }
+            // Not yet chosen — check deadline.
+            if (state.current_tick > neg.deadline_tick) {
+                continue;  // expired; drop
+            }
+            survivors.push_back(neg);
+        }
+        active_negotiations_ = std::move(survivors);
+    }
+
     // ── 1. Drain incoming requests ──
     for (const auto& req : state.pending_property_transactions) {
         PropertyListing* prop = find_property(properties_, req.property_id);
@@ -484,8 +637,6 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             case PropertyTransactionKind::buy: {
                 if (!prop->listed_for_sale)
                     break;
-                if (req.price < prop->asking_price)
-                    break;  // Phase 3 enables below-asking
                 if (prop->owner_id == req.actor_id)
                     break;
                 if (running_player_wealth < req.price)
@@ -496,8 +647,31 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 if (find_active_pending_tx(pending_txs, prop->id) != nullptr)
                     break;
 
-                // Reserve buyer's wealth for the running check (avoids
-                // accepting two same-tick buys that together overflow).
+                // Phase 3: below-asking offers roll the relationship-
+                // driven accept formula against the seller NPC. At-or-
+                // above asking continues to auto-accept (Phase 1/2
+                // behavior). Player-owned-seller path also auto-accepts
+                // since there is no NPC to roll (player is selling to
+                // an NPC buyer — only happens via the opportunistic
+                // scan, never via this drain).
+                if (req.price < prop->asking_price) {
+                    const NPC* seller = lookup_npc_by_id(state, prop->owner_id);
+                    if (!seller)
+                        break;  // state-owned or unknown — no negotiation
+                    // Fork RNG per (tick, property, buyer) so the
+                    // outcome is reproducible.
+                    DeterministicRNG roll_rng(state.world_seed ^
+                                              (static_cast<uint64_t>(state.current_tick) *
+                                               0x9E37u) ^
+                                              (static_cast<uint64_t>(prop->id) * 0xB7E1u) ^
+                                              (static_cast<uint64_t>(req.actor_id) * 0x5851u));
+                    float p_accept = npc_accept_probability(*seller, req.actor_id, req.price,
+                                                            prop->market_value, cfg_);
+                    if (roll_rng.next_float() >= p_accept)
+                        break;  // rejected
+                }
+
+                // Reserve buyer's wealth for the running check.
                 running_player_wealth -= req.price;
 
                 PendingTransaction tx{};
@@ -572,11 +746,19 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         tx.stage = PendingTxStage::settled;
     }
 
-    // ── 3. NPC opportunistic-buy scan ──
+    // ── 3. NPC opportunistic-buy / below-asking-offer scan ──
     //
-    // Skip properties already under contract (active pending_tx). Each
-    // qualifying buyer creates a NEW PendingTransaction with close_tick
-    // = current_tick + delay (Phase 2: no instant settle).
+    // Two paths per player listing:
+    //   a) Deal listing (asking/market < npc_buyer_deal_max_ratio):
+    //      opportunistic at-asking buy (Phase 1/2 behavior — creates a
+    //      pending tx directly).
+    //   b) Non-deal listing (asking/market >= ratio): NPCs may emit a
+    //      below-asking offer (Phase 3) delivered via SceneCard. Player
+    //      decides accept/decline; resolution lives in the negotiation
+    //      pass at the top of execute().
+    //
+    // Either path is gated by: property listed_for_sale, no active
+    // pending tx, no active negotiation.
     if (state.player) {
         DeterministicRNG rng(state.world_seed ^
                              (static_cast<uint64_t>(state.current_tick) * 0xB7E1u));
@@ -589,12 +771,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 continue;
             if (find_active_pending_tx(pending_txs, prop.id) != nullptr)
                 continue;  // under contract
+            if (has_active_negotiation_for_property(active_negotiations_, prop.id))
+                continue;  // negotiation already in flight
+
             float deal_ratio = prop.asking_price / prop.market_value;
-            if (deal_ratio >= cfg_.npc_buyer_deal_max_ratio)
-                continue;
-            float deal_strength = std::clamp(1.0f - deal_ratio, 0.0f, 1.0f);
-            float p_buy_per_npc = std::clamp(deal_strength * cfg_.npc_opportunistic_buy_rate,
-                                             0.0f, 1.0f);
 
             DeterministicRNG prop_rng(rng.next_uint(0xFFFFFFFFu) ^
                                       (static_cast<uint64_t>(prop.id) * 0x9E37u));
@@ -610,27 +790,99 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             std::sort(candidates.begin(), candidates.end(),
                       [](const NPC* a, const NPC* b) { return a->id < b->id; });
 
-            for (const NPC* n : candidates) {
-                float& cash = npc_cash(n->id, n->capital);
-                if (cash < prop.asking_price)
-                    continue;
-                float roll = prop_rng.next_float();
-                if (roll >= p_buy_per_npc)
-                    continue;
+            if (deal_ratio < cfg_.npc_buyer_deal_max_ratio) {
+                // Path A: deal listing → at-asking opportunistic buy.
+                float deal_strength = std::clamp(1.0f - deal_ratio, 0.0f, 1.0f);
+                float p_buy_per_npc =
+                    std::clamp(deal_strength * cfg_.npc_opportunistic_buy_rate, 0.0f, 1.0f);
 
-                // Reserve NPC capital and create pending tx.
-                cash -= prop.asking_price;
-                PendingTransaction tx{};
-                tx.id = next_pending_tx_id(pending_txs);
-                tx.property_id = prop.id;
-                tx.buyer_id = n->id;
-                tx.seller_id = prop.owner_id;
-                tx.offer_price = prop.asking_price;
-                tx.offered_tick = state.current_tick;
-                tx.close_tick = state.current_tick + close_delay_for_type(cfg_, prop.type);
-                tx.stage = PendingTxStage::pending;
-                pending_txs.push_back(tx);
-                break;  // one buyer per property per tick
+                for (const NPC* n : candidates) {
+                    float& cash = npc_cash(n->id, n->capital);
+                    if (cash < prop.asking_price)
+                        continue;
+                    float roll = prop_rng.next_float();
+                    if (roll >= p_buy_per_npc)
+                        continue;
+
+                    cash -= prop.asking_price;
+                    PendingTransaction tx{};
+                    tx.id = next_pending_tx_id(pending_txs);
+                    tx.property_id = prop.id;
+                    tx.buyer_id = n->id;
+                    tx.seller_id = prop.owner_id;
+                    tx.offer_price = prop.asking_price;
+                    tx.offered_tick = state.current_tick;
+                    tx.close_tick =
+                        state.current_tick + close_delay_for_type(cfg_, prop.type);
+                    tx.stage = PendingTxStage::pending;
+                    pending_txs.push_back(tx);
+                    break;  // one buyer per property per tick
+                }
+            } else {
+                // Path B (Phase 3): below-asking offer via SceneCard.
+                // Per-NPC probability is small (base rate), independent
+                // of price. Offer price drawn from
+                // [market * min_ratio, asking * max_ratio]. NPC must have
+                // capital to cover the offer.
+                for (const NPC* n : candidates) {
+                    float& cash = npc_cash(n->id, n->capital);
+                    float min_offer = prop.market_value * cfg_.npc_offer_min_ratio;
+                    float max_offer = prop.asking_price * cfg_.npc_offer_max_ratio;
+                    if (max_offer <= min_offer)
+                        continue;  // pathological pricing — skip
+                    if (cash < min_offer)
+                        continue;
+                    float roll = prop_rng.next_float();
+                    if (roll >= cfg_.npc_offer_base_rate)
+                        continue;
+
+                    float price_roll = prop_rng.next_float();
+                    float offer_price = min_offer + price_roll * (max_offer - min_offer);
+                    if (cash < offer_price)
+                        continue;  // randomly drawn too high
+
+                    // Emit SceneCard for player decision. We do NOT
+                    // reserve the NPC's capital yet — the offer may be
+                    // declined or expire. Reservation happens at the
+                    // accept moment in the negotiation-resolution pass.
+                    SceneCard card{};
+                    card.id = next_scene_card_id(state, delta);
+                    card.type = SceneCardType::meeting;
+                    card.setting = SceneSetting::private_office;
+                    card.npc_id = n->id;
+                    DialogueLine line{};
+                    line.speaker_npc_id = n->id;
+                    line.text = "I'd like to make an offer on your property.";
+                    line.emotional_tone = 0.4f;
+                    card.dialogue.push_back(line);
+                    PlayerChoice accept{};
+                    accept.id = CHOICE_ACCEPT_OFFER;
+                    accept.label = "Accept offer";
+                    accept.description = "Sell at the offered price.";
+                    accept.consequence_id = 0;
+                    PlayerChoice decline{};
+                    decline.id = CHOICE_DECLINE_OFFER;
+                    decline.label = "Decline";
+                    decline.description = "Stay on the market.";
+                    decline.consequence_id = 0;
+                    card.choices.push_back(accept);
+                    card.choices.push_back(decline);
+                    card.npc_presentation_state = 0.5f;
+                    card.is_authored = false;
+                    card.chosen_choice_id = 0;
+                    delta.new_scene_cards.push_back(card);
+
+                    NegotiationContext neg{};
+                    neg.scene_card_id = card.id;
+                    neg.property_id = prop.id;
+                    neg.buyer_id = n->id;
+                    neg.seller_id = prop.owner_id;
+                    neg.offer_price = offer_price;
+                    neg.offered_tick = state.current_tick;
+                    neg.deadline_tick = state.current_tick + cfg_.negotiation_deadline_ticks;
+                    active_negotiations_.push_back(neg);
+                    break;  // one offer per property per tick
+                }
             }
         }
     }
@@ -705,9 +957,11 @@ struct Reader {
 }  // namespace
 
 void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
-    // schema_tag = 2 adds trailing `listed_for_sale` byte per record
-    // (Phase 1 market). v1 records have an implicit listed_for_sale = false.
-    put_u32(out, 2u);
+    // schema_tag history:
+    //   1 = initial properties_ vector (Phase 0)
+    //   2 = adds listed_for_sale byte per property (Phase 1)
+    //   3 = adds active_negotiations_ trailing block (Phase 3)
+    put_u32(out, 3u);
     put_u32(out, static_cast<uint32_t>(properties_.size()));
     for (const auto& p : properties_) {
         put_u32(out, p.id);
@@ -725,12 +979,23 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
         put_f32(out, p.purchase_price);
         out.push_back(p.listed_for_sale ? 1u : 0u);
     }
+    // schema_tag 3: trailing active_negotiations_ block.
+    put_u32(out, static_cast<uint32_t>(active_negotiations_.size()));
+    for (const auto& n : active_negotiations_) {
+        put_u32(out, n.scene_card_id);
+        put_u32(out, n.property_id);
+        put_u32(out, n.buyer_id);
+        put_u32(out, n.seller_id);
+        put_f32(out, n.offer_price);
+        put_u32(out, n.offered_tick);
+        put_u32(out, n.deadline_tick);
+    }
 }
 
 bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
     uint32_t schema_tag = r.u32();
-    if (schema_tag != 1u && schema_tag != 2u)
+    if (schema_tag != 1u && schema_tag != 2u && schema_tag != 3u)
         return false;
     uint32_t count = r.u32();
     properties_.clear();
@@ -758,6 +1023,24 @@ bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
             return false;
         properties_.push_back(p);
     }
+    active_negotiations_.clear();
+    if (schema_tag >= 3u) {
+        uint32_t neg_count = r.u32();
+        active_negotiations_.reserve(neg_count);
+        for (uint32_t i = 0; i < neg_count; ++i) {
+            NegotiationContext n{};
+            n.scene_card_id = r.u32();
+            n.property_id = r.u32();
+            n.buyer_id = r.u32();
+            n.seller_id = r.u32();
+            n.offer_price = r.f32();
+            n.offered_tick = r.u32();
+            n.deadline_tick = r.u32();
+            active_negotiations_.push_back(n);
+        }
+    }
+    if (r.error)
+        return false;
     // Restoring properties invalidates the per-province index; clear it so
     // the next init_for_tick (or execute_province's fallback) rebuilds.
     province_property_indices_.clear();

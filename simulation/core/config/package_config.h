@@ -415,6 +415,34 @@ struct RealEstateConfig {
     uint32_t close_delay_residential = 7;
     uint32_t close_delay_commercial = 30;
     uint32_t close_delay_industrial = 30;
+
+    // Phase 3 — relationship-driven negotiation on below-asking offers.
+    // The seller's accept_score is:
+    //     price_ratio (offer/market_value)
+    //   + trust_accept_weight  * relationship.trust   (-1..1)
+    //   + fear_accept_weight   * relationship.fear    ( 0..1)
+    //   + capital_pressure_weight * (1 - capital / distress_capital_threshold)
+    // p_accept = sigmoid((accept_score - 1.0) * sigmoid_steepness)
+    // A trusted friend with a desperate NPC seller can buy at a steep
+    // discount; a stranger gets no discount; rivals or wealthy holders
+    // hold out for full price.
+    float trust_accept_weight = 0.20f;
+    float fear_accept_weight = 0.15f;
+    float capital_pressure_weight = 0.30f;
+    float distress_capital_threshold = 50000.0f;  // NPCs below this = 100% pressure
+    float sigmoid_steepness = 6.0f;
+
+    // Phase 3 — NPC offers on player listings (below asking, scene-card
+    // delivered). Fires when the listing is NOT a sub-90%-of-market deal
+    // (those still get the at-asking opportunistic buy). The NPC's offer
+    // is a uniform draw in [market * npc_offer_min_ratio,
+    // asking * npc_offer_max_ratio]; the SceneCard exposes accept/decline.
+    // Player has negotiation_deadline_ticks to respond before the
+    // context expires.
+    float npc_offer_base_rate = 0.005f;
+    float npc_offer_min_ratio = 0.85f;
+    float npc_offer_max_ratio = 0.95f;
+    uint32_t negotiation_deadline_ticks = 14;
 };
 
 struct FinancialDistributionConfig {

@@ -97,6 +97,21 @@ class RealEstateModule : public ITickModule {
     // execute_province() to touch only its own province's data, eliminating
     // cross-province data races.
     std::unordered_map<uint32_t, std::vector<size_t>> province_property_indices_;
+
+    // Phase 3 — in-flight below-asking offers awaiting player decision via
+    // SceneCard. Resolved in execute()'s global post-pass: accept creates a
+    // PendingTransaction, decline drops the context, deadline expires it.
+    // Round-tripped via the v7 module-state hook (schema_tag = 3).
+    std::vector<NegotiationContext> active_negotiations_;
+
+   public:
+    // Exposed for testing.
+    const std::vector<NegotiationContext>& active_negotiations() const {
+        return active_negotiations_;
+    }
+    std::vector<NegotiationContext>& active_negotiations_mut() {
+        return active_negotiations_;
+    }
 };
 
 }  // namespace econlife

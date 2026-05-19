@@ -1581,3 +1581,334 @@ TEST_CASE("Phase2: settled pending tx survives serialization round-trip via pers
     REQUIRE(tx.close_tick == 17);
     REQUIRE(tx.stage == PendingTxStage::pending);
 }
+
+// ===========================================================================
+// Phase 3: relationship-driven negotiation + NPC below-asking offers
+// ===========================================================================
+
+namespace {
+
+NPC make_seller_npc(uint32_t id, uint32_t province_id, float capital) {
+    NPC n{};
+    n.id = id;
+    n.home_province_id = province_id;
+    n.current_province_id = province_id;
+    n.capital = capital;
+    n.status = NPCStatus::active;
+    return n;
+}
+
+void set_relationship_to_player(NPC& npc, uint32_t player_id, float trust, float fear) {
+    Relationship rel{};
+    rel.target_npc_id = player_id;
+    rel.trust = trust;
+    rel.fear = fear;
+    rel.obligation_balance = 0.0f;
+    rel.last_interaction_tick = 0;
+    rel.is_movement_ally = false;
+    rel.recovery_ceiling = 1.0f;
+    npc.relationships.push_back(rel);
+}
+
+}  // namespace
+
+TEST_CASE("Phase3: below-asking offer with high trust + distressed seller accepts",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    // Seller NPC: trusts player (0.9), totally broke (capital=0 → pressure=1.0).
+    NPC seller = make_seller_npc(42, /*province=*/0, /*capital=*/0.0f);
+    set_relationship_to_player(seller, 99, /*trust=*/0.9f, /*fear=*/0.0f);
+    state.significant_npcs.push_back(std::move(seller));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 120000.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // price_ratio = 0.80, trust = 0.9 (× 0.20 = 0.18), pressure = 1.0
+    // (× 0.30 = 0.30) → score = 1.28 → p_accept ≈ 0.84. With a fixed
+    // seed this is reliably above the roll threshold.
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE_THAT(state.pending_transactions[0].offer_price, WithinAbs(120000.0f, 0.01f));
+}
+
+TEST_CASE("Phase3: below-asking offer to wealthy seller with no relationship rejected",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    // Seller: rich (1M capital → pressure=0), no relationship to player
+    // (trust=0, fear=0). Score = price_ratio. Lowball offer rejected.
+    NPC seller = make_seller_npc(42, 0, /*capital=*/1000000.0f);
+    state.significant_npcs.push_back(std::move(seller));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 80000.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // price_ratio = 0.53, no trust/fear/pressure → score = 0.53
+    // → p_accept = sigmoid((0.53 - 1.0) * 6) = sigmoid(-2.8) ≈ 0.057.
+    // Roll is deterministic at this seed; reliably > 0.057 → rejected.
+    REQUIRE(state.pending_transactions.empty());
+}
+
+TEST_CASE("Phase3: below-asking offer from feared player accepted by NPC",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    // Seller: comfortable capital, but fears the player (intimidation
+    // discount). fear=1.0 × 0.15 = +0.15 to score.
+    NPC seller = make_seller_npc(42, 0, 200000.0f);
+    set_relationship_to_player(seller, 99, /*trust=*/0.0f, /*fear=*/1.0f);
+    state.significant_npcs.push_back(std::move(seller));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 42, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 135000.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // price_ratio = 0.90, fear = 1.0 × 0.15 = +0.15 → score = 1.05
+    // → p_accept = sigmoid(0.30) ≈ 0.57. With this seed the roll passes.
+    REQUIRE(state.pending_transactions.size() == 1);
+}
+
+TEST_CASE("Phase3: below-asking offer to unknown seller (state-owned) silently dropped",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    // Property owned by NPC id 999 that does NOT exist in significant_npcs.
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/999, 150000.0f);
+    prop.asking_price = 150000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 100000.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.pending_transactions.empty());
+    REQUIRE(module.properties()[0].owner_id == 999);
+}
+
+TEST_CASE("Phase3: NPC generates below-asking offer on player listing as SceneCard",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    // Wealthy NPC to be the buyer.
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+
+    RealEstateModule module;
+    // Player-owned listing at market value (asking == market, not a
+    // "deal" → triggers Path B below-asking offer path).
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Loop until an offer scene card is generated.
+    bool offer_seen = false;
+    for (int t = 0; t < 2000 && !offer_seen; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        DeltaBuffer d{};
+        module.execute(state, d);
+        // Move any new scene cards to pending_scene_cards (apply_deltas
+        // would do this in the full orchestrator; test inlines it).
+        for (auto& card : d.new_scene_cards) {
+            state.pending_scene_cards.push_back(std::move(card));
+        }
+        if (!module.active_negotiations().empty()) {
+            offer_seen = true;
+            REQUIRE(module.active_negotiations()[0].buyer_id == 7);
+            REQUIRE(module.active_negotiations()[0].seller_id == 99);
+            REQUIRE(module.active_negotiations()[0].property_id == 1);
+            // Offer price must lie in [market * 0.85, asking * 0.95].
+            float offer = module.active_negotiations()[0].offer_price;
+            REQUIRE(offer >= 200000.0f * 0.85f - 0.01f);
+            REQUIRE(offer <= 200000.0f * 0.95f + 0.01f);
+            // Scene card should be in pending_scene_cards.
+            REQUIRE_FALSE(state.pending_scene_cards.empty());
+        }
+    }
+    REQUIRE(offer_seen);
+}
+
+TEST_CASE("Phase3: player accepts NPC offer via scene card → pending tx created",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 99, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Seed an active negotiation directly (skip the probabilistic loop).
+    NegotiationContext neg{};
+    neg.scene_card_id = 100;
+    neg.property_id = 1;
+    neg.buyer_id = 7;
+    neg.seller_id = 99;
+    neg.offer_price = 170000.0f;
+    neg.offered_tick = 10;
+    neg.deadline_tick = 24;
+    module.active_negotiations_mut().push_back(neg);
+
+    // Drop a matching scene card with the accept choice picked.
+    SceneCard card{};
+    card.id = 100;
+    card.type = SceneCardType::meeting;
+    card.npc_id = 7;
+    PlayerChoice accept{1, "Accept", "", 0};
+    PlayerChoice decline{2, "Decline", "", 0};
+    card.choices.push_back(accept);
+    card.choices.push_back(decline);
+    card.chosen_choice_id = 1;  // accept
+    state.pending_scene_cards.push_back(card);
+
+    state.current_tick = 12;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE(state.pending_transactions[0].property_id == 1);
+    REQUIRE(state.pending_transactions[0].buyer_id == 7);
+    REQUIRE_THAT(state.pending_transactions[0].offer_price, WithinAbs(170000.0f, 0.01f));
+    REQUIRE(module.active_negotiations().empty());
+}
+
+TEST_CASE("Phase3: player declines NPC offer via scene card → no tx, context removed",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 99, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    NegotiationContext neg{100, 1, 7, 99, 170000.0f, 10, 24};
+    module.active_negotiations_mut().push_back(neg);
+
+    SceneCard card{};
+    card.id = 100;
+    card.type = SceneCardType::meeting;
+    card.npc_id = 7;
+    card.choices.push_back(PlayerChoice{1, "Accept", "", 0});
+    card.choices.push_back(PlayerChoice{2, "Decline", "", 0});
+    card.chosen_choice_id = 2;  // decline
+    state.pending_scene_cards.push_back(card);
+
+    state.current_tick = 12;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.pending_transactions.empty());
+    REQUIRE(module.active_negotiations().empty());
+}
+
+TEST_CASE("Phase3: negotiation expires after deadline if player never responds",
+          "[real_estate][market_phase3]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 500000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 99, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    NegotiationContext neg{100, 1, 7, 99, 170000.0f, 10, 24};
+    module.active_negotiations_mut().push_back(neg);
+
+    SceneCard card{};
+    card.id = 100;
+    card.type = SceneCardType::meeting;
+    card.choices.push_back(PlayerChoice{1, "Accept", "", 0});
+    card.choices.push_back(PlayerChoice{2, "Decline", "", 0});
+    card.chosen_choice_id = 0;  // never chosen
+    state.pending_scene_cards.push_back(card);
+
+    // Past deadline.
+    state.current_tick = 30;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(module.active_negotiations().empty());
+    REQUIRE(state.pending_transactions.empty());
+}
+
+TEST_CASE("Phase3: active negotiations round-trip via persistence (schema_tag 3)",
+          "[real_estate][market_phase3][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 99, 200000.0f);
+    module.add_property(prop);
+
+    NegotiationContext neg{100, 1, 7, 99, 170000.0f, 10, 24};
+    module.active_negotiations_mut().push_back(neg);
+
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    RealEstateModule restored_mod;
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.active_negotiations().size() == 1);
+    const auto& r = restored_mod.active_negotiations()[0];
+    REQUIRE(r.scene_card_id == 100);
+    REQUIRE(r.property_id == 1);
+    REQUIRE(r.buyer_id == 7);
+    REQUIRE(r.seller_id == 99);
+    REQUIRE_THAT(r.offer_price, WithinAbs(170000.0f, 0.01f));
+    REQUIRE(r.offered_tick == 10);
+    REQUIRE(r.deadline_tick == 24);
+}

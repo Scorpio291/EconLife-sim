@@ -72,6 +72,30 @@ struct PropertyListing {
     //   (mean market_value across all PropertyListing in province; recomputed monthly)
 };
 
+// Phase 3 — NegotiationContext
+//
+// In-flight below-asking offer that was emitted as a SceneCard to the
+// player. The NegotiationContext links the SceneCard.id to the
+// underlying real-estate intent (which property, who's buying, at what
+// price). real_estate's global post-pass resolves the context by
+// reading state.pending_scene_cards for chosen_choice_id; on accept the
+// context produces a PendingTransaction at offer_price, on decline the
+// context is dropped, on deadline the context expires.
+//
+// V1 storage: module-private in RealEstateModule::active_negotiations_;
+// round-tripped via the v7 module-state hook with schema_tag bumped 2->3.
+//
+// Choice ID convention: 1 = accept, 2 = decline.
+struct NegotiationContext {
+    uint32_t scene_card_id;
+    uint32_t property_id;
+    uint32_t buyer_id;  // the NPC (always for now; future: any actor)
+    uint32_t seller_id; // the player (always for now)
+    float offer_price;
+    uint32_t offered_tick;
+    uint32_t deadline_tick;
+};
+
 // --- §33.2 — RealEstateConstants ---
 // Configuration constants for real estate market computations.
 // These are compile-time defaults; runtime config overrides may be loaded

@@ -80,7 +80,43 @@ Phase 1 shipped a symmetric at-asking cash market; **Phase 2** replaces instant 
 
 **Persistence**: `pending_transactions` round-trips via schema v9 (u32 count + per-entry record of id, property_id, buyer_id, seller_id, offer_price, offered_tick, close_tick, stage). v7/v8 saves load with the queue empty.
 
-Phase 3 wires below-asking negotiation (relationship-driven NPC accept/reject + counter-offer scene cards). Phase 4 extends NPC initiative beyond opportunistic deals. Phase 5 layers mortgage financing on top.
+## Phase 3 Negotiation
+**Phase 3** unlocks below-asking offers in both directions. Two paths:
+
+**Below-asking buy → NPC accept-roll (drain path).**
+When `req.price < prop.asking_price`, real_estate looks up the seller NPC. If the seller is not in `significant_npcs` (state-owned / player-owned that re-emitted via this drain) the request is dropped. Otherwise:
+
+```
+price_ratio       = offer_price / market_value
+trust             = find_trust_toward(seller, buyer_id)
+fear              = find_fear_toward(seller, buyer_id)
+capital_pressure  = clamp(1 - seller.capital / distress_capital_threshold, 0, 1)
+accept_score      = price_ratio
+                  + trust_accept_weight  * trust
+                  + fear_accept_weight   * fear
+                  + capital_pressure_weight * capital_pressure
+p_accept          = sigmoid((accept_score - 1.0) * sigmoid_steepness)
+```
+
+Deterministic RNG fork from `(world_seed ⊕ tick × salt₁ ⊕ property_id × salt₂ ⊕ buyer_id × salt₃)`. On accept, a `PendingTransaction` is created at the offered price; on reject, the request is silently dropped.
+
+**NPC below-asking offer → SceneCard (opportunistic-buy scan path).**
+The opportunistic scan now has two branches:
+- **Path A (deal listing, `asking/market < npc_buyer_deal_max_ratio`):** at-asking opportunistic buy, unchanged from Phase 1/2.
+- **Path B (non-deal listing):** NPCs in the same province with capital ≥ `market_value × npc_offer_min_ratio` each roll `p_offer = npc_offer_base_rate` (default 0.005/tick). On pass, a uniform offer price is drawn in `[market_value × npc_offer_min_ratio, asking_price × npc_offer_max_ratio]`. A `SceneCard{type = meeting, setting = private_office, npc_id = buyer}` is emitted to the player with two choices: `accept` (id = 1) and `decline` (id = 2). A `NegotiationContext{scene_card_id, property_id, buyer_id, seller_id, offer_price, offered_tick, deadline_tick}` is recorded in `RealEstateModule::active_negotiations_`. Only one offer per property per tick.
+
+**Negotiation resolution** runs at the top of `execute()`'s global post-pass, before the drain:
+- For each active negotiation, locate its scene card in `pending_scene_cards`:
+  - `chosen_choice_id == 1` (accept): validate ownership still matches, no active pending tx on the property, buyer can still afford → create `PendingTransaction` at `offer_price`. Drop the context.
+  - `chosen_choice_id == 2` (decline): drop the context.
+  - `chosen_choice_id == 0` (no decision) AND `current_tick > deadline_tick`: drop the context (expired).
+  - Otherwise: keep the context for next tick.
+
+Properties with an active negotiation are skipped by both Path A and Path B in subsequent ticks until the negotiation resolves.
+
+**Persistence**: `active_negotiations_` round-trips via the v7 module-state hook with `schema_tag = 3` (trailing block per record: scene_card_id, property_id, buyer_id, seller_id, offer_price, offered_tick, deadline_tick). v2 saves load with the queue empty; v1 saves predate `listed_for_sale` and load with that flag false.
+
+Phase 4 extends NPC initiative beyond opportunistic to demand-driven offers. Phase 5 layers mortgage financing on top. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.
