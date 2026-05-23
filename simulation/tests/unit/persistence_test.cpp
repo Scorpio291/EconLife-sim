@@ -47,22 +47,23 @@ TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
     REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
 }
 
-TEST_CASE("Persistence: schema accepts v7..v11", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(7, 11) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(8, 11) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(9, 11) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(10, 11) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(11, 11) == true);
+TEST_CASE("Persistence: schema accepts v7..v12", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 12) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(8, 12) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(9, 12) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(10, 12) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(11, 12) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(12, 12) == true);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(12, 11) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(13, 12) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(7, 11) == true);
-    REQUIRE(PersistenceModule::needs_migration(10, 11) == true);
-    REQUIRE(PersistenceModule::needs_migration(11, 11) == false);
+    REQUIRE(PersistenceModule::needs_migration(7, 12) == true);
+    REQUIRE(PersistenceModule::needs_migration(11, 12) == true);
+    REQUIRE(PersistenceModule::needs_migration(12, 12) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -108,7 +109,7 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // (payment_method, down_payment_fraction, interest_rate,
     // loan_maturity_ticks per entry). Earlier bumps (v3..v10) documented
     // in persistence_module.h:CURRENT_SCHEMA_VERSION.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 11);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 12);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

@@ -403,6 +403,23 @@ static void handle_cancel_pending_transaction(const CancelPendingTransactionActi
     delta.new_property_transactions.push_back(req);
 }
 
+static void handle_place_auction_bid(const PlaceAuctionBidAction& action, const WorldState& state,
+                                     DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.bid_amount <= 0.0f)
+        return;
+    // Cheap upfront cash check; real_estate re-validates against the
+    // auction's current high bid + the player's running wealth at drain.
+    if (state.player->wealth < action.bid_amount)
+        return;
+    AuctionBidRequest req{};
+    req.auction_id = action.auction_id;
+    req.bidder_id = state.player->id;
+    req.bid_amount = action.bid_amount;
+    delta.new_auction_bid_requests.push_back(req);
+}
+
 static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -481,6 +498,8 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_make_property_offer(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, CancelPendingTransactionAction>) {
                     handle_cancel_pending_transaction(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, PlaceAuctionBidAction>) {
+                    handle_place_auction_bid(payload, state, delta);
                 }
             },
             action.payload);

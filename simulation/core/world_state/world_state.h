@@ -10,6 +10,7 @@
 
 // Core headers (provide DeltaBuffer, DeferredWorkQueue, and transitive types)
 #include "../tick/deferred_work.h"  // DeferredWorkQueue
+#include "active_auction.h"         // ActiveAuction (Phase 6)
 #include "delta_buffer.h"           // DeltaBuffer + npc.h + shared_types.h
 #include "pending_transaction.h"    // PendingTransaction
 #include "player_action_types.h"    // PlayerAction
@@ -183,6 +184,22 @@ struct WorldState {
     // Persisted by schema v11+ so a save mid-cycle does not drop the
     // pending foreclosure.
     std::vector<PropertyForeclosureRequest> pending_property_foreclosures;
+
+    // Open / settled / cancelled property auctions (Phase 6). Created
+    // by real_estate when bank-foreclosed properties enter the auction
+    // pipeline (lender_id = 0 → bank's auction policy). Bidders
+    // (player + NPCs) submit AuctionBidRequests; real_estate places
+    // them on the auction and settles at close_tick. Persisted (schema
+    // v12+) — auctions outlive a single tick and cross save boundaries.
+    // Settled / closed_no_reserve / cancelled entries are pruned the
+    // tick they reach a terminal state.
+    std::vector<ActiveAuction> active_auctions;
+
+    // pending_auction_bid_requests: written by player_actions
+    // (PlaceAuctionBidAction). Drained by real_estate at the start of
+    // its execute() (same-tick consumer contract). Defensively cleared
+    // on persistence load.
+    std::vector<AuctionBidRequest> pending_auction_bid_requests;
 
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().

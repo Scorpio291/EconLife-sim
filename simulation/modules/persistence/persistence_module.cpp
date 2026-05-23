@@ -1573,11 +1573,11 @@ bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t cu
     // migration, v6 currency/facility/technology footers, v7 module-state
     // section, v8 pending_random_event_triggers footer, v9
     // pending_transactions footer, v10 pending_transactions Phase 4
-    // mortgage extension, v11 pending_property_foreclosures footer)
-    // changes the byte-stream layout. V1 is pre-release; reject
-    // anything older than the current floor outright. v7..v10 saves
-    // remain loadable: each footer or trailing-field extension is
-    // gated on saved_version checks.
+    // mortgage extension, v11 pending_property_foreclosures footer,
+    // v12 active_auctions footer) changes the byte-stream layout. V1
+    // is pre-release; reject anything older than the current floor
+    // outright. v7..v11 saves remain loadable: each footer or
+    // trailing-field extension is gated on saved_version checks.
     if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
@@ -1839,6 +1839,30 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
             w.write_u32(f.property_id);
             w.write_u32(f.borrower_id);
             w.write_u32(f.lender_id);
+        }
+    }
+
+    // --- v12: active_auctions (real-estate Phase 6) ---
+    // Open auctions outlive ticks; bids preserved in order.
+    {
+        const auto& queue = state.active_auctions;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& a : queue) {
+            w.write_u32(a.id);
+            w.write_u32(a.asset_id);
+            w.write_u32(a.consigner_id);
+            w.write_float(a.reserve_price);
+            w.write_u32(a.opened_tick);
+            w.write_u32(a.closes_tick);
+            w.write_u8(static_cast<uint8_t>(a.status));
+            w.write_u32(a.current_high_bidder_id);
+            w.write_float(a.current_high_bid);
+            w.write_u32(static_cast<uint32_t>(a.bids.size()));
+            for (const auto& b : a.bids) {
+                w.write_u32(b.bidder_id);
+                w.write_float(b.bid_amount);
+                w.write_u32(b.placed_tick);
+            }
         }
     }
 
@@ -2246,6 +2270,39 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             out_state.pending_property_foreclosures.push_back(f);
         }
     }
+
+    // --- v12: active_auctions (Phase 6, persisted) ---
+    out_state.active_auctions.clear();
+    if (schema_ver >= 12u) {
+        uint32_t auction_count = r.read_u32();
+        out_state.active_auctions.reserve(auction_count);
+        for (uint32_t i = 0; i < auction_count; ++i) {
+            ActiveAuction a{};
+            a.id = r.read_u32();
+            a.asset_id = r.read_u32();
+            a.consigner_id = r.read_u32();
+            a.reserve_price = r.read_float();
+            a.opened_tick = r.read_u32();
+            a.closes_tick = r.read_u32();
+            a.status = static_cast<AuctionStatus>(r.read_u8());
+            a.current_high_bidder_id = r.read_u32();
+            a.current_high_bid = r.read_float();
+            uint32_t bid_count = r.read_u32();
+            a.bids.reserve(bid_count);
+            for (uint32_t j = 0; j < bid_count; ++j) {
+                AuctionBid b{};
+                b.bidder_id = r.read_u32();
+                b.bid_amount = r.read_float();
+                b.placed_tick = r.read_u32();
+                a.bids.push_back(b);
+            }
+            out_state.active_auctions.push_back(std::move(a));
+        }
+    }
+
+    // pending_auction_bid_requests same-tick (player_actions emits,
+    // real_estate drains). Defensively reset on load.
+    out_state.pending_auction_bid_requests.clear();
 
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();

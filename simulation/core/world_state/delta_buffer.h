@@ -261,6 +261,20 @@ enum class PaymentMethod : uint8_t {
     mixed = 2,
 };
 
+// Phase 6 — bid submission to an open ActiveAuction. Emitted by
+// player_actions on PlaceAuctionBidAction (and by NPC auction logic in
+// real_estate's own scan). Routed by apply_deltas into
+// WorldState.pending_auction_bid_requests; real_estate drains the
+// queue at the start of its execute() within the same tick (Tier 4
+// follows player_actions Tier 0). Validation (auction exists & open,
+// bid above current high, bidder has cash) is performed during the
+// drain — invalid bids are dropped.
+struct AuctionBidRequest {
+    uint32_t auction_id;
+    uint32_t bidder_id;
+    float bid_amount;
+};
+
 // Phase 5 — cross-module foreclosure trigger. Emitted by banking when a
 // property_purchase loan transitions to in_default; routed by
 // apply_deltas into WorldState.pending_property_foreclosures;
@@ -343,6 +357,7 @@ struct DeltaBuffer {
     std::vector<PropertyTransactionRequest> new_property_transactions;  // merge: append
     std::vector<NewLoanRequest> new_loan_requests;                      // merge: append
     std::vector<PropertyForeclosureRequest> new_property_foreclosures;  // merge: append
+    std::vector<AuctionBidRequest> new_auction_bid_requests;             // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

@@ -2317,3 +2317,279 @@ TEST_CASE("Phase5: pending_property_foreclosures round-trips via persistence v11
     REQUIRE(restored.pending_property_foreclosures[0].borrower_id == 99);
     REQUIRE(restored.pending_property_foreclosures[0].lender_id == 0);
 }
+
+// ===========================================================================
+// Phase 6: auctions
+// ===========================================================================
+
+TEST_CASE("Phase6: foreclosure opens an auction at reserve fraction of market",
+          "[real_estate][market_phase6]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 200000.0f);
+    module.add_property(prop);
+
+    PropertyForeclosureRequest fc{1, 1, 99, 0};  // lender 0 = bank
+    state.pending_property_foreclosures.push_back(fc);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Seized to bank AND auction opened.
+    REQUIRE(module.properties()[0].owner_id == 0);
+    REQUIRE(state.active_auctions.size() == 1);
+    const auto& a = state.active_auctions[0];
+    REQUIRE(a.asset_id == 1);
+    REQUIRE(a.consigner_id == 0);
+    REQUIRE(a.status == AuctionStatus::open);
+    // reserve = market_value (200k) × 0.70 = 140k.
+    REQUIRE_THAT(a.reserve_price, WithinAbs(140000.0f, 1.0f));
+    REQUIRE(a.closes_tick == 10u + 30u);
+}
+
+TEST_CASE("Phase6: player bid above reserve registers as high bid",
+          "[real_estate][market_phase6]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/0, 200000.0f);
+    module.add_property(prop);
+
+    // Pre-seed an open auction.
+    ActiveAuction a{};
+    a.id = 1;
+    a.asset_id = 1;
+    a.consigner_id = 0;
+    a.reserve_price = 140000.0f;
+    a.opened_tick = 10;
+    a.closes_tick = 40;
+    a.status = AuctionStatus::open;
+    a.current_high_bidder_id = 0;
+    a.current_high_bid = 0.0f;
+    state.active_auctions.push_back(a);
+
+    state.pending_auction_bid_requests.push_back(AuctionBidRequest{1, 99, 150000.0f});
+
+    state.current_tick = 12;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.active_auctions.size() == 1);
+    REQUIRE(state.active_auctions[0].current_high_bidder_id == 99);
+    REQUIRE_THAT(state.active_auctions[0].current_high_bid, WithinAbs(150000.0f, 0.01f));
+}
+
+TEST_CASE("Phase6: sub-reserve opening bid is dropped",
+          "[real_estate][market_phase6]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/0, 200000.0f);
+    module.add_property(prop);
+
+    ActiveAuction a{};
+    a.id = 1;
+    a.asset_id = 1;
+    a.consigner_id = 0;
+    a.reserve_price = 140000.0f;
+    a.opened_tick = 10;
+    a.closes_tick = 40;
+    a.status = AuctionStatus::open;
+    state.active_auctions.push_back(a);
+
+    // Below reserve, no prior bids → dropped.
+    state.pending_auction_bid_requests.push_back(AuctionBidRequest{1, 99, 100000.0f});
+
+    state.current_tick = 12;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.active_auctions[0].current_high_bidder_id == 0);
+}
+
+TEST_CASE("Phase6: auction settles to high bidder at close, ownership transfers",
+          "[real_estate][market_phase6]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 500000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/0, 200000.0f);
+    module.add_property(prop);
+
+    ActiveAuction a{};
+    a.id = 1;
+    a.asset_id = 1;
+    a.consigner_id = 0;
+    a.reserve_price = 140000.0f;
+    a.opened_tick = 10;
+    a.closes_tick = 20;
+    a.status = AuctionStatus::open;
+    a.current_high_bidder_id = 99;
+    a.current_high_bid = 160000.0f;
+    state.active_auctions.push_back(a);
+
+    // At close_tick.
+    state.current_tick = 20;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Player won; ownership transferred, wealth debited, auction pruned.
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE(d.player_delta.wealth_delta.has_value());
+    REQUIRE_THAT(*d.player_delta.wealth_delta, WithinAbs(-160000.0f, 0.01f));
+    REQUIRE(state.active_auctions.empty());
+}
+
+TEST_CASE("Phase6: auction with no qualifying bid closes_no_reserve (asset retained)",
+          "[real_estate][market_phase6]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/0, 200000.0f);
+    module.add_property(prop);
+
+    ActiveAuction a{};
+    a.id = 1;
+    a.asset_id = 1;
+    a.consigner_id = 0;
+    a.reserve_price = 140000.0f;
+    a.opened_tick = 10;
+    a.closes_tick = 20;
+    a.status = AuctionStatus::open;
+    a.current_high_bidder_id = 0;  // no bids
+    a.current_high_bid = 0.0f;
+    state.active_auctions.push_back(a);
+
+    state.current_tick = 20;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // No sale; consigner (bank, owner 0) keeps the asset; auction pruned.
+    REQUIRE(module.properties()[0].owner_id == 0);
+    REQUIRE(state.active_auctions.empty());
+}
+
+TEST_CASE("Phase6: NPC bidders raise an open auction over time",
+          "[real_estate][market_phase6]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    // Two wealthy NPCs in the province who may bid.
+    state.significant_npcs.push_back(make_buyer_npc(7, 0, 1000000.0f));
+    state.significant_npcs.push_back(make_buyer_npc(8, 0, 1000000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/0, 200000.0f);
+    module.add_property(prop);
+
+    ActiveAuction a{};
+    a.id = 1;
+    a.asset_id = 1;
+    a.consigner_id = 0;
+    a.reserve_price = 140000.0f;
+    a.opened_tick = 10;
+    a.closes_tick = 200;  // long window
+    a.status = AuctionStatus::open;
+    state.active_auctions.push_back(a);
+
+    bool got_bid = false;
+    for (int t = 0; t < 150 && !got_bid; ++t) {
+        state.current_tick = 11u + static_cast<uint32_t>(t);
+        DeltaBuffer d{};
+        module.execute(state, d);
+        if (!state.active_auctions.empty() &&
+            state.active_auctions[0].current_high_bidder_id != 0) {
+            got_bid = true;
+            // First NPC bid opens at the reserve.
+            REQUIRE_THAT(state.active_auctions[0].current_high_bid, WithinAbs(140000.0f, 1.0f));
+        }
+    }
+    REQUIRE(got_bid);
+}
+
+TEST_CASE("Phase6: NPC auction bidding is deterministic across runs",
+          "[real_estate][market_phase6][determinism]") {
+    auto run_once = [](uint32_t seed) {
+        auto state = make_test_world_state(10);
+        state.world_seed = seed;
+        state.provinces.push_back(make_test_province(0));
+        state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+        state.significant_npcs.push_back(make_buyer_npc(7, 0, 1000000.0f));
+        state.significant_npcs.push_back(make_buyer_npc(8, 0, 1000000.0f));
+
+        RealEstateModule module;
+        auto prop = make_test_property(1, PropertyType::residential, 0, 0, 200000.0f);
+        module.add_property(prop);
+        ActiveAuction a{};
+        a.id = 1;
+        a.asset_id = 1;
+        a.consigner_id = 0;
+        a.reserve_price = 140000.0f;
+        a.opened_tick = 10;
+        a.closes_tick = 200;
+        a.status = AuctionStatus::open;
+        state.active_auctions.push_back(a);
+
+        std::vector<uint32_t> bidder_seq;
+        for (int t = 0; t < 60; ++t) {
+            state.current_tick = 11u + static_cast<uint32_t>(t);
+            DeltaBuffer d{};
+            module.execute(state, d);
+            if (!state.active_auctions.empty())
+                bidder_seq.push_back(state.active_auctions[0].current_high_bidder_id);
+        }
+        return bidder_seq;
+    };
+    REQUIRE(run_once(42) == run_once(42));
+}
+
+TEST_CASE("Phase6: active_auctions round-trip via persistence v12",
+          "[real_estate][market_phase6][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    ActiveAuction a{};
+    a.id = 3;
+    a.asset_id = 7;
+    a.consigner_id = 0;
+    a.reserve_price = 140000.0f;
+    a.opened_tick = 10;
+    a.closes_tick = 40;
+    a.status = AuctionStatus::open;
+    a.current_high_bidder_id = 99;
+    a.current_high_bid = 155000.0f;
+    a.bids.push_back(AuctionBid{99, 145000.0f, 12});
+    a.bids.push_back(AuctionBid{99, 155000.0f, 14});
+    state.active_auctions.push_back(a);
+
+    RealEstateModule module;
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored.active_auctions.size() == 1);
+    const auto& r = restored.active_auctions[0];
+    REQUIRE(r.id == 3);
+    REQUIRE(r.asset_id == 7);
+    REQUIRE(r.status == AuctionStatus::open);
+    REQUIRE(r.current_high_bidder_id == 99);
+    REQUIRE_THAT(r.current_high_bid, WithinAbs(155000.0f, 0.01f));
+    REQUIRE(r.bids.size() == 2);
+    REQUIRE_THAT(r.bids[1].bid_amount, WithinAbs(155000.0f, 0.01f));
+}

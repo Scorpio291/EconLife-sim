@@ -162,7 +162,22 @@ real_estate drains the queue at the very top of `execute()` (before negotiation 
 
 **Persistence**: schema v10→v11 adds the `pending_property_foreclosures` footer (u32 count + per-entry record of loan_id, property_id, borrower_id, lender_id). v7..v10 saves load with the queue empty.
 
-Phase 6 layers an open auction system on top of seized properties (and tax sales). Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 6 Auctions
+**Phase 6** adds an open auction pipeline. Bank-foreclosed properties (lender_id = 0 → bank liquidation policy) auto-open an `ActiveAuction` immediately after the Phase 5 seizure transfer, with `reserve_price = market_value × auction_reserve_fraction` (default 0.70) and a window of `auction_duration_ticks` (default 30).
+
+`ActiveAuction` (WorldState, persisted schema v12): `{id, asset_id, consigner_id, reserve_price, opened_tick, closes_tick, status, current_high_bidder_id, current_high_bid, bids[]}`. Status ∈ {open, closed_sold, closed_no_reserve, cancelled}; terminal-state auctions are pruned the tick they resolve.
+
+real_estate's global post-pass runs four auction sub-passes (after the foreclosure drain, before negotiation resolution):
+1. **Open** auctions for freshly-foreclosed bank-held properties.
+2. **Drain `pending_auction_bid_requests`** (player bids via `PlaceAuctionBidAction`, routed through `new_auction_bid_requests`). A bid registers iff: auction open, not past close, bid > current high, bidder can afford, and — for the opening bid — bid ≥ reserve. Sub-reserve opening bids are dropped.
+3. **NPC bid scan**: for each open auction, NPCs in the asset's province (excluding the current high bidder) roll `npc_auction_bid_rate` (default 0.05/tick). A winner raises the high by `npc_auction_bid_increment` (default 5%) over the current high, or opens at the reserve. NPCs never bid above `market_value × npc_auction_max_value_ratio` (default 1.10). Deterministic RNG fork per (tick, auction).
+4. **Settle** auctions at `close_tick`: high bid ≥ reserve and winner can still pay → `settle_transfer` (ownership to winner, winner debited, consigner credited — bank consigner_id=0 receives nothing, i.e. funds recovered by the anonymous bank, evidence emitted). No qualifying bid or winner can't pay → `closed_no_reserve` (consigner keeps the asset).
+
+New player action: `PlaceAuctionBidAction{auction_id, bid_amount}` (PlayerActionType 13).
+
+**Persistence**: schema v11→v12 adds the `active_auctions` footer (auctions + nested bids). `pending_auction_bid_requests` is defensively cleared on load (same-tick contract). v7..v11 saves load with no auctions.
+
+Phase 7 adds raw land + zoning approval; tax sales (Phase 13) will reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

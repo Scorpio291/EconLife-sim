@@ -78,6 +78,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(new_property_transactions, std::move(other.new_property_transactions));
     move_extend(new_loan_requests, std::move(other.new_loan_requests));
     move_extend(new_property_foreclosures, std::move(other.new_property_foreclosures));
+    move_extend(new_auction_bid_requests, std::move(other.new_auction_bid_requests));
 }
 
 }  // namespace econlife

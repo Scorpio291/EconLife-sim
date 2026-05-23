@@ -347,6 +347,32 @@ uint32_t next_pending_tx_id(const std::vector<PendingTransaction>& txs) {
     return max_id + 1;
 }
 
+// Phase 6 — auction helpers.
+uint32_t next_auction_id(const std::vector<ActiveAuction>& auctions) {
+    uint32_t max_id = 0;
+    for (const auto& a : auctions) {
+        if (a.id > max_id)
+            max_id = a.id;
+    }
+    return max_id + 1;
+}
+
+ActiveAuction* find_open_auction(std::vector<ActiveAuction>& auctions, uint32_t auction_id) {
+    for (auto& a : auctions) {
+        if (a.id == auction_id && a.status == AuctionStatus::open)
+            return &a;
+    }
+    return nullptr;
+}
+
+bool has_open_auction_for_asset(const std::vector<ActiveAuction>& auctions, uint32_t asset_id) {
+    for (const auto& a : auctions) {
+        if (a.asset_id == asset_id && a.status == AuctionStatus::open)
+            return true;
+    }
+    return false;
+}
+
 // Phase 2: per-PropertyType close delay (config-driven).
 uint32_t close_delay_for_type(const RealEstateConfig& cfg, PropertyType type) {
     switch (type) {
@@ -541,6 +567,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // established carve-out (see DeferredWorkQueue, pending_legal_case_seeds).
     auto& pending_txs =
         const_cast<std::vector<PendingTransaction>&>(state.pending_transactions);
+    auto& auctions = const_cast<std::vector<ActiveAuction>&>(state.active_auctions);
 
     const uint32_t player_id = state.player ? state.player->id : 0u;
 
@@ -638,10 +665,172 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             prop->listed_for_sale = false;
             prop->purchased_tick = state.current_tick;
             prop->purchase_price = 0.0f;  // seizure, not a sale
+
+            // Phase 6: the bank's liquidation policy (lender_id == 0 =
+            // anonymous bank) is to auction the seized property. Open an
+            // auction with reserve = market_value × reserve_fraction.
+            // (Future: private creditors with non-zero lender_id may
+            // choose to hold instead.)
+            if (fc.lender_id == 0u && prop->market_value > 0.0f &&
+                !has_open_auction_for_asset(auctions, prop->id)) {
+                ActiveAuction auction{};
+                auction.id = next_auction_id(auctions);
+                auction.asset_id = prop->id;
+                auction.consigner_id = fc.lender_id;
+                auction.reserve_price = prop->market_value * cfg_.auction_reserve_fraction;
+                auction.opened_tick = state.current_tick;
+                auction.closes_tick = state.current_tick + cfg_.auction_duration_ticks;
+                auction.status = AuctionStatus::open;
+                auction.current_high_bidder_id = 0;
+                auction.current_high_bid = 0.0f;
+                auctions.push_back(auction);
+            }
         }
         auto& mutable_queue = const_cast<std::vector<PropertyForeclosureRequest>&>(
             state.pending_property_foreclosures);
         mutable_queue.clear();
+    }
+
+    // ── 0a2. Phase 6: drain auction bid requests (player + NPC) ──
+    //
+    // Validate each bid: auction exists & open, not yet past close,
+    // bid exceeds current high, bidder can afford. Winning bids update
+    // the auction's current high; losing/invalid bids are dropped.
+    if (!state.pending_auction_bid_requests.empty()) {
+        for (const auto& bid : state.pending_auction_bid_requests) {
+            ActiveAuction* auction = find_open_auction(auctions, bid.auction_id);
+            if (!auction)
+                continue;
+            if (state.current_tick > auction->closes_tick)
+                continue;
+            if (bid.bid_amount <= auction->current_high_bid)
+                continue;
+            if (bid.bid_amount < auction->reserve_price &&
+                auction->current_high_bidder_id == 0) {
+                // First bid must at least reach reserve to register; sub-
+                // reserve opening bids are dropped (keeps the high-bid
+                // ladder meaningful).
+                continue;
+            }
+            // Affordability: player tracked via running wealth; NPCs via
+            // running capital.
+            float bidder_cash;
+            if (bid.bidder_id == player_id) {
+                bidder_cash = running_player_wealth;
+            } else {
+                const NPC* n = lookup_npc_by_id(state, bid.bidder_id);
+                bidder_cash = n ? npc_cash(bid.bidder_id, n->capital) : 0.0f;
+            }
+            if (bidder_cash < bid.bid_amount)
+                continue;
+            auction->current_high_bidder_id = bid.bidder_id;
+            auction->current_high_bid = bid.bid_amount;
+            auction->bids.push_back(AuctionBid{bid.bidder_id, bid.bid_amount, state.current_tick});
+        }
+        auto& mutable_bids =
+            const_cast<std::vector<AuctionBidRequest>&>(state.pending_auction_bid_requests);
+        mutable_bids.clear();
+    }
+
+    // ── 0a3. Phase 6: NPC auction-bid scan ──
+    //
+    // For each open auction, NPCs in the asset's province may raise the
+    // bid. Deterministic RNG fork per (tick, auction).
+    if (state.player) {
+        DeterministicRNG auction_rng(state.world_seed ^
+                                     (static_cast<uint64_t>(state.current_tick) * 0x27D4u));
+        for (auto& auction : auctions) {
+            if (auction.status != AuctionStatus::open)
+                continue;
+            if (state.current_tick >= auction.closes_tick)
+                continue;
+            PropertyListing* prop = find_property(properties_, auction.asset_id);
+            if (!prop)
+                continue;
+            float max_bid_value = prop->market_value * cfg_.npc_auction_max_value_ratio;
+            // Next bid the NPC would place: raise current high by the
+            // increment, or open at the reserve if no bids yet.
+            float next_bid = (auction.current_high_bid > 0.0f)
+                                 ? auction.current_high_bid *
+                                       (1.0f + cfg_.npc_auction_bid_increment)
+                                 : auction.reserve_price;
+            if (next_bid > max_bid_value)
+                continue;  // bidding past sane value — NPCs bow out
+
+            DeterministicRNG a_rng(auction_rng.next_uint(0xFFFFFFFFu) ^
+                                   (static_cast<uint64_t>(auction.id) * 0x9E37u));
+            std::vector<const NPC*> candidates;
+            for (const auto& n : state.significant_npcs) {
+                if (n.home_province_id != prop->province_id)
+                    continue;
+                if (n.id == player_id)
+                    continue;
+                // Don't bid against yourself if you're already the high bidder.
+                if (n.id == auction.current_high_bidder_id)
+                    continue;
+                candidates.push_back(&n);
+            }
+            std::sort(candidates.begin(), candidates.end(),
+                      [](const NPC* a, const NPC* b) { return a->id < b->id; });
+            for (const NPC* n : candidates) {
+                float& cash = npc_cash(n->id, n->capital);
+                if (cash < next_bid)
+                    continue;
+                if (a_rng.next_float() >= cfg_.npc_auction_bid_rate)
+                    continue;
+                auction.current_high_bidder_id = n->id;
+                auction.current_high_bid = next_bid;
+                auction.bids.push_back(AuctionBid{n->id, next_bid, state.current_tick});
+                break;  // one raise per auction per tick
+            }
+        }
+    }
+
+    // ── 0a4. Phase 6: settle auctions whose window has closed ──
+    if (!auctions.empty()) {
+        for (auto& auction : auctions) {
+            if (auction.status != AuctionStatus::open)
+                continue;
+            if (state.current_tick < auction.closes_tick)
+                continue;
+            PropertyListing* prop = find_property(properties_, auction.asset_id);
+            if (!prop) {
+                auction.status = AuctionStatus::cancelled;
+                continue;
+            }
+            // No qualifying bid → withdrawn (consigner keeps asset).
+            if (auction.current_high_bidder_id == 0 ||
+                auction.current_high_bid < auction.reserve_price) {
+                auction.status = AuctionStatus::closed_no_reserve;
+                continue;
+            }
+            // Re-validate winner can still pay.
+            uint32_t winner = auction.current_high_bidder_id;
+            float price = auction.current_high_bid;
+            bool can_pay;
+            if (winner == player_id) {
+                can_pay = running_player_wealth >= price;
+            } else {
+                const NPC* n = lookup_npc_by_id(state, winner);
+                can_pay = n && npc_cash(winner, n->capital) >= price;
+            }
+            if (!can_pay) {
+                // Winner defaulted at settlement → no sale.
+                auction.status = AuctionStatus::closed_no_reserve;
+                continue;
+            }
+            // settle_transfer handles buyer debit / seller credit /
+            // evidence / ownership. consigner_id 0 (bank) → no credit
+            // recipient (funds recovered by anonymous bank).
+            settle_transfer(*prop, winner, auction.consigner_id, price);
+            auction.status = AuctionStatus::closed_sold;
+        }
+        // Prune terminal-state auctions.
+        auctions.erase(std::remove_if(auctions.begin(), auctions.end(),
+                                      [](const ActiveAuction& a) {
+                                          return a.status != AuctionStatus::open;
+                                      }),
+                       auctions.end());
     }
 
     // ── 0. Phase 3: resolve active negotiations ──

@@ -458,6 +458,23 @@ struct RealEstateConfig {
     float player_max_loan_multiplier_of_wealth = 10.0f;
     float mortgage_interest_rate = 0.00025f;   // per-tick rate ≈ ~9% annual
     uint32_t mortgage_term_ticks = 10950u;     // ~30 years at 365 ticks/year
+
+    // Phase 6 — auctions. Bank-foreclosed properties auto-open an
+    // auction with reserve = market_value × auction_reserve_fraction,
+    // running for auction_duration_ticks. Each tick, NPCs in the
+    // property's province with sufficient capital evaluate open
+    // auctions: per-NPC bid probability = npc_auction_bid_rate; a
+    // bidding NPC raises the current high by a
+    // npc_auction_bid_increment fraction (of the current high, or of
+    // the reserve when there are no bids yet). Player bids arrive via
+    // PlaceAuctionBidAction. At close_tick the high bid wins if it
+    // meets reserve, else the auction closes_no_reserve (consigner
+    // keeps the asset).
+    float auction_reserve_fraction = 0.70f;     // reserve = market_value × this
+    uint32_t auction_duration_ticks = 30u;
+    float npc_auction_bid_rate = 0.05f;         // per-NPC per-tick bid probability
+    float npc_auction_bid_increment = 0.05f;    // raise fraction over current high
+    float npc_auction_max_value_ratio = 1.10f;  // NPC won't bid above market × this
 };
 
 struct FinancialDistributionConfig {

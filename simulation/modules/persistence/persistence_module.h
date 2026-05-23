@@ -134,7 +134,13 @@ class PersistenceModule : public ITickModule {
     //      borrower_id + u32 lender_id). Cross-tick: banking emits on
     //      default; real_estate drains next tick. v10 saves load with
     //      the queue empty.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 11;
+    //   v12: trailing active_auctions vector (Phase 6) (u32 count, per
+    //      auction: u32 id + u32 asset_id + u32 consigner_id + f32
+    //      reserve_price + u32 opened_tick + u32 closes_tick + u8 status
+    //      + u32 current_high_bidder_id + f32 current_high_bid + u32
+    //      bid_count + per bid: u32 bidder_id + f32 bid_amount + u32
+    //      placed_tick). v11 saves load with no auctions.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 12;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

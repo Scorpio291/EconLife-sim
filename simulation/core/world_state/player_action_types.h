@@ -114,6 +114,16 @@ struct CancelPendingTransactionAction {
     uint32_t property_id;
 };
 
+// Place a bid on an open ActiveAuction. Phase 6. Bid must exceed the
+// auction's current_high_bid and the bidder must have enough cash to
+// cover the bid amount (re-validated at settle time). Multiple bids
+// per auction per tick from the same bidder are allowed (price
+// escalation).
+struct PlaceAuctionBidAction {
+    uint32_t auction_id;
+    float bid_amount;
+};
+
 // ---------------------------------------------------------------------------
 // PlayerActionType enum — mirrors variant index for type dispatch
 // ---------------------------------------------------------------------------
@@ -132,6 +142,7 @@ enum class PlayerActionType : uint8_t {
     unlist_property = 10,
     make_property_offer = 11,
     cancel_pending_transaction = 12,
+    place_auction_bid = 13,
 };
 
 // ---------------------------------------------------------------------------
@@ -142,7 +153,7 @@ using PlayerActionPayload =
     std::variant<SceneCardChoiceAction, CalendarCommitAction, CalendarScheduleAction, TravelAction,
                  StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
-                 MakePropertyOfferAction, CancelPendingTransactionAction>;
+                 MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action
