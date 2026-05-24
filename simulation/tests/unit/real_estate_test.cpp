@@ -3698,3 +3698,157 @@ TEST_CASE("Phase12: tax fields round-trip via persistence schema_tag 7",
     REQUIRE(r.consecutive_delinquent_quarters == 3);
     REQUIRE(r.tax_lien == true);
 }
+
+// ===========================================================================
+// Counter-offers (negotiation loop closure)
+// ===========================================================================
+
+TEST_CASE("Counter: rejected serious below-asking offer draws an NPC counter SceneCard",
+          "[real_estate][market_counter]") {
+    auto state = make_test_world_state(10);
+    state.world_seed = 1;
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+    // Wealthy, no-relationship seller → low accept probability on a
+    // below-asking offer, so the reject→counter path fires.
+    NPC seller = make_seller_npc(42, 0, /*capital=*/100000000.0f);
+    state.significant_npcs.push_back(std::move(seller));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 200000.0f);
+    prop.asking_price = 200000.0f;
+    // Market value far above asking → very low price_ratio → near-zero
+    // accept probability, so the reject→counter branch fires
+    // deterministically. The offer is still ≥ 0.70 × asking, so it is
+    // counter-eligible.
+    prop.market_value = 1000000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Offer 150k = 0.75 × asking (above the 0.70 counter threshold).
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 150000.0f});
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // No immediate pending tx; instead a counter negotiation + SceneCard.
+    REQUIRE(state.pending_transactions.empty());
+    REQUIRE(module.active_negotiations().size() == 1);
+    const auto& neg = module.active_negotiations()[0];
+    REQUIRE(neg.property_id == 1);
+    REQUIRE(neg.buyer_id == 99);
+    REQUIRE(neg.seller_id == 42);
+    // counter = 150k + (200k - 150k) × 0.5 = 175k.
+    REQUIRE_THAT(neg.offer_price, WithinAbs(175000.0f, 1.0f));
+    REQUIRE_FALSE(d.new_scene_cards.empty());
+}
+
+TEST_CASE("Counter: player accepts the counter → pending buy at counter price",
+          "[real_estate][market_counter]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // Seed an active counter negotiation (player is buyer).
+    NegotiationContext neg{};
+    neg.scene_card_id = 100;
+    neg.property_id = 1;
+    neg.buyer_id = 99;
+    neg.seller_id = 42;
+    neg.offer_price = 190000.0f;
+    neg.offered_tick = 10;
+    neg.deadline_tick = 30;
+    module.active_negotiations_mut().push_back(neg);
+
+    SceneCard card{};
+    card.id = 100;
+    card.type = SceneCardType::meeting;
+    card.npc_id = 42;
+    card.choices.push_back(PlayerChoice{1, "Accept counter", "", 0});
+    card.choices.push_back(PlayerChoice{2, "Walk away", "", 0});
+    card.chosen_choice_id = 1;  // accept
+    state.pending_scene_cards.push_back(card);
+
+    state.current_tick = 12;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.pending_transactions.size() == 1);
+    REQUIRE(state.pending_transactions[0].buyer_id == 99);
+    REQUIRE(state.pending_transactions[0].seller_id == 42);
+    REQUIRE_THAT(state.pending_transactions[0].offer_price, WithinAbs(190000.0f, 1.0f));
+    REQUIRE(module.active_negotiations().empty());
+
+    // Settle at close → player owns it at the counter price.
+    state.current_tick = 12 + 7;
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE_THAT(*d2.player_delta.wealth_delta, WithinAbs(-190000.0f, 1.0f));
+}
+
+TEST_CASE("Counter: player declining the counter leaves ownership unchanged",
+          "[real_estate][market_counter]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 200000.0f);
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    NegotiationContext neg{100, 1, 99, 42, 190000.0f, 10, 30};
+    module.active_negotiations_mut().push_back(neg);
+    SceneCard card{};
+    card.id = 100;
+    card.type = SceneCardType::meeting;
+    card.choices.push_back(PlayerChoice{1, "Accept counter", "", 0});
+    card.choices.push_back(PlayerChoice{2, "Walk away", "", 0});
+    card.chosen_choice_id = 2;  // decline
+    state.pending_scene_cards.push_back(card);
+
+    state.current_tick = 12;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.pending_transactions.empty());
+    REQUIRE(module.active_negotiations().empty());
+    REQUIRE(module.properties()[0].owner_id == 42);
+}
+
+TEST_CASE("Counter: lowball below the counter threshold draws no counter",
+          "[real_estate][market_counter]") {
+    auto state = make_test_world_state(10);
+    state.world_seed = 1;
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+    state.significant_npcs.push_back(make_seller_npc(42, 0, 100000000.0f));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 200000.0f);
+    prop.asking_price = 200000.0f;
+    prop.market_value = 1000000.0f;  // near-zero accept probability
+    prop.listed_for_sale = true;
+    module.add_property(prop);
+
+    // 50% of asking — below the 0.70 counter threshold → no counter,
+    // and price_ratio is far too low to accept.
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 100000.0f});
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(module.active_negotiations().empty());
+    REQUIRE(state.pending_transactions.empty());
+}

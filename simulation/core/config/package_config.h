@@ -444,6 +444,14 @@ struct RealEstateConfig {
     float npc_offer_max_ratio = 0.95f;
     uint32_t negotiation_deadline_ticks = 14;
 
+    // Counter-offers: when an NPC seller rejects a serious below-asking
+    // cash offer (offer >= asking × negotiation_counter_min_ratio), it
+    // counters at offer + (asking − offer) × negotiation_counter_split
+    // via a SceneCard the player can accept or decline. Closes the
+    // negotiation loop without free numeric input.
+    float negotiation_counter_min_ratio = 0.70f;
+    float negotiation_counter_split = 0.50f;
+
     // Phase 4 — mortgage financing. Down-payment minimums per property
     // type (offers with down_payment_fraction below the floor are
     // rejected at the drain). Player-mortgage approval uses banking's

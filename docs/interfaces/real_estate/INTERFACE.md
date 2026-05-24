@@ -241,7 +241,10 @@ New `NewFacilityDelta` (applied by `apply_new_facilities`) is the runtime facili
 
 **Persistence**: real_estate module-state `schema_tag` 6→7 adds the four tax fields per property; pre-v7 records load tax-clean.
 
-This completes the 13-phase player asset acquisition arc. Counter-offer flow (player counters back, NPC counter-proposes) remains deferred pending SceneCard numeric-input design.
+## Counter-offers
+The negotiation loop is closed without free numeric input: when an NPC seller rejects a **serious** below-asking cash offer (`offer ≥ asking × negotiation_counter_min_ratio`, default 0.70) and no negotiation is already in flight on the parcel, it **counters** at `offer + (asking − offer) × negotiation_counter_split` (default 0.50) via a SceneCard. The player accepts (→ a `PendingTransaction` at the counter price, settling through the normal close path) or walks away. The resolution pass handles a player buyer (drawing on running player wealth) as well as the Phase 3/4 NPC-buyer case. Counters are cash-only in V1; financed below-asking offers that are rejected simply drop.
+
+This completes the 13-phase player asset acquisition arc plus the counter-offer closure.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

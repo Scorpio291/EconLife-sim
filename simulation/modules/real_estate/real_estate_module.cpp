@@ -1592,16 +1592,23 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     continue;  // already under contract; drop
                 if (prop->owner_id != neg.seller_id)
                     continue;  // ownership changed mid-negotiation; drop
-                const NPC* buyer = lookup_npc_by_id(state, neg.buyer_id);
-                if (!buyer)
-                    continue;
-                if (npc_cash(buyer->id, buyer->capital) < neg.offer_price)
-                    continue;  // buyer broke; drop
+                // Buyer affordability: a player buyer (counter-offer
+                // acceptance) draws on running player wealth; an NPC
+                // buyer (NPC-initiated offer) draws on its capital.
+                if (neg.buyer_id == player_id) {
+                    if (running_player_wealth < neg.offer_price)
+                        continue;  // player can't cover the counter; drop
+                    running_player_wealth -= neg.offer_price;  // settlement debits
+                } else {
+                    const NPC* buyer = lookup_npc_by_id(state, neg.buyer_id);
+                    if (!buyer)
+                        continue;
+                    if (npc_cash(buyer->id, buyer->capital) < neg.offer_price)
+                        continue;  // buyer broke; drop
+                    npc_cash(buyer->id, buyer->capital) -= neg.offer_price;
+                }
 
-                // Reserve buyer's cash and create pending tx at the
-                // offer_price (the offer was below the asking, so this
-                // settles at the negotiated discount).
-                npc_cash(buyer->id, buyer->capital) -= neg.offer_price;
+                // Create the pending tx at the negotiated price.
                 PendingTransaction tx{};
                 tx.id = next_pending_tx_id(pending_txs);
                 tx.property_id = prop->id;
@@ -1708,8 +1715,52 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                               (static_cast<uint64_t>(req.actor_id) * 0x5851u));
                     float p_accept = npc_accept_probability(*seller, req.actor_id, req.price,
                                                             prop->market_value, cfg_);
-                    if (roll_rng.next_float() >= p_accept)
-                        break;  // rejected
+                    if (roll_rng.next_float() >= p_accept) {
+                        // Counter-offer: a serious cash offer that the
+                        // seller won't accept outright draws a counter at a
+                        // midpoint price (delivered as a SceneCard the
+                        // player accepts/declines next tick). Skip if a
+                        // negotiation is already in flight on this parcel,
+                        // or the buy is financed (counters are cash-only).
+                        if (req.payment_method == PaymentMethod::cash &&
+                            prop->asking_price > 0.0f &&
+                            req.price >= prop->asking_price * cfg_.negotiation_counter_min_ratio &&
+                            !has_active_negotiation_for_property(active_negotiations_, prop->id)) {
+                            float counter_price =
+                                req.price + (prop->asking_price - req.price) *
+                                                cfg_.negotiation_counter_split;
+                            SceneCard card{};
+                            card.id = next_scene_card_id(state, delta);
+                            card.type = SceneCardType::meeting;
+                            card.setting = SceneSetting::private_office;
+                            card.npc_id = prop->owner_id;
+                            DialogueLine line{};
+                            line.speaker_npc_id = prop->owner_id;
+                            line.text = "I can't take that — but I'd let it go at my counter.";
+                            line.emotional_tone = 0.2f;
+                            card.dialogue.push_back(line);
+                            card.choices.push_back(PlayerChoice{CHOICE_ACCEPT_OFFER,
+                                                                "Accept counter", "", 0});
+                            card.choices.push_back(PlayerChoice{CHOICE_DECLINE_OFFER,
+                                                                "Walk away", "", 0});
+                            card.npc_presentation_state = 0.5f;
+                            card.is_authored = false;
+                            card.chosen_choice_id = 0;
+                            delta.new_scene_cards.push_back(card);
+
+                            NegotiationContext neg{};
+                            neg.scene_card_id = card.id;
+                            neg.property_id = prop->id;
+                            neg.buyer_id = req.actor_id;       // the player
+                            neg.seller_id = prop->owner_id;    // the NPC
+                            neg.offer_price = counter_price;
+                            neg.offered_tick = state.current_tick;
+                            neg.deadline_tick =
+                                state.current_tick + cfg_.negotiation_deadline_ticks;
+                            active_negotiations_.push_back(neg);
+                        }
+                        break;  // not accepted outright
+                    }
                 }
 
                 // Reserve buyer's cash portion only (not the full price
