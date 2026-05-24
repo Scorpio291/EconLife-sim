@@ -2994,3 +2994,88 @@ TEST_CASE("Phase8: subdivision round-trips via persistence schema_tag 5",
     REQUIRE(rc->parent_property_id == 1);
     REQUIRE(rc->subtype_key == "apartment_unit");
 }
+
+// ===========================================================================
+// Phase 9: location flags (offshore concealment)
+// ===========================================================================
+
+TEST_CASE("Phase9: offshore property transaction emits no evidence token",
+          "[real_estate][market_phase9]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 1000000.0f);
+    prop.asking_price = 1000000.0f;
+    prop.listed_for_sale = true;
+    prop.location_flags = LocationFlag_Offshore;
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 1000000.0f});
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+    state.current_tick = 20;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Ownership transferred (1M well above evidence threshold) but the
+    // offshore registry leaves no institutional paper trail.
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE(d.evidence_deltas.empty());
+}
+
+TEST_CASE("Phase9: onshore property of identical value DOES emit evidence",
+          "[real_estate][market_phase9]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 1000000.0f);
+    prop.asking_price = 1000000.0f;
+    prop.listed_for_sale = true;
+    prop.location_flags = LocationFlag_None;  // onshore
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 1000000.0f});
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+    state.current_tick = 20;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(module.properties()[0].owner_id == 99);
+    REQUIRE(d.evidence_deltas.size() == 1);
+}
+
+TEST_CASE("Phase9: island = raw_land + offshore round-trips via persistence schema_tag 6",
+          "[real_estate][market_phase9][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::raw_land, 0, /*owner=*/99, 25000000.0f);
+    prop.subtype_key = "island";
+    prop.parcel_area_hectares = 500.0f;
+    prop.location_flags = LocationFlag_Offshore | LocationFlag_International;
+    module.add_property(prop);
+
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.properties().size() == 1);
+    const auto& r = restored_mod.properties()[0];
+    REQUIRE(r.subtype_key == "island");
+    REQUIRE((r.location_flags & LocationFlag_Offshore) != 0);
+    REQUIRE((r.location_flags & LocationFlag_International) != 0);
+    REQUIRE((r.location_flags & LocationFlag_Remote) == 0);
+}

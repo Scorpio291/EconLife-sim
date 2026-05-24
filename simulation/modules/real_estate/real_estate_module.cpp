@@ -603,8 +603,13 @@ bool approve_player_mortgage(const PlayerCharacter& player, float offer_price,
 // Documentary type, public scope; source = seller, target = buyer.
 void emit_transaction_evidence(DeltaBuffer& delta, uint32_t seller_id, uint32_t buyer_id,
                                uint32_t province_id, float price, float threshold,
-                               uint32_t current_tick) {
+                               uint32_t current_tick, uint8_t location_flags = 0u) {
     if (price < threshold)
+        return;
+    // Phase 9: offshore parcels conceal their ownership transfers — the
+    // offshore registry leaves no institutional paper trail (this is the
+    // laundering appeal of offshore property). No evidence token emitted.
+    if (location_flags & LocationFlag_Offshore)
         return;
     EvidenceDelta ev{};
     EvidenceToken token{};
@@ -699,7 +704,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 npc_cash(seller_id, n->capital) += price;
         }
         emit_transaction_evidence(delta, seller_id, buyer_id, prop.province_id, price,
-                                  cfg_.transaction_evidence_threshold, state.current_tick);
+                                  cfg_.transaction_evidence_threshold, state.current_tick,
+                                  prop.location_flags);
         prop.owner_id = buyer_id;
         prop.listed_for_sale = false;
         prop.purchased_tick = state.current_tick;
@@ -1331,7 +1337,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
             emit_transaction_evidence(delta, tx.seller_id, tx.buyer_id, prop->province_id,
                                       tx.offer_price, cfg_.transaction_evidence_threshold,
-                                      state.current_tick);
+                                      state.current_tick, prop->location_flags);
             prop->owner_id = tx.buyer_id;
             prop->listed_for_sale = false;
             prop->purchased_tick = state.current_tick;
@@ -1587,7 +1593,8 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
     //       property (Phase 7 raw land + zoning)
     //   5 = adds parent_property_id + unit_count + subdivided per
     //       property (Phase 8 subdivision)
-    put_u32(out, 5u);
+    //   6 = adds location_flags per property (Phase 9)
+    put_u32(out, 6u);
     put_u32(out, static_cast<uint32_t>(properties_.size()));
     for (const auto& p : properties_) {
         put_u32(out, p.id);
@@ -1612,6 +1619,8 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
         put_u32(out, p.parent_property_id);
         put_u32(out, p.unit_count);
         out.push_back(p.subdivided ? 1u : 0u);
+        // schema_tag 6: location flags.
+        out.push_back(p.location_flags);
     }
     // schema_tag 3: trailing active_negotiations_ block.
     put_u32(out, static_cast<uint32_t>(active_negotiations_.size()));
@@ -1629,7 +1638,7 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
 bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
     uint32_t schema_tag = r.u32();
-    if (schema_tag < 1u || schema_tag > 5u)
+    if (schema_tag < 1u || schema_tag > 6u)
         return false;
     uint32_t count = r.u32();
     properties_.clear();
@@ -1674,6 +1683,11 @@ bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
             p.unit_count = 1;
             p.subdivided = false;
         }
+        // schema_tag 6: location flags. Pre-v6 records are flag-free.
+        if (schema_tag >= 6u)
+            p.location_flags = r.u8();
+        else
+            p.location_flags = 0u;
         if (r.error)
             return false;
         properties_.push_back(p);

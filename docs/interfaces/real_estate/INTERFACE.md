@@ -202,7 +202,12 @@ Child units are ordinary `PropertyListing`s once created, so the full Phase 1-6 
 
 **Persistence**: real_estate module-state `schema_tag` 4→5 adds `parent_property_id` (u32), `unit_count` (u32), `subdivided` (u8) per property. Pre-v5 records load as standalone (parent 0, unit_count 1, not subdivided). `pending_subdivision_requests` is defensively cleared on load.
 
-Phase 11 (construction) consumes `zoned_use` to gate what can be built on a parcel. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 9 Location Flags
+**Phase 9** adds a `location_flags` bitfield to `PropertyListing` (`LocationFlag_Offshore | LocationFlag_International | LocationFlag_Remote`). The concrete behaviour shipped now: **offshore** transactions emit **no institutional evidence token** (the offshore registry conceals ownership transfers — the laundering appeal). `remote` and `international` are stored for Phase 11 (raises construction cost) and forward-looking legal status. An "island" is simply `raw_land` with `subtype_key="island"` and the offshore flag — that combination is what makes islands mechanically distinct (untaxed in Phase 12, concealed transfers now).
+
+**Persistence**: real_estate module-state `schema_tag` 5→6 adds `location_flags` (u8) per property; pre-v6 records load flag-free.
+
+Phase 11 (construction) consumes `zoned_use` to gate what can be built on a parcel and `LocationFlag_Remote` to scale construction cost. Phase 12 (property tax) exempts offshore parcels. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

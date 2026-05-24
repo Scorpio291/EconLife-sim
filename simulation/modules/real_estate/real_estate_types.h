@@ -37,6 +37,13 @@ enum class PropertyType : uint8_t {
                      // Construction onto raw_land lands in Phase 11.
 };
 
+// Phase 9 — LocationFlags bitfield values (stored in
+// PropertyListing.location_flags).
+inline constexpr uint8_t LocationFlag_None = 0u;
+inline constexpr uint8_t LocationFlag_Offshore = 1u << 0;       // no tax, concealed transfers
+inline constexpr uint8_t LocationFlag_International = 1u << 1;  // multi-flag legal status
+inline constexpr uint8_t LocationFlag_Remote = 1u << 2;        // raises construction cost
+
 // --- §33.1 — PropertyListing ---
 
 struct PropertyListing {
@@ -85,6 +92,16 @@ struct PropertyListing {
     uint32_t parent_property_id = 0;  // 0 = standalone/top-level; else child unit's parent
     uint32_t unit_count = 1;          // units a subdivided parent was split into; 1 otherwise
     bool subdivided = false;          // true on a parent whose children are live
+
+    // Phase 9 — location flags bitfield (LocationFlag_* constants). An
+    // offshore parcel conceals its ownership transfers (no institutional
+    // evidence token on buy/sell) and is exempt from province property
+    // tax (Phase 12). `remote` raises construction cost (Phase 11).
+    // `international` carries a multi-flag legal status (forward-looking).
+    // "Islands" are simply raw_land with subtype_key="island" + the
+    // offshore flag set — that combination is what makes them
+    // mechanically distinct.
+    uint8_t location_flags = 0u;
 
     // Invariants:
     //   asking_price >= 0.0
