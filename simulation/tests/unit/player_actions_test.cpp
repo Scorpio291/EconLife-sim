@@ -518,3 +518,20 @@ TEST_CASE("CancelPendingTransactionAction emits cancel request",
     REQUIRE(delta.new_property_transactions[0].property_id == 42);
     REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
 }
+
+TEST_CASE("RequestZoningChangeAction emits zoning request",
+          "[player_actions][market_phase7]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::request_zoning_change,
+                          RequestZoningChangeAction{5, PropertyType::industrial});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_zoning_requests.size() == 1);
+    REQUIRE(delta.new_zoning_requests[0].property_id == 5);
+    REQUIRE(delta.new_zoning_requests[0].actor_id == world.player->id);
+    REQUIRE(delta.new_zoning_requests[0].desired_use ==
+            static_cast<uint8_t>(PropertyType::industrial));
+}

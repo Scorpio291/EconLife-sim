@@ -742,6 +742,12 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_auction_bid_requests.push_back(std::move(bid));
     }
 
+    // Route zoning-change requests (Phase 7) into pending_zoning_requests.
+    // Same-tick: player_actions (Tier 0) emits, real_estate (Tier 4) drains.
+    for (auto& zr : delta.new_zoning_requests) {
+        world.pending_zoning_requests.push_back(std::move(zr));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -773,6 +779,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_loan_requests.clear();
     delta.new_property_foreclosures.clear();
     delta.new_auction_bid_requests.clear();
+    delta.new_zoning_requests.clear();
 }
 
 // ---------------------------------------------------------------------------

@@ -201,6 +201,11 @@ struct WorldState {
     // on persistence load.
     std::vector<AuctionBidRequest> pending_auction_bid_requests;
 
+    // pending_zoning_requests: written by player_actions
+    // (RequestZoningChangeAction). Drained by real_estate at the start
+    // of its execute() (same-tick). Defensively cleared on load.
+    std::vector<ZoningChangeRequest> pending_zoning_requests;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.

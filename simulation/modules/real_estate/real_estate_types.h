@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace econlife {
 
@@ -28,6 +29,12 @@ enum class PropertyType : uint8_t {
     industrial = 2,  // Factory floor, port facility, storage yard.
                      // Primary use: facility housing for Facility records.
                      // Price drivers: energy_cost_baseline, infrastructure_rating.
+
+    raw_land = 3,    // Undeveloped parcel (Phase 7). No rental yield. Carries a
+                     // `subtype_key` (farmland / coastal / wilderness / island /
+                     // urban_*) and a `zoned_use` describing what it may be
+                     // developed into without a zoning-change application.
+                     // Construction onto raw_land lands in Phase 11.
 };
 
 // --- §33.1 — PropertyListing ---
@@ -53,6 +60,20 @@ struct PropertyListing {
                                    // set by ListPropertyForSaleAction (player) or by NPC
                                    // sale-intent logic (future). Buyers can only target
                                    // properties where listed_for_sale == true.
+
+    // Phase 7 — land taxonomy + zoning (meaningful chiefly for raw_land,
+    // but stored uniformly).
+    std::string subtype_key;       // "farmland" | "coastal" | "wilderness" |
+                                   // "island" | "urban_residential" |
+                                   // "urban_commercial" | "urban_industrial" | ""
+    float parcel_area_hectares = 0.0f;  // distinguishes a 0.05 ha house lot from
+                                        // a 500 ha island. 0 = unspecified.
+    PropertyType zoned_use = PropertyType::residential;  // permitted development
+                                   // class. For built properties equals `type`.
+                                   // For raw_land, the class it may be developed
+                                   // into without a zoning-change application; a
+                                   // RequestZoningChangeAction can change it
+                                   // subject to local-government approval.
 
     // Invariants:
     //   asking_price >= 0.0

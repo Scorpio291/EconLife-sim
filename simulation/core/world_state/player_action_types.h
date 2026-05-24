@@ -14,9 +14,10 @@
 #include <string>
 #include <variant>
 
-#include "core/world_state/delta_buffer.h"    // PaymentMethod
-#include "modules/calendar/calendar_types.h"  // CalendarEntryType
-#include "modules/economy/economy_types.h"    // BusinessSector
+#include "core/world_state/delta_buffer.h"        // PaymentMethod
+#include "modules/calendar/calendar_types.h"      // CalendarEntryType
+#include "modules/economy/economy_types.h"        // BusinessSector
+#include "modules/real_estate/real_estate_types.h"  // PropertyType
 
 namespace econlife {
 
@@ -124,6 +125,17 @@ struct PlaceAuctionBidAction {
     float bid_amount;
 };
 
+// Apply to the local government to re-zone an owned property to a new
+// permitted-use class. Phase 7. The player must own the property.
+// Approval is decided by a deterministic government roll (minor vs
+// major change + province corruption). On approval the property's
+// zoned_use changes; on denial nothing happens (the player may
+// re-apply later).
+struct RequestZoningChangeAction {
+    uint32_t property_id;
+    PropertyType desired_use;
+};
+
 // ---------------------------------------------------------------------------
 // PlayerActionType enum — mirrors variant index for type dispatch
 // ---------------------------------------------------------------------------
@@ -143,6 +155,7 @@ enum class PlayerActionType : uint8_t {
     make_property_offer = 11,
     cancel_pending_transaction = 12,
     place_auction_bid = 13,
+    request_zoning_change = 14,
 };
 
 // ---------------------------------------------------------------------------
@@ -153,7 +166,8 @@ using PlayerActionPayload =
     std::variant<SceneCardChoiceAction, CalendarCommitAction, CalendarScheduleAction, TravelAction,
                  StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
-                 MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction>;
+                 MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction,
+                 RequestZoningChangeAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

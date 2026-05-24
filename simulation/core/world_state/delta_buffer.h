@@ -261,6 +261,20 @@ enum class PaymentMethod : uint8_t {
     mixed = 2,
 };
 
+// Phase 7 — zoning-change application on an owned property. Emitted by
+// player_actions on RequestZoningChangeAction. Routed by apply_deltas
+// into WorldState.pending_zoning_requests; real_estate drains the queue
+// at the start of its execute() within the same tick. The local
+// government's approval roll (deterministic) decides whether the
+// property's zoned_use changes. desired_use is the underlying
+// PropertyType enum value encoded as u8 to keep delta_buffer.h free of
+// per-module includes.
+struct ZoningChangeRequest {
+    uint32_t property_id;
+    uint32_t actor_id;
+    uint8_t desired_use;  // PropertyType enum value
+};
+
 // Phase 6 — bid submission to an open ActiveAuction. Emitted by
 // player_actions on PlaceAuctionBidAction (and by NPC auction logic in
 // real_estate's own scan). Routed by apply_deltas into
@@ -358,6 +372,7 @@ struct DeltaBuffer {
     std::vector<NewLoanRequest> new_loan_requests;                      // merge: append
     std::vector<PropertyForeclosureRequest> new_property_foreclosures;  // merge: append
     std::vector<AuctionBidRequest> new_auction_bid_requests;             // merge: append
+    std::vector<ZoningChangeRequest> new_zoning_requests;                // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

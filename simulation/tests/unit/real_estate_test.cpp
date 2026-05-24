@@ -2593,3 +2593,152 @@ TEST_CASE("Phase6: active_auctions round-trip via persistence v12",
     REQUIRE(r.bids.size() == 2);
     REQUIRE_THAT(r.bids[1].bid_amount, WithinAbs(155000.0f, 0.01f));
 }
+
+// ===========================================================================
+// Phase 7: raw land + zoning approval
+// ===========================================================================
+
+TEST_CASE("Phase7: minor zoning change (residential->commercial) can be approved",
+          "[real_estate][market_phase7]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0, /*criminal_dominance=*/0.0f));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 150000.0f);
+    prop.zoned_use = PropertyType::residential;
+    module.add_property(prop);
+
+    // Try across many ticks until an approval lands (minor base prob 0.60).
+    bool approved = false;
+    for (int t = 0; t < 50 && !approved; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        state.pending_zoning_requests.push_back(
+            ZoningChangeRequest{1, 99, static_cast<uint8_t>(PropertyType::commercial)});
+        DeltaBuffer d{};
+        module.execute(state, d);
+        if (module.properties()[0].zoned_use == PropertyType::commercial)
+            approved = true;
+    }
+    REQUIRE(approved);
+}
+
+TEST_CASE("Phase7: zoning change rejected when actor is not owner",
+          "[real_estate][market_phase7]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0, 0.0f));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 150000.0f);
+    prop.zoned_use = PropertyType::residential;
+    module.add_property(prop);
+
+    // Player 99 tries to rezone NPC 42's property across many ticks.
+    for (int t = 0; t < 50; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        state.pending_zoning_requests.push_back(
+            ZoningChangeRequest{1, 99, static_cast<uint8_t>(PropertyType::commercial)});
+        DeltaBuffer d{};
+        module.execute(state, d);
+    }
+    REQUIRE(module.properties()[0].zoned_use == PropertyType::residential);
+}
+
+TEST_CASE("Phase7: corruption raises approval odds for major change",
+          "[real_estate][market_phase7]") {
+    // High-corruption province should approve a major (raw_land->industrial)
+    // change within far fewer attempts than a clean province would.
+    auto run = [](float corruption) {
+        auto state = make_test_world_state(10);
+        state.world_seed = 7;
+        state.provinces.push_back(make_test_province(0, corruption));
+        state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+        RealEstateModule module;
+        auto prop = make_test_property(1, PropertyType::raw_land, 0, /*owner=*/99, 50000.0f);
+        prop.subtype_key = "farmland";
+        prop.parcel_area_hectares = 10.0f;
+        prop.zoned_use = PropertyType::raw_land;
+        module.add_property(prop);
+
+        int attempts = 0;
+        bool approved = false;
+        for (int t = 0; t < 200 && !approved; ++t) {
+            state.current_tick = 10u + static_cast<uint32_t>(t);
+            state.pending_zoning_requests.push_back(
+                ZoningChangeRequest{1, 99, static_cast<uint8_t>(PropertyType::industrial)});
+            DeltaBuffer d{};
+            module.execute(state, d);
+            attempts++;
+            if (module.properties()[0].zoned_use == PropertyType::industrial)
+                approved = true;
+        }
+        return std::make_pair(approved, attempts);
+    };
+
+    auto [clean_ok, clean_attempts] = run(0.0f);
+    auto [corrupt_ok, corrupt_attempts] = run(1.0f);
+    REQUIRE(clean_ok);
+    REQUIRE(corrupt_ok);
+    // Full-corruption major prob = 0.25 + 1.0*0.30 = 0.55 vs clean 0.25.
+    REQUIRE(corrupt_attempts <= clean_attempts);
+}
+
+TEST_CASE("Phase7: approved zoning change nudges market_value toward land baseline",
+          "[real_estate][market_phase7]") {
+    auto state = make_test_world_state(10);
+    state.world_seed = 3;
+    state.provinces.push_back(make_test_province(0, 1.0f));  // high corruption → easy approval
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::raw_land, 0, /*owner=*/99, 50000.0f);
+    prop.subtype_key = "urban_commercial";  // base 400k/ha
+    prop.parcel_area_hectares = 1.0f;
+    prop.zoned_use = PropertyType::raw_land;
+    module.add_property(prop);
+
+    float initial_value = module.properties()[0].market_value;
+
+    bool approved = false;
+    for (int t = 0; t < 100 && !approved; ++t) {
+        state.current_tick = 10u + static_cast<uint32_t>(t);
+        state.pending_zoning_requests.push_back(
+            ZoningChangeRequest{1, 99, static_cast<uint8_t>(PropertyType::commercial)});
+        DeltaBuffer d{};
+        module.execute(state, d);
+        if (module.properties()[0].zoned_use == PropertyType::commercial)
+            approved = true;
+    }
+    REQUIRE(approved);
+    // target = 400000/ha × 1ha = 400k; value nudged up from 50k.
+    REQUIRE(module.properties()[0].market_value > initial_value);
+}
+
+TEST_CASE("Phase7: raw_land subtype + zoning round-trips via persistence schema_tag 4",
+          "[real_estate][market_phase7][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::raw_land, 0, /*owner=*/99, 50000.0f);
+    prop.subtype_key = "island";
+    prop.parcel_area_hectares = 500.0f;
+    prop.zoned_use = PropertyType::raw_land;
+    module.add_property(prop);
+
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.properties().size() == 1);
+    const auto& r = restored_mod.properties()[0];
+    REQUIRE(r.type == PropertyType::raw_land);
+    REQUIRE(r.subtype_key == "island");
+    REQUIRE_THAT(r.parcel_area_hectares, WithinAbs(500.0f, 0.01f));
+    REQUIRE(r.zoned_use == PropertyType::raw_land);
+}

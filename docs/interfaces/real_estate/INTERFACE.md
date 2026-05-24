@@ -177,7 +177,20 @@ New player action: `PlaceAuctionBidAction{auction_id, bid_amount}` (PlayerAction
 
 **Persistence**: schema v11→v12 adds the `active_auctions` footer (auctions + nested bids). `pending_auction_bid_requests` is defensively cleared on load (same-tick contract). v7..v11 saves load with no auctions.
 
-Phase 7 adds raw land + zoning approval; tax sales (Phase 13) will reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 7 Raw Land + Zoning
+**Phase 7** adds `PropertyType::raw_land` and a zoning-change mechanism honouring "no hard-locking — major changes need local-government approval." `PropertyListing` gains `subtype_key` (farmland / coastal / wilderness / island / urban_residential / urban_commercial / urban_industrial), `parcel_area_hectares`, and `zoned_use` (the development class currently permitted; equals `type` for built properties). raw_land carries no rental yield and is bought/sold/auctioned through the existing market generically.
+
+`RequestZoningChangeAction{property_id, desired_use}` (PlayerActionType 14) emits a `ZoningChangeRequest` routed into `WorldState.pending_zoning_requests`. real_estate drains it same-tick:
+- Owner check: only the property's owner may apply.
+- Classification: a change is **major** if it involves industrial use (either side) or develops raw_land into a built class; otherwise **minor** (residential↔commercial).
+- Approval probability = base (`zoning_minor_approval_prob` 0.60 / `zoning_major_approval_prob` 0.25) + `province.criminal_dominance_index × zoning_corruption_bonus` (0.30) — political capture eases approval — clamped to [0, 1]. Deterministic RNG fork per (tick, property, desired_use).
+- On approval: `zoned_use` changes and `market_value` is nudged toward the target land baseline (`land_base_value_per_hectare(subtype_key) × parcel_area_hectares`) by `zoning_revaluation_rate` (0.20). On denial: no change (player may re-apply; no cooldown in V1).
+
+Land subtype base values per hectare (authored defaults, designer-tunable): farmland 8k, urban_residential 250k, urban_commercial 400k, urban_industrial 180k, coastal 120k, wilderness 2k, island 50k.
+
+**Persistence**: real_estate module-state `schema_tag` 3→4 adds `subtype_key` (length-prefixed string), `parcel_area_hectares` (f32), `zoned_use` (u8) per property. Pre-v4 records load with no subtype, zero area, and `zoned_use == type`. `pending_zoning_requests` is defensively cleared on load (same-tick contract).
+
+Phase 8 adds subdivision + re-merge (apartment blocks → units). Phase 11 (construction) consumes `zoned_use` to gate what can be built on a parcel. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

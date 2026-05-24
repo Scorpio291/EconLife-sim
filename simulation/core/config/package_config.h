@@ -475,6 +475,22 @@ struct RealEstateConfig {
     float npc_auction_bid_rate = 0.05f;         // per-NPC per-tick bid probability
     float npc_auction_bid_increment = 0.05f;    // raise fraction over current high
     float npc_auction_max_value_ratio = 1.10f;  // NPC won't bid above market × this
+
+    // Phase 7 — raw land + zoning. A RequestZoningChangeAction is
+    // decided by a deterministic local-government roll. A "minor"
+    // change (between residential/commercial) approves at
+    // zoning_minor_approval_prob; a "major" change (anything involving
+    // industrial, or developing raw_land into a built class) approves at
+    // zoning_major_approval_prob. Province criminal_dominance_index acts
+    // as a capture/bribery proxy that *raises* approval odds by up to
+    // zoning_corruption_bonus. On approval the property's market_value
+    // is nudged toward the target class baseline by
+    // zoning_revaluation_rate. Land subtype base values (per hectare)
+    // seed market_value when raw_land parcels are generated.
+    float zoning_minor_approval_prob = 0.60f;
+    float zoning_major_approval_prob = 0.25f;
+    float zoning_corruption_bonus = 0.30f;
+    float zoning_revaluation_rate = 0.20f;
 };
 
 struct FinancialDistributionConfig {

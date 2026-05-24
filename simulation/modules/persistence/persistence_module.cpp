@@ -2304,6 +2304,10 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // real_estate drains). Defensively reset on load.
     out_state.pending_auction_bid_requests.clear();
 
+    // pending_zoning_requests same-tick (player_actions emits,
+    // real_estate drains). Defensively reset on load.
+    out_state.pending_zoning_requests.clear();
+
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();
 

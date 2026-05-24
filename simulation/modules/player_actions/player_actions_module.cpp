@@ -420,6 +420,17 @@ static void handle_place_auction_bid(const PlaceAuctionBidAction& action, const 
     delta.new_auction_bid_requests.push_back(req);
 }
 
+static void handle_request_zoning_change(const RequestZoningChangeAction& action,
+                                         const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    ZoningChangeRequest req{};
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.desired_use = static_cast<uint8_t>(action.desired_use);
+    delta.new_zoning_requests.push_back(req);
+}
+
 static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -500,6 +511,8 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_cancel_pending_transaction(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, PlaceAuctionBidAction>) {
                     handle_place_auction_bid(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, RequestZoningChangeAction>) {
+                    handle_request_zoning_change(payload, state, delta);
                 }
             },
             action.payload);

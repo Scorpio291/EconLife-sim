@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <string>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
@@ -373,7 +374,42 @@ bool has_open_auction_for_asset(const std::vector<ActiveAuction>& auctions, uint
     return false;
 }
 
-// Phase 2: per-PropertyType close delay (config-driven).
+// Phase 7 — a zoning change is "major" when it involves industrial use
+// on either side, or develops raw_land (undeveloped) into a built
+// class. Minor changes are residential<->commercial shuffles. Major
+// changes face the local government's higher bar.
+bool is_major_zoning_change(PropertyType current_type, PropertyType current_zoned,
+                            PropertyType desired) {
+    if (desired == PropertyType::industrial || current_zoned == PropertyType::industrial)
+        return true;
+    if (current_type == PropertyType::raw_land && desired != PropertyType::raw_land)
+        return true;
+    return false;
+}
+
+// Phase 7 — base land value per hectare by subtype_key. Used to seed
+// raw_land market_value at generation; authored defaults the designer
+// can retune. Unknown keys fall back to a neutral baseline.
+float land_base_value_per_hectare(const std::string& subtype_key) {
+    if (subtype_key == "farmland")
+        return 8000.0f;
+    if (subtype_key == "urban_residential")
+        return 250000.0f;
+    if (subtype_key == "urban_commercial")
+        return 400000.0f;
+    if (subtype_key == "urban_industrial")
+        return 180000.0f;
+    if (subtype_key == "coastal")
+        return 120000.0f;
+    if (subtype_key == "wilderness")
+        return 2000.0f;
+    if (subtype_key == "island")
+        return 50000.0f;
+    return 10000.0f;  // neutral fallback
+}
+
+// Phase 2: per-PropertyType close delay (config-driven). raw_land uses
+// the commercial cadence (land conveyances are slower than residential).
 uint32_t close_delay_for_type(const RealEstateConfig& cfg, PropertyType type) {
     switch (type) {
         case PropertyType::residential:
@@ -382,6 +418,8 @@ uint32_t close_delay_for_type(const RealEstateConfig& cfg, PropertyType type) {
             return cfg.close_delay_commercial;
         case PropertyType::industrial:
             return cfg.close_delay_industrial;
+        case PropertyType::raw_land:
+            return cfg.close_delay_commercial;
     }
     return cfg.close_delay_residential;  // default for new types in later phases
 }
@@ -473,7 +511,9 @@ uint32_t next_scene_card_id(const WorldState& state, const DeltaBuffer& delta) {
 constexpr uint32_t CHOICE_ACCEPT_OFFER = 1;
 constexpr uint32_t CHOICE_DECLINE_OFFER = 2;
 
-// Phase 4 — minimum down-payment fraction by property type.
+// Phase 4 — minimum down-payment fraction by property type. raw_land
+// uses the industrial floor (lenders want more equity on undeveloped
+// parcels).
 float min_down_payment_for_type(const RealEstateConfig& cfg, PropertyType type) {
     switch (type) {
         case PropertyType::residential:
@@ -481,6 +521,8 @@ float min_down_payment_for_type(const RealEstateConfig& cfg, PropertyType type) 
         case PropertyType::commercial:
             return cfg.min_down_payment_commercial;
         case PropertyType::industrial:
+            return cfg.min_down_payment_industrial;
+        case PropertyType::raw_land:
             return cfg.min_down_payment_industrial;
     }
     return cfg.min_down_payment_residential;
@@ -831,6 +873,63 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                           return a.status != AuctionStatus::open;
                                       }),
                        auctions.end());
+    }
+
+    // ── 0b. Phase 7: drain zoning-change requests ──
+    //
+    // Each request is decided immediately by a deterministic local-
+    // government roll. Approval probability = base (minor vs major) +
+    // province criminal_dominance_index × zoning_corruption_bonus
+    // (capture/bribery proxy), clamped to [0, 1]. On approval the
+    // property's zoned_use changes and market_value is nudged toward
+    // the target-class land baseline.
+    if (!state.pending_zoning_requests.empty()) {
+        for (const auto& zr : state.pending_zoning_requests) {
+            PropertyListing* prop = find_property(properties_, zr.property_id);
+            if (!prop)
+                continue;
+            if (prop->owner_id != zr.actor_id)
+                continue;  // only the owner may apply
+            PropertyType desired = static_cast<PropertyType>(zr.desired_use);
+            if (desired == prop->zoned_use)
+                continue;  // no-op
+
+            // Province corruption proxy.
+            float corruption = 0.0f;
+            for (const auto& prov : state.provinces) {
+                if (prov.id == prop->province_id && prov.cohort_stats) {
+                    corruption = prov.cohort_stats->criminal_dominance_index;
+                    break;
+                }
+            }
+            bool major = is_major_zoning_change(prop->type, prop->zoned_use, desired);
+            float base_prob =
+                major ? cfg_.zoning_major_approval_prob : cfg_.zoning_minor_approval_prob;
+            float p_approve =
+                std::clamp(base_prob + corruption * cfg_.zoning_corruption_bonus, 0.0f, 1.0f);
+
+            DeterministicRNG zr_rng(state.world_seed ^
+                                    (static_cast<uint64_t>(state.current_tick) * 0x41C6u) ^
+                                    (static_cast<uint64_t>(prop->id) * 0x9E37u) ^
+                                    (static_cast<uint64_t>(zr.desired_use) * 0x2545u));
+            if (zr_rng.next_float() >= p_approve)
+                continue;  // application denied
+
+            // Approved: re-zone and nudge market_value toward the
+            // target land baseline (uses subtype_key if present, else a
+            // class-neutral baseline keyed off the desired use).
+            prop->zoned_use = desired;
+            float target_value = prop->market_value;
+            if (!prop->subtype_key.empty() && prop->parcel_area_hectares > 0.0f) {
+                target_value =
+                    land_base_value_per_hectare(prop->subtype_key) * prop->parcel_area_hectares;
+            }
+            prop->market_value +=
+                (target_value - prop->market_value) * cfg_.zoning_revaluation_rate;
+        }
+        auto& mutable_zoning =
+            const_cast<std::vector<ZoningChangeRequest>&>(state.pending_zoning_requests);
+        mutable_zoning.clear();
     }
 
     // ── 0. Phase 3: resolve active negotiations ──
@@ -1280,6 +1379,12 @@ void put_f32(std::vector<uint8_t>& out, float v) {
     put_u32(out, bits);
 }
 
+void put_str(std::vector<uint8_t>& out, const std::string& s) {
+    put_u32(out, static_cast<uint32_t>(s.size()));
+    for (char c : s)
+        out.push_back(static_cast<uint8_t>(c));
+}
+
 struct Reader {
     const uint8_t* data;
     size_t size;
@@ -1311,6 +1416,14 @@ struct Reader {
         std::memcpy(&v, &bits, sizeof(v));
         return v;
     }
+    std::string str() {
+        uint32_t len = u32();
+        if (!need(len))
+            return std::string();
+        std::string s(reinterpret_cast<const char*>(data + pos), len);
+        pos += len;
+        return s;
+    }
 };
 
 }  // namespace
@@ -1320,7 +1433,9 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
     //   1 = initial properties_ vector (Phase 0)
     //   2 = adds listed_for_sale byte per property (Phase 1)
     //   3 = adds active_negotiations_ trailing block (Phase 3)
-    put_u32(out, 3u);
+    //   4 = adds subtype_key + parcel_area_hectares + zoned_use per
+    //       property (Phase 7 raw land + zoning)
+    put_u32(out, 4u);
     put_u32(out, static_cast<uint32_t>(properties_.size()));
     for (const auto& p : properties_) {
         put_u32(out, p.id);
@@ -1337,6 +1452,10 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
         put_u32(out, p.purchased_tick);
         put_f32(out, p.purchase_price);
         out.push_back(p.listed_for_sale ? 1u : 0u);
+        // schema_tag 4: land taxonomy + zoning.
+        put_str(out, p.subtype_key);
+        put_f32(out, p.parcel_area_hectares);
+        out.push_back(static_cast<uint8_t>(p.zoned_use));
     }
     // schema_tag 3: trailing active_negotiations_ block.
     put_u32(out, static_cast<uint32_t>(active_negotiations_.size()));
@@ -1354,7 +1473,7 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
 bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
     uint32_t schema_tag = r.u32();
-    if (schema_tag != 1u && schema_tag != 2u && schema_tag != 3u)
+    if (schema_tag < 1u || schema_tag > 4u)
         return false;
     uint32_t count = r.u32();
     properties_.clear();
@@ -1378,6 +1497,17 @@ bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
             p.listed_for_sale = (r.u8() != 0);
         else
             p.listed_for_sale = false;
+        // schema_tag 4: land taxonomy + zoning. Pre-v4 records default
+        // to no subtype, zero area, and zoned_use == their own type.
+        if (schema_tag >= 4u) {
+            p.subtype_key = r.str();
+            p.parcel_area_hectares = r.f32();
+            p.zoned_use = static_cast<PropertyType>(r.u8());
+        } else {
+            p.subtype_key.clear();
+            p.parcel_area_hectares = 0.0f;
+            p.zoned_use = p.type;
+        }
         if (r.error)
             return false;
         properties_.push_back(p);
