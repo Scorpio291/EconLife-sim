@@ -431,6 +431,32 @@ static void handle_request_zoning_change(const RequestZoningChangeAction& action
     delta.new_zoning_requests.push_back(req);
 }
 
+static void handle_subdivide_property(const SubdividePropertyAction& action,
+                                      const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.n_units < 2)
+        return;  // need at least two units to subdivide
+    PropertySubdivisionRequest req{};
+    req.kind = SubdivisionKind::subdivide;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.n_units = action.n_units;
+    delta.new_subdivision_requests.push_back(req);
+}
+
+static void handle_merge_units(const MergeUnitsAction& action, const WorldState& state,
+                               DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    PropertySubdivisionRequest req{};
+    req.kind = SubdivisionKind::merge;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.n_units = 0;
+    delta.new_subdivision_requests.push_back(req);
+}
+
 static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -513,6 +539,10 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_place_auction_bid(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, RequestZoningChangeAction>) {
                     handle_request_zoning_change(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, SubdividePropertyAction>) {
+                    handle_subdivide_property(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, MergeUnitsAction>) {
+                    handle_merge_units(payload, state, delta);
                 }
             },
             action.payload);

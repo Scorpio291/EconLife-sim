@@ -535,3 +535,47 @@ TEST_CASE("RequestZoningChangeAction emits zoning request",
     REQUIRE(delta.new_zoning_requests[0].desired_use ==
             static_cast<uint8_t>(PropertyType::industrial));
 }
+
+TEST_CASE("SubdividePropertyAction emits subdivide request",
+          "[player_actions][market_phase8]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::subdivide_property,
+                          SubdividePropertyAction{3, 6});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_subdivision_requests.size() == 1);
+    REQUIRE(delta.new_subdivision_requests[0].kind == SubdivisionKind::subdivide);
+    REQUIRE(delta.new_subdivision_requests[0].property_id == 3);
+    REQUIRE(delta.new_subdivision_requests[0].n_units == 6);
+    REQUIRE(delta.new_subdivision_requests[0].actor_id == world.player->id);
+}
+
+TEST_CASE("SubdividePropertyAction with fewer than 2 units is dropped",
+          "[player_actions][market_phase8]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::subdivide_property,
+                          SubdividePropertyAction{3, 1});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_subdivision_requests.empty());
+}
+
+TEST_CASE("MergeUnitsAction emits merge request",
+          "[player_actions][market_phase8]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::merge_units, MergeUnitsAction{3});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_subdivision_requests.size() == 1);
+    REQUIRE(delta.new_subdivision_requests[0].kind == SubdivisionKind::merge);
+    REQUIRE(delta.new_subdivision_requests[0].property_id == 3);
+}

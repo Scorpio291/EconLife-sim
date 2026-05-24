@@ -136,6 +136,21 @@ struct RequestZoningChangeAction {
     PropertyType desired_use;
 };
 
+// Split an owned subdivisible building into n_units individually-
+// ownable child units. Phase 8. The player must own the property and
+// it must be a subdivisible subtype not already subdivided.
+struct SubdividePropertyAction {
+    uint32_t property_id;
+    uint32_t n_units;
+};
+
+// Recombine all live child units of a subdivided parent back into the
+// parent. Phase 8. The player must own the parent and every live
+// child, and none may be under contract / in auction / in negotiation.
+struct MergeUnitsAction {
+    uint32_t property_id;  // the parent
+};
+
 // ---------------------------------------------------------------------------
 // PlayerActionType enum — mirrors variant index for type dispatch
 // ---------------------------------------------------------------------------
@@ -156,6 +171,8 @@ enum class PlayerActionType : uint8_t {
     cancel_pending_transaction = 12,
     place_auction_bid = 13,
     request_zoning_change = 14,
+    subdivide_property = 15,
+    merge_units = 16,
 };
 
 // ---------------------------------------------------------------------------
@@ -167,7 +184,7 @@ using PlayerActionPayload =
                  StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
                  MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction,
-                 RequestZoningChangeAction>;
+                 RequestZoningChangeAction, SubdividePropertyAction, MergeUnitsAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

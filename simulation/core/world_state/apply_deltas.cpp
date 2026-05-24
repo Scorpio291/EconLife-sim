@@ -748,6 +748,12 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_zoning_requests.push_back(std::move(zr));
     }
 
+    // Route subdivision/merge requests (Phase 8) into
+    // pending_subdivision_requests. Same-tick consumer.
+    for (auto& sr : delta.new_subdivision_requests) {
+        world.pending_subdivision_requests.push_back(std::move(sr));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -780,6 +786,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_property_foreclosures.clear();
     delta.new_auction_bid_requests.clear();
     delta.new_zoning_requests.clear();
+    delta.new_subdivision_requests.clear();
 }
 
 // ---------------------------------------------------------------------------

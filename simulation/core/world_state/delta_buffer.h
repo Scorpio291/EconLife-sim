@@ -261,6 +261,22 @@ enum class PaymentMethod : uint8_t {
     mixed = 2,
 };
 
+// Phase 8 — composite property subdivision / re-merge request. Emitted
+// by player_actions (SubdividePropertyAction / MergeUnitsAction).
+// Routed by apply_deltas into WorldState.pending_subdivision_requests;
+// real_estate drains the queue at the start of its execute() same-tick.
+enum class SubdivisionKind : uint8_t {
+    subdivide = 0,  // split a subdivisible parent into n_units children
+    merge = 1,      // recombine all live children back into the parent
+};
+
+struct PropertySubdivisionRequest {
+    SubdivisionKind kind;
+    uint32_t property_id;  // the parent property
+    uint32_t actor_id;
+    uint32_t n_units;      // subdivide: number of child units; ignored for merge
+};
+
 // Phase 7 — zoning-change application on an owned property. Emitted by
 // player_actions on RequestZoningChangeAction. Routed by apply_deltas
 // into WorldState.pending_zoning_requests; real_estate drains the queue
@@ -373,6 +389,7 @@ struct DeltaBuffer {
     std::vector<PropertyForeclosureRequest> new_property_foreclosures;  // merge: append
     std::vector<AuctionBidRequest> new_auction_bid_requests;             // merge: append
     std::vector<ZoningChangeRequest> new_zoning_requests;                // merge: append
+    std::vector<PropertySubdivisionRequest> new_subdivision_requests;    // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

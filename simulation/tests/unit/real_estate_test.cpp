@@ -2742,3 +2742,255 @@ TEST_CASE("Phase7: raw_land subtype + zoning round-trips via persistence schema_
     REQUIRE_THAT(r.parcel_area_hectares, WithinAbs(500.0f, 0.01f));
     REQUIRE(r.zoned_use == PropertyType::raw_land);
 }
+
+// ===========================================================================
+// Phase 8: subdivision + re-merge
+// ===========================================================================
+
+TEST_CASE("Phase8: subdivide splits a block into N child units",
+          "[real_estate][market_phase8]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 1000000.0f);
+    prop.subtype_key = "apartment_block";
+    module.add_property(prop);
+
+    state.pending_subdivision_requests.push_back(
+        PropertySubdivisionRequest{SubdivisionKind::subdivide, 1, 99, 4});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Parent marked subdivided; 4 child units created.
+    const auto& props = module.properties();
+    REQUIRE(props.size() == 5);  // parent + 4 children
+    int children = 0;
+    for (const auto& p : props) {
+        if (p.parent_property_id == 1) {
+            children++;
+            REQUIRE(p.owner_id == 99);
+            REQUIRE(p.subtype_key == "apartment_unit");
+            // per_unit = (1,000,000 / 4) × 1.10 = 275,000.
+            REQUIRE_THAT(p.market_value, WithinAbs(275000.0f, 1.0f));
+        }
+        if (p.id == 1) {
+            REQUIRE(p.subdivided == true);
+            REQUIRE(p.unit_count == 4);
+        }
+    }
+    REQUIRE(children == 4);
+}
+
+TEST_CASE("Phase8: subdivide rejected for non-subdivisible subtype",
+          "[real_estate][market_phase8]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, 99, 500000.0f);
+    prop.subtype_key = "house";  // single dwelling — not subdivisible
+    module.add_property(prop);
+
+    state.pending_subdivision_requests.push_back(
+        PropertySubdivisionRequest{SubdivisionKind::subdivide, 1, 99, 4});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(module.properties().size() == 1);
+    REQUIRE(module.properties()[0].subdivided == false);
+}
+
+TEST_CASE("Phase8: subdivide rejected for non-owner",
+          "[real_estate][market_phase8]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 1000000.0f);
+    prop.subtype_key = "apartment_block";
+    module.add_property(prop);
+
+    state.pending_subdivision_requests.push_back(
+        PropertySubdivisionRequest{SubdivisionKind::subdivide, 1, 99, 4});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(module.properties().size() == 1);
+    REQUIRE(module.properties()[0].subdivided == false);
+}
+
+TEST_CASE("Phase8: subdivided parent (shell) is not buyable",
+          "[real_estate][market_phase8]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 1000000.0f);
+    prop.subtype_key = "apartment_block";
+    prop.subdivided = true;        // already a shell
+    prop.listed_for_sale = true;   // even if somehow listed
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 1000000.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // No pending transaction created — shell rejected.
+    REQUIRE(state.pending_transactions.empty());
+    REQUIRE(module.properties()[0].owner_id == 42);
+}
+
+TEST_CASE("Phase8: a child unit can be sold independently",
+          "[real_estate][market_phase8]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    // Parent + one child unit owned by NPC 42, listed.
+    auto parent = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 1000000.0f);
+    parent.subtype_key = "apartment_block";
+    parent.subdivided = true;
+    parent.unit_count = 2;
+    module.add_property(parent);
+    auto child = make_test_property(2, PropertyType::residential, 0, /*owner=*/42, 275000.0f);
+    child.parent_property_id = 1;
+    child.subtype_key = "apartment_unit";
+    child.asking_price = 275000.0f;
+    child.listed_for_sale = true;
+    module.add_property(child);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 2, 99, 275000.0f});
+
+    DeltaBuffer d_offer{};
+    module.execute(state, d_offer);
+    REQUIRE(state.pending_transactions.size() == 1);
+
+    state.current_tick = 20;  // past close
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Child unit transferred to player; parent shell untouched.
+    for (const auto& p : module.properties()) {
+        if (p.id == 2)
+            REQUIRE(p.owner_id == 99);
+        if (p.id == 1)
+            REQUIRE(p.owner_id == 42);
+    }
+}
+
+TEST_CASE("Phase8: merge recombines child units when one owner holds all",
+          "[real_estate][market_phase8]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto parent = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 1000000.0f);
+    parent.subtype_key = "apartment_block";
+    parent.subdivided = true;
+    parent.unit_count = 3;
+    module.add_property(parent);
+    for (uint32_t u = 0; u < 3; ++u) {
+        auto child = make_test_property(2 + u, PropertyType::residential, 0, /*owner=*/99,
+                                        300000.0f);
+        child.parent_property_id = 1;
+        child.subtype_key = "apartment_unit";
+        module.add_property(child);
+    }
+
+    state.pending_subdivision_requests.push_back(
+        PropertySubdivisionRequest{SubdivisionKind::merge, 1, 99, 0});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Children removed; parent restored.
+    REQUIRE(module.properties().size() == 1);
+    REQUIRE(module.properties()[0].id == 1);
+    REQUIRE(module.properties()[0].subdivided == false);
+    REQUIRE(module.properties()[0].unit_count == 1);
+    // value = sum of children = 900,000.
+    REQUIRE_THAT(module.properties()[0].market_value, WithinAbs(900000.0f, 1.0f));
+}
+
+TEST_CASE("Phase8: merge rejected when a child is owned by someone else",
+          "[real_estate][market_phase8]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto parent = make_test_property(1, PropertyType::residential, 0, /*owner=*/99, 1000000.0f);
+    parent.subtype_key = "apartment_block";
+    parent.subdivided = true;
+    parent.unit_count = 2;
+    module.add_property(parent);
+    auto c1 = make_test_property(2, PropertyType::residential, 0, /*owner=*/99, 300000.0f);
+    c1.parent_property_id = 1;
+    module.add_property(c1);
+    auto c2 = make_test_property(3, PropertyType::residential, 0, /*owner=*/77, 300000.0f);
+    c2.parent_property_id = 1;  // owned by a different NPC
+    module.add_property(c2);
+
+    state.pending_subdivision_requests.push_back(
+        PropertySubdivisionRequest{SubdivisionKind::merge, 1, 99, 0});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Merge blocked; everything intact.
+    REQUIRE(module.properties().size() == 3);
+    REQUIRE(module.properties()[0].subdivided == true);
+}
+
+TEST_CASE("Phase8: subdivision round-trips via persistence schema_tag 5",
+          "[real_estate][market_phase8][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto parent = make_test_property(1, PropertyType::residential, 0, 99, 1000000.0f);
+    parent.subtype_key = "apartment_block";
+    parent.subdivided = true;
+    parent.unit_count = 2;
+    module.add_property(parent);
+    auto child = make_test_property(2, PropertyType::residential, 0, 99, 550000.0f);
+    child.parent_property_id = 1;
+    child.subtype_key = "apartment_unit";
+    module.add_property(child);
+
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored_mod.properties().size() == 2);
+    const PropertyListing* rp = nullptr;
+    const PropertyListing* rc = nullptr;
+    for (const auto& p : restored_mod.properties()) {
+        if (p.id == 1) rp = &p;
+        if (p.id == 2) rc = &p;
+    }
+    REQUIRE(rp != nullptr);
+    REQUIRE(rc != nullptr);
+    REQUIRE(rp->subdivided == true);
+    REQUIRE(rp->unit_count == 2);
+    REQUIRE(rc->parent_property_id == 1);
+    REQUIRE(rc->subtype_key == "apartment_unit");
+}

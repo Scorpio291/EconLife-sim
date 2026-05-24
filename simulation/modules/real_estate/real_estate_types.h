@@ -75,6 +75,17 @@ struct PropertyListing {
                                    // RequestZoningChangeAction can change it
                                    // subject to local-government approval.
 
+    // Phase 8 — composite property subdivision. A subdivisible building
+    // (subtype_key in {apartment_block, office_tower, mixed_use_building,
+    // warehouse_complex, retail_center, industrial_park}) can be split
+    // into `unit_count` child PropertyListings, each individually
+    // ownable/sellable. While subdivided, the parent is a dormant shell
+    // (not buyable, not rentable). Re-merge (MergeUnitsAction) is
+    // possible when one owner holds the parent and all live children.
+    uint32_t parent_property_id = 0;  // 0 = standalone/top-level; else child unit's parent
+    uint32_t unit_count = 1;          // units a subdivided parent was split into; 1 otherwise
+    bool subdivided = false;          // true on a parent whose children are live
+
     // Invariants:
     //   asking_price >= 0.0
     //   market_value >= 0.0

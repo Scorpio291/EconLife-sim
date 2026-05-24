@@ -324,6 +324,16 @@ PropertyListing* find_property(std::vector<PropertyListing>& props, uint32_t id)
     return nullptr;
 }
 
+// Phase 8 — next free PropertyListing id (max existing + 1).
+uint32_t next_property_id(const std::vector<PropertyListing>& props) {
+    uint32_t max_id = 0;
+    for (const auto& p : props) {
+        if (p.id > max_id)
+            max_id = p.id;
+    }
+    return max_id + 1;
+}
+
 // Phase 2: returns the active (stage == pending) PendingTransaction for
 // a property, or nullptr if none. At most one active tx per property is
 // enforced by the drain (buy rejected if already under contract).
@@ -385,6 +395,31 @@ bool is_major_zoning_change(PropertyType current_type, PropertyType current_zone
     if (current_type == PropertyType::raw_land && desired != PropertyType::raw_land)
         return true;
     return false;
+}
+
+// Phase 8 — subtypes that can be subdivided into individually-ownable
+// units.
+bool is_subdivisible_subtype(const std::string& subtype_key) {
+    return subtype_key == "apartment_block" || subtype_key == "office_tower" ||
+           subtype_key == "mixed_use_building" || subtype_key == "warehouse_complex" ||
+           subtype_key == "retail_center" || subtype_key == "industrial_park";
+}
+
+// Phase 8 — the unit subtype produced when a parent is subdivided.
+std::string unit_subtype_for(const std::string& parent_subtype) {
+    if (parent_subtype == "apartment_block")
+        return "apartment_unit";
+    if (parent_subtype == "office_tower")
+        return "office_unit";
+    if (parent_subtype == "retail_center")
+        return "retail_unit";
+    if (parent_subtype == "warehouse_complex")
+        return "warehouse_unit";
+    if (parent_subtype == "industrial_park")
+        return "industrial_unit";
+    if (parent_subtype == "mixed_use_building")
+        return "mixed_use_unit";
+    return "unit";
 }
 
 // Phase 7 — base land value per hectare by subtype_key. Used to seed
@@ -932,6 +967,119 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         mutable_zoning.clear();
     }
 
+    // ── 0c. Phase 8: drain subdivision / merge requests ──
+    if (!state.pending_subdivision_requests.empty()) {
+        for (const auto& sr : state.pending_subdivision_requests) {
+            PropertyListing* parent = find_property(properties_, sr.property_id);
+            if (!parent)
+                continue;
+            if (parent->owner_id != sr.actor_id)
+                continue;  // owner-only
+
+            if (sr.kind == SubdivisionKind::subdivide) {
+                if (parent->subdivided)
+                    continue;  // already split
+                if (!is_subdivisible_subtype(parent->subtype_key))
+                    continue;  // not a divisible building
+                uint32_t n = sr.n_units;
+                if (n < cfg_.subdivision_min_units || n > cfg_.subdivision_max_units)
+                    continue;
+                // Can't subdivide while under contract / in auction.
+                if (find_active_pending_tx(pending_txs, parent->id) != nullptr)
+                    continue;
+                if (has_open_auction_for_asset(auctions, parent->id))
+                    continue;
+
+                // Capture parent fields into locals: push_back below may
+                // reallocate properties_ and invalidate `parent`.
+                const uint32_t parent_id = parent->id;
+                const PropertyType parent_type = parent->type;
+                const uint32_t parent_province = parent->province_id;
+                const uint32_t parent_owner = parent->owner_id;
+                const float parent_yield = parent->rental_yield_rate;
+                const bool parent_launder = parent->launder_eligible;
+                const PropertyType parent_zoned = parent->zoned_use;
+                const float per_unit_value =
+                    (parent->market_value / static_cast<float>(n)) * cfg_.subdivision_unit_premium;
+                const std::string unit_subtype = unit_subtype_for(parent->subtype_key);
+                const uint32_t next_id = next_property_id(properties_);
+                for (uint32_t u = 0; u < n; ++u) {
+                    PropertyListing child{};
+                    child.id = next_id + u;
+                    child.type = parent_type;
+                    child.province_id = parent_province;
+                    child.owner_id = parent_owner;
+                    child.market_value = per_unit_value;
+                    child.asking_price = per_unit_value;
+                    child.rental_yield_rate = parent_yield;
+                    child.rental_income_per_tick =
+                        compute_rental_income(per_unit_value, parent_yield);
+                    child.rented = false;
+                    child.tenant_id = 0;
+                    child.launder_eligible = parent_launder;
+                    child.purchased_tick = state.current_tick;
+                    child.purchase_price = 0.0f;
+                    child.listed_for_sale = false;
+                    child.subtype_key = unit_subtype;
+                    child.parcel_area_hectares = 0.0f;
+                    child.zoned_use = parent_zoned;
+                    child.parent_property_id = parent_id;
+                    child.unit_count = 1;
+                    child.subdivided = false;
+                    properties_.push_back(child);
+                }
+                // Re-fetch parent (push_back may have reallocated).
+                parent = find_property(properties_, parent_id);
+                parent->subdivided = true;
+                parent->unit_count = n;
+                parent->listed_for_sale = false;  // shell: not directly buyable
+                parent->rented = false;
+                parent->tenant_id = 0;
+                province_property_indices_.clear();  // new properties invalidate index
+            } else {
+                // Merge: actor must own the parent and every live child;
+                // no child may be under contract / in auction.
+                if (!parent->subdivided)
+                    continue;
+                bool ok = true;
+                float summed_value = 0.0f;
+                for (const auto& child : properties_) {
+                    if (child.parent_property_id != parent->id)
+                        continue;
+                    if (child.owner_id != sr.actor_id) {
+                        ok = false;
+                        break;
+                    }
+                    if (find_active_pending_tx(pending_txs, child.id) != nullptr ||
+                        has_open_auction_for_asset(auctions, child.id)) {
+                        ok = false;
+                        break;
+                    }
+                    summed_value += child.market_value;
+                }
+                if (!ok)
+                    continue;
+                // Remove children; restore parent.
+                uint32_t parent_id = parent->id;
+                properties_.erase(
+                    std::remove_if(properties_.begin(), properties_.end(),
+                                   [parent_id](const PropertyListing& p) {
+                                       return p.parent_property_id == parent_id;
+                                   }),
+                    properties_.end());
+                parent = find_property(properties_, parent_id);
+                parent->subdivided = false;
+                parent->unit_count = 1;
+                if (summed_value > 0.0f)
+                    parent->market_value = summed_value;
+                province_property_indices_.clear();
+            }
+        }
+        auto& mutable_sub = const_cast<std::vector<PropertySubdivisionRequest>&>(
+            state.pending_subdivision_requests);
+        mutable_sub.clear();
+    }
+
     // ── 0. Phase 3: resolve active negotiations ──
     //
     // For each active NegotiationContext, look up the linked SceneCard
@@ -1017,6 +1165,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             case PropertyTransactionKind::buy: {
                 if (!prop->listed_for_sale)
                     break;
+                if (prop->subdivided)
+                    break;  // Phase 8: a subdivided parent is a dormant shell
                 if (prop->owner_id == req.actor_id)
                     break;
                 // Under-contract guard: at most one active pending_tx
@@ -1435,7 +1585,9 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
     //   3 = adds active_negotiations_ trailing block (Phase 3)
     //   4 = adds subtype_key + parcel_area_hectares + zoned_use per
     //       property (Phase 7 raw land + zoning)
-    put_u32(out, 4u);
+    //   5 = adds parent_property_id + unit_count + subdivided per
+    //       property (Phase 8 subdivision)
+    put_u32(out, 5u);
     put_u32(out, static_cast<uint32_t>(properties_.size()));
     for (const auto& p : properties_) {
         put_u32(out, p.id);
@@ -1456,6 +1608,10 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
         put_str(out, p.subtype_key);
         put_f32(out, p.parcel_area_hectares);
         out.push_back(static_cast<uint8_t>(p.zoned_use));
+        // schema_tag 5: subdivision.
+        put_u32(out, p.parent_property_id);
+        put_u32(out, p.unit_count);
+        out.push_back(p.subdivided ? 1u : 0u);
     }
     // schema_tag 3: trailing active_negotiations_ block.
     put_u32(out, static_cast<uint32_t>(active_negotiations_.size()));
@@ -1473,7 +1629,7 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
 bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
     uint32_t schema_tag = r.u32();
-    if (schema_tag < 1u || schema_tag > 4u)
+    if (schema_tag < 1u || schema_tag > 5u)
         return false;
     uint32_t count = r.u32();
     properties_.clear();
@@ -1507,6 +1663,16 @@ bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
             p.subtype_key.clear();
             p.parcel_area_hectares = 0.0f;
             p.zoned_use = p.type;
+        }
+        // schema_tag 5: subdivision. Pre-v5 records are standalone.
+        if (schema_tag >= 5u) {
+            p.parent_property_id = r.u32();
+            p.unit_count = r.u32();
+            p.subdivided = (r.u8() != 0);
+        } else {
+            p.parent_property_id = 0;
+            p.unit_count = 1;
+            p.subdivided = false;
         }
         if (r.error)
             return false;

@@ -190,7 +190,19 @@ Land subtype base values per hectare (authored defaults, designer-tunable): farm
 
 **Persistence**: real_estate module-state `schema_tag` 3→4 adds `subtype_key` (length-prefixed string), `parcel_area_hectares` (f32), `zoned_use` (u8) per property. Pre-v4 records load with no subtype, zero area, and `zoned_use == type`. `pending_zoning_requests` is defensively cleared on load (same-tick contract).
 
-Phase 8 adds subdivision + re-merge (apartment blocks → units). Phase 11 (construction) consumes `zoned_use` to gate what can be built on a parcel. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 8 Subdivision + Re-merge
+**Phase 8** lets a subdivisible building be split into individually-ownable units and recombined. `PropertyListing` gains `parent_property_id` (0 = standalone), `unit_count`, and `subdivided`. Subdivisible subtypes: apartment_block, office_tower, mixed_use_building, warehouse_complex, retail_center, industrial_park.
+
+`SubdividePropertyAction{property_id, n_units}` (PlayerActionType 15) and `MergeUnitsAction{property_id}` (PlayerActionType 16) emit a `PropertySubdivisionRequest{kind, property_id, actor_id, n_units}` into `WorldState.pending_subdivision_requests`. real_estate drains it same-tick:
+
+- **Subdivide**: owner-only; subtype must be subdivisible and not already subdivided; `n_units ∈ [subdivision_min_units (2), subdivision_max_units (100)]`; parent must not be under contract or in auction. Creates N child `PropertyListing`s each valued at `(parent_value / n) × subdivision_unit_premium` (1.10 — individually-sellable units carry a small premium), inheriting type/province/owner/yield/zoned_use, with `parent_property_id` set and a derived unit subtype (apartment_block → apartment_unit, etc). The parent becomes a dormant shell: `subdivided = true`, `unit_count = n`, unlisted, untenanted, and **not buyable** (the buy drain rejects subdivided parents).
+- **Merge**: owner-only; the parent must be subdivided and the actor must own every live child, none of which may be under contract or in auction. Children are removed; the parent is restored (`subdivided = false`, `unit_count = 1`, `market_value = Σ child values`).
+
+Child units are ordinary `PropertyListing`s once created, so the full Phase 1-6 market (list/buy/negotiate/mortgage/auction) applies to them individually — satisfying "per-unit and whole blocks both viable to buy."
+
+**Persistence**: real_estate module-state `schema_tag` 4→5 adds `parent_property_id` (u32), `unit_count` (u32), `subdivided` (u8) per property. Pre-v5 records load as standalone (parent 0, unit_count 1, not subdivided). `pending_subdivision_requests` is defensively cleared on load.
+
+Phase 11 (construction) consumes `zoned_use` to gate what can be built on a parcel. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

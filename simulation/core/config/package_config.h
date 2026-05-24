@@ -491,6 +491,16 @@ struct RealEstateConfig {
     float zoning_major_approval_prob = 0.25f;
     float zoning_corruption_bonus = 0.30f;
     float zoning_revaluation_rate = 0.20f;
+
+    // Phase 8 — subdivision. A subdivisible building can be split into
+    // [subdivision_min_units, subdivision_max_units] child units. Each
+    // child is valued at (parent_value / n) × subdivision_unit_premium —
+    // individually-sellable units carry a small premium over their pro
+    // rata share. Re-merge sums the live children's values back into the
+    // parent.
+    uint32_t subdivision_min_units = 2u;
+    uint32_t subdivision_max_units = 100u;
+    float subdivision_unit_premium = 1.10f;
 };
 
 struct FinancialDistributionConfig {

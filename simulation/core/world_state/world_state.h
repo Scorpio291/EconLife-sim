@@ -206,6 +206,11 @@ struct WorldState {
     // of its execute() (same-tick). Defensively cleared on load.
     std::vector<ZoningChangeRequest> pending_zoning_requests;
 
+    // pending_subdivision_requests: written by player_actions
+    // (Subdivide/MergeUnits). Drained by real_estate same-tick.
+    // Defensively cleared on load.
+    std::vector<PropertySubdivisionRequest> pending_subdivision_requests;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.
