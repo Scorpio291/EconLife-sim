@@ -531,6 +531,21 @@ struct RealEstateConfig {
     float construction_margin_max = 0.35f;
     float construction_remote_cost_multiplier = 1.50f;
     uint32_t construction_default_bidding_window = 14u;
+
+    // Phase 12 — property tax (assessed every property_tax_quarter_ticks
+    // against the owner; offshore parcels exempt). Annual rate is divided
+    // by 4 per quarterly assessment. Owners who can't pay accrue
+    // unpaid_tax_balance and a delinquency count. Phase 13 — after
+    // tax_lien_quarters delinquent quarters a lien is filed (blocks
+    // voluntary sale); after tax_sale_quarters the parcel goes to a
+    // government-consigned auction with reserve = unpaid balance.
+    float property_tax_annual_residential = 0.005f;
+    float property_tax_annual_commercial = 0.010f;
+    float property_tax_annual_industrial = 0.015f;
+    float property_tax_annual_raw_land = 0.001f;
+    uint32_t property_tax_quarter_ticks = 90u;
+    uint8_t tax_lien_quarters = 2u;
+    uint8_t tax_sale_quarters = 4u;
 };
 
 struct FinancialDistributionConfig {

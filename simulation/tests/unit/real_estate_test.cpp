@@ -3540,3 +3540,161 @@ TEST_CASE("Phase11: Facility.property_id round-trips via persistence v14",
     }
     REQUIRE(found);
 }
+
+// ===========================================================================
+// Phase 12+13: property tax, delinquency, lien, tax sale
+// ===========================================================================
+
+TEST_CASE("Phase12: quarterly property tax debits a solvent player owner",
+          "[real_estate][market_phase12]") {
+    auto state = make_test_world_state(90);  // tax quarter
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 1000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::commercial, 0, /*owner=*/99, 1000000.0f);
+    module.add_property(prop);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // commercial annual 0.010 → quarterly 0.0025 × 1,000,000 = 2,500.
+    REQUIRE(d.player_delta.wealth_delta.has_value());
+    REQUIRE_THAT(*d.player_delta.wealth_delta, WithinAbs(-2500.0f, 1.0f));
+    REQUIRE(module.properties()[0].consecutive_delinquent_quarters == 0);
+}
+
+TEST_CASE("Phase12: no tax assessed off-quarter",
+          "[real_estate][market_phase12]") {
+    auto state = make_test_world_state(45);  // not a quarter boundary
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 1000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::commercial, 0, 99, 1000000.0f);
+    module.add_property(prop);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    REQUIRE_FALSE(d.player_delta.wealth_delta.has_value());
+}
+
+TEST_CASE("Phase12: offshore parcel is tax-exempt",
+          "[real_estate][market_phase12]") {
+    auto state = make_test_world_state(90);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 1000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::commercial, 0, 99, 1000000.0f);
+    prop.location_flags = LocationFlag_Offshore;
+    module.add_property(prop);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    REQUIRE_FALSE(d.player_delta.wealth_delta.has_value());
+}
+
+TEST_CASE("Phase13: insolvent owner accrues delinquency, then a lien",
+          "[real_estate][market_phase13]") {
+    auto state = make_test_world_state(0);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 0.0f;  // can never pay
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::commercial, 0, 99, 1000000.0f);
+    module.add_property(prop);
+
+    // Quarter 1: delinquent, no lien yet (lien at 2).
+    state.current_tick = 90;
+    DeltaBuffer d1{};
+    module.execute(state, d1);
+    REQUIRE(module.properties()[0].consecutive_delinquent_quarters == 1);
+    REQUIRE(module.properties()[0].tax_lien == false);
+    REQUIRE(module.properties()[0].unpaid_tax_balance > 0.0f);
+
+    // Quarter 2: lien filed.
+    state.current_tick = 180;
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+    REQUIRE(module.properties()[0].consecutive_delinquent_quarters == 2);
+    REQUIRE(module.properties()[0].tax_lien == true);
+}
+
+TEST_CASE("Phase13: lien blocks voluntary sale",
+          "[real_estate][market_phase13]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::commercial, 0, /*owner=*/42, 500000.0f);
+    prop.asking_price = 500000.0f;
+    prop.listed_for_sale = true;
+    prop.tax_lien = true;  // encumbered
+    module.add_property(prop);
+
+    state.pending_property_transactions.push_back(
+        PropertyTransactionRequest{PropertyTransactionKind::buy, 1, 99, 500000.0f});
+    DeltaBuffer d{};
+    module.execute(state, d);
+    REQUIRE(state.pending_transactions.empty());  // blocked by lien
+}
+
+TEST_CASE("Phase13: tax sale seizes parcel to the state and opens a government auction",
+          "[real_estate][market_phase13]") {
+    auto state = make_test_world_state(0);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 0.0f;  // never pays
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::commercial, 0, /*owner=*/99, 1000000.0f);
+    module.add_property(prop);
+
+    // Run 4 quarters (sale threshold = 4).
+    for (uint32_t q = 1; q <= 4; ++q) {
+        state.current_tick = 90u * q;
+        DeltaBuffer d{};
+        module.execute(state, d);
+    }
+
+    // Parcel seized to the state; a government-consigned auction opened.
+    REQUIRE(module.properties()[0].owner_id == 0u);
+    REQUIRE(state.active_auctions.size() == 1);
+    REQUIRE(state.active_auctions[0].asset_id == 1);
+    REQUIRE(state.active_auctions[0].consigner_id == 0u);
+    REQUIRE(state.active_auctions[0].status == AuctionStatus::open);
+}
+
+TEST_CASE("Phase12: tax fields round-trip via persistence schema_tag 7",
+          "[real_estate][market_phase12][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::commercial, 0, 99, 500000.0f);
+    prop.unpaid_tax_balance = 1250.0f;
+    prop.last_tax_assessment_tick = 90;
+    prop.consecutive_delinquent_quarters = 3;
+    prop.tax_lien = true;
+    module.add_property(prop);
+
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    const auto& r = restored_mod.properties()[0];
+    REQUIRE_THAT(r.unpaid_tax_balance, WithinAbs(1250.0f, 0.01f));
+    REQUIRE(r.last_tax_assessment_tick == 90);
+    REQUIRE(r.consecutive_delinquent_quarters == 3);
+    REQUIRE(r.tax_lien == true);
+}

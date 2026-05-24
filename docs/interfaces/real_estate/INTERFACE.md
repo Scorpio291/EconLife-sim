@@ -232,7 +232,16 @@ New `NewFacilityDelta` (applied by `apply_new_facilities`) is the runtime facili
 
 **Persistence**: schema v13→v14 — `Facility` gains a trailing `property_id` (pre-v14 facilities load with 0); new `construction_contracts` footer. `pending_construction_requests` / `_awards` are defensively cleared on load.
 
-Phase 12 (property tax) exempts offshore parcels. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 12+13 Property Tax, Liens, Tax Sales
+**Phase 12** assesses property tax every `property_tax_quarter_ticks` (90) against each parcel's owner. `PropertyListing` gains `unpaid_tax_balance`, `last_tax_assessment_tick`, `consecutive_delinquent_quarters`, `tax_lien`. Quarterly tax = `market_value × annual_rate / 4`, with per-type annual rates (residential 0.5%, commercial 1.0%, industrial 1.5%, raw_land 0.1%). State/bank-held parcels (owner 0), **offshore** parcels (Phase 9 exemption), and subdivided shells are skipped. A solvent owner is debited (player wealth / NPC capital) and their delinquency resets; an insolvent owner accrues `unpaid_tax_balance` and increments `consecutive_delinquent_quarters`.
+
+**Phase 13** escalates delinquency:
+- After `tax_lien_quarters` (2) delinquent quarters → `tax_lien = true`. A lien blocks voluntary sale (the buy drain rejects lien'd parcels) until cleared (paying current clears it).
+- After `tax_sale_quarters` (4) → **tax sale**: any in-flight voluntary deal/negotiation on the parcel is cancelled, the parcel is seized to the state (`owner_id = 0`, lien/balance cleared), and a government-consigned `ActiveAuction` (consigner_id 0) opens with `reserve = min(unpaid_balance, market_value)` — reusing the Phase 6 auction pipeline end-to-end.
+
+**Persistence**: real_estate module-state `schema_tag` 6→7 adds the four tax fields per property; pre-v7 records load tax-clean.
+
+This completes the 13-phase player asset acquisition arc. Counter-offer flow (player counters back, NPC counter-proposes) remains deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

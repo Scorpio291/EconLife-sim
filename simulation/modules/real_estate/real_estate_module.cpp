@@ -546,6 +546,21 @@ uint32_t next_scene_card_id(const WorldState& state, const DeltaBuffer& delta) {
 constexpr uint32_t CHOICE_ACCEPT_OFFER = 1;
 constexpr uint32_t CHOICE_DECLINE_OFFER = 2;
 
+// Phase 12 — annual property tax rate by property type.
+float property_tax_annual_rate(const RealEstateConfig& cfg, PropertyType type) {
+    switch (type) {
+        case PropertyType::residential:
+            return cfg.property_tax_annual_residential;
+        case PropertyType::commercial:
+            return cfg.property_tax_annual_commercial;
+        case PropertyType::industrial:
+            return cfg.property_tax_annual_industrial;
+        case PropertyType::raw_land:
+            return cfg.property_tax_annual_raw_land;
+    }
+    return cfg.property_tax_annual_residential;
+}
+
 // Phase 4 — minimum down-payment fraction by property type. raw_land
 // uses the industrial floor (lenders want more equity on undeveloped
 // parcels).
@@ -1449,6 +1464,108 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                    }),
                     contracts.end());
 
+    // ── 0f. Phase 12+13: quarterly property tax + delinquency escalation ──
+    //
+    // On each tax quarter, assess every owned, non-offshore, non-shell
+    // parcel against its owner. Payers reset their delinquency; non-payers
+    // accrue unpaid_tax_balance and a delinquency count. Phase 13: after
+    // tax_lien_quarters a lien is filed; after tax_sale_quarters the parcel
+    // is seized to the state and sent to a government-consigned auction
+    // (reusing the Phase 6 pipeline) with reserve = unpaid balance.
+    if (state.current_tick > 0u &&
+        state.current_tick % cfg_.property_tax_quarter_ticks == 0u) {
+        for (auto& prop : properties_) {
+            if (prop.owner_id == 0u)
+                continue;  // state/bank-held — no tax on the treasury itself
+            if (prop.location_flags & LocationFlag_Offshore)
+                continue;  // offshore exemption (Phase 9)
+            if (prop.subdivided)
+                continue;  // shell; child units are taxed individually
+            if (prop.last_tax_assessment_tick == state.current_tick)
+                continue;  // already assessed this tick
+            prop.last_tax_assessment_tick = state.current_tick;
+
+            float tax = prop.market_value * property_tax_annual_rate(cfg_, prop.type) / 4.0f;
+            if (tax <= 0.0f)
+                continue;
+
+            // Can the owner pay this quarter?
+            bool paid = false;
+            if (prop.owner_id == player_id) {
+                if (running_player_wealth >= tax) {
+                    running_player_wealth -= tax;
+                    delta.player_delta.wealth_delta =
+                        delta.player_delta.wealth_delta.value_or(0.0f) - tax;
+                    paid = true;
+                }
+            } else {
+                const NPC* n = lookup_npc_by_id(state, prop.owner_id);
+                if (n && npc_cash(prop.owner_id, n->capital) >= tax) {
+                    npc_cash(prop.owner_id, n->capital) -= tax;
+                    NPCDelta nd{};
+                    nd.npc_id = prop.owner_id;
+                    nd.capital_delta = -tax;
+                    delta.npc_deltas.push_back(nd);
+                    paid = true;
+                }
+            }
+
+            if (paid) {
+                prop.consecutive_delinquent_quarters = 0;
+                prop.tax_lien = false;  // current → lien cleared
+                continue;
+            }
+
+            // Delinquent.
+            prop.unpaid_tax_balance += tax;
+            if (prop.consecutive_delinquent_quarters < 255u)
+                prop.consecutive_delinquent_quarters += 1u;
+
+            // Phase 13: lien after the lien threshold.
+            if (prop.consecutive_delinquent_quarters >= cfg_.tax_lien_quarters)
+                prop.tax_lien = true;
+
+            // Phase 13: tax sale after the sale threshold — seize to the
+            // state and open a government-consigned auction (reserve =
+            // unpaid balance, capped below market so it can actually
+            // clear).
+            if (prop.consecutive_delinquent_quarters >= cfg_.tax_sale_quarters &&
+                !has_open_auction_for_asset(auctions, prop.id)) {
+                // Cancel any in-flight voluntary deal / negotiation.
+                if (auto* tx = find_active_pending_tx(pending_txs, prop.id))
+                    tx->stage = PendingTxStage::cancelled;
+                active_negotiations_.erase(
+                    std::remove_if(active_negotiations_.begin(), active_negotiations_.end(),
+                                   [&](const NegotiationContext& n) {
+                                       return n.property_id == prop.id;
+                                   }),
+                    active_negotiations_.end());
+
+                float reserve = prop.unpaid_tax_balance;
+                if (prop.market_value > 0.0f && reserve > prop.market_value)
+                    reserve = prop.market_value;  // keep the sale clearable
+                // Seize to the state (consigner) and list via auction.
+                prop.owner_id = 0u;
+                prop.listed_for_sale = false;
+                prop.tax_lien = false;
+                prop.unpaid_tax_balance = 0.0f;
+                prop.consecutive_delinquent_quarters = 0u;
+
+                ActiveAuction auction{};
+                auction.id = next_auction_id(auctions);
+                auction.asset_id = prop.id;
+                auction.consigner_id = 0u;  // government
+                auction.reserve_price = reserve;
+                auction.opened_tick = state.current_tick;
+                auction.closes_tick = state.current_tick + cfg_.auction_duration_ticks;
+                auction.status = AuctionStatus::open;
+                auction.current_high_bidder_id = 0;
+                auction.current_high_bid = 0.0f;
+                auctions.push_back(auction);
+            }
+        }
+    }
+
     // ── 0. Phase 3: resolve active negotiations ──
     //
     // For each active NegotiationContext, look up the linked SceneCard
@@ -1536,6 +1653,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     break;
                 if (prop->subdivided)
                     break;  // Phase 8: a subdivided parent is a dormant shell
+                if (prop->tax_lien)
+                    break;  // Phase 13: a tax lien blocks voluntary sale
                 if (prop->owner_id == req.actor_id)
                     break;
                 // Under-contract guard: at most one active pending_tx
@@ -1957,7 +2076,10 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
     //   5 = adds parent_property_id + unit_count + subdivided per
     //       property (Phase 8 subdivision)
     //   6 = adds location_flags per property (Phase 9)
-    put_u32(out, 6u);
+    //   7 = adds tax fields per property (Phase 12/13): unpaid_tax_balance,
+    //       last_tax_assessment_tick, consecutive_delinquent_quarters,
+    //       tax_lien
+    put_u32(out, 7u);
     put_u32(out, static_cast<uint32_t>(properties_.size()));
     for (const auto& p : properties_) {
         put_u32(out, p.id);
@@ -1984,6 +2106,11 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
         out.push_back(p.subdivided ? 1u : 0u);
         // schema_tag 6: location flags.
         out.push_back(p.location_flags);
+        // schema_tag 7: tax fields.
+        put_f32(out, p.unpaid_tax_balance);
+        put_u32(out, p.last_tax_assessment_tick);
+        out.push_back(p.consecutive_delinquent_quarters);
+        out.push_back(p.tax_lien ? 1u : 0u);
     }
     // schema_tag 3: trailing active_negotiations_ block.
     put_u32(out, static_cast<uint32_t>(active_negotiations_.size()));
@@ -2001,7 +2128,7 @@ void RealEstateModule::serialize_state(std::vector<uint8_t>& out) const {
 bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
     uint32_t schema_tag = r.u32();
-    if (schema_tag < 1u || schema_tag > 6u)
+    if (schema_tag < 1u || schema_tag > 7u)
         return false;
     uint32_t count = r.u32();
     properties_.clear();
@@ -2051,6 +2178,18 @@ bool RealEstateModule::deserialize_state(const uint8_t* data, size_t size) {
             p.location_flags = r.u8();
         else
             p.location_flags = 0u;
+        // schema_tag 7: tax fields. Pre-v7 records are tax-clean.
+        if (schema_tag >= 7u) {
+            p.unpaid_tax_balance = r.f32();
+            p.last_tax_assessment_tick = r.u32();
+            p.consecutive_delinquent_quarters = r.u8();
+            p.tax_lien = (r.u8() != 0);
+        } else {
+            p.unpaid_tax_balance = 0.0f;
+            p.last_tax_assessment_tick = 0u;
+            p.consecutive_delinquent_quarters = 0u;
+            p.tax_lien = false;
+        }
         if (r.error)
             return false;
         properties_.push_back(p);

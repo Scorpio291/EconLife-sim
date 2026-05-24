@@ -103,6 +103,16 @@ struct PropertyListing {
     // mechanically distinct.
     uint8_t location_flags = 0u;
 
+    // Phase 12 — property tax + delinquency. Assessed quarterly against
+    // the owner. Offshore parcels are exempt. Unpaid assessments
+    // accumulate in unpaid_tax_balance and bump
+    // consecutive_delinquent_quarters, which Phase 13 escalates to a
+    // lien and then a tax-sale auction.
+    float unpaid_tax_balance = 0.0f;
+    uint32_t last_tax_assessment_tick = 0u;
+    uint8_t consecutive_delinquent_quarters = 0u;
+    bool tax_lien = false;  // Phase 13: blocks voluntary sale until cleared
+
     // Invariants:
     //   asking_price >= 0.0
     //   market_value >= 0.0
