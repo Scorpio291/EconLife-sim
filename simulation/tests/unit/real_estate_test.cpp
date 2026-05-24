@@ -3263,3 +3263,280 @@ TEST_CASE("Phase10: pending_business_acquisitions round-trips via persistence v1
     REQUIRE_THAT(r.down_payment_fraction, WithinAbs(0.40f, 0.001f));
     REQUIRE(r.loan_maturity_ticks == 10950u);
 }
+
+// ===========================================================================
+// Phase 11: construction sector + bid contracts
+// ===========================================================================
+
+namespace {
+
+NPCBusiness make_construction_firm(uint32_t id, uint32_t owner_id, uint32_t province_id) {
+    NPCBusiness b{};
+    b.id = id;
+    b.owner_id = owner_id;
+    b.province_id = province_id;
+    b.sector = BusinessSector::construction;
+    b.cash = 0.0f;
+    return b;
+}
+
+}  // namespace
+
+TEST_CASE("Phase11: construction request opens a contract with bids from local firms",
+          "[real_estate][market_phase11]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::industrial, 0, /*owner=*/99, 500000.0f);
+    prop.zoned_use = PropertyType::industrial;  // developed
+    module.add_property(prop);
+
+    // Two construction firms in the province.
+    state.npc_businesses.push_back(make_construction_firm(50, /*owner=*/0, 0));
+    state.npc_businesses.push_back(make_construction_firm(51, /*owner=*/0, 0));
+
+    state.pending_construction_requests.push_back(
+        ConstructionBidsRequest{99, 1, "factory", "steel_smelting", 14});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.construction_contracts.size() == 1);
+    const auto& c = state.construction_contracts[0];
+    REQUIRE(c.client_id == 99);
+    REQUIRE(c.property_id == 1);
+    REQUIRE(c.stage == ContractStage::bidding);
+    REQUIRE(c.bids.size() == 2);
+    // Each bid covers at least the base cost.
+    REQUIRE(c.bids[0].bid_amount >= 200000.0f);
+}
+
+TEST_CASE("Phase11: construction request on raw_land (un-zoned) is rejected",
+          "[real_estate][market_phase11]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::raw_land, 0, /*owner=*/99, 50000.0f);
+    prop.zoned_use = PropertyType::raw_land;  // not yet zoned for development
+    module.add_property(prop);
+    state.npc_businesses.push_back(make_construction_firm(50, 0, 0));
+
+    state.pending_construction_requests.push_back(
+        ConstructionBidsRequest{99, 1, "factory", "steel_smelting", 14});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    REQUIRE(state.construction_contracts.empty());
+}
+
+TEST_CASE("Phase11: player-owned contractor bids at zero margin (internal cost)",
+          "[real_estate][market_phase11]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::industrial, 0, 99, 500000.0f);
+    prop.zoned_use = PropertyType::industrial;
+    module.add_property(prop);
+    // Player owns firm 50; firm 51 is independent.
+    state.npc_businesses.push_back(make_construction_firm(50, /*owner=*/99, 0));
+    state.npc_businesses.push_back(make_construction_firm(51, /*owner=*/0, 0));
+
+    state.pending_construction_requests.push_back(
+        ConstructionBidsRequest{99, 1, "factory", "steel_smelting", 14});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    const auto& c = state.construction_contracts[0];
+    REQUIRE(c.bids.size() == 2);
+    // Firm 50 (player-owned) bids exactly base cost (zero margin); firm 51 more.
+    float bid50 = 0, bid51 = 0;
+    for (const auto& b : c.bids) {
+        if (b.contractor_business_id == 50) bid50 = b.bid_amount;
+        if (b.contractor_business_id == 51) bid51 = b.bid_amount;
+    }
+    REQUIRE_THAT(bid50, WithinAbs(200000.0f, 1.0f));
+    REQUIRE(bid51 > bid50);
+}
+
+TEST_CASE("Phase11: awarding a bid escrows funds and starts construction",
+          "[real_estate][market_phase11]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::industrial, 0, 99, 500000.0f);
+    prop.zoned_use = PropertyType::industrial;
+    module.add_property(prop);
+    state.npc_businesses.push_back(make_construction_firm(50, 0, 0));
+
+    // Open the contract.
+    state.pending_construction_requests.push_back(
+        ConstructionBidsRequest{99, 1, "factory", "steel_smelting", 14});
+    DeltaBuffer d1{};
+    module.execute(state, d1);
+    REQUIRE(state.construction_contracts.size() == 1);
+    float bid_amount = state.construction_contracts[0].bids[0].bid_amount;
+    uint32_t contract_id = state.construction_contracts[0].id;
+
+    // Award bid 0.
+    state.current_tick = 12;
+    state.pending_construction_awards.push_back(ConstructionAwardRequest{99, contract_id, 0});
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+
+    REQUIRE(state.construction_contracts[0].stage == ContractStage::in_progress);
+    REQUIRE(state.construction_contracts[0].expected_completion_tick == 12u + 90u);
+    REQUIRE(d2.player_delta.wealth_delta.has_value());
+    REQUIRE_THAT(*d2.player_delta.wealth_delta, WithinAbs(-bid_amount, 1.0f));
+}
+
+TEST_CASE("Phase11: construction completes — facility delivered, contractor paid",
+          "[real_estate][market_phase11]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::industrial, 0, 99, 500000.0f);
+    prop.zoned_use = PropertyType::industrial;
+    module.add_property(prop);
+    state.npc_businesses.push_back(make_construction_firm(50, 0, 0));
+
+    state.pending_construction_requests.push_back(
+        ConstructionBidsRequest{99, 1, "factory", "steel_smelting", 14});
+    DeltaBuffer d1{};
+    module.execute(state, d1);
+    uint32_t contract_id = state.construction_contracts[0].id;
+    float bid_amount = state.construction_contracts[0].bids[0].bid_amount;
+
+    state.current_tick = 12;
+    state.pending_construction_awards.push_back(ConstructionAwardRequest{99, contract_id, 0});
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+
+    // Jump to completion.
+    state.current_tick = 12 + 90;
+    DeltaBuffer d3{};
+    module.execute(state, d3);
+
+    // Facility delivered on the parcel, owned by an auto-created
+    // player business; contractor paid; contract pruned.
+    REQUIRE(d3.new_facilities.size() == 1);
+    REQUIRE(d3.new_facilities[0].new_facility.property_id == 1);
+    REQUIRE(d3.new_facilities[0].new_facility.recipe_id == "steel_smelting");
+    REQUIRE(d3.new_facilities[0].new_facility.is_operational == false);
+    REQUIRE(d3.new_businesses.size() == 1);  // auto-created holding business
+    REQUIRE(d3.new_businesses[0].new_business.owner_id == 99);
+    bool contractor_paid = false;
+    for (const auto& bd : d3.business_deltas) {
+        if (bd.business_id == 50 && bd.cash_delta.has_value() &&
+            std::fabs(*bd.cash_delta - bid_amount) < 1.0f)
+            contractor_paid = true;
+    }
+    REQUIRE(contractor_paid);
+    REQUIRE(state.construction_contracts.empty());  // pruned
+}
+
+TEST_CASE("Phase11: bidding contract cancels if no award by deadline",
+          "[real_estate][market_phase11]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    RealEstateModule module;
+    auto prop = make_test_property(1, PropertyType::industrial, 0, 99, 500000.0f);
+    prop.zoned_use = PropertyType::industrial;
+    module.add_property(prop);
+    state.npc_businesses.push_back(make_construction_firm(50, 0, 0));
+
+    state.pending_construction_requests.push_back(
+        ConstructionBidsRequest{99, 1, "factory", "steel_smelting", 14});
+    DeltaBuffer d1{};
+    module.execute(state, d1);
+    REQUIRE(state.construction_contracts.size() == 1);  // deadline = tick 24
+
+    // No award; advance past deadline.
+    state.current_tick = 25;
+    DeltaBuffer d2{};
+    module.execute(state, d2);
+    REQUIRE(state.construction_contracts.empty());  // cancelled + pruned
+}
+
+TEST_CASE("Phase11: construction contract round-trips via persistence v14",
+          "[real_estate][market_phase11][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    ConstructionContract c{};
+    c.id = 3;
+    c.client_id = 99;
+    c.property_id = 1;
+    c.facility_type_key = "factory";
+    c.recipe_id = "steel_smelting";
+    c.bids.push_back(ConstructionBid{50, 220000.0f, 90});
+    c.bids.push_back(ConstructionBid{51, 250000.0f, 80});
+    c.awarded_bid_index = 0;
+    c.stage = ContractStage::in_progress;
+    c.bidding_deadline_tick = 24;
+    c.expected_completion_tick = 102;
+    state.construction_contracts.push_back(c);
+
+    RealEstateModule module;
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored.construction_contracts.size() == 1);
+    const auto& r = restored.construction_contracts[0];
+    REQUIRE(r.id == 3);
+    REQUIRE(r.facility_type_key == "factory");
+    REQUIRE(r.recipe_id == "steel_smelting");
+    REQUIRE(r.bids.size() == 2);
+    REQUIRE(r.stage == ContractStage::in_progress);
+    REQUIRE(r.expected_completion_tick == 102);
+    REQUIRE_THAT(r.bids[1].bid_amount, WithinAbs(250000.0f, 0.01f));
+}
+
+TEST_CASE("Phase11: Facility.property_id round-trips via persistence v14",
+          "[real_estate][market_phase11][persistence]") {
+    auto world = make_test_world_state(10);
+    world.provinces.push_back(make_test_province(0));
+    Facility f{};
+    f.id = 5000;
+    f.business_id = 7;
+    f.province_id = 0;
+    f.recipe_id = "steel_smelting";
+    f.tech_tier = 2;
+    f.output_rate_modifier = 1.0f;
+    f.soil_health = 1.0f;
+    f.worker_count = 3;
+    f.is_operational = true;
+    f.property_id = 42;
+    world.facilities.push_back(f);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    bool found = false;
+    for (const auto& rf : restored.facilities) {
+        if (rf.id == 5000) {
+            found = true;
+            REQUIRE(rf.property_id == 42);
+        }
+    }
+    REQUIRE(found);
+}

@@ -597,3 +597,47 @@ TEST_CASE("AcquireBusinessAction emits business acquisition request",
     REQUIRE(delta.new_business_acquisitions[0].payment_method ==
             static_cast<uint8_t>(PaymentMethod::mixed));
 }
+
+TEST_CASE("RequestConstructionBidsAction emits construction request",
+          "[player_actions][market_phase11]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::request_construction_bids,
+                          RequestConstructionBidsAction{1, "factory", "steel_smelting", 14});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_construction_requests.size() == 1);
+    REQUIRE(delta.new_construction_requests[0].property_id == 1);
+    REQUIRE(delta.new_construction_requests[0].facility_type_key == "factory");
+    REQUIRE(delta.new_construction_requests[0].client_id == world.player->id);
+}
+
+TEST_CASE("RequestConstructionBidsAction with empty facility type is dropped",
+          "[player_actions][market_phase11]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::request_construction_bids,
+                          RequestConstructionBidsAction{1, "", "steel_smelting", 14});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+    REQUIRE(delta.new_construction_requests.empty());
+}
+
+TEST_CASE("AwardConstructionBidAction emits award request",
+          "[player_actions][market_phase11]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::award_construction_bid,
+                          AwardConstructionBidAction{7, 2});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_construction_awards.size() == 1);
+    REQUIRE(delta.new_construction_awards[0].contract_id == 7);
+    REQUIRE(delta.new_construction_awards[0].bid_index == 2);
+    REQUIRE(delta.new_construction_awards[0].client_id == world.player->id);
+}

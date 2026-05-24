@@ -73,6 +73,8 @@ struct Facility {
     float soil_health;           // 0.0-1.0; relevant for farm facilities only (1.0 = pristine)
     uint32_t worker_count;       // number of workers assigned to this facility
     bool is_operational;         // false = facility is shut down or under construction
+    uint32_t property_id;        // PropertyListing this facility sits on (Phase 11
+                                 // construction); 0 = unlinked / legacy facility
 };
 
 // ---------------------------------------------------------------------------

@@ -634,6 +634,13 @@ static void apply_new_businesses(WorldState& world, const std::vector<NewBusines
     }
 }
 
+// apply_new_facilities (Phase 11 construction delivery)
+static void apply_new_facilities(WorldState& world, const std::vector<NewFacilityDelta>& deltas) {
+    for (const auto& d : deltas) {
+        world.facilities.push_back(d.new_facility);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // apply_scene_card_choice_deltas
 // ---------------------------------------------------------------------------
@@ -688,6 +695,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_lod2_price_deltas(world, delta.lod2_price_index_deltas, lod2_smoothing_rate);
     apply_dissolved_businesses(world, delta.dissolved_businesses);
     apply_new_businesses(world, delta.new_businesses);
+    apply_new_facilities(world, delta.new_facilities);
     apply_append_deltas(world, delta);
     apply_scene_card_choice_deltas(world, delta.scene_card_choice_deltas);
     apply_calendar_commit_deltas(world, delta.calendar_commit_deltas);
@@ -763,6 +771,14 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_business_acquisition_requests.push_back(std::move(ba));
     }
 
+    // Route construction requests/awards (Phase 11). Same-tick consumer.
+    for (auto& cr : delta.new_construction_requests) {
+        world.pending_construction_requests.push_back(std::move(cr));
+    }
+    for (auto& ca : delta.new_construction_awards) {
+        world.pending_construction_awards.push_back(std::move(ca));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -797,6 +813,9 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_zoning_requests.clear();
     delta.new_subdivision_requests.clear();
     delta.new_business_acquisitions.clear();
+    delta.new_facilities.clear();
+    delta.new_construction_requests.clear();
+    delta.new_construction_awards.clear();
 }
 
 // ---------------------------------------------------------------------------

@@ -763,9 +763,11 @@ void write_facility(ByteWriter& w, const Facility& f) {
     w.write_float(f.soil_health);
     w.write_u32(f.worker_count);
     w.write_bool(f.is_operational);
+    // v14 (Phase 11): property_id link. Always written by current code.
+    w.write_u32(f.property_id);
 }
 
-Facility read_facility(ByteReader& r) {
+Facility read_facility(ByteReader& r, uint32_t schema_ver) {
     Facility f{};
     f.id = r.read_u32();
     f.business_id = r.read_u32();
@@ -776,6 +778,8 @@ Facility read_facility(ByteReader& r) {
     f.soil_health = r.read_float();
     f.worker_count = r.read_u32();
     f.is_operational = r.read_bool();
+    // v14 (Phase 11): property_id link. Pre-v14 facility blocks omit it.
+    f.property_id = (schema_ver >= 14u) ? r.read_u32() : 0u;
     return f;
 }
 
@@ -1575,10 +1579,11 @@ bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t cu
     // pending_transactions footer, v10 pending_transactions Phase 4
     // mortgage extension, v11 pending_property_foreclosures footer,
     // v12 active_auctions footer, v13 pending_business_acquisitions
-    // footer) changes the byte-stream layout. V1 is pre-release; reject
-    // anything older than the current floor outright. v7..v12 saves
-    // remain loadable: each footer or trailing-field extension is gated
-    // on saved_version checks.
+    // footer, v14 facility property_id + construction_contracts footer)
+    // changes the byte-stream layout. V1 is pre-release; reject anything
+    // older than the current floor outright. v7..v13 saves remain
+    // loadable: each footer or trailing-field extension is gated on
+    // saved_version checks.
     if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
@@ -1887,6 +1892,29 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
         }
     }
 
+    // --- v14: construction_contracts (real-estate Phase 11) ---
+    {
+        const auto& queue = state.construction_contracts;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& c : queue) {
+            w.write_u32(c.id);
+            w.write_u32(c.client_id);
+            w.write_u32(c.property_id);
+            w.write_string(c.facility_type_key);
+            w.write_string(c.recipe_id);
+            w.write_u32(static_cast<uint32_t>(c.bids.size()));
+            for (const auto& b : c.bids) {
+                w.write_u32(b.contractor_business_id);
+                w.write_float(b.bid_amount);
+                w.write_u32(b.completion_ticks);
+            }
+            w.write_u32(c.awarded_bid_index);
+            w.write_u8(static_cast<uint8_t>(c.stage));
+            w.write_u32(c.bidding_deadline_tick);
+            w.write_u32(c.expected_completion_tick);
+        }
+    }
+
     // --- Uncompressed data ready ---
     const auto& raw = w.data();
     uint32_t raw_size = static_cast<uint32_t>(raw.size());
@@ -2179,7 +2207,7 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     out_state.facilities.clear();
     out_state.facilities.reserve(fac_count);
     for (uint32_t i = 0; i < fac_count; ++i)
-        out_state.facilities.push_back(read_facility(r));
+        out_state.facilities.push_back(read_facility(r, schema_ver));
 
     read_global_technology_state(r, out_state.technology);
 
@@ -2343,6 +2371,39 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             out_state.pending_business_acquisitions.push_back(a);
         }
     }
+
+    // --- v14: construction_contracts (Phase 11, persisted) ---
+    out_state.construction_contracts.clear();
+    if (schema_ver >= 14u) {
+        uint32_t cc_count = r.read_u32();
+        out_state.construction_contracts.reserve(cc_count);
+        for (uint32_t i = 0; i < cc_count; ++i) {
+            ConstructionContract c{};
+            c.id = r.read_u32();
+            c.client_id = r.read_u32();
+            c.property_id = r.read_u32();
+            c.facility_type_key = r.read_string();
+            c.recipe_id = r.read_string();
+            uint32_t bid_count = r.read_u32();
+            c.bids.reserve(bid_count);
+            for (uint32_t j = 0; j < bid_count; ++j) {
+                ConstructionBid b{};
+                b.contractor_business_id = r.read_u32();
+                b.bid_amount = r.read_float();
+                b.completion_ticks = r.read_u32();
+                c.bids.push_back(b);
+            }
+            c.awarded_bid_index = r.read_u32();
+            c.stage = static_cast<ContractStage>(r.read_u8());
+            c.bidding_deadline_tick = r.read_u32();
+            c.expected_completion_tick = r.read_u32();
+            out_state.construction_contracts.push_back(std::move(c));
+        }
+    }
+
+    // pending_construction_requests / _awards same-tick. Reset on load.
+    out_state.pending_construction_requests.clear();
+    out_state.pending_construction_awards.clear();
 
     // pending_auction_bid_requests same-tick (player_actions emits,
     // real_estate drains). Defensively reset on load.

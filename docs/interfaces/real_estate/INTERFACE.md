@@ -219,7 +219,20 @@ Settlement at `close_tick`: the business must still exist and still be owned by 
 
 **Persistence**: schema v12→v13 adds the `pending_business_acquisitions` footer. `pending_business_acquisition_requests` is defensively cleared on load. `BusinessDelta` gained `owner_id_update` (applied by `apply_business_deltas`).
 
-Phase 11 (construction) consumes `zoned_use` to gate what can be built on a parcel and `LocationFlag_Remote` to scale construction cost. Phase 12 (property tax) exempts offshore parcels. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
+## Phase 11 Construction
+**Phase 11** adds `BusinessSector::construction` and a service-trade construction pipeline: the player hires a contractor to build a `Facility` on a developed parcel. `Facility` gains a `property_id` link.
+
+`RequestConstructionBidsAction{property_id, facility_type_key, recipe_id, bidding_window_ticks}` (PlayerActionType 18) opens a `ConstructionContract`. real_estate validates: client owns the parcel, parcel not subdivided, and `zoned_use != raw_land` (must be zoned for development first — ties to Phase 7). It then collects a `ConstructionBid` from every construction-sector firm in the parcel's province: `bid = construction_base_cost × remote_mult × (1 + margin)`, where margin is a deterministic draw in `[construction_margin_min, construction_margin_max]` (or **0 for a player-owned contractor** — internal cost), and `remote_mult = construction_remote_cost_multiplier` for `LocationFlag_Remote` parcels.
+
+`AwardConstructionBidAction{contract_id, bid_index}` (PlayerActionType 19): real_estate validates ownership + affordability, escrows the bid amount (debits the client immediately), and moves the contract to `in_progress` with `expected_completion_tick = current_tick + bid.completion_ticks`.
+
+At completion: the `Facility` is delivered onto the parcel (`is_operational = false` — labor_market staffs it), owned by a client-owned business in the province (auto-created if none exists), and the contractor's business is paid the escrowed amount via `BusinessDelta.cash_delta`. A player who owns the contractor recovers the cost internally. Bidding contracts with no award by `bidding_deadline_tick` are cancelled (no escrow was taken). Terminal contracts are pruned.
+
+New `NewFacilityDelta` (applied by `apply_new_facilities`) is the runtime facility-creation path.
+
+**Persistence**: schema v13→v14 — `Facility` gains a trailing `property_id` (pre-v14 facilities load with 0); new `construction_contracts` footer. `pending_construction_requests` / `_awards` are defensively cleared on load.
+
+Phase 12 (property tax) exempts offshore parcels. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes
 - PropertyListing references invalid province_id: log warning, skip that property, continue.

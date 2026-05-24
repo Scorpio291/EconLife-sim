@@ -11,6 +11,7 @@
 // Core headers (provide DeltaBuffer, DeferredWorkQueue, and transitive types)
 #include "../tick/deferred_work.h"  // DeferredWorkQueue
 #include "active_auction.h"         // ActiveAuction (Phase 6)
+#include "construction_contract.h"  // ConstructionContract (Phase 11)
 #include "delta_buffer.h"           // DeltaBuffer + npc.h + shared_types.h
 #include "pending_transaction.h"    // PendingTransaction
 #include "player_action_types.h"    // PlayerAction
@@ -221,6 +222,18 @@ struct WorldState {
     // accepts an offer; settled at close (owner transfer + payment +
     // optional mortgage). Persisted (schema v13+).
     std::vector<PendingBusinessAcquisition> pending_business_acquisitions;
+
+    // pending_construction_requests / _awards: written by player_actions
+    // (RequestConstructionBids / AwardConstructionBid). Drained by
+    // real_estate same-tick. Defensively cleared on load.
+    std::vector<ConstructionBidsRequest> pending_construction_requests;
+    std::vector<ConstructionAwardRequest> pending_construction_awards;
+
+    // Live construction contracts (Phase 11): bidding → awarded →
+    // in_progress → completed. Created/advanced by real_estate. Persisted
+    // (schema v14+). Terminal-state (completed/cancelled) entries are
+    // pruned the tick they resolve.
+    std::vector<ConstructionContract> construction_contracts;
 
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().

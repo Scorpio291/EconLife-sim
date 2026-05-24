@@ -1250,6 +1250,205 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                   }),
                    biz_acqs.end());
 
+    // ── 0e. Phase 11: construction contracts ──
+    auto& contracts =
+        const_cast<std::vector<ConstructionContract>&>(state.construction_contracts);
+
+    // Helpers to allocate ids that don't collide with state or this
+    // tick's pending delta additions.
+    auto next_contract_id = [&]() {
+        uint32_t m = 0;
+        for (const auto& c : contracts)
+            m = std::max(m, c.id);
+        return m + 1;
+    };
+    auto next_facility_id = [&]() {
+        uint32_t m = 0;
+        for (const auto& f : state.facilities)
+            m = std::max(m, f.id);
+        for (const auto& nf : delta.new_facilities)
+            m = std::max(m, nf.new_facility.id);
+        return m + 1;
+    };
+    auto next_business_id_rt = [&]() {
+        uint32_t m = 0;
+        for (const auto& b : state.npc_businesses)
+            m = std::max(m, b.id);
+        for (const auto& nb : delta.new_businesses)
+            m = std::max(m, nb.new_business.id);
+        return m + 1;
+    };
+
+    // 0e-i: open contracts + collect bids.
+    if (!state.pending_construction_requests.empty()) {
+        for (const auto& req : state.pending_construction_requests) {
+            PropertyListing* prop = find_property(properties_, req.property_id);
+            if (!prop)
+                continue;
+            if (prop->owner_id != req.client_id)
+                continue;  // must own the parcel
+            if (prop->subdivided)
+                continue;  // a shell can't host a facility
+            if (prop->zoned_use == PropertyType::raw_land)
+                continue;  // parcel must be zoned for development first (Phase 7)
+
+            ConstructionContract c{};
+            c.id = next_contract_id();
+            c.client_id = req.client_id;
+            c.property_id = req.property_id;
+            c.facility_type_key = req.facility_type_key;
+            c.recipe_id = req.recipe_id;
+            c.awarded_bid_index = 0;
+            c.stage = ContractStage::bidding;
+            uint32_t window = req.bidding_window_ticks > 0u ? req.bidding_window_ticks
+                                                            : cfg_.construction_default_bidding_window;
+            c.bidding_deadline_tick = state.current_tick + window;
+
+            // Collect bids from construction-sector firms in the province.
+            DeterministicRNG bid_rng(state.world_seed ^
+                                     (static_cast<uint64_t>(state.current_tick) * 0x7F4Au) ^
+                                     (static_cast<uint64_t>(c.id) * 0x9E37u));
+            bool remote = (prop->location_flags & LocationFlag_Remote) != 0;
+            float remote_mult = remote ? cfg_.construction_remote_cost_multiplier : 1.0f;
+            std::vector<const NPCBusiness*> firms;
+            for (const auto& b : state.npc_businesses) {
+                if (b.sector == BusinessSector::construction && b.province_id == prop->province_id)
+                    firms.push_back(&b);
+            }
+            std::sort(firms.begin(), firms.end(),
+                      [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
+            for (const NPCBusiness* firm : firms) {
+                float margin;
+                if (firm->owner_id == req.client_id) {
+                    margin = 0.0f;  // self-owned contractor → internal cost
+                } else {
+                    float t = bid_rng.next_float();
+                    margin = cfg_.construction_margin_min +
+                             t * (cfg_.construction_margin_max - cfg_.construction_margin_min);
+                }
+                ConstructionBid bid{};
+                bid.contractor_business_id = firm->id;
+                bid.bid_amount = cfg_.construction_base_cost * remote_mult * (1.0f + margin);
+                bid.completion_ticks = cfg_.construction_base_ticks;
+                c.bids.push_back(bid);
+            }
+            contracts.push_back(std::move(c));
+        }
+        const_cast<std::vector<ConstructionBidsRequest>&>(state.pending_construction_requests)
+            .clear();
+    }
+
+    // 0e-ii: process awards.
+    if (!state.pending_construction_awards.empty()) {
+        for (const auto& aw : state.pending_construction_awards) {
+            ConstructionContract* c = nullptr;
+            for (auto& cc : contracts) {
+                if (cc.id == aw.contract_id && cc.stage == ContractStage::bidding) {
+                    c = &cc;
+                    break;
+                }
+            }
+            if (!c)
+                continue;
+            if (c->client_id != aw.client_id)
+                continue;
+            if (aw.bid_index >= c->bids.size())
+                continue;
+            float bid_amount = c->bids[aw.bid_index].bid_amount;
+            if (running_player_wealth < bid_amount)
+                continue;  // can't afford the escrow
+            // Escrow the bid amount now.
+            running_player_wealth -= bid_amount;
+            delta.player_delta.wealth_delta =
+                delta.player_delta.wealth_delta.value_or(0.0f) - bid_amount;
+            c->awarded_bid_index = aw.bid_index;
+            c->stage = ContractStage::in_progress;
+            c->expected_completion_tick =
+                state.current_tick + c->bids[aw.bid_index].completion_ticks;
+        }
+        const_cast<std::vector<ConstructionAwardRequest>&>(state.pending_construction_awards)
+            .clear();
+    }
+
+    // 0e-iii: complete in-progress contracts; cancel stale biddings.
+    for (auto& c : contracts) {
+        if (c.stage == ContractStage::bidding) {
+            if (state.current_tick > c.bidding_deadline_tick)
+                c.stage = ContractStage::cancelled;  // no award in time (escrow not taken)
+            continue;
+        }
+        if (c.stage != ContractStage::in_progress)
+            continue;
+        if (state.current_tick < c.expected_completion_tick)
+            continue;
+
+        PropertyListing* prop = find_property(properties_, c.property_id);
+        if (!prop) {
+            c.stage = ContractStage::cancelled;
+            continue;
+        }
+        const ConstructionBid& bid = c.bids[c.awarded_bid_index];
+
+        // Find (or auto-create) a client-owned business in the province to
+        // hold the new facility.
+        uint32_t holding_business = 0;
+        for (const auto& b : state.npc_businesses) {
+            if (b.owner_id == c.client_id && b.province_id == prop->province_id) {
+                holding_business = b.id;
+                break;
+            }
+        }
+        if (holding_business == 0) {
+            NPCBusiness nb{};
+            nb.id = next_business_id_rt();
+            nb.sector = BusinessSector::manufacturing;
+            nb.owner_id = c.client_id;
+            nb.province_id = prop->province_id;
+            nb.cash = 0.0f;
+            nb.revenue_per_tick = 0.0f;
+            nb.cost_per_tick = 0.0f;
+            nb.output_quality = 0.5f;
+            NewBusinessDelta nbd{};
+            nbd.new_business = nb;
+            delta.new_businesses.push_back(nbd);
+            holding_business = nb.id;
+        }
+
+        // Deliver the facility (under construction → not yet operational;
+        // worker assignment by labor_market brings it online).
+        Facility f{};
+        f.id = next_facility_id();
+        f.business_id = holding_business;
+        f.province_id = prop->province_id;
+        f.recipe_id = c.recipe_id;
+        f.tech_tier = 1;
+        f.output_rate_modifier = 1.0f;
+        f.soil_health = 1.0f;
+        f.worker_count = 0;
+        f.is_operational = false;
+        f.property_id = prop->id;
+        NewFacilityDelta nfd{};
+        nfd.new_facility = f;
+        delta.new_facilities.push_back(nfd);
+
+        // Pay the contractor's business (escrow → contractor cash). If the
+        // client owns the contractor, the payment lands in their own
+        // business (internal transfer; they recover the cost basis).
+        BusinessDelta pay{};
+        pay.business_id = bid.contractor_business_id;
+        pay.cash_delta = bid.bid_amount;
+        delta.business_deltas.push_back(pay);
+
+        c.stage = ContractStage::completed;
+    }
+    // Prune terminal-state contracts.
+    contracts.erase(std::remove_if(contracts.begin(), contracts.end(),
+                                   [](const ConstructionContract& c) {
+                                       return c.stage == ContractStage::completed ||
+                                              c.stage == ContractStage::cancelled;
+                                   }),
+                    contracts.end());
+
     // ── 0. Phase 3: resolve active negotiations ──
     //
     // For each active NegotiationContext, look up the linked SceneCard

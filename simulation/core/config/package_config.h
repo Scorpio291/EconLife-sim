@@ -513,6 +513,24 @@ struct RealEstateConfig {
     uint32_t acquisition_ticks_per_month = 30u;
     uint32_t acquisition_due_diligence_ticks = 60u;
     float acquisition_min_down_payment = 0.40f;  // floor for financed business buys
+
+    // Phase 11 — construction. A RequestConstructionBidsAction opens a
+    // contract; every construction-sector firm in the parcel's province
+    // submits a bid priced at construction_base_cost × (1 + margin),
+    // where margin is drawn deterministically in
+    // [construction_margin_min, construction_margin_max] and scaled up by
+    // construction_remote_cost_multiplier for LocationFlag_Remote
+    // parcels. A player-owned contractor bids at zero margin (internal
+    // cost). completion_ticks is construction_base_ticks. On award the
+    // bid amount is escrowed; the facility is delivered at completion and
+    // the contractor's business is paid. If the client owns no business
+    // in the province, one is auto-created to hold the new facility.
+    float construction_base_cost = 200000.0f;
+    uint32_t construction_base_ticks = 90u;
+    float construction_margin_min = 0.10f;
+    float construction_margin_max = 0.35f;
+    float construction_remote_cost_multiplier = 1.50f;
+    uint32_t construction_default_bidding_window = 14u;
 };
 
 struct FinancialDistributionConfig {

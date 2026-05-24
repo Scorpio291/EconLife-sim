@@ -8,6 +8,7 @@
 // Complete type definitions needed for std::optional and std::vector members.
 #include "modules/calendar/calendar_types.h"           // CalendarEntry
 #include "modules/economy/economy_types.h"             // NPCBusiness (for NewBusinessDelta)
+#include "modules/production/production_types.h"       // Facility (for NewFacilityDelta)
 #include "modules/scene_cards/scene_card_types.h"      // SceneCard
 #include "modules/trade_infrastructure/trade_types.h"  // NPCTravelStatus (complete type for optional)
 #include "npc.h"                                       // MemoryEntry, Relationship, NPCStatus
@@ -105,6 +106,33 @@ struct DissolvedBusinessDelta {
 // New business spawned (era entrant): appends entity to world.npc_businesses.
 struct NewBusinessDelta {
     NPCBusiness new_business;
+};
+
+// New facility delivered (Phase 11 construction): appends to world.facilities.
+struct NewFacilityDelta {
+    Facility new_facility;
+};
+
+// Phase 11 — open a construction contract for bids. Emitted by
+// player_actions (RequestConstructionBidsAction). Routed into
+// WorldState.pending_construction_requests; real_estate drains same-tick,
+// validates the parcel, collects contractor bids, and opens a
+// ConstructionContract in the bidding stage.
+struct ConstructionBidsRequest {
+    uint32_t client_id;
+    uint32_t property_id;
+    std::string facility_type_key;
+    std::string recipe_id;
+    uint32_t bidding_window_ticks;
+};
+
+// Phase 11 — award a bid on an open contract. Emitted by player_actions
+// (AwardConstructionBidAction). Routed into
+// WorldState.pending_construction_awards; real_estate drains same-tick.
+struct ConstructionAwardRequest {
+    uint32_t client_id;
+    uint32_t contract_id;
+    uint32_t bid_index;
 };
 
 struct CurrencyDelta {
@@ -408,6 +436,9 @@ struct DeltaBuffer {
     std::vector<ZoningChangeRequest> new_zoning_requests;                // merge: append
     std::vector<PropertySubdivisionRequest> new_subdivision_requests;    // merge: append
     std::vector<BusinessAcquisitionRequest> new_business_acquisitions;   // merge: append
+    std::vector<NewFacilityDelta> new_facilities;                        // merge: append
+    std::vector<ConstructionBidsRequest> new_construction_requests;      // merge: append
+    std::vector<ConstructionAwardRequest> new_construction_awards;       // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

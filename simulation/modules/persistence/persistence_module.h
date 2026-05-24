@@ -146,7 +146,11 @@ class PersistenceModule : public ITickModule {
     //      close_tick + u8 stage + u8 payment_method + f32
     //      down_payment_fraction + f32 interest_rate + u32
     //      loan_maturity_ticks). v12 saves load with none.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 13;
+    //   v14: Facility gains a trailing u32 property_id (Phase 11); plus a
+    //      trailing construction_contracts vector (per entry: ids +
+    //      strings + bids + stage + tick fields). v13 saves load
+    //      facilities with property_id=0 and no contracts.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 14;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

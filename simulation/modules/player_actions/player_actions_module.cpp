@@ -457,6 +457,32 @@ static void handle_merge_units(const MergeUnitsAction& action, const WorldState&
     delta.new_subdivision_requests.push_back(req);
 }
 
+static void handle_request_construction_bids(const RequestConstructionBidsAction& action,
+                                             const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.facility_type_key.empty())
+        return;
+    ConstructionBidsRequest req{};
+    req.client_id = state.player->id;
+    req.property_id = action.property_id;
+    req.facility_type_key = action.facility_type_key;
+    req.recipe_id = action.recipe_id;
+    req.bidding_window_ticks = action.bidding_window_ticks;
+    delta.new_construction_requests.push_back(req);
+}
+
+static void handle_award_construction_bid(const AwardConstructionBidAction& action,
+                                          const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    ConstructionAwardRequest req{};
+    req.client_id = state.player->id;
+    req.contract_id = action.contract_id;
+    req.bid_index = action.bid_index;
+    delta.new_construction_awards.push_back(req);
+}
+
 static void handle_acquire_business(const AcquireBusinessAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -560,6 +586,10 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_merge_units(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, AcquireBusinessAction>) {
                     handle_acquire_business(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, RequestConstructionBidsAction>) {
+                    handle_request_construction_bids(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, AwardConstructionBidAction>) {
+                    handle_award_construction_bid(payload, state, delta);
                 }
             },
             action.payload);

@@ -181,6 +181,8 @@ static const char* business_sector_str(BusinessSector s) {
             return "research";
         case BusinessSector::criminal:
             return "criminal";
+        case BusinessSector::construction:
+            return "construction";
         default:
             return "unknown";
     }

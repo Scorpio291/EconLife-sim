@@ -151,6 +151,24 @@ struct MergeUnitsAction {
     uint32_t property_id;  // the parent
 };
 
+// Open a construction contract for bids: build a facility of
+// facility_type_key (running recipe_id) on an owned, developed parcel.
+// Phase 11. Construction-sector firms bid; the player then awards one.
+struct RequestConstructionBidsAction {
+    uint32_t property_id;
+    std::string facility_type_key;
+    std::string recipe_id;
+    uint32_t bidding_window_ticks;
+};
+
+// Award a collected bid on an open construction contract. Phase 11. The
+// player must own the contract and be able to afford the bid; the bid
+// amount is escrowed and the facility is delivered at completion.
+struct AwardConstructionBidAction {
+    uint32_t contract_id;
+    uint32_t bid_index;
+};
+
 // Offer to acquire an NPC-owned business. Phase 10. price =
 // revenue_per_tick × ticks_per_month × offer_multiple. The owner runs
 // an accept-roll (multiple vs fair multiple + relationship). On
@@ -187,6 +205,8 @@ enum class PlayerActionType : uint8_t {
     subdivide_property = 15,
     merge_units = 16,
     acquire_business = 17,
+    request_construction_bids = 18,
+    award_construction_bid = 19,
 };
 
 // ---------------------------------------------------------------------------
@@ -199,7 +219,8 @@ using PlayerActionPayload =
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
                  MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction,
                  RequestZoningChangeAction, SubdividePropertyAction, MergeUnitsAction,
-                 AcquireBusinessAction>;
+                 AcquireBusinessAction, RequestConstructionBidsAction,
+                 AwardConstructionBidAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

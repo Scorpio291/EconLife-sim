@@ -51,6 +51,11 @@ enum class BusinessSector : uint8_t {
     criminal = 13,            // Explicitly criminal operations: drug production,
                               //   distribution, protection rackets, laundering fronts.
                               //   Uses informal market price signals, not formal market.
+    construction = 14,        // Building contractors. Bid on player/NPC construction
+                              //   contracts (Phase 11) and deliver Facility records onto
+                              //   developed parcels. Trades services for money like any
+                              //   sector; a player-owned construction firm builds for the
+                              //   player at its internal cost basis (cheaper).
 };
 
 // ---------------------------------------------------------------------------
