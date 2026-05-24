@@ -151,6 +151,19 @@ struct MergeUnitsAction {
     uint32_t property_id;  // the parent
 };
 
+// Offer to acquire an NPC-owned business. Phase 10. price =
+// revenue_per_tick × ticks_per_month × offer_multiple. The owner runs
+// an accept-roll (multiple vs fair multiple + relationship). On
+// acceptance a PendingBusinessAcquisition is created and settles after
+// a due-diligence delay. Mortgage/mixed payment finances against the
+// target business as collateral (design default).
+struct AcquireBusinessAction {
+    uint32_t business_id;
+    float offer_multiple;
+    PaymentMethod payment_method;
+    float down_payment_fraction;
+};
+
 // ---------------------------------------------------------------------------
 // PlayerActionType enum — mirrors variant index for type dispatch
 // ---------------------------------------------------------------------------
@@ -173,6 +186,7 @@ enum class PlayerActionType : uint8_t {
     request_zoning_change = 14,
     subdivide_property = 15,
     merge_units = 16,
+    acquire_business = 17,
 };
 
 // ---------------------------------------------------------------------------
@@ -184,7 +198,8 @@ using PlayerActionPayload =
                  StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
                  MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction,
-                 RequestZoningChangeAction, SubdividePropertyAction, MergeUnitsAction>;
+                 RequestZoningChangeAction, SubdividePropertyAction, MergeUnitsAction,
+                 AcquireBusinessAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

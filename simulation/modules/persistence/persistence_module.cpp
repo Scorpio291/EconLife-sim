@@ -1574,10 +1574,11 @@ bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t cu
     // section, v8 pending_random_event_triggers footer, v9
     // pending_transactions footer, v10 pending_transactions Phase 4
     // mortgage extension, v11 pending_property_foreclosures footer,
-    // v12 active_auctions footer) changes the byte-stream layout. V1
-    // is pre-release; reject anything older than the current floor
-    // outright. v7..v11 saves remain loadable: each footer or
-    // trailing-field extension is gated on saved_version checks.
+    // v12 active_auctions footer, v13 pending_business_acquisitions
+    // footer) changes the byte-stream layout. V1 is pre-release; reject
+    // anything older than the current floor outright. v7..v12 saves
+    // remain loadable: each footer or trailing-field extension is gated
+    // on saved_version checks.
     if (saved_version < 7u)
         return false;
     return saved_version <= current_version;
@@ -1863,6 +1864,26 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
                 w.write_float(b.bid_amount);
                 w.write_u32(b.placed_tick);
             }
+        }
+    }
+
+    // --- v13: pending_business_acquisitions (real-estate Phase 10) ---
+    {
+        const auto& queue = state.pending_business_acquisitions;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& a : queue) {
+            w.write_u32(a.id);
+            w.write_u32(a.business_id);
+            w.write_u32(a.buyer_id);
+            w.write_u32(a.seller_id);
+            w.write_float(a.price);
+            w.write_u32(a.offered_tick);
+            w.write_u32(a.close_tick);
+            w.write_u8(static_cast<uint8_t>(a.stage));
+            w.write_u8(static_cast<uint8_t>(a.payment_method));
+            w.write_float(a.down_payment_fraction);
+            w.write_float(a.interest_rate);
+            w.write_u32(a.loan_maturity_ticks);
         }
     }
 
@@ -2300,6 +2321,29 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         }
     }
 
+    // --- v13: pending_business_acquisitions (Phase 10, persisted) ---
+    out_state.pending_business_acquisitions.clear();
+    if (schema_ver >= 13u) {
+        uint32_t acq_count = r.read_u32();
+        out_state.pending_business_acquisitions.reserve(acq_count);
+        for (uint32_t i = 0; i < acq_count; ++i) {
+            PendingBusinessAcquisition a{};
+            a.id = r.read_u32();
+            a.business_id = r.read_u32();
+            a.buyer_id = r.read_u32();
+            a.seller_id = r.read_u32();
+            a.price = r.read_float();
+            a.offered_tick = r.read_u32();
+            a.close_tick = r.read_u32();
+            a.stage = static_cast<PendingTxStage>(r.read_u8());
+            a.payment_method = static_cast<PaymentMethod>(r.read_u8());
+            a.down_payment_fraction = r.read_float();
+            a.interest_rate = r.read_float();
+            a.loan_maturity_ticks = r.read_u32();
+            out_state.pending_business_acquisitions.push_back(a);
+        }
+    }
+
     // pending_auction_bid_requests same-tick (player_actions emits,
     // real_estate drains). Defensively reset on load.
     out_state.pending_auction_bid_requests.clear();
@@ -2310,6 +2354,9 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
 
     // pending_subdivision_requests same-tick. Defensively reset on load.
     out_state.pending_subdivision_requests.clear();
+
+    // pending_business_acquisition_requests same-tick. Defensively reset.
+    out_state.pending_business_acquisition_requests.clear();
 
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();

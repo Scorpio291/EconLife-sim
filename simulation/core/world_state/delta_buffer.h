@@ -93,6 +93,8 @@ struct BusinessDelta {
     std::optional<float> revenue_per_tick_update;  // replacement; latest revenue figure
     std::optional<float> cost_per_tick_update;     // replacement; latest cost figure
     std::optional<float> output_quality_update;    // replacement; latest production quality [0,1]
+    std::optional<uint32_t> owner_id_update;       // replacement; ownership transfer (Phase 10
+                                                   // business acquisition)
 };
 
 // Business dissolved (market exit): removes entity from world.npc_businesses.
@@ -261,6 +263,21 @@ enum class PaymentMethod : uint8_t {
     mixed = 2,
 };
 
+// Phase 10 — business acquisition offer. Emitted by player_actions
+// (AcquireBusinessAction). Routed by apply_deltas into
+// WorldState.pending_business_acquisition_requests; real_estate's
+// post-pass drains it same-tick, runs the owner accept-roll, and on
+// acceptance creates a PendingBusinessAcquisition. collateral_is_target
+// (default true per design) finances the buy against the target
+// business itself when payment_method != cash.
+struct BusinessAcquisitionRequest {
+    uint32_t business_id;
+    uint32_t buyer_id;
+    float offer_multiple;  // price = revenue_per_tick × ticks_per_month × this
+    uint8_t payment_method;
+    float down_payment_fraction;
+};
+
 // Phase 8 — composite property subdivision / re-merge request. Emitted
 // by player_actions (SubdividePropertyAction / MergeUnitsAction).
 // Routed by apply_deltas into WorldState.pending_subdivision_requests;
@@ -390,6 +407,7 @@ struct DeltaBuffer {
     std::vector<AuctionBidRequest> new_auction_bid_requests;             // merge: append
     std::vector<ZoningChangeRequest> new_zoning_requests;                // merge: append
     std::vector<PropertySubdivisionRequest> new_subdivision_requests;    // merge: append
+    std::vector<BusinessAcquisitionRequest> new_business_acquisitions;   // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

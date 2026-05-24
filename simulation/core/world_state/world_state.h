@@ -211,6 +211,17 @@ struct WorldState {
     // Defensively cleared on load.
     std::vector<PropertySubdivisionRequest> pending_subdivision_requests;
 
+    // pending_business_acquisition_requests: written by player_actions
+    // (AcquireBusinessAction). Drained by real_estate same-tick (offer
+    // accept-roll). Defensively cleared on load.
+    std::vector<BusinessAcquisitionRequest> pending_business_acquisition_requests;
+
+    // Accepted, in-flight business acquisitions awaiting their
+    // due-diligence close_tick. Created by real_estate when an owner
+    // accepts an offer; settled at close (owner transfer + payment +
+    // optional mortgage). Persisted (schema v13+).
+    std::vector<PendingBusinessAcquisition> pending_business_acquisitions;
+
     // --- Player Action Queue ---
     // External code enqueues actions between ticks via enqueue_player_action().
     // The player_actions module drains this queue each tick.

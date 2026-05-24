@@ -3079,3 +3079,187 @@ TEST_CASE("Phase9: island = raw_land + offshore round-trips via persistence sche
     REQUIRE((r.location_flags & LocationFlag_International) != 0);
     REQUIRE((r.location_flags & LocationFlag_Remote) == 0);
 }
+
+// ===========================================================================
+// Phase 10: business acquisition
+// ===========================================================================
+
+namespace {
+
+NPCBusiness make_acq_business(uint32_t id, uint32_t owner_id, float revenue_per_tick) {
+    NPCBusiness b{};
+    b.id = id;
+    b.owner_id = owner_id;
+    b.revenue_per_tick = revenue_per_tick;
+    b.cash = 0.0f;
+    b.province_id = 0;
+    return b;
+}
+
+}  // namespace
+
+TEST_CASE("Phase10: generous cash offer is accepted and creates a pending acquisition",
+          "[real_estate][market_phase10]") {
+    auto state = make_test_world_state(10);
+    state.world_seed = 5;
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+    // Owner NPC who trusts the player (eases acceptance).
+    NPC owner = make_seller_npc(42, 0, 100000.0f);
+    set_relationship_to_player(owner, 99, /*trust=*/0.8f, /*fear=*/0.0f);
+    state.significant_npcs.push_back(std::move(owner));
+    state.npc_businesses.push_back(make_acq_business(7, /*owner=*/42, /*revenue=*/1000.0f));
+
+    RealEstateModule module;
+    // Generous multiple (12 vs fair 6) → high accept probability.
+    state.pending_business_acquisition_requests.push_back(
+        BusinessAcquisitionRequest{7, 99, 12.0f, static_cast<uint8_t>(PaymentMethod::cash), 1.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(state.pending_business_acquisitions.size() == 1);
+    const auto& a = state.pending_business_acquisitions[0];
+    REQUIRE(a.business_id == 7);
+    REQUIRE(a.buyer_id == 99);
+    REQUIRE(a.seller_id == 42);
+    // price = 1000 × 30 × 12 = 360,000.
+    REQUIRE_THAT(a.price, WithinAbs(360000.0f, 1.0f));
+    REQUIRE(a.close_tick == 10u + 60u);
+}
+
+TEST_CASE("Phase10: acquisition settles at close — ownership transfers, seller paid",
+          "[real_estate][market_phase10]") {
+    auto state = make_test_world_state(10);
+    state.world_seed = 5;
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+    NPC owner = make_seller_npc(42, 0, 100000.0f);
+    set_relationship_to_player(owner, 99, 0.8f, 0.0f);
+    state.significant_npcs.push_back(std::move(owner));
+    state.npc_businesses.push_back(make_acq_business(7, 42, 1000.0f));
+
+    RealEstateModule module;
+    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
+        1, 7, 99, 42, 360000.0f, 10, 20, PendingTxStage::pending, PaymentMethod::cash, 1.0f, 0.0f,
+        0u});
+
+    state.current_tick = 20;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Ownership transfer delta emitted; player debited; seller credited.
+    REQUIRE(d.business_deltas.size() == 1);
+    REQUIRE(d.business_deltas[0].business_id == 7);
+    REQUIRE(d.business_deltas[0].owner_id_update.has_value());
+    REQUIRE(*d.business_deltas[0].owner_id_update == 99);
+    REQUIRE_THAT(*d.player_delta.wealth_delta, WithinAbs(-360000.0f, 1.0f));
+    bool seller_paid = false;
+    for (const auto& nd : d.npc_deltas) {
+        if (nd.npc_id == 42 && nd.capital_delta.has_value() &&
+            std::fabs(*nd.capital_delta - 360000.0f) < 1.0f)
+            seller_paid = true;
+    }
+    REQUIRE(seller_paid);
+    REQUIRE(state.pending_business_acquisitions.empty());  // pruned
+}
+
+TEST_CASE("Phase10: mortgaged acquisition emits a business-collateral loan request",
+          "[real_estate][market_phase10]") {
+    auto state = make_test_world_state(10);
+    state.world_seed = 5;
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+    state.npc_businesses.push_back(make_acq_business(7, /*owner=*/0, 1000.0f));  // independent
+
+    RealEstateModule module;
+    // mixed: 40% down on 360k → 144k cash, 216k loan.
+    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
+        1, 7, 99, 0, 360000.0f, 10, 20, PendingTxStage::pending, PaymentMethod::mixed, 0.40f,
+        0.00025f, 10950u});
+
+    state.current_tick = 20;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    REQUIRE(d.business_deltas.size() == 1);
+    REQUIRE(*d.business_deltas[0].owner_id_update == 99);
+    REQUIRE_THAT(*d.player_delta.wealth_delta, WithinAbs(-144000.0f, 1.0f));
+    // Independent business (owner 0) → no seller credit.
+    REQUIRE(d.npc_deltas.empty());
+    REQUIRE(d.new_loan_requests.size() == 1);
+    const auto& lr = d.new_loan_requests[0];
+    REQUIRE(lr.borrower_id == 99);
+    REQUIRE(lr.collateral_id == 7u);  // the business itself is collateral
+    REQUIRE_THAT(lr.principal, WithinAbs(216000.0f, 1.0f));
+}
+
+TEST_CASE("Phase10: zero-revenue business has no acquisition price (offer dropped)",
+          "[real_estate][market_phase10]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+    state.npc_businesses.push_back(make_acq_business(7, 42, /*revenue=*/0.0f));
+
+    RealEstateModule module;
+    state.pending_business_acquisition_requests.push_back(
+        BusinessAcquisitionRequest{7, 99, 12.0f, static_cast<uint8_t>(PaymentMethod::cash), 1.0f});
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    REQUIRE(state.pending_business_acquisitions.empty());
+}
+
+TEST_CASE("Phase10: acquisition expires if business sold out from under the buyer",
+          "[real_estate][market_phase10]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+    state.player->wealth = 5000000.0f;
+    // Business now owned by 88, but the acquisition recorded seller 42.
+    state.npc_businesses.push_back(make_acq_business(7, /*owner=*/88, 1000.0f));
+
+    RealEstateModule module;
+    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
+        1, 7, 99, 42, 360000.0f, 10, 20, PendingTxStage::pending, PaymentMethod::cash, 1.0f, 0.0f,
+        0u});
+
+    state.current_tick = 20;
+    DeltaBuffer d{};
+    module.execute(state, d);
+
+    // Seller mismatch → cancelled, no transfer.
+    REQUIRE(d.business_deltas.empty());
+    REQUIRE(state.pending_business_acquisitions.empty());
+}
+
+TEST_CASE("Phase10: pending_business_acquisitions round-trips via persistence v13",
+          "[real_estate][market_phase10][persistence]") {
+    auto state = make_test_world_state(10);
+    state.provinces.push_back(make_test_province(0));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
+
+    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
+        3, 7, 99, 42, 360000.0f, 10, 70, PendingTxStage::pending, PaymentMethod::mixed, 0.40f,
+        0.00025f, 10950u});
+
+    RealEstateModule module;
+    auto bytes = PersistenceModule::serialize(state, {&module});
+    WorldState restored{};
+    RealEstateModule restored_mod;
+    REQUIRE(PersistenceModule::deserialize(bytes, restored, {&restored_mod}) ==
+            RestoreResult::success);
+
+    REQUIRE(restored.pending_business_acquisitions.size() == 1);
+    const auto& r = restored.pending_business_acquisitions[0];
+    REQUIRE(r.business_id == 7);
+    REQUIRE(r.seller_id == 42);
+    REQUIRE_THAT(r.price, WithinAbs(360000.0f, 1.0f));
+    REQUIRE(r.payment_method == PaymentMethod::mixed);
+    REQUIRE_THAT(r.down_payment_fraction, WithinAbs(0.40f, 0.001f));
+    REQUIRE(r.loan_maturity_ticks == 10950u);
+}

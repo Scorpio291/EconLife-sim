@@ -207,6 +207,18 @@ Child units are ordinary `PropertyListing`s once created, so the full Phase 1-6 
 
 **Persistence**: real_estate module-state `schema_tag` 5→6 adds `location_flags` (u8) per property; pre-v6 records load flag-free.
 
+## Phase 10 Business Acquisition
+**Phase 10** lets the player buy an NPC-owned business (and, implicitly, all its facilities — they follow via the unchanged `Facility.business_id` link). `AcquireBusinessAction{business_id, offer_multiple, payment_method, down_payment_fraction}` (PlayerActionType 17) emits a `BusinessAcquisitionRequest` into `WorldState.pending_business_acquisition_requests`. real_estate's post-pass (it hosts the player-asset-market machinery) drains it same-tick:
+
+- Price = `revenue_per_tick × acquisition_ticks_per_month (30) × offer_multiple`. A zero-revenue business has no price and the offer is dropped.
+- Owner accept-roll: `p_accept = logistic(((offer_multiple / acquisition_fair_multiple) − 1 + trust × trust_accept_weight) × sigmoid_steepness)`, where `trust` is the owner NPC's relationship trust toward the buyer (0 for independent businesses, owner_id=0). Deterministic RNG fork per (tick, business, buyer).
+- Mortgage/mixed underwriting: down-payment ≥ `acquisition_min_down_payment` (0.40); principal ≤ `player.wealth × player_max_loan_multiplier_of_wealth`.
+- On acceptance a `PendingBusinessAcquisition` is created with `close_tick = current_tick + acquisition_due_diligence_ticks (60)` and the cash portion reserved.
+
+Settlement at `close_tick`: the business must still exist and still be owned by the recorded seller (else the acquisition is cancelled — protects against the business changing hands mid-deal). Buyer is debited the cash portion; the seller NPC (if any) is credited the full price; ownership transfers via `BusinessDelta.owner_id_update` (new field). Financed buys emit a `NewLoanRequest` with `purpose = business_capital` and `collateral_id = business_id` — the target business itself secures the loan (design default for collateral).
+
+**Persistence**: schema v12→v13 adds the `pending_business_acquisitions` footer. `pending_business_acquisition_requests` is defensively cleared on load. `BusinessDelta` gained `owner_id_update` (applied by `apply_business_deltas`).
+
 Phase 11 (construction) consumes `zoned_use` to gate what can be built on a parcel and `LocationFlag_Remote` to scale construction cost. Phase 12 (property tax) exempts offshore parcels. Tax sales (Phase 13) reuse the auction pipeline with a government consigner. Counter-offer flow (player counters back, NPC counter-proposes) is deferred pending SceneCard numeric-input design.
 
 ## Failure Modes

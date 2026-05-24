@@ -501,6 +501,18 @@ struct RealEstateConfig {
     uint32_t subdivision_min_units = 2u;
     uint32_t subdivision_max_units = 100u;
     float subdivision_unit_premium = 1.10f;
+
+    // Phase 10 — business acquisition. Offer price = revenue_per_tick ×
+    // acquisition_ticks_per_month × offer_multiple. The owner accepts
+    // with probability logistic(((offer_multiple / fair_multiple) - 1 +
+    // trust × trust_accept_weight) × sigmoid_steepness). On acceptance a
+    // PendingBusinessAcquisition settles after
+    // acquisition_due_diligence_ticks. Mortgage/mixed finances against
+    // the target business (collateral_id = business_id).
+    float acquisition_fair_multiple = 6.0f;
+    uint32_t acquisition_ticks_per_month = 30u;
+    uint32_t acquisition_due_diligence_ticks = 60u;
+    float acquisition_min_down_payment = 0.40f;  // floor for financed business buys
 };
 
 struct FinancialDistributionConfig {

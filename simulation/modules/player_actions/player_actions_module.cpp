@@ -457,6 +457,21 @@ static void handle_merge_units(const MergeUnitsAction& action, const WorldState&
     delta.new_subdivision_requests.push_back(req);
 }
 
+static void handle_acquire_business(const AcquireBusinessAction& action, const WorldState& state,
+                                    DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.offer_multiple <= 0.0f)
+        return;
+    BusinessAcquisitionRequest req{};
+    req.business_id = action.business_id;
+    req.buyer_id = state.player->id;
+    req.offer_multiple = action.offer_multiple;
+    req.payment_method = static_cast<uint8_t>(action.payment_method);
+    req.down_payment_fraction = std::clamp(action.down_payment_fraction, 0.0f, 1.0f);
+    delta.new_business_acquisitions.push_back(req);
+}
+
 static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -543,6 +558,8 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_subdivide_property(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, MergeUnitsAction>) {
                     handle_merge_units(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, AcquireBusinessAction>) {
+                    handle_acquire_business(payload, state, delta);
                 }
             },
             action.payload);

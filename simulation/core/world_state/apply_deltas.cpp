@@ -265,6 +265,9 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
         if (d.output_quality_update.has_value()) {
             biz.output_quality = clamp01(*d.output_quality_update);
         }
+        if (d.owner_id_update.has_value()) {
+            biz.owner_id = *d.owner_id_update;
+        }
     }
 }
 
@@ -754,6 +757,12 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_subdivision_requests.push_back(std::move(sr));
     }
 
+    // Route business acquisition offers (Phase 10) into
+    // pending_business_acquisition_requests. Same-tick consumer.
+    for (auto& ba : delta.new_business_acquisitions) {
+        world.pending_business_acquisition_requests.push_back(std::move(ba));
+    }
+
     // Refresh the province → significant_npcs index. Most apply_deltas calls
     // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
     // a conditional rebuild buys little. The orchestrator separately calls
@@ -787,6 +796,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_auction_bid_requests.clear();
     delta.new_zoning_requests.clear();
     delta.new_subdivision_requests.clear();
+    delta.new_business_acquisitions.clear();
 }
 
 // ---------------------------------------------------------------------------

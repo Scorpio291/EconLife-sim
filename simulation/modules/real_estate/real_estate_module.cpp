@@ -1086,6 +1086,170 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         mutable_sub.clear();
     }
 
+    // ── 0d. Phase 10: business acquisition offers + settlement ──
+    auto& biz_acqs =
+        const_cast<std::vector<PendingBusinessAcquisition>&>(state.pending_business_acquisitions);
+
+    // 0d-i: drain incoming acquisition offers.
+    if (!state.pending_business_acquisition_requests.empty()) {
+        for (const auto& req : state.pending_business_acquisition_requests) {
+            const NPCBusiness* biz = nullptr;
+            for (const auto& b : state.npc_businesses) {
+                if (b.id == req.business_id) {
+                    biz = &b;
+                    break;
+                }
+            }
+            if (!biz)
+                continue;
+            if (biz->owner_id == req.buyer_id)
+                continue;  // already owned by buyer
+            // One active acquisition per business.
+            bool already = false;
+            for (const auto& a : biz_acqs) {
+                if (a.business_id == biz->id && a.stage == PendingTxStage::pending) {
+                    already = true;
+                    break;
+                }
+            }
+            if (already)
+                continue;
+
+            float price = biz->revenue_per_tick *
+                          static_cast<float>(cfg_.acquisition_ticks_per_month) * req.offer_multiple;
+            if (price <= 0.0f)
+                continue;  // a zero-revenue business has no acquisition price in V1
+
+            PaymentMethod pm = static_cast<PaymentMethod>(req.payment_method);
+            float dpf = (pm == PaymentMethod::cash)
+                            ? 1.0f
+                            : std::clamp(req.down_payment_fraction, 0.0f, 1.0f);
+            if (pm == PaymentMethod::mortgage)
+                dpf = std::max(dpf, cfg_.acquisition_min_down_payment);
+            if (pm == PaymentMethod::mixed && dpf < cfg_.acquisition_min_down_payment)
+                continue;  // non-conforming structure
+            float cash_required = price * dpf;
+            if (running_player_wealth < cash_required)
+                continue;
+            // Financed buys: principal must fit the player's max-loan rule.
+            if (pm != PaymentMethod::cash && state.player) {
+                float principal = price * (1.0f - dpf);
+                float max_loan = state.player->wealth * cfg_.player_max_loan_multiplier_of_wealth;
+                if (principal > max_loan)
+                    continue;
+            }
+
+            // Owner accept-roll: multiple vs fair + relationship trust.
+            float trust = 0.0f;
+            const NPC* owner = (biz->owner_id != 0u)
+                                   ? lookup_npc_by_id(state, biz->owner_id)
+                                   : nullptr;
+            if (owner)
+                trust = find_trust_toward(*owner, req.buyer_id);
+            float fair = cfg_.acquisition_fair_multiple;
+            float score = (fair > 0.0f ? req.offer_multiple / fair : 1.0f) - 1.0f +
+                          trust * cfg_.trust_accept_weight;
+            float p_accept = logistic(score * cfg_.sigmoid_steepness);
+            DeterministicRNG acq_rng(state.world_seed ^
+                                     (static_cast<uint64_t>(state.current_tick) * 0x68C5u) ^
+                                     (static_cast<uint64_t>(biz->id) * 0x9E37u) ^
+                                     (static_cast<uint64_t>(req.buyer_id) * 0x2545u));
+            if (acq_rng.next_float() >= p_accept)
+                continue;  // owner declined
+
+            running_player_wealth -= cash_required;  // reserve cash portion
+            PendingBusinessAcquisition acq{};
+            acq.id = biz_acqs.empty() ? 1u : 0u;
+            for (const auto& a : biz_acqs)
+                acq.id = std::max(acq.id, a.id);
+            acq.id += 1u;
+            acq.business_id = biz->id;
+            acq.buyer_id = req.buyer_id;
+            acq.seller_id = biz->owner_id;
+            acq.price = price;
+            acq.offered_tick = state.current_tick;
+            acq.close_tick = state.current_tick + cfg_.acquisition_due_diligence_ticks;
+            acq.stage = PendingTxStage::pending;
+            acq.payment_method = pm;
+            acq.down_payment_fraction = dpf;
+            acq.interest_rate = cfg_.mortgage_interest_rate;
+            acq.loan_maturity_ticks =
+                (pm == PaymentMethod::cash) ? 0u : cfg_.mortgage_term_ticks;
+            biz_acqs.push_back(acq);
+        }
+        auto& mutable_reqs = const_cast<std::vector<BusinessAcquisitionRequest>&>(
+            state.pending_business_acquisition_requests);
+        mutable_reqs.clear();
+    }
+
+    // 0d-ii: settle acquisitions whose due-diligence window has closed.
+    for (auto& acq : biz_acqs) {
+        if (acq.stage != PendingTxStage::pending)
+            continue;
+        if (acq.close_tick > state.current_tick)
+            continue;
+        // Business must still exist and still be owned by the seller.
+        const NPCBusiness* biz = nullptr;
+        for (const auto& b : state.npc_businesses) {
+            if (b.id == acq.business_id) {
+                biz = &b;
+                break;
+            }
+        }
+        if (!biz || biz->owner_id != acq.seller_id) {
+            acq.stage = PendingTxStage::cancelled;
+            continue;
+        }
+        float cash_portion = acq.price * acq.down_payment_fraction;
+        float loan_principal = acq.price - cash_portion;
+        bool buyer_can_pay = (acq.buyer_id == player_id)
+                                 ? running_player_wealth >= cash_portion
+                                 : true;
+        if (!buyer_can_pay) {
+            acq.stage = PendingTxStage::expired;
+            continue;
+        }
+        // Buyer pays the cash portion.
+        if (acq.buyer_id == player_id) {
+            delta.player_delta.wealth_delta =
+                delta.player_delta.wealth_delta.value_or(0.0f) - cash_portion;
+            running_player_wealth -= cash_portion;
+        }
+        // Seller (if a real NPC) is credited the full price.
+        if (acq.seller_id != 0u) {
+            NPCDelta seller_delta{};
+            seller_delta.npc_id = acq.seller_id;
+            seller_delta.capital_delta = acq.price;
+            delta.npc_deltas.push_back(seller_delta);
+        }
+        // Ownership transfer (facilities follow via Facility.business_id).
+        BusinessDelta bd{};
+        bd.business_id = acq.business_id;
+        bd.owner_id_update = acq.buyer_id;
+        delta.business_deltas.push_back(bd);
+        // Financed buys: originate a loan collateralised by the business.
+        if (loan_principal > 0.0f) {
+            NewLoanRequest loan_req{};
+            loan_req.borrower_id = acq.buyer_id;
+            loan_req.lender_id = 0u;
+            loan_req.purpose = static_cast<uint8_t>(LoanPurpose::business_capital);
+            loan_req.principal = loan_principal;
+            loan_req.interest_rate = acq.interest_rate;
+            loan_req.repayment_per_tick = BankingModule::compute_repayment_per_tick(
+                loan_principal, acq.interest_rate, acq.loan_maturity_ticks);
+            loan_req.maturity_tick = state.current_tick + acq.loan_maturity_ticks;
+            loan_req.collateral_id = acq.business_id;
+            delta.new_loan_requests.push_back(loan_req);
+        }
+        acq.stage = PendingTxStage::settled;
+    }
+    // Prune terminal-state acquisitions.
+    biz_acqs.erase(std::remove_if(biz_acqs.begin(), biz_acqs.end(),
+                                  [](const PendingBusinessAcquisition& a) {
+                                      return a.stage != PendingTxStage::pending;
+                                  }),
+                   biz_acqs.end());
+
     // ── 0. Phase 3: resolve active negotiations ──
     //
     // For each active NegotiationContext, look up the linked SceneCard

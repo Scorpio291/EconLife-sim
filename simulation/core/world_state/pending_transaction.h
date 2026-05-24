@@ -50,4 +50,25 @@ struct PendingTransaction {
     uint32_t loan_maturity_ticks = 0; // 0 = N/A for cash; non-zero for mortgage/mixed
 };
 
+// Phase 10 — in-flight business acquisition. Structurally parallel to
+// PendingTransaction but settles ownership of an NPCBusiness (and all
+// its facilities, which follow via the unchanged Facility.business_id
+// link) rather than a PropertyListing. Created when an NPC owner accepts
+// the player's acquisition offer; settles after a due-diligence delay.
+// Reuses PendingTxStage and PaymentMethod. Persisted (schema v13+).
+struct PendingBusinessAcquisition {
+    uint32_t id;
+    uint32_t business_id;
+    uint32_t buyer_id;
+    uint32_t seller_id;     // current owner (0 = independent business)
+    float price;            // computed acquisition price (revenue × months × multiple)
+    uint32_t offered_tick;
+    uint32_t close_tick;
+    PendingTxStage stage;
+    PaymentMethod payment_method = PaymentMethod::cash;
+    float down_payment_fraction = 1.0f;
+    float interest_rate = 0.0f;
+    uint32_t loan_maturity_ticks = 0;
+};
+
 }  // namespace econlife

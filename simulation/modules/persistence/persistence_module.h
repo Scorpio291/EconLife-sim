@@ -140,7 +140,13 @@ class PersistenceModule : public ITickModule {
     //      + u32 current_high_bidder_id + f32 current_high_bid + u32
     //      bid_count + per bid: u32 bidder_id + f32 bid_amount + u32
     //      placed_tick). v11 saves load with no auctions.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 12;
+    //   v13: trailing pending_business_acquisitions vector (Phase 10)
+    //      (u32 count, per entry: u32 id + u32 business_id + u32
+    //      buyer_id + u32 seller_id + f32 price + u32 offered_tick + u32
+    //      close_tick + u8 stage + u8 payment_method + f32
+    //      down_payment_fraction + f32 interest_rate + u32
+    //      loan_maturity_ticks). v12 saves load with none.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 13;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

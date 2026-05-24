@@ -579,3 +579,21 @@ TEST_CASE("MergeUnitsAction emits merge request",
     REQUIRE(delta.new_subdivision_requests[0].kind == SubdivisionKind::merge);
     REQUIRE(delta.new_subdivision_requests[0].property_id == 3);
 }
+
+TEST_CASE("AcquireBusinessAction emits business acquisition request",
+          "[player_actions][market_phase10]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::acquire_business,
+                          AcquireBusinessAction{7, 8.0f, PaymentMethod::mixed, 0.5f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_business_acquisitions.size() == 1);
+    REQUIRE(delta.new_business_acquisitions[0].business_id == 7);
+    REQUIRE(delta.new_business_acquisitions[0].buyer_id == world.player->id);
+    REQUIRE_THAT(delta.new_business_acquisitions[0].offer_multiple, WithinAbs(8.0f, 0.001f));
+    REQUIRE(delta.new_business_acquisitions[0].payment_method ==
+            static_cast<uint8_t>(PaymentMethod::mixed));
+}
