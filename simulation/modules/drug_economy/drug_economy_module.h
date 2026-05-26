@@ -66,9 +66,7 @@ class DrugEconomyModule : public ITickModule {
     const std::vector<DrugLegalizationStatus>& legalization_status() const {
         return legalization_status_;
     }
-    std::vector<DrugLegalizationStatus>& legalization_status_mut() {
-        return legalization_status_;
-    }
+    std::vector<DrugLegalizationStatus>& legalization_status_mut() { return legalization_status_; }
 
     // --- Static utility functions (public for testing) ---
 

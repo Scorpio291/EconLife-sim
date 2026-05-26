@@ -24,9 +24,9 @@
 #include "modules/healthcare/healthcare_module.h"
 #include "modules/informant_system/informant_system_module.h"
 #include "modules/investigator_engine/investigator_engine_module.h"
-#include "modules/media_system/media_system_module.h"
 #include "modules/labor_market/labor_market_module.h"
 #include "modules/legal_process/legal_process_module.h"
+#include "modules/media_system/media_system_module.h"
 #include "modules/money_laundering/money_laundering_module.h"
 #include "modules/persistence/persistence_module.h"
 #include "modules/protection_rackets/protection_rackets_module.h"
@@ -390,8 +390,7 @@ TEST_CASE("v7 module-state: money_laundering operations + fiu_results round-trip
     REQUIRE(restored_mod.fiu_results().size() == 1);
     REQUIRE(restored_mod.fiu_results()[0].target_actor_id == 99);
     REQUIRE(restored_mod.fiu_results()[0].suspicion_score == 0.85f);
-    REQUIRE(restored_mod.fiu_results()[0].inferred_method ==
-            LaunderingMethod::shell_company_chain);
+    REQUIRE(restored_mod.fiu_results()[0].inferred_method == LaunderingMethod::shell_company_chain);
 }
 
 TEST_CASE("v7 module-state: labor_market full deployed state round-trip",
@@ -469,8 +468,7 @@ TEST_CASE("v7 module-state: labor_market full deployed state round-trip",
 
     REQUIRE(restored_mod.job_postings().size() == 1);
     REQUIRE(restored_mod.job_postings()[0].id == 50);
-    REQUIRE(restored_mod.job_postings()[0].applicant_ids ==
-            std::vector<uint32_t>{200, 201, 202});
+    REQUIRE(restored_mod.job_postings()[0].applicant_ids == std::vector<uint32_t>{200, 201, 202});
     REQUIRE(restored_mod.job_postings()[0].channel == HiringChannel::professional_network);
 
     REQUIRE(restored_mod.employment_records().size() == 2);
@@ -674,10 +672,8 @@ TEST_CASE("v7 module-state: criminal_operations orgs + expansions round-trip",
 
     REQUIRE(restored_mod.organizations().size() == 1);
     REQUIRE(restored_mod.organizations()[0].id == 10);
-    REQUIRE(restored_mod.organizations()[0].member_npc_ids ==
-            std::vector<uint32_t>{601, 602, 603});
-    REQUIRE(restored_mod.organizations()[0].income_source_ids ==
-            std::vector<uint32_t>{1000, 1001});
+    REQUIRE(restored_mod.organizations()[0].member_npc_ids == std::vector<uint32_t>{601, 602, 603});
+    REQUIRE(restored_mod.organizations()[0].income_source_ids == std::vector<uint32_t>{1000, 1001});
     REQUIRE(restored_mod.organizations()[0].dominance_by_province.size() == 2);
     REQUIRE(restored_mod.organizations()[0].dominance_by_province.at(1) == 0.6f);
     REQUIRE(restored_mod.organizations()[0].dominance_by_province.at(2) == 0.4f);
@@ -686,8 +682,7 @@ TEST_CASE("v7 module-state: criminal_operations orgs + expansions round-trip",
     REQUIRE(restored_mod.organizations()[0].conflict_rival_org_id == 11);
 
     REQUIRE(restored_mod.active_expansions().size() == 1);
-    REQUIRE(restored_mod.active_expansions()[0].member_npc_ids ==
-            std::vector<uint32_t>{604, 605});
+    REQUIRE(restored_mod.active_expansions()[0].member_npc_ids == std::vector<uint32_t>{604, 605});
     REQUIRE(restored_mod.active_expansions()[0].arrival_tick == 200);
 }
 
@@ -898,15 +893,13 @@ TEST_CASE("v7 module-state: media_system outlets + stories round-trip",
             RestoreResult::success);
 
     REQUIRE(restored_mod.outlets().size() == 1);
-    REQUIRE(restored_mod.outlets()[0].journalist_ids ==
-            std::vector<uint32_t>{900, 901, 902});
+    REQUIRE(restored_mod.outlets()[0].journalist_ids == std::vector<uint32_t>{900, 901, 902});
     REQUIRE(restored_mod.outlets()[0].type == MediaOutletType::newspaper);
     REQUIRE(restored_mod.outlets()[0].credibility == 0.7f);
 
     REQUIRE(restored_mod.active_stories().size() == 1);
     REQUIRE(restored_mod.active_stories()[0].tone == StoryTone::damaging);
-    REQUIRE(restored_mod.active_stories()[0].evidence_token_ids ==
-            std::vector<uint32_t>{50, 51});
+    REQUIRE(restored_mod.active_stories()[0].evidence_token_ids == std::vector<uint32_t>{50, 51});
     REQUIRE(restored_mod.active_stories()[0].amplification == 2.5f);
 }
 
@@ -946,10 +939,10 @@ TEST_CASE("v7 module-state: government_budget round-trip",
     REQUIRE(restored_mod.budgets()[0].revenue_own_taxes == 1000000.0f);
     REQUIRE(restored_mod.budgets()[0].accumulated_debt == 2000000.0f);
     REQUIRE(restored_mod.budgets()[0].spending_allocations.size() == 2);
-    REQUIRE(restored_mod.budgets()[0].spending_allocations.at(
-                SpendingCategory::public_services) == 400000.0f);
-    REQUIRE(restored_mod.budgets()[0].spending_actual.at(
-                SpendingCategory::law_enforcement) == 200000.0f);
+    REQUIRE(restored_mod.budgets()[0].spending_allocations.at(SpendingCategory::public_services) ==
+            400000.0f);
+    REQUIRE(restored_mod.budgets()[0].spending_actual.at(SpendingCategory::law_enforcement) ==
+            200000.0f);
     REQUIRE(restored_mod.budgets()[0].cash == 150000.0f);
 }
 

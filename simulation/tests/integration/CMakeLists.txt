@@ -11,6 +11,7 @@ target_link_libraries(econlife_integration_tests PRIVATE
 
 econlife_set_warnings(econlife_integration_tests)
 econlife_maybe_werror(econlife_integration_tests)
+econlife_relax_test_warnings(econlife_integration_tests)
 
 # SKIP_RETURN_CODE 4 tells CTest that exit code 4 (Catch2 SKIP) is not a failure.
 # WORKING_DIRECTORY is the project source root so relative paths in tests

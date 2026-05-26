@@ -39,7 +39,7 @@ struct ConstructionContract {
     std::string facility_type_key;  // what to build
     std::string recipe_id;          // initial recipe the facility runs
     std::vector<ConstructionBid> bids;
-    uint32_t awarded_bid_index;     // index into bids once awarded; else 0
+    uint32_t awarded_bid_index;  // index into bids once awarded; else 0
     ContractStage stage;
     uint32_t bidding_deadline_tick;     // award must happen by this tick or it cancels
     uint32_t expected_completion_tick;  // set on award

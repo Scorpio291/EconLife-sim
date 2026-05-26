@@ -302,8 +302,8 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
                     : 0.0f;
             RegionDelta homeless_delta{};
             homeless_delta.region_id = state.provinces[province_idx].region_id;
-            homeless_delta.homeless_rate_delta = cfg_.homeless_rate_convergence *
-                                                 (sample_homeless_fraction - current_homeless_rate);
+            homeless_delta.homeless_rate_delta =
+                cfg_.homeless_rate_convergence * (sample_homeless_fraction - current_homeless_rate);
             province_delta.region_deltas.push_back(homeless_delta);
         }
     }
@@ -494,19 +494,9 @@ float npc_accept_probability(const NPC& seller, uint32_t buyer_id, float offer_p
     if (cfg.distress_capital_threshold > 0.0f) {
         pressure = std::clamp(1.0f - seller.capital / cfg.distress_capital_threshold, 0.0f, 1.0f);
     }
-    float score = price_ratio + cfg.trust_accept_weight * trust +
-                  cfg.fear_accept_weight * fear + cfg.capital_pressure_weight * pressure;
+    float score = price_ratio + cfg.trust_accept_weight * trust + cfg.fear_accept_weight * fear +
+                  cfg.capital_pressure_weight * pressure;
     return logistic((score - 1.0f) * cfg.sigmoid_steepness);
-}
-
-// Phase 3 — find the active negotiation for a given scene_card_id, if any.
-NegotiationContext* find_negotiation_by_card(std::vector<NegotiationContext>& negs,
-                                             uint32_t scene_card_id) {
-    for (auto& n : negs) {
-        if (n.scene_card_id == scene_card_id)
-            return &n;
-    }
-    return nullptr;
 }
 
 // Phase 3 — true if any active negotiation references the given property.
@@ -608,9 +598,9 @@ bool approve_player_mortgage(const PlayerCharacter& player, float offer_price,
     // independently.
     constexpr float kPlayerBaselineCreditScore = 0.5f;
     constexpr float kBankingDenialDtiThreshold = 0.40f;  // matches BankingConfig default
-    return BankingModule::evaluate_loan_application(
-        kPlayerBaselineCreditScore, /*dti=*/0.0f, LoanPurpose::property_purchase,
-        kBankingDenialDtiThreshold);
+    return BankingModule::evaluate_loan_application(kPlayerBaselineCreditScore, /*dti=*/0.0f,
+                                                    LoanPurpose::property_purchase,
+                                                    kBankingDenialDtiThreshold);
 }
 
 // Emit an EvidenceToken for a property transaction when its dollar
@@ -662,8 +652,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // pending_transactions is logically write-side staging from the
     // module's point of view but lives on WorldState. const_cast is the
     // established carve-out (see DeferredWorkQueue, pending_legal_case_seeds).
-    auto& pending_txs =
-        const_cast<std::vector<PendingTransaction>&>(state.pending_transactions);
+    auto& pending_txs = const_cast<std::vector<PendingTransaction>&>(state.pending_transactions);
     auto& auctions = const_cast<std::vector<ActiveAuction>&>(state.active_auctions);
 
     const uint32_t player_id = state.player ? state.player->id : 0u;
@@ -672,9 +661,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // in one tick (e.g. paying a bail, listing+buying, settling N tx
     // simultaneously). state.player->wealth has not yet been adjusted
     // by this module's deltas.
-    float running_player_wealth =
-        (state.player ? state.player->wealth : 0.0f) +
-        delta.player_delta.wealth_delta.value_or(0.0f);
+    float running_player_wealth = (state.player ? state.player->wealth : 0.0f) +
+                                  delta.player_delta.wealth_delta.value_or(0.0f);
 
     // Per-NPC running capital for the same reason.
     std::unordered_map<uint32_t, float> running_npc_capital;
@@ -753,10 +741,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
             // Drop active negotiation, if any.
             active_negotiations_.erase(
-                std::remove_if(active_negotiations_.begin(), active_negotiations_.end(),
-                               [&](const NegotiationContext& n) {
-                                   return n.property_id == prop->id;
-                               }),
+                std::remove_if(
+                    active_negotiations_.begin(), active_negotiations_.end(),
+                    [&](const NegotiationContext& n) { return n.property_id == prop->id; }),
                 active_negotiations_.end());
             // Transfer ownership to lender (0 = anonymous bank).
             prop->owner_id = fc.lender_id;
@@ -803,8 +790,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 continue;
             if (bid.bid_amount <= auction->current_high_bid)
                 continue;
-            if (bid.bid_amount < auction->reserve_price &&
-                auction->current_high_bidder_id == 0) {
+            if (bid.bid_amount < auction->reserve_price && auction->current_high_bidder_id == 0) {
                 // First bid must at least reach reserve to register; sub-
                 // reserve opening bids are dropped (keeps the high-bid
                 // ladder meaningful).
@@ -848,10 +834,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             float max_bid_value = prop->market_value * cfg_.npc_auction_max_value_ratio;
             // Next bid the NPC would place: raise current high by the
             // increment, or open at the reserve if no bids yet.
-            float next_bid = (auction.current_high_bid > 0.0f)
-                                 ? auction.current_high_bid *
-                                       (1.0f + cfg_.npc_auction_bid_increment)
-                                 : auction.reserve_price;
+            float next_bid =
+                (auction.current_high_bid > 0.0f)
+                    ? auction.current_high_bid * (1.0f + cfg_.npc_auction_bid_increment)
+                    : auction.reserve_price;
             if (next_bid > max_bid_value)
                 continue;  // bidding past sane value — NPCs bow out
 
@@ -924,11 +910,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             auction.status = AuctionStatus::closed_sold;
         }
         // Prune terminal-state auctions.
-        auctions.erase(std::remove_if(auctions.begin(), auctions.end(),
-                                      [](const ActiveAuction& a) {
-                                          return a.status != AuctionStatus::open;
-                                      }),
-                       auctions.end());
+        auctions.erase(
+            std::remove_if(auctions.begin(), auctions.end(),
+                           [](const ActiveAuction& a) { return a.status != AuctionStatus::open; }),
+            auctions.end());
     }
 
     // ── 0b. Phase 7: drain zoning-change requests ──
@@ -1051,6 +1036,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 }
                 // Re-fetch parent (push_back may have reallocated).
                 parent = find_property(properties_, parent_id);
+                if (!parent)
+                    continue;  // unreachable (parent_id just existed); satisfies -Wnull
                 parent->subdivided = true;
                 parent->unit_count = n;
                 parent->listed_for_sale = false;  // shell: not directly buyable
@@ -1082,13 +1069,14 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     continue;
                 // Remove children; restore parent.
                 uint32_t parent_id = parent->id;
-                properties_.erase(
-                    std::remove_if(properties_.begin(), properties_.end(),
-                                   [parent_id](const PropertyListing& p) {
-                                       return p.parent_property_id == parent_id;
-                                   }),
-                    properties_.end());
+                properties_.erase(std::remove_if(properties_.begin(), properties_.end(),
+                                                 [parent_id](const PropertyListing& p) {
+                                                     return p.parent_property_id == parent_id;
+                                                 }),
+                                  properties_.end());
                 parent = find_property(properties_, parent_id);
+                if (!parent)
+                    continue;  // unreachable (parent survived the erase); satisfies -Wnull
                 parent->subdivided = false;
                 parent->unit_count = 1;
                 if (summed_value > 0.0f)
@@ -1156,9 +1144,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
             // Owner accept-roll: multiple vs fair + relationship trust.
             float trust = 0.0f;
-            const NPC* owner = (biz->owner_id != 0u)
-                                   ? lookup_npc_by_id(state, biz->owner_id)
-                                   : nullptr;
+            const NPC* owner =
+                (biz->owner_id != 0u) ? lookup_npc_by_id(state, biz->owner_id) : nullptr;
             if (owner)
                 trust = find_trust_toward(*owner, req.buyer_id);
             float fair = cfg_.acquisition_fair_multiple;
@@ -1188,8 +1175,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             acq.payment_method = pm;
             acq.down_payment_fraction = dpf;
             acq.interest_rate = cfg_.mortgage_interest_rate;
-            acq.loan_maturity_ticks =
-                (pm == PaymentMethod::cash) ? 0u : cfg_.mortgage_term_ticks;
+            acq.loan_maturity_ticks = (pm == PaymentMethod::cash) ? 0u : cfg_.mortgage_term_ticks;
             biz_acqs.push_back(acq);
         }
         auto& mutable_reqs = const_cast<std::vector<BusinessAcquisitionRequest>&>(
@@ -1217,9 +1203,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         }
         float cash_portion = acq.price * acq.down_payment_fraction;
         float loan_principal = acq.price - cash_portion;
-        bool buyer_can_pay = (acq.buyer_id == player_id)
-                                 ? running_player_wealth >= cash_portion
-                                 : true;
+        bool buyer_can_pay =
+            (acq.buyer_id == player_id) ? running_player_wealth >= cash_portion : true;
         if (!buyer_can_pay) {
             acq.stage = PendingTxStage::expired;
             continue;
@@ -1266,8 +1251,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                    biz_acqs.end());
 
     // ── 0e. Phase 11: construction contracts ──
-    auto& contracts =
-        const_cast<std::vector<ConstructionContract>&>(state.construction_contracts);
+    auto& contracts = const_cast<std::vector<ConstructionContract>&>(state.construction_contracts);
 
     // Helpers to allocate ids that don't collide with state or this
     // tick's pending delta additions.
@@ -1315,8 +1299,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             c.recipe_id = req.recipe_id;
             c.awarded_bid_index = 0;
             c.stage = ContractStage::bidding;
-            uint32_t window = req.bidding_window_ticks > 0u ? req.bidding_window_ticks
-                                                            : cfg_.construction_default_bidding_window;
+            uint32_t window = req.bidding_window_ticks > 0u
+                                  ? req.bidding_window_ticks
+                                  : cfg_.construction_default_bidding_window;
             c.bidding_deadline_tick = state.current_tick + window;
 
             // Collect bids from construction-sector firms in the province.
@@ -1472,8 +1457,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // tax_lien_quarters a lien is filed; after tax_sale_quarters the parcel
     // is seized to the state and sent to a government-consigned auction
     // (reusing the Phase 6 pipeline) with reserve = unpaid balance.
-    if (state.current_tick > 0u &&
-        state.current_tick % cfg_.property_tax_quarter_ticks == 0u) {
+    if (state.current_tick > 0u && state.current_tick % cfg_.property_tax_quarter_ticks == 0u) {
         for (auto& prop : properties_) {
             if (prop.owner_id == 0u)
                 continue;  // state/bank-held — no tax on the treasury itself
@@ -1535,10 +1519,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 if (auto* tx = find_active_pending_tx(pending_txs, prop.id))
                     tx->stage = PendingTxStage::cancelled;
                 active_negotiations_.erase(
-                    std::remove_if(active_negotiations_.begin(), active_negotiations_.end(),
-                                   [&](const NegotiationContext& n) {
-                                       return n.property_id == prop.id;
-                                   }),
+                    std::remove_if(
+                        active_negotiations_.begin(), active_negotiations_.end(),
+                        [&](const NegotiationContext& n) { return n.property_id == prop.id; }),
                     active_negotiations_.end());
 
                 float reserve = prop.unpaid_tax_balance;
@@ -1708,11 +1691,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     const NPC* seller = lookup_npc_by_id(state, prop->owner_id);
                     if (!seller)
                         break;  // state-owned or unknown — no negotiation
-                    DeterministicRNG roll_rng(state.world_seed ^
-                                              (static_cast<uint64_t>(state.current_tick) *
-                                               0x9E37u) ^
-                                              (static_cast<uint64_t>(prop->id) * 0xB7E1u) ^
-                                              (static_cast<uint64_t>(req.actor_id) * 0x5851u));
+                    DeterministicRNG roll_rng(
+                        state.world_seed ^ (static_cast<uint64_t>(state.current_tick) * 0x9E37u) ^
+                        (static_cast<uint64_t>(prop->id) * 0xB7E1u) ^
+                        (static_cast<uint64_t>(req.actor_id) * 0x5851u));
                     float p_accept = npc_accept_probability(*seller, req.actor_id, req.price,
                                                             prop->market_value, cfg_);
                     if (roll_rng.next_float() >= p_accept) {
@@ -1726,9 +1708,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                             prop->asking_price > 0.0f &&
                             req.price >= prop->asking_price * cfg_.negotiation_counter_min_ratio &&
                             !has_active_negotiation_for_property(active_negotiations_, prop->id)) {
-                            float counter_price =
-                                req.price + (prop->asking_price - req.price) *
-                                                cfg_.negotiation_counter_split;
+                            float counter_price = req.price + (prop->asking_price - req.price) *
+                                                                  cfg_.negotiation_counter_split;
                             SceneCard card{};
                             card.id = next_scene_card_id(state, delta);
                             card.type = SceneCardType::meeting;
@@ -1739,10 +1720,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                             line.text = "I can't take that — but I'd let it go at my counter.";
                             line.emotional_tone = 0.2f;
                             card.dialogue.push_back(line);
-                            card.choices.push_back(PlayerChoice{CHOICE_ACCEPT_OFFER,
-                                                                "Accept counter", "", 0});
-                            card.choices.push_back(PlayerChoice{CHOICE_DECLINE_OFFER,
-                                                                "Walk away", "", 0});
+                            card.choices.push_back(
+                                PlayerChoice{CHOICE_ACCEPT_OFFER, "Accept counter", "", 0});
+                            card.choices.push_back(
+                                PlayerChoice{CHOICE_DECLINE_OFFER, "Walk away", "", 0});
                             card.npc_presentation_state = 0.5f;
                             card.is_authored = false;
                             card.chosen_choice_id = 0;
@@ -1751,8 +1732,8 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                             NegotiationContext neg{};
                             neg.scene_card_id = card.id;
                             neg.property_id = prop->id;
-                            neg.buyer_id = req.actor_id;       // the player
-                            neg.seller_id = prop->owner_id;    // the NPC
+                            neg.buyer_id = req.actor_id;     // the player
+                            neg.seller_id = prop->owner_id;  // the NPC
                             neg.offer_price = counter_price;
                             neg.offered_tick = state.current_tick;
                             neg.deadline_tick =
@@ -1959,8 +1940,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     tx.seller_id = prop.owner_id;
                     tx.offer_price = prop.asking_price;
                     tx.offered_tick = state.current_tick;
-                    tx.close_tick =
-                        state.current_tick + close_delay_for_type(cfg_, prop.type);
+                    tx.close_tick = state.current_tick + close_delay_for_type(cfg_, prop.type);
                     tx.stage = PendingTxStage::pending;
                     pending_txs.push_back(tx);
                     break;  // one buyer per property per tick

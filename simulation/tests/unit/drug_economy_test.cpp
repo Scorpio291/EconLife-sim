@@ -205,8 +205,7 @@ TEST_CASE("DrugEconomy: no seeding when no supply and zero addiction_rate",
     REQUIRE(count_seeded(delta) == 0);
 }
 
-TEST_CASE("DrugEconomy: seeds NPCs when drug business present",
-          "[drug_economy][seeding][tier8]") {
+TEST_CASE("DrugEconomy: seeds NPCs when drug business present", "[drug_economy][seeding][tier8]") {
     DrugEconomyConfig cfg{};
     cfg.addiction_seeding_probability = 1.0f;  // every eligible NPC seeded
     DrugEconomyModule module(cfg);
@@ -227,8 +226,7 @@ TEST_CASE("DrugEconomy: seeds NPCs when drug business present",
     }
 }
 
-TEST_CASE("DrugEconomy: saturation cap halts further seeding",
-          "[drug_economy][seeding][tier8]") {
+TEST_CASE("DrugEconomy: saturation cap halts further seeding", "[drug_economy][seeding][tier8]") {
     DrugEconomyConfig cfg{};
     cfg.addiction_seeding_probability = 1.0f;
     cfg.addiction_seeding_saturation_cap = 0.05f;

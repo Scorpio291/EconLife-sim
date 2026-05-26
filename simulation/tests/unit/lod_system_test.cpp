@@ -145,8 +145,7 @@ TEST_CASE("LOD: annual tick emits per-good price index deltas",
     REQUIRE_THAT(delta.lod2_price_index_deltas[1].raw_modifier, WithinAbs(0.5f, 0.001f));
 }
 
-TEST_CASE("LOD: non-annual tick emits no price index deltas",
-          "[lod_system][lod2_index][tier11]") {
+TEST_CASE("LOD: non-annual tick emits no price index deltas", "[lod_system][lod2_index][tier11]") {
     auto state = make_lod2_world(180);  // not annual
     state.provinces.push_back(make_lod2_province(0, SimulationLOD::statistical));
     RegionalMarket m{};
@@ -212,8 +211,7 @@ TEST_CASE("LOD: apply lerps from prior modifier using smoothing rate",
     REQUIRE(state.lod2_price_index->last_updated_tick == 365);
 }
 
-TEST_CASE("LOD: apply seeds at 1.0 when good_id is new",
-          "[lod_system][lod2_index][tier11]") {
+TEST_CASE("LOD: apply seeds at 1.0 when good_id is new", "[lod_system][lod2_index][tier11]") {
     auto state = make_lod2_world(365);
     REQUIRE(state.lod2_price_index->lod2_price_modifier.find(42) ==
             state.lod2_price_index->lod2_price_modifier.end());
@@ -230,8 +228,7 @@ TEST_CASE("LOD: apply seeds at 1.0 when good_id is new",
     REQUIRE_THAT(state.lod2_price_index->lod2_price_modifier[42], WithinAbs(1.15f, 0.001f));
 }
 
-TEST_CASE("LOD: apply rejects NaN raw_modifier",
-          "[lod_system][lod2_index][tier11]") {
+TEST_CASE("LOD: apply rejects NaN raw_modifier", "[lod_system][lod2_index][tier11]") {
     auto state = make_lod2_world(365);
     state.lod2_price_index->lod2_price_modifier[1] = 1.2f;
 

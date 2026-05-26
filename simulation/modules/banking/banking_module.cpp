@@ -380,8 +380,7 @@ void BankingModule::execute(const WorldState& state, DeltaBuffer& delta) {
             loan.collateral_id = req.collateral_id;
             active_loans_.push_back(loan);
         }
-        auto& mutable_queue =
-            const_cast<std::vector<NewLoanRequest>&>(state.pending_loan_requests);
+        auto& mutable_queue = const_cast<std::vector<NewLoanRequest>&>(state.pending_loan_requests);
         mutable_queue.clear();
     }
 

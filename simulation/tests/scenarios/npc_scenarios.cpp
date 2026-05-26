@@ -495,5 +495,6 @@ TEST_CASE("spending allocation affects service quality", "[scenario][npc][budget
 
     REQUIRE_THAT(world.provinces[0].conditions.stability_score,
                  WithinAbs(initial_stability + 0.08f, 0.01f));
-    REQUIRE_THAT(world.provinces[0].cohort_stats->crime_rate, WithinAbs(initial_crime + 0.06f, 0.01f));
+    REQUIRE_THAT(world.provinces[0].cohort_stats->crime_rate,
+                 WithinAbs(initial_crime + 0.06f, 0.01f));
 }

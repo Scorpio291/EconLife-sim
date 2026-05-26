@@ -71,6 +71,7 @@ target_link_libraries(econlife_unit_tests PRIVATE
 
 econlife_set_warnings(econlife_unit_tests)
 econlife_maybe_werror(econlife_unit_tests)
+econlife_relax_test_warnings(econlife_unit_tests)
 
 catch_discover_tests(econlife_unit_tests
     PROPERTIES LABELS "module"

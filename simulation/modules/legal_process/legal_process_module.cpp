@@ -73,8 +73,7 @@ bool LegalProcessModule::should_charge(uint32_t current_tick, uint32_t stage_ent
     return evidence_weight >= charge_evidence_threshold;
 }
 
-bool LegalProcessModule::should_proceed_to_trial(uint32_t current_tick,
-                                                 uint32_t stage_entered_tick,
+bool LegalProcessModule::should_proceed_to_trial(uint32_t current_tick, uint32_t stage_entered_tick,
                                                  uint32_t charge_to_trial_ticks) {
     if (current_tick < stage_entered_tick)
         return false;
@@ -156,10 +155,8 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
         // never re-open within this lifetime; fined cases retain double-jeopardy
         // protection but otherwise no longer transition; paroled defendants are
         // released from custody (NPC status flip already emitted on transition).
-        if (lcase.stage == LegalCaseStage::acquitted ||
-            lcase.stage == LegalCaseStage::pardoned ||
-            lcase.stage == LegalCaseStage::fined ||
-            lcase.stage == LegalCaseStage::paroled)
+        if (lcase.stage == LegalCaseStage::acquitted || lcase.stage == LegalCaseStage::pardoned ||
+            lcase.stage == LegalCaseStage::fined || lcase.stage == LegalCaseStage::paroled)
             continue;
 
         // --- Stage: investigation ---
@@ -179,8 +176,8 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 // Weight = case evidence + arrest_exposure_hit (additive
                 // PR damage of public arrest, per player.h:159 "exposure
                 // is the set of awareness entries, not a scalar").
-                float public_weight = std::clamp(
-                    lcase.evidence_weight + cfg_.arrest_exposure_hit, 0.0f, 1.0f);
+                float public_weight =
+                    std::clamp(lcase.evidence_weight + cfg_.arrest_exposure_hit, 0.0f, 1.0f);
                 EvidenceDelta arrest_record;
                 arrest_record.new_token = EvidenceToken{0,
                                                         EvidenceType::documentary,
@@ -219,8 +216,7 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             if (should_dismiss(lcase.evidence_weight, cfg_.dismissal_evidence_threshold)) {
                 lcase.stage = LegalCaseStage::acquitted;
                 lcase.stage_entered_tick = state.current_tick;
-                lcase.double_jeopardy_until =
-                    state.current_tick + cfg_.double_jeopardy_cooldown;
+                lcase.double_jeopardy_until = state.current_tick + cfg_.double_jeopardy_cooldown;
                 if (lcase.defendant_npc_id > 0) {
                     NPCDelta npc_delta;
                     npc_delta.npc_id = lcase.defendant_npc_id;
@@ -244,8 +240,7 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             if (should_dismiss(lcase.evidence_weight, cfg_.dismissal_evidence_threshold)) {
                 lcase.stage = LegalCaseStage::acquitted;
                 lcase.stage_entered_tick = state.current_tick;
-                lcase.double_jeopardy_until =
-                    state.current_tick + cfg_.double_jeopardy_cooldown;
+                lcase.double_jeopardy_until = state.current_tick + cfg_.double_jeopardy_cooldown;
                 continue;
             }
             if (should_proceed_to_trial(state.current_tick, lcase.stage_entered_tick,
@@ -290,8 +285,7 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 lcase.sentence_ticks =
                     compute_sentence_ticks(lcase.severity, cfg_.ticks_per_severity);
                 lcase.release_tick = state.current_tick + lcase.sentence_ticks;
-                lcase.double_jeopardy_until =
-                    lcase.release_tick + cfg_.double_jeopardy_cooldown;
+                lcase.double_jeopardy_until = lcase.release_tick + cfg_.double_jeopardy_cooldown;
                 ConsequenceDelta cons;
                 cons.new_entry_id = lcase.id;
                 delta.consequence_deltas.push_back(cons);
@@ -300,8 +294,7 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
             } else {
                 lcase.stage = LegalCaseStage::acquitted;
                 lcase.stage_entered_tick = state.current_tick;
-                lcase.double_jeopardy_until =
-                    state.current_tick + cfg_.double_jeopardy_cooldown;
+                lcase.double_jeopardy_until = state.current_tick + cfg_.double_jeopardy_cooldown;
                 continue;
             }
         }
@@ -336,9 +329,9 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
         // Parole eligibility once parole_eligibility_fraction of sentence has
         // been served. Mandatory release at release_tick.
         if (lcase.stage == LegalCaseStage::imprisoned) {
-            bool eligible = is_parole_eligible(state.current_tick, lcase.release_tick,
-                                               lcase.sentence_ticks,
-                                               cfg_.parole_eligibility_fraction);
+            bool eligible =
+                is_parole_eligible(state.current_tick, lcase.release_tick, lcase.sentence_ticks,
+                                   cfg_.parole_eligibility_fraction);
             bool mandatory_release = state.current_tick >= lcase.release_tick;
             if (eligible || mandatory_release) {
                 lcase.stage = LegalCaseStage::paroled;

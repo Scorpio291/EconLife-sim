@@ -332,9 +332,10 @@ TEST_CASE("GoodsCatalog loads all tier 0-4 goods from base_game CSVs",
     // reach. Failing loud is the right call — silently SKIPping let the
     // CSV-load path regress unobserved in CI for several PRs (see the
     // goods CSV skip entry in docs/session_logs/flagged_issues.md).
-    INFO("find_goods_dir() returned empty — relative-path search from cwd "
-         "failed; expected one of packages/base_game/goods (or up to 3 "
-         "parents) to resolve");
+    INFO(
+        "find_goods_dir() returned empty — relative-path search from cwd "
+        "failed; expected one of packages/base_game/goods (or up to 3 "
+        "parents) to resolve");
     REQUIRE_FALSE(goods_dir.empty());
 
     GoodsCatalog catalog;

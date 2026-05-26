@@ -14,9 +14,9 @@
 #include <string>
 #include <variant>
 
-#include "core/world_state/delta_buffer.h"        // PaymentMethod
-#include "modules/calendar/calendar_types.h"      // CalendarEntryType
-#include "modules/economy/economy_types.h"        // BusinessSector
+#include "core/world_state/delta_buffer.h"          // PaymentMethod
+#include "modules/calendar/calendar_types.h"        // CalendarEntryType
+#include "modules/economy/economy_types.h"          // BusinessSector
 #include "modules/real_estate/real_estate_types.h"  // PropertyType
 
 namespace econlife {
@@ -219,8 +219,7 @@ using PlayerActionPayload =
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
                  MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction,
                  RequestZoningChangeAction, SubdividePropertyAction, MergeUnitsAction,
-                 AcquireBusinessAction, RequestConstructionBidsAction,
-                 AwardConstructionBidAction>;
+                 AcquireBusinessAction, RequestConstructionBidsAction, AwardConstructionBidAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

@@ -446,8 +446,7 @@ TEST_CASE("ListPropertyForSaleAction rejects non-positive asking price",
 
 TEST_CASE("UnlistPropertyAction emits unlist request", "[player_actions][market_phase1]") {
     auto world = make_minimal_world();
-    enqueue_player_action(world, PlayerActionType::unlist_property,
-                          UnlistPropertyAction{42});
+    enqueue_player_action(world, PlayerActionType::unlist_property, UnlistPropertyAction{42});
 
     PlayerActionsModule module;
     DeltaBuffer delta;
@@ -519,8 +518,7 @@ TEST_CASE("CancelPendingTransactionAction emits cancel request",
     REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
 }
 
-TEST_CASE("RequestZoningChangeAction emits zoning request",
-          "[player_actions][market_phase7]") {
+TEST_CASE("RequestZoningChangeAction emits zoning request", "[player_actions][market_phase7]") {
     auto world = make_minimal_world();
     enqueue_player_action(world, PlayerActionType::request_zoning_change,
                           RequestZoningChangeAction{5, PropertyType::industrial});
@@ -536,8 +534,7 @@ TEST_CASE("RequestZoningChangeAction emits zoning request",
             static_cast<uint8_t>(PropertyType::industrial));
 }
 
-TEST_CASE("SubdividePropertyAction emits subdivide request",
-          "[player_actions][market_phase8]") {
+TEST_CASE("SubdividePropertyAction emits subdivide request", "[player_actions][market_phase8]") {
     auto world = make_minimal_world();
     enqueue_player_action(world, PlayerActionType::subdivide_property,
                           SubdividePropertyAction{3, 6});
@@ -566,8 +563,7 @@ TEST_CASE("SubdividePropertyAction with fewer than 2 units is dropped",
     REQUIRE(delta.new_subdivision_requests.empty());
 }
 
-TEST_CASE("MergeUnitsAction emits merge request",
-          "[player_actions][market_phase8]") {
+TEST_CASE("MergeUnitsAction emits merge request", "[player_actions][market_phase8]") {
     auto world = make_minimal_world();
     enqueue_player_action(world, PlayerActionType::merge_units, MergeUnitsAction{3});
 
@@ -626,8 +622,7 @@ TEST_CASE("RequestConstructionBidsAction with empty facility type is dropped",
     REQUIRE(delta.new_construction_requests.empty());
 }
 
-TEST_CASE("AwardConstructionBidAction emits award request",
-          "[player_actions][market_phase11]") {
+TEST_CASE("AwardConstructionBidAction emits award request", "[player_actions][market_phase11]") {
     auto world = make_minimal_world();
     enqueue_player_action(world, PlayerActionType::award_construction_bid,
                           AwardConstructionBidAction{7, 2});

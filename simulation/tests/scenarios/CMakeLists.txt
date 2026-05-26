@@ -15,6 +15,7 @@ target_link_libraries(econlife_scenario_tests PRIVATE
 
 econlife_set_warnings(econlife_scenario_tests)
 econlife_maybe_werror(econlife_scenario_tests)
+econlife_relax_test_warnings(econlife_scenario_tests)
 
 catch_discover_tests(econlife_scenario_tests
     PROPERTIES LABELS "scenario"

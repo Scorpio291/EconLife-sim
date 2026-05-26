@@ -109,9 +109,7 @@ class RealEstateModule : public ITickModule {
     const std::vector<NegotiationContext>& active_negotiations() const {
         return active_negotiations_;
     }
-    std::vector<NegotiationContext>& active_negotiations_mut() {
-        return active_negotiations_;
-    }
+    std::vector<NegotiationContext>& active_negotiations_mut() { return active_negotiations_; }
 };
 
 }  // namespace econlife

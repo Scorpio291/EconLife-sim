@@ -23,17 +23,17 @@
 namespace econlife {
 
 enum class PendingTxStage : uint8_t {
-    pending = 0,     // accepted, awaiting close_tick
-    settled = 1,     // close_tick reached, ownership transferred
-    cancelled = 2,   // player cancelled before close (buyer or seller)
-    expired = 3,     // close_tick reached but buyer can no longer afford
+    pending = 0,    // accepted, awaiting close_tick
+    settled = 1,    // close_tick reached, ownership transferred
+    cancelled = 2,  // player cancelled before close (buyer or seller)
+    expired = 3,    // close_tick reached but buyer can no longer afford
 };
 
 struct PendingTransaction {
     uint32_t id;
     uint32_t property_id;
     uint32_t buyer_id;
-    uint32_t seller_id;     // resolved at create time from property.owner_id
+    uint32_t seller_id;  // resolved at create time from property.owner_id
     float offer_price;
     uint32_t offered_tick;
     uint32_t close_tick;
@@ -46,8 +46,8 @@ struct PendingTransaction {
     // payment_method=mixed and down_payment_fraction in (0, 1).
     PaymentMethod payment_method = PaymentMethod::cash;
     float down_payment_fraction = 1.0f;
-    float interest_rate = 0.0f;       // captured at offer time so close uses approved rate
-    uint32_t loan_maturity_ticks = 0; // 0 = N/A for cash; non-zero for mortgage/mixed
+    float interest_rate = 0.0f;        // captured at offer time so close uses approved rate
+    uint32_t loan_maturity_ticks = 0;  // 0 = N/A for cash; non-zero for mortgage/mixed
 };
 
 // Phase 10 — in-flight business acquisition. Structurally parallel to
@@ -60,8 +60,8 @@ struct PendingBusinessAcquisition {
     uint32_t id;
     uint32_t business_id;
     uint32_t buyer_id;
-    uint32_t seller_id;     // current owner (0 = independent business)
-    float price;            // computed acquisition price (revenue × months × multiple)
+    uint32_t seller_id;  // current owner (0 = independent business)
+    float price;         // computed acquisition price (revenue × months × multiple)
     uint32_t offered_tick;
     uint32_t close_tick;
     PendingTxStage stage;

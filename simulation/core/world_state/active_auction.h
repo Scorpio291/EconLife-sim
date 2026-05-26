@@ -26,9 +26,9 @@ namespace econlife {
 
 enum class AuctionStatus : uint8_t {
     open = 0,
-    closed_sold = 1,         // close_tick reached, high bid >= reserve
-    closed_no_reserve = 2,   // close_tick reached, no bid met reserve
-    cancelled = 3,           // consigner cancelled (reserved for player-initiated)
+    closed_sold = 1,        // close_tick reached, high bid >= reserve
+    closed_no_reserve = 2,  // close_tick reached, no bid met reserve
+    cancelled = 3,          // consigner cancelled (reserved for player-initiated)
 };
 
 struct AuctionBid {
@@ -39,10 +39,10 @@ struct AuctionBid {
 
 struct ActiveAuction {
     uint32_t id;
-    uint32_t asset_id;             // PropertyListing.id (V1)
-    uint32_t consigner_id;         // who put it up (lender_id for foreclosure;
-                                   // future: player or government)
-    float reserve_price;           // minimum acceptable winning bid
+    uint32_t asset_id;      // PropertyListing.id (V1)
+    uint32_t consigner_id;  // who put it up (lender_id for foreclosure;
+                            // future: player or government)
+    float reserve_price;    // minimum acceptable winning bid
     uint32_t opened_tick;
     uint32_t closes_tick;
     AuctionStatus status;

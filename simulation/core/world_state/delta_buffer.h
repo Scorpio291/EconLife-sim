@@ -234,11 +234,11 @@ struct CalendarCommitDelta {
 // severity is the underlying value of CaseSeverity (kept as u8 here so
 // delta_buffer.h does not depend on legal_process_types.h).
 struct LegalCaseSeedDelta {
-    uint32_t defendant_npc_id;     // 0 = player defendant
-    uint32_t lead_investigator_id; // NPC opening the case; 0 if none
-    uint8_t severity;              // CaseSeverity enum value
+    uint32_t defendant_npc_id;      // 0 = player defendant
+    uint32_t lead_investigator_id;  // NPC opening the case; 0 if none
+    uint8_t severity;               // CaseSeverity enum value
     uint32_t province_id;
-    float initial_evidence_weight; // starting evidence accumulated so far
+    float initial_evidence_weight;  // starting evidence accumulated so far
 };
 
 // Random event trigger — request to start a specific ActiveRandomEvent
@@ -255,7 +255,7 @@ struct LegalCaseSeedDelta {
 struct RandomEventTriggerDelta {
     std::string template_key;  // matches RandomEventTemplate.id
     uint32_t province_id;
-    float severity;            // 0.0–1.0; clamped to template's [min,max] range
+    float severity;  // 0.0–1.0; clamped to template's [min,max] range
 };
 
 // Property transaction request — player_actions (and future NPC seller
@@ -319,7 +319,7 @@ struct PropertySubdivisionRequest {
     SubdivisionKind kind;
     uint32_t property_id;  // the parent property
     uint32_t actor_id;
-    uint32_t n_units;      // subdivide: number of child units; ignored for merge
+    uint32_t n_units;  // subdivide: number of child units; ignored for merge
 };
 
 // Phase 7 — zoning-change application on an owned property. Emitted by
@@ -376,13 +376,13 @@ struct PropertyForeclosureRequest {
 // per-module includes.
 struct NewLoanRequest {
     uint32_t borrower_id;
-    uint32_t lender_id;       // 0 = anonymous bank (V1 default)
-    uint8_t purpose;          // LoanPurpose enum value (property_purchase = 1)
+    uint32_t lender_id;  // 0 = anonymous bank (V1 default)
+    uint8_t purpose;     // LoanPurpose enum value (property_purchase = 1)
     float principal;
     float interest_rate;
     float repayment_per_tick;
     uint32_t maturity_tick;
-    uint32_t collateral_id;   // PropertyListing.id for property_purchase loans
+    uint32_t collateral_id;  // PropertyListing.id for property_purchase loans
 };
 
 struct PropertyTransactionRequest {
@@ -428,17 +428,17 @@ struct DeltaBuffer {
     std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
     std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
     std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
-    std::vector<RandomEventTriggerDelta> new_random_event_triggers;  // merge: append
+    std::vector<RandomEventTriggerDelta> new_random_event_triggers;     // merge: append
     std::vector<PropertyTransactionRequest> new_property_transactions;  // merge: append
     std::vector<NewLoanRequest> new_loan_requests;                      // merge: append
     std::vector<PropertyForeclosureRequest> new_property_foreclosures;  // merge: append
-    std::vector<AuctionBidRequest> new_auction_bid_requests;             // merge: append
-    std::vector<ZoningChangeRequest> new_zoning_requests;                // merge: append
-    std::vector<PropertySubdivisionRequest> new_subdivision_requests;    // merge: append
-    std::vector<BusinessAcquisitionRequest> new_business_acquisitions;   // merge: append
-    std::vector<NewFacilityDelta> new_facilities;                        // merge: append
-    std::vector<ConstructionBidsRequest> new_construction_requests;      // merge: append
-    std::vector<ConstructionAwardRequest> new_construction_awards;       // merge: append
+    std::vector<AuctionBidRequest> new_auction_bid_requests;            // merge: append
+    std::vector<ZoningChangeRequest> new_zoning_requests;               // merge: append
+    std::vector<PropertySubdivisionRequest> new_subdivision_requests;   // merge: append
+    std::vector<BusinessAcquisitionRequest> new_business_acquisitions;  // merge: append
+    std::vector<NewFacilityDelta> new_facilities;                       // merge: append
+    std::vector<ConstructionBidsRequest> new_construction_requests;     // merge: append
+    std::vector<ConstructionAwardRequest> new_construction_awards;      // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

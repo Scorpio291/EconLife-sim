@@ -211,10 +211,9 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         // Fork the RNG deterministically per (tick, province) so seeding is
         // reproducible. The seed mixes world_seed, current_tick, province.id,
         // and a module-specific context tag.
-        const uint64_t rng_seed = state.world_seed ^
-                                  (static_cast<uint64_t>(state.current_tick) << 16) ^
-                                  static_cast<uint64_t>(province.id) ^
-                                  (static_cast<uint64_t>(SEED_RNG_CONTEXT) << 32);
+        const uint64_t rng_seed =
+            state.world_seed ^ (static_cast<uint64_t>(state.current_tick) << 16) ^
+            static_cast<uint64_t>(province.id) ^ (static_cast<uint64_t>(SEED_RNG_CONTEXT) << 32);
         DeterministicRNG rng(rng_seed);
 
         // Iterate NPC bucket for this province in npc_id ascending order.

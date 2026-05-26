@@ -662,7 +662,8 @@ TEST_CASE("province stability reflects aggregated conditions",
     REQUIRE(world.provinces[0].cohort_stats->addiction_rate > initial_addiction);
     REQUIRE(world.provinces[0].conditions.stability_score < initial_stability);
 
-    REQUIRE_THAT(world.provinces[0].cohort_stats->crime_rate, WithinAbs(initial_crime + 0.1f, 0.01f));
+    REQUIRE_THAT(world.provinces[0].cohort_stats->crime_rate,
+                 WithinAbs(initial_crime + 0.1f, 0.01f));
     REQUIRE_THAT(world.provinces[0].conditions.stability_score,
                  WithinAbs(initial_stability - 0.1f, 0.01f));
 }

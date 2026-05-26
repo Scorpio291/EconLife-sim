@@ -30,11 +30,11 @@ enum class PropertyType : uint8_t {
                      // Primary use: facility housing for Facility records.
                      // Price drivers: energy_cost_baseline, infrastructure_rating.
 
-    raw_land = 3,    // Undeveloped parcel (Phase 7). No rental yield. Carries a
-                     // `subtype_key` (farmland / coastal / wilderness / island /
-                     // urban_*) and a `zoned_use` describing what it may be
-                     // developed into without a zoning-change application.
-                     // Construction onto raw_land lands in Phase 11.
+    raw_land = 3,  // Undeveloped parcel (Phase 7). No rental yield. Carries a
+                   // `subtype_key` (farmland / coastal / wilderness / island /
+                   // urban_*) and a `zoned_use` describing what it may be
+                   // developed into without a zoning-change application.
+                   // Construction onto raw_land lands in Phase 11.
 };
 
 // Phase 9 — LocationFlags bitfield values (stored in
@@ -42,7 +42,7 @@ enum class PropertyType : uint8_t {
 inline constexpr uint8_t LocationFlag_None = 0u;
 inline constexpr uint8_t LocationFlag_Offshore = 1u << 0;       // no tax, concealed transfers
 inline constexpr uint8_t LocationFlag_International = 1u << 1;  // multi-flag legal status
-inline constexpr uint8_t LocationFlag_Remote = 1u << 2;        // raises construction cost
+inline constexpr uint8_t LocationFlag_Remote = 1u << 2;         // raises construction cost
 
 // --- §33.1 — PropertyListing ---
 
@@ -70,17 +70,18 @@ struct PropertyListing {
 
     // Phase 7 — land taxonomy + zoning (meaningful chiefly for raw_land,
     // but stored uniformly).
-    std::string subtype_key;       // "farmland" | "coastal" | "wilderness" |
-                                   // "island" | "urban_residential" |
-                                   // "urban_commercial" | "urban_industrial" | ""
+    std::string subtype_key;            // "farmland" | "coastal" | "wilderness" |
+                                        // "island" | "urban_residential" |
+                                        // "urban_commercial" | "urban_industrial" | ""
     float parcel_area_hectares = 0.0f;  // distinguishes a 0.05 ha house lot from
                                         // a 500 ha island. 0 = unspecified.
-    PropertyType zoned_use = PropertyType::residential;  // permitted development
-                                   // class. For built properties equals `type`.
-                                   // For raw_land, the class it may be developed
-                                   // into without a zoning-change application; a
-                                   // RequestZoningChangeAction can change it
-                                   // subject to local-government approval.
+    PropertyType zoned_use =
+        PropertyType::residential;  // permitted development
+                                    // class. For built properties equals `type`.
+                                    // For raw_land, the class it may be developed
+                                    // into without a zoning-change application; a
+                                    // RequestZoningChangeAction can change it
+                                    // subject to local-government approval.
 
     // Phase 8 — composite property subdivision. A subdivisible building
     // (subtype_key in {apartment_block, office_tower, mixed_use_building,
@@ -148,8 +149,8 @@ struct PropertyListing {
 struct NegotiationContext {
     uint32_t scene_card_id;
     uint32_t property_id;
-    uint32_t buyer_id;  // the NPC (always for now; future: any actor)
-    uint32_t seller_id; // the player (always for now)
+    uint32_t buyer_id;   // the NPC (always for now; future: any actor)
+    uint32_t seller_id;  // the player (always for now)
     float offer_price;
     uint32_t offered_tick;
     uint32_t deadline_tick;

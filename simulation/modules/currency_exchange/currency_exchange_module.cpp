@@ -67,10 +67,10 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
                 // per peg break per province — we use the nation's
                 // home province as the event location.
                 float threshold = cfg_.peg_break_reserve_threshold;
-                float depth = (threshold > 0.0f)
-                                  ? std::clamp(1.0f - currency.foreign_reserves / threshold,
-                                               0.0f, 1.0f)
-                                  : 1.0f;
+                float depth =
+                    (threshold > 0.0f)
+                        ? std::clamp(1.0f - currency.foreign_reserves / threshold, 0.0f, 1.0f)
+                        : 1.0f;
                 // Locate a representative province for the affected nation
                 // (CurrencyRecord has no home_province_id field). First
                 // match in id-ascending order is deterministic.

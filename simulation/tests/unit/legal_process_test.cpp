@@ -171,8 +171,8 @@ TEST_CASE("LegalProcess: investigation -> arrested on evidence threshold",
           "[legal_process][tier9][state_machine]") {
     LegalProcessConfig cfg;
     LegalProcessModule mod(cfg);
-    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
-                                        0.36f, /*opened*/ 10));
+    mod.cases_mut().push_back(
+        make_case(1, LegalCaseStage::investigation, CaseSeverity::serious, 0.36f, /*opened*/ 10));
     WorldState world = empty_world(15);
     DeltaBuffer delta;
     mod.execute(world, delta);
@@ -188,8 +188,8 @@ TEST_CASE("LegalProcess: arrest_exposure_hit adds to public arrest token weight"
     // case at exactly the arrest threshold (0.35) — public token weight
     // should be 0.35 + 0.15 = 0.50.
     LegalProcessModule mod(cfg);
-    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
-                                        0.35f, /*opened*/ 10));
+    mod.cases_mut().push_back(
+        make_case(1, LegalCaseStage::investigation, CaseSeverity::serious, 0.35f, /*opened*/ 10));
     WorldState world = empty_world(15);
     DeltaBuffer delta;
     mod.execute(world, delta);
@@ -204,8 +204,8 @@ TEST_CASE("LegalProcess: arrest_exposure_hit clamps token weight at 1.0",
     LegalProcessConfig cfg;  // arrest_exposure_hit = 0.15
     LegalProcessModule mod(cfg);
     // case with strong evidence (0.95): 0.95 + 0.15 = 1.10 → clamped to 1.0.
-    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
-                                        0.95f, /*opened*/ 10));
+    mod.cases_mut().push_back(
+        make_case(1, LegalCaseStage::investigation, CaseSeverity::serious, 0.95f, /*opened*/ 10));
     WorldState world = empty_world(15);
     DeltaBuffer delta;
     mod.execute(world, delta);
@@ -218,8 +218,8 @@ TEST_CASE("LegalProcess: investigation stays put below threshold",
           "[legal_process][tier9][state_machine]") {
     LegalProcessConfig cfg;
     LegalProcessModule mod(cfg);
-    mod.cases_mut().push_back(make_case(1, LegalCaseStage::investigation, CaseSeverity::serious,
-                                        0.20f, 10));
+    mod.cases_mut().push_back(
+        make_case(1, LegalCaseStage::investigation, CaseSeverity::serious, 0.20f, 10));
     WorldState world = empty_world(15);
     DeltaBuffer delta;
     mod.execute(world, delta);
@@ -245,8 +245,8 @@ TEST_CASE("LegalProcess: arrested -> acquitted on evidence collapse",
           "[legal_process][tier9][state_machine]") {
     LegalProcessConfig cfg;
     LegalProcessModule mod(cfg);
-    mod.cases_mut().push_back(make_case(1, LegalCaseStage::arrested, CaseSeverity::serious, 0.20f,
-                                        5, 10));
+    mod.cases_mut().push_back(
+        make_case(1, LegalCaseStage::arrested, CaseSeverity::serious, 0.20f, 5, 10));
     WorldState world = empty_world(70);
     DeltaBuffer delta;
     mod.execute(world, delta);

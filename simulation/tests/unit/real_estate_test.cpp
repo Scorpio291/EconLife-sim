@@ -92,6 +92,9 @@ PropertyListing make_test_property(uint32_t id, PropertyType type, uint32_t prov
         case PropertyType::industrial:
             prop.rental_yield_rate = RealEstateConfig{}.industrial_yield_rate;
             break;
+        case PropertyType::raw_land:
+            prop.rental_yield_rate = 0.0f;  // undeveloped land yields no rent
+            break;
     }
 
     // Derive rental_income_per_tick (invariant).
@@ -942,8 +945,7 @@ TEST_CASE("Phase1: list action flips listed_for_sale on owned property",
     REQUIRE(state.pending_property_transactions.empty());
 }
 
-TEST_CASE("Phase1: list action rejected when actor is not owner",
-          "[real_estate][market_phase1]") {
+TEST_CASE("Phase1: list action rejected when actor is not owner", "[real_estate][market_phase1]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -966,8 +968,7 @@ TEST_CASE("Phase1: list action rejected when actor is not owner",
     REQUIRE(module.properties()[0].listed_for_sale == false);
 }
 
-TEST_CASE("Phase1: unlist action flips flag back",
-          "[real_estate][market_phase1]") {
+TEST_CASE("Phase1: unlist action flips flag back", "[real_estate][market_phase1]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -989,9 +990,10 @@ TEST_CASE("Phase1: unlist action flips flag back",
     REQUIRE(module.properties()[0].listed_for_sale == false);
 }
 
-TEST_CASE("Phase2: buy at asking transfers ownership at close_tick, "
-          "deducts player wealth, emits evidence",
-          "[real_estate][market_phase2]") {
+TEST_CASE(
+    "Phase2: buy at asking transfers ownership at close_tick, "
+    "deducts player wealth, emits evidence",
+    "[real_estate][market_phase2]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1080,8 +1082,7 @@ TEST_CASE("Phase2: buy above asking settles at offer price after close delay",
     REQUIRE_THAT(*delta.player_delta.wealth_delta, WithinAbs(-175000.0f, 0.01f));
 }
 
-TEST_CASE("Phase1: buy below asking rejected — no state change",
-          "[real_estate][market_phase1]") {
+TEST_CASE("Phase1: buy below asking rejected — no state change", "[real_estate][market_phase1]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1110,8 +1111,7 @@ TEST_CASE("Phase1: buy below asking rejected — no state change",
     REQUIRE(delta.evidence_deltas.empty());
 }
 
-TEST_CASE("Phase1: buy on unlisted property rejected",
-          "[real_estate][market_phase1]") {
+TEST_CASE("Phase1: buy on unlisted property rejected", "[real_estate][market_phase1]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1303,8 +1303,7 @@ TEST_CASE("Phase2: buy creates pending tx and does not settle before close_tick"
     REQUIRE(state.pending_transactions.empty());
 }
 
-TEST_CASE("Phase2: close delay matches property type",
-          "[real_estate][market_phase2]") {
+TEST_CASE("Phase2: close delay matches property type", "[real_estate][market_phase2]") {
     auto state = make_test_world_state(100);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1338,9 +1337,12 @@ TEST_CASE("Phase2: close delay matches property type",
     // residential = 7, commercial = 30, industrial = 30.
     uint32_t resi_close = 0, comm_close = 0, indu_close = 0;
     for (const auto& tx : state.pending_transactions) {
-        if (tx.property_id == 1) resi_close = tx.close_tick;
-        if (tx.property_id == 2) comm_close = tx.close_tick;
-        if (tx.property_id == 3) indu_close = tx.close_tick;
+        if (tx.property_id == 1)
+            resi_close = tx.close_tick;
+        if (tx.property_id == 2)
+            comm_close = tx.close_tick;
+        if (tx.property_id == 3)
+            indu_close = tx.close_tick;
     }
     REQUIRE(resi_close == 107u);
     REQUIRE(comm_close == 130u);
@@ -1448,8 +1450,7 @@ TEST_CASE("Phase2: cancel by seller-NPC works (NPC opportunistic buy on player l
     REQUIRE(module.properties()[0].owner_id == 99);
 }
 
-TEST_CASE("Phase2: cancel by unrelated actor rejected",
-          "[real_estate][market_phase2]") {
+TEST_CASE("Phase2: cancel by unrelated actor rejected", "[real_estate][market_phase2]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -2385,8 +2386,7 @@ TEST_CASE("Phase6: player bid above reserve registers as high bid",
     REQUIRE_THAT(state.active_auctions[0].current_high_bid, WithinAbs(150000.0f, 0.01f));
 }
 
-TEST_CASE("Phase6: sub-reserve opening bid is dropped",
-          "[real_estate][market_phase6]") {
+TEST_CASE("Phase6: sub-reserve opening bid is dropped", "[real_estate][market_phase6]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -2482,8 +2482,7 @@ TEST_CASE("Phase6: auction with no qualifying bid closes_no_reserve (asset retai
     REQUIRE(state.active_auctions.empty());
 }
 
-TEST_CASE("Phase6: NPC bidders raise an open auction over time",
-          "[real_estate][market_phase6]") {
+TEST_CASE("Phase6: NPC bidders raise an open auction over time", "[real_estate][market_phase6]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -2747,8 +2746,7 @@ TEST_CASE("Phase7: raw_land subtype + zoning round-trips via persistence schema_
 // Phase 8: subdivision + re-merge
 // ===========================================================================
 
-TEST_CASE("Phase8: subdivide splits a block into N child units",
-          "[real_estate][market_phase8]") {
+TEST_CASE("Phase8: subdivide splits a block into N child units", "[real_estate][market_phase8]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -2805,8 +2803,7 @@ TEST_CASE("Phase8: subdivide rejected for non-subdivisible subtype",
     REQUIRE(module.properties()[0].subdivided == false);
 }
 
-TEST_CASE("Phase8: subdivide rejected for non-owner",
-          "[real_estate][market_phase8]") {
+TEST_CASE("Phase8: subdivide rejected for non-owner", "[real_estate][market_phase8]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -2826,8 +2823,7 @@ TEST_CASE("Phase8: subdivide rejected for non-owner",
     REQUIRE(module.properties()[0].subdivided == false);
 }
 
-TEST_CASE("Phase8: subdivided parent (shell) is not buyable",
-          "[real_estate][market_phase8]") {
+TEST_CASE("Phase8: subdivided parent (shell) is not buyable", "[real_estate][market_phase8]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -2836,8 +2832,8 @@ TEST_CASE("Phase8: subdivided parent (shell) is not buyable",
     RealEstateModule module;
     auto prop = make_test_property(1, PropertyType::residential, 0, /*owner=*/42, 1000000.0f);
     prop.subtype_key = "apartment_block";
-    prop.subdivided = true;        // already a shell
-    prop.listed_for_sale = true;   // even if somehow listed
+    prop.subdivided = true;       // already a shell
+    prop.listed_for_sale = true;  // even if somehow listed
     module.add_property(prop);
 
     state.pending_property_transactions.push_back(
@@ -2851,8 +2847,7 @@ TEST_CASE("Phase8: subdivided parent (shell) is not buyable",
     REQUIRE(module.properties()[0].owner_id == 42);
 }
 
-TEST_CASE("Phase8: a child unit can be sold independently",
-          "[real_estate][market_phase8]") {
+TEST_CASE("Phase8: a child unit can be sold independently", "[real_estate][market_phase8]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -2905,8 +2900,8 @@ TEST_CASE("Phase8: merge recombines child units when one owner holds all",
     parent.unit_count = 3;
     module.add_property(parent);
     for (uint32_t u = 0; u < 3; ++u) {
-        auto child = make_test_property(2 + u, PropertyType::residential, 0, /*owner=*/99,
-                                        300000.0f);
+        auto child =
+            make_test_property(2 + u, PropertyType::residential, 0, /*owner=*/99, 300000.0f);
         child.parent_property_id = 1;
         child.subtype_key = "apartment_unit";
         module.add_property(child);
@@ -2984,8 +2979,10 @@ TEST_CASE("Phase8: subdivision round-trips via persistence schema_tag 5",
     const PropertyListing* rp = nullptr;
     const PropertyListing* rc = nullptr;
     for (const auto& p : restored_mod.properties()) {
-        if (p.id == 1) rp = &p;
-        if (p.id == 2) rc = &p;
+        if (p.id == 1)
+            rp = &p;
+        if (p.id == 2)
+            rc = &p;
     }
     REQUIRE(rp != nullptr);
     REQUIRE(rc != nullptr);
@@ -3142,9 +3139,9 @@ TEST_CASE("Phase10: acquisition settles at close — ownership transfers, seller
     state.npc_businesses.push_back(make_acq_business(7, 42, 1000.0f));
 
     RealEstateModule module;
-    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
-        1, 7, 99, 42, 360000.0f, 10, 20, PendingTxStage::pending, PaymentMethod::cash, 1.0f, 0.0f,
-        0u});
+    state.pending_business_acquisitions.push_back(
+        PendingBusinessAcquisition{1, 7, 99, 42, 360000.0f, 10, 20, PendingTxStage::pending,
+                                   PaymentMethod::cash, 1.0f, 0.0f, 0u});
 
     state.current_tick = 20;
     DeltaBuffer d{};
@@ -3177,9 +3174,9 @@ TEST_CASE("Phase10: mortgaged acquisition emits a business-collateral loan reque
 
     RealEstateModule module;
     // mixed: 40% down on 360k → 144k cash, 216k loan.
-    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
-        1, 7, 99, 0, 360000.0f, 10, 20, PendingTxStage::pending, PaymentMethod::mixed, 0.40f,
-        0.00025f, 10950u});
+    state.pending_business_acquisitions.push_back(
+        PendingBusinessAcquisition{1, 7, 99, 0, 360000.0f, 10, 20, PendingTxStage::pending,
+                                   PaymentMethod::mixed, 0.40f, 0.00025f, 10950u});
 
     state.current_tick = 20;
     DeltaBuffer d{};
@@ -3224,9 +3221,9 @@ TEST_CASE("Phase10: acquisition expires if business sold out from under the buye
     state.npc_businesses.push_back(make_acq_business(7, /*owner=*/88, 1000.0f));
 
     RealEstateModule module;
-    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
-        1, 7, 99, 42, 360000.0f, 10, 20, PendingTxStage::pending, PaymentMethod::cash, 1.0f, 0.0f,
-        0u});
+    state.pending_business_acquisitions.push_back(
+        PendingBusinessAcquisition{1, 7, 99, 42, 360000.0f, 10, 20, PendingTxStage::pending,
+                                   PaymentMethod::cash, 1.0f, 0.0f, 0u});
 
     state.current_tick = 20;
     DeltaBuffer d{};
@@ -3243,9 +3240,9 @@ TEST_CASE("Phase10: pending_business_acquisitions round-trips via persistence v1
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
 
-    state.pending_business_acquisitions.push_back(PendingBusinessAcquisition{
-        3, 7, 99, 42, 360000.0f, 10, 70, PendingTxStage::pending, PaymentMethod::mixed, 0.40f,
-        0.00025f, 10950u});
+    state.pending_business_acquisitions.push_back(
+        PendingBusinessAcquisition{3, 7, 99, 42, 360000.0f, 10, 70, PendingTxStage::pending,
+                                   PaymentMethod::mixed, 0.40f, 0.00025f, 10950u});
 
     RealEstateModule module;
     auto bytes = PersistenceModule::serialize(state, {&module});
@@ -3358,8 +3355,10 @@ TEST_CASE("Phase11: player-owned contractor bids at zero margin (internal cost)"
     // Firm 50 (player-owned) bids exactly base cost (zero margin); firm 51 more.
     float bid50 = 0, bid51 = 0;
     for (const auto& b : c.bids) {
-        if (b.contractor_business_id == 50) bid50 = b.bid_amount;
-        if (b.contractor_business_id == 51) bid51 = b.bid_amount;
+        if (b.contractor_business_id == 50)
+            bid50 = b.bid_amount;
+        if (b.contractor_business_id == 51)
+            bid51 = b.bid_amount;
     }
     REQUIRE_THAT(bid50, WithinAbs(200000.0f, 1.0f));
     REQUIRE(bid51 > bid50);
@@ -3565,8 +3564,7 @@ TEST_CASE("Phase12: quarterly property tax debits a solvent player owner",
     REQUIRE(module.properties()[0].consecutive_delinquent_quarters == 0);
 }
 
-TEST_CASE("Phase12: no tax assessed off-quarter",
-          "[real_estate][market_phase12]") {
+TEST_CASE("Phase12: no tax assessed off-quarter", "[real_estate][market_phase12]") {
     auto state = make_test_world_state(45);  // not a quarter boundary
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -3581,8 +3579,7 @@ TEST_CASE("Phase12: no tax assessed off-quarter",
     REQUIRE_FALSE(d.player_delta.wealth_delta.has_value());
 }
 
-TEST_CASE("Phase12: offshore parcel is tax-exempt",
-          "[real_estate][market_phase12]") {
+TEST_CASE("Phase12: offshore parcel is tax-exempt", "[real_estate][market_phase12]") {
     auto state = make_test_world_state(90);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -3625,8 +3622,7 @@ TEST_CASE("Phase13: insolvent owner accrues delinquency, then a lien",
     REQUIRE(module.properties()[0].tax_lien == true);
 }
 
-TEST_CASE("Phase13: lien blocks voluntary sale",
-          "[real_estate][market_phase13]") {
+TEST_CASE("Phase13: lien blocks voluntary sale", "[real_estate][market_phase13]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));

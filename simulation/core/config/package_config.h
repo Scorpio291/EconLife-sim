@@ -123,9 +123,9 @@ struct LegalProcessConfig {
 
     // --- v7 state-machine thresholds (legal_process INTERFACE.md) ---
     // Evidence-weight thresholds gating stage transitions.
-    float arrest_evidence_threshold = 0.35f;      // investigation -> arrested
-    float charge_evidence_threshold = 0.55f;      // arrested -> charged
-    float dismissal_evidence_threshold = 0.25f;   // arrested/charged -> acquitted
+    float arrest_evidence_threshold = 0.35f;     // investigation -> arrested
+    float charge_evidence_threshold = 0.55f;     // arrested -> charged
+    float dismissal_evidence_threshold = 0.25f;  // arrested/charged -> acquitted
     // Time-in-stage minimums (ticks).
     uint32_t investigation_to_charge_ticks = 60;  // ~2 months arrested -> charged
     uint32_t charge_to_trial_ticks = 180;         // ~6 months charged -> trial
@@ -403,8 +403,8 @@ struct RealEstateConfig {
     // only buy trigger in Phase 1; market-rate or above-market
     // listings produce no NPC buyers (extends in Phase 4 with
     // demand-driven NPC offers and counter-offer flow).
-    float npc_buyer_deal_max_ratio = 0.90f;     // asking/market under this = "a deal"
-    float npc_opportunistic_buy_rate = 0.02f;   // base rate (multiplied by deal_strength)
+    float npc_buyer_deal_max_ratio = 0.90f;    // asking/market under this = "a deal"
+    float npc_opportunistic_buy_rate = 0.02f;  // base rate (multiplied by deal_strength)
 
     // Phase 2 — multi-tick close delays per PropertyType. A buy accepted
     // at-or-above asking creates a PendingTransaction whose close_tick is
@@ -464,8 +464,8 @@ struct RealEstateConfig {
     float min_down_payment_commercial = 0.25f;
     float min_down_payment_industrial = 0.35f;
     float player_max_loan_multiplier_of_wealth = 10.0f;
-    float mortgage_interest_rate = 0.00025f;   // per-tick rate ≈ ~9% annual
-    uint32_t mortgage_term_ticks = 10950u;     // ~30 years at 365 ticks/year
+    float mortgage_interest_rate = 0.00025f;  // per-tick rate ≈ ~9% annual
+    uint32_t mortgage_term_ticks = 10950u;    // ~30 years at 365 ticks/year
 
     // Phase 6 — auctions. Bank-foreclosed properties auto-open an
     // auction with reserve = market_value × auction_reserve_fraction,
@@ -478,7 +478,7 @@ struct RealEstateConfig {
     // PlaceAuctionBidAction. At close_tick the high bid wins if it
     // meets reserve, else the auction closes_no_reserve (consigner
     // keeps the asset).
-    float auction_reserve_fraction = 0.70f;     // reserve = market_value × this
+    float auction_reserve_fraction = 0.70f;  // reserve = market_value × this
     uint32_t auction_duration_ticks = 30u;
     float npc_auction_bid_rate = 0.05f;         // per-NPC per-tick bid probability
     float npc_auction_bid_increment = 0.05f;    // raise fraction over current high

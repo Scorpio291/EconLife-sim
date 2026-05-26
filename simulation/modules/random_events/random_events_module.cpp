@@ -143,8 +143,8 @@ void RandomEventsModule::execute(const WorldState& state, DeltaBuffer& delta) {
             ev.effects_applied_this_tick = false;
             active_events_.push_back(ev);
         }
-        auto& mutable_queue = const_cast<std::vector<RandomEventTriggerDelta>&>(
-            state.pending_random_event_triggers);
+        auto& mutable_queue =
+            const_cast<std::vector<RandomEventTriggerDelta>&>(state.pending_random_event_triggers);
         mutable_queue.clear();
     }
 
