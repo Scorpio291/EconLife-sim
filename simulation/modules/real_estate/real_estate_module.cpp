@@ -1717,7 +1717,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                             card.npc_id = prop->owner_id;
                             DialogueLine line{};
                             line.speaker_npc_id = prop->owner_id;
-                            line.text = "I can't take that — but I'd let it go at my counter.";
+                            line.text = "I can't take that, but I'd let it go at my counter.";
                             line.emotional_tone = 0.2f;
                             card.dialogue.push_back(line);
                             card.choices.push_back(

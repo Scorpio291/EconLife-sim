@@ -1082,7 +1082,7 @@ TEST_CASE("Phase2: buy above asking settles at offer price after close delay",
     REQUIRE_THAT(*delta.player_delta.wealth_delta, WithinAbs(-175000.0f, 0.01f));
 }
 
-TEST_CASE("Phase1: buy below asking rejected — no state change", "[real_estate][market_phase1]") {
+TEST_CASE("Phase1: buy below asking rejected - no state change", "[real_estate][market_phase1]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
     state.player = std::make_unique<PlayerCharacter>(make_test_player(99));
@@ -1771,7 +1771,7 @@ TEST_CASE("Phase3: NPC generates below-asking offer on player listing as SceneCa
     REQUIRE(offer_seen);
 }
 
-TEST_CASE("Phase3: player accepts NPC offer via scene card → pending tx created",
+TEST_CASE("Phase3: player accepts NPC offer via scene card -> pending tx created",
           "[real_estate][market_phase3]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
@@ -1818,7 +1818,7 @@ TEST_CASE("Phase3: player accepts NPC offer via scene card → pending tx create
     REQUIRE(module.active_negotiations().empty());
 }
 
-TEST_CASE("Phase3: player declines NPC offer via scene card → no tx, context removed",
+TEST_CASE("Phase3: player declines NPC offer via scene card -> no tx, context removed",
           "[real_estate][market_phase3]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
@@ -2195,7 +2195,7 @@ TEST_CASE("Phase5: banking default on property_purchase loan emits foreclosure r
     REQUIRE(foreclosure_seen);
 }
 
-TEST_CASE("Phase5: real_estate drains foreclosure → property ownership transfers",
+TEST_CASE("Phase5: real_estate drains foreclosure -> property ownership transfers",
           "[real_estate][market_phase5]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
@@ -3126,7 +3126,7 @@ TEST_CASE("Phase10: generous cash offer is accepted and creates a pending acquis
     REQUIRE(a.close_tick == 10u + 60u);
 }
 
-TEST_CASE("Phase10: acquisition settles at close — ownership transfers, seller paid",
+TEST_CASE("Phase10: acquisition settles at close - ownership transfers, seller paid",
           "[real_estate][market_phase10]") {
     auto state = make_test_world_state(10);
     state.world_seed = 5;
@@ -3398,7 +3398,7 @@ TEST_CASE("Phase11: awarding a bid escrows funds and starts construction",
     REQUIRE_THAT(*d2.player_delta.wealth_delta, WithinAbs(-bid_amount, 1.0f));
 }
 
-TEST_CASE("Phase11: construction completes — facility delivered, contractor paid",
+TEST_CASE("Phase11: construction completes - facility delivered, contractor paid",
           "[real_estate][market_phase11]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
@@ -3740,7 +3740,7 @@ TEST_CASE("Counter: rejected serious below-asking offer draws an NPC counter Sce
     REQUIRE_FALSE(d.new_scene_cards.empty());
 }
 
-TEST_CASE("Counter: player accepts the counter → pending buy at counter price",
+TEST_CASE("Counter: player accepts the counter -> pending buy at counter price",
           "[real_estate][market_counter]") {
     auto state = make_test_world_state(10);
     state.provinces.push_back(make_test_province(0));
