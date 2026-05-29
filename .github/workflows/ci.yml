@@ -231,7 +231,14 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="${{ matrix.link_flags }}"
 
       - name: Build
-        run: cmake --build build -j
+        # Constrain parallelism: -fsanitize=address,undefined -g produces
+        # very large object files (sanitizer metadata + debug info), and
+        # the ubuntu-latest runner has ~7 GB RAM. Compiling four of those
+        # TUs in parallel reliably OOM-kills the job (SIGTERM, exit 143)
+        # mid-build. -j 2 keeps peak memory well under the runner cap at
+        # the cost of doubled build wall time — still well under the job
+        # timeout.
+        run: cmake --build build -j 2
 
       - name: Run unit tests (address-undefined)
         if: matrix.sanitizer == 'address-undefined'
