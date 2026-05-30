@@ -39,7 +39,21 @@ jobs:
         shell: bash
 
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }} -j
+        # Windows: cap MSBuild project parallelism. The h3 third-party
+        # dependency (FetchContent) has multiple targets that share
+        # h3.pdb as their PDB output; with unconstrained `/m` MSBuild
+        # races them and one loses with LNK1201 "error writing to
+        # program database". `-j 2` is sufficient headroom for our own
+        # targets while preventing the h3 PDB race. Linux uses the
+        # unconstrained Ninja/Make parallelism (where this race
+        # doesn't exist).
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cmake --build build --config ${{ matrix.build_type }} -j 2
+          else
+            cmake --build build --config ${{ matrix.build_type }} -j
+          fi
 
       - name: Run unit tests
         run: ctest --test-dir build -C ${{ matrix.build_type }} -L "module" --output-on-failure --timeout 300
