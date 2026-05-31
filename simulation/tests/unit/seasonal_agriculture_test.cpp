@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "core/config/package_config.h"
+#include "core/world_gen/goods_catalog.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/production/production_types.h"
@@ -575,6 +576,53 @@ TEST_CASE("continuous facility output reduced by climate stress", "[seasonal_agr
     auto supply = summarize_supply(delta, "coffee", province_id);
     REQUIRE(supply.count == 1);
     REQUIRE_THAT(supply.total_supply, WithinAbs(7.7f, 0.01f));
+}
+
+// ===========================================================================
+// Unknown-good guard (good_id == 0 suppression)
+// ===========================================================================
+//
+// When WorldState carries a catalog and a facility's output good is not in it,
+// lookup_good_id() returns 0. Without the guard in process_continuous_facility,
+// the module would push MarketDelta { good_id = 0, ... } onto whichever real
+// market happens to hold good_id == 0, corrupting it with phantom supply. The
+// guard skips the delta instead. Mirrors production's
+// test_unknown_good_suppresses_market_deltas.
+
+TEST_CASE("continuous facility with unknown good emits no good_id==0 delta",
+          "[seasonal_agriculture][tier2]") {
+    constexpr uint32_t province_id = 0;
+
+    // Catalog with one real good ("wheat" at numeric_id 0). The facility's
+    // output ("unicorn_fruit") is absent, so lookup_good_id() returns 0.
+    auto cat = std::make_unique<GoodsCatalog>();
+    GoodDefinition wheat{};
+    wheat.numeric_id = 0;
+    wheat.good_id = "wheat";
+    wheat.base_price = 25.0f;
+    cat->push_back_loaded(wheat);
+
+    SeasonalAgricultureModule module;
+    auto facility = make_farm_facility(1, province_id, "unicorn_fruit");
+    facility.output_rate_modifier = 10.0f;
+    module.register_continuous_facility(facility, CropCategory::perennial_tree, 182);
+
+    // Run at peak tick — output would be strongly positive but for the guard.
+    auto state = make_test_world_state(182);
+    state.goods_catalog = std::move(cat);
+    auto prov = make_test_province(province_id, 10.0f);  // northern hemisphere
+    prov.climate.climate_stress_current = 0.0f;
+    state.provinces.push_back(prov);
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // The guard suppresses the only output, so nothing should be emitted and
+    // certainly nothing stamped onto the good_id == 0 ("wheat") market.
+    for (const auto& md : delta.market_deltas) {
+        REQUIRE(md.good_id != 0);
+    }
+    REQUIRE(delta.market_deltas.empty());
 }
 
 // ===========================================================================
