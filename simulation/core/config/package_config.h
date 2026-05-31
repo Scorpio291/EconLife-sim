@@ -705,6 +705,11 @@ struct AddictionConfig {
     float active_craving_threshold = 0.70f;
     uint32_t active_duration_ticks = 60;
     float withdrawal_health_hit = 0.005f;
+    // Per-tick recovery of addiction-local withdrawal_health when the NPC is
+    // supplied (no supply gap). Lets a dependent NPC who keeps paying for
+    // substance heal back toward 1.0, so terminal death requires a sustained
+    // supply gap rather than merely reaching the dependent stage.
+    float withdrawal_health_recovery = 0.01f;
     float dependent_work_efficiency = 0.70f;
     float active_work_efficiency = 0.50f;
     float terminal_work_efficiency = 0.20f;

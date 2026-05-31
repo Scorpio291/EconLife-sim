@@ -382,3 +382,127 @@ TEST_CASE("Addiction: entering active stage emits one-time impairment memory",
     REQUIRE(delta2.npc_deltas.size() == 1);
     REQUIRE_FALSE(delta2.npc_deltas[0].new_memory_entry.has_value());
 }
+
+// --- Withdrawal health, terminal stage, and death -------------------------
+//
+// withdrawal_health is the addiction-local body-health proxy. It falls when a
+// dependent+ NPC can't afford supply (a supply gap), recovers when supplied,
+// gates entry into the terminal stage after sustained deprivation, and kills
+// the NPC when it reaches 0.0 at terminal.
+
+TEST_CASE("Addiction: unsupplied dependent NPC accrues supply gap and loses health",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    AddictionState seed{};
+    seed.stage = AddictionStage::dependent;
+    seed.substance_key = "cocaine";
+    seed.craving = 0.50f;
+    seed.consecutive_use_ticks = 90;
+    seed.tolerance = 0.40f;
+    seed.withdrawal_health = 1.0f;
+    world.significant_npcs[0].addiction_state = seed;
+    // Can't afford the dependent-stage spend (30) -> supply gap -> withdrawal.
+    world.significant_npcs[0].capital = 5.0f;
+
+    AddictionModule module;
+    step_addiction(world, module);
+
+    const AddictionState& after = world.significant_npcs[0].addiction_state;
+    REQUIRE(after.supply_gap_ticks == 1);
+    REQUIRE(after.withdrawal_health < 1.0f);
+    // No charge when unsupplied: capital unchanged.
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(5.0f, 1e-6f));
+}
+
+TEST_CASE("Addiction: supplied dependent NPC pays and recovers health",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    AddictionState seed{};
+    seed.stage = AddictionStage::dependent;
+    seed.substance_key = "cocaine";
+    seed.craving = 0.50f;
+    seed.consecutive_use_ticks = 90;
+    seed.tolerance = 0.40f;
+    seed.withdrawal_health = 0.50f;  // depressed, room to recover
+    world.significant_npcs[0].addiction_state = seed;
+    world.significant_npcs[0].capital = 1000.0f;  // can afford supply
+
+    AddictionModule module;
+    step_addiction(world, module);
+
+    const AddictionState& after = world.significant_npcs[0].addiction_state;
+    REQUIRE(after.supply_gap_ticks == 0);
+    REQUIRE(after.withdrawal_health > 0.50f);                                   // recovered
+    REQUIRE_THAT(world.significant_npcs[0].capital, WithinAbs(970.0f, 1e-3f));  // paid 30
+}
+
+TEST_CASE("Addiction: sustained deprivation drives terminal stage then death",
+          "[addiction][tier10][state]") {
+    // Tight config so the test runs in a handful of ticks: terminal after 3
+    // sub-threshold ticks, big health hit, no recovery headroom needed.
+    AddictionConfig cfg{};
+    cfg.terminal_health_threshold = 0.90f;  // easy to fall below
+    cfg.terminal_persistence_ticks = 3;     // terminal after 3 deprived ticks
+    cfg.withdrawal_health_hit = 0.20f;      // 5 hits from 1.0 reach 0.0
+
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+    AddictionState seed{};
+    seed.stage = AddictionStage::dependent;
+    seed.substance_key = "cocaine";
+    seed.craving = 0.20f;
+    seed.consecutive_use_ticks = 90;
+    seed.tolerance = 0.40f;
+    seed.withdrawal_health = 1.0f;
+    world.significant_npcs[0].addiction_state = seed;
+    world.significant_npcs[0].capital = 0.0f;  // permanently unsupplied
+
+    AddictionModule module{cfg};
+
+    bool saw_terminal = false;
+    bool saw_death = false;
+    for (int i = 0; i < 12 && !saw_death; ++i) {
+        world.current_tick += 1;
+        DeltaBuffer delta{};
+        module.execute_province(0, world, delta);
+        for (const auto& d : delta.npc_deltas) {
+            if (d.set_addiction_state.has_value() &&
+                d.set_addiction_state->stage == AddictionStage::terminal) {
+                saw_terminal = true;
+            }
+            if (d.new_status.has_value() && *d.new_status == NPCStatus::dead) {
+                saw_death = true;
+            }
+        }
+        apply_deltas(world, delta);
+    }
+
+    REQUIRE(saw_terminal);
+    REQUIRE(saw_death);
+    REQUIRE(world.significant_npcs[0].status == NPCStatus::dead);
+}
+
+TEST_CASE("Addiction: terminal death emits consequence and clamps health at zero",
+          "[addiction][tier10][state]") {
+    AddictionConfig cfg{};
+    cfg.withdrawal_health_hit = 0.50f;  // one tick from 0.4 reaches 0.0
+
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+    AddictionState seed{};
+    seed.stage = AddictionStage::terminal;  // already terminal
+    seed.substance_key = "cocaine";
+    seed.withdrawal_health = 0.40f;
+    world.significant_npcs[0].addiction_state = seed;
+
+    AddictionModule module{cfg};
+    world.current_tick += 1;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+
+    REQUIRE(delta.npc_deltas.size() == 1);
+    REQUIRE(delta.npc_deltas[0].new_status.has_value());
+    REQUIRE(*delta.npc_deltas[0].new_status == NPCStatus::dead);
+    REQUIRE(delta.consequence_deltas.size() == 1);
+    REQUIRE(delta.npc_deltas[0].set_addiction_state->withdrawal_health <= 0.0f);
+}

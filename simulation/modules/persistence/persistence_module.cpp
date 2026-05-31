@@ -291,6 +291,11 @@ void write_npc(ByteWriter& w, const NPC& npc) {
     w.write_u32(npc.addiction_state.clean_ticks);
     w.write_u32(npc.addiction_state.supply_gap_ticks);
     w.write_float(npc.addiction_state.relapse_probability);
+    // Schema v15: addiction-local withdrawal_health + terminal_ticks. Always
+    // written; read_npc gates the read on schema_ver >= 15 so v4..v14 saves
+    // (which lack these) load with the defaults (health 1.0, terminal 0).
+    w.write_float(npc.addiction_state.withdrawal_health);
+    w.write_u32(npc.addiction_state.terminal_ticks);
 }
 
 void write_evidence_token(ByteWriter& w, const EvidenceToken& e) {
@@ -1033,7 +1038,7 @@ MotivationVector read_motivation(ByteReader& r) {
     return m;
 }
 
-NPC read_npc(ByteReader& r) {
+NPC read_npc(ByteReader& r, uint32_t schema_ver) {
     NPC npc{};
     npc.id = r.read_u32();
     npc.role = static_cast<NPCRole>(r.read_u8());
@@ -1083,6 +1088,13 @@ NPC read_npc(ByteReader& r) {
     npc.addiction_state.clean_ticks = r.read_u32();
     npc.addiction_state.supply_gap_ticks = r.read_u32();
     npc.addiction_state.relapse_probability = r.read_float();
+    // Schema v15+: addiction-local withdrawal_health + terminal_ticks. v4..v14
+    // saves lack these trailing fields; leave the AddictionState defaults
+    // (withdrawal_health 1.0, terminal_ticks 0) in place for them.
+    if (schema_ver >= 15u) {
+        npc.addiction_state.withdrawal_health = r.read_float();
+        npc.addiction_state.terminal_ticks = r.read_u32();
+    }
     return npc;
 }
 
@@ -2071,12 +2083,12 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     uint32_t sig_count = r.read_u32();
     out_state.significant_npcs.resize(sig_count);
     for (uint32_t i = 0; i < sig_count; ++i)
-        out_state.significant_npcs[i] = read_npc(r);
+        out_state.significant_npcs[i] = read_npc(r, schema_ver);
 
     uint32_t bg_count = r.read_u32();
     out_state.named_background_npcs.resize(bg_count);
     for (uint32_t i = 0; i < bg_count; ++i)
-        out_state.named_background_npcs[i] = read_npc(r);
+        out_state.named_background_npcs[i] = read_npc(r, schema_ver);
 
     // Player
     bool has_player = r.read_bool();

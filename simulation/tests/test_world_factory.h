@@ -498,6 +498,8 @@ inline std::vector<uint8_t> serialize_world_state(const WorldState& world) {
         push_u32(npc->addiction_state.clean_ticks);
         push_u32(npc->addiction_state.supply_gap_ticks);
         push_float(npc->addiction_state.relapse_probability);
+        push_float(npc->addiction_state.withdrawal_health);
+        push_u32(npc->addiction_state.terminal_ticks);
     }
 
     // Markets in (good_id, province_id) order

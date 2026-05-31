@@ -32,6 +32,10 @@ class AddictionModule : public ITickModule {
     static float compute_withdrawal_damage(AddictionStage stage, uint32_t supply_gap_ticks,
                                            const AddictionConfig& cfg = {});
     static float compute_work_efficiency(AddictionStage stage, const AddictionConfig& cfg = {});
+    // Per-tick substance cost the NPC tries to pay at a given stage. Used as
+    // the affordability threshold against NPC.capital: short of it produces a
+    // supply gap and withdrawal rather than a charge.
+    static float substance_spend_for_stage(AddictionStage stage);
     static float compute_addiction_rate_delta(AddictionStage old_stage, AddictionStage new_stage,
                                               const AddictionConfig& cfg = {});
     static bool is_recovery_complete(uint32_t clean_ticks, float relapse_probability,

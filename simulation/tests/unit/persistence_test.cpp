@@ -47,25 +47,26 @@ TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
     REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
 }
 
-TEST_CASE("Persistence: schema accepts v7..v14", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(7, 14) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(8, 14) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(9, 14) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(10, 14) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(11, 14) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(12, 14) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(13, 14) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(14, 14) == true);
+TEST_CASE("Persistence: schema accepts v7..v15", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(8, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(9, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(10, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(11, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(12, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(13, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(14, 15) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(15, 15) == true);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(15, 14) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(16, 15) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(7, 14) == true);
-    REQUIRE(PersistenceModule::needs_migration(13, 14) == true);
-    REQUIRE(PersistenceModule::needs_migration(14, 14) == false);
+    REQUIRE(PersistenceModule::needs_migration(7, 15) == true);
+    REQUIRE(PersistenceModule::needs_migration(14, 15) == true);
+    REQUIRE(PersistenceModule::needs_migration(15, 15) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -111,7 +112,7 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // (payment_method, down_payment_fraction, interest_rate,
     // loan_maturity_ticks per entry). Earlier bumps (v3..v10) documented
     // in persistence_module.h:CURRENT_SCHEMA_VERSION.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 14);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 15);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -194,6 +195,37 @@ TEST_CASE("Persistence: round-trip preserves NPC data", "[persistence][tier12][s
     REQUIRE(rnpc.relationships.size() == 1);
     REQUIRE_THAT(rnpc.relationships[0].trust, WithinAbs(0.6f, 0.001));
     REQUIRE(rnpc.relationships[0].shared_secrets.size() == 3);
+}
+
+TEST_CASE("Persistence: round-trip preserves addiction withdrawal fields (v15)",
+          "[persistence][tier12][serialization]") {
+    auto world = test::create_test_world(42, 20, 2, 5);
+
+    auto& npc = world.significant_npcs[0];
+    AddictionState as{};
+    as.stage = AddictionStage::dependent;
+    as.substance_key = "cocaine";
+    as.tolerance = 0.42f;
+    as.craving = 0.61f;
+    as.consecutive_use_ticks = 123;
+    as.clean_ticks = 7;
+    as.supply_gap_ticks = 4;
+    as.relapse_probability = 0.33f;
+    as.withdrawal_health = 0.27f;  // v15 field
+    as.terminal_ticks = 11;        // v15 field
+    npc.addiction_state = as;
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    const auto& r = restored.significant_npcs[0].addiction_state;
+    REQUIRE(r.stage == AddictionStage::dependent);
+    REQUIRE(r.substance_key == "cocaine");
+    REQUIRE(r.consecutive_use_ticks == 123);
+    REQUIRE(r.supply_gap_ticks == 4);
+    REQUIRE_THAT(r.withdrawal_health, WithinAbs(0.27f, 1e-4));
+    REQUIRE(r.terminal_ticks == 11);
 }
 
 TEST_CASE("Persistence: round-trip preserves markets", "[persistence][tier12][serialization]") {

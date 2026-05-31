@@ -87,6 +87,23 @@ float AddictionModule::compute_withdrawal_damage(AddictionStage stage, uint32_t 
     return cfg.withdrawal_health_hit;
 }
 
+float AddictionModule::substance_spend_for_stage(AddictionStage stage) {
+    switch (stage) {
+        case AddictionStage::casual:
+            return 5.0f;
+        case AddictionStage::regular:
+            return 15.0f;
+        case AddictionStage::dependent:
+            return 30.0f;
+        case AddictionStage::active:
+            return 50.0f;
+        case AddictionStage::terminal:
+            return 20.0f;  // reduced capacity to obtain
+        default:
+            return 0.0f;
+    }
+}
+
 float AddictionModule::compute_work_efficiency(AddictionStage stage, const AddictionConfig& cfg) {
     switch (stage) {
         case AddictionStage::dependent:
@@ -173,6 +190,18 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
                    s == AddictionStage::dependent || s == AddictionStage::active;
         };
 
+        // --- Supply / affordability ---------------------------------------
+        // A using-stage NPC tries to buy substance this tick; the cost scales
+        // with severity. NPC.capital is the existing affordability signal —
+        // enough cash means supplied (and charged), too little means a supply
+        // gap (no charge), which drives withdrawal for dependent+ NPCs. This
+        // replaces the earlier "supply always available" placeholder.
+        const float spend = substance_spend_for_stage(current.stage);
+        bool supplied = false;
+        if (is_using_stage(current.stage) && npc->capital >= spend) {
+            supplied = true;
+        }
+
         // Increment craving
         current.craving =
             std::clamp(current.craving + craving_increment(current.stage, cfg_), 0.0f, 1.0f);
@@ -188,17 +217,47 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         // needs consecutive_use_ticks >= regular_use_threshold and
         // regular->dependent needs >= dependency_threshold, while recovery
         // completion needs clean_ticks to accumulate. Use ticks accrue while
-        // using; clean ticks accrue while in recovery.
+        // using; clean ticks accrue while in recovery. supply_gap_ticks counts
+        // consecutive unsupplied ticks (reset when supplied or clean).
         if (is_using_stage(current.stage)) {
             current.consecutive_use_ticks += 1;
             current.clean_ticks = 0;
-            // Supply is assumed available this tick. Modelling genuine supply
-            // gaps (and the withdrawal damage they cause) requires a substance
-            // market-availability signal that does not yet exist — see
-            // flagged_issues.md. supply_gap_ticks therefore stays 0 for now.
-            current.supply_gap_ticks = 0;
+            if (supplied) {
+                current.supply_gap_ticks = 0;
+            } else {
+                current.supply_gap_ticks += 1;
+            }
         } else if (current.stage == AddictionStage::recovery) {
             current.clean_ticks += 1;
+            current.supply_gap_ticks = 0;
+        }
+
+        // --- Withdrawal health dynamics -----------------------------------
+        // withdrawal_health is the addiction-local body-health proxy (not the
+        // NPC's global health — there is no such field). It falls under
+        // withdrawal (dependent+ with a supply gap) and in the terminal stage
+        // (irreversible decline), and recovers otherwise. Reaching 0.0 at
+        // terminal is fatal.
+        const bool in_withdrawal = (current.stage == AddictionStage::dependent ||
+                                    current.stage == AddictionStage::active) &&
+                                   current.supply_gap_ticks > 0;
+        if (current.stage == AddictionStage::terminal || in_withdrawal) {
+            current.withdrawal_health =
+                std::clamp(current.withdrawal_health - cfg_.withdrawal_health_hit, 0.0f, 1.0f);
+        } else {
+            current.withdrawal_health =
+                std::clamp(current.withdrawal_health + cfg_.withdrawal_health_recovery, 0.0f, 1.0f);
+        }
+
+        // Sustained-deprivation gate: track consecutive ticks at dependent/
+        // active with withdrawal_health below the terminal threshold. Reset
+        // when health recovers (but never while already terminal).
+        if ((current.stage == AddictionStage::dependent ||
+             current.stage == AddictionStage::active) &&
+            current.withdrawal_health < cfg_.terminal_health_threshold) {
+            current.terminal_ticks += 1;
+        } else if (current.stage != AddictionStage::terminal) {
+            current.terminal_ticks = 0;
         }
 
         // Relapse risk tracks current craving (which decays during recovery).
@@ -207,8 +266,8 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
 
         // Stage transition. recovery has two extra exits the static helper does
         // not model — a stochastic relapse back to active and a deterministic
-        // completion to none — so handle recovery here and defer the rest to
-        // compute_next_stage.
+        // completion to none — and terminal is absorbing, so handle both here
+        // and defer the ordinary forward transitions to compute_next_stage.
         AddictionStage new_stage;
         if (current.stage == AddictionStage::recovery) {
             DeterministicRNG npc_rng = province_rng.fork(npc_id);
@@ -223,8 +282,18 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
             } else {
                 new_stage = AddictionStage::recovery;
             }
+        } else if (current.stage == AddictionStage::terminal) {
+            new_stage = AddictionStage::terminal;  // absorbing until death
         } else {
             new_stage = compute_next_stage(current, cfg_);
+            // Terminal override: a dependent/active NPC whose withdrawal_health
+            // has sat below the terminal threshold for terminal_persistence_ticks
+            // collapses into the terminal stage regardless of craving dynamics.
+            if ((current.stage == AddictionStage::dependent ||
+                 current.stage == AddictionStage::active) &&
+                current.terminal_ticks >= cfg_.terminal_persistence_ticks) {
+                new_stage = AddictionStage::terminal;
+            }
         }
 
         // Entering recovery: stop the use clock and start the clean clock.
@@ -233,50 +302,33 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
             current.clean_ticks = 0;
         }
 
-        // Full recovery clears the machine back to the default (stage none).
+        // Full recovery clears the machine back to the default (stage none),
+        // which also restores withdrawal_health to 1.0.
         if (new_stage == AddictionStage::none) {
             current = AddictionState{};
         } else {
             current.stage = new_stage;
         }
 
-        // Province rate delta
-        addiction_rate_delta += compute_addiction_rate_delta(old_stage, new_stage, cfg_);
+        // Terminal death: withdrawal_health exhausted in the terminal stage.
+        // Mirror the healthcare module's death pathway — emit a status
+        // replacement to NPCStatus::dead (the established way a module kills an
+        // NPC) plus a consequence notification.
+        const bool terminal_death =
+            new_stage == AddictionStage::terminal && current.withdrawal_health <= 0.0f;
 
-        // NPCDelta: deduct substance spending from NPC capital
-        // Spending scales with addiction severity.
-        constexpr float SUBSTANCE_SPEND_CASUAL = 5.0f;
-        constexpr float SUBSTANCE_SPEND_REGULAR = 15.0f;
-        constexpr float SUBSTANCE_SPEND_DEPENDENT = 30.0f;
-        constexpr float SUBSTANCE_SPEND_ACTIVE = 50.0f;
-        constexpr float SUBSTANCE_SPEND_TERMINAL = 20.0f;  // reduced capacity to obtain
+        // Province rate delta. A terminal death leaves the counted stage, so
+        // feed the dead NPC's transition as terminal -> none for the rate.
+        addiction_rate_delta += compute_addiction_rate_delta(
+            old_stage, terminal_death ? AddictionStage::none : new_stage, cfg_);
 
-        float spend = 0.0f;
-        switch (new_stage) {
-            case AddictionStage::casual:
-                spend = SUBSTANCE_SPEND_CASUAL;
-                break;
-            case AddictionStage::regular:
-                spend = SUBSTANCE_SPEND_REGULAR;
-                break;
-            case AddictionStage::dependent:
-                spend = SUBSTANCE_SPEND_DEPENDENT;
-                break;
-            case AddictionStage::active:
-                spend = SUBSTANCE_SPEND_ACTIVE;
-                break;
-            case AddictionStage::terminal:
-                spend = SUBSTANCE_SPEND_TERMINAL;
-                break;
-            default:
-                break;
-        }
         // Persist the stepped addiction state through NPCDelta. Bundling
         // capital_delta in the same NPCDelta keeps emissions per NPC to one;
-        // apply_deltas applies both fields in a single pass.
+        // apply_deltas applies both fields in a single pass. The substance is
+        // only charged when actually supplied this tick.
         NPCDelta npc_delta;
         npc_delta.npc_id = npc_id;
-        if (spend > 0.0f) {
+        if (supplied && spend > 0.0f) {
             npc_delta.capital_delta = -spend;
         }
         npc_delta.set_addiction_state = current;
@@ -293,6 +345,13 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
             mem.decay = 1.0f;
             mem.is_actionable = true;
             npc_delta.new_memory_entry = mem;
+        }
+
+        if (terminal_death) {
+            npc_delta.new_status = NPCStatus::dead;
+            ConsequenceDelta cons_delta{};
+            cons_delta.new_entry_id = npc_id;
+            province_delta.consequence_deltas.push_back(cons_delta);
         }
 
         province_delta.npc_deltas.push_back(npc_delta);
