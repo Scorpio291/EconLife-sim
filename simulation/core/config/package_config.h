@@ -120,6 +120,34 @@ struct LegalProcessConfig {
     uint32_t double_jeopardy_cooldown = 1825;
     uint32_t charge_to_trial_min = 90;
     uint32_t charge_to_trial_max = 365;
+
+    // --- v7 state-machine thresholds (legal_process INTERFACE.md) ---
+    // Evidence-weight thresholds gating stage transitions.
+    float arrest_evidence_threshold = 0.35f;     // investigation -> arrested
+    float charge_evidence_threshold = 0.55f;     // arrested -> charged
+    float dismissal_evidence_threshold = 0.25f;  // arrested/charged -> acquitted
+    // Time-in-stage minimums (ticks).
+    uint32_t investigation_to_charge_ticks = 60;  // ~2 months arrested -> charged
+    uint32_t charge_to_trial_ticks = 180;         // ~6 months charged -> trial
+    // Sentencing branch: severity-floor for custodial vs fine outcome.
+    // CaseSeverity::serious = enum value 2 = severity 3 in spec terminology
+    // (severity = static_cast<uint32_t>(enum) + 1).
+    uint32_t custodial_sentence_severity_floor = 3;
+    // Parole: defendant eligible once this fraction of sentence has been served.
+    float parole_eligibility_fraction = 0.50f;
+    // Bail amount auto-posted by player defendants with sufficient liquidity.
+    // Reduces player wealth on post; no refund modelled at this stage.
+    float bail_amount = 50000.0f;
+    // Fine amount for non-custodial convictions (severity below floor).
+    // Applied as a one-shot wealth deduction on transition convicted -> fined.
+    float fine_amount_per_severity = 10000.0f;
+    // Additive bump to the public_arrest_record EvidenceToken's weight on
+    // arrest. Per player.h:159, "exposure" is not a scalar — it's the set
+    // of evidence tokens the player is aware of. This config models the
+    // PR damage of being publicly arrested on top of the underlying
+    // case's evidence: token_weight = clamp(case.evidence_weight +
+    // arrest_exposure_hit, 0.0, 1.0).
+    float arrest_exposure_hit = 0.15f;
 };
 
 struct EvidenceConfig {
@@ -353,6 +381,179 @@ struct RealEstateConfig {
     float criminal_dominance_penalty = 0.15f;
     float laundering_premium = 0.10f;
     float transaction_evidence_threshold = 50000.0f;
+    // Homeless-rate accounting (drives cohort_stats.homeless_rate via
+    // RegionDelta.homeless_rate_delta). An NPC is considered "housed" when
+    // their capital covers `homeless_rent_buffer_months` of the province's
+    // mean residential rent. Provinces with no residential listings fall
+    // back to the configured baseline rent_floor for the comparison.
+    float homeless_rent_buffer_months = 3.0f;
+    float homeless_rent_floor = 50.0f;
+    float homeless_rate_convergence = 0.05f;
+
+    // Phase 1 market — symmetric at-asking cash, instant settle.
+    // NPCs opportunistically buy player-listed properties when the
+    // asking price is meaningfully below the property's market value
+    // (a deal). Per-tick scan: for each player-listed property with
+    // asking_price < market_value * npc_buyer_deal_max_ratio, evaluate
+    // NPCs in same province with capital >= asking_price; deal_strength
+    // = (1 - asking/market), each candidate NPC rolls
+    //   p = deal_strength * npc_opportunistic_buy_rate
+    // against the per-tick deterministic RNG. First successful roll
+    // (in NPC id ascending order) wins. Below-market listings are the
+    // only buy trigger in Phase 1; market-rate or above-market
+    // listings produce no NPC buyers (extends in Phase 4 with
+    // demand-driven NPC offers and counter-offer flow).
+    float npc_buyer_deal_max_ratio = 0.90f;    // asking/market under this = "a deal"
+    float npc_opportunistic_buy_rate = 0.02f;  // base rate (multiplied by deal_strength)
+
+    // Phase 2 — multi-tick close delays per PropertyType. A buy accepted
+    // at-or-above asking creates a PendingTransaction whose close_tick is
+    // (current_tick + delay). The transaction settles when real_estate's
+    // global post-pass observes close_tick <= current_tick, transferring
+    // ownership and money. Defaults model rough due-diligence time:
+    // residential closes fast, commercial/industrial slower.
+    uint32_t close_delay_residential = 7;
+    uint32_t close_delay_commercial = 30;
+    uint32_t close_delay_industrial = 30;
+
+    // Phase 3 — relationship-driven negotiation on below-asking offers.
+    // The seller's accept_score is:
+    //     price_ratio (offer/market_value)
+    //   + trust_accept_weight  * relationship.trust   (-1..1)
+    //   + fear_accept_weight   * relationship.fear    ( 0..1)
+    //   + capital_pressure_weight * (1 - capital / distress_capital_threshold)
+    // p_accept = sigmoid((accept_score - 1.0) * sigmoid_steepness)
+    // A trusted friend with a desperate NPC seller can buy at a steep
+    // discount; a stranger gets no discount; rivals or wealthy holders
+    // hold out for full price.
+    float trust_accept_weight = 0.20f;
+    float fear_accept_weight = 0.15f;
+    float capital_pressure_weight = 0.30f;
+    float distress_capital_threshold = 50000.0f;  // NPCs below this = 100% pressure
+    float sigmoid_steepness = 6.0f;
+
+    // Phase 3 — NPC offers on player listings (below asking, scene-card
+    // delivered). Fires when the listing is NOT a sub-90%-of-market deal
+    // (those still get the at-asking opportunistic buy). The NPC's offer
+    // is a uniform draw in [market * npc_offer_min_ratio,
+    // asking * npc_offer_max_ratio]; the SceneCard exposes accept/decline.
+    // Player has negotiation_deadline_ticks to respond before the
+    // context expires.
+    float npc_offer_base_rate = 0.005f;
+    float npc_offer_min_ratio = 0.85f;
+    float npc_offer_max_ratio = 0.95f;
+    uint32_t negotiation_deadline_ticks = 14;
+
+    // Counter-offers: when an NPC seller rejects a serious below-asking
+    // cash offer (offer >= asking × negotiation_counter_min_ratio), it
+    // counters at offer + (asking − offer) × negotiation_counter_split
+    // via a SceneCard the player can accept or decline. Closes the
+    // negotiation loop without free numeric input.
+    float negotiation_counter_min_ratio = 0.70f;
+    float negotiation_counter_split = 0.50f;
+
+    // Phase 4 — mortgage financing. Down-payment minimums per property
+    // type (offers with down_payment_fraction below the floor are
+    // rejected at the drain). Player-mortgage approval uses banking's
+    // min_credit_score_for_purpose (LoanPurpose::property_purchase)
+    // and a player-specific max-loan rule:
+    //     max_loan = player.wealth × player_max_loan_multiplier_of_wealth
+    // The loan's repayment cadence uses mortgage_term_ticks and the
+    // banking-supplied compute_repayment_per_tick.
+    float min_down_payment_residential = 0.10f;
+    float min_down_payment_commercial = 0.25f;
+    float min_down_payment_industrial = 0.35f;
+    float player_max_loan_multiplier_of_wealth = 10.0f;
+    float mortgage_interest_rate = 0.00025f;  // per-tick rate ≈ ~9% annual
+    uint32_t mortgage_term_ticks = 10950u;    // ~30 years at 365 ticks/year
+
+    // Phase 6 — auctions. Bank-foreclosed properties auto-open an
+    // auction with reserve = market_value × auction_reserve_fraction,
+    // running for auction_duration_ticks. Each tick, NPCs in the
+    // property's province with sufficient capital evaluate open
+    // auctions: per-NPC bid probability = npc_auction_bid_rate; a
+    // bidding NPC raises the current high by a
+    // npc_auction_bid_increment fraction (of the current high, or of
+    // the reserve when there are no bids yet). Player bids arrive via
+    // PlaceAuctionBidAction. At close_tick the high bid wins if it
+    // meets reserve, else the auction closes_no_reserve (consigner
+    // keeps the asset).
+    float auction_reserve_fraction = 0.70f;  // reserve = market_value × this
+    uint32_t auction_duration_ticks = 30u;
+    float npc_auction_bid_rate = 0.05f;         // per-NPC per-tick bid probability
+    float npc_auction_bid_increment = 0.05f;    // raise fraction over current high
+    float npc_auction_max_value_ratio = 1.10f;  // NPC won't bid above market × this
+
+    // Phase 7 — raw land + zoning. A RequestZoningChangeAction is
+    // decided by a deterministic local-government roll. A "minor"
+    // change (between residential/commercial) approves at
+    // zoning_minor_approval_prob; a "major" change (anything involving
+    // industrial, or developing raw_land into a built class) approves at
+    // zoning_major_approval_prob. Province criminal_dominance_index acts
+    // as a capture/bribery proxy that *raises* approval odds by up to
+    // zoning_corruption_bonus. On approval the property's market_value
+    // is nudged toward the target class baseline by
+    // zoning_revaluation_rate. Land subtype base values (per hectare)
+    // seed market_value when raw_land parcels are generated.
+    float zoning_minor_approval_prob = 0.60f;
+    float zoning_major_approval_prob = 0.25f;
+    float zoning_corruption_bonus = 0.30f;
+    float zoning_revaluation_rate = 0.20f;
+
+    // Phase 8 — subdivision. A subdivisible building can be split into
+    // [subdivision_min_units, subdivision_max_units] child units. Each
+    // child is valued at (parent_value / n) × subdivision_unit_premium —
+    // individually-sellable units carry a small premium over their pro
+    // rata share. Re-merge sums the live children's values back into the
+    // parent.
+    uint32_t subdivision_min_units = 2u;
+    uint32_t subdivision_max_units = 100u;
+    float subdivision_unit_premium = 1.10f;
+
+    // Phase 10 — business acquisition. Offer price = revenue_per_tick ×
+    // acquisition_ticks_per_month × offer_multiple. The owner accepts
+    // with probability logistic(((offer_multiple / fair_multiple) - 1 +
+    // trust × trust_accept_weight) × sigmoid_steepness). On acceptance a
+    // PendingBusinessAcquisition settles after
+    // acquisition_due_diligence_ticks. Mortgage/mixed finances against
+    // the target business (collateral_id = business_id).
+    float acquisition_fair_multiple = 6.0f;
+    uint32_t acquisition_ticks_per_month = 30u;
+    uint32_t acquisition_due_diligence_ticks = 60u;
+    float acquisition_min_down_payment = 0.40f;  // floor for financed business buys
+
+    // Phase 11 — construction. A RequestConstructionBidsAction opens a
+    // contract; every construction-sector firm in the parcel's province
+    // submits a bid priced at construction_base_cost × (1 + margin),
+    // where margin is drawn deterministically in
+    // [construction_margin_min, construction_margin_max] and scaled up by
+    // construction_remote_cost_multiplier for LocationFlag_Remote
+    // parcels. A player-owned contractor bids at zero margin (internal
+    // cost). completion_ticks is construction_base_ticks. On award the
+    // bid amount is escrowed; the facility is delivered at completion and
+    // the contractor's business is paid. If the client owns no business
+    // in the province, one is auto-created to hold the new facility.
+    float construction_base_cost = 200000.0f;
+    uint32_t construction_base_ticks = 90u;
+    float construction_margin_min = 0.10f;
+    float construction_margin_max = 0.35f;
+    float construction_remote_cost_multiplier = 1.50f;
+    uint32_t construction_default_bidding_window = 14u;
+
+    // Phase 12 — property tax (assessed every property_tax_quarter_ticks
+    // against the owner; offshore parcels exempt). Annual rate is divided
+    // by 4 per quarterly assessment. Owners who can't pay accrue
+    // unpaid_tax_balance and a delinquency count. Phase 13 — after
+    // tax_lien_quarters delinquent quarters a lien is filed (blocks
+    // voluntary sale); after tax_sale_quarters the parcel goes to a
+    // government-consigned auction with reserve = unpaid balance.
+    float property_tax_annual_residential = 0.005f;
+    float property_tax_annual_commercial = 0.010f;
+    float property_tax_annual_industrial = 0.015f;
+    float property_tax_annual_raw_land = 0.001f;
+    uint32_t property_tax_quarter_ticks = 90u;
+    uint8_t tax_lien_quarters = 2u;
+    uint8_t tax_sale_quarters = 4u;
 };
 
 struct FinancialDistributionConfig {
@@ -581,6 +782,15 @@ struct DrugEconomyConfig {
     float demand_per_addict = 1.0f;
     float precursor_ratio_meth = 2.0f;
     float designer_legal_margin_mult = 1.5f;
+    // Per-tick probability that an active stage==none NPC in a province with
+    // drug supply (or pre-existing addiction_rate > 0) is seeded into the
+    // addiction state machine at stage=casual. Scaled up by the province's
+    // current addiction_rate; clamped by addiction_seeding_saturation_cap.
+    float addiction_seeding_probability = 0.00005f;
+    // Once cohort_stats.addiction_rate reaches this fraction, drug_economy
+    // stops seeding new NPCs this tick. Keeps growth bounded; further
+    // progression is driven by AddictionModule's stage transitions.
+    float addiction_seeding_saturation_cap = 0.05f;
 };
 
 struct RegionalConditionsConfig {

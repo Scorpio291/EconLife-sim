@@ -163,10 +163,12 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
         regional_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
 
     std::vector<const NPC*> le_npcs;
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.role == NPCRole::law_enforcement && npc.current_province_id == province.id &&
-            npc.status == NPCStatus::active) {
-            le_npcs.push_back(&npc);
+    if (province.id < state.npc_indices_by_province.size()) {
+        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.role == NPCRole::law_enforcement && npc.status == NPCStatus::active) {
+                le_npcs.push_back(&npc);
+            }
         }
     }
     std::sort(le_npcs.begin(), le_npcs.end(),
@@ -187,10 +189,12 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
 
     // --- Phase 3: Update regulator scrutiny meters ---
     std::vector<const NPC*> reg_npcs;
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.role == NPCRole::regulator && npc.current_province_id == province.id &&
-            npc.status == NPCStatus::active) {
-            reg_npcs.push_back(&npc);
+    if (province.id < state.npc_indices_by_province.size()) {
+        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.role == NPCRole::regulator && npc.status == NPCStatus::active) {
+                reg_npcs.push_back(&npc);
+            }
         }
     }
     std::sort(reg_npcs.begin(), reg_npcs.end(),

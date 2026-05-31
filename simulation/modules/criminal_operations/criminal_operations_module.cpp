@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -285,6 +286,174 @@ void CriminalOperationsModule::process_dormant_orgs(const WorldState& /*state*/)
             }
         }
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 org_count
+//   for each CriminalOrganization:
+//     u32 id, u32 leadership_npc_id
+//     u32 member_count, u32[member_count]
+//     u32 income_count, u32[income_count]
+//     f32 cash, u32 strategic_decision_tick, u8 decision_day_offset
+//     u32 dominance_count, for each: u32 province_id, f32 dominance
+//     u8 conflict_state, u32 conflict_rival_org_id
+//   u32 expansion_count
+//   for each ExpansionTeam:
+//     u32 org_id, u32 target_province_id
+//     u32 member_count, u32[member_count]
+//     f32 investment, u32 arrival_tick
+//
+// std::map iterates in key order so dominance_by_province serializes
+// deterministically without explicit sorting.
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void CriminalOperationsModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(organizations_.size()));
+    for (const auto& o : organizations_) {
+        put_u32(out, o.id);
+        put_u32(out, o.leadership_npc_id);
+        put_u32(out, static_cast<uint32_t>(o.member_npc_ids.size()));
+        for (uint32_t m : o.member_npc_ids)
+            put_u32(out, m);
+        put_u32(out, static_cast<uint32_t>(o.income_source_ids.size()));
+        for (uint32_t is : o.income_source_ids)
+            put_u32(out, is);
+        put_f32(out, o.cash);
+        put_u32(out, o.strategic_decision_tick);
+        out.push_back(o.decision_day_offset);
+        put_u32(out, static_cast<uint32_t>(o.dominance_by_province.size()));
+        for (const auto& [prov, dom] : o.dominance_by_province) {
+            put_u32(out, prov);
+            put_f32(out, dom);
+        }
+        out.push_back(static_cast<uint8_t>(o.conflict_state));
+        put_u32(out, o.conflict_rival_org_id);
+    }
+    put_u32(out, static_cast<uint32_t>(active_expansions_.size()));
+    for (const auto& e : active_expansions_) {
+        put_u32(out, e.org_id);
+        put_u32(out, e.target_province_id);
+        put_u32(out, static_cast<uint32_t>(e.member_npc_ids.size()));
+        for (uint32_t m : e.member_npc_ids)
+            put_u32(out, m);
+        put_f32(out, e.investment);
+        put_u32(out, e.arrival_tick);
+    }
+}
+
+bool CriminalOperationsModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t org_count = r.u32();
+    organizations_.clear();
+    organizations_.reserve(org_count);
+    for (uint32_t i = 0; i < org_count; ++i) {
+        CriminalOrganization o{};
+        o.id = r.u32();
+        o.leadership_npc_id = r.u32();
+        uint32_t mn = r.u32();
+        if (r.error)
+            return false;
+        o.member_npc_ids.reserve(mn);
+        for (uint32_t j = 0; j < mn; ++j)
+            o.member_npc_ids.push_back(r.u32());
+        uint32_t isn = r.u32();
+        if (r.error)
+            return false;
+        o.income_source_ids.reserve(isn);
+        for (uint32_t j = 0; j < isn; ++j)
+            o.income_source_ids.push_back(r.u32());
+        o.cash = r.f32();
+        o.strategic_decision_tick = r.u32();
+        o.decision_day_offset = r.u8();
+        uint32_t dn = r.u32();
+        if (r.error)
+            return false;
+        for (uint32_t j = 0; j < dn; ++j) {
+            uint32_t prov = r.u32();
+            float dom = r.f32();
+            o.dominance_by_province[prov] = dom;
+        }
+        o.conflict_state = static_cast<TerritorialConflictStage>(r.u8());
+        o.conflict_rival_org_id = r.u32();
+        if (r.error)
+            return false;
+        organizations_.push_back(std::move(o));
+    }
+    uint32_t exp_count = r.u32();
+    active_expansions_.clear();
+    active_expansions_.reserve(exp_count);
+    for (uint32_t i = 0; i < exp_count; ++i) {
+        ExpansionTeam e{};
+        e.org_id = r.u32();
+        e.target_province_id = r.u32();
+        uint32_t mn = r.u32();
+        if (r.error)
+            return false;
+        e.member_npc_ids.reserve(mn);
+        for (uint32_t j = 0; j < mn; ++j)
+            e.member_npc_ids.push_back(r.u32());
+        e.investment = r.f32();
+        e.arrival_tick = r.u32();
+        if (r.error)
+            return false;
+        active_expansions_.push_back(std::move(e));
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

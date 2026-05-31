@@ -2,7 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <utility>
+#include <vector>
 
+#include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -81,9 +85,8 @@ void LodSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
                 // Write a supply delta for each regional market in this province.
                 // V1 simplified: apply net production surplus/deficit across all markets.
-                for (const auto& market : state.regional_markets) {
-                    if (market.province_id != prov_id)
-                        continue;
+                for (uint32_t i : markets_in_province(state, prov_id)) {
+                    const auto& market = state.regional_markets[i];
 
                     float net_surplus = lod1_production - lod1_consumption;
                     if (net_surplus == 0.0f)
@@ -99,51 +102,48 @@ void LodSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
         }
     }
 
-    // LOD 2 annual batch: update smoothed price modifier in the global price index
-    // using aggregated production/consumption across LOD 2 nations.
-    // lod2_price_index pointer may be null when no LOD 2 nations exist.
-    if (annual && state.lod2_price_index) {
-        // Aggregate total LOD 2 production and consumption signals.
-        // V1 simplified: walk regional markets for statistical provinces and sum supply/demand.
-        float total_production = 0.0f;
-        float total_consumption = 0.0f;
-
-        for (const auto& nation : state.nations) {
-            if (!nation.lod1_profile.has_value())
-                continue;
-
-            const auto& profile = nation.lod1_profile.value();
-
-            for (uint32_t prov_id : nation.province_ids) {
-                if (prov_id >= state.provinces.size())
-                    continue;
-                const auto& province = state.provinces[prov_id];
-                if (province.lod_level != SimulationLOD::statistical)
-                    continue;
-
-                float climate_penalty =
-                    std::clamp(province.climate.climate_stress_current, 0.0f, 1.0f);
-
-                total_production += compute_lod1_production(
-                    province.agricultural_productivity, profile.tech_tier_modifier, climate_penalty,
-                    province.trade_openness);
-
-                total_consumption += compute_lod1_consumption(1.0f, profile.population_modifier,
-                                                              profile.tech_tier_modifier);
+    // LOD 2 annual batch: emit per-good Lod2PriceIndexDelta entries with
+    // raw_modifier = compute_lod2_price_modifier(consumption, production,
+    // supply_floor). apply_lod2_price_deltas applies lerp smoothing using
+    // cfg_.lod2_smoothing_rate and writes into
+    // world.lod2_price_index->lod2_price_modifier[good_id].
+    //
+    // Per-good aggregation walks regional markets in LOD 2 statistical
+    // provinces: supply (this-tick production) is the production signal;
+    // demand_buffer (previous-tick demand carried over) is the consumption
+    // signal. Goods absent from LOD 2 markets do not appear in the index.
+    if (annual) {
+        // Mark each LOD 2 statistical province for fast lookup. Sized to
+        // match provinces vector; index == province_id.
+        std::vector<uint8_t> is_lod2(state.provinces.size(), 0);
+        for (size_t i = 0; i < state.provinces.size(); ++i) {
+            if (state.provinces[i].lod_level == SimulationLOD::statistical) {
+                is_lod2[i] = 1;
             }
         }
 
-        if (total_production > 0.0f || total_consumption > 0.0f) {
-            float raw_modifier =
-                compute_lod2_price_modifier(total_consumption, total_production, cfg_.supply_floor);
+        // Per-good aggregation: ordered map keeps the emission order canonical
+        // (good_id ascending) so delta ordering is deterministic regardless
+        // of regional_markets iteration order.
+        std::map<uint32_t, std::pair<float, float>> per_good;  // good_id -> (supply, demand)
+        for (const auto& market : state.regional_markets) {
+            if (market.province_id >= is_lod2.size() || !is_lod2[market.province_id])
+                continue;
+            auto& bucket = per_good[market.good_id];
+            bucket.first += market.supply;
+            bucket.second += market.demand_buffer;
+        }
 
-            // lod2_price_index carries a smoothed_modifier field; apply lerp smoothing.
-            // Access pattern: lod2_price_index is a unique_ptr in WorldState.
-            // The LOD system is the only module that writes the global price index.
-            // Using LOD2_SMOOTHING_RATE constant from the module header.
-            (void)raw_modifier;  // applied by engine via DeltaBuffer in full implementation
-            // Full price-index write is EX scope (requires GlobalCommodityPriceIndex delta type).
-            // The computations above are performed and values are available for that delta.
+        for (const auto& [good_id, signals] : per_good) {
+            const float production = signals.first;
+            const float consumption = signals.second;
+            if (production <= 0.0f && consumption <= 0.0f)
+                continue;
+            Lod2PriceIndexDelta lpd{};
+            lpd.good_id = good_id;
+            lpd.raw_modifier =
+                compute_lod2_price_modifier(consumption, production, cfg_.supply_floor);
+            delta.lod2_price_index_deltas.push_back(lpd);
         }
     }
 }

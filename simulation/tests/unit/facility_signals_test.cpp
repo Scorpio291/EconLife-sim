@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/facility_signals/facility_signals_module.h"
@@ -115,6 +116,7 @@ TEST_CASE("Facility signals execute province computes signals", "[facility_signa
 
     // Create a province with karst
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     prov.has_karst = true;
     state.provinces.push_back(prov);
@@ -151,6 +153,7 @@ TEST_CASE("Facility signals execute province computes signals", "[facility_signa
     sig.scrutiny_mitigation = 0.1f;
     module.facility_signals().push_back(sig);
 
+    rebuild_npc_indices(state);
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
@@ -177,6 +180,7 @@ TEST_CASE("Regulator reads chemical and traffic only", "[facility_signals][tier7
     state.current_tick = 100;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     prov.has_karst = false;
     state.provinces.push_back(prov);
@@ -213,6 +217,7 @@ TEST_CASE("Regulator reads chemical and traffic only", "[facility_signals][tier7
     sig.scrutiny_mitigation = 0.0f;
     module.facility_signals().push_back(sig);
 
+    rebuild_npc_indices(state);
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 

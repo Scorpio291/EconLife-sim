@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_gen/goods_catalog.h"
+#include "core/world_state/apply_deltas.h"  // lookup_good_id
 #include "modules/persistence/persistence_module.h"
 #include "tests/test_world_factory.h"
 
@@ -29,20 +31,41 @@ TEST_CASE("Persistence: checksum empty data", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: schema compatible same version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 1) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 7) == true);
 }
 
-TEST_CASE("Persistence: schema compatible older version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 3) == true);
+// v7 builds reject pre-v7 saves: every prior bump (v3 catalog, v4 addiction
+// state, v5 cohort_stats migration, v6 currency/facility/technology footers,
+// v7 module-state section) changes the byte-stream layout, so reading an
+// older save with v7 code short-reads at the new trailing blocks.
+TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(1, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(2, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(3, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(4, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(5, 7) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
+}
+
+TEST_CASE("Persistence: schema accepts v7..v14", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::is_schema_compatible(7, 14) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(8, 14) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(9, 14) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(10, 14) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(11, 14) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(12, 14) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(13, 14) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(14, 14) == true);
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(5, 3) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(15, 14) == false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(1, 3) == true);
-    REQUIRE(PersistenceModule::needs_migration(3, 3) == false);
+    REQUIRE(PersistenceModule::needs_migration(7, 14) == true);
+    REQUIRE(PersistenceModule::needs_migration(13, 14) == true);
+    REQUIRE(PersistenceModule::needs_migration(14, 14) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -84,9 +107,11 @@ TEST_CASE("Persistence: disruption tier computation", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
-    // Schema v2: added next_action_sequence persistence (issue #11). See
-    // docs/design/EconLife_PlayerDelta_Semantics_v1.md.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 2);
+    // Schema v10: pending_transactions Phase 4 mortgage extension
+    // (payment_method, down_payment_fraction, interest_rate,
+    // loan_maturity_ticks per entry). Earlier bumps (v3..v10) documented
+    // in persistence_module.h:CURRENT_SCHEMA_VERSION.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 14);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -213,8 +238,8 @@ TEST_CASE("Persistence: round-trip preserves provinces", "[persistence][tier12][
         REQUIRE(restored.provinces[i].id == world.provinces[i].id);
         REQUIRE_THAT(restored.provinces[i].conditions.stability_score,
                      WithinAbs(world.provinces[i].conditions.stability_score, 0.001));
-        REQUIRE_THAT(restored.provinces[i].conditions.crime_rate,
-                     WithinAbs(world.provinces[i].conditions.crime_rate, 0.001));
+        REQUIRE_THAT(restored.provinces[i].cohort_stats->crime_rate,
+                     WithinAbs(world.provinces[i].cohort_stats->crime_rate, 0.001));
         REQUIRE(restored.provinces[i].links.size() == world.provinces[i].links.size());
     }
 }
@@ -322,4 +347,380 @@ TEST_CASE("Persistence: serialize-deserialize-serialize is byte-identical",
     // serialize(deserialize(serialize(state))) == serialize(state)
     REQUIRE(bytes1.size() == bytes2.size());
     REQUIRE(bytes1 == bytes2);
+}
+
+// --- Goods catalog round-trip (schema v3) ----------------------------------
+
+namespace {
+
+GoodDefinition make_good(uint32_t id, const std::string& key, float price, uint8_t tier,
+                         const std::string& category, bool perishable, bool illegal, uint8_t era) {
+    GoodDefinition g{};
+    g.numeric_id = id;
+    g.good_id = key;
+    g.display_name = key + " (display)";
+    g.tier = tier;
+    g.unit = "tonne";
+    g.category = category;
+    g.base_price = price;
+    g.perishable = perishable;
+    g.illegal = illegal;
+    g.era_available = era;
+    return g;
+}
+
+}  // namespace
+
+TEST_CASE("Persistence: empty catalog round-trips as empty",
+          "[persistence][tier12][goods_catalog]") {
+    WorldState world{};
+    world.current_tick = 0;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+    REQUIRE(!world.goods_catalog);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    auto result = PersistenceModule::deserialize(bytes, restored);
+    REQUIRE(result == RestoreResult::success);
+
+    // Either nullptr or an empty catalog is acceptable; both mean "no
+    // catalog", and lookup_good_id() behaves identically (FNV fallback).
+    if (restored.goods_catalog) {
+        REQUIRE(restored.goods_catalog->size() == 0);
+    }
+    REQUIRE(lookup_good_id(restored, "steel") == lookup_good_id(world, "steel"));
+}
+
+TEST_CASE("Persistence: empty-catalog save overwrites a stale catalog on the target",
+          "[persistence][tier12][goods_catalog]") {
+    // Deserialize is documented as a full state restore. If the target
+    // WorldState already carries a non-empty catalog (e.g. a reused
+    // container, or a world loaded from a previous save), restoring a
+    // save whose goods section is empty must clear it — otherwise
+    // lookup_good_id() resolves against IDs that no longer mean anything
+    // in the restored world.
+    WorldState src{};
+    src.current_tick = 0;
+    src.world_seed = 1;
+    src.game_mode = GameMode::standard;
+    REQUIRE(!src.goods_catalog);
+    auto bytes = PersistenceModule::serialize(src);
+
+    WorldState target{};
+    target.current_tick = 99;
+    target.world_seed = 42;
+    target.game_mode = GameMode::standard;
+    auto stale = std::make_unique<GoodsCatalog>();
+    stale->push_back_loaded(make_good(11, "stale_steel", 80.0f, 2, "metals", false, false, 2));
+    stale->push_back_loaded(make_good(22, "stale_ore", 15.0f, 0, "geological", false, false, 1));
+    target.goods_catalog = std::move(stale);
+    REQUIRE(target.goods_catalog);
+    REQUIRE(target.goods_catalog->size() == 2);
+
+    auto result = PersistenceModule::deserialize(bytes, target);
+    REQUIRE(result == RestoreResult::success);
+
+    // Catalog state must match the source: src had no catalog, so target
+    // must end with no catalog. A non-null catalog here means the prior
+    // contents leaked through.
+    REQUIRE(!target.goods_catalog);
+    // And behaviorally: looking up the stale entries' string keys must
+    // not return their stale numeric_ids (11, 22). Without a catalog,
+    // lookup_good_id falls back to the FNV-1a hash, which is unrelated
+    // to the prior catalog's numeric_ids — so the stale IDs are gone.
+    REQUIRE(lookup_good_id(target, "stale_steel") != 11u);
+    REQUIRE(lookup_good_id(target, "stale_ore") != 22u);
+}
+
+TEST_CASE("Persistence: populated catalog round-trips field-by-field",
+          "[persistence][tier12][goods_catalog]") {
+    WorldState world{};
+    world.current_tick = 42;
+    world.world_seed = 99;
+    world.game_mode = GameMode::standard;
+
+    auto cat = std::make_unique<GoodsCatalog>();
+    // Mix of fields covering every member of GoodDefinition.
+    cat->push_back_loaded(make_good(0, "wheat", 25.0f, /*tier=*/0, "biological", /*perish=*/true,
+                                    /*illegal=*/false, /*era=*/1));
+    cat->push_back_loaded(make_good(7, "steel", 80.0f, /*tier=*/2, "metals", /*perish=*/false,
+                                    /*illegal=*/false, /*era=*/2));
+    cat->push_back_loaded(make_good(42, "coca_leaf", 200.0f, /*tier=*/1, "biological",
+                                    /*perish=*/true, /*illegal=*/true, /*era=*/3));
+    world.goods_catalog = std::move(cat);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    auto result = PersistenceModule::deserialize(bytes, restored);
+    REQUIRE(result == RestoreResult::success);
+
+    REQUIRE(restored.goods_catalog);
+    REQUIRE(restored.goods_catalog->size() == 3);
+
+    const auto& orig = world.goods_catalog->goods();
+    const auto& copy = restored.goods_catalog->goods();
+    for (size_t i = 0; i < orig.size(); ++i) {
+        CAPTURE(i);
+        REQUIRE(copy[i].numeric_id == orig[i].numeric_id);
+        REQUIRE(copy[i].good_id == orig[i].good_id);
+        REQUIRE(copy[i].display_name == orig[i].display_name);
+        REQUIRE(copy[i].tier == orig[i].tier);
+        REQUIRE(copy[i].unit == orig[i].unit);
+        REQUIRE(copy[i].category == orig[i].category);
+        REQUIRE_THAT(copy[i].base_price, WithinAbs(orig[i].base_price, 0.0001f));
+        REQUIRE(copy[i].perishable == orig[i].perishable);
+        REQUIRE(copy[i].illegal == orig[i].illegal);
+        REQUIRE(copy[i].era_available == orig[i].era_available);
+    }
+}
+
+TEST_CASE("Persistence: catalog round-trip preserves lookup_good_id results",
+          "[persistence][tier12][goods_catalog]") {
+    // The whole point of embedding the catalog is so deserialised worlds
+    // resolve string good_ids to the same numeric_id the original world used.
+    // If serialize/deserialize swapped a field or read in wrong order, the
+    // ids would still come back as some uint32 — but they would not match.
+    WorldState world{};
+    world.current_tick = 0;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    auto cat = std::make_unique<GoodsCatalog>();
+    cat->push_back_loaded(make_good(11, "steel", 80.0f, 2, "metals", false, false, 2));
+    cat->push_back_loaded(make_good(22, "iron_ore", 15.0f, 0, "geological", false, false, 1));
+    world.goods_catalog = std::move(cat);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(lookup_good_id(restored, "steel") == 11u);
+    REQUIRE(lookup_good_id(restored, "iron_ore") == 22u);
+    REQUIRE(lookup_good_id(restored, "steel") == lookup_good_id(world, "steel"));
+    REQUIRE(lookup_good_id(restored, "iron_ore") == lookup_good_id(world, "iron_ore"));
+}
+
+TEST_CASE("Persistence: catalog round-trip is bit-identical",
+          "[persistence][tier12][goods_catalog]") {
+    // serialize → deserialize → serialize must be byte-equal to the first
+    // serialise. Catches any non-canonical ordering or leftover state
+    // (e.g. next_numeric_id_ drift after replay) that survives the field-
+    // level checks above.
+    WorldState world{};
+    world.current_tick = 7;
+    world.world_seed = 3;
+    world.game_mode = GameMode::standard;
+
+    auto cat = std::make_unique<GoodsCatalog>();
+    cat->push_back_loaded(make_good(0, "wheat", 25.0f, 0, "biological", true, false, 1));
+    cat->push_back_loaded(make_good(1, "iron_ore", 15.0f, 0, "geological", false, false, 1));
+    world.goods_catalog = std::move(cat);
+
+    auto bytes1 = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes1, restored) == RestoreResult::success);
+    auto bytes2 = PersistenceModule::serialize(restored);
+    REQUIRE(bytes1 == bytes2);
+}
+
+// ── v6: currencies, facilities, technology round-trip ──────────────────────
+
+TEST_CASE("Persistence: round-trip preserves currencies",
+          "[persistence][tier12][v6][serialization]") {
+    WorldState world{};
+    world.current_tick = 1;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    CurrencyRecord usd{};
+    usd.nation_id = 1;
+    usd.iso_code = "USD";
+    usd.usd_rate = 1.0f;
+    usd.usd_rate_baseline = 1.0f;
+    usd.volatility = 0.01f;
+    usd.foreign_reserves = 0.9f;
+    usd.pegged = false;
+    usd.peg_rate = 1.0f;
+    world.currencies.push_back(usd);
+
+    CurrencyRecord eur{};
+    eur.nation_id = 2;
+    eur.iso_code = "EUR";
+    eur.usd_rate = 0.92f;
+    eur.usd_rate_baseline = 0.95f;
+    eur.volatility = 0.02f;
+    eur.foreign_reserves = 0.75f;
+    eur.pegged = true;
+    eur.peg_rate = 0.93f;
+    world.currencies.push_back(eur);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.currencies.size() == 2);
+    REQUIRE(restored.currencies[0].iso_code == "USD");
+    REQUIRE(restored.currencies[0].usd_rate == 1.0f);
+    REQUIRE(restored.currencies[1].iso_code == "EUR");
+    REQUIRE(restored.currencies[1].pegged == true);
+    REQUIRE(restored.currencies[1].peg_rate == 0.93f);
+}
+
+TEST_CASE("Persistence: round-trip preserves facilities",
+          "[persistence][tier12][v6][serialization]") {
+    WorldState world{};
+    world.current_tick = 1;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    Facility f1{};
+    f1.id = 100;
+    f1.business_id = 50;
+    f1.province_id = 0;
+    f1.recipe_id = "wheat_to_flour";
+    f1.tech_tier = 1;
+    f1.output_rate_modifier = 1.2f;
+    f1.soil_health = 0.85f;
+    f1.worker_count = 12;
+    f1.is_operational = true;
+    world.facilities.push_back(f1);
+
+    Facility f2{};
+    f2.id = 101;
+    f2.business_id = 51;
+    f2.province_id = 1;
+    f2.recipe_id = "iron_ore_smelt";
+    f2.tech_tier = 2;
+    f2.output_rate_modifier = 0.95f;
+    f2.soil_health = 1.0f;
+    f2.worker_count = 8;
+    f2.is_operational = false;
+    world.facilities.push_back(f2);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.facilities.size() == 2);
+    REQUIRE(restored.facilities[0].id == 100);
+    REQUIRE(restored.facilities[0].recipe_id == "wheat_to_flour");
+    REQUIRE(restored.facilities[0].worker_count == 12);
+    REQUIRE(restored.facilities[0].soil_health == 0.85f);
+    REQUIRE(restored.facilities[1].id == 101);
+    REQUIRE(restored.facilities[1].is_operational == false);
+    REQUIRE(restored.facilities[1].tech_tier == 2);
+}
+
+TEST_CASE("Persistence: round-trip preserves GlobalTechnologyState",
+          "[persistence][tier12][v6][serialization]") {
+    WorldState world{};
+    world.current_tick = 1;
+    world.world_seed = 1;
+    world.game_mode = GameMode::standard;
+
+    world.technology.current_era = SimulationEra::era_3_acceleration;
+    world.technology.era_started_tick = 4380;  // ~ year 12
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
+        world.technology.domain_knowledge[i] = 0.1f * static_cast<float>(i + 1);
+
+    ResearchProject rp{};
+    rp.project_key = "fusion_v1";
+    rp.business_id = 7;
+    rp.facility_id = 12;
+    rp.domain = "energy";
+    rp.target_node_key = "fusion_node";
+    rp.difficulty = 1.8f;
+    rp.progress = 0.45f;
+    rp.researchers_assigned = 3;
+    rp.funding_per_tick = 250.0f;
+    rp.success_probability = 0.4f;
+    rp.started_tick = 100;
+    rp.is_secret = true;
+    world.technology.active_research_projects.push_back(rp);
+
+    MaturationProject mp{};
+    mp.node_key = "ai_optimization";
+    mp.business_id = 9;
+    mp.facility_id = 0;
+    mp.researchers_assigned = 2;
+    mp.funding_per_tick = 100.0f;
+    mp.progress = 0.62f;
+    world.technology.active_maturation_projects.push_back(mp);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.technology.current_era == SimulationEra::era_3_acceleration);
+    REQUIRE(restored.technology.era_started_tick == 4380);
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
+        REQUIRE(restored.technology.domain_knowledge[i] == 0.1f * static_cast<float>(i + 1));
+    }
+    REQUIRE(restored.technology.active_research_projects.size() == 1);
+    REQUIRE(restored.technology.active_research_projects[0].project_key == "fusion_v1");
+    REQUIRE(restored.technology.active_research_projects[0].is_secret == true);
+    REQUIRE(restored.technology.active_research_projects[0].progress == 0.45f);
+    REQUIRE(restored.technology.active_maturation_projects.size() == 1);
+    REQUIRE(restored.technology.active_maturation_projects[0].node_key == "ai_optimization");
+    REQUIRE(restored.technology.active_maturation_projects[0].progress == 0.62f);
+}
+
+// ── Schema v8: pending_random_event_triggers round-trip ────────────────────
+
+TEST_CASE("Persistence: round-trip preserves pending_random_event_triggers (v8)",
+          "[persistence][tier12][serialization][v8]") {
+    auto world = test::create_test_world(99, 10, 2, 5);
+
+    RandomEventTriggerDelta t1{};
+    t1.template_key = "currency_crisis";
+    t1.province_id = 2;
+    t1.severity = 0.72f;
+    world.pending_random_event_triggers.push_back(t1);
+
+    RandomEventTriggerDelta t2{};
+    t2.template_key = "market_shock";
+    t2.province_id = 4;
+    t2.severity = 0.31f;
+    world.pending_random_event_triggers.push_back(t2);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    auto result = PersistenceModule::deserialize(bytes, restored);
+    REQUIRE(result == RestoreResult::success);
+
+    REQUIRE(restored.pending_random_event_triggers.size() == 2);
+    REQUIRE(restored.pending_random_event_triggers[0].template_key == "currency_crisis");
+    REQUIRE(restored.pending_random_event_triggers[0].province_id == 2);
+    REQUIRE_THAT(restored.pending_random_event_triggers[0].severity, WithinAbs(0.72f, 0.001f));
+    REQUIRE(restored.pending_random_event_triggers[1].template_key == "market_shock");
+    REQUIRE(restored.pending_random_event_triggers[1].province_id == 4);
+    REQUIRE_THAT(restored.pending_random_event_triggers[1].severity, WithinAbs(0.31f, 0.001f));
+}
+
+TEST_CASE("Persistence: empty trigger queue round-trips cleanly (v8)",
+          "[persistence][tier12][serialization][v8]") {
+    auto world = test::create_test_world(99, 10, 2, 5);
+    REQUIRE(world.pending_random_event_triggers.empty());
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+    REQUIRE(restored.pending_random_event_triggers.empty());
+}
+
+TEST_CASE("Persistence: pending_legal_case_seeds defensively cleared on load (v8)",
+          "[persistence][tier12][serialization][v8]") {
+    auto world = test::create_test_world(99, 10, 2, 5);
+    // The producer→consumer pair runs within one tick so this queue is
+    // documented as "must be empty at save time". Serializer does not
+    // write it; loader defensively resets it.
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    // Pre-populate to verify loader clears.
+    LegalCaseSeedDelta stale{};
+    stale.defendant_npc_id = 999;
+    restored.pending_legal_case_seeds.push_back(stale);
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+    REQUIRE(restored.pending_legal_case_seeds.empty());
 }

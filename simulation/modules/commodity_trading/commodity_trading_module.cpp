@@ -16,7 +16,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
+#include "core/world_state/apply_deltas.h"  // lookup_market
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -58,14 +60,9 @@ void CommodityTradingModule::execute(const WorldState& state, DeltaBuffer& delta
             continue;
         }
 
-        // Find the regional market for this position's good and province.
-        const RegionalMarket* market = nullptr;
-        for (const auto& rm : state.regional_markets) {
-            if (rm.good_id == pos.good_id && rm.province_id == pos.province_id) {
-                market = &rm;
-                break;
-            }
-        }
+        // Find the regional market for this position's good and province
+        // via the composite-key index (with linear-scan fallback for tests).
+        const RegionalMarket* market = lookup_market(state, pos.good_id, pos.province_id);
 
         if (market == nullptr) {
             // Invalid market reference; skip position (failure mode per spec).
@@ -202,6 +199,103 @@ float CommodityTradingModule::compute_pnl(PositionType type, float entry_price, 
         // Short: profit when price falls.
         return (entry_price - exit_price) * quantity;
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void CommodityTradingModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(positions_.size()));
+    for (const auto& p : positions_) {
+        put_u32(out, p.id);
+        put_u32(out, p.actor_id);
+        put_u32(out, p.good_id);
+        put_u32(out, p.province_id);
+        out.push_back(static_cast<uint8_t>(p.position_type));
+        put_f32(out, p.quantity);
+        put_f32(out, p.entry_price);
+        put_f32(out, p.current_value);
+        put_u32(out, p.opened_tick);
+        put_u32(out, p.exit_tick);
+        put_f32(out, p.realised_pnl);
+    }
+}
+
+bool CommodityTradingModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    positions_.clear();
+    positions_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        CommodityPosition p{};
+        p.id = r.u32();
+        p.actor_id = r.u32();
+        p.good_id = r.u32();
+        p.province_id = r.u32();
+        p.position_type = static_cast<PositionType>(r.u8());
+        p.quantity = r.f32();
+        p.entry_price = r.f32();
+        p.current_value = r.f32();
+        p.opened_tick = r.u32();
+        p.exit_tick = r.u32();
+        p.realised_pnl = r.f32();
+        if (r.error)
+            return false;
+        positions_.push_back(p);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

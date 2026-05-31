@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "core/config/package_config.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -190,6 +191,7 @@ TEST_CASE("test_cohesion_ema_smoothing", "[community_response][tier6]") {
     state.world_seed = 42;
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     p.community.cohesion = 0.5f;
     p.community.grievance_level = 0.0f;
@@ -211,6 +213,7 @@ TEST_CASE("test_cohesion_ema_smoothing", "[community_response][tier6]") {
         // stability weight (index 6) = 0.3
         state.significant_npcs.push_back(npc);
     }
+    rebuild_npc_indices(state);
 
     // Run multiple ticks to see EMA convergence
     float initial_cohesion = 0.5f;
@@ -243,6 +246,7 @@ TEST_CASE("test_grievance_from_negative_memory", "[community_response][tier6]") 
     state.world_seed = 42;
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     p.community.cohesion = 0.5f;
     p.community.grievance_level = 0.0f;
@@ -271,6 +275,7 @@ TEST_CASE("test_grievance_from_negative_memory", "[community_response][tier6]") 
 
         state.significant_npcs.push_back(npc);
     }
+    rebuild_npc_indices(state);
 
     DeltaBuffer delta{};
     module.execute(state, delta);
@@ -294,6 +299,7 @@ TEST_CASE("test_grievance_shock_bypasses_ema", "[community_response][tier6]") {
     state.world_seed = 42;
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     p.community.cohesion = 0.5f;
     p.community.grievance_level = 0.0f;
@@ -324,6 +330,7 @@ TEST_CASE("test_grievance_shock_bypasses_ema", "[community_response][tier6]") {
 
         state.significant_npcs.push_back(npc);
     }
+    rebuild_npc_indices(state);
 
     DeltaBuffer delta{};
     module.execute(state, delta);

@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "modules/addiction/addiction_types.h"
+
 namespace econlife {
 
 // Forward declarations for types defined in other domain headers
@@ -296,6 +298,18 @@ struct NPC {
 
     // --- State ---
     NPCStatus status;  // active, imprisoned, dead, fled, waiting
+
+    // --- Addiction state ---
+    // Per-NPC substance addiction state machine. Stage `none` (default)
+    // means the NPC is not in the addiction state machine; drug_economy
+    // (or other substance pathways) seed the entry by setting stage to
+    // `casual` via NPCDelta::set_addiction_state. The AddictionModule
+    // then steps the machine each tick. See addiction/INTERFACE.md and
+    // addiction_types.h. Per docs/session_logs/flagged_issues.md, this
+    // field lives on the NPC (per the spec) rather than in a module-
+    // private map.
+    AddictionState addiction_state;
+
     // NOTE: NPC delayed actions are DeferredWorkItem entries with
     // type == WorkType::consequence and subject_id == npc.id.
     // There is no separate ActionQueue. See §3.3.

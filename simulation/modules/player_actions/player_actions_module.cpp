@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include "core/tick/deferred_work.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
@@ -45,11 +46,7 @@ std::vector<std::string_view> PlayerActionsModule::runs_before() const {
 // ---------------------------------------------------------------------------
 
 static const NPC* find_npc(const WorldState& state, uint32_t npc_id) {
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.id == npc_id)
-            return &npc;
-    }
-    return nullptr;
+    return lookup_npc_by_id(state, npc_id);
 }
 
 static bool province_exists(const WorldState& state, uint32_t province_id) {
@@ -333,6 +330,174 @@ static void handle_commercialize_tech(const CommercializeTechAction& action,
     }
 }
 
+// Real-estate market actions — Phase 1 (symmetric at-asking cash market,
+// instant settle). player_actions emits PropertyTransactionRequest into
+// the DeltaBuffer; apply_deltas routes into
+// state.pending_property_transactions; real_estate drains the queue at
+// the start of its execute() within the same tick (Tier 4 follows
+// Tier 0). Validation that depends on the module-private properties_
+// vector (ownership, listing state) is performed in real_estate.
+
+static void handle_list_property_for_sale(const ListPropertyForSaleAction& action,
+                                          const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.asking_price <= 0.0f)
+        return;
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::list;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = action.asking_price;
+    delta.new_property_transactions.push_back(req);
+}
+
+static void handle_unlist_property(const UnlistPropertyAction& action, const WorldState& state,
+                                   DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::unlist;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = 0.0f;
+    delta.new_property_transactions.push_back(req);
+}
+
+static void handle_make_property_offer(const MakePropertyOfferAction& action,
+                                       const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.offer_price <= 0.0f)
+        return;
+
+    // Phase 4: down_payment_fraction in [0, 1]; mortgage uses 0, cash
+    // uses 1, mixed uses something in between. Sanity-clamp.
+    float dpf = std::clamp(action.down_payment_fraction, 0.0f, 1.0f);
+    // Cheap upfront wealth check: player must at least cover the cash
+    // portion of the deal. The mortgage path is approved by real_estate
+    // against banking helpers, so we do not gate that here.
+    float cash_required = action.offer_price * dpf;
+    if (state.player->wealth < cash_required)
+        return;
+
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::buy;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = action.offer_price;
+    req.payment_method = action.payment_method;
+    req.down_payment_fraction = dpf;
+    delta.new_property_transactions.push_back(req);
+}
+
+static void handle_cancel_pending_transaction(const CancelPendingTransactionAction& action,
+                                              const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    PropertyTransactionRequest req{};
+    req.kind = PropertyTransactionKind::cancel;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.price = 0.0f;
+    delta.new_property_transactions.push_back(req);
+}
+
+static void handle_place_auction_bid(const PlaceAuctionBidAction& action, const WorldState& state,
+                                     DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.bid_amount <= 0.0f)
+        return;
+    // Cheap upfront cash check; real_estate re-validates against the
+    // auction's current high bid + the player's running wealth at drain.
+    if (state.player->wealth < action.bid_amount)
+        return;
+    AuctionBidRequest req{};
+    req.auction_id = action.auction_id;
+    req.bidder_id = state.player->id;
+    req.bid_amount = action.bid_amount;
+    delta.new_auction_bid_requests.push_back(req);
+}
+
+static void handle_request_zoning_change(const RequestZoningChangeAction& action,
+                                         const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    ZoningChangeRequest req{};
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.desired_use = static_cast<uint8_t>(action.desired_use);
+    delta.new_zoning_requests.push_back(req);
+}
+
+static void handle_subdivide_property(const SubdividePropertyAction& action,
+                                      const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.n_units < 2)
+        return;  // need at least two units to subdivide
+    PropertySubdivisionRequest req{};
+    req.kind = SubdivisionKind::subdivide;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.n_units = action.n_units;
+    delta.new_subdivision_requests.push_back(req);
+}
+
+static void handle_merge_units(const MergeUnitsAction& action, const WorldState& state,
+                               DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    PropertySubdivisionRequest req{};
+    req.kind = SubdivisionKind::merge;
+    req.property_id = action.property_id;
+    req.actor_id = state.player->id;
+    req.n_units = 0;
+    delta.new_subdivision_requests.push_back(req);
+}
+
+static void handle_request_construction_bids(const RequestConstructionBidsAction& action,
+                                             const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.facility_type_key.empty())
+        return;
+    ConstructionBidsRequest req{};
+    req.client_id = state.player->id;
+    req.property_id = action.property_id;
+    req.facility_type_key = action.facility_type_key;
+    req.recipe_id = action.recipe_id;
+    req.bidding_window_ticks = action.bidding_window_ticks;
+    delta.new_construction_requests.push_back(req);
+}
+
+static void handle_award_construction_bid(const AwardConstructionBidAction& action,
+                                          const WorldState& state, DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    ConstructionAwardRequest req{};
+    req.client_id = state.player->id;
+    req.contract_id = action.contract_id;
+    req.bid_index = action.bid_index;
+    delta.new_construction_awards.push_back(req);
+}
+
+static void handle_acquire_business(const AcquireBusinessAction& action, const WorldState& state,
+                                    DeltaBuffer& delta) {
+    if (!state.player)
+        return;
+    if (action.offer_multiple <= 0.0f)
+        return;
+    BusinessAcquisitionRequest req{};
+    req.business_id = action.business_id;
+    req.buyer_id = state.player->id;
+    req.offer_multiple = action.offer_multiple;
+    req.payment_method = static_cast<uint8_t>(action.payment_method);
+    req.down_payment_fraction = std::clamp(action.down_payment_fraction, 0.0f, 1.0f);
+    delta.new_business_acquisitions.push_back(req);
+}
+
 static void handle_initiate_contact(const InitiateContactAction& action, const WorldState& state,
                                     DeltaBuffer& delta) {
     if (!state.player)
@@ -403,6 +568,28 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_commercialize_tech(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, InitiateContactAction>) {
                     handle_initiate_contact(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, ListPropertyForSaleAction>) {
+                    handle_list_property_for_sale(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, UnlistPropertyAction>) {
+                    handle_unlist_property(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, MakePropertyOfferAction>) {
+                    handle_make_property_offer(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, CancelPendingTransactionAction>) {
+                    handle_cancel_pending_transaction(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, PlaceAuctionBidAction>) {
+                    handle_place_auction_bid(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, RequestZoningChangeAction>) {
+                    handle_request_zoning_change(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, SubdividePropertyAction>) {
+                    handle_subdivide_property(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, MergeUnitsAction>) {
+                    handle_merge_units(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, AcquireBusinessAction>) {
+                    handle_acquire_business(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, RequestConstructionBidsAction>) {
+                    handle_request_construction_bids(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, AwardConstructionBidAction>) {
+                    handle_award_construction_bid(payload, state, delta);
                 }
             },
             action.payload);

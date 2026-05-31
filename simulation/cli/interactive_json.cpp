@@ -181,6 +181,8 @@ static const char* business_sector_str(BusinessSector s) {
             return "research";
         case BusinessSector::criminal:
             return "criminal";
+        case BusinessSector::construction:
+            return "construction";
         default:
             return "unknown";
     }
@@ -302,7 +304,7 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
                              {"population", prov.demographics.total_population},
                              {"infrastructure", prov.infrastructure_rating},
                              {"stability", prov.conditions.stability_score},
-                             {"crime", prov.conditions.crime_rate},
+                             {"crime", prov.cohort_stats->crime_rate},
                              {"grievance", prov.community.grievance_level},
                              {"cohesion", prov.community.cohesion}});
     }

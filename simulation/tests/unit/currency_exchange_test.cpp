@@ -206,3 +206,103 @@ TEST_CASE("CurrencyExchange: constants match spec", "[currency_exchange][tier11]
     REQUIRE_THAT(cfg.peg_break_reserve_threshold, WithinAbs(0.15f, 0.001f));
     REQUIRE_THAT(cfg.fx_transaction_cost, WithinAbs(0.01f, 0.001f));
 }
+
+// ─── Cross-module trigger: peg break → currency_crisis random event ─────────
+
+TEST_CASE("CurrencyExchange: peg break emits currency_crisis trigger",
+          "[currency_exchange][tier11][cross_module]") {
+    CurrencyExchangeModule module;
+
+    WorldState state{};
+    state.current_tick = 14;  // weekly tick
+    state.world_seed = 42;
+    state.player.reset();
+    state.lod2_price_index.reset();
+    state.game_mode = GameMode::standard;
+
+    Province prov{};
+    prov.id = 3;
+    prov.nation_id = 1;
+    state.provinces.push_back(std::move(prov));
+
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 3.5f;
+    cur.usd_rate_baseline = 3.5f;
+    cur.pegged = true;
+    cur.peg_rate = 3.5f;
+    cur.foreign_reserves = 0.0f;  // maximum depth shortfall
+    state.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_random_event_triggers.size() == 1);
+    REQUIRE(delta.new_random_event_triggers[0].template_key == "currency_crisis");
+    REQUIRE(delta.new_random_event_triggers[0].province_id == 3);
+    // depth = 1.0 → severity = 0.40 + 1.0 * 0.55 = 0.95 (template max).
+    REQUIRE_THAT(delta.new_random_event_triggers[0].severity, WithinAbs(0.95f, 0.001f));
+}
+
+TEST_CASE("CurrencyExchange: peg break at threshold gives minimum severity",
+          "[currency_exchange][tier11][cross_module]") {
+    CurrencyExchangeModule module;
+
+    WorldState state{};
+    state.current_tick = 14;
+    state.world_seed = 42;
+    state.player.reset();
+    state.lod2_price_index.reset();
+    state.game_mode = GameMode::standard;
+
+    Province prov{};
+    prov.id = 7;
+    prov.nation_id = 2;
+    state.provinces.push_back(std::move(prov));
+
+    CurrencyRecord cur{};
+    cur.nation_id = 2;
+    cur.pegged = true;
+    cur.peg_rate = 1.0f;
+    cur.usd_rate = 1.0f;
+    cur.usd_rate_baseline = 1.0f;
+    cur.foreign_reserves = 0.15f;  // exactly at threshold
+    state.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_random_event_triggers.size() == 1);
+    // depth = 1.0 - 0.15/0.15 = 0.0 → severity = 0.40 (template min).
+    REQUIRE_THAT(delta.new_random_event_triggers[0].severity, WithinAbs(0.40f, 0.001f));
+}
+
+TEST_CASE("CurrencyExchange: peg break with no matching province emits no trigger",
+          "[currency_exchange][tier11][cross_module]") {
+    CurrencyExchangeModule module;
+
+    WorldState state{};
+    state.current_tick = 14;
+    state.world_seed = 42;
+    state.player.reset();
+    state.lod2_price_index.reset();
+    state.game_mode = GameMode::standard;
+
+    // No provinces with nation_id=1: trigger should be suppressed
+    // (currency_deltas still emitted, since the peg break itself is
+    // independent of where the event lives).
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.pegged = true;
+    cur.peg_rate = 1.0f;
+    cur.usd_rate = 1.0f;
+    cur.usd_rate_baseline = 1.0f;
+    cur.foreign_reserves = 0.05f;
+    state.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.currency_deltas.size() == 1);
+    REQUIRE(delta.new_random_event_triggers.empty());
+}

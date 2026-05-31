@@ -97,7 +97,7 @@ TEST_CASE("WorldGenerator world runs 365 ticks at V1 scale", "[integration][worl
     }
     for (const auto& p : world.provinces) {
         REQUIRE_FALSE(std::isnan(p.conditions.stability_score));
-        REQUIRE_FALSE(std::isnan(p.conditions.crime_rate));
+        REQUIRE_FALSE(std::isnan(p.cohort_stats->crime_rate));
         REQUIRE_FALSE(std::isnan(p.community.grievance_level));
         REQUIRE_FALSE(std::isnan(p.community.cohesion));
     }
@@ -126,14 +126,14 @@ TEST_CASE("WorldGenerator world: province conditions stay in [0,1] over 365 tick
     for (const auto& p : world.provinces) {
         CHECK(p.conditions.stability_score >= 0.0f);
         CHECK(p.conditions.stability_score <= 1.0f);
-        CHECK(p.conditions.crime_rate >= 0.0f);
-        CHECK(p.conditions.crime_rate <= 1.0f);
+        CHECK(p.cohort_stats->crime_rate >= 0.0f);
+        CHECK(p.cohort_stats->crime_rate <= 1.0f);
         CHECK(p.conditions.inequality_index >= 0.0f);
         CHECK(p.conditions.inequality_index <= 1.0f);
-        CHECK(p.conditions.addiction_rate >= 0.0f);
-        CHECK(p.conditions.addiction_rate <= 1.0f);
-        CHECK(p.conditions.criminal_dominance_index >= 0.0f);
-        CHECK(p.conditions.criminal_dominance_index <= 1.0f);
+        CHECK(p.cohort_stats->addiction_rate >= 0.0f);
+        CHECK(p.cohort_stats->addiction_rate <= 1.0f);
+        CHECK(p.cohort_stats->criminal_dominance_index >= 0.0f);
+        CHECK(p.cohort_stats->criminal_dominance_index <= 1.0f);
         CHECK(p.community.grievance_level >= 0.0f);
         CHECK(p.community.grievance_level <= 1.0f);
         CHECK(p.community.cohesion >= 0.0f);
@@ -326,9 +326,17 @@ TEST_CASE("WorldGenerator: no orphaned market references", "[integration][world_
 TEST_CASE("GoodsCatalog loads all tier 0-4 goods from base_game CSVs",
           "[integration][world_gen][csv]") {
     std::string goods_dir = find_goods_dir();
-    if (goods_dir.empty()) {
-        SKIP("Goods CSV directory not found");
-    }
+    // The CSVs live in packages/base_game/goods/ and ARE checked in. A
+    // missing directory means the test was launched from a working
+    // directory that the relative-path search in find_goods_dir() can't
+    // reach. Failing loud is the right call — silently SKIPping let the
+    // CSV-load path regress unobserved in CI for several PRs (see the
+    // goods CSV skip entry in docs/session_logs/flagged_issues.md).
+    INFO(
+        "find_goods_dir() returned empty — relative-path search from cwd "
+        "failed; expected one of packages/base_game/goods (or up to 3 "
+        "parents) to resolve");
+    REQUIRE_FALSE(goods_dir.empty());
 
     GoodsCatalog catalog;
     REQUIRE(catalog.load_from_directory(goods_dir));

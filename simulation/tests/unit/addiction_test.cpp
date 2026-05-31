@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/addiction/addiction_module.h"
 
 using namespace econlife;
@@ -134,4 +137,109 @@ TEST_CASE("Addiction: config defaults match spec", "[addiction][tier10]") {
     REQUIRE(cfg.full_recovery_ticks == 365);
     REQUIRE_THAT(cfg.terminal_health_threshold, WithinAbs(0.15f, 0.01f));
     REQUIRE(cfg.terminal_persistence_ticks == 90);
+}
+
+// --- Wired-state proof-of-life --------------------------------------------
+//
+// Before the set_addiction_state() seeder existed, no NPC could enter the
+// addiction state machine — the module ran every tick but skipped every NPC
+// because addiction_states_ was empty. These tests prove that with a seeded
+// state, execute_province() actually steps the state machine and the
+// changes persist across ticks.
+//
+// The cross-module seeding hookup (drug_economy → addiction) is the open
+// architectural question — see docs/session_logs/flagged_issues.md.
+
+namespace {
+
+WorldState make_world_with_npc(uint32_t npc_id, uint32_t province_id) {
+    WorldState w{};
+    w.current_tick = 0;
+    w.world_seed = 1;
+    w.game_mode = GameMode::standard;
+
+    Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.id = province_id;
+    w.provinces.push_back(p);
+
+    NPC npc{};
+    npc.id = npc_id;
+    npc.current_province_id = province_id;
+    npc.home_province_id = province_id;
+    npc.status = NPCStatus::active;
+    npc.capital = 10000.0f;
+    w.significant_npcs.push_back(npc);
+
+    rebuild_npc_indices(w);
+    return w;
+}
+
+}  // namespace
+
+TEST_CASE("Addiction: seeded state persists craving accumulation across ticks",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    // Per-NPC addiction state now lives on NPC::addiction_state. Seed
+    // directly; AddictionModule reads from there and writes back through
+    // NPCDelta::set_addiction_state, which apply_deltas persists.
+    AddictionState seed{};
+    seed.stage = AddictionStage::casual;
+    seed.substance_key = "cocaine";
+    seed.tolerance = 0.10f;
+    seed.craving = 0.20f;
+    seed.consecutive_use_ticks = 5;
+    world.significant_npcs[0].addiction_state = seed;
+
+    AddictionModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    apply_deltas(world, delta);
+
+    // The state machine should have stepped: craving incremented per stage
+    // (casual: +0.01), tolerance grew (consecutive_use_ticks > 0 in casual),
+    // and the new state was persisted onto NPC.
+    const AddictionState& after = world.significant_npcs[0].addiction_state;
+    REQUIRE(after.craving > seed.craving);
+    REQUIRE(after.tolerance > seed.tolerance);
+}
+
+TEST_CASE("Addiction: stage progresses casual -> regular over enough ticks",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    AddictionState seed{};
+    seed.stage = AddictionStage::casual;
+    seed.craving = 0.295f;            // one tick (+0.01) crosses 0.30 threshold
+    seed.consecutive_use_ticks = 30;  // meets regular_use_threshold
+    world.significant_npcs[0].addiction_state = seed;
+
+    // One tick raises craving by craving_increment(casual) (0.01 default),
+    // pushing it past the 0.30 casual_to_regular_craving threshold;
+    // compute_next_stage advances stage to regular.
+    AddictionModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    apply_deltas(world, delta);
+
+    REQUIRE(world.significant_npcs[0].addiction_state.stage == AddictionStage::regular);
+}
+
+TEST_CASE("Addiction: NPCs with stage=none are invisible to the module",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    // NPC::addiction_state defaults to {stage=none, ...}; no substance
+    // pathway has seeded the NPC into the state machine.
+    REQUIRE(world.significant_npcs[0].addiction_state.stage == AddictionStage::none);
+
+    AddictionModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+
+    REQUIRE(delta.npc_deltas.empty());
+    REQUIRE(delta.region_deltas.empty());
+    // State stays at the default after the no-op run.
+    REQUIRE(world.significant_npcs[0].addiction_state.stage == AddictionStage::none);
 }

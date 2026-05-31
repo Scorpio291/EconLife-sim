@@ -206,7 +206,7 @@ static void print_metrics(const WorldState& world) {
     float stability = 0.0f, crime = 0.0f, grievance = 0.0f, cohesion = 0.0f;
     if (!world.provinces.empty()) {
         stability = world.provinces[0].conditions.stability_score;
-        crime = world.provinces[0].conditions.crime_rate;
+        crime = world.provinces[0].cohort_stats->crime_rate;
         grievance = world.provinces[0].community.grievance_level;
         cohesion = world.provinces[0].community.cohesion;
     }
@@ -241,7 +241,7 @@ static bool check_nan_contamination(const WorldState& world) {
             return true;
     }
     for (const auto& p : world.provinces) {
-        if (std::isnan(p.conditions.stability_score) || std::isnan(p.conditions.crime_rate))
+        if (std::isnan(p.conditions.stability_score) || std::isnan(p.cohort_stats->crime_rate))
             return true;
     }
     return false;

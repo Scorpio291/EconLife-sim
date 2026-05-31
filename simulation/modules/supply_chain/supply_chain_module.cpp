@@ -9,6 +9,7 @@
 
 #include "core/good_id_hash.h"
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_market, markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -93,8 +94,9 @@ void SupplyChainModule::collect_sell_offers(uint32_t province_id, const WorldSta
     // Build sell offers from regional market supply for this province.
     // Each market with positive supply generates a sell offer.
     // In V1, we treat the aggregated market supply as available for matching.
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province_id && market.supply > 0.0f) {
+    for (uint32_t i : markets_in_province(state, province_id)) {
+        const auto& market = state.regional_markets[i];
+        if (market.supply > 0.0f) {
             SellOffer offer{};
             offer.business_id = 0;  // aggregated market (not a specific business)
             offer.province_id = province_id;
@@ -115,8 +117,9 @@ void SupplyChainModule::collect_buy_orders(uint32_t province_id, const WorldStat
                                            std::vector<BuyOrder>& orders) const {
     // Build buy orders from demand buffer for this province.
     // Each market with positive demand_buffer generates a buy order.
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province_id && market.demand_buffer > 0.0f) {
+    for (uint32_t i : markets_in_province(state, province_id)) {
+        const auto& market = state.regional_markets[i];
+        if (market.demand_buffer > 0.0f) {
             BuyOrder order{};
             order.business_id = 0;  // aggregated demand
             order.province_id = province_id;
@@ -219,11 +222,8 @@ void SupplyChainModule::dispatch_inter_province(uint32_t province_id, const Worl
 
             // Check if source province has supply for this good.
             float source_supply = 0.0f;
-            for (const auto& market : state.regional_markets) {
-                if (market.province_id == src && market.good_id == order.good_id) {
-                    source_supply = market.supply;
-                    break;
-                }
+            if (const RegionalMarket* m = lookup_market(state, order.good_id, src)) {
+                source_supply = m->supply;
             }
 
             if (source_supply <= 0.001f) {

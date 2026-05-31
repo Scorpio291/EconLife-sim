@@ -24,7 +24,7 @@ TEST_CASE("community responds to rising crime with protests",
     // Apply crime_rate_delta +0.05 over 20 iterations.
     // Verify crime_rate increased and grievance_level reflects community response.
     auto world = create_test_world(42, 10, 1, 5);
-    float initial_crime = world.provinces[0].conditions.crime_rate;
+    float initial_crime = world.provinces[0].cohort_stats->crime_rate;
     float initial_grievance = world.provinces[0].community.grievance_level;
 
     for (int i = 0; i < 20; ++i) {
@@ -38,7 +38,7 @@ TEST_CASE("community responds to rising crime with protests",
         apply_deltas(world, delta);
     }
 
-    REQUIRE(world.provinces[0].conditions.crime_rate > initial_crime);
+    REQUIRE(world.provinces[0].cohort_stats->crime_rate > initial_crime);
     REQUIRE(world.provinces[0].community.grievance_level > initial_grievance);
 }
 
@@ -444,7 +444,7 @@ TEST_CASE("substance use leads to addiction progression", "[scenario][social][ad
     // Apply addiction_rate_delta +0.02 over 30 iterations.
     // Verify addiction_rate increased.
     auto world = create_test_world(42, 10, 1, 5);
-    float initial_addiction = world.provinces[0].conditions.addiction_rate;
+    float initial_addiction = world.provinces[0].cohort_stats->addiction_rate;
 
     for (int i = 0; i < 30; ++i) {
         DeltaBuffer delta{};
@@ -455,10 +455,10 @@ TEST_CASE("substance use leads to addiction progression", "[scenario][social][ad
         apply_deltas(world, delta);
     }
 
-    REQUIRE(world.provinces[0].conditions.addiction_rate > initial_addiction);
+    REQUIRE(world.provinces[0].cohort_stats->addiction_rate > initial_addiction);
     // 30 * 0.02 = 0.6 added; but result is clamped to 1.0.
     float expected = std::min(1.0f, initial_addiction + 30 * 0.02f);
-    REQUIRE_THAT(world.provinces[0].conditions.addiction_rate, WithinAbs(expected, 0.01f));
+    REQUIRE_THAT(world.provinces[0].cohort_stats->addiction_rate, WithinAbs(expected, 0.01f));
 }
 
 TEST_CASE("addiction treatment reduces dependency", "[scenario][social][addiction]") {
@@ -466,8 +466,8 @@ TEST_CASE("addiction treatment reduces dependency", "[scenario][social][addictio
     // Verify addiction_rate decreased.
     auto world = create_test_world(42, 10, 1, 5);
     // First raise addiction so there is room to decrease.
-    world.provinces[0].conditions.addiction_rate = 0.5f;
-    float initial_addiction = world.provinces[0].conditions.addiction_rate;
+    world.provinces[0].cohort_stats->addiction_rate = 0.5f;
+    float initial_addiction = world.provinces[0].cohort_stats->addiction_rate;
 
     for (int i = 0; i < 20; ++i) {
         DeltaBuffer delta{};
@@ -478,9 +478,9 @@ TEST_CASE("addiction treatment reduces dependency", "[scenario][social][addictio
         apply_deltas(world, delta);
     }
 
-    REQUIRE(world.provinces[0].conditions.addiction_rate < initial_addiction);
+    REQUIRE(world.provinces[0].cohort_stats->addiction_rate < initial_addiction);
     float expected = std::max(0.0f, initial_addiction - 20 * 0.01f);
-    REQUIRE_THAT(world.provinces[0].conditions.addiction_rate, WithinAbs(expected, 0.01f));
+    REQUIRE_THAT(world.provinces[0].cohort_stats->addiction_rate, WithinAbs(expected, 0.01f));
 }
 
 TEST_CASE("regional addiction rate affects province conditions", "[scenario][social][addiction]") {
@@ -488,7 +488,7 @@ TEST_CASE("regional addiction rate affects province conditions", "[scenario][soc
     // simulating the documented relationship between addiction and province stability.
     auto world = create_test_world(42, 10, 1, 5);
     float initial_stability = world.provinces[0].conditions.stability_score;
-    float initial_addiction = world.provinces[0].conditions.addiction_rate;
+    float initial_addiction = world.provinces[0].cohort_stats->addiction_rate;
 
     DeltaBuffer delta{};
     RegionDelta rd{};
@@ -498,9 +498,9 @@ TEST_CASE("regional addiction rate affects province conditions", "[scenario][soc
     delta.region_deltas.push_back(rd);
     apply_deltas(world, delta);
 
-    REQUIRE(world.provinces[0].conditions.addiction_rate > initial_addiction);
+    REQUIRE(world.provinces[0].cohort_stats->addiction_rate > initial_addiction);
     REQUIRE(world.provinces[0].conditions.stability_score < initial_stability);
-    REQUIRE_THAT(world.provinces[0].conditions.addiction_rate,
+    REQUIRE_THAT(world.provinces[0].cohort_stats->addiction_rate,
                  WithinAbs(initial_addiction + 0.2f, 0.01f));
     REQUIRE_THAT(world.provinces[0].conditions.stability_score,
                  WithinAbs(initial_stability - 0.15f, 0.01f));
@@ -643,9 +643,9 @@ TEST_CASE("province stability reflects aggregated conditions",
     // matching stability_delta. Verify all conditions changed.
     auto world = create_test_world(42, 10, 1, 5);
     float initial_stability = world.provinces[0].conditions.stability_score;
-    float initial_crime = world.provinces[0].conditions.crime_rate;
+    float initial_crime = world.provinces[0].cohort_stats->crime_rate;
     float initial_inequality = world.provinces[0].conditions.inequality_index;
-    float initial_addiction = world.provinces[0].conditions.addiction_rate;
+    float initial_addiction = world.provinces[0].cohort_stats->addiction_rate;
 
     DeltaBuffer delta{};
     RegionDelta rd{};
@@ -657,12 +657,13 @@ TEST_CASE("province stability reflects aggregated conditions",
     delta.region_deltas.push_back(rd);
     apply_deltas(world, delta);
 
-    REQUIRE(world.provinces[0].conditions.crime_rate > initial_crime);
+    REQUIRE(world.provinces[0].cohort_stats->crime_rate > initial_crime);
     REQUIRE(world.provinces[0].conditions.inequality_index > initial_inequality);
-    REQUIRE(world.provinces[0].conditions.addiction_rate > initial_addiction);
+    REQUIRE(world.provinces[0].cohort_stats->addiction_rate > initial_addiction);
     REQUIRE(world.provinces[0].conditions.stability_score < initial_stability);
 
-    REQUIRE_THAT(world.provinces[0].conditions.crime_rate, WithinAbs(initial_crime + 0.1f, 0.01f));
+    REQUIRE_THAT(world.provinces[0].cohort_stats->crime_rate,
+                 WithinAbs(initial_crime + 0.1f, 0.01f));
     REQUIRE_THAT(world.provinces[0].conditions.stability_score,
                  WithinAbs(initial_stability - 0.1f, 0.01f));
 }

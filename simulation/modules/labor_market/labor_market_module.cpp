@@ -6,8 +6,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -70,6 +72,52 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
 
     // Step 4: Close expired postings.
     close_expired_postings(province_idx, state.current_tick);
+
+    // Step 5: Update unemployment_rate and formal_employment_rate monitors
+    // on cohort_stats. We measure across active significant_npcs in this
+    // province as a sample of the working-age population; the stored rates
+    // converge toward the sample fraction rather than being overwritten,
+    // so per-tick sampling noise smooths out.
+    //
+    // "Employed" = has an employment_record with employer_business_id != 0.
+    // "Unemployed" = active NPC with no employer. The two share the same
+    // denominator (count of active NPCs in this province), so:
+    //   sample_employed_fraction + sample_unemployed_fraction == 1.0
+    // when every active NPC has either an employment record or is counted
+    // unemployed. NPCs not yet seeded in employment_records_ are treated
+    // as unemployed (matches init_for_tick: every NPC eventually gets a
+    // record with employer_business_id = 0).
+    if (province_idx < state.npc_indices_by_province.size()) {
+        uint32_t active_count = 0;
+        uint32_t employed_count = 0;
+        for (uint32_t idx : state.npc_indices_by_province[province_idx]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.status != NPCStatus::active)
+                continue;
+            ++active_count;
+            const EmploymentRecord* rec = find_employment(npc.id);
+            if (rec && rec->employer_business_id != 0) {
+                ++employed_count;
+            }
+        }
+
+        if (active_count > 0) {
+            constexpr float RATE_CONVERGENCE = 0.05f;
+            const float emp_fraction =
+                static_cast<float>(employed_count) / static_cast<float>(active_count);
+            const float unemp_fraction = 1.0f - emp_fraction;
+
+            const auto& cs = state.provinces[province_idx].cohort_stats;
+            const float cur_formal = cs ? cs->formal_employment_rate : 0.0f;
+            const float cur_unemp = cs ? cs->unemployment_rate : 0.0f;
+
+            RegionDelta rd{};
+            rd.region_id = state.provinces[province_idx].region_id;
+            rd.formal_employment_rate_delta = RATE_CONVERGENCE * (emp_fraction - cur_formal);
+            rd.unemployment_rate_delta = RATE_CONVERGENCE * (unemp_fraction - cur_unemp);
+            province_delta.region_deltas.push_back(rd);
+        }
+    }
 }
 
 void LaborMarketModule::execute(const WorldState& state, DeltaBuffer& /*delta*/) {
@@ -619,11 +667,10 @@ const EmploymentRecord* LaborMarketModule::find_employment(uint32_t npc_id) cons
 }
 
 const NPC* LaborMarketModule::find_npc(const WorldState& state, uint32_t npc_id) {
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.id == npc_id) {
-            return &npc;
-        }
-    }
+    if (const NPC* npc = lookup_npc_by_id(state, npc_id))
+        return npc;
+    // Background NPCs are not in the id index; the labor market does maintain
+    // employment records for them, so fall back to a linear scan.
     for (const auto& npc : state.named_background_npcs) {
         if (npc.id == npc_id) {
             return &npc;
@@ -639,6 +686,295 @@ const NPCBusiness* LaborMarketModule::find_business(const WorldState& state, uin
         }
     }
     return nullptr;
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Order of keyed maps (npc_skills_, regional_wages_, applications_) is
+// canonicalised on write so byte output is deterministic regardless of
+// std::unordered_map insertion order.
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 posting_count
+//   for each JobPosting:
+//     u32 id, u32 owner_id, u32 business_id, u32 province_id
+//     u8 required_domain
+//     f32 min_skill_level, f32 offered_wage
+//     u8 channel
+//     u32 posted_tick, u32 expires_tick
+//     u32 applicant_count, u32[applicant_count]
+//     u8 filled
+//   u32 employment_count
+//   for each EmploymentRecord:
+//     u32 npc_id, u32 employer_business_id
+//     f32 offered_wage
+//     u32 hired_tick, u32 deferred_salary_ticks
+//   u32 npc_skill_npc_count
+//   for each npc (sorted by npc_id):
+//     u32 npc_id, u32 entry_count
+//     for each entry: u8 domain, f32 level
+//   u32 regional_wage_count
+//   for each entry (sorted by province_id, domain):
+//     u32 province_id, u8 domain, f32 wage
+//   u32 application_posting_count
+//   for each posting (sorted by posting id):
+//     u32 posting_id, u32 application_count
+//     for each WorkerApplication:
+//       u32 applicant_npc_id, f32 skill_level, f32 salary_expectation,
+//       f32 loyalty_prior, u8 background_visible
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void LaborMarketModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+
+    // Job postings
+    put_u32(out, static_cast<uint32_t>(job_postings_.size()));
+    for (const auto& p : job_postings_) {
+        put_u32(out, p.id);
+        put_u32(out, p.owner_id);
+        put_u32(out, p.business_id);
+        put_u32(out, p.province_id);
+        out.push_back(static_cast<uint8_t>(p.required_domain));
+        put_f32(out, p.min_skill_level);
+        put_f32(out, p.offered_wage);
+        out.push_back(static_cast<uint8_t>(p.channel));
+        put_u32(out, p.posted_tick);
+        put_u32(out, p.expires_tick);
+        put_u32(out, static_cast<uint32_t>(p.applicant_ids.size()));
+        for (uint32_t a : p.applicant_ids)
+            put_u32(out, a);
+        out.push_back(p.filled ? 1u : 0u);
+    }
+
+    // Employment records
+    put_u32(out, static_cast<uint32_t>(employment_records_.size()));
+    for (const auto& e : employment_records_) {
+        put_u32(out, e.npc_id);
+        put_u32(out, e.employer_business_id);
+        put_f32(out, e.offered_wage);
+        put_u32(out, e.hired_tick);
+        put_u32(out, e.deferred_salary_ticks);
+    }
+
+    // NPC skills — sort by npc_id for determinism
+    {
+        std::vector<uint32_t> npc_ids;
+        npc_ids.reserve(npc_skills_.size());
+        for (const auto& kv : npc_skills_)
+            npc_ids.push_back(kv.first);
+        std::sort(npc_ids.begin(), npc_ids.end());
+        put_u32(out, static_cast<uint32_t>(npc_ids.size()));
+        for (uint32_t npc_id : npc_ids) {
+            const auto& entries = npc_skills_.at(npc_id);
+            put_u32(out, npc_id);
+            put_u32(out, static_cast<uint32_t>(entries.size()));
+            for (const auto& s : entries) {
+                out.push_back(static_cast<uint8_t>(s.domain));
+                put_f32(out, s.level);
+            }
+        }
+    }
+
+    // Regional wages — sort by (province_id, domain) for determinism
+    {
+        std::vector<std::pair<ProvinceSkillKey, float>> entries;
+        entries.reserve(regional_wages_.size());
+        for (const auto& kv : regional_wages_)
+            entries.push_back(kv);
+        std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+            if (a.first.province_id != b.first.province_id)
+                return a.first.province_id < b.first.province_id;
+            return static_cast<uint8_t>(a.first.domain) < static_cast<uint8_t>(b.first.domain);
+        });
+        put_u32(out, static_cast<uint32_t>(entries.size()));
+        for (const auto& kv : entries) {
+            put_u32(out, kv.first.province_id);
+            out.push_back(static_cast<uint8_t>(kv.first.domain));
+            put_f32(out, kv.second);
+        }
+    }
+
+    // Applications — sort by posting_id for determinism
+    {
+        std::vector<uint32_t> posting_ids;
+        posting_ids.reserve(applications_.size());
+        for (const auto& kv : applications_)
+            posting_ids.push_back(kv.first);
+        std::sort(posting_ids.begin(), posting_ids.end());
+        put_u32(out, static_cast<uint32_t>(posting_ids.size()));
+        for (uint32_t posting_id : posting_ids) {
+            const auto& apps = applications_.at(posting_id);
+            put_u32(out, posting_id);
+            put_u32(out, static_cast<uint32_t>(apps.size()));
+            for (const auto& a : apps) {
+                put_u32(out, a.applicant_npc_id);
+                put_f32(out, a.skill_level);
+                put_f32(out, a.salary_expectation);
+                put_f32(out, a.loyalty_prior);
+                out.push_back(a.background_visible ? 1u : 0u);
+            }
+        }
+    }
+}
+
+bool LaborMarketModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+
+    uint32_t posting_count = r.u32();
+    job_postings_.clear();
+    job_postings_.reserve(posting_count);
+    for (uint32_t i = 0; i < posting_count; ++i) {
+        JobPosting p{};
+        p.id = r.u32();
+        p.owner_id = r.u32();
+        p.business_id = r.u32();
+        p.province_id = r.u32();
+        p.required_domain = static_cast<SkillDomain>(r.u8());
+        p.min_skill_level = r.f32();
+        p.offered_wage = r.f32();
+        p.channel = static_cast<HiringChannel>(r.u8());
+        p.posted_tick = r.u32();
+        p.expires_tick = r.u32();
+        uint32_t app_n = r.u32();
+        if (r.error)
+            return false;
+        p.applicant_ids.reserve(app_n);
+        for (uint32_t j = 0; j < app_n; ++j)
+            p.applicant_ids.push_back(r.u32());
+        p.filled = (r.u8() != 0);
+        if (r.error)
+            return false;
+        job_postings_.push_back(std::move(p));
+    }
+
+    uint32_t emp_count = r.u32();
+    employment_records_.clear();
+    employment_records_.reserve(emp_count);
+    for (uint32_t i = 0; i < emp_count; ++i) {
+        EmploymentRecord e{};
+        e.npc_id = r.u32();
+        e.employer_business_id = r.u32();
+        e.offered_wage = r.f32();
+        e.hired_tick = r.u32();
+        e.deferred_salary_ticks = r.u32();
+        if (r.error)
+            return false;
+        employment_records_.push_back(e);
+    }
+    // employment_index_ is rebuilt lazily on next find_employment call.
+    employment_index_.clear();
+
+    uint32_t skill_npc_count = r.u32();
+    npc_skills_.clear();
+    npc_skills_.reserve(skill_npc_count);
+    for (uint32_t i = 0; i < skill_npc_count; ++i) {
+        uint32_t npc_id = r.u32();
+        uint32_t entry_n = r.u32();
+        if (r.error)
+            return false;
+        std::vector<NPCSkillEntry> entries;
+        entries.reserve(entry_n);
+        for (uint32_t j = 0; j < entry_n; ++j) {
+            NPCSkillEntry s{};
+            s.domain = static_cast<SkillDomain>(r.u8());
+            s.level = r.f32();
+            entries.push_back(s);
+        }
+        if (r.error)
+            return false;
+        npc_skills_.emplace(npc_id, std::move(entries));
+    }
+
+    uint32_t wage_count = r.u32();
+    regional_wages_.clear();
+    regional_wages_.reserve(wage_count);
+    for (uint32_t i = 0; i < wage_count; ++i) {
+        ProvinceSkillKey k{};
+        k.province_id = r.u32();
+        k.domain = static_cast<SkillDomain>(r.u8());
+        float w = r.f32();
+        if (r.error)
+            return false;
+        regional_wages_.emplace(k, w);
+    }
+
+    uint32_t apps_posting_count = r.u32();
+    applications_.clear();
+    applications_.reserve(apps_posting_count);
+    for (uint32_t i = 0; i < apps_posting_count; ++i) {
+        uint32_t posting_id = r.u32();
+        uint32_t app_n = r.u32();
+        if (r.error)
+            return false;
+        std::vector<WorkerApplication> apps;
+        apps.reserve(app_n);
+        for (uint32_t j = 0; j < app_n; ++j) {
+            WorkerApplication a{};
+            a.applicant_npc_id = r.u32();
+            a.skill_level = r.f32();
+            a.salary_expectation = r.f32();
+            a.loyalty_prior = r.f32();
+            a.background_visible = (r.u8() != 0);
+            apps.push_back(a);
+        }
+        if (r.error)
+            return false;
+        applications_.emplace(posting_id, std::move(apps));
+    }
+
+    return !r.error;
 }
 
 }  // namespace econlife

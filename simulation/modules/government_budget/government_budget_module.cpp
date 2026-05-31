@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <numeric>
 
@@ -293,23 +294,19 @@ void GovernmentBudgetModule::execute_spending(const WorldState& state, DeltaBuff
         if (welfare_it == budget->spending_actual.end() || welfare_it->second <= 0.0f)
             continue;
 
-        // Count NPCs resident in this province (significant_npcs only).
-        uint32_t resident_count = 0;
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.home_province_id == budget->jurisdiction_id)
-                ++resident_count;
+        // Resident NPCs of this province via the home_province bucket.
+        std::vector<const NPC*> resident_npcs;
+        if (budget->jurisdiction_id < state.npc_indices_by_home_province.size()) {
+            for (uint32_t idx : state.npc_indices_by_home_province[budget->jurisdiction_id]) {
+                resident_npcs.push_back(&state.significant_npcs[idx]);
+            }
         }
-        if (resident_count == 0)
+        if (resident_npcs.empty())
             continue;
 
-        float per_npc_payment = welfare_it->second / static_cast<float>(resident_count);
+        const float per_npc_payment = welfare_it->second / static_cast<float>(resident_npcs.size());
 
         // Emit NPCDelta.capital_delta for each resident NPC (ascending id order for determinism).
-        std::vector<const NPC*> resident_npcs;
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.home_province_id == budget->jurisdiction_id)
-                resident_npcs.push_back(&npc);
-        }
         std::sort(resident_npcs.begin(), resident_npcs.end(),
                   [](const NPC* a, const NPC* b) { return a->id < b->id; });
 
@@ -603,6 +600,147 @@ const GovernmentBudget* GovernmentBudgetModule::find_budget(GovernmentLevel leve
         }
     }
     return nullptr;
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 count
+//   for each GovernmentBudget:
+//     u8 level, u32 jurisdiction_id
+//     f32 revenue_own_taxes, f32 revenue_transfers_in, f32 revenue_other, f32 total_revenue
+//     u32 alloc_count, for each: u8 SpendingCategory, f32 amount
+//     u32 actual_count, for each: u8 SpendingCategory, f32 amount
+//     f32 total_expenditure
+//     f32 surplus_deficit, f32 accumulated_debt
+//     f32 cash
+//     f32 debt_to_revenue_ratio, f32 deficit_to_revenue_ratio
+//
+// std::map iterates in key order so spending_allocations and
+// spending_actual serialise deterministically.
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void GovernmentBudgetModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(budgets_.size()));
+    for (const auto& b : budgets_) {
+        out.push_back(static_cast<uint8_t>(b.level));
+        put_u32(out, b.jurisdiction_id);
+        put_f32(out, b.revenue_own_taxes);
+        put_f32(out, b.revenue_transfers_in);
+        put_f32(out, b.revenue_other);
+        put_f32(out, b.total_revenue);
+        put_u32(out, static_cast<uint32_t>(b.spending_allocations.size()));
+        for (const auto& [cat, amt] : b.spending_allocations) {
+            out.push_back(static_cast<uint8_t>(cat));
+            put_f32(out, amt);
+        }
+        put_u32(out, static_cast<uint32_t>(b.spending_actual.size()));
+        for (const auto& [cat, amt] : b.spending_actual) {
+            out.push_back(static_cast<uint8_t>(cat));
+            put_f32(out, amt);
+        }
+        put_f32(out, b.total_expenditure);
+        put_f32(out, b.surplus_deficit);
+        put_f32(out, b.accumulated_debt);
+        put_f32(out, b.cash);
+        put_f32(out, b.debt_to_revenue_ratio);
+        put_f32(out, b.deficit_to_revenue_ratio);
+    }
+}
+
+bool GovernmentBudgetModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    budgets_.clear();
+    budgets_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        GovernmentBudget b{};
+        b.level = static_cast<GovernmentLevel>(r.u8());
+        b.jurisdiction_id = r.u32();
+        b.revenue_own_taxes = r.f32();
+        b.revenue_transfers_in = r.f32();
+        b.revenue_other = r.f32();
+        b.total_revenue = r.f32();
+        uint32_t alloc_n = r.u32();
+        if (r.error)
+            return false;
+        for (uint32_t j = 0; j < alloc_n; ++j) {
+            SpendingCategory cat = static_cast<SpendingCategory>(r.u8());
+            float amt = r.f32();
+            b.spending_allocations[cat] = amt;
+        }
+        uint32_t act_n = r.u32();
+        if (r.error)
+            return false;
+        for (uint32_t j = 0; j < act_n; ++j) {
+            SpendingCategory cat = static_cast<SpendingCategory>(r.u8());
+            float amt = r.f32();
+            b.spending_actual[cat] = amt;
+        }
+        b.total_expenditure = r.f32();
+        b.surplus_deficit = r.f32();
+        b.accumulated_debt = r.f32();
+        b.cash = r.f32();
+        b.debt_to_revenue_ratio = r.f32();
+        b.deficit_to_revenue_ratio = r.f32();
+        if (r.error)
+            return false;
+        budgets_.push_back(std::move(b));
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

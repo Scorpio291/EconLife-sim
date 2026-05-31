@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
@@ -131,11 +132,15 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
     for (uint32_t pi = 0; pi < state.provinces.size(); ++pi) {
         const auto& province = state.provinces[pi];
 
-        // Collect active NPCs in this province, sorted by id ascending.
+        // Collect active residents of this province via the home_province
+        // bucket index, sorted by id ascending.
         std::vector<const NPC*> province_npcs;
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.home_province_id == province.id && npc.status == NPCStatus::active) {
-                province_npcs.push_back(&npc);
+        if (province.id < state.npc_indices_by_home_province.size()) {
+            for (uint32_t idx : state.npc_indices_by_home_province[province.id]) {
+                const NPC& npc = state.significant_npcs[idx];
+                if (npc.status == NPCStatus::active) {
+                    province_npcs.push_back(&npc);
+                }
             }
         }
         std::sort(province_npcs.begin(), province_npcs.end(),
@@ -261,6 +266,77 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
         }
         delta.region_deltas.push_back(rd);
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Note: province_states_ is indexed by position (province slot, not
+// province_id) — the existing module code populates it via push_back for
+// every province at init time. Serialization preserves vector ordering.
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+};
+
+}  // namespace
+
+void CommunityResponseModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(province_states_.size()));
+    for (const auto& s : province_states_) {
+        out.push_back(s.opposition_org_exists ? 1u : 0u);
+        put_u32(out, s.last_stage_change_tick);
+    }
+}
+
+bool CommunityResponseModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    province_states_.clear();
+    province_states_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        ProvinceOppositionState s{};
+        s.opposition_org_exists = (r.u8() != 0);
+        s.last_stage_change_tick = r.u32();
+        if (r.error)
+            return false;
+        province_states_.push_back(s);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

@@ -2,8 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <string>
+#include <utility>
 
-#include "core/world_state/player.h"  // PlayerCharacter (complete type for state.player->)
+#include "core/world_state/apply_deltas.h"  // markets_in_province
+#include "core/world_state/player.h"        // PlayerCharacter (complete type for state.player->)
 
 namespace econlife {
 
@@ -43,6 +47,12 @@ static std::vector<RandomEventTemplate> get_default_templates() {
                          false});
     templates.push_back({"credit_tightening", "credit_tightening", EventCategory::economic,
                          "Credit Tightening", 0.5f, 0.30f, 0.70f, 10, 30, 1.0f, 1.5f, 1.0f, false});
+    // Triggered (not rolled): currency_exchange emits a
+    // RandomEventTriggerDelta on peg break. base_weight = 0 keeps it out
+    // of the random selection pool — the only path to fire is the
+    // pending_random_event_triggers drain in execute().
+    templates.push_back({"currency_crisis", "currency_crisis", EventCategory::economic,
+                         "Currency Crisis", 0.0f, 0.40f, 0.95f, 20, 90, 1.0f, 1.0f, 1.0f, false});
 
     templates.push_back({"political_crisis", "political_crisis", EventCategory::human,
                          "Political Crisis", 0.8f, 0.25f, 0.65f, 5, 20, 1.0f, 2.5f, 1.0f, false});
@@ -97,6 +107,47 @@ void RandomEventsModule::execute_province(uint32_t province_idx, const WorldStat
 }
 
 void RandomEventsModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Drain cross-module triggers first. Any module emits a
+    // RandomEventTriggerDelta -> apply_deltas routes it into
+    // state.pending_random_event_triggers. We instantiate the named
+    // template here, then clear the queue via const_cast (same carve-out
+    // legal_process uses for state.pending_legal_case_seeds). Triggers
+    // with an unknown template_key are dropped silently — the producer
+    // is at fault and we never want to throw mid-tick. Severity is
+    // clamped to the template's [severity_min, severity_max] range.
+    if (!state.pending_random_event_triggers.empty()) {
+        for (const auto& trig : state.pending_random_event_triggers) {
+            const RandomEventTemplate* tmpl = nullptr;
+            for (const auto& t : templates_) {
+                if (t.id == trig.template_key) {
+                    tmpl = &t;
+                    break;
+                }
+            }
+            if (!tmpl)
+                continue;
+            // Duration: midpoint of [min, max]. Deterministic, no RNG draw
+            // (we are at the very top of execute(), before any roll). For
+            // currency_crisis (20..90) that is 55 ticks.
+            uint32_t duration = (tmpl->duration_ticks_min + tmpl->duration_ticks_max) / 2u;
+            ActiveRandomEvent ev{};
+            ev.id = allocate_event_id();
+            ev.template_id = tmpl->id;
+            ev.template_key = tmpl->template_key;
+            ev.province_id = trig.province_id;
+            ev.category = tmpl->category;
+            ev.severity = std::clamp(trig.severity, tmpl->severity_min, tmpl->severity_max);
+            ev.started_tick = state.current_tick;
+            ev.end_tick = state.current_tick + duration;
+            ev.evidence_generated = false;
+            ev.effects_applied_this_tick = false;
+            active_events_.push_back(ev);
+        }
+        auto& mutable_queue =
+            const_cast<std::vector<RandomEventTriggerDelta>&>(state.pending_random_event_triggers);
+        mutable_queue.clear();
+    }
+
     // Prune expired events (end_tick == 0) so active_events_ does not grow without bound.
     // This runs single-threaded, so the erase is safe.
     active_events_.erase(std::remove_if(active_events_.begin(), active_events_.end(),
@@ -231,22 +282,22 @@ void RandomEventsModule::apply_accident_per_tick(const WorldState& state, const 
     rd.stability_delta = -0.005f * event.severity;
     province_delta.region_deltas.push_back(rd);
 
-    for (uint32_t npc_id : province.significant_npc_ids) {
-        for (const auto& npc : state.significant_npcs) {
-            if (npc.id == npc_id && npc.status == NPCStatus::active) {
-                NPCDelta nd{};
-                nd.npc_id = npc.id;
-                MemoryEntry mem{};
-                mem.tick_timestamp = state.current_tick;
-                mem.type = MemoryType::physical_hazard;
-                mem.subject_id = province.id;
-                mem.emotional_weight = -0.3f * event.severity;
-                mem.decay = 1.0f;
-                mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
-                nd.new_memory_entry = mem;
-                province_delta.npc_deltas.push_back(nd);
-                break;
-            }
+    if (province.id < state.npc_indices_by_province.size()) {
+        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.status != NPCStatus::active)
+                continue;
+            NPCDelta nd{};
+            nd.npc_id = npc.id;
+            MemoryEntry mem{};
+            mem.tick_timestamp = state.current_tick;
+            mem.type = MemoryType::physical_hazard;
+            mem.subject_id = province.id;
+            mem.emotional_weight = -0.3f * event.severity;
+            mem.decay = 1.0f;
+            mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
+            nd.new_memory_entry = mem;
+            province_delta.npc_deltas.push_back(nd);
         }
     }
 }
@@ -261,15 +312,14 @@ void RandomEventsModule::apply_economic_per_tick(const WorldState& state, const 
         if (event.id % 2 == 0)
             shift = -shift;
 
-        for (const auto& market : state.regional_markets) {
-            if (market.province_id == province.id) {
-                MarketDelta md{};
-                md.good_id = market.good_id;
-                md.region_id = province.region_id;
-                md.spot_price_override = market.spot_price + shift;
-                province_delta.market_deltas.push_back(md);
-                break;
-            }
+        for (uint32_t i : markets_in_province(state, province.id)) {
+            const auto& market = state.regional_markets[i];
+            MarketDelta md{};
+            md.good_id = market.good_id;
+            md.region_id = province.region_id;
+            md.spot_price_override = market.spot_price + shift;
+            province_delta.market_deltas.push_back(md);
+            break;
         }
     }
 }
@@ -349,8 +399,9 @@ float RandomEventsModule::compute_economic_volatility(const WorldState& state,
                                                       const Province& province) const {
     float total_deviation = 0.0f;
     uint32_t count = 0;
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province.id && market.equilibrium_price > 0.0f) {
+    for (uint32_t i : markets_in_province(state, province.id)) {
+        const auto& market = state.regional_markets[i];
+        if (market.equilibrium_price > 0.0f) {
             float deviation =
                 std::abs(market.spot_price - market.equilibrium_price) / market.equilibrium_price;
             total_deviation += deviation;
@@ -489,22 +540,22 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                 event.evidence_generated = true;
             }
 
-            for (uint32_t npc_id : province.significant_npc_ids) {
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.id == npc_id && npc.status == NPCStatus::active) {
-                        NPCDelta nd{};
-                        nd.npc_id = npc.id;
-                        MemoryEntry mem{};
-                        mem.tick_timestamp = state.current_tick;
-                        mem.type = MemoryType::physical_hazard;
-                        mem.subject_id = province.id;
-                        mem.emotional_weight = -0.5f * event.severity;
-                        mem.decay = 1.0f;
-                        mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
-                        nd.new_memory_entry = mem;
-                        province_delta.npc_deltas.push_back(nd);
-                        break;
-                    }
+            if (province.id < state.npc_indices_by_province.size()) {
+                for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+                    const NPC& npc = state.significant_npcs[idx];
+                    if (npc.status != NPCStatus::active)
+                        continue;
+                    NPCDelta nd{};
+                    nd.npc_id = npc.id;
+                    MemoryEntry mem{};
+                    mem.tick_timestamp = state.current_tick;
+                    mem.type = MemoryType::physical_hazard;
+                    mem.subject_id = province.id;
+                    mem.emotional_weight = -0.5f * event.severity;
+                    mem.decay = 1.0f;
+                    mem.is_actionable = (event.severity >= cfg_.evidence_severity_threshold);
+                    nd.new_memory_entry = mem;
+                    province_delta.npc_deltas.push_back(nd);
                 }
             }
             break;
@@ -518,34 +569,33 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
                 if (event.id % 2 == 0)
                     shift = -shift;
 
-                for (const auto& market : state.regional_markets) {
-                    if (market.province_id == province.id) {
-                        MarketDelta md{};
-                        md.good_id = market.good_id;
-                        md.region_id = province.region_id;
-                        md.spot_price_override = market.spot_price + shift;
-                        province_delta.market_deltas.push_back(md);
-                        break;
-                    }
+                for (uint32_t i : markets_in_province(state, province.id)) {
+                    const auto& market = state.regional_markets[i];
+                    MarketDelta md{};
+                    md.good_id = market.good_id;
+                    md.region_id = province.region_id;
+                    md.spot_price_override = market.spot_price + shift;
+                    province_delta.market_deltas.push_back(md);
+                    break;
                 }
             }
 
-            for (uint32_t npc_id : province.significant_npc_ids) {
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.id == npc_id && npc.status == NPCStatus::active) {
-                        NPCDelta nd{};
-                        nd.npc_id = npc.id;
-                        MemoryEntry mem{};
-                        mem.tick_timestamp = state.current_tick;
-                        mem.type = MemoryType::event;
-                        mem.subject_id = province.id;
-                        mem.emotional_weight = -0.2f * event.severity;
-                        mem.decay = 1.0f;
-                        mem.is_actionable = false;
-                        nd.new_memory_entry = mem;
-                        province_delta.npc_deltas.push_back(nd);
-                        break;
-                    }
+            if (province.id < state.npc_indices_by_province.size()) {
+                for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+                    const NPC& npc = state.significant_npcs[idx];
+                    if (npc.status != NPCStatus::active)
+                        continue;
+                    NPCDelta nd{};
+                    nd.npc_id = npc.id;
+                    MemoryEntry mem{};
+                    mem.tick_timestamp = state.current_tick;
+                    mem.type = MemoryType::event;
+                    mem.subject_id = province.id;
+                    mem.emotional_weight = -0.2f * event.severity;
+                    mem.decay = 1.0f;
+                    mem.is_actionable = false;
+                    nd.new_memory_entry = mem;
+                    province_delta.npc_deltas.push_back(nd);
                 }
             }
             break;
@@ -570,6 +620,135 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             break;
         }
     }
+}
+
+// ─── Persistence helpers ────────────────────────────────────────────────────
+//
+// Encodes next_event_id_ and active_events_ as a self-contained byte block.
+// Format (little-endian fixed-width):
+//   u32 schema_tag (1 == this layout)
+//   u32 next_event_id_
+//   u32 count
+//   for each ActiveRandomEvent:
+//     u32 id
+//     u32 template_id length + bytes
+//     u32 template_key length + bytes
+//     u32 province_id
+//     u8  category
+//     f32 severity
+//     u32 started_tick
+//     u32 end_tick
+//     u8  evidence_generated
+//     u8  effects_applied_this_tick
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+void put_string(std::vector<uint8_t>& out, const std::string& s) {
+    put_u32(out, static_cast<uint32_t>(s.size()));
+    for (char c : s)
+        out.push_back(static_cast<uint8_t>(c));
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+    std::string str() {
+        uint32_t n = u32();
+        if (!need(n))
+            return {};
+        std::string s(reinterpret_cast<const char*>(data + pos), n);
+        pos += n;
+        return s;
+    }
+};
+
+}  // namespace
+
+void RandomEventsModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);  // schema_tag
+    put_u32(out, next_event_id_);
+    put_u32(out, static_cast<uint32_t>(active_events_.size()));
+    for (const auto& e : active_events_) {
+        put_u32(out, e.id);
+        put_string(out, e.template_id);
+        put_string(out, e.template_key);
+        put_u32(out, e.province_id);
+        out.push_back(static_cast<uint8_t>(e.category));
+        put_f32(out, e.severity);
+        put_u32(out, e.started_tick);
+        put_u32(out, e.end_tick);
+        out.push_back(e.evidence_generated ? 1u : 0u);
+        out.push_back(e.effects_applied_this_tick ? 1u : 0u);
+    }
+}
+
+bool RandomEventsModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    uint32_t schema_tag = r.u32();
+    if (schema_tag != 1u)
+        return false;
+    next_event_id_ = r.u32();
+    uint32_t count = r.u32();
+    active_events_.clear();
+    active_events_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        ActiveRandomEvent e{};
+        e.id = r.u32();
+        e.template_id = r.str();
+        e.template_key = r.str();
+        e.province_id = r.u32();
+        e.category = static_cast<EventCategory>(r.u8());
+        e.severity = r.f32();
+        e.started_tick = r.u32();
+        e.end_tick = r.u32();
+        e.evidence_generated = (r.u8() != 0);
+        e.effects_applied_this_tick = (r.u8() != 0);
+        if (r.error)
+            return false;
+        active_events_.push_back(std::move(e));
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

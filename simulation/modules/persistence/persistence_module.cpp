@@ -4,7 +4,11 @@
 
 #include <algorithm>
 #include <cstring>
+#include <unordered_map>
+#include <utility>
 
+#include "core/world_gen/goods_catalog.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -171,12 +175,12 @@ void write_political(ByteWriter& w, const RegionalPoliticalState& p) {
 }
 
 void write_conditions(ByteWriter& w, const RegionConditions& c) {
+    // Schema v5: population-fraction monitors (crime_rate, addiction_rate,
+    // criminal_dominance_index, formal_employment_rate) moved to
+    // RegionCohortStats. This struct now holds only the non-demographic
+    // policy/event scalars.
     w.write_float(c.stability_score);
     w.write_float(c.inequality_index);
-    w.write_float(c.crime_rate);
-    w.write_float(c.addiction_rate);
-    w.write_float(c.criminal_dominance_index);
-    w.write_float(c.formal_employment_rate);
     w.write_float(c.regulatory_compliance_index);
     w.write_float(c.drought_modifier);
     w.write_float(c.flood_modifier);
@@ -274,6 +278,19 @@ void write_npc(ByteWriter& w, const NPC& npc) {
     w.write_u32(npc.current_province_id);
     w.write_u8(static_cast<uint8_t>(npc.travel_status));
     w.write_u8(static_cast<uint8_t>(npc.status));
+
+    // Addiction state (schema v4). Empty AddictionState (stage=none,
+    // everything else 0/empty) serialises as a fixed-size footer so saves
+    // produced from worlds with no addiction system loaded still encode
+    // cleanly.
+    w.write_u8(static_cast<uint8_t>(npc.addiction_state.stage));
+    w.write_string(npc.addiction_state.substance_key);
+    w.write_float(npc.addiction_state.tolerance);
+    w.write_float(npc.addiction_state.craving);
+    w.write_u32(npc.addiction_state.consecutive_use_ticks);
+    w.write_u32(npc.addiction_state.clean_ticks);
+    w.write_u32(npc.addiction_state.supply_gap_ticks);
+    w.write_float(npc.addiction_state.relapse_probability);
 }
 
 void write_evidence_token(ByteWriter& w, const EvidenceToken& e) {
@@ -360,7 +377,11 @@ void write_province(ByteWriter& w, const Province& p) {
     for (uint32_t id : p.significant_npc_ids)
         w.write_u32(id);
 
-    // cohort_stats presence flag + data
+    // cohort_stats presence flag + data. Schema v5 added all the
+    // population-fraction monitors (migrated from RegionConditions plus
+    // sick_rate / homeless_rate / unemployment_rate). The presence flag is
+    // retained for backward-compat with the in-memory invariant — production
+    // worlds always have cohort_stats populated by world_generator.
     bool has_cohort = (p.cohort_stats != nullptr);
     w.write_bool(has_cohort);
     if (has_cohort) {
@@ -368,6 +389,14 @@ void write_province(ByteWriter& w, const Province& p) {
         w.write_float(p.cohort_stats->median_age);
         w.write_float(p.cohort_stats->working_age_fraction);
         w.write_float(p.cohort_stats->dependency_ratio);
+        // v5 additions:
+        w.write_float(p.cohort_stats->addiction_rate);
+        w.write_float(p.cohort_stats->crime_rate);
+        w.write_float(p.cohort_stats->criminal_dominance_index);
+        w.write_float(p.cohort_stats->formal_employment_rate);
+        w.write_float(p.cohort_stats->sick_rate);
+        w.write_float(p.cohort_stats->homeless_rate);
+        w.write_float(p.cohort_stats->unemployment_rate);
     }
 
     w.write_bool(p.has_karst);
@@ -699,6 +728,146 @@ void write_lod1_stats(ByteWriter& w, const std::map<uint32_t, Lod1NationStats>& 
     }
 }
 
+// Schema v6: currencies, facilities, and core GlobalTechnologyState fields.
+void write_currency_record(ByteWriter& w, const CurrencyRecord& c) {
+    w.write_u32(c.nation_id);
+    w.write_string(c.iso_code);
+    w.write_float(c.usd_rate);
+    w.write_float(c.usd_rate_baseline);
+    w.write_float(c.volatility);
+    w.write_float(c.foreign_reserves);
+    w.write_bool(c.pegged);
+    w.write_float(c.peg_rate);
+}
+
+CurrencyRecord read_currency_record(ByteReader& r) {
+    CurrencyRecord c{};
+    c.nation_id = r.read_u32();
+    c.iso_code = r.read_string();
+    c.usd_rate = r.read_float();
+    c.usd_rate_baseline = r.read_float();
+    c.volatility = r.read_float();
+    c.foreign_reserves = r.read_float();
+    c.pegged = r.read_bool();
+    c.peg_rate = r.read_float();
+    return c;
+}
+
+void write_facility(ByteWriter& w, const Facility& f) {
+    w.write_u32(f.id);
+    w.write_u32(f.business_id);
+    w.write_u32(f.province_id);
+    w.write_string(f.recipe_id);
+    w.write_u32(f.tech_tier);
+    w.write_float(f.output_rate_modifier);
+    w.write_float(f.soil_health);
+    w.write_u32(f.worker_count);
+    w.write_bool(f.is_operational);
+    // v14 (Phase 11): property_id link. Always written by current code.
+    w.write_u32(f.property_id);
+}
+
+Facility read_facility(ByteReader& r, uint32_t schema_ver) {
+    Facility f{};
+    f.id = r.read_u32();
+    f.business_id = r.read_u32();
+    f.province_id = r.read_u32();
+    f.recipe_id = r.read_string();
+    f.tech_tier = r.read_u32();
+    f.output_rate_modifier = r.read_float();
+    f.soil_health = r.read_float();
+    f.worker_count = r.read_u32();
+    f.is_operational = r.read_bool();
+    // v14 (Phase 11): property_id link. Pre-v14 facility blocks omit it.
+    f.property_id = (schema_ver >= 14u) ? r.read_u32() : 0u;
+    return f;
+}
+
+void write_research_project(ByteWriter& w, const ResearchProject& p) {
+    w.write_string(p.project_key);
+    w.write_u32(p.business_id);
+    w.write_u32(p.facility_id);
+    w.write_string(p.domain);
+    w.write_string(p.target_node_key);
+    w.write_float(p.difficulty);
+    w.write_float(p.progress);
+    w.write_u32(p.researchers_assigned);
+    w.write_float(p.funding_per_tick);
+    w.write_float(p.success_probability);
+    w.write_u32(p.started_tick);
+    w.write_bool(p.is_secret);
+}
+
+ResearchProject read_research_project(ByteReader& r) {
+    ResearchProject p{};
+    p.project_key = r.read_string();
+    p.business_id = r.read_u32();
+    p.facility_id = r.read_u32();
+    p.domain = r.read_string();
+    p.target_node_key = r.read_string();
+    p.difficulty = r.read_float();
+    p.progress = r.read_float();
+    p.researchers_assigned = r.read_u32();
+    p.funding_per_tick = r.read_float();
+    p.success_probability = r.read_float();
+    p.started_tick = r.read_u32();
+    p.is_secret = r.read_bool();
+    return p;
+}
+
+void write_maturation_project(ByteWriter& w, const MaturationProject& p) {
+    w.write_string(p.node_key);
+    w.write_u32(p.business_id);
+    w.write_u32(p.facility_id);
+    w.write_u32(p.researchers_assigned);
+    w.write_float(p.funding_per_tick);
+    w.write_float(p.progress);
+}
+
+MaturationProject read_maturation_project(ByteReader& r) {
+    MaturationProject p{};
+    p.node_key = r.read_string();
+    p.business_id = r.read_u32();
+    p.facility_id = r.read_u32();
+    p.researchers_assigned = r.read_u32();
+    p.funding_per_tick = r.read_float();
+    p.progress = r.read_float();
+    return p;
+}
+
+// Writes the runtime-mutable subset of GlobalTechnologyState. era_triggers
+// is config-loaded reference data and not persisted; the engine reloads it
+// from packages/base_game/config/rnd_config.json on startup.
+void write_global_technology_state(ByteWriter& w, const GlobalTechnologyState& g) {
+    w.write_u8(static_cast<uint8_t>(g.current_era));
+    w.write_u32(g.era_started_tick);
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
+        w.write_float(g.domain_knowledge[i]);
+    w.write_u32(static_cast<uint32_t>(g.active_research_projects.size()));
+    for (const auto& p : g.active_research_projects)
+        write_research_project(w, p);
+    w.write_u32(static_cast<uint32_t>(g.active_maturation_projects.size()));
+    for (const auto& p : g.active_maturation_projects)
+        write_maturation_project(w, p);
+}
+
+void read_global_technology_state(ByteReader& r, GlobalTechnologyState& g) {
+    g.current_era = static_cast<SimulationEra>(r.read_u8());
+    g.era_started_tick = r.read_u32();
+    for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
+        g.domain_knowledge[i] = r.read_float();
+    uint32_t rp_count = r.read_u32();
+    g.active_research_projects.clear();
+    g.active_research_projects.reserve(rp_count);
+    for (uint32_t i = 0; i < rp_count; ++i)
+        g.active_research_projects.push_back(read_research_project(r));
+    uint32_t mp_count = r.read_u32();
+    g.active_maturation_projects.clear();
+    g.active_maturation_projects.reserve(mp_count);
+    for (uint32_t i = 0; i < mp_count; ++i)
+        g.active_maturation_projects.push_back(read_maturation_project(r));
+}
+
 void write_route_table(
     ByteWriter& w,
     const std::map<std::pair<uint32_t, uint32_t>, std::array<RouteProfile, 5>>& table) {
@@ -789,10 +958,6 @@ RegionConditions read_conditions(ByteReader& r) {
     RegionConditions c{};
     c.stability_score = r.read_float();
     c.inequality_index = r.read_float();
-    c.crime_rate = r.read_float();
-    c.addiction_rate = r.read_float();
-    c.criminal_dominance_index = r.read_float();
-    c.formal_employment_rate = r.read_float();
     c.regulatory_compliance_index = r.read_float();
     c.drought_modifier = r.read_float();
     c.flood_modifier = r.read_float();
@@ -907,6 +1072,17 @@ NPC read_npc(ByteReader& r) {
     npc.current_province_id = r.read_u32();
     npc.travel_status = static_cast<NPCTravelStatus>(r.read_u8());
     npc.status = static_cast<NPCStatus>(r.read_u8());
+
+    // Addiction state (schema v4+). Pre-v4 saves are rejected outright by
+    // is_schema_compatible, so this read is unconditional.
+    npc.addiction_state.stage = static_cast<AddictionStage>(r.read_u8());
+    npc.addiction_state.substance_key = r.read_string();
+    npc.addiction_state.tolerance = r.read_float();
+    npc.addiction_state.craving = r.read_float();
+    npc.addiction_state.consecutive_use_ticks = r.read_u32();
+    npc.addiction_state.clean_ticks = r.read_u32();
+    npc.addiction_state.supply_gap_ticks = r.read_u32();
+    npc.addiction_state.relapse_probability = r.read_float();
     return npc;
 }
 
@@ -1010,6 +1186,14 @@ Province read_province(ByteReader& r) {
         p.cohort_stats->median_age = r.read_float();
         p.cohort_stats->working_age_fraction = r.read_float();
         p.cohort_stats->dependency_ratio = r.read_float();
+        // v5 additions — migrated population-fraction monitors:
+        p.cohort_stats->addiction_rate = r.read_float();
+        p.cohort_stats->crime_rate = r.read_float();
+        p.cohort_stats->criminal_dominance_index = r.read_float();
+        p.cohort_stats->formal_employment_rate = r.read_float();
+        p.cohort_stats->sick_rate = r.read_float();
+        p.cohort_stats->homeless_rate = r.read_float();
+        p.cohort_stats->unemployment_rate = r.read_float();
     } else {
         p.cohort_stats.reset();
     }
@@ -1389,6 +1573,19 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 }
 
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
+    // Each schema bump (v3 catalog, v4 addiction footer, v5 cohort_stats
+    // migration, v6 currency/facility/technology footers, v7 module-state
+    // section, v8 pending_random_event_triggers footer, v9
+    // pending_transactions footer, v10 pending_transactions Phase 4
+    // mortgage extension, v11 pending_property_foreclosures footer,
+    // v12 active_auctions footer, v13 pending_business_acquisitions
+    // footer, v14 facility property_id + construction_contracts footer)
+    // changes the byte-stream layout. V1 is pre-release; reject anything
+    // older than the current floor outright. v7..v13 saves remain
+    // loadable: each footer or trailing-field extension is gated on
+    // saved_version checks.
+    if (saved_version < 7u)
+        return false;
     return saved_version <= current_version;
 }
 
@@ -1427,6 +1624,12 @@ uint8_t PersistenceModule::compute_disruption_tier(uint32_t restoration_count) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
+    static const std::vector<const ITickModule*> kNoModules{};
+    return serialize(state, kNoModules);
+}
+
+std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
+                                                  const std::vector<const ITickModule*>& modules) {
     ByteWriter w;
 
     // --- Global scalars ---
@@ -1441,6 +1644,30 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
     // already journaled in the same save lineage. See
     // docs/design/EconLife_PlayerDelta_Semantics_v1.md issue #11.
     w.write_u32(state.next_action_sequence);
+
+    // --- Goods catalog (schema v3) ---
+    // Embedded so deserialised worlds hold the same string→numeric_id
+    // mapping as when they were saved, which is what the modules' market
+    // deltas key on. Empty catalog (e.g. test worlds without CSV data)
+    // serialises as a 0-count.
+    if (state.goods_catalog) {
+        const auto& goods = state.goods_catalog->goods();
+        w.write_u32(static_cast<uint32_t>(goods.size()));
+        for (const auto& g : goods) {
+            w.write_u32(g.numeric_id);
+            w.write_string(g.good_id);
+            w.write_string(g.display_name);
+            w.write_u8(g.tier);
+            w.write_string(g.unit);
+            w.write_string(g.category);
+            w.write_float(g.base_price);
+            w.write_bool(g.perishable);
+            w.write_bool(g.illegal);
+            w.write_u8(g.era_available);
+        }
+    } else {
+        w.write_u32(0u);
+    }
 
     // --- Nations ---
     w.write_u32(static_cast<uint32_t>(state.nations.size()));
@@ -1534,6 +1761,160 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
     write_lod1_stats(w, state.lod1_national_stats);
     write_route_table(w, state.province_route_table);
 
+    // --- v6: currencies, facilities, technology ---
+    w.write_u32(static_cast<uint32_t>(state.currencies.size()));
+    for (const auto& c : state.currencies)
+        write_currency_record(w, c);
+
+    w.write_u32(static_cast<uint32_t>(state.facilities.size()));
+    for (const auto& f : state.facilities)
+        write_facility(w, f);
+
+    write_global_technology_state(w, state.technology);
+
+    // --- v7: module-private state section ---
+    // Each module that overrides serialize_state appends its payload here.
+    // Format: u32 count, then per module: string name + u32 payload size +
+    // payload bytes. The count is always written (0 when modules is empty
+    // or no module emits state), so the section header is present even
+    // when there's no opt-in.
+    {
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> blocks;
+        blocks.reserve(modules.size());
+        for (const ITickModule* mod : modules) {
+            if (!mod)
+                continue;
+            std::vector<uint8_t> payload;
+            mod->serialize_state(payload);
+            if (!payload.empty()) {
+                blocks.emplace_back(std::string(mod->name()), std::move(payload));
+            }
+        }
+        w.write_u32(static_cast<uint32_t>(blocks.size()));
+        for (const auto& [n, p] : blocks) {
+            w.write_string(n);
+            w.write_u32(static_cast<uint32_t>(p.size()));
+            for (uint8_t b : p)
+                w.write_u8(b);
+        }
+    }
+
+    // --- v8: pending_random_event_triggers ---
+    // Cross-tick trigger queue. Written even when empty so the section
+    // header is always present. Entry order is preserved (consumer
+    // processes them in insertion order).
+    {
+        const auto& queue = state.pending_random_event_triggers;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& t : queue) {
+            w.write_string(t.template_key);
+            w.write_u32(t.province_id);
+            w.write_float(t.severity);
+        }
+    }
+
+    // --- v9: pending_transactions (real-estate Phase 2) ---
+    //         Extended in v10 with Phase 4 mortgage payment fields.
+    {
+        const auto& queue = state.pending_transactions;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& t : queue) {
+            w.write_u32(t.id);
+            w.write_u32(t.property_id);
+            w.write_u32(t.buyer_id);
+            w.write_u32(t.seller_id);
+            w.write_float(t.offer_price);
+            w.write_u32(t.offered_tick);
+            w.write_u32(t.close_tick);
+            w.write_u8(static_cast<uint8_t>(t.stage));
+            // v10: Phase 4 mortgage fields.
+            w.write_u8(static_cast<uint8_t>(t.payment_method));
+            w.write_float(t.down_payment_fraction);
+            w.write_float(t.interest_rate);
+            w.write_u32(t.loan_maturity_ticks);
+        }
+    }
+
+    // --- v11: pending_property_foreclosures (real-estate Phase 5) ---
+    // Cross-tick queue. Order preserved.
+    {
+        const auto& queue = state.pending_property_foreclosures;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& f : queue) {
+            w.write_u32(f.loan_id);
+            w.write_u32(f.property_id);
+            w.write_u32(f.borrower_id);
+            w.write_u32(f.lender_id);
+        }
+    }
+
+    // --- v12: active_auctions (real-estate Phase 6) ---
+    // Open auctions outlive ticks; bids preserved in order.
+    {
+        const auto& queue = state.active_auctions;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& a : queue) {
+            w.write_u32(a.id);
+            w.write_u32(a.asset_id);
+            w.write_u32(a.consigner_id);
+            w.write_float(a.reserve_price);
+            w.write_u32(a.opened_tick);
+            w.write_u32(a.closes_tick);
+            w.write_u8(static_cast<uint8_t>(a.status));
+            w.write_u32(a.current_high_bidder_id);
+            w.write_float(a.current_high_bid);
+            w.write_u32(static_cast<uint32_t>(a.bids.size()));
+            for (const auto& b : a.bids) {
+                w.write_u32(b.bidder_id);
+                w.write_float(b.bid_amount);
+                w.write_u32(b.placed_tick);
+            }
+        }
+    }
+
+    // --- v13: pending_business_acquisitions (real-estate Phase 10) ---
+    {
+        const auto& queue = state.pending_business_acquisitions;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& a : queue) {
+            w.write_u32(a.id);
+            w.write_u32(a.business_id);
+            w.write_u32(a.buyer_id);
+            w.write_u32(a.seller_id);
+            w.write_float(a.price);
+            w.write_u32(a.offered_tick);
+            w.write_u32(a.close_tick);
+            w.write_u8(static_cast<uint8_t>(a.stage));
+            w.write_u8(static_cast<uint8_t>(a.payment_method));
+            w.write_float(a.down_payment_fraction);
+            w.write_float(a.interest_rate);
+            w.write_u32(a.loan_maturity_ticks);
+        }
+    }
+
+    // --- v14: construction_contracts (real-estate Phase 11) ---
+    {
+        const auto& queue = state.construction_contracts;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& c : queue) {
+            w.write_u32(c.id);
+            w.write_u32(c.client_id);
+            w.write_u32(c.property_id);
+            w.write_string(c.facility_type_key);
+            w.write_string(c.recipe_id);
+            w.write_u32(static_cast<uint32_t>(c.bids.size()));
+            for (const auto& b : c.bids) {
+                w.write_u32(b.contractor_business_id);
+                w.write_float(b.bid_amount);
+                w.write_u32(b.completion_ticks);
+            }
+            w.write_u32(c.awarded_bid_index);
+            w.write_u8(static_cast<uint8_t>(c.stage));
+            w.write_u32(c.bidding_deadline_tick);
+            w.write_u32(c.expected_completion_tick);
+        }
+    }
+
     // --- Uncompressed data ready ---
     const auto& raw = w.data();
     uint32_t raw_size = static_cast<uint32_t>(raw.size());
@@ -1569,6 +1950,13 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state) {
 
 RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
                                              WorldState& out_state) {
+    static const std::vector<ITickModule*> kNoModules{};
+    return deserialize(data, out_state, kNoModules);
+}
+
+RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
+                                             WorldState& out_state,
+                                             const std::vector<ITickModule*>& modules) {
     if (data.size() < HEADER_SIZE)
         return RestoreResult::io_error;
 
@@ -1622,6 +2010,36 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         out_state.next_action_sequence = r.read_u32();
     } else {
         out_state.next_action_sequence = 0;
+    }
+
+    // Goods catalog (schema v3+).
+    if (schema_ver >= 3) {
+        uint32_t goods_count = r.read_u32();
+        if (goods_count > 0) {
+            auto catalog = std::make_unique<GoodsCatalog>();
+            for (uint32_t i = 0; i < goods_count; ++i) {
+                GoodDefinition g{};
+                g.numeric_id = r.read_u32();
+                g.good_id = r.read_string();
+                g.display_name = r.read_string();
+                g.tier = r.read_u8();
+                g.unit = r.read_string();
+                g.category = r.read_string();
+                g.base_price = r.read_float();
+                g.perishable = r.read_bool();
+                g.illegal = r.read_bool();
+                g.era_available = r.read_u8();
+                catalog->push_back_loaded(std::move(g));
+            }
+            out_state.goods_catalog = std::move(catalog);
+        } else {
+            // Source had no catalog (or a zero-good one). Always overwrite —
+            // deserialize is documented as a full state restore, so leaving
+            // a stale catalog on a reused WorldState would silently
+            // misroute lookup_good_id() against IDs that no longer mean
+            // anything in the restored world.
+            out_state.goods_catalog.reset();
+        }
     }
 
     // Nations
@@ -1778,11 +2196,238 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         out_state.province_route_table[{from, to}] = routes;
     }
 
+    // --- v6: currencies, facilities, technology ---
+    uint32_t cur_count = r.read_u32();
+    out_state.currencies.clear();
+    out_state.currencies.reserve(cur_count);
+    for (uint32_t i = 0; i < cur_count; ++i)
+        out_state.currencies.push_back(read_currency_record(r));
+
+    uint32_t fac_count = r.read_u32();
+    out_state.facilities.clear();
+    out_state.facilities.reserve(fac_count);
+    for (uint32_t i = 0; i < fac_count; ++i)
+        out_state.facilities.push_back(read_facility(r, schema_ver));
+
+    read_global_technology_state(r, out_state.technology);
+
+    // --- v7: module-private state section ---
+    // Build a name → module lookup for O(1) dispatch. Modules in the save
+    // but absent from `modules` are skipped (forward compatibility). A
+    // module's deserialize_state returning false aborts the load.
+    {
+        uint32_t block_count = r.read_u32();
+        std::unordered_map<std::string, ITickModule*> by_name;
+        by_name.reserve(modules.size());
+        for (ITickModule* mod : modules) {
+            if (mod)
+                by_name[std::string(mod->name())] = mod;
+        }
+        for (uint32_t i = 0; i < block_count; ++i) {
+            std::string mname = r.read_string();
+            uint32_t psize = r.read_u32();
+            if (r.has_error())
+                return RestoreResult::io_error;
+            std::vector<uint8_t> payload(psize);
+            for (uint32_t j = 0; j < psize; ++j)
+                payload[j] = r.read_u8();
+            if (r.has_error())
+                return RestoreResult::io_error;
+            auto it = by_name.find(mname);
+            if (it != by_name.end()) {
+                if (!it->second->deserialize_state(payload.data(), payload.size()))
+                    return RestoreResult::io_error;
+            }
+        }
+    }
+
+    // --- v8: pending_random_event_triggers ---
+    // v7 saves omit this section: leave the queue empty (no cross-tick
+    // triggers in flight at save time). v8+ saves carry the queue.
+    out_state.pending_random_event_triggers.clear();
+    if (schema_ver >= 8u) {
+        uint32_t trig_count = r.read_u32();
+        out_state.pending_random_event_triggers.reserve(trig_count);
+        for (uint32_t i = 0; i < trig_count; ++i) {
+            RandomEventTriggerDelta t{};
+            t.template_key = r.read_string();
+            t.province_id = r.read_u32();
+            t.severity = r.read_float();
+            out_state.pending_random_event_triggers.push_back(std::move(t));
+        }
+    }
+
+    // --- v9: pending_transactions (real-estate Phase 2/4) ---
+    // v7/v8 saves omit this section: leave the queue empty (no in-flight
+    // property transactions at save time). v9 saves carry the queue.
+    // v10 saves carry the queue with extended Phase 4 payment fields;
+    // v9 saves load with the cash defaults.
+    out_state.pending_transactions.clear();
+    if (schema_ver >= 9u) {
+        uint32_t tx_count = r.read_u32();
+        out_state.pending_transactions.reserve(tx_count);
+        for (uint32_t i = 0; i < tx_count; ++i) {
+            PendingTransaction t{};
+            t.id = r.read_u32();
+            t.property_id = r.read_u32();
+            t.buyer_id = r.read_u32();
+            t.seller_id = r.read_u32();
+            t.offer_price = r.read_float();
+            t.offered_tick = r.read_u32();
+            t.close_tick = r.read_u32();
+            t.stage = static_cast<PendingTxStage>(r.read_u8());
+            if (schema_ver >= 10u) {
+                t.payment_method = static_cast<PaymentMethod>(r.read_u8());
+                t.down_payment_fraction = r.read_float();
+                t.interest_rate = r.read_float();
+                t.loan_maturity_ticks = r.read_u32();
+            } else {
+                t.payment_method = PaymentMethod::cash;
+                t.down_payment_fraction = 1.0f;
+                t.interest_rate = 0.0f;
+                t.loan_maturity_ticks = 0u;
+            }
+            out_state.pending_transactions.push_back(t);
+        }
+    }
+
+    // pending_legal_case_seeds is documented as "must be empty at save
+    // time" (consumer drains within the same tick as the producer).
+    // Defensively reset on load.
+    out_state.pending_legal_case_seeds.clear();
+
+    // pending_property_transactions follows the same same-tick consumer
+    // contract (player_actions emits at Tier 0, real_estate drains at
+    // Tier 4 within the same tick). Defensively reset on load.
+    out_state.pending_property_transactions.clear();
+
+    // pending_loan_requests also same-tick (real_estate emits at Tier 4
+    // settlement, banking drains at Tier 5). Defensively reset on load.
+    out_state.pending_loan_requests.clear();
+
+    // --- v11: pending_property_foreclosures (cross-tick, persisted) ---
+    out_state.pending_property_foreclosures.clear();
+    if (schema_ver >= 11u) {
+        uint32_t fc_count = r.read_u32();
+        out_state.pending_property_foreclosures.reserve(fc_count);
+        for (uint32_t i = 0; i < fc_count; ++i) {
+            PropertyForeclosureRequest f{};
+            f.loan_id = r.read_u32();
+            f.property_id = r.read_u32();
+            f.borrower_id = r.read_u32();
+            f.lender_id = r.read_u32();
+            out_state.pending_property_foreclosures.push_back(f);
+        }
+    }
+
+    // --- v12: active_auctions (Phase 6, persisted) ---
+    out_state.active_auctions.clear();
+    if (schema_ver >= 12u) {
+        uint32_t auction_count = r.read_u32();
+        out_state.active_auctions.reserve(auction_count);
+        for (uint32_t i = 0; i < auction_count; ++i) {
+            ActiveAuction a{};
+            a.id = r.read_u32();
+            a.asset_id = r.read_u32();
+            a.consigner_id = r.read_u32();
+            a.reserve_price = r.read_float();
+            a.opened_tick = r.read_u32();
+            a.closes_tick = r.read_u32();
+            a.status = static_cast<AuctionStatus>(r.read_u8());
+            a.current_high_bidder_id = r.read_u32();
+            a.current_high_bid = r.read_float();
+            uint32_t bid_count = r.read_u32();
+            a.bids.reserve(bid_count);
+            for (uint32_t j = 0; j < bid_count; ++j) {
+                AuctionBid b{};
+                b.bidder_id = r.read_u32();
+                b.bid_amount = r.read_float();
+                b.placed_tick = r.read_u32();
+                a.bids.push_back(b);
+            }
+            out_state.active_auctions.push_back(std::move(a));
+        }
+    }
+
+    // --- v13: pending_business_acquisitions (Phase 10, persisted) ---
+    out_state.pending_business_acquisitions.clear();
+    if (schema_ver >= 13u) {
+        uint32_t acq_count = r.read_u32();
+        out_state.pending_business_acquisitions.reserve(acq_count);
+        for (uint32_t i = 0; i < acq_count; ++i) {
+            PendingBusinessAcquisition a{};
+            a.id = r.read_u32();
+            a.business_id = r.read_u32();
+            a.buyer_id = r.read_u32();
+            a.seller_id = r.read_u32();
+            a.price = r.read_float();
+            a.offered_tick = r.read_u32();
+            a.close_tick = r.read_u32();
+            a.stage = static_cast<PendingTxStage>(r.read_u8());
+            a.payment_method = static_cast<PaymentMethod>(r.read_u8());
+            a.down_payment_fraction = r.read_float();
+            a.interest_rate = r.read_float();
+            a.loan_maturity_ticks = r.read_u32();
+            out_state.pending_business_acquisitions.push_back(a);
+        }
+    }
+
+    // --- v14: construction_contracts (Phase 11, persisted) ---
+    out_state.construction_contracts.clear();
+    if (schema_ver >= 14u) {
+        uint32_t cc_count = r.read_u32();
+        out_state.construction_contracts.reserve(cc_count);
+        for (uint32_t i = 0; i < cc_count; ++i) {
+            ConstructionContract c{};
+            c.id = r.read_u32();
+            c.client_id = r.read_u32();
+            c.property_id = r.read_u32();
+            c.facility_type_key = r.read_string();
+            c.recipe_id = r.read_string();
+            uint32_t bid_count = r.read_u32();
+            c.bids.reserve(bid_count);
+            for (uint32_t j = 0; j < bid_count; ++j) {
+                ConstructionBid b{};
+                b.contractor_business_id = r.read_u32();
+                b.bid_amount = r.read_float();
+                b.completion_ticks = r.read_u32();
+                c.bids.push_back(b);
+            }
+            c.awarded_bid_index = r.read_u32();
+            c.stage = static_cast<ContractStage>(r.read_u8());
+            c.bidding_deadline_tick = r.read_u32();
+            c.expected_completion_tick = r.read_u32();
+            out_state.construction_contracts.push_back(std::move(c));
+        }
+    }
+
+    // pending_construction_requests / _awards same-tick. Reset on load.
+    out_state.pending_construction_requests.clear();
+    out_state.pending_construction_awards.clear();
+
+    // pending_auction_bid_requests same-tick (player_actions emits,
+    // real_estate drains). Defensively reset on load.
+    out_state.pending_auction_bid_requests.clear();
+
+    // pending_zoning_requests same-tick (player_actions emits,
+    // real_estate drains). Defensively reset on load.
+    out_state.pending_zoning_requests.clear();
+
+    // pending_subdivision_requests same-tick. Defensively reset on load.
+    out_state.pending_subdivision_requests.clear();
+
+    // pending_business_acquisition_requests same-tick. Defensively reset.
+    out_state.pending_business_acquisition_requests.clear();
+
     // CrossProvinceDeltaBuffer is always empty at save/load time
     out_state.cross_province_delta_buffer.entries.clear();
 
     if (r.has_error())
         return RestoreResult::io_error;
+
+    // Computed indices are not serialized; rebuild from significant_npcs.
+    rebuild_npc_indices(out_state);
+
     return RestoreResult::success;
 }
 

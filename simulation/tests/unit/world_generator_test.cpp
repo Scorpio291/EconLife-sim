@@ -481,8 +481,8 @@ TEST_CASE("WorldGenerator  - province community state initialized correctly",
         // Conditions should be initialized within valid ranges.
         CHECK(p.conditions.stability_score >= 0.0f);
         CHECK(p.conditions.stability_score <= 1.0f);
-        CHECK(p.conditions.crime_rate >= 0.0f);
-        CHECK(p.conditions.crime_rate <= 1.0f);
+        CHECK(p.cohort_stats->crime_rate >= 0.0f);
+        CHECK(p.cohort_stats->crime_rate <= 1.0f);
         CHECK(p.conditions.drought_modifier == 1.0f);  // no active drought
         CHECK(p.conditions.flood_modifier == 1.0f);    // no active flood
 
@@ -1166,8 +1166,8 @@ TEST_CASE("WorldGenerator - formal_employment_rate is bounded after economic geo
         config.npc_count = 50;
         auto world = WorldGenerator::generate(config);
         for (const auto& p : world.provinces) {
-            CHECK(p.conditions.formal_employment_rate >= 0.20f);
-            CHECK(p.conditions.formal_employment_rate <= 0.95f);
+            CHECK(p.cohort_stats->formal_employment_rate >= 0.20f);
+            CHECK(p.cohort_stats->formal_employment_rate <= 0.95f);
         }
     }
 }
@@ -1187,8 +1187,8 @@ TEST_CASE("WorldGenerator - economic geography is deterministic",
         CHECK(w1.provinces[i].trade_openness == w2.provinces[i].trade_openness);
         CHECK(w1.provinces[i].climate.wildfire_vulnerability ==
               w2.provinces[i].climate.wildfire_vulnerability);
-        CHECK(w1.provinces[i].conditions.formal_employment_rate ==
-              w2.provinces[i].conditions.formal_employment_rate);
+        CHECK(w1.provinces[i].cohort_stats->formal_employment_rate ==
+              w2.provinces[i].cohort_stats->formal_employment_rate);
     }
 }
 

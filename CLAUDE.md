@@ -25,15 +25,20 @@ the spec wins — update the spec through review, not by silently
 diverging.
 
 ## Architecture Overview
-- **Tick Orchestrator:** Runs 27 steps per tick in topological order.
+- **Tick Orchestrator:** Runs registered modules per tick in topological order.
   Modules register via `ITickModule` interface with `runs_after()`/`runs_before()`.
-- **Province-parallel:** Steps that are independent per province dispatch
+  Step counts named in design docs ("27 steps", "Step 2: drain queue") are
+  guidelines that reflect the V1 base-game module set; additional packages,
+  expansions, and mods append to the effective tick. Module ordering — not
+  step number — is the contract.
+- **Province-parallel:** Modules that are independent per province dispatch
   to a thread pool (one thread per province, max 6). Results merge in
   ascending province index order for determinism.
 - **DeltaBuffer:** Modules read `WorldState` (const) and write to `DeltaBuffer`.
   WorldState is never modified mid-tick.
 - **DeferredWorkQueue:** Single min-heap for scheduled work (consequences,
-  transit arrivals, decay batches, business decisions). Step 2 drains it.
+  transit arrivals, decay batches, business decisions). The orchestrator
+  drains it once per tick, before the module loop.
 - **Cross-province effects:** One-tick propagation delay via `CrossProvinceDeltaBuffer`.
 - **Package system:** Base game, expansions, and mods load in topological order.
   Same capability model; distinction is trust level.
@@ -47,6 +52,9 @@ See docs/session_logs/ for AI session history.
 Tick must complete in < 500ms at 2,000 significant NPCs.
 Target: < 200ms on 6 cores.
 Benchmarks are in simulation/tests/benchmarks/.
+CI enforces the 200 ms target — not the 500 ms ceiling — to catch
+regressions early. A failing benchmark gate means "we regressed below
+target", not "we breached the ceiling".
 Do not merge code that regresses benchmarks without explicit approval.
 
 ## Coding Standards

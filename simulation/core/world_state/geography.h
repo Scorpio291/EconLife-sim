@@ -597,17 +597,16 @@ struct RegionalPoliticalState {
 // ---------------------------------------------------------------------------
 // RegionConditions
 // ---------------------------------------------------------------------------
+// NOTE: Population-fraction monitors (addiction_rate, crime_rate,
+// criminal_dominance_index, formal_employment_rate, sick_rate,
+// homeless_rate, unemployment_rate) live on `RegionCohortStats`, not
+// here. Pre-schema-v5 they were scattered across this struct; the
+// consolidation puts everything population-anchored in one place. This
+// struct is now policy/world-state knobs (stability, inequality, climate
+// modifiers, regulatory compliance, response stage) — not demographics.
 struct RegionConditions {
     float stability_score;
     float inequality_index;
-    float crime_rate;
-    float addiction_rate;
-    float criminal_dominance_index;
-    float formal_employment_rate;       // 0.0-1.0; fraction of working-age population in formal
-                                        // (declared, taxed) employment. Updated monthly via
-                                        // DeferredWorkQueue. High criminal_dominance_index
-                                        // suppresses this over time as legitimate businesses
-                                        // exit or are extorted.
     float regulatory_compliance_index;  // 0.0-1.0; mean(1.0 -
                                         // facility.scrutiny_meter.current_level)
                                         // across all facilities in province where

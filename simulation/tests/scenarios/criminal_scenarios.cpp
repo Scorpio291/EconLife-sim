@@ -557,7 +557,7 @@ TEST_CASE("drug quality affects market price and addiction rate",
     REQUIRE_THAT(world.regional_markets[lo_market_idx].spot_price, WithinAbs(lo_price, 0.01f));
 
     // Apply addiction rate increase for high-quality province.
-    float addiction_before = world.provinces[0].conditions.addiction_rate;
+    float addiction_before = world.provinces[0].cohort_stats->addiction_rate;
     {
         DeltaBuffer d{};
         RegionDelta rd{};
@@ -566,7 +566,7 @@ TEST_CASE("drug quality affects market price and addiction rate",
         d.region_deltas.push_back(rd);
         apply_deltas(world, d);
     }
-    REQUIRE(world.provinces[0].conditions.addiction_rate > addiction_before);
+    REQUIRE(world.provinces[0].cohort_stats->addiction_rate > addiction_before);
 }
 
 // ── Facility signals scenarios ──────────────────────────────────────────────

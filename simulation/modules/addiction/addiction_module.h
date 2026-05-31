@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <unordered_map>
 #include <vector>
 
 #include "addiction_types.h"
@@ -40,8 +39,9 @@ class AddictionModule : public ITickModule {
 
    private:
     AddictionConfig cfg_;
-    // Module-internal addiction state per NPC (not in WorldState)
-    std::unordered_map<uint32_t, AddictionState> addiction_states_;
+    // Per-NPC addiction state now lives on NPC::addiction_state — the module
+    // reads it from WorldState and writes back through
+    // NPCDelta::set_addiction_state in execute_province.
 };
 
 }  // namespace econlife

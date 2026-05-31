@@ -21,6 +21,7 @@
 #include "core/world_gen/h3_utils.h"
 #include "core/world_gen/nation_generator.h"
 #include "core/world_gen/settlement_generator.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 
 namespace econlife {
 
@@ -243,12 +244,15 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
     detect_special_features(world, rng, config);
 
-    // Step 4: Markets from goods catalog
-    GoodsCatalog catalog;
+    // Step 4: Markets from goods catalog. Transfer catalog ownership to
+    // WorldState so runtime modules can resolve string good_ids to the
+    // same numeric_id that create_markets() stamped onto RegionalMarket.
+    auto catalog_owned = std::make_unique<GoodsCatalog>();
     if (!config.goods_directory.empty()) {
-        catalog.load_from_directory(config.goods_directory);
+        catalog_owned->load_from_directory(config.goods_directory);
     }
-    create_markets(world, rng, catalog, config);
+    create_markets(world, rng, *catalog_owned, config);
+    world.goods_catalog = std::move(catalog_owned);
 
     // Step 5: NPC population
     SettlementGenerator::create_npcs(world, rng, config);
@@ -270,8 +274,8 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // in a recipe CSV would otherwise silently zero out the corresponding
     // supply or demand at runtime — surfaces here as a clear list at world
     // generation. Logged to stderr so modders see it during package load.
-    if (recipe_catalog.size() > 0 && catalog.size() > 0) {
-        auto errors = recipe_catalog.validate_against_goods(catalog);
+    if (recipe_catalog.size() > 0 && world.goods_catalog && world.goods_catalog->size() > 0) {
+        auto errors = recipe_catalog.validate_against_goods(*world.goods_catalog);
         for (const auto& err : errors) {
             std::cerr << "[recipe_catalog] " << err << "\n";
         }
@@ -378,6 +382,11 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
         config.commentary_depth != CommentaryDepth::none) {
         write_encyclopedia_json(world, config, config.output_encyclopedia_file);
     }
+
+    // Build the province → significant_npcs index. From here on, modules and
+    // tests can read world.npc_indices_by_province directly; the orchestrator
+    // and apply_deltas keep it fresh between ticks.
+    rebuild_npc_indices(world);
 
     return world;
 }
@@ -650,11 +659,11 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
 
     province.conditions.stability_score = 0.6f + rng.next_float() * 0.3f;
     province.conditions.inequality_index = 0.2f + rng.next_float() * 0.3f;
-    province.conditions.crime_rate = 0.05f + rng.next_float() * 0.1f;
-    province.conditions.addiction_rate = 0.02f + rng.next_float() * 0.05f;
-    province.conditions.criminal_dominance_index =
+    province.cohort_stats->crime_rate = 0.05f + rng.next_float() * 0.1f;
+    province.cohort_stats->addiction_rate = 0.02f + rng.next_float() * 0.05f;
+    province.cohort_stats->criminal_dominance_index =
         config.criminal_baseline + rng.next_float() * 0.05f;
-    province.conditions.formal_employment_rate = 0.6f + rng.next_float() * 0.25f;
+    province.cohort_stats->formal_employment_rate = 0.6f + rng.next_float() * 0.25f;
     province.conditions.regulatory_compliance_index = 0.7f + rng.next_float() * 0.2f;
     province.conditions.drought_modifier = 1.0f;
     province.conditions.flood_modifier = 1.0f;
@@ -695,7 +704,11 @@ void WorldGenerator::create_provinces(WorldState& world, DeterministicRNG& rng,
         province.region_id = p;
         province.nation_id = 0;
         province.lod_level = SimulationLOD::full;
-        province.cohort_stats.reset();
+        // Invariant: cohort_stats is non-null after world generation so the
+        // population-fraction monitor reads (`cohort_stats->addiction_rate`,
+        // etc.) don't need null guards. population_aging fills in the
+        // demographic numbers when the module runs.
+        province.cohort_stats = std::make_unique<RegionCohortStats>();
 
         ProvinceArchetype archetype = assign_archetype(rng, p, config.province_count);
         province.province_archetype_index = static_cast<uint8_t>(archetype);
@@ -2684,9 +2697,9 @@ void WorldGenerator::seed_economic_geography(WorldState& world,
         float infra_bonus = (prov.infrastructure_rating - 0.50f) * e.employment_infra_scale;
         float corruption_penalty = prov.political.corruption_index * e.employment_corruption_scale;
         float inequality_penalty = prov.conditions.inequality_index * e.employment_inequality_scale;
-        prov.conditions.formal_employment_rate =
-            std::max(0.20f, std::min(0.95f, prov.conditions.formal_employment_rate + infra_bonus -
-                                                corruption_penalty - inequality_penalty));
+        prov.cohort_stats->formal_employment_rate = std::max(
+            0.20f, std::min(0.95f, prov.cohort_stats->formal_employment_rate + infra_bonus -
+                                       corruption_penalty - inequality_penalty));
     }
 }
 
@@ -5451,10 +5464,10 @@ nlohmann::json WorldGenerator::to_world_json(const WorldState& world) {
         p["conditions"] = {
             {"stability_score", prov.conditions.stability_score},
             {"inequality_index", prov.conditions.inequality_index},
-            {"crime_rate", prov.conditions.crime_rate},
-            {"addiction_rate", prov.conditions.addiction_rate},
-            {"criminal_dominance_index", prov.conditions.criminal_dominance_index},
-            {"formal_employment_rate", prov.conditions.formal_employment_rate},
+            {"crime_rate", prov.cohort_stats->crime_rate},
+            {"addiction_rate", prov.cohort_stats->addiction_rate},
+            {"criminal_dominance_index", prov.cohort_stats->criminal_dominance_index},
+            {"formal_employment_rate", prov.cohort_stats->formal_employment_rate},
             {"regulatory_compliance_index", prov.conditions.regulatory_compliance_index},
             {"drought_modifier", prov.conditions.drought_modifier},
             {"flood_modifier", prov.conditions.flood_modifier},

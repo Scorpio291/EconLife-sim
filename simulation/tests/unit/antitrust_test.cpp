@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/antitrust/antitrust_module.h"
@@ -74,6 +75,7 @@ TEST_CASE("Monthly check fires and reschedules", "[antitrust][tier7]") {
     state.current_tick = 30;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -96,6 +98,7 @@ TEST_CASE("Criminal sector excluded from antitrust", "[antitrust][tier7]") {
     state.current_tick = 30;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -144,6 +147,7 @@ TEST_CASE("Tier 1 triggers regulator meter fill", "[antitrust][tier7]") {
     state.current_tick = 30;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -186,6 +190,7 @@ TEST_CASE("Tier 1 triggers regulator meter fill", "[antitrust][tier7]") {
     AntitrustModule module;
     module.next_check_tick() = 30;
 
+    rebuild_npc_indices(state);
     DeltaBuffer delta{};
     module.execute(state, delta);
 
@@ -207,6 +212,7 @@ TEST_CASE("Tier 2 accumulates proposal pressure", "[antitrust][tier7]") {
     state.current_tick = 30;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -254,6 +260,7 @@ TEST_CASE("Pressure decays when no dominant actor", "[antitrust][tier7]") {
     state.current_tick = 30;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -303,6 +310,7 @@ TEST_CASE("Zero supply good skipped", "[antitrust][tier7]") {
     state.current_tick = 30;
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 

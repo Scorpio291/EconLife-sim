@@ -44,6 +44,14 @@ class MediaSystemModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): outlets_ holds media outlet ownership,
+    // credibility, reach, editorial independence, and journalist rosters.
+    // active_stories_ tracks the multi-tick propagation lifecycle of every
+    // published story. Without persistence, ownership/journalist
+    // assignments and in-flight news cycles reset on load.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Module-internal storage ---
     std::vector<MediaOutlet>& outlets() { return outlets_; }
     const std::vector<MediaOutlet>& outlets() const { return outlets_; }

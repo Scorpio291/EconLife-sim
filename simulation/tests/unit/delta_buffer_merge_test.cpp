@@ -25,6 +25,10 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
     {
         NPCDelta d{};
         d.npc_id = tag;
+        AddictionState as{};
+        as.stage = AddictionStage::casual;
+        as.craving = 0.1f * static_cast<float>(tag);
+        d.set_addiction_state = as;
         db.npc_deltas.push_back(d);
     }
 
@@ -128,6 +132,30 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
         d.committed = true;
         db.calendar_commit_deltas.push_back(d);
     }
+    {
+        LegalCaseSeedDelta d{};
+        d.defendant_npc_id = tag;
+        d.lead_investigator_id = tag + 1u;
+        d.severity = 2u;
+        d.province_id = tag;
+        d.initial_evidence_weight = 0.4f;
+        db.new_legal_case_seeds.push_back(d);
+    }
+    {
+        RandomEventTriggerDelta d{};
+        d.template_key = "currency_crisis";
+        d.province_id = tag;
+        d.severity = 0.5f;
+        db.new_random_event_triggers.push_back(d);
+    }
+    {
+        PropertyTransactionRequest r{};
+        r.kind = PropertyTransactionKind::buy;
+        r.property_id = tag;
+        r.actor_id = tag + 100u;
+        r.price = 250000.0f;
+        db.new_property_transactions.push_back(r);
+    }
 }
 
 }  // namespace
@@ -161,6 +189,9 @@ TEST_CASE("test_delta_buffer_merge_covers_every_field", "[world_state][delta_buf
     REQUIRE(dst.new_businesses.size() == 2);
     REQUIRE(dst.scene_card_choice_deltas.size() == 2);
     REQUIRE(dst.calendar_commit_deltas.size() == 2);
+    REQUIRE(dst.new_legal_case_seeds.size() == 2);
+    REQUIRE(dst.new_random_event_triggers.size() == 2);
+    REQUIRE(dst.new_property_transactions.size() == 2);
 
     // Append order is preserved: the dst-tagged entry comes first.
     REQUIRE(dst.npc_deltas[0].npc_id == 1);

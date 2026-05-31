@@ -8,6 +8,7 @@
 // Complete type definitions needed for std::optional and std::vector members.
 #include "modules/calendar/calendar_types.h"           // CalendarEntry
 #include "modules/economy/economy_types.h"             // NPCBusiness (for NewBusinessDelta)
+#include "modules/production/production_types.h"       // Facility (for NewFacilityDelta)
 #include "modules/scene_cards/scene_card_types.h"      // SceneCard
 #include "modules/trade_infrastructure/trade_types.h"  // NPCTravelStatus (complete type for optional)
 #include "npc.h"                                       // MemoryEntry, Relationship, NPCStatus
@@ -41,6 +42,9 @@ struct NPCDelta {
     std::optional<float> motivation_delta;  // additive to financial_gain slot (weights[0]); prefer
                                             // motivation_replacement for full vector
     std::optional<MotivationVector> motivation_replacement;  // replacement; full vector override
+    std::optional<AddictionState> set_addiction_state;  // replacement; full AddictionState override
+                                                        // (drug_economy seeds; AddictionModule
+                                                        // writes back each tick)
 };
 
 struct PlayerDelta {
@@ -90,6 +94,8 @@ struct BusinessDelta {
     std::optional<float> revenue_per_tick_update;  // replacement; latest revenue figure
     std::optional<float> cost_per_tick_update;     // replacement; latest cost figure
     std::optional<float> output_quality_update;    // replacement; latest production quality [0,1]
+    std::optional<uint32_t> owner_id_update;       // replacement; ownership transfer (Phase 10
+                                                   // business acquisition)
 };
 
 // Business dissolved (market exit): removes entity from world.npc_businesses.
@@ -102,11 +108,49 @@ struct NewBusinessDelta {
     NPCBusiness new_business;
 };
 
+// New facility delivered (Phase 11 construction): appends to world.facilities.
+struct NewFacilityDelta {
+    Facility new_facility;
+};
+
+// Phase 11 — open a construction contract for bids. Emitted by
+// player_actions (RequestConstructionBidsAction). Routed into
+// WorldState.pending_construction_requests; real_estate drains same-tick,
+// validates the parcel, collects contractor bids, and opens a
+// ConstructionContract in the bidding stage.
+struct ConstructionBidsRequest {
+    uint32_t client_id;
+    uint32_t property_id;
+    std::string facility_type_key;
+    std::string recipe_id;
+    uint32_t bidding_window_ticks;
+};
+
+// Phase 11 — award a bid on an open contract. Emitted by player_actions
+// (AwardConstructionBidAction). Routed into
+// WorldState.pending_construction_awards; real_estate drains same-tick.
+struct ConstructionAwardRequest {
+    uint32_t client_id;
+    uint32_t contract_id;
+    uint32_t bid_index;
+};
+
 struct CurrencyDelta {
     uint32_t nation_id;
     std::optional<float> usd_rate_update;         // replacement; new exchange rate
     std::optional<bool> pegged_update;            // replacement; peg status change
     std::optional<float> foreign_reserves_delta;  // additive; reserve depletion
+};
+
+// LOD 2 global commodity price index update. Emitted annually by
+// lod_system_module aggregating supply/demand across LOD 2 nations.
+// lod_system is the sole writer; apply_lod2_price_deltas applies lerp
+// smoothing using LodSystemConfig::lod2_smoothing_rate. Reading modules
+// (price_engine, commodity_trading) read the smoothed value from
+// `WorldState::lod2_price_index->lod2_price_modifier[good_id]`.
+struct Lod2PriceIndexDelta {
+    uint32_t good_id;
+    float raw_modifier;  // unsmoothed ratio: consumption / max(production, supply_floor)
 };
 
 struct TechnologyDelta {
@@ -125,11 +169,22 @@ struct TechnologyDelta {
 
 struct RegionDelta {
     uint32_t region_id;
-    std::optional<float> stability_delta;            // additive
-    std::optional<float> inequality_delta;           // additive
-    std::optional<float> crime_rate_delta;           // additive
-    std::optional<float> addiction_rate_delta;       // additive
-    std::optional<float> criminal_dominance_delta;   // additive
+    std::optional<float> stability_delta;   // additive; conditions.stability_score
+    std::optional<float> inequality_delta;  // additive; conditions.inequality_index
+
+    // Population-fraction monitors — all live on RegionCohortStats since
+    // the schema-v5 demographics consolidation. apply_region_deltas routes
+    // these into province.cohort_stats->*.
+    std::optional<float> crime_rate_delta;      // additive; cohort_stats->crime_rate
+    std::optional<float> addiction_rate_delta;  // additive; cohort_stats->addiction_rate
+    std::optional<float>
+        criminal_dominance_delta;  // additive; cohort_stats->criminal_dominance_index
+    std::optional<float>
+        formal_employment_rate_delta;              // additive; cohort_stats->formal_employment_rate
+    std::optional<float> sick_rate_delta;          // additive; cohort_stats->sick_rate
+    std::optional<float> homeless_rate_delta;      // additive; cohort_stats->homeless_rate
+    std::optional<float> unemployment_rate_delta;  // additive; cohort_stats->unemployment_rate
+
     std::optional<float> cohesion_delta;             // additive
     std::optional<float> grievance_delta;            // additive
     std::optional<float> institutional_trust_delta;  // additive
@@ -170,6 +225,175 @@ struct CalendarCommitDelta {
     bool committed;
 };
 
+// Legal case seed — request to open a new LegalCase at the investigation
+// stage. Emitted by any module observing a triggering event (e.g.
+// investigator_engine when its meter crosses raid_imminent). Routed by
+// apply_deltas into WorldState.pending_legal_case_seeds; legal_process
+// drains the queue at the start of its execute() within the same tick.
+//
+// severity is the underlying value of CaseSeverity (kept as u8 here so
+// delta_buffer.h does not depend on legal_process_types.h).
+struct LegalCaseSeedDelta {
+    uint32_t defendant_npc_id;      // 0 = player defendant
+    uint32_t lead_investigator_id;  // NPC opening the case; 0 if none
+    uint8_t severity;               // CaseSeverity enum value
+    uint32_t province_id;
+    float initial_evidence_weight;  // starting evidence accumulated so far
+};
+
+// Random event trigger — request to start a specific ActiveRandomEvent
+// from any module observing a triggering condition (e.g.
+// currency_exchange when a peg breaks). Routed by apply_deltas into
+// WorldState.pending_random_event_triggers; random_events drains the
+// queue at the start of its execute() and instantiates the event using
+// the named template.
+//
+// Unlike LegalCaseSeedDelta, this trigger may cross tick boundaries:
+// producers later in the tick order (e.g. currency_exchange Tier 11)
+// emit triggers that random_events (Tier 1) cannot consume until the
+// next tick. The pending queue is therefore persisted (schema v8+).
+struct RandomEventTriggerDelta {
+    std::string template_key;  // matches RandomEventTemplate.id
+    uint32_t province_id;
+    float severity;  // 0.0–1.0; clamped to template's [min,max] range
+};
+
+// Property transaction request — player_actions (and future NPC seller
+// logic) emit these to drive real-estate market state changes. Routed
+// by apply_deltas into WorldState.pending_property_transactions;
+// real_estate drains the queue at the start of its execute() within
+// the same tick (real_estate runs at Tier 4, after player_actions at
+// Tier 0). Validation (ownership, listing state, sufficient cash) is
+// performed by real_estate; player_actions emits requests without
+// touching the module-private properties_ vector.
+//
+// Phase 1 (symmetric at-asking cash market, instant settle): supports
+// list / unlist / buy. Below-asking buy requests are dropped during
+// drain. Pending state, financing, negotiation, subdivision, raw_land,
+// and business acquisition come in later phases.
+enum class PropertyTransactionKind : uint8_t {
+    list = 0,    // owner flags property listed_for_sale = true; updates asking_price
+    unlist = 1,  // owner flags property listed_for_sale = false
+    buy = 2,     // buyer offers; creates a PendingTransaction awaiting close_tick
+    cancel = 3,  // buyer or seller aborts the active PendingTransaction on a
+                 // property. property_id identifies the under-contract property
+                 // (at most one active pending_transaction per property).
+};
+
+// Phase 4 — payment method for a buy request. Cash settles in full at
+// close. Mortgage finances the full price; buyer pays only the down
+// payment in cash at close, the remainder is a LoanRecord created in
+// banking with collateral_id = property_id. Mixed splits the difference
+// using a caller-supplied down_payment_fraction.
+enum class PaymentMethod : uint8_t {
+    cash = 0,
+    mortgage = 1,
+    mixed = 2,
+};
+
+// Phase 10 — business acquisition offer. Emitted by player_actions
+// (AcquireBusinessAction). Routed by apply_deltas into
+// WorldState.pending_business_acquisition_requests; real_estate's
+// post-pass drains it same-tick, runs the owner accept-roll, and on
+// acceptance creates a PendingBusinessAcquisition. collateral_is_target
+// (default true per design) finances the buy against the target
+// business itself when payment_method != cash.
+struct BusinessAcquisitionRequest {
+    uint32_t business_id;
+    uint32_t buyer_id;
+    float offer_multiple;  // price = revenue_per_tick × ticks_per_month × this
+    uint8_t payment_method;
+    float down_payment_fraction;
+};
+
+// Phase 8 — composite property subdivision / re-merge request. Emitted
+// by player_actions (SubdividePropertyAction / MergeUnitsAction).
+// Routed by apply_deltas into WorldState.pending_subdivision_requests;
+// real_estate drains the queue at the start of its execute() same-tick.
+enum class SubdivisionKind : uint8_t {
+    subdivide = 0,  // split a subdivisible parent into n_units children
+    merge = 1,      // recombine all live children back into the parent
+};
+
+struct PropertySubdivisionRequest {
+    SubdivisionKind kind;
+    uint32_t property_id;  // the parent property
+    uint32_t actor_id;
+    uint32_t n_units;  // subdivide: number of child units; ignored for merge
+};
+
+// Phase 7 — zoning-change application on an owned property. Emitted by
+// player_actions on RequestZoningChangeAction. Routed by apply_deltas
+// into WorldState.pending_zoning_requests; real_estate drains the queue
+// at the start of its execute() within the same tick. The local
+// government's approval roll (deterministic) decides whether the
+// property's zoned_use changes. desired_use is the underlying
+// PropertyType enum value encoded as u8 to keep delta_buffer.h free of
+// per-module includes.
+struct ZoningChangeRequest {
+    uint32_t property_id;
+    uint32_t actor_id;
+    uint8_t desired_use;  // PropertyType enum value
+};
+
+// Phase 6 — bid submission to an open ActiveAuction. Emitted by
+// player_actions on PlaceAuctionBidAction (and by NPC auction logic in
+// real_estate's own scan). Routed by apply_deltas into
+// WorldState.pending_auction_bid_requests; real_estate drains the
+// queue at the start of its execute() within the same tick (Tier 4
+// follows player_actions Tier 0). Validation (auction exists & open,
+// bid above current high, bidder has cash) is performed during the
+// drain — invalid bids are dropped.
+struct AuctionBidRequest {
+    uint32_t auction_id;
+    uint32_t bidder_id;
+    float bid_amount;
+};
+
+// Phase 5 — cross-module foreclosure trigger. Emitted by banking when a
+// property_purchase loan transitions to in_default; routed by
+// apply_deltas into WorldState.pending_property_foreclosures;
+// real_estate drains at the start of its execute() (banking Tier 5 →
+// real_estate Tier 4 next tick) and transfers the collateral
+// PropertyListing's ownership to the lender (lender_id; 0 = anonymous
+// bank → unowned). In-flight pending_transactions on the property are
+// marked cancelled; active negotiations are dropped. The loan itself
+// is wound down by banking (outstanding_balance set to 0 → next
+// retire_matured_loans pass removes it).
+struct PropertyForeclosureRequest {
+    uint32_t loan_id;
+    uint32_t property_id;
+    uint32_t borrower_id;
+    uint32_t lender_id;
+};
+
+// Phase 4 — cross-module request from real_estate at settlement time to
+// banking to originate a LoanRecord with the supplied parameters. Routed
+// via apply_deltas into WorldState.pending_loan_requests; banking
+// drains the queue at the start of its execute() within the same tick
+// (banking Tier 5 follows real_estate Tier 4). purpose is the underlying
+// banking LoanPurpose enum encoded as u8 to keep delta_buffer.h free of
+// per-module includes.
+struct NewLoanRequest {
+    uint32_t borrower_id;
+    uint32_t lender_id;  // 0 = anonymous bank (V1 default)
+    uint8_t purpose;     // LoanPurpose enum value (property_purchase = 1)
+    float principal;
+    float interest_rate;
+    float repayment_per_tick;
+    uint32_t maturity_tick;
+    uint32_t collateral_id;  // PropertyListing.id for property_purchase loans
+};
+
+struct PropertyTransactionRequest {
+    PropertyTransactionKind kind;
+    uint32_t property_id;
+    uint32_t actor_id;  // player.id for player-initiated; NPC.id for NPC-initiated
+    float price;        // asking_price for list, offer_price for buy, ignored for unlist
+    PaymentMethod payment_method = PaymentMethod::cash;
+    float down_payment_fraction = 1.0f;  // cash → 1.0; mortgage → 0.0; mixed → in (0, 1)
+};
+
 // Accumulated state changes for one tick step.
 // Pre-reserve vectors at WorldState initialization using known NPC count.
 //
@@ -185,23 +409,36 @@ struct CalendarCommitDelta {
 // merge. The test_delta_buffer_merge_covers_every_field unit test will
 // fail when a new field is added without corresponding merge support.
 struct DeltaBuffer {
-    std::vector<NPCDelta> npc_deltas;
-    PlayerDelta player_delta;
-    std::vector<MarketDelta> market_deltas;
-    std::vector<EvidenceDelta> evidence_deltas;
-    std::vector<ConsequenceDelta> consequence_deltas;
-    std::vector<BusinessDelta> business_deltas;
-    std::vector<RegionDelta> region_deltas;
-    std::vector<CurrencyDelta> currency_deltas;
-    std::vector<TechnologyDelta> technology_deltas;
-    std::vector<CalendarEntry> new_calendar_entries;
-    std::vector<SceneCard> new_scene_cards;
-    std::vector<ObligationNode> new_obligation_nodes;
-    std::vector<CrossProvinceDelta> cross_province_deltas;
-    std::vector<DissolvedBusinessDelta> dissolved_businesses;
-    std::vector<NewBusinessDelta> new_businesses;
-    std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;
-    std::vector<CalendarCommitDelta> calendar_commit_deltas;
+    std::vector<NPCDelta> npc_deltas;                            // merge: append
+    PlayerDelta player_delta;                                    // merge: PlayerDelta::merge_from
+    std::vector<MarketDelta> market_deltas;                      // merge: append
+    std::vector<EvidenceDelta> evidence_deltas;                  // merge: append
+    std::vector<ConsequenceDelta> consequence_deltas;            // merge: append
+    std::vector<BusinessDelta> business_deltas;                  // merge: append
+    std::vector<RegionDelta> region_deltas;                      // merge: append
+    std::vector<CurrencyDelta> currency_deltas;                  // merge: append
+    std::vector<TechnologyDelta> technology_deltas;              // merge: append
+    std::vector<Lod2PriceIndexDelta> lod2_price_index_deltas;    // merge: append
+    std::vector<CalendarEntry> new_calendar_entries;             // merge: append
+    std::vector<SceneCard> new_scene_cards;                      // merge: append
+    std::vector<ObligationNode> new_obligation_nodes;            // merge: append
+    std::vector<CrossProvinceDelta> cross_province_deltas;       // merge: append
+    std::vector<DissolvedBusinessDelta> dissolved_businesses;    // merge: append
+    std::vector<NewBusinessDelta> new_businesses;                // merge: append
+    std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
+    std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
+    std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
+    std::vector<RandomEventTriggerDelta> new_random_event_triggers;     // merge: append
+    std::vector<PropertyTransactionRequest> new_property_transactions;  // merge: append
+    std::vector<NewLoanRequest> new_loan_requests;                      // merge: append
+    std::vector<PropertyForeclosureRequest> new_property_foreclosures;  // merge: append
+    std::vector<AuctionBidRequest> new_auction_bid_requests;            // merge: append
+    std::vector<ZoningChangeRequest> new_zoning_requests;               // merge: append
+    std::vector<PropertySubdivisionRequest> new_subdivision_requests;   // merge: append
+    std::vector<BusinessAcquisitionRequest> new_business_acquisitions;  // merge: append
+    std::vector<NewFacilityDelta> new_facilities;                       // merge: append
+    std::vector<ConstructionBidsRequest> new_construction_requests;     // merge: append
+    std::vector<ConstructionAwardRequest> new_construction_awards;      // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

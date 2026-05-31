@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <map>
 #include <set>
 
+#include "core/world_state/apply_deltas.h"  // lookup_market
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -81,13 +83,11 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
     std::set<uint32_t> provinces_with_tier2;
 
     for (const auto& mk : market_keys) {
-        // Find total supply for this good in this province
+        // Find total supply for this good in this province via the composite-
+        // key index (with linear-scan fallback for tests).
         float total_supply = 0.0f;
-        for (const auto& rm : state.regional_markets) {
-            if (rm.good_id == mk.good_id && rm.province_id == mk.province_id) {
-                total_supply = rm.supply;
-                break;
-            }
+        if (const RegionalMarket* m = lookup_market(state, mk.good_id, mk.province_id)) {
+            total_supply = m->supply;
         }
 
         // Skip goods with zero supply (avoid division by zero)
@@ -184,15 +184,16 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
 
             if (is_tier1_triggered(share)) {
                 // Find regulator NPC in this province
-                for (const auto& npc : state.significant_npcs) {
-                    if (npc.role == NPCRole::regulator &&
-                        npc.current_province_id == mk.province_id &&
-                        npc.status == NPCStatus::active) {
-                        NPCDelta npc_delta;
-                        npc_delta.npc_id = npc.id;
-                        npc_delta.motivation_delta = compute_meter_fill_increment();
-                        delta.npc_deltas.push_back(npc_delta);
-                        break;  // one regulator per province
+                if (mk.province_id < state.npc_indices_by_province.size()) {
+                    for (uint32_t idx : state.npc_indices_by_province[mk.province_id]) {
+                        const NPC& npc = state.significant_npcs[idx];
+                        if (npc.role == NPCRole::regulator && npc.status == NPCStatus::active) {
+                            NPCDelta npc_delta;
+                            npc_delta.npc_id = npc.id;
+                            npc_delta.motivation_delta = compute_meter_fill_increment();
+                            delta.npc_deltas.push_back(npc_delta);
+                            break;  // one regulator per province
+                        }
                     }
                 }
 
@@ -260,11 +261,13 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
         if (should_generate_proposal(pressure)) {
             // Find a legislator NPC in this province
             uint32_t proposer = 0;
-            for (const auto& npc : state.significant_npcs) {
-                if (npc.role == NPCRole::politician && npc.current_province_id == prov_id &&
-                    npc.status == NPCStatus::active) {
-                    proposer = npc.id;
-                    break;
+            if (prov_id < state.npc_indices_by_province.size()) {
+                for (uint32_t idx : state.npc_indices_by_province[prov_id]) {
+                    const NPC& npc = state.significant_npcs[idx];
+                    if (npc.role == NPCRole::politician && npc.status == NPCStatus::active) {
+                        proposer = npc.id;
+                        break;
+                    }
                 }
             }
 
@@ -280,6 +283,86 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
             pressure = 0.0f;
         }
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void AntitrustModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(proposals_.size()));
+    for (const auto& p : proposals_) {
+        put_u32(out, p.id);
+        put_u32(out, p.province_id);
+        put_u32(out, p.proposer_npc_id);
+        put_u32(out, p.created_tick);
+        put_f32(out, p.target_market_share_cap);
+    }
+}
+
+bool AntitrustModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    proposals_.clear();
+    proposals_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        AntitrustProposal p{};
+        p.id = r.u32();
+        p.province_id = r.u32();
+        p.proposer_npc_id = r.u32();
+        p.created_tick = r.u32();
+        p.target_market_share_cap = r.f32();
+        if (r.error)
+            return false;
+        proposals_.push_back(p);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

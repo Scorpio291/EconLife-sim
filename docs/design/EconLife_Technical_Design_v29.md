@@ -437,7 +437,7 @@ Everything loads before tick 1. No dynamic package loading mid-run. The module a
 
 The world runs on a **daily tick**. One tick = one in-game day = one real-time minute at normal speed (30x fast-forward = one tick per two real seconds).
 
-The tick executes the 27 steps defined in GDD Section 21. Steps are ordered to respect causality: production before prices, prices before financial distribution, NPC behavior after financial state is updated, consequence thresholds checked after NPC behavior. Most steps operate only on items that have changed state since the previous tick or whose deferred work is due this tick — not all items unconditionally.
+The tick executes the modules defined in GDD Section 21 (27 in the V1 base-game set; the count is a guideline that grows as packages, expansions, and mods register additional modules). Modules are ordered to respect causality: production before prices, prices before financial distribution, NPC behavior after financial state is updated, consequence thresholds checked after NPC behavior. The contract is the topological ordering (`runs_after` / `runs_before`), not the absolute step number. Most modules operate only on items that have changed state since the previous tick or whose deferred work is due this tick — not all items unconditionally.
 
 ### Tick Budget
 
@@ -2282,7 +2282,9 @@ struct WorldState {
     // Holds: consequences, transit arrivals, interception checks, relationship decay batches,
     //        evidence decay batches, NPC business decisions, market recomputes,
     //        investigator meter updates, climate downstream batches, background work.
-    // Min-heap sorted on due_tick. All systems write to this; Step 2 drains it each tick.
+    // Min-heap sorted on due_tick. All systems write to this; the orchestrator
+    // drains it once per tick, before the module loop ("Step 2" in the V1
+    // step-numbered guideline).
     std::priority_queue<DeferredWorkItem,
                         std::vector<DeferredWorkItem>,
                         DeferredWorkComparator> deferred_work_queue;  // see Section 3.3
@@ -2773,7 +2775,7 @@ enum class KoppenZone : uint8_t {
 };
 
 enum class SimulationLOD : uint8_t {
-    full        = 0,   // 27-step tick; full NPC model; detailed market clearing
+    full        = 0,   // full tick (all registered modules); full NPC model; detailed market clearing
     simplified  = 1,   // Monthly LOD 1 update; archetype NPCs; aggregated markets
     statistical = 2,   // Annual batch update only; contributes to price index
 };
@@ -4847,7 +4849,7 @@ struct ActiveRandomEvent {
 
 ## 20. LOD 1 Monthly Update [V1]
 
-LOD 1 nations run a simplified monthly update pass — not a subset of the 27-step tick. It executes once per simulated month (every `TICKS_PER_MONTH` ticks) for each LOD 1 nation.
+LOD 1 nations run a simplified monthly update pass — not a subset of the full per-tick module pipeline. It executes once per simulated month (every `TICKS_PER_MONTH` ticks) for each LOD 1 nation.
 
 ### 20.1 — Decision Resolutions
 

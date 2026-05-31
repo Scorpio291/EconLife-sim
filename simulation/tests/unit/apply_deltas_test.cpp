@@ -2,6 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <limits>
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -19,9 +20,18 @@ static WorldState make_minimal_world() {
     w.player.reset();
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     p.region_id = 0;
-    p.conditions = {0.7f, 0.3f, 0.1f, 0.05f, 0.05f, 0.7f, 0.8f, 1.0f, 1.0f};
+    // RegionConditions (post schema-v5): 5 fields. Population-fraction
+    // monitors moved to cohort_stats; we initialize that below too.
+    p.conditions = {0.7f, 0.3f, 0.8f, 1.0f, 1.0f};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 100000;
+    p.cohort_stats->addiction_rate = 0.05f;
+    p.cohort_stats->crime_rate = 0.1f;
+    p.cohort_stats->criminal_dominance_index = 0.05f;
+    p.cohort_stats->formal_employment_rate = 0.7f;
     p.community = {0.6f, 0.2f, 0.6f, 0.5f, 0};
     w.provinces.push_back(p);
 
@@ -441,6 +451,49 @@ TEST_CASE("apply_deltas: currency deltas cleared after application", "[apply_del
 
     apply_deltas(w, delta);
     REQUIRE(delta.currency_deltas.empty());
+}
+
+TEST_CASE("apply_deltas: currency rate NaN delta is dropped", "[apply_deltas][core]") {
+    // std::max with NaN returns NaN — bare std::max(0.001f, NaN) would
+    // poison usd_rate. The Phase-3 guard drops NaN/Inf updates and keeps
+    // the previous rate.
+    auto w = make_minimal_world();
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 5.0f;
+    cur.usd_rate_baseline = 5.0f;
+    cur.pegged = false;
+    cur.foreign_reserves = 0.8f;
+    w.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    CurrencyDelta cd{};
+    cd.nation_id = 1;
+    cd.usd_rate_update = std::numeric_limits<float>::quiet_NaN();
+    delta.currency_deltas.push_back(cd);
+
+    apply_deltas(w, delta);
+    REQUIRE_THAT(w.currencies[0].usd_rate, WithinAbs(5.0f, 0.0001f));
+}
+
+TEST_CASE("apply_deltas: currency rate Inf delta is dropped", "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    CurrencyRecord cur{};
+    cur.nation_id = 1;
+    cur.usd_rate = 5.0f;
+    cur.usd_rate_baseline = 5.0f;
+    cur.pegged = false;
+    cur.foreign_reserves = 0.8f;
+    w.currencies.push_back(cur);
+
+    DeltaBuffer delta{};
+    CurrencyDelta cd{};
+    cd.nation_id = 1;
+    cd.usd_rate_update = std::numeric_limits<float>::infinity();
+    delta.currency_deltas.push_back(cd);
+
+    apply_deltas(w, delta);
+    REQUIRE_THAT(w.currencies[0].usd_rate, WithinAbs(5.0f, 0.0001f));
 }
 
 TEST_CASE("apply_deltas: multiple NPC deltas accumulate", "[apply_deltas][core]") {

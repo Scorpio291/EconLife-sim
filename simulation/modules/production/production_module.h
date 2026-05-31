@@ -70,6 +70,13 @@ class ProductionModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Runs on the main thread before parallel dispatch each tick. Picks up
+    // facilities appended to WorldState since the last sync — Phase 11
+    // construction contracts deliver new facilities via NewFacilityDelta,
+    // and without this hook the cached facility_registry_ would never see
+    // them.
+    void init_for_tick(const WorldState& state) override;
+
     // Populate registries from WorldState data at init.
     void init_from_world_state(const WorldState& state);
 
@@ -92,6 +99,11 @@ class ProductionModule : public ITickModule {
     RecipeRegistry recipe_registry_;
     FacilityRegistry facility_registry_;
     std::once_flag init_flag_;
+    // Number of WorldState::facilities entries already registered into
+    // facility_registry_. Used by init_for_tick() to register only the
+    // tail (facilities appended since last tick) rather than re-walking
+    // the whole vector or double-registering existing entries.
+    std::size_t last_synced_facility_count_ = 0;
 
     void process_business(const NPCBusiness& biz, const WorldState& state, DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,

@@ -47,28 +47,32 @@ void TrustUpdatesModule::execute_province(uint32_t province_idx, const WorldStat
     if (province_idx >= state.provinces.size())
         return;
 
-    const auto& province = state.provinces[province_idx];
+    // Read NPCs through the province bucket index. This replaces the older
+    // pattern that walked Province::significant_npc_ids (a snapshot taken at
+    // world generation that wasn't updated on cross-province migration) and
+    // then linearly searched state.significant_npcs for each id.
+    if (province_idx >= state.npc_indices_by_province.size())
+        return;
+    const auto& bucket = state.npc_indices_by_province[province_idx];
 
-    // Get NPC IDs sorted for deterministic processing
-    auto npc_ids = province.significant_npc_ids;
-    std::sort(npc_ids.begin(), npc_ids.end());
+    // Bucket entries already match significant_npcs vector order (id-ascending
+    // in practice). Sort the local copy by id to keep the deterministic
+    // processing order robust against any future change that lets
+    // significant_npcs hold non-monotonic ids.
+    std::vector<uint32_t> npc_indices(bucket.begin(), bucket.end());
+    std::sort(npc_indices.begin(), npc_indices.end(), [&](uint32_t a, uint32_t b) {
+        return state.significant_npcs[a].id < state.significant_npcs[b].id;
+    });
 
-    for (uint32_t npc_id : npc_ids) {
-        // Find NPC in significant_npcs
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == npc_id) {
-                npc = &n;
-                break;
-            }
-        }
-        if (!npc)
+    for (uint32_t idx : npc_indices) {
+        const NPC& npc = state.significant_npcs[idx];
+        if (npc.status != NPCStatus::active)
             continue;
-        if (npc->status != NPCStatus::active)
-            continue;
+
+        const uint32_t npc_id = npc.id;
 
         // Process each relationship in target_npc_id order
-        auto rels = npc->relationships;
+        auto rels = npc.relationships;
         std::sort(rels.begin(), rels.end(), [](const Relationship& a, const Relationship& b) {
             return a.target_npc_id < b.target_npc_id;
         });
@@ -76,7 +80,7 @@ void TrustUpdatesModule::execute_province(uint32_t province_idx, const WorldStat
         for (const auto& rel : rels) {
             // Accumulate trust deltas from memory entries this tick
             float total_delta = 0.0f;
-            for (const auto& memory : npc->memory_log) {
+            for (const auto& memory : npc.memory_log) {
                 if (memory.tick_timestamp != state.current_tick)
                     continue;
                 if (memory.subject_id != rel.target_npc_id)

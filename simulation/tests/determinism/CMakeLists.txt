@@ -31,3 +31,4 @@ target_include_directories(econlife_golden_dump PRIVATE
 
 econlife_set_warnings(econlife_golden_dump)
 econlife_maybe_werror(econlife_golden_dump)
+econlife_relax_test_warnings(econlife_golden_dump)

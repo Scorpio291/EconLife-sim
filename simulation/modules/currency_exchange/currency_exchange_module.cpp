@@ -56,7 +56,40 @@ void CurrencyExchangeModule::execute(const WorldState& state, DeltaBuffer& delta
                 cd.pegged_update = false;
                 delta.currency_deltas.push_back(cd);
 
-                // TODO: Queue currency_crisis random event via DeferredWorkQueue.
+                // Trigger a currency_crisis ActiveRandomEvent. Severity
+                // scales with the depth of the reserve shortfall: a peg
+                // breaking at exactly the threshold lands at 0.40 (the
+                // template minimum); reserves at zero (or negative)
+                // land at 0.95 (template max). The trigger lands in
+                // state.pending_random_event_triggers and is consumed by
+                // random_events at the start of next tick (this module
+                // runs at Tier 11, random_events at Tier 1). One trigger
+                // per peg break per province — we use the nation's
+                // home province as the event location.
+                float threshold = cfg_.peg_break_reserve_threshold;
+                float depth =
+                    (threshold > 0.0f)
+                        ? std::clamp(1.0f - currency.foreign_reserves / threshold, 0.0f, 1.0f)
+                        : 1.0f;
+                // Locate a representative province for the affected nation
+                // (CurrencyRecord has no home_province_id field). First
+                // match in id-ascending order is deterministic.
+                uint32_t event_province_id = 0;
+                bool found = false;
+                for (const auto& prov : state.provinces) {
+                    if (prov.nation_id == currency.nation_id) {
+                        event_province_id = prov.id;
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) {
+                    RandomEventTriggerDelta trig{};
+                    trig.template_key = "currency_crisis";
+                    trig.province_id = event_province_id;
+                    trig.severity = 0.40f + depth * (0.95f - 0.40f);
+                    delta.new_random_event_triggers.push_back(trig);
+                }
             }
             // Pegged: rate stays at peg_rate; no rate delta needed.
             continue;

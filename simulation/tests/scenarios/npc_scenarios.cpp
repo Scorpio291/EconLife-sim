@@ -480,7 +480,7 @@ TEST_CASE("spending allocation affects service quality", "[scenario][npc][budget
     auto world = create_test_world(42, 10, 1, 5);
 
     float initial_stability = world.provinces[0].conditions.stability_score;
-    float initial_crime = world.provinces[0].conditions.crime_rate;
+    float initial_crime = world.provinces[0].cohort_stats->crime_rate;
 
     DeltaBuffer delta{};
     RegionDelta rd{};
@@ -491,9 +491,10 @@ TEST_CASE("spending allocation affects service quality", "[scenario][npc][budget
     apply_deltas(world, delta);
 
     REQUIRE(world.provinces[0].conditions.stability_score > initial_stability);
-    REQUIRE(world.provinces[0].conditions.crime_rate > initial_crime);
+    REQUIRE(world.provinces[0].cohort_stats->crime_rate > initial_crime);
 
     REQUIRE_THAT(world.provinces[0].conditions.stability_score,
                  WithinAbs(initial_stability + 0.08f, 0.01f));
-    REQUIRE_THAT(world.provinces[0].conditions.crime_rate, WithinAbs(initial_crime + 0.06f, 0.01f));
+    REQUIRE_THAT(world.provinces[0].cohort_stats->crime_rate,
+                 WithinAbs(initial_crime + 0.06f, 0.01f));
 }

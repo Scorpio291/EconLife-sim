@@ -21,9 +21,18 @@ static WorldState make_dwq_world() {
     w.player.reset();
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     p.region_id = 0;
-    p.conditions = {0.7f, 0.3f, 0.1f, 0.05f, 0.05f, 0.7f, 0.8f, 1.0f, 1.0f};
+    // RegionConditions (post schema-v5): 5 fields. Population-fraction
+    // monitors moved to cohort_stats; we initialize that below too.
+    p.conditions = {0.7f, 0.3f, 0.8f, 1.0f, 1.0f};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 100000;
+    p.cohort_stats->addiction_rate = 0.05f;
+    p.cohort_stats->crime_rate = 0.1f;
+    p.cohort_stats->criminal_dominance_index = 0.05f;
+    p.cohort_stats->formal_employment_rate = 0.7f;
     p.community = {0.6f, 0.2f, 0.6f, 0.5f, 0};
     w.provinces.push_back(p);
 

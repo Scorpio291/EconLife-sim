@@ -57,6 +57,10 @@ add_executable(econlife_unit_tests
     facility_type_catalog_test.cpp
     technology_catalog_test.cpp
     delta_buffer_merge_test.cpp
+    npc_province_index_test.cpp
+    business_lifecycle_test.cpp
+    technology_test.cpp
+    persistence_module_state_test.cpp
 )
 
 target_link_libraries(econlife_unit_tests PRIVATE
@@ -67,6 +71,7 @@ target_link_libraries(econlife_unit_tests PRIVATE
 
 econlife_set_warnings(econlife_unit_tests)
 econlife_maybe_werror(econlife_unit_tests)
+econlife_relax_test_warnings(econlife_unit_tests)
 
 catch_discover_tests(econlife_unit_tests
     PROPERTIES LABELS "module"

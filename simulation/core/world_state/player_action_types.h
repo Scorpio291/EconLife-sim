@@ -14,8 +14,10 @@
 #include <string>
 #include <variant>
 
-#include "modules/calendar/calendar_types.h"  // CalendarEntryType
-#include "modules/economy/economy_types.h"    // BusinessSector
+#include "core/world_state/delta_buffer.h"          // PaymentMethod
+#include "modules/calendar/calendar_types.h"        // CalendarEntryType
+#include "modules/economy/economy_types.h"          // BusinessSector
+#include "modules/real_estate/real_estate_types.h"  // PropertyType
 
 namespace econlife {
 
@@ -78,6 +80,108 @@ struct InitiateContactAction {
     uint32_t target_npc_id;
 };
 
+// List an owned PropertyListing for sale at a specified asking price.
+// Validates ownership in real_estate's drain step. Player must own the
+// property and asking_price must be > 0.
+struct ListPropertyForSaleAction {
+    uint32_t property_id;
+    float asking_price;
+};
+
+// Remove an owned PropertyListing from the market (sets listed_for_sale
+// = false). Player must own the property.
+struct UnlistPropertyAction {
+    uint32_t property_id;
+};
+
+// Make an offer on a listed property. Phase 2 wires the close-delay
+// lifecycle; Phase 3 wires below-asking negotiation; Phase 4 wires
+// mortgage financing. Cash + Phase 4 mortgage use the same action; the
+// payment_method field selects the payment path. Default
+// payment_method=cash + down_payment_fraction=1.0 preserves Phase 1-3
+// caller semantics. For mortgage: down_payment_fraction = 0.0
+// (full-principal loan); for mixed: down_payment_fraction in (0, 1).
+struct MakePropertyOfferAction {
+    uint32_t property_id;
+    float offer_price;
+    PaymentMethod payment_method = PaymentMethod::cash;
+    float down_payment_fraction = 1.0f;
+};
+
+// Cancel the currently-active PendingTransaction on a property. The
+// player must be either the buyer or the seller. Aborts the deal
+// before its close_tick; no transfer occurs. Phase 2.
+struct CancelPendingTransactionAction {
+    uint32_t property_id;
+};
+
+// Place a bid on an open ActiveAuction. Phase 6. Bid must exceed the
+// auction's current_high_bid and the bidder must have enough cash to
+// cover the bid amount (re-validated at settle time). Multiple bids
+// per auction per tick from the same bidder are allowed (price
+// escalation).
+struct PlaceAuctionBidAction {
+    uint32_t auction_id;
+    float bid_amount;
+};
+
+// Apply to the local government to re-zone an owned property to a new
+// permitted-use class. Phase 7. The player must own the property.
+// Approval is decided by a deterministic government roll (minor vs
+// major change + province corruption). On approval the property's
+// zoned_use changes; on denial nothing happens (the player may
+// re-apply later).
+struct RequestZoningChangeAction {
+    uint32_t property_id;
+    PropertyType desired_use;
+};
+
+// Split an owned subdivisible building into n_units individually-
+// ownable child units. Phase 8. The player must own the property and
+// it must be a subdivisible subtype not already subdivided.
+struct SubdividePropertyAction {
+    uint32_t property_id;
+    uint32_t n_units;
+};
+
+// Recombine all live child units of a subdivided parent back into the
+// parent. Phase 8. The player must own the parent and every live
+// child, and none may be under contract / in auction / in negotiation.
+struct MergeUnitsAction {
+    uint32_t property_id;  // the parent
+};
+
+// Open a construction contract for bids: build a facility of
+// facility_type_key (running recipe_id) on an owned, developed parcel.
+// Phase 11. Construction-sector firms bid; the player then awards one.
+struct RequestConstructionBidsAction {
+    uint32_t property_id;
+    std::string facility_type_key;
+    std::string recipe_id;
+    uint32_t bidding_window_ticks;
+};
+
+// Award a collected bid on an open construction contract. Phase 11. The
+// player must own the contract and be able to afford the bid; the bid
+// amount is escrowed and the facility is delivered at completion.
+struct AwardConstructionBidAction {
+    uint32_t contract_id;
+    uint32_t bid_index;
+};
+
+// Offer to acquire an NPC-owned business. Phase 10. price =
+// revenue_per_tick × ticks_per_month × offer_multiple. The owner runs
+// an accept-roll (multiple vs fair multiple + relationship). On
+// acceptance a PendingBusinessAcquisition is created and settles after
+// a due-diligence delay. Mortgage/mixed payment finances against the
+// target business as collateral (design default).
+struct AcquireBusinessAction {
+    uint32_t business_id;
+    float offer_multiple;
+    PaymentMethod payment_method;
+    float down_payment_fraction;
+};
+
 // ---------------------------------------------------------------------------
 // PlayerActionType enum — mirrors variant index for type dispatch
 // ---------------------------------------------------------------------------
@@ -92,6 +196,17 @@ enum class PlayerActionType : uint8_t {
     delegate = 6,
     commercialize_tech = 7,
     initiate_contact = 8,
+    list_property_for_sale = 9,
+    unlist_property = 10,
+    make_property_offer = 11,
+    cancel_pending_transaction = 12,
+    place_auction_bid = 13,
+    request_zoning_change = 14,
+    subdivide_property = 15,
+    merge_units = 16,
+    acquire_business = 17,
+    request_construction_bids = 18,
+    award_construction_bid = 19,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,7 +216,10 @@ enum class PlayerActionType : uint8_t {
 using PlayerActionPayload =
     std::variant<SceneCardChoiceAction, CalendarCommitAction, CalendarScheduleAction, TravelAction,
                  StartBusinessAction, SetProductionAction, DelegateAction, CommercializeTechAction,
-                 InitiateContactAction>;
+                 InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
+                 MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction,
+                 RequestZoningChangeAction, SubdividePropertyAction, MergeUnitsAction,
+                 AcquireBusinessAction, RequestConstructionBidsAction, AwardConstructionBidAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

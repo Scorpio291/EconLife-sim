@@ -42,6 +42,19 @@ function(econlife_maybe_werror target)
     endif()
 endfunction()
 
+# Test/benchmark targets copy aggregate value types (notably NPC, which
+# holds several std::vector members) into fixtures heavily. GCC's
+# -Wnull-dereference emits well-known false positives on std::vector copy
+# construction under optimization — it cannot prove the source buffer is
+# non-null at the inlined `*__to = *__from`. This is harmless in test
+# fixtures. Relax just that one warning for test/bench targets; the
+# production simulation library keeps the full warning baseline.
+function(econlife_relax_test_warnings target)
+    if(NOT MSVC)
+        target_compile_options(${target} PRIVATE -Wno-null-dereference)
+    endif()
+endfunction()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

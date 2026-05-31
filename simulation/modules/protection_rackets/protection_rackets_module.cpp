@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -241,6 +242,109 @@ void ProtectionRacketsModule::execute(const WorldState& state, DeltaBuffer& delt
     for (uint32_t i = 0; i < state.provinces.size(); ++i) {
         execute_province(i, state, delta);
     }
+}
+
+// ─── Persistence helpers ────────────────────────────────────────────────────
+//
+// Encodes rackets_ as a self-contained byte block. Format (little-endian):
+//   u32 schema_tag (1 == this layout)
+//   u32 count
+//   for each ProtectionRacket:
+//     u32 id, u32 criminal_org_id, u32 target_business_id
+//     f32 demand_per_tick
+//     u8  status, u8 escalation_stage
+//     u32 last_payment_tick, u32 demand_issued_tick
+//     f32 community_grievance_contribution
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void ProtectionRacketsModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(rackets_.size()));
+    for (const auto& r : rackets_) {
+        put_u32(out, r.id);
+        put_u32(out, r.criminal_org_id);
+        put_u32(out, r.target_business_id);
+        put_f32(out, r.demand_per_tick);
+        out.push_back(static_cast<uint8_t>(r.status));
+        out.push_back(static_cast<uint8_t>(r.escalation_stage));
+        put_u32(out, r.last_payment_tick);
+        put_u32(out, r.demand_issued_tick);
+        put_f32(out, r.community_grievance_contribution);
+    }
+}
+
+bool ProtectionRacketsModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    rackets_.clear();
+    rackets_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        ProtectionRacket pr{};
+        pr.id = r.u32();
+        pr.criminal_org_id = r.u32();
+        pr.target_business_id = r.u32();
+        pr.demand_per_tick = r.f32();
+        pr.status = static_cast<RacketStatus>(r.u8());
+        pr.escalation_stage = static_cast<RacketEscalationStage>(r.u8());
+        pr.last_payment_tick = r.u32();
+        pr.demand_issued_tick = r.u32();
+        pr.community_grievance_contribution = r.f32();
+        if (r.error)
+            return false;
+        rackets_.push_back(pr);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

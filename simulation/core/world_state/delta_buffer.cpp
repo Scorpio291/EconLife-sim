@@ -64,6 +64,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(region_deltas, std::move(other.region_deltas));
     move_extend(currency_deltas, std::move(other.currency_deltas));
     move_extend(technology_deltas, std::move(other.technology_deltas));
+    move_extend(lod2_price_index_deltas, std::move(other.lod2_price_index_deltas));
     move_extend(new_calendar_entries, std::move(other.new_calendar_entries));
     move_extend(new_scene_cards, std::move(other.new_scene_cards));
     move_extend(new_obligation_nodes, std::move(other.new_obligation_nodes));
@@ -72,6 +73,18 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(new_businesses, std::move(other.new_businesses));
     move_extend(scene_card_choice_deltas, std::move(other.scene_card_choice_deltas));
     move_extend(calendar_commit_deltas, std::move(other.calendar_commit_deltas));
+    move_extend(new_legal_case_seeds, std::move(other.new_legal_case_seeds));
+    move_extend(new_random_event_triggers, std::move(other.new_random_event_triggers));
+    move_extend(new_property_transactions, std::move(other.new_property_transactions));
+    move_extend(new_loan_requests, std::move(other.new_loan_requests));
+    move_extend(new_property_foreclosures, std::move(other.new_property_foreclosures));
+    move_extend(new_auction_bid_requests, std::move(other.new_auction_bid_requests));
+    move_extend(new_zoning_requests, std::move(other.new_zoning_requests));
+    move_extend(new_subdivision_requests, std::move(other.new_subdivision_requests));
+    move_extend(new_business_acquisitions, std::move(other.new_business_acquisitions));
+    move_extend(new_facilities, std::move(other.new_facilities));
+    move_extend(new_construction_requests, std::move(other.new_construction_requests));
+    move_extend(new_construction_awards, std::move(other.new_construction_awards));
 }
 
 }  // namespace econlife

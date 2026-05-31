@@ -392,7 +392,7 @@ TEST_CASE("crime rate increase affects stability", "[scenario][economy][region]"
     delta.region_deltas.push_back(rd);
     apply_deltas(world, delta);
 
-    REQUIRE(world.provinces[0].conditions.crime_rate > 0.1f);
+    REQUIRE(world.provinces[0].cohort_stats->crime_rate > 0.1f);
     REQUIRE(world.provinces[0].conditions.stability_score < 0.7f);
 }
 
@@ -408,5 +408,5 @@ TEST_CASE("region conditions clamped to 0-1 range", "[scenario][economy][region]
     apply_deltas(world, delta);
 
     REQUIRE(world.provinces[0].conditions.stability_score == 0.0f);
-    REQUIRE(world.provinces[0].conditions.crime_rate == 1.0f);
+    REQUIRE(world.provinces[0].cohort_stats->crime_rate == 1.0f);
 }

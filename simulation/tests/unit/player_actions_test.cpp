@@ -410,3 +410,229 @@ TEST_CASE("Initiate contact with dead NPC is rejected", "[player_actions][unit]"
 
     REQUIRE(delta.new_calendar_entries.empty());
 }
+
+// ---------------------------------------------------------------------------
+// Phase 1 real-estate market actions — emit PropertyTransactionRequest
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ListPropertyForSaleAction emits list request", "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::list_property_for_sale,
+                          ListPropertyForSaleAction{42, 250000.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::list);
+    REQUIRE(delta.new_property_transactions[0].property_id == 42);
+    REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
+    REQUIRE_THAT(delta.new_property_transactions[0].price, WithinAbs(250000.0f, 0.01f));
+}
+
+TEST_CASE("ListPropertyForSaleAction rejects non-positive asking price",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::list_property_for_sale,
+                          ListPropertyForSaleAction{42, -100.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.empty());
+}
+
+TEST_CASE("UnlistPropertyAction emits unlist request", "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::unlist_property, UnlistPropertyAction{42});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::unlist);
+    REQUIRE(delta.new_property_transactions[0].property_id == 42);
+    REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
+}
+
+TEST_CASE("MakePropertyOfferAction emits buy request when wealth sufficient",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    world.player->wealth = 300000.0f;
+    enqueue_player_action(world, PlayerActionType::make_property_offer,
+                          MakePropertyOfferAction{42, 250000.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::buy);
+    REQUIRE_THAT(delta.new_property_transactions[0].price, WithinAbs(250000.0f, 0.01f));
+}
+
+TEST_CASE("MakePropertyOfferAction rejected when player cannot afford",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    world.player->wealth = 100000.0f;  // less than offer
+    enqueue_player_action(world, PlayerActionType::make_property_offer,
+                          MakePropertyOfferAction{42, 250000.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.empty());
+}
+
+TEST_CASE("MakePropertyOfferAction rejects non-positive offer price",
+          "[player_actions][market_phase1]") {
+    auto world = make_minimal_world();
+    world.player->wealth = 300000.0f;
+    enqueue_player_action(world, PlayerActionType::make_property_offer,
+                          MakePropertyOfferAction{42, 0.0f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.empty());
+}
+
+TEST_CASE("CancelPendingTransactionAction emits cancel request",
+          "[player_actions][market_phase2]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::cancel_pending_transaction,
+                          CancelPendingTransactionAction{42});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_property_transactions.size() == 1);
+    REQUIRE(delta.new_property_transactions[0].kind == PropertyTransactionKind::cancel);
+    REQUIRE(delta.new_property_transactions[0].property_id == 42);
+    REQUIRE(delta.new_property_transactions[0].actor_id == world.player->id);
+}
+
+TEST_CASE("RequestZoningChangeAction emits zoning request", "[player_actions][market_phase7]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::request_zoning_change,
+                          RequestZoningChangeAction{5, PropertyType::industrial});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_zoning_requests.size() == 1);
+    REQUIRE(delta.new_zoning_requests[0].property_id == 5);
+    REQUIRE(delta.new_zoning_requests[0].actor_id == world.player->id);
+    REQUIRE(delta.new_zoning_requests[0].desired_use ==
+            static_cast<uint8_t>(PropertyType::industrial));
+}
+
+TEST_CASE("SubdividePropertyAction emits subdivide request", "[player_actions][market_phase8]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::subdivide_property,
+                          SubdividePropertyAction{3, 6});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_subdivision_requests.size() == 1);
+    REQUIRE(delta.new_subdivision_requests[0].kind == SubdivisionKind::subdivide);
+    REQUIRE(delta.new_subdivision_requests[0].property_id == 3);
+    REQUIRE(delta.new_subdivision_requests[0].n_units == 6);
+    REQUIRE(delta.new_subdivision_requests[0].actor_id == world.player->id);
+}
+
+TEST_CASE("SubdividePropertyAction with fewer than 2 units is dropped",
+          "[player_actions][market_phase8]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::subdivide_property,
+                          SubdividePropertyAction{3, 1});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_subdivision_requests.empty());
+}
+
+TEST_CASE("MergeUnitsAction emits merge request", "[player_actions][market_phase8]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::merge_units, MergeUnitsAction{3});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_subdivision_requests.size() == 1);
+    REQUIRE(delta.new_subdivision_requests[0].kind == SubdivisionKind::merge);
+    REQUIRE(delta.new_subdivision_requests[0].property_id == 3);
+}
+
+TEST_CASE("AcquireBusinessAction emits business acquisition request",
+          "[player_actions][market_phase10]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::acquire_business,
+                          AcquireBusinessAction{7, 8.0f, PaymentMethod::mixed, 0.5f});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_business_acquisitions.size() == 1);
+    REQUIRE(delta.new_business_acquisitions[0].business_id == 7);
+    REQUIRE(delta.new_business_acquisitions[0].buyer_id == world.player->id);
+    REQUIRE_THAT(delta.new_business_acquisitions[0].offer_multiple, WithinAbs(8.0f, 0.001f));
+    REQUIRE(delta.new_business_acquisitions[0].payment_method ==
+            static_cast<uint8_t>(PaymentMethod::mixed));
+}
+
+TEST_CASE("RequestConstructionBidsAction emits construction request",
+          "[player_actions][market_phase11]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::request_construction_bids,
+                          RequestConstructionBidsAction{1, "factory", "steel_smelting", 14});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_construction_requests.size() == 1);
+    REQUIRE(delta.new_construction_requests[0].property_id == 1);
+    REQUIRE(delta.new_construction_requests[0].facility_type_key == "factory");
+    REQUIRE(delta.new_construction_requests[0].client_id == world.player->id);
+}
+
+TEST_CASE("RequestConstructionBidsAction with empty facility type is dropped",
+          "[player_actions][market_phase11]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::request_construction_bids,
+                          RequestConstructionBidsAction{1, "", "steel_smelting", 14});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+    REQUIRE(delta.new_construction_requests.empty());
+}
+
+TEST_CASE("AwardConstructionBidAction emits award request", "[player_actions][market_phase11]") {
+    auto world = make_minimal_world();
+    enqueue_player_action(world, PlayerActionType::award_construction_bid,
+                          AwardConstructionBidAction{7, 2});
+
+    PlayerActionsModule module;
+    DeltaBuffer delta;
+    module.execute(world, delta);
+
+    REQUIRE(delta.new_construction_awards.size() == 1);
+    REQUIRE(delta.new_construction_awards[0].contract_id == 7);
+    REQUIRE(delta.new_construction_awards[0].bid_index == 2);
+    REQUIRE(delta.new_construction_awards[0].client_id == world.player->id);
+}

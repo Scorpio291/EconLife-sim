@@ -43,6 +43,13 @@ class CommunityResponseModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): province_states_ records whether each
+    // province has an active opposition organisation and when the last
+    // stage change happened — without persistence, multi-tick protest
+    // build-up resets and stage gates fire prematurely on load.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Static utility functions (exposed for testing) ---
 
     // Compute cohesion sample for a single NPC.

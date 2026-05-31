@@ -14,7 +14,9 @@
 #include <unordered_set>
 
 #include "core/config/package_config.h"
+#include "core/good_id_hash.h"
 #include "core/tick/deferred_work.h"
+#include "core/world_gen/goods_catalog.h"
 #include "modules/technology/technology_types.h"
 #include "player.h"
 #include "world_state.h"
@@ -141,6 +143,19 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
                 }
             }
         }
+
+        // set_addiction_state: full AddictionState replacement. Used by
+        // AddictionModule each tick to persist stage/craving/tolerance
+        // changes, and by drug_economy (or similar) to seed an NPC into
+        // the state machine. Clamping the floats keeps tolerance/craving
+        // in [0, 1] even if the delta wrote out-of-range values.
+        if (d.set_addiction_state.has_value()) {
+            npc->addiction_state = *d.set_addiction_state;
+            npc->addiction_state.tolerance = clamp01(npc->addiction_state.tolerance);
+            npc->addiction_state.craving = clamp01(npc->addiction_state.craving);
+            npc->addiction_state.relapse_probability =
+                clamp01(npc->addiction_state.relapse_probability);
+        }
     }
 }
 
@@ -249,6 +264,9 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
         }
         if (d.output_quality_update.has_value()) {
             biz.output_quality = clamp01(*d.output_quality_update);
+        }
+        if (d.owner_id_update.has_value()) {
+            biz.owner_id = *d.owner_id_update;
         }
     }
 }
@@ -390,15 +408,37 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                 if (d.inequality_delta.has_value()) {
                     c.inequality_index = clamp01(safe_add(c.inequality_index, *d.inequality_delta));
                 }
+
+                // Population-fraction monitors live on cohort_stats since the
+                // schema-v5 consolidation. Initialise lazily if missing.
+                if (!prov.cohort_stats) {
+                    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+                }
+                auto& cs = *prov.cohort_stats;
                 if (d.crime_rate_delta.has_value()) {
-                    c.crime_rate = clamp01(safe_add(c.crime_rate, *d.crime_rate_delta));
+                    cs.crime_rate = clamp01(safe_add(cs.crime_rate, *d.crime_rate_delta));
                 }
                 if (d.addiction_rate_delta.has_value()) {
-                    c.addiction_rate = clamp01(safe_add(c.addiction_rate, *d.addiction_rate_delta));
+                    cs.addiction_rate =
+                        clamp01(safe_add(cs.addiction_rate, *d.addiction_rate_delta));
                 }
                 if (d.criminal_dominance_delta.has_value()) {
-                    c.criminal_dominance_index =
-                        clamp01(safe_add(c.criminal_dominance_index, *d.criminal_dominance_delta));
+                    cs.criminal_dominance_index =
+                        clamp01(safe_add(cs.criminal_dominance_index, *d.criminal_dominance_delta));
+                }
+                if (d.formal_employment_rate_delta.has_value()) {
+                    cs.formal_employment_rate = clamp01(
+                        safe_add(cs.formal_employment_rate, *d.formal_employment_rate_delta));
+                }
+                if (d.sick_rate_delta.has_value()) {
+                    cs.sick_rate = clamp01(safe_add(cs.sick_rate, *d.sick_rate_delta));
+                }
+                if (d.homeless_rate_delta.has_value()) {
+                    cs.homeless_rate = clamp01(safe_add(cs.homeless_rate, *d.homeless_rate_delta));
+                }
+                if (d.unemployment_rate_delta.has_value()) {
+                    cs.unemployment_rate =
+                        clamp01(safe_add(cs.unemployment_rate, *d.unemployment_rate_delta));
                 }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =
@@ -452,7 +492,14 @@ static void apply_currency_deltas(WorldState& world, const std::vector<CurrencyD
             continue;
         CurrencyRecord& cur = *it->second;
         if (d.usd_rate_update.has_value()) {
-            cur.usd_rate = std::max(0.001f, *d.usd_rate_update);
+            const float requested = *d.usd_rate_update;
+            // std::max with NaN returns NaN — guard explicitly. Matches
+            // safe_add()'s NaN policy: drop the delta, keep the previous
+            // value. Inf is also rejected since clamping it would yield
+            // either +Inf or the floor depending on sign.
+            if (!std::isnan(requested) && !std::isinf(requested)) {
+                cur.usd_rate = std::max(0.001f, requested);
+            }
         }
         if (d.pegged_update.has_value()) {
             cur.pegged = *d.pegged_update;
@@ -485,6 +532,34 @@ static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
         }
         world.obligation_network.push_back(std::move(node));
     }
+}
+
+// ---------------------------------------------------------------------------
+// apply_lod2_price_deltas
+// ---------------------------------------------------------------------------
+// LOD 2 emits raw_modifier values per good_id; this routine applies lerp
+// smoothing against the existing stored modifier (default 1.0 when the good
+// is new) using LodSystemConfig::lod2_smoothing_rate. The smoothing rate is
+// read from the per-tick config when supplied; otherwise the LodSystemConfig
+// default (0.30) is used.
+static void apply_lod2_price_deltas(WorldState& world,
+                                    const std::vector<Lod2PriceIndexDelta>& deltas,
+                                    float smoothing_rate) {
+    if (deltas.empty())
+        return;
+    if (!world.lod2_price_index)
+        world.lod2_price_index = std::make_unique<GlobalCommodityPriceIndex>();
+
+    auto& index = *world.lod2_price_index;
+    for (const auto& d : deltas) {
+        if (std::isnan(d.raw_modifier) || std::isinf(d.raw_modifier))
+            continue;  // reject pathological inputs
+        auto it = index.lod2_price_modifier.find(d.good_id);
+        const float old_modifier = (it == index.lod2_price_modifier.end()) ? 1.0f : it->second;
+        const float smoothed = old_modifier + smoothing_rate * (d.raw_modifier - old_modifier);
+        index.lod2_price_modifier[d.good_id] = smoothed;
+    }
+    index.last_updated_tick = world.current_tick;
 }
 
 // ---------------------------------------------------------------------------
@@ -559,6 +634,13 @@ static void apply_new_businesses(WorldState& world, const std::vector<NewBusines
     }
 }
 
+// apply_new_facilities (Phase 11 construction delivery)
+static void apply_new_facilities(WorldState& world, const std::vector<NewFacilityDelta>& deltas) {
+    for (const auto& d : deltas) {
+        world.facilities.push_back(d.new_facility);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // apply_scene_card_choice_deltas
 // ---------------------------------------------------------------------------
@@ -608,8 +690,12 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_region_deltas(world, delta.region_deltas);
     apply_currency_deltas(world, delta.currency_deltas);
     apply_technology_deltas(world, delta.technology_deltas);
+    const float lod2_smoothing_rate =
+        config ? config->lod_system.lod2_smoothing_rate : LodSystemConfig{}.lod2_smoothing_rate;
+    apply_lod2_price_deltas(world, delta.lod2_price_index_deltas, lod2_smoothing_rate);
     apply_dissolved_businesses(world, delta.dissolved_businesses);
     apply_new_businesses(world, delta.new_businesses);
+    apply_new_facilities(world, delta.new_facilities);
     apply_append_deltas(world, delta);
     apply_scene_card_choice_deltas(world, delta.scene_card_choice_deltas);
     apply_calendar_commit_deltas(world, delta.calendar_commit_deltas);
@@ -619,6 +705,86 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     for (auto& cpd : delta.cross_province_deltas) {
         world.cross_province_delta_buffer.entries.push_back(std::move(cpd));
     }
+
+    // Route legal case seeds into WorldState's pending queue. legal_process
+    // drains them at the start of its execute() within the same tick (it
+    // runs at Tier 9, after investigator_engine at Tier 8 which is the
+    // primary producer). The queue must be empty at save time.
+    for (auto& seed : delta.new_legal_case_seeds) {
+        world.pending_legal_case_seeds.push_back(std::move(seed));
+    }
+
+    // Route random event triggers into WorldState's pending queue.
+    // random_events drains them at the start of its execute(). Unlike
+    // legal_case_seeds this queue MAY persist across tick boundaries
+    // because typical producers (currency_exchange at Tier 11) run after
+    // the consumer (random_events at Tier 1), and is therefore persisted
+    // by persistence schema v8+.
+    for (auto& trig : delta.new_random_event_triggers) {
+        world.pending_random_event_triggers.push_back(std::move(trig));
+    }
+
+    // Route property transaction requests into WorldState's pending
+    // queue. real_estate drains them at the start of its execute()
+    // within the same tick (real_estate Tier 4 follows player_actions
+    // Tier 0). Queue is empty at save time.
+    for (auto& tx : delta.new_property_transactions) {
+        world.pending_property_transactions.push_back(std::move(tx));
+    }
+
+    // Route new loan requests (Phase 4 — mortgage origination) into
+    // pending_loan_requests. Banking drains them at the start of its
+    // execute() (Tier 5 follows real_estate Tier 4). Queue empty at
+    // save time.
+    for (auto& req : delta.new_loan_requests) {
+        world.pending_loan_requests.push_back(std::move(req));
+    }
+
+    // Route foreclosure requests (Phase 5) into pending_property_foreclosures.
+    // Cross-tick: banking (Tier 5) emits, real_estate (Tier 4) drains
+    // next tick. Persisted by schema v11+.
+    for (auto& fc : delta.new_property_foreclosures) {
+        world.pending_property_foreclosures.push_back(std::move(fc));
+    }
+
+    // Route auction bid requests (Phase 6) into pending_auction_bid_requests.
+    // Same-tick: player_actions (Tier 0) emits, real_estate (Tier 4) drains.
+    for (auto& bid : delta.new_auction_bid_requests) {
+        world.pending_auction_bid_requests.push_back(std::move(bid));
+    }
+
+    // Route zoning-change requests (Phase 7) into pending_zoning_requests.
+    // Same-tick: player_actions (Tier 0) emits, real_estate (Tier 4) drains.
+    for (auto& zr : delta.new_zoning_requests) {
+        world.pending_zoning_requests.push_back(std::move(zr));
+    }
+
+    // Route subdivision/merge requests (Phase 8) into
+    // pending_subdivision_requests. Same-tick consumer.
+    for (auto& sr : delta.new_subdivision_requests) {
+        world.pending_subdivision_requests.push_back(std::move(sr));
+    }
+
+    // Route business acquisition offers (Phase 10) into
+    // pending_business_acquisition_requests. Same-tick consumer.
+    for (auto& ba : delta.new_business_acquisitions) {
+        world.pending_business_acquisition_requests.push_back(std::move(ba));
+    }
+
+    // Route construction requests/awards (Phase 11). Same-tick consumer.
+    for (auto& cr : delta.new_construction_requests) {
+        world.pending_construction_requests.push_back(std::move(cr));
+    }
+    for (auto& ca : delta.new_construction_awards) {
+        world.pending_construction_awards.push_back(std::move(ca));
+    }
+
+    // Refresh the province → significant_npcs index. Most apply_deltas calls
+    // touch NPCs (status, capital), and the worst-case full sweep is O(N), so
+    // a conditional rebuild buys little. The orchestrator separately calls
+    // rebuild_npc_indices when it knows the index is needed; doing it here too
+    // keeps callers that invoke apply_deltas directly (drain, tests) honest.
+    rebuild_npc_indices(world);
 
     // Clear the delta buffer for next step
     delta.npc_deltas.clear();
@@ -638,6 +804,18 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_businesses.clear();
     delta.scene_card_choice_deltas.clear();
     delta.calendar_commit_deltas.clear();
+    delta.new_legal_case_seeds.clear();
+    delta.new_random_event_triggers.clear();
+    delta.new_property_transactions.clear();
+    delta.new_loan_requests.clear();
+    delta.new_property_foreclosures.clear();
+    delta.new_auction_bid_requests.clear();
+    delta.new_zoning_requests.clear();
+    delta.new_subdivision_requests.clear();
+    delta.new_business_acquisitions.clear();
+    delta.new_facilities.clear();
+    delta.new_construction_requests.clear();
+    delta.new_construction_awards.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -668,6 +846,204 @@ void apply_cross_province_deltas(WorldState& world) {
 
     // Retain only entries not yet due.
     cpd.entries = std::move(pending);
+
+    // Cross-province NPC deltas can change current_province_id; refresh the
+    // bucket index so the first module of the new tick sees a consistent view.
+    rebuild_npc_indices(world);
+}
+
+// ---------------------------------------------------------------------------
+// lookup_good_id
+// ---------------------------------------------------------------------------
+uint32_t lookup_good_id(const WorldState& world, const std::string& good_id_str) {
+    if (world.goods_catalog) {
+        if (const GoodDefinition* def = world.goods_catalog->find(good_id_str)) {
+            return def->numeric_id;
+        }
+        // Catalog is set but doesn't know this good — return 0 rather than
+        // a hash that would silently route to a phantom market.
+        return 0u;
+    }
+    // No catalog (typically a unit test). Fall back to the FNV-1a hash so
+    // tests that built their markets with the same hash continue to work.
+    return good_id_hash(good_id_str);
+}
+
+// ---------------------------------------------------------------------------
+// lookup_market / markets_in_province
+// ---------------------------------------------------------------------------
+const RegionalMarket* lookup_market(const WorldState& world, uint32_t good_id,
+                                    uint32_t province_id) {
+    const uint64_t key = (static_cast<uint64_t>(good_id) << 32) | province_id;
+    if (auto it = world.market_index_by_good_province.find(key);
+        it != world.market_index_by_good_province.end()) {
+        return &world.regional_markets[it->second];
+    }
+    if (!world.market_index_by_good_province.empty()) {
+        return nullptr;  // index built; absence is real
+    }
+    for (const auto& m : world.regional_markets) {
+        if (m.good_id == good_id && m.province_id == province_id) {
+            return &m;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<uint32_t> markets_in_province(const WorldState& world, uint32_t province_id) {
+    if (province_id < world.market_indices_by_province.size() &&
+        !world.market_indices_by_province[province_id].empty()) {
+        return world.market_indices_by_province[province_id];
+    }
+    // Fallback only when the index is empty AND there are markets — otherwise
+    // an empty result is real.
+    if (!world.market_indices_by_province.empty() && !world.regional_markets.empty()) {
+        bool any_bucket_populated = false;
+        for (const auto& bucket : world.market_indices_by_province) {
+            if (!bucket.empty()) {
+                any_bucket_populated = true;
+                break;
+            }
+        }
+        if (any_bucket_populated) {
+            return {};  // index built; this province genuinely has no markets
+        }
+    }
+    std::vector<uint32_t> out;
+    for (size_t i = 0; i < world.regional_markets.size(); ++i) {
+        if (world.regional_markets[i].province_id == province_id) {
+            out.push_back(static_cast<uint32_t>(i));
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// lookup_npc_by_id
+// ---------------------------------------------------------------------------
+const NPC* lookup_npc_by_id(const WorldState& world, uint32_t npc_id) {
+    auto it = world.npc_index_by_id.find(npc_id);
+    if (it != world.npc_index_by_id.end()) {
+        return &world.significant_npcs[it->second];
+    }
+    // Index built and id not present — absence is real.
+    if (!world.npc_index_by_id.empty()) {
+        return nullptr;
+    }
+    // Index not built (typically a unit test that constructed WorldState
+    // piecemeal). Fall back to a linear scan so the helper is safe to call
+    // before rebuild_npc_indices() has run.
+    for (const auto& npc : world.significant_npcs) {
+        if (npc.id == npc_id) {
+            return &npc;
+        }
+    }
+    return nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// rebuild_npc_indices
+// ---------------------------------------------------------------------------
+void rebuild_npc_indices(WorldState& world) {
+    // Rebuild the id → index map first; it is independent of province count
+    // and used by callers that don't care about the province bucket.
+    auto& by_id = world.npc_index_by_id;
+    by_id.clear();
+    by_id.reserve(world.significant_npcs.size());
+    for (size_t i = 0; i < world.significant_npcs.size(); ++i) {
+        by_id[world.significant_npcs[i].id] = static_cast<uint32_t>(i);
+    }
+
+    const size_t province_count = world.provinces.size();
+    auto& buckets = world.npc_indices_by_province;
+    buckets.assign(province_count, {});
+
+    if (province_count == 0)
+        return;
+
+    // First pass: count to size each bucket exactly. Avoids growth churn at
+    // the 2k-NPC scale where the per-bucket vectors might otherwise reallocate
+    // a few times.
+    std::vector<size_t> counts(province_count, 0);
+    for (const auto& npc : world.significant_npcs) {
+        if (npc.current_province_id < province_count) {
+            ++counts[npc.current_province_id];
+        }
+    }
+    for (size_t p = 0; p < province_count; ++p) {
+        buckets[p].reserve(counts[p]);
+    }
+
+    // Second pass: populate. Iterating significant_npcs in vector order means
+    // each bucket is filled in the same order as the underlying vector, so
+    // bucket entries are id-ascending when significant_npcs is id-ascending
+    // (the standard invariant after world generation and apply_deltas).
+    for (size_t i = 0; i < world.significant_npcs.size(); ++i) {
+        const auto& npc = world.significant_npcs[i];
+        if (npc.current_province_id < province_count) {
+            buckets[npc.current_province_id].push_back(static_cast<uint32_t>(i));
+        }
+        // NPCs with out-of-range province_id are skipped silently — they
+        // would already be invisible to province-filtered scans today.
+    }
+
+    // home_province bucket: same shape as the current_province bucket but
+    // keyed by home_province_id. Used by modules whose contract is
+    // "residents of this province".
+    auto& home_buckets = world.npc_indices_by_home_province;
+    home_buckets.assign(province_count, {});
+    std::vector<size_t> home_counts(province_count, 0);
+    for (const auto& npc : world.significant_npcs) {
+        if (npc.home_province_id < province_count) {
+            ++home_counts[npc.home_province_id];
+        }
+    }
+    for (size_t p = 0; p < province_count; ++p) {
+        home_buckets[p].reserve(home_counts[p]);
+    }
+    for (size_t i = 0; i < world.significant_npcs.size(); ++i) {
+        const auto& npc = world.significant_npcs[i];
+        if (npc.home_province_id < province_count) {
+            home_buckets[npc.home_province_id].push_back(static_cast<uint32_t>(i));
+        }
+    }
+
+    // --- regional_markets indices ---
+    //
+    // Buckets and the (good_id, province_id) composite-key map are rebuilt
+    // alongside the NPC indices. Markets do not migrate between provinces, so
+    // these would be stable after world generation in practice — but era
+    // transitions and mod hot-loads can append new markets, and the rebuild
+    // cost is O(M) ≈ 1500 ops at V1 scale, negligible next to the rebuild's
+    // existing NPC pass.
+    auto& market_buckets = world.market_indices_by_province;
+    market_buckets.assign(province_count, {});
+    auto& market_kv = world.market_index_by_good_province;
+    market_kv.clear();
+    market_kv.reserve(world.regional_markets.size());
+
+    if (province_count > 0) {
+        std::vector<size_t> market_counts(province_count, 0);
+        for (const auto& m : world.regional_markets) {
+            if (m.province_id < province_count) {
+                ++market_counts[m.province_id];
+            }
+        }
+        for (size_t p = 0; p < province_count; ++p) {
+            market_buckets[p].reserve(market_counts[p]);
+        }
+    }
+
+    for (size_t i = 0; i < world.regional_markets.size(); ++i) {
+        const auto& m = world.regional_markets[i];
+        if (m.province_id < province_count) {
+            market_buckets[m.province_id].push_back(static_cast<uint32_t>(i));
+        }
+        // The composite-key map keeps every market regardless of bucket
+        // eligibility — the contract is "id → index", not "in some bucket".
+        const uint64_t key = (static_cast<uint64_t>(m.good_id) << 32) | m.province_id;
+        market_kv[key] = static_cast<uint32_t>(i);
+    }
 }
 
 }  // namespace econlife

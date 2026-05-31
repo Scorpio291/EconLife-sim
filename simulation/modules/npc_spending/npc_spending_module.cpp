@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -82,7 +83,12 @@ float NpcSpendingModule::buyer_type_quality_weight(BuyerType buyer_type) {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-BuyerType NpcSpendingModule::get_buyer_type(uint32_t npc_id) const {
+void NpcSpendingModule::init_for_tick(const WorldState& /*state*/) {
+    // Eagerly rebuild the buyer_profile_index_ on the main thread before
+    // province-parallel dispatch. The index can be out of sync if tests or
+    // external code pushed buyer_profiles_ entries directly through the
+    // accessor; rebuilding here guarantees execute_province() reads a
+    // consistent map with no concurrent mutation.
     if (buyer_profile_index_.size() != buyer_profiles_.size()) {
         buyer_profile_index_.clear();
         buyer_profile_index_.reserve(buyer_profiles_.size());
@@ -90,6 +96,11 @@ BuyerType NpcSpendingModule::get_buyer_type(uint32_t npc_id) const {
             buyer_profile_index_[buyer_profiles_[i].npc_id] = i;
         }
     }
+}
+
+BuyerType NpcSpendingModule::get_buyer_type(uint32_t npc_id) const {
+    // Read-only lookup. init_for_tick() is responsible for keeping the
+    // index in sync with buyer_profiles_; this method must not mutate.
     auto it = buyer_profile_index_.find(npc_id);
     if (it == buyer_profile_index_.end()) {
         return BuyerType::necessity_buyer;  // default
@@ -109,9 +120,12 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
 
     // Collect active NPCs in this province, sorted by id ascending for determinism.
     std::vector<const NPC*> province_npcs;
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.current_province_id == province.id && npc.status == NPCStatus::active) {
-            province_npcs.push_back(&npc);
+    if (province.id < state.npc_indices_by_province.size()) {
+        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.status == NPCStatus::active) {
+                province_npcs.push_back(&npc);
+            }
         }
     }
     std::sort(province_npcs.begin(), province_npcs.end(),
@@ -123,10 +137,10 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
     // For each regional market in this province, compute consumer demand.
     // Markets sorted by good_id ascending for deterministic accumulation.
     std::vector<const RegionalMarket*> province_markets;
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province.id) {
-            province_markets.push_back(&market);
-        }
+    const auto bucket = markets_in_province(state, province.id);
+    province_markets.reserve(bucket.size());
+    for (uint32_t i : bucket) {
+        province_markets.push_back(&state.regional_markets[i]);
     }
     std::sort(
         province_markets.begin(), province_markets.end(),

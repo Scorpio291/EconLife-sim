@@ -7,6 +7,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_gen/goods_catalog.h"
+#include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/production/production_module.h"
@@ -157,6 +159,7 @@ TEST_CASE("test_basic_recipe_output", "[production][tier1]") {
 
     // Set up province (needed for execute_province to work).
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -201,6 +204,7 @@ TEST_CASE("test_tech_tier_bonus", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -277,6 +281,7 @@ TEST_CASE("test_bankrupt_business_skipped", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -325,6 +330,7 @@ TEST_CASE("test_criminal_sector_uses_informal_price", "[production][tier1]") {
     add_market(state, "drugs", province_id, 0.0f, 100.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -369,6 +375,7 @@ TEST_CASE("test_derived_demand", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -406,6 +413,7 @@ TEST_CASE("test_insufficient_input_clamps_output", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -444,6 +452,7 @@ TEST_CASE("test_no_facilities_produces_nothing", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -470,6 +479,7 @@ TEST_CASE("test_non_operational_facility_skipped", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -552,6 +562,7 @@ TEST_CASE("test_multiple_businesses_deterministic_order", "[production][tier1]")
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -589,6 +600,7 @@ TEST_CASE("test_worker_count_throughput_effect", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -621,6 +633,7 @@ TEST_CASE("test_zero_workers_no_production", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -652,6 +665,7 @@ TEST_CASE("test_business_delta_written", "[production][tier1]") {
     add_market(state, "steel", province_id, 0.0f, 15.0f);
 
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = province_id;
     state.provinces.push_back(prov);
 
@@ -678,4 +692,151 @@ TEST_CASE("test_business_delta_written", "[production][tier1]") {
     // Cash delta = revenue - cost = 120.0 - 100.0 = 20.0
     REQUIRE(delta.business_deltas[0].cash_delta.has_value());
     REQUIRE_THAT(*delta.business_deltas[0].cash_delta, WithinAbs(20.0f, 0.01f));
+}
+
+// --- Phase-3 guard: don't emit MarketDelta for unknown goods --------------
+//
+// When WorldState has a catalog and a recipe references a string the catalog
+// doesn't know, lookup_good_id() returns 0. Without the guard, production
+// would push MarketDelta { good_id = 0, ... } onto whichever real market
+// happens to hold good_id == 0 — typically the first tier-0 good in the
+// catalog. The guard skips the delta instead.
+
+TEST_CASE("test_unknown_good_suppresses_market_deltas", "[production][tier1]") {
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    // Catalog with two real goods, neither matching the recipe.
+    auto cat = std::make_unique<GoodsCatalog>();
+    GoodDefinition g0{};
+    g0.numeric_id = 0;
+    g0.good_id = "wheat";
+    g0.base_price = 25.0f;
+    cat->push_back_loaded(g0);
+    GoodDefinition g7{};
+    g7.numeric_id = 7;
+    g7.good_id = "steel";
+    g7.base_price = 80.0f;
+    cat->push_back_loaded(g7);
+    state.goods_catalog = std::move(cat);
+
+    // Pre-existing market for the wheat good with known supply.
+    RegionalMarket wheat_market{};
+    wheat_market.good_id = 0;  // catalog's "wheat"
+    wheat_market.province_id = province_id;
+    wheat_market.spot_price = 25.0f;
+    wheat_market.equilibrium_price = 25.0f;
+    wheat_market.supply = 100.0f;
+    wheat_market.demand_buffer = 0.0f;
+    state.regional_markets.push_back(wheat_market);
+    rebuild_npc_indices(state);
+
+    // Business and recipe referencing a good the catalog doesn't know.
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+
+    Recipe orphan_recipe{};
+    orphan_recipe.id = "mystery_thing";
+    orphan_recipe.name = "Mystery Thing";
+    orphan_recipe.inputs = {};
+    orphan_recipe.outputs = {RecipeOutput{"unicorn_horn", 5.0f, 0.6f, false}};
+    orphan_recipe.min_tech_tier = 1;
+    orphan_recipe.base_cost_per_tick = 0.0f;
+    orphan_recipe.is_technology_intensive = false;
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(orphan_recipe);
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "mystery_thing"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // No MarketDelta should be emitted (the only output is the orphan good).
+    // Specifically: nothing should have stamped good_id == 0 onto the wheat
+    // market, even though "unicorn_horn" hashes to 0 via lookup_good_id.
+    for (const auto& md : delta.market_deltas) {
+        REQUIRE(md.good_id != 0);
+    }
+
+    // And no phantom revenue: a recipe whose only output is unknown to the
+    // catalog must produce zero revenue, not be priced against whatever the
+    // gid == 0 market happens to be ("wheat" here, priced at 25.0).
+    float total_revenue = 0.0f;
+    for (const auto& bd : delta.business_deltas) {
+        if (bd.business_id == 1 && bd.revenue_per_tick_update.has_value()) {
+            total_revenue += bd.revenue_per_tick_update.value();
+        }
+    }
+    REQUIRE_THAT(total_revenue, WithinAbs(0.0f, 1e-6f));
+}
+
+TEST_CASE("test_init_for_tick_picks_up_newly_constructed_facility",
+          "[production][tier1][construction]") {
+    // Phase 11 (construction) delivers new facilities via NewFacilityDelta,
+    // which apply_deltas appends to state.facilities. ProductionModule's
+    // facility_registry_ is lazily seeded once via std::call_once; without
+    // init_for_tick() syncing the tail, subsequent ticks never see the new
+    // facility and the business silently produces nothing. This test
+    // verifies the sync.
+
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    // Markets for the steel recipe (both inputs + output).
+    add_market(state, "iron_ore", province_id, 1000.0f, 10.0f);
+    add_market(state, "coking_coal", province_id, 1000.0f, 10.0f);
+    add_market(state, "steel", province_id, 0.0f, 80.0f);
+    rebuild_npc_indices(state);
+
+    // Business exists from tick 0; its facility is delivered later.
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_steel_recipe());
+
+    // Tick 1: no facility yet, no production.
+    {
+        module.init_for_tick(state);
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        auto steel = summarize_deltas(delta, "steel", province_id);
+        REQUIRE(steel.supply_count == 0);
+    }
+
+    // A construction contract completes between ticks: apply_new_facilities
+    // appends to state.facilities directly (we simulate that here).
+    state.facilities.push_back(make_test_facility(42, 1, province_id, "steel_smelting"));
+
+    // Tick 2: init_for_tick must sync the new facility into the registry,
+    // and execute_province must now produce steel.
+    {
+        module.init_for_tick(state);
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        auto steel = summarize_deltas(delta, "steel", province_id);
+        REQUIRE(steel.supply_count >= 1);
+        REQUIRE(steel.total_supply_delta > 0.0f);
+    }
+
+    // Tick 3 (no new facilities): the previously-registered facility still
+    // produces; the sync from tick 2 must not double-register or lose it.
+    {
+        module.init_for_tick(state);
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        auto steel = summarize_deltas(delta, "steel", province_id);
+        REQUIRE(steel.supply_count >= 1);
+        REQUIRE(steel.total_supply_delta > 0.0f);
+    }
 }

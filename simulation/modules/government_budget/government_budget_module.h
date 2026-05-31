@@ -42,6 +42,14 @@ class GovernmentBudgetModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): budgets_ holds revenue, accumulated_debt,
+    // spending_allocations/actual maps, and cash for every jurisdiction.
+    // Without persistence, fiscal multi-quarter trajectories (debt
+    // build-up, deficit-to-revenue ratios that gate fiscal crisis
+    // consequences) reset on load. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Internal budget storage ---
     // Module owns GovernmentBudget records because WorldState does not yet
     // carry budget fields on Province/Nation (see budget_types.h FIELD ADDITION notes).

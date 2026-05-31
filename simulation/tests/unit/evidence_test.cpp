@@ -138,6 +138,7 @@ TEST_CASE("test_criminal_business_generates_evidence", "[evidence][tier6]") {
 
     // Create one province
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     state.provinces.push_back(p);
 
@@ -181,6 +182,7 @@ TEST_CASE("test_player_aware_proxy_on_direct_creation", "[evidence][tier6]") {
     state.world_seed = 42;
 
     Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.id = 0;
     state.provinces.push_back(p);
 

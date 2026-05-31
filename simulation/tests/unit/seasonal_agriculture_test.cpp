@@ -48,6 +48,7 @@ WorldState make_test_world_state(uint32_t tick = 1) {
 
 Province make_test_province(uint32_t id, float latitude = 45.0f) {
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.lod_level = SimulationLOD::full;
     prov.geography.latitude = latitude;
@@ -77,14 +78,13 @@ Province make_test_province(uint32_t id, float latitude = 45.0f) {
     prov.trade_openness = 0.5f;
     prov.conditions.stability_score = 0.8f;
     prov.conditions.inequality_index = 0.3f;
-    prov.conditions.crime_rate = 0.1f;
-    prov.conditions.addiction_rate = 0.05f;
-    prov.conditions.criminal_dominance_index = 0.05f;
-    prov.conditions.formal_employment_rate = 0.7f;
+    prov.cohort_stats->crime_rate = 0.1f;
+    prov.cohort_stats->addiction_rate = 0.05f;
+    prov.cohort_stats->criminal_dominance_index = 0.05f;
+    prov.cohort_stats->formal_employment_rate = 0.7f;
     prov.conditions.regulatory_compliance_index = 0.9f;
     prov.conditions.drought_modifier = 1.0f;  // no drought
     prov.conditions.flood_modifier = 1.0f;    // no flood
-    prov.cohort_stats.reset();
     return prov;
 }
 

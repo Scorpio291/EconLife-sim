@@ -46,6 +46,7 @@ WorldState make_test_world_state() {
 // Create a Province with sensible defaults.
 Province make_test_province(uint32_t id, float infrastructure = 0.5f) {
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = id;
     prov.h3_index = 0;
     prov.fictional_name = "TestProvince" + std::to_string(id);
@@ -58,15 +59,14 @@ Province make_test_province(uint32_t id, float infrastructure = 0.5f) {
     prov.historical_trauma_index = 0.0f;
     prov.region_id = 0;
     prov.nation_id = 0;
-    prov.cohort_stats.reset();
 
     // Initialize conditions to defaults
     prov.conditions.stability_score = 0.8f;
     prov.conditions.inequality_index = 0.3f;
-    prov.conditions.crime_rate = 0.1f;
-    prov.conditions.addiction_rate = 0.05f;
-    prov.conditions.criminal_dominance_index = 0.1f;
-    prov.conditions.formal_employment_rate = 0.7f;
+    prov.cohort_stats->crime_rate = 0.1f;
+    prov.cohort_stats->addiction_rate = 0.05f;
+    prov.cohort_stats->criminal_dominance_index = 0.1f;
+    prov.cohort_stats->formal_employment_rate = 0.7f;
     prov.conditions.regulatory_compliance_index = 0.9f;
     prov.conditions.drought_modifier = 1.0f;
     prov.conditions.flood_modifier = 1.0f;

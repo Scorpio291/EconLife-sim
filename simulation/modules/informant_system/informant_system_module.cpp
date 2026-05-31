@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -62,13 +64,7 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
         if (rec.status != InformantStatus::not_cooperating)
             continue;
 
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == rec.npc_id) {
-                npc = &n;
-                break;
-            }
-        }
+        const NPC* npc = lookup_npc_by_id(state, rec.npc_id);
         if (!npc || npc->status != NPCStatus::imprisoned)
             continue;
 
@@ -124,6 +120,102 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
             delta.npc_deltas.push_back(reliability_delta);
         }
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 count
+//   for each InformantRecord:
+//     u32 npc_id, u8 status, f32 flip_probability, f32 base_flip_rate
+//     u32 arrest_tick, u32 cooperation_start_tick, u32 compartmentalization_level
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void InformantSystemModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(records_.size()));
+    for (const auto& r : records_) {
+        put_u32(out, r.npc_id);
+        out.push_back(static_cast<uint8_t>(r.status));
+        put_f32(out, r.flip_probability);
+        put_f32(out, r.base_flip_rate);
+        put_u32(out, r.arrest_tick);
+        put_u32(out, r.cooperation_start_tick);
+        put_u32(out, r.compartmentalization_level);
+    }
+}
+
+bool InformantSystemModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    records_.clear();
+    records_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        InformantRecord rec{};
+        rec.npc_id = r.u32();
+        rec.status = static_cast<InformantStatus>(r.u8());
+        rec.flip_probability = r.f32();
+        rec.base_flip_rate = r.f32();
+        rec.arrest_tick = r.u32();
+        rec.cooperation_start_tick = r.u32();
+        rec.compartmentalization_level = r.u32();
+        if (r.error)
+            return false;
+        records_.push_back(rec);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

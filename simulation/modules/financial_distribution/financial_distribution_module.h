@@ -46,6 +46,16 @@ class FinancialDistributionModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): compensation_records_ carries per-business
+    // ExecutiveCompensation (including vesting EquityGrant vector),
+    // BoardComposition (member roster + independence_score), monthly draw
+    // accumulator with reset timer, deferred-salary tick count, and
+    // retained_earnings. Without persistence every business reverts to
+    // default salary/bonus/dividend policy and all vesting progress
+    // disappears.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- State access (for test injection and module initialization) ---
 
     // Per-business compensation records. The module owns these because

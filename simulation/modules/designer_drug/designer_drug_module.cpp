@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -126,6 +127,117 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
         compound.market_margin_multiplier =
             compute_market_margin(compound.stage, compound.has_successor);
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+void put_string(std::vector<uint8_t>& out, const std::string& s) {
+    put_u32(out, static_cast<uint32_t>(s.size()));
+    for (char c : s)
+        out.push_back(static_cast<uint8_t>(c));
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+    std::string str() {
+        uint32_t n = u32();
+        if (!need(n))
+            return {};
+        std::string s(reinterpret_cast<const char*>(data + pos), n);
+        pos += n;
+        return s;
+    }
+};
+
+}  // namespace
+
+void DesignerDrugModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(compounds_.size()));
+    for (const auto& c : compounds_) {
+        put_u32(out, c.compound_id);
+        put_u32(out, c.creator_actor_id);
+        put_string(out, c.goods_key);
+        out.push_back(static_cast<uint8_t>(c.stage));
+        put_f32(out, c.cumulative_evidence_weight);
+        put_f32(out, c.detection_threshold);
+        put_u32(out, c.review_start_tick);
+        put_u32(out, c.review_duration);
+        put_f32(out, c.market_margin_multiplier);
+        put_u32(out, c.province_id);
+        out.push_back(c.has_successor ? 1u : 0u);
+    }
+}
+
+bool DesignerDrugModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    compounds_.clear();
+    compounds_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        DesignerDrugCompound c{};
+        c.compound_id = r.u32();
+        c.creator_actor_id = r.u32();
+        c.goods_key = r.str();
+        c.stage = static_cast<SchedulingStage>(r.u8());
+        c.cumulative_evidence_weight = r.f32();
+        c.detection_threshold = r.f32();
+        c.review_start_tick = r.u32();
+        c.review_duration = r.u32();
+        c.market_margin_multiplier = r.f32();
+        c.province_id = r.u32();
+        c.has_successor = (r.u8() != 0);
+        if (r.error)
+            return false;
+        compounds_.push_back(std::move(c));
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

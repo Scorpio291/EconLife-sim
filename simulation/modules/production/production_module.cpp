@@ -9,6 +9,7 @@
 
 #include "core/good_id_hash.h"
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_market, markets_in_province
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -60,6 +61,21 @@ void ProductionModule::init_from_world_state(const WorldState& state) {
     for (const auto& facility : state.facilities) {
         facility_registry_.register_facility(facility);
     }
+    last_synced_facility_count_ = state.facilities.size();
+}
+
+void ProductionModule::init_for_tick(const WorldState& state) {
+    // First call seeds the registry via the same code path as the
+    // execute_province std::call_once; subsequent calls register only
+    // the tail (facilities delivered by Phase 11 construction since the
+    // previous tick). state.facilities is append-only — apply_deltas.cpp
+    // adds via apply_new_facilities() and there is no facility-deletion
+    // delta — so a monotonically growing prefix is safe to skip.
+    std::call_once(init_flag_, [this, &state]() { init_from_world_state(state); });
+    for (std::size_t i = last_synced_facility_count_; i < state.facilities.size(); ++i) {
+        facility_registry_.register_facility(state.facilities[i]);
+    }
+    last_synced_facility_count_ = state.facilities.size();
 }
 
 // ===========================================================================
@@ -101,23 +117,33 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
     std::unordered_map<std::string, float> available_supply;
 
     // Pre-populate available supply from regional markets for this province.
-    // We need to map from uint32_t market.good_id back to string keys.
-    // Build reverse lookup from registered recipes' input/output good_id strings.
+    // Build a numeric_id → string reverse lookup from registered recipes,
+    // routing through lookup_good_id() so the ids match RegionalMarket.good_id
+    // (catalog numeric_id when WorldState has a catalog; FNV-1a hash in tests
+    // that build markets without one).
     std::unordered_map<uint32_t, std::string> id_to_string;
     for (const auto& [recipe_id, recipe] : recipe_registry_.all()) {
         for (const auto& input : recipe.inputs) {
-            id_to_string[good_id_from_string(input.good_id)] = input.good_id;
+            // Skip unknown goods so we don't stamp id 0 onto a real market.
+            // lookup_good_id() returns 0 when WorldState has a catalog but
+            // doesn't know the string — typically a recipe-CSV typo. The
+            // recipe ↔ goods cross-validation in world_generator surfaces
+            // these at load; this guard is defence-in-depth.
+            const uint32_t gid = lookup_good_id(state, input.good_id);
+            if (gid != 0)
+                id_to_string[gid] = input.good_id;
         }
         for (const auto& output : recipe.outputs) {
-            id_to_string[good_id_from_string(output.good_id)] = output.good_id;
+            const uint32_t gid = lookup_good_id(state, output.good_id);
+            if (gid != 0)
+                id_to_string[gid] = output.good_id;
         }
     }
-    for (const auto& market : state.regional_markets) {
-        if (market.province_id == province_idx) {
-            auto it = id_to_string.find(market.good_id);
-            if (it != id_to_string.end()) {
-                available_supply[it->second] = market.supply;
-            }
+    for (uint32_t i : markets_in_province(state, province_idx)) {
+        const auto& market = state.regional_markets[i];
+        auto it = id_to_string.find(market.good_id);
+        if (it != id_to_string.end()) {
+            available_supply[it->second] = market.supply;
         }
     }
 
@@ -177,11 +203,11 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
                                         const WorldState& state, DeltaBuffer& delta,
                                         std::unordered_map<std::string, float>& available_supply,
                                         DeterministicRNG& /*rng*/) {
-    // Look up recipe.
+    // Look up recipe. Recipe ↔ facility cross-validation runs at world load
+    // (RecipeCatalog::validate_against_goods); silently skipping here keeps
+    // a stale or mod-introduced recipe_id from breaking determinism.
     const Recipe* recipe = recipe_registry_.find(facility.recipe_id);
     if (!recipe) {
-        // Missing recipe: skip facility. Business still incurs fixed operating
-        // costs but produces nothing. (TODO: proper logging)
         return;
     }
 
@@ -247,12 +273,17 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             it->second = std::max(0.0f, it->second - consumed);
         }
 
-        // Write demand_buffer_delta for derived demand.
-        MarketDelta demand_delta{};
-        demand_delta.good_id = good_id_from_string(input->good_id);
-        demand_delta.region_id = biz.province_id;
-        demand_delta.demand_buffer_delta = consumed;
-        delta.market_deltas.push_back(demand_delta);
+        // Write demand_buffer_delta for derived demand. Skip if the good is
+        // unknown to the catalog (lookup returns 0) so we don't corrupt
+        // whichever market happens to hold id 0.
+        const uint32_t input_gid = lookup_good_id(state, input->good_id);
+        if (input_gid != 0) {
+            MarketDelta demand_delta{};
+            demand_delta.good_id = input_gid;
+            demand_delta.region_id = biz.province_id;
+            demand_delta.demand_buffer_delta = consumed;
+            delta.market_deltas.push_back(demand_delta);
+        }
     }
 
     // Compute outputs — sort by good_id ascending for deterministic accumulation.
@@ -315,15 +346,27 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             continue;
         }
 
-        // Write supply_delta.
+        // Skip outputs whose good_id is unknown to the catalog. Treating an
+        // unknown gid == 0 as a legitimate output would (a) corrupt the
+        // gid == 0 market's supply with phantom volume and (b) book revenue
+        // against whatever the gid == 0 market happens to be priced at —
+        // both nonsense for a misconfigured recipe. Better to produce
+        // nothing (no supply, no revenue) and surface the recipe defect
+        // via zero output than to silently mis-attribute economic
+        // activity.
+        const uint32_t output_gid = lookup_good_id(state, output->good_id);
+        if (output_gid == 0) {
+            continue;
+        }
+
         MarketDelta supply_delta{};
-        supply_delta.good_id = good_id_from_string(output->good_id);
+        supply_delta.good_id = output_gid;
         supply_delta.region_id = biz.province_id;
         supply_delta.supply_delta = actual_output;
         delta.market_deltas.push_back(supply_delta);
 
         // Calculate revenue using appropriate price.
-        float price = get_price_for_business(biz, supply_delta.good_id, state);
+        float price = get_price_for_business(biz, output_gid, state);
         total_revenue += actual_output * price;
     }
 
@@ -349,17 +392,17 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
 float ProductionModule::get_price_for_business(const NPCBusiness& biz, uint32_t good_id,
                                                const WorldState& state) const {
-    // Find the regional market for this good in this province.
-    for (const auto& market : state.regional_markets) {
-        if (market.good_id == good_id && market.province_id == biz.province_id) {
-            if (biz.criminal_sector) {
-                // Criminal sector uses informal price.
-                // In V1, informal price is approximated as a discount on
-                // spot_price. The full informal market model is expansion scope.
-                return market.spot_price * cfg_.informal_price_discount;
-            }
-            return market.spot_price;
+    // Find the regional market for this good in this province via the
+    // (good_id, province_id) composite-key index (with linear-scan fallback
+    // for unit tests that build state piecemeal).
+    if (const RegionalMarket* market = lookup_market(state, good_id, biz.province_id)) {
+        if (biz.criminal_sector) {
+            // Criminal sector uses informal price.
+            // In V1, informal price is approximated as a discount on
+            // spot_price. The full informal market model is expansion scope.
+            return market->spot_price * cfg_.informal_price_discount;
         }
+        return market->spot_price;
     }
     // No market found; return 0 to avoid uninitialized access.
     return 0.0f;

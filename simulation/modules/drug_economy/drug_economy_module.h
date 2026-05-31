@@ -49,6 +49,25 @@ class DrugEconomyModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): production_records_ tracks every drug
+    // facility's ongoing output (quantity, quality, precursor consumption),
+    // and legalization_status_ tracks per-province per-drug legal status —
+    // the designer_drug scheduling flag flips this field, so without
+    // persistence scheduled compounds become legal again on load. See
+    // ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Test helpers.
+    const std::vector<DrugProductionRecord>& production_records() const {
+        return production_records_;
+    }
+    std::vector<DrugProductionRecord>& production_records_mut() { return production_records_; }
+    const std::vector<DrugLegalizationStatus>& legalization_status() const {
+        return legalization_status_;
+    }
+    std::vector<DrugLegalizationStatus>& legalization_status_mut() { return legalization_status_; }
+
     // --- Static utility functions (public for testing) ---
 
     // Compute wholesale price from retail spot price

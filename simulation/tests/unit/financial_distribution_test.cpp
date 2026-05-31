@@ -45,6 +45,7 @@ WorldState make_test_world_state() {
 
     // Add one province.
     Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
     prov.id = 0;
     state.provinces.push_back(prov);
 
@@ -976,6 +977,7 @@ TEST_CASE("test_execute_fallback_all_provinces", "[financial_distribution][tier4
 
     // Add second province.
     Province prov1{};
+    prov1.cohort_stats = std::make_unique<RegionCohortStats>();
     prov1.id = 1;
     state.provinces.push_back(prov1);
 

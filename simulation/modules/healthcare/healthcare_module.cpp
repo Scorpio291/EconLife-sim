@@ -13,8 +13,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
@@ -39,14 +41,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
     // for deterministic processing order.
     std::vector<NpcHealthRecord*> province_npcs;
     for (auto& record : npc_health_records_) {
-        // Look up the NPC in WorldState to check province and status.
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == record.npc_id) {
-                npc = &n;
-                break;
-            }
-        }
+        const NPC* npc = lookup_npc_by_id(state, record.npc_id);
         if (!npc)
             continue;
         if (npc->current_province_id != province_idx)
@@ -78,13 +73,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
         }
 
         // Look up NPC for capital check.
-        const NPC* npc = nullptr;
-        for (const auto& n : state.significant_npcs) {
-            if (n.id == hr->npc_id) {
-                npc = &n;
-                break;
-            }
-        }
+        const NPC* npc = lookup_npc_by_id(state, hr->npc_id);
         if (!npc)
             continue;
 
@@ -189,12 +178,42 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
         labour_force, phs->sick_leave_fraction, cfg_.labour_supply_impact);
 
     // ---------------------------------------------------------------
-    // Step 6: Health Crisis — RegionDelta
-    // If sick leave fraction exceeds the crisis threshold, apply a
-    // stability penalty to the region containing this province.
+    // Step 6: Health Crisis + sick_rate monitor — RegionDelta
+    // The province-level sick_rate (cohort_stats->sick_rate) tracks the
+    // fraction of the working-age population whose health is below the
+    // labour-impairment threshold (default 0.5). Per-tick sample noise is
+    // smoothed by converging at SICK_RATE_CONVERGENCE_RATE rather than
+    // overwriting outright. If the resulting sick fraction crosses the
+    // crisis threshold, apply the stability penalty (existing behavior).
     // ---------------------------------------------------------------
     constexpr float kHealthCrisisThreshold = 0.15f;
-    if (phs->sick_leave_fraction > kHealthCrisisThreshold) {
+    constexpr float SICK_RATE_CONVERGENCE_RATE = 0.05f;
+
+    // labour_force is the number of NPCs in this province that the module
+    // processed (built earlier in execute_province). Treat it as the
+    // sample denominator — using significant_npcs as a proxy for the
+    // working-age share of cohort_stats.total_population is acceptable
+    // for V1; the stored rate converges to the true sample over many
+    // ticks regardless of sampling skew.
+    if (labour_force > 0) {
+        const float sample_sick_fraction =
+            static_cast<float>(sick_count) / static_cast<float>(labour_force);
+        const float current_sick_rate = state.provinces[province_idx].cohort_stats
+                                            ? state.provinces[province_idx].cohort_stats->sick_rate
+                                            : 0.0f;
+        const float sick_rate_delta_value =
+            SICK_RATE_CONVERGENCE_RATE * (sample_sick_fraction - current_sick_rate);
+
+        RegionDelta region_delta{};
+        region_delta.region_id = state.provinces[province_idx].region_id;
+        region_delta.sick_rate_delta = sick_rate_delta_value;
+        if (phs->sick_leave_fraction > kHealthCrisisThreshold) {
+            region_delta.stability_delta = -0.01f * phs->sick_leave_fraction;
+        }
+        province_delta.region_deltas.push_back(region_delta);
+    } else if (phs->sick_leave_fraction > kHealthCrisisThreshold) {
+        // Edge case: zero labour force but crisis flag (shouldn't happen,
+        // but preserves the prior unconditional emission shape).
         RegionDelta region_delta{};
         region_delta.region_id = state.provinces[province_idx].region_id;
         region_delta.stability_delta = -0.01f * phs->sick_leave_fraction;
@@ -285,6 +304,113 @@ const HealthcareModule::ProvinceHealthState* HealthcareModule::find_province_hea
         }
     }
     return nullptr;
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void HealthcareModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(province_health_states_.size()));
+    for (const auto& p : province_health_states_) {
+        put_u32(out, p.province_id);
+        put_f32(out, p.profile.access_level);
+        put_f32(out, p.profile.quality_level);
+        put_f32(out, p.profile.cost_per_treatment);
+        put_f32(out, p.profile.capacity_utilisation);
+        put_f32(out, p.sick_leave_fraction);
+        put_f32(out, p.effective_labour_supply);
+    }
+    put_u32(out, static_cast<uint32_t>(npc_health_records_.size()));
+    for (const auto& n : npc_health_records_) {
+        put_u32(out, n.npc_id);
+        put_f32(out, n.health);
+        put_u32(out, n.last_treatment_tick);
+    }
+}
+
+bool HealthcareModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t pc = r.u32();
+    province_health_states_.clear();
+    province_health_states_.reserve(pc);
+    for (uint32_t i = 0; i < pc; ++i) {
+        ProvinceHealthState p{};
+        p.province_id = r.u32();
+        p.profile.access_level = r.f32();
+        p.profile.quality_level = r.f32();
+        p.profile.cost_per_treatment = r.f32();
+        p.profile.capacity_utilisation = r.f32();
+        p.sick_leave_fraction = r.f32();
+        p.effective_labour_supply = r.f32();
+        if (r.error)
+            return false;
+        province_health_states_.push_back(p);
+    }
+    uint32_t nc = r.u32();
+    npc_health_records_.clear();
+    npc_health_records_.reserve(nc);
+    for (uint32_t i = 0; i < nc; ++i) {
+        NpcHealthRecord n{};
+        n.npc_id = r.u32();
+        n.health = r.f32();
+        n.last_treatment_tick = r.u32();
+        if (r.error)
+            return false;
+        npc_health_records_.push_back(n);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+#include <vector>
+
 // apply_deltas — applies accumulated DeltaBuffer changes to WorldState.
 // Called by TickOrchestrator after each module (or after all modules in a step).
 //
@@ -25,5 +29,61 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta,
 
 // Apply cross-province deltas that were deferred from the previous tick.
 void apply_cross_province_deltas(WorldState& world);
+
+struct NPC;
+struct RegionalMarket;
+
+// Lookup an NPC by id. Prefers the precomputed npc_index_by_id (O(1));
+// falls back to a linear scan of significant_npcs only when the index is
+// empty and significant_npcs is not — i.e. in unit tests that construct
+// WorldState piecemeal and never call rebuild_npc_indices(). Production
+// paths always have the index populated by the tick orchestrator.
+const NPC* lookup_npc_by_id(const WorldState& world, uint32_t npc_id);
+
+// Lookup the regional market for (good_id, province_id). Prefers
+// market_index_by_good_province (O(1)); falls back to a linear scan of
+// regional_markets when the index is empty — same fallback contract as
+// lookup_npc_by_id.
+const RegionalMarket* lookup_market(const WorldState& world, uint32_t good_id,
+                                    uint32_t province_id);
+
+// Returns indices into regional_markets for the given province. Prefers
+// market_indices_by_province; falls back to an O(M) linear scan when the
+// bucket is empty AND regional_markets is not — same fallback contract as
+// lookup_npc_by_id. Bucket-built indices are returned by reference for
+// zero-copy iteration; the fallback path materialises a fresh vector.
+std::vector<uint32_t> markets_in_province(const WorldState& world, uint32_t province_id);
+
+// Resolve a string good_id to the numeric id stored on RegionalMarket.good_id.
+// Prefers WorldState::goods_catalog; falls back to the FNV-1a hash in
+// good_id_hash.h when the catalog is unset (unit tests that construct
+// WorldState piecemeal). Production paths always have the catalog populated
+// by the world generator / persistence load. Returning the catalog's
+// numeric_id makes the result match the markets that create_markets() built;
+// the FNV fallback exists only to keep the long tail of legacy unit tests
+// that built markets and deltas with the same hash function in lockstep.
+//
+// Returns 0 when neither catalog nor good_id_hash() resolves the string.
+uint32_t lookup_good_id(const WorldState& world, const std::string& good_id_str);
+
+// Rebuild the computed NPC indices on WorldState from significant_npcs:
+//   - npc_index_by_id (id → significant_npcs index) for O(1) per-id lookup.
+//   - npc_indices_by_province (province → indices) for the province bucket.
+//
+// The province bucket's outer vector is resized to provinces.size(); inner
+// vectors are cleared and repopulated with significant_npcs indices grouped
+// by current_province_id, preserving ascending vector order (which is
+// id-ascending after world generation).
+//
+// O(N) in significant_npcs. Single-threaded; called by:
+//  - WorldGenerator after NPC generation completes
+//  - PersistenceModule after deserialization
+//  - TickOrchestrator after every apply_deltas() call (so the indices reflect
+//    the WorldState the next module will see)
+//
+// NPCs whose current_province_id is out of range relative to provinces.size()
+// are skipped from the province bucket; they remain reachable through
+// npc_index_by_id.
+void rebuild_npc_indices(WorldState& world);
 
 }  // namespace econlife

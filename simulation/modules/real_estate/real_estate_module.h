@@ -34,6 +34,12 @@ class RealEstateModule : public ITickModule {
     std::string_view package_id() const noexcept override { return "base_game"; }
     ModuleScope scope() const noexcept override { return ModuleScope::v1; }
     bool is_province_parallel() const noexcept override { return true; }
+    // The global post-pass runs after province-parallel work merges.
+    // Used by Phase 1 to drain pending_property_transactions (player-
+    // initiated list/unlist/buy) and to scan player listings for
+    // opportunistic NPC buyers — both touch the module-private
+    // properties_ vector and must run single-threaded.
+    bool has_global_post_pass() const noexcept override { return true; }
 
     std::vector<std::string_view> runs_after() const override { return {"price_engine"}; }
 
@@ -45,6 +51,13 @@ class RealEstateModule : public ITickModule {
                           DeltaBuffer& province_delta) override;
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
+
+    // Persistence: properties_ holds genuine world state — every PropertyListing
+    // with its owner, tenant, asking price, market value, and rental yield.
+    // See ITickModule. Note: on deserialize the per-province index is invalidated;
+    // it gets rebuilt by the next init_for_tick or by execute_province itself.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
 
     // --- Property management (exposed for testing) ---
 
@@ -84,6 +97,19 @@ class RealEstateModule : public ITickModule {
     // execute_province() to touch only its own province's data, eliminating
     // cross-province data races.
     std::unordered_map<uint32_t, std::vector<size_t>> province_property_indices_;
+
+    // Phase 3 — in-flight below-asking offers awaiting player decision via
+    // SceneCard. Resolved in execute()'s global post-pass: accept creates a
+    // PendingTransaction, decline drops the context, deadline expires it.
+    // Round-tripped via the v7 module-state hook (schema_tag = 3).
+    std::vector<NegotiationContext> active_negotiations_;
+
+   public:
+    // Exposed for testing.
+    const std::vector<NegotiationContext>& active_negotiations() const {
+        return active_negotiations_;
+    }
+    std::vector<NegotiationContext>& active_negotiations_mut() { return active_negotiations_; }
 };
 
 }  // namespace econlife

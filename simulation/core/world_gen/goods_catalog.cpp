@@ -152,4 +152,11 @@ const GoodDefinition* GoodsCatalog::find(const std::string& good_id) const {
     return nullptr;
 }
 
+void GoodsCatalog::push_back_loaded(GoodDefinition def) {
+    if (def.numeric_id >= next_numeric_id_) {
+        next_numeric_id_ = def.numeric_id + 1;
+    }
+    goods_.push_back(std::move(def));
+}
+
 }  // namespace econlife

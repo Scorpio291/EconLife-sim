@@ -35,9 +35,7 @@ NOT province-parallel: exchange rates are global-scope operations affecting all 
   - `usd_rate` — new exchange rate after macro model + noise application
   - `pegged` — changed to `false` if peg breaks (reserve depletion below threshold)
   - `foreign_reserves` — depleted during peg defense; unchanged for free-floating currencies
-- `DeferredWorkItem[]` — consequence entries:
-  - Currency crisis random event when peg breaks: `RandomEvent(type: economic, template_key: "currency_crisis", province_id: capital_province_id)`
-  - Economic stability consequences propagated to affected provinces
+- `RandomEventTriggerDelta` on peg break — emitted alongside the `CurrencyDelta.pegged = false` write. `template_key = "currency_crisis"`. `province_id` is the first province (id-ascending) with matching `nation_id`; no trigger emitted if no matching province exists. `severity = 0.40 + depth * 0.55` where `depth = clamp(1 - foreign_reserves / peg_break_reserve_threshold, 0, 1)`: at-threshold breaks land at the template minimum (0.40), zero-reserve breaks at the template maximum (0.95). Consumed by random_events at the start of the *next* tick (currency_exchange is Tier 11, random_events is Tier 1), so the trigger lives in `WorldState.pending_random_event_triggers` across the tick boundary and is persisted by schema v8+.
 - Cross-currency conversion utility (stateless function, not a delta):
   - `price_in_buyer_currency = price_in_seller_currency * (seller_currency.usd_rate / buyer_currency.usd_rate) * (1.0 + fx_transaction_cost)`
 

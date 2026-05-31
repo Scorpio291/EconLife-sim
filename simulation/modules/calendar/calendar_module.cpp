@@ -1,7 +1,9 @@
 #include "calendar_module.h"
 
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/npc.h"
 #include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 #include "modules/calendar/calendar_types.h"
 
 namespace econlife {
@@ -78,11 +80,10 @@ bool CalendarModule::is_npc_dead(const WorldState& state, uint32_t npc_id) {
 // CalendarModule::find_npc
 // ---------------------------------------------------------------------------
 const NPC* CalendarModule::find_npc(const WorldState& state, uint32_t npc_id) {
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.id == npc_id) {
-            return &npc;
-        }
-    }
+    if (const NPC* npc = lookup_npc_by_id(state, npc_id))
+        return npc;
+    // Background NPCs are not in the id index; fall back to a linear scan.
+    // The vector is small in V1 and this path is rare.
     for (const auto& npc : state.named_background_npcs) {
         if (npc.id == npc_id) {
             return &npc;

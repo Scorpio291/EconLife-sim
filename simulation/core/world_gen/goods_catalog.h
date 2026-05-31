@@ -48,6 +48,11 @@ class GoodsCatalog {
     // Find by string ID. Returns nullptr if not found.
     const GoodDefinition* find(const std::string& good_id) const;
 
+    // Append a fully-formed entry. Used by persistence load to restore the
+    // catalog as it was at save time (numeric_id and all). The CSV loader
+    // path goes through load_csv() instead.
+    void push_back_loaded(GoodDefinition def);
+
    private:
     std::vector<GoodDefinition> goods_;
     uint32_t next_numeric_id_ = 0;

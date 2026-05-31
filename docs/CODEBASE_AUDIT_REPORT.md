@@ -28,25 +28,76 @@ managed by smart pointers, and CI actually runs all 1300+ tests.
 
 ### H5. Linear scan lookups will exceed performance budget at scale
 
-**Status:** Open.
-**Files:** Multiple modules use O(N) linear scan for NPC/business lookups:
+**Status:** Resolved.
 
-- `simulation/core/world_state/apply_deltas.cpp:47` — per-NPCDelta scan over `world.significant_npcs`.
-- `simulation/core/tick/drain_deferred_work.cpp:26-32` — `find_npc` linear scan, called from every relationship/travel/evidence handler.
-- 22 occurrences of `for (const auto& npc : state.significant_npcs)` across modules (count via `grep -rc`).
-- 16 occurrences of `for (... : state.regional_markets)` across modules.
+`WorldState` now carries three computed indices, maintained by
+`rebuild_npc_indices()` at world generation, persistence load, and after
+every `apply_deltas`:
 
-With 2000 NPCs and thousands of deltas per tick, `apply_npc_deltas` is
-O(N·M). The 500ms tick budget at V1 scale will be exceeded.
+- `npc_index_by_id` — id → significant_npcs index, used by every
+  `find_npc(id)` site that previously did a linear scan.
+- `npc_indices_by_province` — keyed by `current_province_id`, used by
+  modules whose contract is "people physically in this province".
+- `npc_indices_by_home_province` — keyed by `home_province_id`, used by
+  modules whose contract is "residents of this province" (taxes,
+  community grievance, founder selection).
 
-**Fix:** Build `std::unordered_map<uint32_t, size_t>` indices at tick
-start (or maintain them as the NPC vector is mutated) and route lookups
-through them. Alternative: sort NPCs by id and use `std::lower_bound`.
-Decide once a benchmark profile shows which paths dominate.
+`lookup_npc_by_id()` in `apply_deltas.h` is the canonical accessor for
+the per-id case; it transparently falls back to a linear scan only when
+the index is empty (i.e. unit tests that build `WorldState` piecemeal
+without calling `rebuild_npc_indices`). Production paths always read
+through the index.
 
-**Priority:** This is the single largest remaining engineering risk. Do
-before tightening B3 (CI perf gate), otherwise the gate locks in a bad
-baseline.
+**Migrated modules** (no remaining filter-by-province linear scans
+across `state.significant_npcs`): addiction, antitrust, banking,
+business_lifecycle, calendar, community_response, evidence,
+facility_signals, government_budget, healthcare, informant_system,
+investigator_engine, labor_market::find_npc, media_system, npc_behavior,
+npc_spending, obligation_network, player_actions, random_events,
+scene_cards, trust_updates, weapons_trafficking.
+
+**Excluded by design:**
+- `persistence_module.cpp:1469` — serializes the full vector; iteration
+  is the contract.
+- `labor_market_module.cpp:41` — `init_for_tick` walks both
+  `significant_npcs` and `named_background_npcs` once per tick to seed
+  employment records; not a filter-shape scan.
+- `labor_market_module.cpp:461` — global memory search across all NPCs
+  for a business reputation score; intentionally global, no province
+  filter.
+- `investigator_engine_module.cpp:103` — global investigator collection
+  for the cross-province pass; not a filter-shape scan.
+
+**Performance:** Headline benchmark "full tick with all modules at 2000
+NPCs" mean ~7-13 ms (CI runner variance) — ~15-30× under the 200 ms
+target. With B1 (delta merge policy) and the H5 substrate landed,
+B3 (CI perf gate, threshold 200 ms in `benchmark.yml`) is now active.
+
+### H5b. Filter-shape regional_markets scans
+
+**Status:** Resolved. Mirroring H5 for the markets axis, `WorldState`
+now carries:
+- `market_indices_by_province` — bucket index for "all markets in
+  province p" iterations.
+- `market_index_by_good_province` — composite-key map for "the market
+  for (good_id, province_id)" lookups.
+
+Both maintained by `rebuild_npc_indices()` (the helper is named for
+its primary axis but updates all four indices in one O(N+M) pass).
+`lookup_market()` and `markets_in_province()` in `apply_deltas.h` are
+the canonical accessors with the same fallback contract as
+`lookup_npc_by_id`.
+
+Migrated consumers: `price_engine`, `npc_spending`, `production`
+(supply table + price lookup), `supply_chain` (sell offers, buy orders,
+inter-province source supply), `commodity_trading`, `antitrust`
+(per-key supply lookup), `random_events` (×3), `lod_system`.
+
+The original audit count of "16 occurrences of
+`for (... : state.regional_markets)`" is now 4 — all global non-filter
+sites: persistence serialize, antitrust market-keys collection (single
+O(M) pass), and supply_chain's "find best demand globally" maximum
+search.
 
 ### M3. Many `drain_deferred_work` handlers are stubs
 
@@ -68,9 +119,36 @@ modules:
 **Fix:** No standalone fix; resolved as each consuming module lands.
 Track via the per-handler `// Will be implemented in...` comments.
 
-### L1. `good_id_from_string` weak hash — partially fixed
+### L1. `good_id_from_string` weak hash — proper fix shipped
 
-**Status:** Quick fix shipped; proper fix still open.
+**Status:** Resolved.
+
+`WorldState::goods_catalog` (unique_ptr<GoodsCatalog>) now holds the
+catalog at runtime; `world_generator` transfers ownership after
+`create_markets()`, and persistence embeds the catalog in saves
+(schema v3+). Modules resolve string good_ids through
+`lookup_good_id(state, str)` in `apply_deltas.h`, which returns the
+catalog `numeric_id` — the same value that `RegionalMarket.good_id`
+was assigned at world generation. The FNV-1a fallback only fires when
+no catalog is present (unit tests that build state piecemeal).
+
+Migrated runtime callsites: ProductionModule (3 sites: input/output
+recipe walk, demand delta, supply delta), SeasonalAgricultureModule
+(3 sites: continuous output and the two annual-harvest branches).
+SupplyChainModule's runtime path already passed catalog ids through
+unchanged (it reads `market.good_id` and forwards it); the per-module
+static `good_id_from_string` helpers remain only for tests.
+
+Schema v2 → v3 cutover: `is_schema_compatible` rejects anything below
+v3 explicitly, since v2 saves hold FNV hashes that would silently
+route to phantom markets if loaded by v3 code. V1 is pre-release so
+this affects no real users.
+
+Tests: 6 new — `lookup_good_id` catalog-wins / FNV-fallback semantics,
+empty-catalog round-trip, populated-catalog field-by-field round-trip,
+`lookup_good_id` preservation across round-trip, and bit-identical
+serialise → deserialise → serialise. Schema rejection has its own
+unit test (`Persistence: schema rejects pre-v3 saves`).
 **File:** `simulation/core/good_id_hash.h` (new).
 
 Quick fix (this branch): the three modules that hashed good_ids
@@ -145,13 +223,32 @@ reordering.
 | **L1** weak good-id hash (quick) | (this commit) | Three duplicated `hash * 31 + c` implementations consolidated into `core/good_id_hash.h` (FNV-1a). Verified zero collisions on base_game. Long-form fix (catalog numeric ids) still open. |
 | **L8** no CI perf gate | `3e53cd7` | `benchmark.yml` now runs the all-modules contract benchmark and gates on a 200 ms threshold; results uploaded as artifact. |
 | **H5** linear-scan lookups (per-id) | `3a40d34` | drain_deferred_work, labor_market::find_employment, npc_spending::get_buyer_type now use hash-map indices. Filter-shape scans (22 NPC iterations) remain. |
-| **L6** register-tier comment drift | (this commit) | Tier-numbered comments replaced with role-based section groupings; runs_after()/runs_before() declared as the source of truth. |
+| **L6** register-tier comment drift | (earlier session) | Tier-numbered comments replaced with role-based section groupings; runs_after()/runs_before() declared as the source of truth. |
 | Supply chain transit-delay bypass | `32ae755` | Tier A. Was not in the original report but discovered during verification. |
+| **B1** delta merge policy | `5af57ed` | Per-field `// merge: append` / `// merge: PlayerDelta::merge_from` annotations on `DeltaBuffer` members; pairs with `delta_buffer_merge_test.cpp` tripwire. |
+| **H5** filter-shape NPC scans | `6f12ed2`, `0beaecf`, `0f4e726` | Province-bucket index `npc_indices_by_province`, per-id `npc_index_by_id`, home-province bucket `npc_indices_by_home_province`; 22 modules migrated; `lookup_npc_by_id` helper with FNV fallback for piecemeal-state tests. |
+| **H5b** filter-shape market scans | `ee9574c` | Bucket index `market_indices_by_province` + composite-key `market_index_by_good_province`; 8 modules / 10 sites migrated; `lookup_market`, `markets_in_province` helpers with same fallback contract. |
+| **L1** weak good-id hash (proper fix) | `1340861` | `WorldState::goods_catalog` (unique_ptr<GoodsCatalog>) holds the catalog at runtime; persistence embeds it (schema v3+); `lookup_good_id` resolves through catalog with FNV fallback; Production/SeasonalAgriculture migrated. v2 saves explicitly rejected. |
+| Determinism harness gaps | `b528601` | `serialize_world_state` now covers NPC location/graph (current_province_id, home_province_id, memory_log, relationships), the five computed indices, and `goods_catalog`. 5 new determinism tests including migration + relationship + memory + catalog tripwires. |
+| Addiction module never-seeded state | `8e4a4cf` | `AddictionModule::set_addiction_state()` seeder API + 3 state tests proving the existing state machine advances given a seed. Cross-module seeding (drug_economy → addiction) flagged for human review in `docs/session_logs/flagged_issues.md`. |
+| `npc_spending::get_buyer_type` lazy-rebuild race | `a1562fa` | `init_for_tick()` rebuilds `buyer_profile_index_` on the main thread before parallel dispatch; `get_buyer_type` is now a pure const lookup. |
+| Production/Seasonal `lookup_good_id == 0` unguarded | `a1562fa` | Six MarketDelta emit sites now skip when the catalog doesn't know the good (vs. corrupting whichever market holds id 0). |
+| Currency `usd_rate_update` NaN/Inf poisoning | `a1562fa` | `apply_currency_deltas` drops NaN/Inf updates instead of letting `std::max(0.001f, NaN)` poison the rate. |
 
 ---
 
 ## Recommended Priority Order (refreshed)
 
-1. **L1 catalog migration** — proper fix: thread `GoodsCatalog&` through Production / SupplyChain / SeasonalAgriculture and use `numeric_id` instead of hashing. Removes the hash entirely. Defer until justified by collision or scale.
-2. **H5 filter-shape scans** — 22 `for npc : significant_npcs` iterations. Needs province-bucketed NPC lists or an iteration helper. Design pass first.
-3. **M3 stub handlers.** Resolve naturally as each consuming module lands.
+The audit's original Open list is functionally empty after the
+2026-05-12 deep-review sweep. Items flagged for human review (not
+autonomous fixes) live in `docs/session_logs/flagged_issues.md`:
+
+- Addiction state location — spec says `NPC.addiction_state`, code has a private map (architecture decision).
+- Cross-module addiction seeding — no module currently calls `AddictionModule::set_addiction_state()`.
+- Tick step "27 vs 28 steps" — open design question, code comment says "do not change drain position without design approval".
+- CLAUDE.md CI gate vs ceiling — 200 ms target vs 500 ms ceiling, defensible but unclear.
+- `world_gen_integration_test.cpp` silent SKIP — goods CSV test never runs in CI.
+
+Remaining deferred items (no driver to start now):
+
+1. **M3 stub handlers.** Resolve naturally as each consuming module lands.

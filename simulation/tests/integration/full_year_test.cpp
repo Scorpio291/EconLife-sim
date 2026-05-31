@@ -97,13 +97,13 @@ TEST_CASE("economy reaches equilibrium over 365 ticks", "[integration][economy]"
 
 TEST_CASE("crime-evidence-enforcement cycle over 365 ticks", "[integration][criminal]") {
     auto world = create_test_world(42, 50, 2, 5);
-    float initial_crime = world.provinces[0].conditions.crime_rate;
+    float initial_crime = world.provinces[0].cohort_stats->crime_rate;
 
     // Simulate: criminal operations generate evidence, evidence leads to
     // enforcement, enforcement reduces crime
     for (uint32_t tick = 0; tick < 365; ++tick) {
         DeltaBuffer delta{};
-        float crime_rate = world.provinces[0].conditions.crime_rate;
+        float crime_rate = world.provinces[0].cohort_stats->crime_rate;
 
         // Phase 1: Crime rises (ticks 0-120)
         if (tick < 120) {
@@ -156,7 +156,7 @@ TEST_CASE("crime-evidence-enforcement cycle over 365 ticks", "[integration][crim
     }
 
     // Crime rose and then fell — should be lower than peak
-    float final_crime = world.provinces[0].conditions.crime_rate;
+    float final_crime = world.provinces[0].cohort_stats->crime_rate;
     // Crime rate should have been reduced by enforcement
     REQUIRE(final_crime < 0.35f);  // Should be below peak
     // Some evidence tokens should exist
@@ -295,8 +295,8 @@ TEST_CASE("persistence round-trip after 365 ticks of mutations", "[integration][
     }
 
     for (size_t i = 0; i < world.provinces.size(); ++i) {
-        REQUIRE_THAT(restored.provinces[i].conditions.crime_rate,
-                     WithinAbs(world.provinces[i].conditions.crime_rate, 0.001));
+        REQUIRE_THAT(restored.provinces[i].cohort_stats->crime_rate,
+                     WithinAbs(world.provinces[i].cohort_stats->crime_rate, 0.001));
     }
 
     // Serialize again — must be byte-identical (invariant 1)
@@ -365,9 +365,9 @@ TEST_CASE("no NaN values after 365 ticks of accumulated deltas", "[integration][
 
     for (const auto& prov : world.provinces) {
         REQUIRE_FALSE(std::isnan(prov.conditions.stability_score));
-        REQUIRE_FALSE(std::isnan(prov.conditions.crime_rate));
+        REQUIRE_FALSE(std::isnan(prov.cohort_stats->crime_rate));
         REQUIRE_FALSE(std::isnan(prov.conditions.inequality_index));
-        REQUIRE_FALSE(std::isnan(prov.conditions.addiction_rate));
+        REQUIRE_FALSE(std::isnan(prov.cohort_stats->addiction_rate));
         REQUIRE_FALSE(std::isnan(prov.community.grievance_level));
         REQUIRE_FALSE(std::isnan(prov.community.cohesion));
     }
@@ -409,14 +409,14 @@ TEST_CASE("region conditions stay within valid ranges", "[integration][safety]")
     for (const auto& prov : world.provinces) {
         REQUIRE(prov.conditions.stability_score >= 0.0f);
         REQUIRE(prov.conditions.stability_score <= 1.0f);
-        REQUIRE(prov.conditions.crime_rate >= 0.0f);
-        REQUIRE(prov.conditions.crime_rate <= 1.0f);
+        REQUIRE(prov.cohort_stats->crime_rate >= 0.0f);
+        REQUIRE(prov.cohort_stats->crime_rate <= 1.0f);
         REQUIRE(prov.conditions.inequality_index >= 0.0f);
         REQUIRE(prov.conditions.inequality_index <= 1.0f);
-        REQUIRE(prov.conditions.addiction_rate >= 0.0f);
-        REQUIRE(prov.conditions.addiction_rate <= 1.0f);
-        REQUIRE(prov.conditions.criminal_dominance_index >= 0.0f);
-        REQUIRE(prov.conditions.criminal_dominance_index <= 1.0f);
+        REQUIRE(prov.cohort_stats->addiction_rate >= 0.0f);
+        REQUIRE(prov.cohort_stats->addiction_rate <= 1.0f);
+        REQUIRE(prov.cohort_stats->criminal_dominance_index >= 0.0f);
+        REQUIRE(prov.cohort_stats->criminal_dominance_index <= 1.0f);
         REQUIRE(prov.community.grievance_level >= 0.0f);
         REQUIRE(prov.community.grievance_level <= 1.0f);
         REQUIRE(prov.community.cohesion >= 0.0f);

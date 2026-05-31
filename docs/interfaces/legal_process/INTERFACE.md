@@ -4,7 +4,8 @@
 Manages court proceedings, sentencing, appeals, and the full legal case lifecycle. Converts completed investigations into legal outcomes through a multi-stage state machine (investigation -> arrested -> charged -> trial -> convicted/acquitted -> imprisoned/fined -> paroled/pardoned). Evidence quality directly affects conviction probability. Player agency exists at each transition (bail, defense counsel, appeal). Processing runs at tick step 14. NOT province-parallel because the judiciary operates at the national level and legal cases can involve actors across multiple provinces.
 
 ## Inputs (from WorldState)
-- `legal_cases[]` — all active LegalCase records: id, defendant_id, stage (LegalCaseStage), opened_tick, stage_entered_tick, evidence_weight, evidence_token_ids, lead_investigator_id, prosecutor_npc_id, judge_npc_id, charge_severity, sentence_ticks, sentence_remaining, bail_posted, appeal_pending, defence_quality
+- `legal_cases[]` — all active LegalCase records: id, defendant_id, stage (LegalCaseStage), opened_tick, stage_entered_tick, evidence_weight, evidence_token_ids, lead_investigator_id, prosecutor_npc_id, judge_npc_id, charge_severity, sentence_ticks, sentence_remaining, bail_posted, appeal_pending, defence_quality (V1: held in `LegalProcessModule::cases_` rather than on WorldState; persistence v7 round-trips them via the ITickModule serialize_state hook)
+- `pending_legal_case_seeds[]` — cross-module trigger queue on WorldState. Drained at the start of `execute()` and instantiated as new `LegalCase` records at stage=investigation. Each seed allocates a fresh case id (max-existing + 1). The queue is cleared via const_cast (same carve-out player_actions uses on `deferred_work_queue`). Producers emit a `LegalCaseSeedDelta` into the DeltaBuffer; apply_deltas routes it into this queue.
 - `evidence_pool[]` — EvidenceToken records referenced by legal_cases[].evidence_token_ids
 - `npcs[]` — NPC records for prosecutor, judge, investigator NPCs
 - `player` — PlayerCharacter state for defendant-is-player cases
@@ -21,7 +22,7 @@ Manages court proceedings, sentencing, appeals, and the full legal case lifecycl
 - `config.legal.prison_delegation_efficiency` — 0.60; delegate performance during imprisonment
 - `config.legal.parole_eligibility_fraction` — 0.50; eligible after 50% of sentence
 - `config.legal.double_jeopardy_cooldown_ticks` — 1825; ~5 years before re-filing
-- `config.legal.arrest_exposure_hit` — 0.15; immediate exposure increase on arrest
+- `config.legal.arrest_exposure_hit` — 0.15; additive bump on the public_arrest_record EvidenceToken's `actionability` weight when emitted at investigation→arrested. Per `player.h:159`, exposure is not a scalar — it is the set of EvidenceAwarenessEntry records the player knows about. This config models the PR damage of being publicly arrested on top of the underlying case strength: `token.actionability = clamp(case.evidence_weight + arrest_exposure_hit, 0.0, 1.0)`.
 - `current_tick` — for stage duration checks and sentence countdown
 
 ## Outputs (to DeltaBuffer)

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <map>
 
 #include "core/world_state/player.h"
@@ -168,14 +169,15 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
 
     // Phase 2: Process investigator NPCs in this province
     std::vector<const NPC*> investigators;
-    for (const auto& npc : state.significant_npcs) {
-        if (npc.current_province_id != province.id)
-            continue;
-        if (npc.status != NPCStatus::active)
-            continue;
-        if (npc.role == NPCRole::law_enforcement || npc.role == NPCRole::regulator ||
-            npc.role == NPCRole::journalist || npc.role == NPCRole::ngo_investigator) {
-            investigators.push_back(&npc);
+    if (province.id < state.npc_indices_by_province.size()) {
+        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
+            const NPC& npc = state.significant_npcs[idx];
+            if (npc.status != NPCStatus::active)
+                continue;
+            if (npc.role == NPCRole::law_enforcement || npc.role == NPCRole::regulator ||
+                npc.role == NPCRole::journalist || npc.role == NPCRole::ngo_investigator) {
+                investigators.push_back(&npc);
+            }
         }
     }
     std::sort(investigators.begin(), investigators.end(),
@@ -328,12 +330,42 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
             province_delta.consequence_deltas.push_back(cons);
         }
 
-        // Raid imminent transition: queue raid consequence
+        // Raid imminent transition: queue raid consequence and request a
+        // new legal case at investigation stage for the resolved target.
+        // legal_process drains pending_legal_case_seeds within the same
+        // tick (runs at Tier 9, after this module at Tier 8) and the new
+        // case typically advances investigation→arrested immediately
+        // because the meter level (>= 0.80) seeds enough evidence to clear
+        // the arrest threshold (0.35).
         if (new_status >= InvestigatorMeterStatus::raid_imminent &&
             old_status < static_cast<uint8_t>(InvestigatorMeterStatus::raid_imminent)) {
             ConsequenceDelta cons;
             cons.new_entry_id = inv->id;
             province_delta.consequence_deltas.push_back(cons);
+
+            if (found_case->target_id != 0u) {
+                LegalCaseSeedDelta seed{};
+                seed.defendant_npc_id = found_case->target_id;
+                seed.lead_investigator_id = inv->id;
+                // Map meter level to severity: 0.80–0.85 → moderate(1),
+                // 0.85–0.90 → serious(2), 0.90–0.95 → major(3),
+                // 0.95–1.00 → severe(4). Linear bucket; severity_value =
+                // enum + 1 in legal_process.
+                float lvl = found_case->current_level;
+                uint8_t sev = 1;  // CaseSeverity::moderate
+                if (lvl >= 0.95f)
+                    sev = 4;  // severe
+                else if (lvl >= 0.90f)
+                    sev = 3;  // major
+                else if (lvl >= 0.85f)
+                    sev = 2;  // serious
+                seed.severity = sev;
+                seed.province_id = found_case->province_id;
+                // Map meter to evidence weight so legal_process's
+                // should_arrest gate (0.35) passes immediately.
+                seed.initial_evidence_weight = found_case->current_level;
+                province_delta.new_legal_case_seeds.push_back(seed);
+            }
         }
     }
 }
@@ -342,6 +374,107 @@ void InvestigatorEngineModule::execute(const WorldState& state, DeltaBuffer& del
     for (uint32_t i = 0; i < state.provinces.size(); ++i) {
         execute_province(i, state, delta);
     }
+}
+
+// ─── Persistence helpers (schema v7) ────────────────────────────────────────
+//
+// Format (little-endian):
+//   u32 schema_tag (1)
+//   u32 count
+//   for each InvestigationCase:
+//     u32 investigator_npc_id, u8 investigator_type, u32 target_id
+//     f32 current_level, f32 fill_rate, u8 status
+//     u32 opened_tick, u8 formally_opened, u32 province_id
+
+namespace {
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+};
+
+}  // namespace
+
+void InvestigatorEngineModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(cases_.size()));
+    for (const auto& c : cases_) {
+        put_u32(out, c.investigator_npc_id);
+        out.push_back(static_cast<uint8_t>(c.investigator_type));
+        put_u32(out, c.target_id);
+        put_f32(out, c.current_level);
+        put_f32(out, c.fill_rate);
+        out.push_back(c.status);
+        put_u32(out, c.opened_tick);
+        out.push_back(c.formally_opened ? 1u : 0u);
+        put_u32(out, c.province_id);
+    }
+}
+
+bool InvestigatorEngineModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    uint32_t count = r.u32();
+    cases_.clear();
+    cases_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        InvestigationCase c{};
+        c.investigator_npc_id = r.u32();
+        c.investigator_type = static_cast<InvestigatorType>(r.u8());
+        c.target_id = r.u32();
+        c.current_level = r.f32();
+        c.fill_rate = r.f32();
+        c.status = r.u8();
+        c.opened_tick = r.u32();
+        c.formally_opened = (r.u8() != 0);
+        c.province_id = r.u32();
+        if (r.error)
+            return false;
+        cases_.push_back(c);
+    }
+    return !r.error;
 }
 
 }  // namespace econlife

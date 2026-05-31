@@ -44,6 +44,15 @@ class HealthcareModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Persistence (schema v7): npc_health_records_ tracks every NPC's
+    // health level and last_treatment_tick — without persistence every
+    // NPC returns to 1.0 health on load, erasing every recovery
+    // trajectory and treatment cooldown. province_health_states_ carries
+    // per-province HealthcareProfile plus sick_leave_fraction and
+    // effective_labour_supply. See ITickModule.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Internal per-province healthcare state ---
     // Module owns this because WorldState Province does not carry
     // HealthcareProfile in the current V1 bootstrap schema. Injected
