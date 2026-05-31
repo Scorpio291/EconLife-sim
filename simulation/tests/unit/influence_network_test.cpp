@@ -2,6 +2,9 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/config/package_config.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/player.h"
+#include "core/world_state/world_state.h"
 #include "modules/influence_network/influence_network_module.h"
 
 using namespace econlife;
@@ -148,4 +151,73 @@ TEST_CASE("InfluenceNetwork: config defaults match spec", "[influence_network][t
     REQUIRE_THAT(default_cfg.recovery_ceiling_factor, WithinAbs(0.60f, 0.001f));
     REQUIRE_THAT(default_cfg.recovery_ceiling_minimum, WithinAbs(0.15f, 0.001f));
     REQUIRE(default_cfg.health_target_count == 10);
+}
+
+// --- Execute-path smoke coverage ------------------------------------------
+// execute() only acts on active obligations between the player and an NPC for
+// whom the player holds a relationship. This drives that path on a minimal
+// world and proves it emits the relationship update (not a silent no-op).
+
+TEST_CASE("InfluenceNetwork: execute erodes obligation on active player obligation",
+          "[influence_network][tier9]") {
+    WorldState w{};
+    w.current_tick = 5;
+    w.world_seed = 1;
+
+    w.player = std::make_unique<PlayerCharacter>();
+    w.player->id = 1;
+    Relationship rel{};
+    rel.target_npc_id = 200;
+    rel.trust = 0.50f;
+    rel.fear = 0.40f;
+    rel.obligation_balance = 0.30f;
+    w.player->relationships.push_back(rel);
+
+    ObligationNode obl{};
+    obl.id = 1;
+    obl.creditor_npc_id = 200;  // NPC is owed
+    obl.debtor_npc_id = 1;      // player owes
+    obl.weight = 0.5f;
+    obl.created_tick = 0;
+    obl.is_active = true;
+    w.obligation_network.push_back(obl);
+
+    InfluenceNetworkModule module;
+    DeltaBuffer delta{};
+    module.execute(w, delta);
+
+    // The player's relationship to the counterpart is updated this tick.
+    bool found = false;
+    for (const auto& nd : delta.npc_deltas) {
+        if (nd.npc_id == 1 && nd.updated_relationship.has_value() &&
+            nd.updated_relationship->target_npc_id == 200) {
+            found = true;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("InfluenceNetwork: inactive obligation produces no relationship update",
+          "[influence_network][tier9]") {
+    WorldState w{};
+    w.current_tick = 5;
+    w.player = std::make_unique<PlayerCharacter>();
+    w.player->id = 1;
+    Relationship rel{};
+    rel.target_npc_id = 200;
+    w.player->relationships.push_back(rel);
+
+    ObligationNode obl{};
+    obl.id = 1;
+    obl.creditor_npc_id = 200;
+    obl.debtor_npc_id = 1;
+    obl.weight = 0.5f;
+    obl.is_active = false;  // inactive -> skipped
+    w.obligation_network.push_back(obl);
+
+    InfluenceNetworkModule module;
+    DeltaBuffer delta{};
+    module.execute(w, delta);
+
+    REQUIRE(delta.npc_deltas.empty());
 }
