@@ -2017,13 +2017,6 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         uint32_t goods_count = r.read_u32();
         if (goods_count > 0) {
             auto catalog = std::make_unique<GoodsCatalog>();
-            // GoodsCatalog::goods_ is private; the v3 embed simply replays
-            // the entries via load_csv-equivalent direct insertion. We use
-            // a lightweight friend-free path: pre-size and emplace via a
-            // helper. Since GoodsCatalog has no public bulk-insert, we
-            // reconstruct entries on a temporary vector and the catalog
-            // exposes its goods() vector as a const& only — so we add a
-            // small public helper there instead.
             for (uint32_t i = 0; i < goods_count; ++i) {
                 GoodDefinition g{};
                 g.numeric_id = r.read_u32();
@@ -2039,6 +2032,13 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
                 catalog->push_back_loaded(std::move(g));
             }
             out_state.goods_catalog = std::move(catalog);
+        } else {
+            // Source had no catalog (or a zero-good one). Always overwrite —
+            // deserialize is documented as a full state restore, so leaving
+            // a stale catalog on a reused WorldState would silently
+            // misroute lookup_good_id() against IDs that no longer mean
+            // anything in the restored world.
+            out_state.goods_catalog.reset();
         }
     }
 

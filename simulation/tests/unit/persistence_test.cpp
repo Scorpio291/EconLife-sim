@@ -392,6 +392,47 @@ TEST_CASE("Persistence: empty catalog round-trips as empty",
     REQUIRE(lookup_good_id(restored, "steel") == lookup_good_id(world, "steel"));
 }
 
+TEST_CASE("Persistence: empty-catalog save overwrites a stale catalog on the target",
+          "[persistence][tier12][goods_catalog]") {
+    // Deserialize is documented as a full state restore. If the target
+    // WorldState already carries a non-empty catalog (e.g. a reused
+    // container, or a world loaded from a previous save), restoring a
+    // save whose goods section is empty must clear it — otherwise
+    // lookup_good_id() resolves against IDs that no longer mean anything
+    // in the restored world.
+    WorldState src{};
+    src.current_tick = 0;
+    src.world_seed = 1;
+    src.game_mode = GameMode::standard;
+    REQUIRE(!src.goods_catalog);
+    auto bytes = PersistenceModule::serialize(src);
+
+    WorldState target{};
+    target.current_tick = 99;
+    target.world_seed = 42;
+    target.game_mode = GameMode::standard;
+    auto stale = std::make_unique<GoodsCatalog>();
+    stale->push_back_loaded(make_good(11, "stale_steel", 80.0f, 2, "metals", false, false, 2));
+    stale->push_back_loaded(make_good(22, "stale_ore", 15.0f, 0, "geological", false, false, 1));
+    target.goods_catalog = std::move(stale);
+    REQUIRE(target.goods_catalog);
+    REQUIRE(target.goods_catalog->size() == 2);
+
+    auto result = PersistenceModule::deserialize(bytes, target);
+    REQUIRE(result == RestoreResult::success);
+
+    // Catalog state must match the source: src had no catalog, so target
+    // must end with no catalog. A non-null catalog here means the prior
+    // contents leaked through.
+    REQUIRE(!target.goods_catalog);
+    // And behaviorally: looking up the stale entries' string keys must
+    // not return their stale numeric_ids (11, 22). Without a catalog,
+    // lookup_good_id falls back to the FNV-1a hash, which is unrelated
+    // to the prior catalog's numeric_ids — so the stale IDs are gone.
+    REQUIRE(lookup_good_id(target, "stale_steel") != 11u);
+    REQUIRE(lookup_good_id(target, "stale_ore") != 22u);
+}
+
 TEST_CASE("Persistence: populated catalog round-trips field-by-field",
           "[persistence][tier12][goods_catalog]") {
     WorldState world{};

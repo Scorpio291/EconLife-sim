@@ -763,4 +763,80 @@ TEST_CASE("test_unknown_good_suppresses_market_deltas", "[production][tier1]") {
     for (const auto& md : delta.market_deltas) {
         REQUIRE(md.good_id != 0);
     }
+
+    // And no phantom revenue: a recipe whose only output is unknown to the
+    // catalog must produce zero revenue, not be priced against whatever the
+    // gid == 0 market happens to be ("wheat" here, priced at 25.0).
+    float total_revenue = 0.0f;
+    for (const auto& bd : delta.business_deltas) {
+        if (bd.business_id == 1 && bd.revenue_per_tick_update.has_value()) {
+            total_revenue += bd.revenue_per_tick_update.value();
+        }
+    }
+    REQUIRE_THAT(total_revenue, WithinAbs(0.0f, 1e-6f));
+}
+
+TEST_CASE("test_init_for_tick_picks_up_newly_constructed_facility",
+          "[production][tier1][construction]") {
+    // Phase 11 (construction) delivers new facilities via NewFacilityDelta,
+    // which apply_deltas appends to state.facilities. ProductionModule's
+    // facility_registry_ is lazily seeded once via std::call_once; without
+    // init_for_tick() syncing the tail, subsequent ticks never see the new
+    // facility and the business silently produces nothing. This test
+    // verifies the sync.
+
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    // Markets for the steel recipe (both inputs + output).
+    add_market(state, "iron_ore", province_id, 1000.0f, 10.0f);
+    add_market(state, "coking_coal", province_id, 1000.0f, 10.0f);
+    add_market(state, "steel", province_id, 0.0f, 80.0f);
+    rebuild_npc_indices(state);
+
+    // Business exists from tick 0; its facility is delivered later.
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_steel_recipe());
+
+    // Tick 1: no facility yet, no production.
+    {
+        module.init_for_tick(state);
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        auto steel = summarize_deltas(delta, "steel", province_id);
+        REQUIRE(steel.supply_count == 0);
+    }
+
+    // A construction contract completes between ticks: apply_new_facilities
+    // appends to state.facilities directly (we simulate that here).
+    state.facilities.push_back(make_test_facility(42, 1, province_id, "steel_smelting"));
+
+    // Tick 2: init_for_tick must sync the new facility into the registry,
+    // and execute_province must now produce steel.
+    {
+        module.init_for_tick(state);
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        auto steel = summarize_deltas(delta, "steel", province_id);
+        REQUIRE(steel.supply_count >= 1);
+        REQUIRE(steel.total_supply_delta > 0.0f);
+    }
+
+    // Tick 3 (no new facilities): the previously-registered facility still
+    // produces; the sync from tick 2 must not double-register or lose it.
+    {
+        module.init_for_tick(state);
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        auto steel = summarize_deltas(delta, "steel", province_id);
+        REQUIRE(steel.supply_count >= 1);
+        REQUIRE(steel.total_supply_delta > 0.0f);
+    }
 }

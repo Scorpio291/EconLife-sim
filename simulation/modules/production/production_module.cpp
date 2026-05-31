@@ -61,6 +61,21 @@ void ProductionModule::init_from_world_state(const WorldState& state) {
     for (const auto& facility : state.facilities) {
         facility_registry_.register_facility(facility);
     }
+    last_synced_facility_count_ = state.facilities.size();
+}
+
+void ProductionModule::init_for_tick(const WorldState& state) {
+    // First call seeds the registry via the same code path as the
+    // execute_province std::call_once; subsequent calls register only
+    // the tail (facilities delivered by Phase 11 construction since the
+    // previous tick). state.facilities is append-only — apply_deltas.cpp
+    // adds via apply_new_facilities() and there is no facility-deletion
+    // delta — so a monotonically growing prefix is safe to skip.
+    std::call_once(init_flag_, [this, &state]() { init_from_world_state(state); });
+    for (std::size_t i = last_synced_facility_count_; i < state.facilities.size(); ++i) {
+        facility_registry_.register_facility(state.facilities[i]);
+    }
+    last_synced_facility_count_ = state.facilities.size();
 }
 
 // ===========================================================================
@@ -331,18 +346,24 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             continue;
         }
 
-        // Write supply_delta. Skip unknown goods (id 0) — same defence as the
-        // demand path above. Revenue still accrues even when we suppress the
-        // delta, since the business produced the goods; the suppression is
-        // purely about not corrupting an unrelated market.
+        // Skip outputs whose good_id is unknown to the catalog. Treating an
+        // unknown gid == 0 as a legitimate output would (a) corrupt the
+        // gid == 0 market's supply with phantom volume and (b) book revenue
+        // against whatever the gid == 0 market happens to be priced at —
+        // both nonsense for a misconfigured recipe. Better to produce
+        // nothing (no supply, no revenue) and surface the recipe defect
+        // via zero output than to silently mis-attribute economic
+        // activity.
         const uint32_t output_gid = lookup_good_id(state, output->good_id);
-        if (output_gid != 0) {
-            MarketDelta supply_delta{};
-            supply_delta.good_id = output_gid;
-            supply_delta.region_id = biz.province_id;
-            supply_delta.supply_delta = actual_output;
-            delta.market_deltas.push_back(supply_delta);
+        if (output_gid == 0) {
+            continue;
         }
+
+        MarketDelta supply_delta{};
+        supply_delta.good_id = output_gid;
+        supply_delta.region_id = biz.province_id;
+        supply_delta.supply_delta = actual_output;
+        delta.market_deltas.push_back(supply_delta);
 
         // Calculate revenue using appropriate price.
         float price = get_price_for_business(biz, output_gid, state);
