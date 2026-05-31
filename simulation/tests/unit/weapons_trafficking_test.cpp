@@ -116,3 +116,75 @@ TEST_CASE("WeaponsTrafficking: no domestic heavy weapons production",
     REQUIRE(WeaponsTraffickingModule::is_embargo_item(WeaponType::heavy_weapons) == true);
     // No production recipe validation — just verify the type flag
 }
+
+// --- Execute-path smoke coverage ------------------------------------------
+// The cases above exercise only static price/diversion helpers. This drives
+// execute_province on a minimal world: a non-compliant manufacturing business
+// in a high-dominance province should divert weapons into the informal market
+// (a MarketDelta for small_arms) rather than silently doing nothing.
+
+TEST_CASE("WeaponsTrafficking: execute_province diverts weapons to informal supply",
+          "[weapons_trafficking][tier8]") {
+    WorldState w{};
+    w.current_tick = 1;
+    w.world_seed = 1;
+
+    Province p{};
+    p.id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->criminal_dominance_index = 0.85f;  // open-warfare demand
+    w.provinces.push_back(std::move(p));
+
+    NPCBusiness biz{};
+    biz.id = 1;
+    biz.sector = BusinessSector::manufacturing;
+    biz.province_id = 0;
+    biz.revenue_per_tick = 1000.0f;
+    biz.regulatory_violation_severity = 0.5f;  // proxy for diversion
+    w.npc_businesses.push_back(biz);
+
+    WeaponsTraffickingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, w, delta);
+
+    REQUIRE_FALSE(delta.market_deltas.empty());
+    const MarketDelta& md = delta.market_deltas[0];
+    REQUIRE(md.good_id == static_cast<uint32_t>(WeaponType::small_arms));
+    REQUIRE(md.region_id == 0);
+    REQUIRE(md.supply_delta.has_value());
+    REQUIRE(*md.supply_delta > 0.0f);
+}
+
+TEST_CASE("WeaponsTrafficking: compliant manufacturer diverts nothing",
+          "[weapons_trafficking][tier8]") {
+    WorldState w{};
+    w.current_tick = 1;
+    Province p{};
+    p.id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->criminal_dominance_index = 0.85f;
+    w.provinces.push_back(std::move(p));
+
+    NPCBusiness biz{};
+    biz.id = 1;
+    biz.sector = BusinessSector::manufacturing;
+    biz.province_id = 0;
+    biz.revenue_per_tick = 1000.0f;
+    biz.regulatory_violation_severity = 0.0f;  // compliant -> not a diverter
+    w.npc_businesses.push_back(biz);
+
+    WeaponsTraffickingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, w, delta);
+
+    // The conflict still drives a demand-side MarketDelta, but a compliant
+    // manufacturer must divert no weapons: no supply_delta should be emitted,
+    // and no inventory-discrepancy evidence generated.
+    bool any_supply = false;
+    for (const auto& md : delta.market_deltas) {
+        if (md.supply_delta.has_value())
+            any_supply = true;
+    }
+    REQUIRE_FALSE(any_supply);
+    REQUIRE(delta.evidence_deltas.empty());
+}

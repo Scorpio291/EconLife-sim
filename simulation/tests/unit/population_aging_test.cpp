@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/population_aging/population_aging_module.h"
 
 using namespace econlife;
@@ -71,4 +73,55 @@ TEST_CASE("PopulationAging: config defaults match spec", "[population_aging][tie
     REQUIRE_THAT(cfg.cohort_employment_update_rate, WithinAbs(0.02f, 0.001f));
     REQUIRE(PopulationAgingModule::TICKS_PER_MONTH == 30);
     REQUIRE(PopulationAgingModule::TICKS_PER_YEAR == 365);
+}
+
+// --- Execute-path smoke coverage ------------------------------------------
+// Drives the tick entry point. population_aging runs on a monthly cadence,
+// so these also lock in the gate: a delta on a monthly tick, none off-month.
+
+namespace {
+WorldState make_one_province_world(uint32_t tick) {
+    WorldState w{};
+    w.current_tick = tick;
+    w.world_seed = 1;
+    Province p{};
+    p.id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.demographics.income_low_fraction = 0.40f;
+    p.demographics.income_high_fraction = 0.20f;
+    p.demographics.education_level = 0.50f;
+    p.conditions.inequality_index = 0.30f;
+    w.provinces.push_back(std::move(p));
+    return w;
+}
+}  // namespace
+
+TEST_CASE("PopulationAging: execute_province emits a RegionDelta on a monthly tick",
+          "[population_aging][tier11]") {
+    auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_MONTH);
+    PopulationAgingModule module;
+
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+
+    REQUIRE(delta.region_deltas.size() == 1);
+    const RegionDelta& rd = delta.region_deltas[0];
+    REQUIRE(rd.region_id == 0);
+    REQUIRE(rd.stability_delta.has_value());
+    REQUIRE(rd.inequality_delta.has_value());
+    REQUIRE(rd.grievance_delta.has_value());
+    // grievance = GRIEVANCE_UNEMPLOYMENT_WEIGHT(0.003) * income_low_fraction(0.40).
+    REQUIRE_THAT(*rd.grievance_delta, WithinAbs(0.0012f, 1e-5f));
+}
+
+TEST_CASE("PopulationAging: execute_province is a no-op off the monthly cadence",
+          "[population_aging][tier11]") {
+    // Tick 1 is not a multiple of TICKS_PER_MONTH (30): the module must skip.
+    auto world = make_one_province_world(/*tick=*/1);
+    PopulationAgingModule module;
+
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+
+    REQUIRE(delta.region_deltas.empty());
 }
