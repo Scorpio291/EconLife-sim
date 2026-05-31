@@ -3,10 +3,18 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
 namespace econlife {
+
+namespace {
+// Salt mixed into the province RNG seed so addiction's relapse draws never
+// share a stream with another module that seeds from the same
+// (world_seed, tick, province) triple (e.g. drug_economy's addiction seeding).
+constexpr uint64_t kAddictionRngSalt = 0xADD1C7;
+}  // namespace
 
 float AddictionModule::craving_increment(AddictionStage stage, const AddictionConfig& cfg) {
     switch (stage) {
@@ -132,6 +140,15 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         return state.significant_npcs[a].id < state.significant_npcs[b].id;
     });
 
+    // Province-level RNG for relapse draws. Forked per npc_id below so each
+    // NPC's draw depends only on (world_seed, tick, province, npc_id) — never
+    // on iteration order or how many NPCs happen to draw — keeping output
+    // identical regardless of core count.
+    const uint64_t province_seed = state.world_seed ^
+                                   (static_cast<uint64_t>(state.current_tick) << 16) ^
+                                   (static_cast<uint64_t>(province_idx) << 8) ^ kAddictionRngSalt;
+    const DeterministicRNG province_rng(province_seed);
+
     for (uint32_t idx : npc_indices) {
         const NPC& npc_ref = state.significant_npcs[idx];
         const NPC* npc = &npc_ref;
@@ -146,7 +163,15 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
             continue;
 
         AddictionState current = npc->addiction_state;
-        AddictionStage old_stage = current.stage;
+        const AddictionStage old_stage = current.stage;
+
+        // A "using" stage means the NPC is actively consuming the substance
+        // this tick (everything between casual and active inclusive). recovery
+        // and terminal are not using stages.
+        auto is_using_stage = [](AddictionStage s) {
+            return s == AddictionStage::casual || s == AddictionStage::regular ||
+                   s == AddictionStage::dependent || s == AddictionStage::active;
+        };
 
         // Increment craving
         current.craving =
@@ -158,9 +183,62 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
                 std::clamp(current.tolerance + cfg_.tolerance_per_use_casual, 0.0f, 1.0f);
         }
 
-        // Stage transition
-        AddictionStage new_stage = compute_next_stage(current, cfg_);
-        current.stage = new_stage;
+        // Advance the tick counters that drive stage transitions. Without this
+        // the state machine could never progress organically: casual->regular
+        // needs consecutive_use_ticks >= regular_use_threshold and
+        // regular->dependent needs >= dependency_threshold, while recovery
+        // completion needs clean_ticks to accumulate. Use ticks accrue while
+        // using; clean ticks accrue while in recovery.
+        if (is_using_stage(current.stage)) {
+            current.consecutive_use_ticks += 1;
+            current.clean_ticks = 0;
+            // Supply is assumed available this tick. Modelling genuine supply
+            // gaps (and the withdrawal damage they cause) requires a substance
+            // market-availability signal that does not yet exist — see
+            // flagged_issues.md. supply_gap_ticks therefore stays 0 for now.
+            current.supply_gap_ticks = 0;
+        } else if (current.stage == AddictionStage::recovery) {
+            current.clean_ticks += 1;
+        }
+
+        // Relapse risk tracks current craving (which decays during recovery).
+        current.relapse_probability =
+            std::clamp(current.craving * cfg_.relapse_history_weight, 0.0f, 1.0f);
+
+        // Stage transition. recovery has two extra exits the static helper does
+        // not model — a stochastic relapse back to active and a deterministic
+        // completion to none — so handle recovery here and defer the rest to
+        // compute_next_stage.
+        AddictionStage new_stage;
+        if (current.stage == AddictionStage::recovery) {
+            DeterministicRNG npc_rng = province_rng.fork(npc_id);
+            if (current.relapse_probability > 0.0f &&
+                npc_rng.next_float() < current.relapse_probability) {
+                new_stage = AddictionStage::active;  // relapse
+                current.clean_ticks = 0;
+                current.consecutive_use_ticks = 0;
+            } else if (is_recovery_complete(current.clean_ticks, current.relapse_probability,
+                                            cfg_)) {
+                new_stage = AddictionStage::none;  // full recovery
+            } else {
+                new_stage = AddictionStage::recovery;
+            }
+        } else {
+            new_stage = compute_next_stage(current, cfg_);
+        }
+
+        // Entering recovery: stop the use clock and start the clean clock.
+        if (old_stage != AddictionStage::recovery && new_stage == AddictionStage::recovery) {
+            current.consecutive_use_ticks = 0;
+            current.clean_ticks = 0;
+        }
+
+        // Full recovery clears the machine back to the default (stage none).
+        if (new_stage == AddictionStage::none) {
+            current = AddictionState{};
+        } else {
+            current.stage = new_stage;
+        }
 
         // Province rate delta
         addiction_rate_delta += compute_addiction_rate_delta(old_stage, new_stage, cfg_);
@@ -202,6 +280,21 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
             npc_delta.capital_delta = -spend;
         }
         npc_delta.set_addiction_state = current;
+
+        // One-time memory on crossing into the active stage: addiction now
+        // impairs day-to-day function. Emitted exactly once on the
+        // non-active -> active transition (per INTERFACE.md).
+        if (old_stage != AddictionStage::active && new_stage == AddictionStage::active) {
+            MemoryEntry mem{};
+            mem.tick_timestamp = state.current_tick;
+            mem.type = MemoryType::event;
+            mem.subject_id = npc_id;       // a memory about the NPC's own condition
+            mem.emotional_weight = -0.5f;  // unfavorable
+            mem.decay = 1.0f;
+            mem.is_actionable = true;
+            npc_delta.new_memory_entry = mem;
+        }
+
         province_delta.npc_deltas.push_back(npc_delta);
     }
 

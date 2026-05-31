@@ -243,3 +243,142 @@ TEST_CASE("Addiction: NPCs with stage=none are invisible to the module",
     // State stays at the default after the no-op run.
     REQUIRE(world.significant_npcs[0].addiction_state.stage == AddictionStage::none);
 }
+
+// --- Per-tick state-machine maturation ------------------------------------
+//
+// These tests exercise the per-tick effects the module applies on top of the
+// static transition helpers: use/clean tick accrual, recovery completion,
+// deterministic relapse, and the one-time active-stage memory.
+
+namespace {
+
+void step_addiction(WorldState& world, AddictionModule& module) {
+    world.current_tick += 1;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    apply_deltas(world, delta);
+}
+
+}  // namespace
+
+TEST_CASE("Addiction: consecutive_use_ticks accrual drives casual -> regular over ticks",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    AddictionState seed{};
+    seed.stage = AddictionStage::casual;
+    seed.substance_key = "cocaine";
+    seed.craving = 0.20f;
+    seed.consecutive_use_ticks = 0;  // must accrue organically to reach 30
+    world.significant_npcs[0].addiction_state = seed;
+
+    AddictionModule module;
+    // 30 ticks: craving climbs 0.01/tick past the 0.30 threshold and
+    // consecutive_use_ticks accrues to the regular_use_threshold (30). Without
+    // the per-tick counter increment the NPC would be frozen at casual forever.
+    for (int i = 0; i < 30; ++i) {
+        step_addiction(world, module);
+    }
+
+    const AddictionState& after = world.significant_npcs[0].addiction_state;
+    REQUIRE(after.consecutive_use_ticks >= 30);
+    REQUIRE(after.stage == AddictionStage::regular);
+}
+
+TEST_CASE("Addiction: clean_ticks accrual completes recovery to none",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    AddictionState seed{};
+    seed.stage = AddictionStage::recovery;
+    seed.substance_key = "cocaine";
+    seed.craving = 0.0f;  // relapse_probability 0 -> no relapse, decay below 0.05
+    seed.clean_ticks = 364;
+    world.significant_npcs[0].addiction_state = seed;
+
+    AddictionModule module;
+    // One tick pushes clean_ticks to full_recovery_ticks (365); with craving 0
+    // the recovery-success threshold is met and the machine clears to none.
+    step_addiction(world, module);
+
+    REQUIRE(world.significant_npcs[0].addiction_state.stage == AddictionStage::none);
+    REQUIRE(world.significant_npcs[0].addiction_state.substance_key.empty());
+}
+
+TEST_CASE("Addiction: certain relapse returns recovery NPC to active",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    AddictionState seed{};
+    seed.stage = AddictionStage::recovery;
+    seed.substance_key = "cocaine";
+    seed.craving = 1.0f;  // relapse_probability ~1.0 -> next_float() always below it
+    seed.clean_ticks = 10;
+    world.significant_npcs[0].addiction_state = seed;
+
+    AddictionModule module;
+    step_addiction(world, module);
+
+    // relapse_probability after one recovery decay tick is 0.997, and
+    // next_float() is in [0,1): the draw is below it, so the NPC relapses.
+    REQUIRE(world.significant_npcs[0].addiction_state.stage == AddictionStage::active);
+    REQUIRE(world.significant_npcs[0].addiction_state.clean_ticks == 0);
+}
+
+TEST_CASE("Addiction: relapse draws are deterministic across identical runs",
+          "[addiction][tier10][state][determinism]") {
+    auto run = []() {
+        auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+        AddictionState seed{};
+        seed.stage = AddictionStage::recovery;
+        seed.substance_key = "cocaine";
+        seed.craving = 0.50f;  // partial relapse probability -> RNG actually matters
+        seed.clean_ticks = 20;
+        world.significant_npcs[0].addiction_state = seed;
+
+        AddictionModule module;
+        for (int i = 0; i < 5; ++i) {
+            step_addiction(world, module);
+        }
+        return world.significant_npcs[0].addiction_state;
+    };
+
+    AddictionState a = run();
+    AddictionState b = run();
+    REQUIRE(a.stage == b.stage);
+    REQUIRE(a.clean_ticks == b.clean_ticks);
+    REQUIRE(a.consecutive_use_ticks == b.consecutive_use_ticks);
+    REQUIRE_THAT(a.craving, WithinAbs(b.craving, 1e-6f));
+}
+
+TEST_CASE("Addiction: entering active stage emits one-time impairment memory",
+          "[addiction][tier10][state]") {
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+
+    AddictionState seed{};
+    seed.stage = AddictionStage::dependent;
+    seed.substance_key = "cocaine";
+    seed.craving = 0.70f;             // at active_craving_threshold
+    seed.consecutive_use_ticks = 60;  // at active_duration_ticks
+    world.significant_npcs[0].addiction_state = seed;
+
+    AddictionModule module;
+    world.current_tick += 1;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+
+    // The dependent -> active transition fires; exactly one NPCDelta carries a
+    // new memory entry marking impaired function.
+    REQUIRE(delta.npc_deltas.size() == 1);
+    REQUIRE(delta.npc_deltas[0].new_memory_entry.has_value());
+    REQUIRE(delta.npc_deltas[0].set_addiction_state.has_value());
+    REQUIRE(delta.npc_deltas[0].set_addiction_state->stage == AddictionStage::active);
+
+    // A second tick at active stage must NOT re-emit the memory.
+    apply_deltas(world, delta);
+    world.current_tick += 1;
+    DeltaBuffer delta2{};
+    module.execute_province(0, world, delta2);
+    REQUIRE(delta2.npc_deltas.size() == 1);
+    REQUIRE_FALSE(delta2.npc_deltas[0].new_memory_entry.has_value());
+}

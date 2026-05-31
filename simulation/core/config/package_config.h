@@ -712,6 +712,11 @@ struct AddictionConfig {
     float craving_decay_rate_recovery = 0.003f;
     uint32_t full_recovery_ticks = 365;
     float recovery_success_threshold = 0.05f;
+    // Weight applied to craving when deriving relapse_probability during
+    // recovery (relapse_probability = craving * relapse_history_weight). 1.0
+    // means relapse risk tracks current craving directly; craving decays each
+    // recovery tick, so risk falls over time per INTERFACE.md.
+    float relapse_history_weight = 1.0f;
     float terminal_health_threshold = 0.15f;
     uint32_t terminal_persistence_ticks = 90;
     float rate_delta_per_active_npc = 0.001f;
