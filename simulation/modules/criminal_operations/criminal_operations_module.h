@@ -100,7 +100,10 @@ class CriminalOperationsModule : public ITickModule {
     // data, so the criminal subsystem is live in a fresh game rather than
     // depending on orgs only ever arriving via save load. Deterministic;
     // idempotent per province (skips provinces already covered by an org).
-    void form_organizations(const WorldState& state);
+    // For each newly formed org it also emits a RacketSeedDelta targeting the
+    // lowest-id legitimate business in the province, which protection_rackets
+    // drains the same tick.
+    void form_organizations(const WorldState& state, DeltaBuffer& delta);
 
     // Process one org's quarterly decision.
     void process_strategic_decision(CriminalOrganization& org, const WorldState& state,

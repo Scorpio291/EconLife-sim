@@ -282,3 +282,39 @@ TEST_CASE("CriminalOps: province with no criminal NPCs forms no org",
 
     REQUIRE(module.organizations().empty());
 }
+
+TEST_CASE("CriminalOps: formation emits a racket seed targeting a legit business",
+          "[criminal_operations][tier7]") {
+    WorldState state{};
+    state.current_tick = 0;
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+    state.significant_npcs.push_back(make_npc(12, NPCRole::criminal_operator, 0));
+
+    NPCBusiness front{};  // criminal -> income source, not a target
+    front.id = 5;
+    front.province_id = 0;
+    front.criminal_sector = true;
+    state.npc_businesses.push_back(front);
+    NPCBusiness legit_hi{};
+    legit_hi.id = 9;
+    legit_hi.province_id = 0;
+    legit_hi.criminal_sector = false;
+    state.npc_businesses.push_back(legit_hi);
+    NPCBusiness legit_lo{};  // lowest-id legit -> the racket target
+    legit_lo.id = 7;
+    legit_lo.province_id = 0;
+    legit_lo.criminal_sector = false;
+    state.npc_businesses.push_back(legit_lo);
+
+    CriminalOperationsModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_racket_seeds.size() == 1);
+    REQUIRE(delta.new_racket_seeds[0].criminal_org_id == 1);
+    REQUIRE(delta.new_racket_seeds[0].target_business_id == 7);  // lowest-id legit
+    REQUIRE(delta.new_racket_seeds[0].province_id == 0);
+}

@@ -140,6 +140,13 @@ struct WorldState {
     // deferred_work_queue.
     std::vector<LegalCaseSeedDelta> pending_legal_case_seeds;
 
+    // pending_racket_seeds: written by criminal_operations (Tier 7) when an
+    // organization establishes a protection racket. Drained by
+    // protection_rackets (Tier 8) in init_for_tick within the same tick.
+    // Same-tick consumer contract (must be empty at save time); defensively
+    // cleared on load. Not persisted.
+    std::vector<RacketSeedDelta> pending_racket_seeds;
+
     // pending_random_event_triggers: written by any module observing a
     // condition that should start a specific ActiveRandomEvent (e.g.
     // currency_exchange when a currency's foreign reserves drop below

@@ -714,6 +714,14 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_legal_case_seeds.push_back(std::move(seed));
     }
 
+    // Route protection-racket seeds into WorldState's pending queue.
+    // protection_rackets (Tier 8) drains them in init_for_tick within the
+    // same tick (criminal_operations at Tier 7 is the producer). The queue
+    // must be empty at save time.
+    for (auto& seed : delta.new_racket_seeds) {
+        world.pending_racket_seeds.push_back(std::move(seed));
+    }
+
     // Route random event triggers into WorldState's pending queue.
     // random_events drains them at the start of its execute(). Unlike
     // legal_case_seeds this queue MAY persist across tick boundaries
@@ -805,6 +813,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.scene_card_choice_deltas.clear();
     delta.calendar_commit_deltas.clear();
     delta.new_legal_case_seeds.clear();
+    delta.new_racket_seeds.clear();
     delta.new_random_event_triggers.clear();
     delta.new_property_transactions.clear();
     delta.new_loan_requests.clear();

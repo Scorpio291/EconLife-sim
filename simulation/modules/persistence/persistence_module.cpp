@@ -2308,6 +2308,11 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     // Defensively reset on load.
     out_state.pending_legal_case_seeds.clear();
 
+    // pending_racket_seeds follows the same same-tick contract
+    // (criminal_operations Tier 7 emits, protection_rackets Tier 8 drains).
+    // Defensively reset on load.
+    out_state.pending_racket_seeds.clear();
+
     // pending_property_transactions follows the same same-tick consumer
     // contract (player_actions emits at Tier 0, real_estate drains at
     // Tier 4 within the same tick). Defensively reset on load.

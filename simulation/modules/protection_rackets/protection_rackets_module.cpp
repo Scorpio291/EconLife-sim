@@ -63,7 +63,52 @@ float ProtectionRacketsModule::compute_violence_le_multiplier(float base_fill_ra
 // Province-parallel execution
 // ============================================================================
 
-void ProtectionRacketsModule::init_for_tick(const WorldState& /*state*/) {
+void ProtectionRacketsModule::init_for_tick(const WorldState& state) {
+    // Drain protection-racket seeds emitted this tick by criminal_operations
+    // (Tier 7). Each seed opens a new racket on a legitimate target business,
+    // deriving demand from the business's revenue. Runs on the main thread in
+    // init_for_tick, before the province-parallel dispatch. Same-tick queue:
+    // cleared after draining via the const_cast carve-out (cf. legal_process).
+    if (!state.pending_racket_seeds.empty()) {
+        for (const auto& seed : state.pending_racket_seeds) {
+            // Dedup: one racket per target business.
+            bool exists = false;
+            for (const auto& r : rackets_) {
+                if (r.target_business_id == seed.target_business_id) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (exists)
+                continue;
+
+            const NPCBusiness* target = nullptr;
+            for (const auto& biz : state.npc_businesses) {
+                if (biz.id == seed.target_business_id) {
+                    target = &biz;
+                    break;
+                }
+            }
+            if (!target)
+                continue;
+
+            ProtectionRacket racket{};
+            racket.id = seed.target_business_id;  // unique: one racket per target
+            racket.criminal_org_id = seed.criminal_org_id;
+            racket.target_business_id = seed.target_business_id;
+            racket.demand_per_tick =
+                compute_demand_per_tick(target->revenue_per_tick, cfg_.demand_rate);
+            racket.status = RacketStatus::active;
+            racket.escalation_stage = RacketEscalationStage::demand_issued;
+            racket.last_payment_tick = state.current_tick;
+            racket.demand_issued_tick = state.current_tick;
+            racket.community_grievance_contribution = compute_grievance_contribution(
+                racket.demand_per_tick, cfg_.grievance_per_demand_unit);
+            rackets_.push_back(std::move(racket));
+        }
+        const_cast<std::vector<RacketSeedDelta>&>(state.pending_racket_seeds).clear();
+    }
+
     // Sort rackets once on the main thread before parallel dispatch.
     std::sort(rackets_.begin(), rackets_.end(),
               [](const ProtectionRacket& a, const ProtectionRacket& b) { return a.id < b.id; });

@@ -258,6 +258,19 @@ struct RandomEventTriggerDelta {
     float severity;  // 0.0–1.0; clamped to template's [min,max] range
 };
 
+// Protection-racket seed — request to start a racket on a target business.
+// Emitted by criminal_operations (Tier 7) when an organization establishes
+// extortion in its province. Routed by apply_deltas into
+// WorldState.pending_racket_seeds; protection_rackets (Tier 8) drains the
+// queue in init_for_tick within the same tick, looking the target business up
+// in WorldState to derive its demand_per_tick. Same-tick contract: the queue
+// must be empty at save time (defensively cleared on load).
+struct RacketSeedDelta {
+    uint32_t criminal_org_id;
+    uint32_t target_business_id;
+    uint32_t province_id;
+};
+
 // Property transaction request — player_actions (and future NPC seller
 // logic) emit these to drive real-estate market state changes. Routed
 // by apply_deltas into WorldState.pending_property_transactions;
@@ -439,6 +452,7 @@ struct DeltaBuffer {
     std::vector<NewFacilityDelta> new_facilities;                       // merge: append
     std::vector<ConstructionBidsRequest> new_construction_requests;     // merge: append
     std::vector<ConstructionAwardRequest> new_construction_awards;      // merge: append
+    std::vector<RacketSeedDelta> new_racket_seeds;                      // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

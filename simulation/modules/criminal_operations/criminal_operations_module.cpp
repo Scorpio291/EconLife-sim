@@ -113,7 +113,7 @@ float CriminalOperationsModule::initial_dominance_seed(float expansion_initial_d
 // Execute
 // ---------------------------------------------------------------------------
 
-void CriminalOperationsModule::form_organizations(const WorldState& state) {
+void CriminalOperationsModule::form_organizations(const WorldState& state, DeltaBuffer& delta) {
     if (formed_)
         return;
     formed_ = true;
@@ -149,11 +149,18 @@ void CriminalOperationsModule::form_organizations(const WorldState& state) {
         }
     }
 
-    // Criminal-sector businesses become the org's income sources.
+    // Criminal-sector businesses become the org's income sources; the
+    // lowest-id legitimate business in the province becomes the racket target.
     std::map<uint32_t, std::vector<uint32_t>> criminal_biz_by_province;
+    std::map<uint32_t, uint32_t> racket_target_by_province;
     for (const auto& biz : state.npc_businesses) {
-        if (biz.criminal_sector)
+        if (biz.criminal_sector) {
             criminal_biz_by_province[biz.province_id].push_back(biz.id);
+        } else {
+            auto it = racket_target_by_province.find(biz.province_id);
+            if (it == racket_target_by_province.end() || biz.id < it->second)
+                racket_target_by_province[biz.province_id] = biz.id;
+        }
     }
 
     // std::map iterates in ascending key order, so provinces (and the npc/biz
@@ -192,6 +199,17 @@ void CriminalOperationsModule::form_organizations(const WorldState& state) {
         org.conflict_state = TerritorialConflictStage::none;
         org.conflict_rival_org_id = 0;
 
+        // Seed a protection racket on the lowest-id legitimate business in the
+        // province (if any). protection_rackets drains this the same tick.
+        auto tit = racket_target_by_province.find(prov_id);
+        if (tit != racket_target_by_province.end()) {
+            RacketSeedDelta seed{};
+            seed.criminal_org_id = org.id;
+            seed.target_business_id = tit->second;
+            seed.province_id = prov_id;
+            delta.new_racket_seeds.push_back(seed);
+        }
+
         organizations_.push_back(std::move(org));
     }
 }
@@ -200,7 +218,7 @@ void CriminalOperationsModule::execute(const WorldState& state, DeltaBuffer& del
     // Bootstrap the org topology from world-gen criminal NPCs/businesses on the
     // first tick (or first tick after a load), so the criminal subsystem is
     // live in a fresh game instead of only ever loading orgs from a save.
-    form_organizations(state);
+    form_organizations(state, delta);
 
     std::sort(
         organizations_.begin(), organizations_.end(),

@@ -2,8 +2,10 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/config/package_config.h"
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/criminal_operations/criminal_operations_module.h"
 #include "modules/protection_rackets/protection_rackets_module.h"
 
 using namespace econlife;
@@ -131,4 +133,82 @@ TEST_CASE("ProtectionRackets: warning memory weight default is -0.5",
           "[protection_rackets][tier8]") {
     REQUIRE_THAT(ProtectionRacketsConfig{}.memory_emotional_weight_warning,
                  WithinAbs(-0.5f, 0.001f));
+}
+
+// ============================================================================
+// Racket seeding (criminal_operations -> protection_rackets, same tick)
+// ============================================================================
+
+TEST_CASE("ProtectionRackets: init_for_tick drains a seed into a live racket",
+          "[protection_rackets][tier8]") {
+    WorldState state{};
+    state.current_tick = 50;
+
+    NPCBusiness target{};
+    target.id = 7;
+    target.province_id = 0;
+    target.revenue_per_tick = 1000.0f;
+    state.npc_businesses.push_back(target);
+
+    RacketSeedDelta seed{};
+    seed.criminal_org_id = 1;
+    seed.target_business_id = 7;
+    seed.province_id = 0;
+    state.pending_racket_seeds.push_back(seed);
+
+    ProtectionRacketsModule module;
+    module.init_for_tick(state);
+
+    REQUIRE(module.rackets().size() == 1);
+    const ProtectionRacket& r = module.rackets()[0];
+    REQUIRE(r.target_business_id == 7);
+    REQUIRE(r.criminal_org_id == 1);
+    REQUIRE(r.status == RacketStatus::active);
+    // demand = revenue(1000) * demand_rate(0.08) = 80.
+    REQUIRE_THAT(r.demand_per_tick, WithinAbs(80.0f, 1e-3f));
+    // Same-tick queue drained.
+    REQUIRE(state.pending_racket_seeds.empty());
+
+    // Idempotent: a second seed on the same target makes no duplicate.
+    state.pending_racket_seeds.push_back(seed);
+    module.init_for_tick(state);
+    REQUIRE(module.rackets().size() == 1);
+}
+
+TEST_CASE("ProtectionRackets: end-to-end seed from criminal_operations becomes a racket",
+          "[protection_rackets][tier8]") {
+    WorldState state{};
+    state.current_tick = 0;
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+
+    NPC op{};
+    op.id = 12;
+    op.role = NPCRole::criminal_operator;
+    op.status = NPCStatus::active;
+    op.current_province_id = 0;
+    state.significant_npcs.push_back(op);
+
+    NPCBusiness legit{};
+    legit.id = 7;
+    legit.province_id = 0;
+    legit.revenue_per_tick = 500.0f;
+    legit.criminal_sector = false;
+    state.npc_businesses.push_back(legit);
+
+    // Producer emits, apply_deltas routes into the pending queue.
+    CriminalOperationsModule crimops;
+    DeltaBuffer delta{};
+    crimops.execute(state, delta);
+    apply_deltas(state, delta);
+    REQUIRE(state.pending_racket_seeds.size() == 1);
+
+    // Consumer drains it the same tick.
+    ProtectionRacketsModule rackets;
+    rackets.init_for_tick(state);
+    REQUIRE(rackets.rackets().size() == 1);
+    REQUIRE(rackets.rackets()[0].target_business_id == 7);
+    REQUIRE(state.pending_racket_seeds.empty());
 }
