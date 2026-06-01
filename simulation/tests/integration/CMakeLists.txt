@@ -2,6 +2,7 @@
 add_executable(econlife_integration_tests
     full_year_test.cpp
     world_gen_integration_test.cpp
+    criminal_subsystem_integration_test.cpp
 )
 
 target_link_libraries(econlife_integration_tests PRIVATE
