@@ -81,6 +81,41 @@ bool MoneyLaunderingModule::is_operation_completed(float laundered_so_far, float
 // ============================================================================
 
 void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Drain laundering seeds emitted this tick by criminal_operations (the
+    // producer runs earlier in tick order). Each seed opens a shell-company
+    // operation for the org's illicit cash; per-method rates come from config.
+    // Same-tick queue: cleared after draining via the const_cast carve-out.
+    if (!state.pending_laundering_seeds.empty()) {
+        for (const auto& seed : state.pending_laundering_seeds) {
+            // Dedup: one seeded operation per actor (org leadership).
+            bool exists = false;
+            for (const auto& op : operations_) {
+                if (op.id == seed.actor_id) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (exists || seed.dirty_amount <= 0.0f)
+                continue;
+
+            LaunderingOperation op{};
+            op.id = seed.actor_id;  // one seeded op per actor
+            op.actor_id = seed.actor_id;
+            op.method = LaunderingMethod::shell_company_chain;
+            op.dirty_amount = seed.dirty_amount;
+            op.laundered_so_far = 0.0f;
+            op.launder_rate_per_tick = cfg_.seed_launder_rate_per_tick;
+            op.conversion_loss_rate = cfg_.seed_conversion_loss_rate;
+            op.started_tick = state.current_tick;
+            op.destination_business_id = seed.destination_business_id;
+            op.evidence_generated_total = 0.0f;
+            op.paused = false;
+            op.completed = false;
+            operations_.push_back(std::move(op));
+        }
+        const_cast<std::vector<LaunderingSeedDelta>&>(state.pending_laundering_seeds).clear();
+    }
+
     // Process all active operations sorted by id ascending for determinism
     std::sort(
         operations_.begin(), operations_.end(),

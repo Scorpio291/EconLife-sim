@@ -318,3 +318,56 @@ TEST_CASE("CriminalOps: formation emits a racket seed targeting a legit business
     REQUIRE(delta.new_racket_seeds[0].target_business_id == 7);  // lowest-id legit
     REQUIRE(delta.new_racket_seeds[0].province_id == 0);
 }
+
+TEST_CASE("CriminalOps: formation emits a laundering seed for illicit income",
+          "[criminal_operations][tier7]") {
+    WorldState state{};
+    state.current_tick = 0;
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+    state.significant_npcs.push_back(make_npc(12, NPCRole::criminal_operator, 0));
+
+    NPCBusiness front{};
+    front.id = 5;
+    front.province_id = 0;
+    front.criminal_sector = true;
+    front.revenue_per_tick = 100.0f;
+    state.npc_businesses.push_back(front);
+
+    CriminalOperationsModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_laundering_seeds.size() == 1);
+    REQUIRE(delta.new_laundering_seeds[0].actor_id == 12);  // org leadership
+    REQUIRE(delta.new_laundering_seeds[0].destination_business_id == 5);
+    // dirty = revenue(100) * launder_seed_income_ticks(30) = 3000.
+    REQUIRE_THAT(delta.new_laundering_seeds[0].dirty_amount,
+                 Catch::Matchers::WithinAbs(3000.0f, 1e-2f));
+}
+
+TEST_CASE("CriminalOps: no criminal businesses -> no laundering seed",
+          "[criminal_operations][tier7]") {
+    WorldState state{};
+    state.current_tick = 0;
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+    state.significant_npcs.push_back(make_npc(12, NPCRole::criminal_operator, 0));
+    // Only a legitimate business present.
+    NPCBusiness legit{};
+    legit.id = 7;
+    legit.province_id = 0;
+    legit.criminal_sector = false;
+    legit.revenue_per_tick = 100.0f;
+    state.npc_businesses.push_back(legit);
+
+    CriminalOperationsModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_laundering_seeds.empty());
+}

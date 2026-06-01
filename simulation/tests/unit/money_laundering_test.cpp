@@ -2,8 +2,10 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/config/package_config.h"
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/criminal_operations/criminal_operations_module.h"
 #include "modules/money_laundering/money_laundering_module.h"
 
 using namespace econlife;
@@ -121,4 +123,75 @@ TEST_CASE("MoneyLaundering: NPC org capacity limit", "[money_laundering][tier8]"
     float max_rate = default_cfg.org_capacity_multiplier * 100000.0f /
                      static_cast<float>(default_cfg.ticks_per_quarter);
     REQUIRE_THAT(max_rate, WithinAbs(277.78f, 0.1f));
+}
+
+// ============================================================================
+// Laundering seeding (criminal_operations -> money_laundering, same tick)
+// ============================================================================
+
+TEST_CASE("MoneyLaundering: execute drains a seed into a live operation",
+          "[money_laundering][tier8]") {
+    WorldState state{};
+    state.current_tick = 40;
+    LaunderingSeedDelta seed{};
+    seed.actor_id = 12;
+    seed.dirty_amount = 3000.0f;
+    seed.destination_business_id = 5;
+    state.pending_laundering_seeds.push_back(seed);
+
+    MoneyLaunderingModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.operations().size() == 1);
+    const LaunderingOperation& op = module.operations()[0];
+    REQUIRE(op.actor_id == 12);
+    REQUIRE(op.destination_business_id == 5);
+    REQUIRE_THAT(op.dirty_amount, WithinAbs(3000.0f, 1e-2f));
+    REQUIRE(op.launder_rate_per_tick > 0.0f);
+    REQUIRE(op.laundered_so_far > 0.0f);  // first tick already washed some
+    REQUIRE(state.pending_laundering_seeds.empty());
+
+    // Idempotent: re-seeding the same actor does not duplicate.
+    state.pending_laundering_seeds.push_back(seed);
+    DeltaBuffer delta2{};
+    module.execute(state, delta2);
+    REQUIRE(module.operations().size() == 1);
+}
+
+TEST_CASE("MoneyLaundering: end-to-end seed from criminal_operations becomes an operation",
+          "[money_laundering][tier8]") {
+    WorldState state{};
+    state.current_tick = 0;
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+
+    NPC op{};
+    op.id = 12;
+    op.role = NPCRole::criminal_operator;
+    op.status = NPCStatus::active;
+    op.current_province_id = 0;
+    state.significant_npcs.push_back(op);
+
+    NPCBusiness front{};
+    front.id = 5;
+    front.province_id = 0;
+    front.criminal_sector = true;
+    front.revenue_per_tick = 100.0f;
+    state.npc_businesses.push_back(front);
+
+    CriminalOperationsModule crimops;
+    DeltaBuffer delta{};
+    crimops.execute(state, delta);
+    apply_deltas(state, delta);
+    REQUIRE(state.pending_laundering_seeds.size() == 1);
+
+    MoneyLaunderingModule launder;
+    DeltaBuffer delta2{};
+    launder.execute(state, delta2);
+    REQUIRE(launder.operations().size() == 1);
+    REQUIRE(launder.operations()[0].actor_id == 12);
+    REQUIRE(state.pending_laundering_seeds.empty());
 }

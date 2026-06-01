@@ -722,6 +722,13 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.pending_racket_seeds.push_back(std::move(seed));
     }
 
+    // Route money-laundering seeds into WorldState's pending queue.
+    // money_laundering (Tier 9) drains them at the start of its execute()
+    // within the same tick (criminal_operations at Tier 7 is the producer).
+    for (auto& seed : delta.new_laundering_seeds) {
+        world.pending_laundering_seeds.push_back(std::move(seed));
+    }
+
     // Route random event triggers into WorldState's pending queue.
     // random_events drains them at the start of its execute(). Unlike
     // legal_case_seeds this queue MAY persist across tick boundaries
@@ -814,6 +821,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.calendar_commit_deltas.clear();
     delta.new_legal_case_seeds.clear();
     delta.new_racket_seeds.clear();
+    delta.new_laundering_seeds.clear();
     delta.new_random_event_triggers.clear();
     delta.new_property_transactions.clear();
     delta.new_loan_requests.clear();

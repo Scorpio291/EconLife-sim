@@ -271,6 +271,18 @@ struct RacketSeedDelta {
     uint32_t province_id;
 };
 
+// Money-laundering seed — request to open a laundering operation for an
+// organization's illicit cash. Emitted by criminal_operations (Tier 7);
+// routed into WorldState.pending_laundering_seeds and drained by
+// money_laundering (Tier 9) at the start of its execute() the same tick,
+// which fills in the per-method launder/loss rates from config. Same-tick
+// contract: empty at save time (defensively cleared on load).
+struct LaunderingSeedDelta {
+    uint32_t actor_id;                 // org leadership NPC doing the laundering
+    float dirty_amount;                // illicit cash to wash
+    uint32_t destination_business_id;  // front the clean money lands in (0 = direct)
+};
+
 // Property transaction request — player_actions (and future NPC seller
 // logic) emit these to drive real-estate market state changes. Routed
 // by apply_deltas into WorldState.pending_property_transactions;
@@ -453,6 +465,7 @@ struct DeltaBuffer {
     std::vector<ConstructionBidsRequest> new_construction_requests;     // merge: append
     std::vector<ConstructionAwardRequest> new_construction_awards;      // merge: append
     std::vector<RacketSeedDelta> new_racket_seeds;                      // merge: append
+    std::vector<LaunderingSeedDelta> new_laundering_seeds;              // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

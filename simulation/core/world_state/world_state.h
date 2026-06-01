@@ -147,6 +147,12 @@ struct WorldState {
     // cleared on load. Not persisted.
     std::vector<RacketSeedDelta> pending_racket_seeds;
 
+    // pending_laundering_seeds: written by criminal_operations (Tier 7) when an
+    // organization launders illicit cash. Drained by money_laundering (Tier 9)
+    // at the start of its execute() within the same tick. Same-tick contract;
+    // defensively cleared on load. Not persisted.
+    std::vector<LaunderingSeedDelta> pending_laundering_seeds;
+
     // pending_random_event_triggers: written by any module observing a
     // condition that should start a specific ActiveRandomEvent (e.g.
     // currency_exchange when a currency's foreign reserves drop below

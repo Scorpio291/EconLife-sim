@@ -153,9 +153,11 @@ void CriminalOperationsModule::form_organizations(const WorldState& state, Delta
     // lowest-id legitimate business in the province becomes the racket target.
     std::map<uint32_t, std::vector<uint32_t>> criminal_biz_by_province;
     std::map<uint32_t, uint32_t> racket_target_by_province;
+    std::map<uint32_t, float> criminal_revenue_by_province;
     for (const auto& biz : state.npc_businesses) {
         if (biz.criminal_sector) {
             criminal_biz_by_province[biz.province_id].push_back(biz.id);
+            criminal_revenue_by_province[biz.province_id] += biz.revenue_per_tick;
         } else {
             auto it = racket_target_by_province.find(biz.province_id);
             if (it == racket_target_by_province.end() || biz.id < it->second)
@@ -208,6 +210,22 @@ void CriminalOperationsModule::form_organizations(const WorldState& state, Delta
             seed.target_business_id = tit->second;
             seed.province_id = prov_id;
             delta.new_racket_seeds.push_back(seed);
+        }
+
+        // Seed a laundering operation for the org's illicit income, washed
+        // through its lowest-id criminal front. money_laundering drains this
+        // the same tick. Only when the org actually has criminal income.
+        if (!org.income_source_ids.empty()) {
+            auto rit = criminal_revenue_by_province.find(prov_id);
+            float monthly_dirty = (rit != criminal_revenue_by_province.end() ? rit->second : 0.0f) *
+                                  cfg_.launder_seed_income_ticks;
+            if (monthly_dirty > 0.0f) {
+                LaunderingSeedDelta lseed{};
+                lseed.actor_id = org.leadership_npc_id;
+                lseed.dirty_amount = monthly_dirty;
+                lseed.destination_business_id = org.income_source_ids.front();
+                delta.new_laundering_seeds.push_back(lseed);
+            }
         }
 
         organizations_.push_back(std::move(org));

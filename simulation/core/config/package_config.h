@@ -605,6 +605,9 @@ struct CriminalOperationsConfig {
     // (one org per province with criminal NPCs). Drives the initial
     // cash_level the strategic-decision matrix reads.
     float initial_org_cash = 10000.0f;
+    // Ticks of criminal-business revenue bundled into the dirty_amount of the
+    // laundering operation seeded on org formation (a month of illicit income).
+    float launder_seed_income_ticks = 30.0f;
 };
 
 struct CommunityResponseConfig {
@@ -777,6 +780,11 @@ struct MoneyLaunderingConfig {
     uint32_t structuring_deposit_count_threshold = 8;
     float org_capacity_multiplier = 0.25f;
     uint32_t ticks_per_quarter = 90;
+    // Defaults applied to a laundering operation opened from a
+    // LaunderingSeedDelta (criminal_operations producer). Placeholder rates,
+    // tunable; the seed itself carries only actor/amount/destination.
+    float seed_launder_rate_per_tick = 0.02f;
+    float seed_conversion_loss_rate = 0.05f;
 };
 
 struct DesignerDrugConfig {
