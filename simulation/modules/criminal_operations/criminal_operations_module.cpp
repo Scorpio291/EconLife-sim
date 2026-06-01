@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
+#include <set>
+#include <vector>
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -110,7 +113,95 @@ float CriminalOperationsModule::initial_dominance_seed(float expansion_initial_d
 // Execute
 // ---------------------------------------------------------------------------
 
+void CriminalOperationsModule::form_organizations(const WorldState& state) {
+    if (formed_)
+        return;
+    formed_ = true;
+
+    // Provinces already covered by an organization. On a loaded save the orgs
+    // arrive via deserialize_state with their province dominance populated, so
+    // this makes formation a no-op for them (idempotent).
+    std::set<uint32_t> covered;
+    for (const auto& org : organizations_) {
+        for (const auto& [prov_id, dom] : org.dominance_by_province) {
+            (void)dom;
+            covered.insert(prov_id);
+        }
+    }
+
+    auto is_criminal_role = [](NPCRole r) {
+        return r == NPCRole::criminal_operator || r == NPCRole::criminal_enforcer ||
+               r == NPCRole::fixer;
+    };
+
+    // Bucket active criminal NPCs by current province; track the lowest-id
+    // criminal_operator per province for leadership.
+    std::map<uint32_t, std::vector<uint32_t>> criminal_npcs_by_province;
+    std::map<uint32_t, uint32_t> leader_by_province;
+    for (const auto& npc : state.significant_npcs) {
+        if (npc.status != NPCStatus::active || !is_criminal_role(npc.role))
+            continue;
+        criminal_npcs_by_province[npc.current_province_id].push_back(npc.id);
+        if (npc.role == NPCRole::criminal_operator) {
+            auto it = leader_by_province.find(npc.current_province_id);
+            if (it == leader_by_province.end() || npc.id < it->second)
+                leader_by_province[npc.current_province_id] = npc.id;
+        }
+    }
+
+    // Criminal-sector businesses become the org's income sources.
+    std::map<uint32_t, std::vector<uint32_t>> criminal_biz_by_province;
+    for (const auto& biz : state.npc_businesses) {
+        if (biz.criminal_sector)
+            criminal_biz_by_province[biz.province_id].push_back(biz.id);
+    }
+
+    // std::map iterates in ascending key order, so provinces (and the npc/biz
+    // id vectors after sorting) are processed deterministically.
+    for (auto& [prov_id, npc_ids] : criminal_npcs_by_province) {
+        if (covered.count(prov_id) || npc_ids.empty())
+            continue;
+        std::sort(npc_ids.begin(), npc_ids.end());
+
+        CriminalOrganization org{};
+        org.id = prov_id + 1;  // stable per province; 0 is reserved for "none"
+        auto lit = leader_by_province.find(prov_id);
+        org.leadership_npc_id = (lit != leader_by_province.end()) ? lit->second : npc_ids.front();
+        org.member_npc_ids = npc_ids;
+
+        auto bit = criminal_biz_by_province.find(prov_id);
+        if (bit != criminal_biz_by_province.end()) {
+            org.income_source_ids = bit->second;
+            std::sort(org.income_source_ids.begin(), org.income_source_ids.end());
+        }
+
+        org.cash = cfg_.initial_org_cash;
+
+        // Seed per-province dominance from the world-gen criminal baseline if
+        // present, else the config default.
+        float baseline = cfg_.expansion_initial_dominance;
+        if (prov_id < state.provinces.size() && state.provinces[prov_id].cohort_stats) {
+            float seed = state.provinces[prov_id].cohort_stats->criminal_dominance_index;
+            if (seed > 0.0f)
+                baseline = seed;
+        }
+        org.dominance_by_province[prov_id] = baseline;
+
+        org.decision_day_offset = compute_decision_offset(org.id, cfg_.quarterly_interval);
+        org.strategic_decision_tick = state.current_tick + org.decision_day_offset;
+        org.conflict_state = TerritorialConflictStage::none;
+        org.conflict_rival_org_id = 0;
+
+        organizations_.push_back(std::move(org));
+    }
+}
+
 void CriminalOperationsModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Bootstrap the org topology from world-gen criminal NPCs/businesses on the
+    // first tick (or first tick after a load), so the criminal subsystem is
+    // live in a fresh game instead of only ever loading orgs from a save.
+    form_organizations(state);
+
     std::sort(
         organizations_.begin(), organizations_.end(),
         [](const CriminalOrganization& a, const CriminalOrganization& b) { return a.id < b.id; });

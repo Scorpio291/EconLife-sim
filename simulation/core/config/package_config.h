@@ -601,6 +601,10 @@ struct CriminalOperationsConfig {
     uint32_t min_expansion_team_size = 2;
     float expansion_refund_fraction = 0.50f;
     float dormant_dominance_decay_rate = 0.001f;
+    // Starting cash for an organization assembled by the formation bootstrap
+    // (one org per province with criminal NPCs). Drives the initial
+    // cash_level the strategic-decision matrix reads.
+    float initial_org_cash = 10000.0f;
 };
 
 struct CommunityResponseConfig {

@@ -199,3 +199,86 @@ TEST_CASE("Personnel violence generates evidence", "[criminal_operations][tier7]
         CHECK(delta.evidence_deltas[0].new_token->type == EvidenceType::physical);
     }
 }
+
+// =============================================================================
+// Organization formation bootstrap
+// =============================================================================
+// criminal_operations only ever loaded orgs from a save; world-gen creates the
+// raw materials (criminal NPCs + criminal-sector businesses) but nothing
+// assembled them. These tests cover the formation bootstrap that makes the
+// subsystem live in a fresh game: one org per province with criminal NPCs.
+
+namespace {
+NPC make_npc(uint32_t id, NPCRole role, uint32_t province) {
+    NPC n{};
+    n.id = id;
+    n.role = role;
+    n.status = NPCStatus::active;
+    n.current_province_id = province;
+    n.home_province_id = province;
+    return n;
+}
+}  // namespace
+
+TEST_CASE("CriminalOps: formation assembles one org per criminal province",
+          "[criminal_operations][tier7]") {
+    WorldState state{};
+    state.current_tick = 0;
+
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.cohort_stats->criminal_dominance_index = 0.05f;  // world-gen baseline
+    state.provinces.push_back(std::move(prov));
+
+    // Criminal NPCs (operator + enforcer) plus a non-criminal that must be
+    // excluded; an enforcer with the lower id must NOT become leader.
+    state.significant_npcs.push_back(make_npc(11, NPCRole::criminal_enforcer, 0));
+    state.significant_npcs.push_back(make_npc(12, NPCRole::criminal_operator, 0));
+    state.significant_npcs.push_back(make_npc(13, NPCRole::worker, 0));
+
+    NPCBusiness front{};
+    front.id = 5;
+    front.province_id = 0;
+    front.criminal_sector = true;
+    state.npc_businesses.push_back(front);
+    NPCBusiness legit{};
+    legit.id = 6;
+    legit.province_id = 0;
+    legit.criminal_sector = false;
+    state.npc_businesses.push_back(legit);
+
+    CriminalOperationsModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.organizations().size() == 1);
+    const CriminalOrganization& org = module.organizations()[0];
+    REQUIRE(org.id == 1);                  // province_id + 1
+    REQUIRE(org.leadership_npc_id == 12);  // the criminal_operator, not the lower-id enforcer
+    REQUIRE(org.member_npc_ids == std::vector<uint32_t>{11, 12});
+    REQUIRE(org.income_source_ids == std::vector<uint32_t>{5});  // only the criminal-sector front
+    REQUIRE_THAT(org.dominance_by_province.at(0), Catch::Matchers::WithinAbs(0.05f, 1e-5f));
+
+    // Idempotent: a second tick must not duplicate the org.
+    DeltaBuffer delta2{};
+    module.execute(state, delta2);
+    REQUIRE(module.organizations().size() == 1);
+}
+
+TEST_CASE("CriminalOps: province with no criminal NPCs forms no org",
+          "[criminal_operations][tier7]") {
+    WorldState state{};
+    state.current_tick = 0;
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+    state.significant_npcs.push_back(make_npc(10, NPCRole::worker, 0));
+
+    CriminalOperationsModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.organizations().empty());
+}

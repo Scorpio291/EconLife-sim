@@ -89,6 +89,18 @@ class CriminalOperationsModule : public ITickModule {
     CriminalOperationsConfig cfg_;
     std::vector<CriminalOrganization> organizations_;
     std::vector<ExpansionTeam> active_expansions_;
+    // One-shot guard for the formation bootstrap. Not persisted: after a load
+    // it resets to false and form_organizations() runs once more, but the
+    // per-province idempotency check makes that pass a no-op for provinces
+    // already covered by a loaded org.
+    bool formed_ = false;
+
+    // Assemble one CriminalOrganization per province that contains criminal
+    // NPCs (criminal_operator / criminal_enforcer / fixer), from world-gen
+    // data, so the criminal subsystem is live in a fresh game rather than
+    // depending on orgs only ever arriving via save load. Deterministic;
+    // idempotent per province (skips provinces already covered by an org).
+    void form_organizations(const WorldState& state);
 
     // Process one org's quarterly decision.
     void process_strategic_decision(CriminalOrganization& org, const WorldState& state,
