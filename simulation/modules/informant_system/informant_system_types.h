@@ -37,7 +37,7 @@ struct InformantRecord {
     uint32_t npc_id;
     InformantStatus status;
     float flip_probability;  // computed from NPC state
-    float base_flip_rate;    // 0.10 default
+    float base_flip_rate;    // InformantConfig::base_flip_rate (default 0.005)
     uint32_t arrest_tick;    // when NPC was arrested/pressured
     uint32_t cooperation_start_tick;
     uint32_t compartmentalization_level;  // number of intermediaries between NPC and player
