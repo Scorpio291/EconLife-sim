@@ -93,3 +93,103 @@ TEST_CASE("Informant: constants match spec", "[informant_system][tier9]") {
     REQUIRE_THAT(50000.0f, WithinAbs(50000.0f, 1.0f));
     REQUIRE_THAT(3.0f, WithinAbs(3.0f, 0.01f));
 }
+
+// ============================================================================
+// Self-seeding from imprisoned criminal NPCs (makes the subsystem live)
+// ============================================================================
+
+namespace {
+NPC make_imprisoned_criminal(uint32_t id, NPCRole role) {
+    NPC n{};
+    n.id = id;
+    n.role = role;
+    n.status = NPCStatus::imprisoned;
+    n.current_province_id = 0;
+    return n;
+}
+}  // namespace
+
+TEST_CASE("Informant: execute self-seeds a record for an imprisoned criminal NPC",
+          "[informant_system][tier9]") {
+    WorldState state{};
+    state.current_tick = 100;
+    state.world_seed = 42;
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    state.significant_npcs.push_back(make_imprisoned_criminal(7, NPCRole::criminal_operator));
+
+    InformantSystemModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.records().size() == 1);
+    const InformantRecord& rec = module.records()[0];
+    REQUIRE(rec.npc_id == 7);
+    REQUIRE(rec.arrest_tick == 100);
+    REQUIRE(rec.compartmentalization_level == 0u);  // operator = core knowledge
+
+    // Idempotent: a second tick does not duplicate the record.
+    DeltaBuffer delta2{};
+    module.execute(state, delta2);
+    REQUIRE(module.records().size() == 1);
+}
+
+TEST_CASE("Informant: non-criminal or free NPCs are not seeded", "[informant_system][tier9]") {
+    WorldState state{};
+    state.current_tick = 5;
+    state.world_seed = 1;
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    // Imprisoned but non-criminal -> skipped.
+    NPC worker = make_imprisoned_criminal(1, NPCRole::worker);
+    state.significant_npcs.push_back(worker);
+    // Criminal but not imprisoned -> skipped.
+    NPC freeCriminal{};
+    freeCriminal.id = 2;
+    freeCriminal.role = NPCRole::criminal_enforcer;
+    freeCriminal.status = NPCStatus::active;
+    state.significant_npcs.push_back(freeCriminal);
+
+    InformantSystemModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.records().empty());
+}
+
+TEST_CASE("Informant: seeded record can flip and emit testimonial evidence",
+          "[informant_system][tier9]") {
+    WorldState state{};
+    state.current_tick = 50;
+    state.world_seed = 12345;
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    // High flip propensity: high risk tolerance, low trust, with knowledge.
+    NPC informant = make_imprisoned_criminal(7, NPCRole::criminal_operator);
+    informant.risk_tolerance = 0.95f;
+    KnowledgeEntry ke{};
+    ke.subject_id = 999;
+    ke.confidence = 0.9f;
+    informant.known_evidence.push_back(ke);
+    state.significant_npcs.push_back(informant);
+
+    // Force base_flip_rate high so the flip is near-certain this tick.
+    InformantConfig cfg{};
+    cfg.base_flip_rate = 1.0f;
+    cfg.max_flip_probability = 1.0f;
+    InformantSystemModule module(cfg);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.records().size() == 1);
+    REQUIRE(module.records()[0].status == InformantStatus::cooperating);
+    // Cooperation produced a testimonial evidence token from disclosed knowledge.
+    REQUIRE_FALSE(delta.evidence_deltas.empty());
+}

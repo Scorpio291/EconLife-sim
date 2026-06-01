@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <set>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
@@ -44,6 +45,43 @@ float InformantSystemModule::compute_flip_probability(
 }
 
 void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Self-seed informant records for imprisoned criminal NPCs not yet tracked.
+    // The recruitment signal is NPCStatus::imprisoned on a criminal-role NPC —
+    // a WorldState fact this module observes directly (legal_process sets it
+    // upstream, and informant_system runs_after legal_process), so no
+    // cross-module producer or seed queue is needed; the flip lifecycle below
+    // already gates on `imprisoned`. Without
+    // this, records_ was only ever populated by deserialize_state and the
+    // whole subsystem was dead in a fresh game. Deterministic: significant_npcs
+    // are scanned in order and deduped by npc_id.
+    {
+        std::set<uint32_t> tracked;
+        for (const auto& rec : records_)
+            tracked.insert(rec.npc_id);
+        auto is_criminal_role = [](NPCRole r) {
+            return r == NPCRole::criminal_operator || r == NPCRole::criminal_enforcer ||
+                   r == NPCRole::fixer;
+        };
+        for (const auto& npc : state.significant_npcs) {
+            if (npc.status != NPCStatus::imprisoned || !is_criminal_role(npc.role))
+                continue;
+            if (tracked.count(npc.id))
+                continue;
+            InformantRecord rec{};
+            rec.npc_id = npc.id;
+            rec.status = InformantStatus::not_cooperating;
+            rec.flip_probability = 0.0f;
+            rec.base_flip_rate = cfg_.base_flip_rate;
+            rec.arrest_tick = state.current_tick;
+            rec.cooperation_start_tick = 0;
+            // Peripheral roles (enforcer/fixer) know less of the org's
+            // operations -> more compartmentalized -> lower flip probability.
+            rec.compartmentalization_level = (npc.role == NPCRole::criminal_operator) ? 0u : 1u;
+            records_.push_back(std::move(rec));
+            tracked.insert(npc.id);
+        }
+    }
+
     // Tick-level RNG seed: world_seed mixed with current tick, then forked per-NPC.
     DeterministicRNG tick_rng(state.world_seed ^ static_cast<uint64_t>(state.current_tick));
 
