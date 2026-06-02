@@ -602,11 +602,13 @@ struct CriminalOperationsConfig {
     float expansion_refund_fraction = 0.50f;
     float dormant_dominance_decay_rate = 0.001f;
     // Starting cash for an organization assembled by the formation bootstrap
-    // (one org per province with criminal NPCs). Drives the initial
-    // cash_level the strategic-decision matrix reads.
+    // (one org per province with criminal NPCs). Drives the initial cash_level
+    // the strategic-decision matrix reads. Anchored to one full expansion team
+    // (cash_per_expansion_slot * min_expansion_team_size = 5000 * 2) so a fresh
+    // org can afford exactly one expansion before needing income.
     float initial_org_cash = 10000.0f;
     // Ticks of criminal-business revenue bundled into the dirty_amount of the
-    // laundering operation seeded on org formation (a month of illicit income).
+    // laundering operation seeded on org formation (a month, ticks_per_month).
     float launder_seed_income_ticks = 30.0f;
 };
 
@@ -780,10 +782,12 @@ struct MoneyLaunderingConfig {
     uint32_t structuring_deposit_count_threshold = 8;
     float org_capacity_multiplier = 0.25f;
     uint32_t ticks_per_quarter = 90;
-    // Defaults applied to a laundering operation opened from a
-    // LaunderingSeedDelta (criminal_operations producer). Placeholder rates,
-    // tunable; the seed itself carries only actor/amount/destination.
-    float seed_launder_rate_per_tick = 0.02f;
+    // Conversion loss applied to a laundering operation opened from a
+    // LaunderingSeedDelta (criminal_operations producer). The operation's
+    // launder_rate_per_tick is derived at drain time as
+    // dirty_amount / ticks_per_quarter (an absolute currency/tick amount), so
+    // a seeded batch washes over one quarter. 0.05 matches the money_laundering
+    // INTERFACE worked example (transfer 1000 -> 950 clean).
     float seed_conversion_loss_rate = 0.05f;
 };
 

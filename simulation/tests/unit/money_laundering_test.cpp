@@ -148,7 +148,9 @@ TEST_CASE("MoneyLaundering: execute drains a seed into a live operation",
     REQUIRE(op.actor_id == 12);
     REQUIRE(op.destination_business_id == 5);
     REQUIRE_THAT(op.dirty_amount, WithinAbs(3000.0f, 1e-2f));
-    REQUIRE(op.launder_rate_per_tick > 0.0f);
+    // Rate is an absolute currency/tick amount: the batch washes over one
+    // quarter, so rate = dirty_amount / ticks_per_quarter = 3000 / 90.
+    REQUIRE_THAT(op.launder_rate_per_tick, WithinAbs(3000.0f / 90.0f, 1e-2f));
     REQUIRE(op.laundered_so_far > 0.0f);  // first tick already washed some
     REQUIRE(state.pending_laundering_seeds.empty());
 

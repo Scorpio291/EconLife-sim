@@ -678,6 +678,10 @@ PackageConfig load_package_config(const std::string& config_dir) {
             "expansion_refund_fraction", cfg.criminal_operations.expansion_refund_fraction);
         cfg.criminal_operations.dormant_dominance_decay_rate = co.value(
             "dormant_dominance_decay_rate", cfg.criminal_operations.dormant_dominance_decay_rate);
+        cfg.criminal_operations.initial_org_cash =
+            co.value("initial_org_cash", cfg.criminal_operations.initial_org_cash);
+        cfg.criminal_operations.launder_seed_income_ticks = co.value(
+            "launder_seed_income_ticks", cfg.criminal_operations.launder_seed_income_ticks);
 
         const auto cr = j.value("community_response", nlohmann::json::object());
         cfg.community_response.ema_alpha = cr.value("ema_alpha", cfg.community_response.ema_alpha);
@@ -887,6 +891,8 @@ PackageConfig load_package_config(const std::string& config_dir) {
             ml.value("org_capacity_multiplier", cfg.money_laundering.org_capacity_multiplier);
         cfg.money_laundering.ticks_per_quarter =
             ml.value("ticks_per_quarter", cfg.money_laundering.ticks_per_quarter);
+        cfg.money_laundering.seed_conversion_loss_rate =
+            ml.value("seed_conversion_loss_rate", cfg.money_laundering.seed_conversion_loss_rate);
 
         const auto dd = j.value("designer_drug", nlohmann::json::object());
         cfg.designer_drug.detection_threshold =
