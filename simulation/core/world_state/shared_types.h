@@ -178,6 +178,45 @@ struct PlayerChoice {
 };
 
 // ---------------------------------------------------------------------------
+// DemographicGroup — background-population segmentation for the population_aging
+// module. 12 groups (canonical model; mirrored by population_aging_types.h).
+// Enum order is the canonical iteration order for deterministic floating-point
+// accumulation.
+// ---------------------------------------------------------------------------
+enum class DemographicGroup : uint8_t {
+    youth_urban = 0,
+    youth_rural = 1,
+    working_urban_low = 2,
+    working_urban_mid = 3,
+    working_urban_high = 4,
+    working_rural_low = 5,
+    working_rural_mid = 6,
+    working_rural_high = 7,
+    retiree_urban = 8,
+    retiree_rural = 9,
+    student = 10,
+    unemployed = 11,
+};
+inline constexpr uint8_t kDemographicGroupCount = 12;
+
+// ---------------------------------------------------------------------------
+// PopulationCohort — one background-population segment within a province.
+// Owned and evolved by the population_aging module (income/employment
+// convergence, education drift, births/deaths/aging). Per-cohort skill_supply
+// (and the province aggregate_skill_supply) are deferred in V1.
+// ---------------------------------------------------------------------------
+struct PopulationCohort {
+    DemographicGroup group = DemographicGroup::youth_urban;
+    uint32_t size = 0;                    // headcount
+    float median_income = 0.0f;           // currency per tick
+    float education_level = 0.0f;         // 0.0-1.0
+    float employment_rate = 0.0f;         // 0.0-1.0
+    float political_lean = 0.0f;          // -1.0 to 1.0
+    float grievance_contribution = 0.0f;  // 0.0-1.0
+    float addiction_prevalence = 0.0f;    // 0.0-1.0
+};
+
+// ---------------------------------------------------------------------------
 // RegionCohortStats — aggregated demographic statistics per region.
 // Single home for all population-fraction monitors. Fields previously
 // scattered across `RegionConditions` (addiction_rate, crime_rate,
@@ -194,6 +233,13 @@ struct PlayerChoice {
 struct RegionCohortStats {
     // --- Population scalar ---
     uint32_t total_population = 0;
+
+    // --- Background-population cohorts (population_aging module) ---
+    // The 12 DemographicGroups; seeded at world gen, evolved monthly/annually.
+    // `total_population` is recomputed as sum(cohort.size) after any change.
+    std::map<DemographicGroup, PopulationCohort> cohorts;
+    float mean_income = 0.0f;       // size-weighted mean of cohort median_income
+    float gini_coefficient = 0.0f;  // income inequality across cohorts [0,1]
 
     // --- Age structure ---
     float median_age = 0.0f;

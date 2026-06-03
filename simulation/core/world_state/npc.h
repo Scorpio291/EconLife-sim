@@ -299,6 +299,11 @@ struct NPC {
     // --- State ---
     NPCStatus status;  // active, imprisoned, dead, fled, waiting
 
+    // --- Demographics ---
+    float age_years = 30.0f;  // years; advanced annually by population_aging,
+                              //   drives retirement and natural-death processing.
+                              //   Seeded at world gen (default young-adult).
+
     // --- Addiction state ---
     // Per-NPC substance addiction state machine. Stage `none` (default)
     // means the NPC is not in the addiction state machine; drug_economy
