@@ -286,3 +286,89 @@ TEST_CASE("PoliticalCycle: no campaign opens outside the lead-time window",
     module.execute(world, delta);
     REQUIRE(module.state().campaigns.empty());
 }
+
+// ===========================================================================
+// Legislative pipeline: stage progression, NPC-legislator polling, resolution.
+// ===========================================================================
+
+namespace {
+NPC make_legislator(uint32_t id, float ideological_weight) {
+    NPC npc{};
+    npc.id = id;
+    npc.role = NPCRole::politician;
+    npc.status = NPCStatus::active;
+    npc.current_province_id = 0;
+    npc.motivations.weights.fill(0.0f);
+    npc.motivations.weights[static_cast<size_t>(OutcomeType::ideological)] = ideological_weight;
+    return npc;
+}
+}  // namespace
+
+TEST_CASE("PoliticalCycle: proposal advances through committee to floor",
+          "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/10, GovernmentType::Democracy);
+    PoliticalCycleModule module;
+    LegislativeProposal prop{};
+    prop.id = 1;
+    prop.status = LegislativeProposalStatus::drafted;
+    prop.sponsor_id = 0;  // no sponsor check
+    prop.vote_tick = 1000;
+    module.state().proposals.push_back(prop);
+
+    DeltaBuffer d{};
+    module.execute(world, d);  // drafted -> in_committee
+    REQUIRE(module.state().proposals[0].status == LegislativeProposalStatus::in_committee);
+    module.execute(world, d);  // in_committee -> floor_debate
+    REQUIRE(module.state().proposals[0].status == LegislativeProposalStatus::floor_debate);
+    module.execute(world, d);  // floor_debate, but vote_tick far away -> stays
+    REQUIRE(module.state().proposals[0].status == LegislativeProposalStatus::floor_debate);
+}
+
+TEST_CASE("PoliticalCycle: floor vote resolves via NPC legislator poll",
+          "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/50, GovernmentType::Democracy);
+    // 3 ideologically-decisive (support) legislators, 1 opposed.
+    world.significant_npcs.push_back(make_legislator(10, 0.70f));  // for
+    world.significant_npcs.push_back(make_legislator(11, 0.70f));  // for
+    world.significant_npcs.push_back(make_legislator(12, 0.70f));  // for
+    world.significant_npcs.push_back(make_legislator(13, 0.20f));  // against
+
+    PoliticalCycleModule module;
+    LegislativeProposal prop{};
+    prop.id = 7;
+    prop.status = LegislativeProposalStatus::floor_debate;
+    prop.sponsor_id = 0;
+    prop.vote_tick = 50;  // due now
+    module.state().proposals.push_back(prop);
+
+    DeltaBuffer d{};
+    module.execute(world, d);
+    // 3 for vs 1 against -> 0.75 > 0.50 -> enacted, consequence queued.
+    REQUIRE(module.state().proposals[0].status == LegislativeProposalStatus::enacted);
+    bool consequence = false;
+    for (const auto& c : d.consequence_deltas)
+        if (c.new_entry_id.has_value() && *c.new_entry_id == 7u)
+            consequence = true;
+    REQUIRE(consequence);
+}
+
+TEST_CASE("PoliticalCycle: proposal with dead sponsor fails", "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/50, GovernmentType::Democracy);
+    NPC sponsor{};
+    sponsor.id = 99;
+    sponsor.role = NPCRole::politician;
+    sponsor.status = NPCStatus::dead;
+    world.significant_npcs.push_back(sponsor);
+
+    PoliticalCycleModule module;
+    LegislativeProposal prop{};
+    prop.id = 3;
+    prop.status = LegislativeProposalStatus::in_committee;
+    prop.sponsor_id = 99;
+    prop.vote_tick = 50;
+    module.state().proposals.push_back(prop);
+
+    DeltaBuffer d{};
+    module.execute(world, d);
+    REQUIRE(module.state().proposals[0].status == LegislativeProposalStatus::failed);
+}

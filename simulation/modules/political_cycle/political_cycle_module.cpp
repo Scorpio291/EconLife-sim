@@ -121,6 +121,39 @@ const char* group_name(DemographicGroup g) {
     return "unknown";
 }
 
+// Poll active politician NPCs on a proposal and tally votes_for/votes_against.
+// Documented V1 proxies (no legislature membership / per-proposal policy
+// alignment vector exists): motivation_alignment = the legislator's ideological
+// motivation weight; obligation_bonus = +0.15 if the legislator owes an active
+// obligation to the sponsor; constituency_pressure = 0. Undecided legislators
+// (between OPPOSE and SUPPORT thresholds) abstain.
+void poll_legislators(const WorldState& state, LegislativeProposal& proposal,
+                      const PoliticalCycleConfig& cfg) {
+    float votes_for = 0.0f;
+    float votes_against = 0.0f;
+    for (const auto& npc : state.significant_npcs) {
+        if (npc.status != NPCStatus::active || npc.role != NPCRole::politician)
+            continue;
+        float alignment = npc.motivations.weights[static_cast<size_t>(OutcomeType::ideological)];
+        float obligation_bonus = 0.0f;
+        for (const auto& o : state.obligation_network) {
+            if (o.is_active && o.debtor_npc_id == npc.id &&
+                o.creditor_npc_id == proposal.sponsor_id) {
+                obligation_bonus = 0.15f;
+                break;
+            }
+        }
+        float support =
+            PoliticalCycleModule::compute_legislator_support(alignment, obligation_bonus, 0.0f);
+        if (support >= cfg.support_threshold)
+            votes_for += 1.0f;
+        else if (support <= cfg.oppose_threshold)
+            votes_against += 1.0f;
+    }
+    proposal.votes_for = votes_for;
+    proposal.votes_against = votes_against;
+}
+
 }  // namespace
 
 void PoliticalCycleModule::form_offices(const WorldState& state) {
@@ -330,17 +363,56 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
         office.election_due_tick = state.current_tick + office.term_length_ticks;
     }
 
-    // Process legislative proposals due this tick
+    // Process legislative proposals: stage progression (drafted -> in_committee
+    // -> floor_debate -> voted) and resolution at vote_tick.
     for (auto& proposal : political_state_.proposals) {
-        if (proposal.status != LegislativeProposalStatus::floor_debate)
-            continue;
-        if (proposal.vote_tick != state.current_tick)
+        if (proposal.status == LegislativeProposalStatus::enacted ||
+            proposal.status == LegislativeProposalStatus::failed)
             continue;
 
-        bool passed = compute_vote_passed(proposal.votes_for, proposal.votes_against,
-                                          cfg_.majority_threshold);
-        proposal.status =
-            passed ? LegislativeProposalStatus::enacted : LegislativeProposalStatus::failed;
+        // Sponsor deceased/fled -> proposal fails (valid state, per INTERFACE).
+        if (proposal.sponsor_id != 0) {
+            bool sponsor_active = false;
+            for (const auto& npc : state.significant_npcs)
+                if (npc.id == proposal.sponsor_id) {
+                    sponsor_active = (npc.status == NPCStatus::active);
+                    break;
+                }
+            if (!sponsor_active) {
+                proposal.status = LegislativeProposalStatus::failed;
+                continue;
+            }
+        }
+
+        switch (proposal.status) {
+            case LegislativeProposalStatus::drafted:
+                proposal.status = LegislativeProposalStatus::in_committee;
+                break;
+            case LegislativeProposalStatus::in_committee:
+                proposal.status = LegislativeProposalStatus::floor_debate;
+                break;
+            case LegislativeProposalStatus::floor_debate: {
+                if (state.current_tick < proposal.vote_tick)
+                    break;  // awaiting the scheduled floor vote
+                // If no tally was supplied by a producer, poll NPC legislators.
+                if (proposal.votes_for + proposal.votes_against <= 0.0f)
+                    poll_legislators(state, proposal, cfg_);
+                bool passed = compute_vote_passed(proposal.votes_for, proposal.votes_against,
+                                                  cfg_.majority_threshold);
+                proposal.status =
+                    passed ? LegislativeProposalStatus::enacted : LegislativeProposalStatus::failed;
+                if (passed) {
+                    // Enacted policy effect: queued as a consequence (placeholder
+                    // id until the generic consequence system lands -- audit #4).
+                    ConsequenceDelta cd;
+                    cd.new_entry_id = static_cast<uint32_t>(proposal.id);
+                    delta.consequence_deltas.push_back(cd);
+                }
+                break;
+            }
+            default:
+                break;
+        }
     }
 }
 
