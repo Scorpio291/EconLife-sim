@@ -42,7 +42,14 @@
 >   recovery, zero-pop safe defaults. New RegionDelta fields for compliance +
 >   drought + flood. Flagged: weather-event recovery gating needs an active-event
 >   signal not on WorldState.
-> - #4b consequence emitter migration, #6 module finishes — not yet started.
+> - **#4b consequence emitter migration — DONE:** all ~24 ConsequenceDelta emit
+>   sites across 16 modules now schedule typed ConsequenceEntries (make_consequence,
+>   GDD §21 delay) instead of the dropped new_entry_id; conservative category
+>   mapping (weapons→criminal_investigation; legal/investigator fallout→social/
+>   political to avoid case loops; rest→social/political). Simplification:
+>   social/political consequences route to province 0 (firing-effect routing is a
+>   follow-up tune).
+> - #6 module finishes — not yet started.
 
 
 **Scope:** All ~49 modules with an `INTERFACE.md` spec, comparing spec ↔ shipped
