@@ -80,82 +80,213 @@ bool PoliticalCycleModule::compute_vote_passed(float votes_for, float votes_agai
     return (votes_for / total) > majority_threshold;
 }
 
+namespace {
+
+const char* group_name(DemographicGroup g) {
+    switch (g) {
+        case DemographicGroup::youth_urban:
+            return "youth_urban";
+        case DemographicGroup::youth_rural:
+            return "youth_rural";
+        case DemographicGroup::working_urban_low:
+            return "working_urban_low";
+        case DemographicGroup::working_urban_mid:
+            return "working_urban_mid";
+        case DemographicGroup::working_urban_high:
+            return "working_urban_high";
+        case DemographicGroup::working_rural_low:
+            return "working_rural_low";
+        case DemographicGroup::working_rural_mid:
+            return "working_rural_mid";
+        case DemographicGroup::working_rural_high:
+            return "working_rural_high";
+        case DemographicGroup::retiree_urban:
+            return "retiree_urban";
+        case DemographicGroup::retiree_rural:
+            return "retiree_rural";
+        case DemographicGroup::student:
+            return "student";
+        case DemographicGroup::unemployed:
+            return "unemployed";
+    }
+    return "unknown";
+}
+
+}  // namespace
+
+void PoliticalCycleModule::form_offices(const WorldState& state) {
+    if (formed_)
+        return;
+    formed_ = true;
+    if (!political_state_.offices.empty())
+        return;  // test- or save-seeded; do not duplicate
+
+    for (const auto& prov : state.provinces) {
+        PoliticalOffice office{};
+        office.id = static_cast<uint64_t>(prov.id) + 1;  // 0 reserved
+        office.province_id = prov.id;
+        office.office_type = PoliticalOfficeType::governor;
+        office.term_length_ticks = 1460;
+        office.win_threshold = 0.5f;
+        office.election_due_tick = prov.political.election_due_tick != 0
+                                       ? prov.political.election_due_tick
+                                       : office.term_length_ticks;
+
+        // Holder: lowest-id active politician in the province, else community_leader.
+        uint32_t politician = 0;
+        uint32_t leader = 0;
+        for (const auto& npc : state.significant_npcs) {
+            if (npc.status != NPCStatus::active || npc.current_province_id != prov.id)
+                continue;
+            if (npc.role == NPCRole::politician && (politician == 0 || npc.id < politician))
+                politician = npc.id;
+            else if (npc.role == NPCRole::community_leader && (leader == 0 || npc.id < leader))
+                leader = npc.id;
+        }
+        office.current_holder_id = politician != 0 ? politician : leader;
+
+        // Baseline approval per demographic from cohort political_lean (-1..1).
+        if (prov.cohort_stats) {
+            for (const auto& [g, c] : prov.cohort_stats->cohorts) {
+                office.approval_by_demographic[group_name(g)] =
+                    std::clamp(0.5f + 0.5f * c.political_lean, 0.0f, 1.0f);
+            }
+        }
+        political_state_.offices.push_back(std::move(office));
+    }
+}
+
 void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    // Process elections for offices due this tick
+    // Seed the office topology from world-gen data on the first tick so the
+    // election pipeline is live in a fresh game.
+    form_offices(state);
+
+    auto find_province = [&](uint32_t pid) -> const Province* {
+        for (const auto& p : state.provinces)
+            if (p.id == pid)
+                return &p;
+        return nullptr;
+    };
+    auto nation_holds_elections = [&](const Province* p) -> bool {
+        if (!p)
+            return true;
+        for (const auto& n : state.nations)
+            if (n.id == p->nation_id)
+                return n.government_type == GovernmentType::Democracy ||
+                       n.government_type == GovernmentType::Federation;
+        return true;
+    };
+
+    // Process elections for offices due this tick.
     for (auto& office : political_state_.offices) {
         if (office.election_due_tick != state.current_tick)
             continue;
 
-        // Find campaigns targeting this office
-        for (auto& campaign : political_state_.campaigns) {
-            if (campaign.office_id != office.id)
-                continue;
-            if (campaign.resolved)
-                continue;
-
-            float event_total =
-                compute_event_modifier_total(campaign.event_modifiers, cfg_.event_modifier_cap);
-            float resource_mod = compute_resource_modifier(
-                campaign.resource_deployment, cfg_.resource_scale, cfg_.resource_max_effect);
-
-            // Compute raw share from campaign approval
-            float raw_share = 0.5f;
-            if (!campaign.current_approval_by_demographic.empty()) {
-                float sum = 0.0f;
-                float count = 0.0f;
-                for (const auto& [dem, approval] : campaign.current_approval_by_demographic) {
-                    sum += approval;
-                    count += 1.0f;
-                }
-                if (count > 0.0f)
-                    raw_share = sum / count;
-            }
-
-            float final_share = compute_final_vote_share(raw_share, resource_mod, event_total);
-
-            NPCDelta npc_delta;
-            npc_delta.npc_id = static_cast<uint32_t>(campaign.active_candidate_id);
-
-            bool won = (final_share >= office.win_threshold);
-            if (won) {
-                office.current_holder_id = campaign.active_candidate_id;
-                npc_delta.new_memory_entry = MemoryEntry{state.current_tick,
-                                                         MemoryType::event,
-                                                         static_cast<uint32_t>(office.id),
-                                                         0.8f,
-                                                         0.01f,
-                                                         true};
-                // Career advance: write updated relationship with self as marker via
-                // motivation_delta (career_advance outcome weight boost)
-                npc_delta.motivation_delta = 0.05f;
-            } else {
-                npc_delta.new_memory_entry = MemoryEntry{state.current_tick,
-                                                         MemoryType::event,
-                                                         static_cast<uint32_t>(office.id),
-                                                         -0.6f,
-                                                         0.01f,
-                                                         true};
-            }
-            delta.npc_deltas.push_back(npc_delta);
-
-            // RegionDelta: institutional_trust increases on clean win, decreases on contested
-            // Use office province (stored as lower 16 bits of office.id in V1 bootstrap)
-            {
-                RegionDelta rdelta;
-                rdelta.region_id = static_cast<uint32_t>(office.id & 0xFFFF);
-                rdelta.institutional_trust_delta = won ? 0.02f : -0.01f;
-                delta.region_deltas.push_back(rdelta);
-            }
-
-            // ConsequenceDelta: schedule election consequence entry
-            {
-                ConsequenceDelta cdelta;
-                cdelta.new_entry_id = static_cast<uint32_t>(campaign.id);
-                delta.consequence_deltas.push_back(cdelta);
-            }
-
-            campaign.resolved = true;
+        const Province* prov = find_province(office.province_id);
+        if (!nation_holds_elections(prov)) {
+            // Autocracy / FailedState: no election (valid state); reschedule.
+            office.election_due_tick = state.current_tick + office.term_length_ticks;
+            continue;
         }
+
+        // Coalition-weighted demographic turnout from the province cohorts.
+        std::vector<DemographicWeight> weights;
+        if (prov && prov->cohort_stats) {
+            uint64_t total = 0;
+            for (const auto& [g, c] : prov->cohort_stats->cohorts) {
+                (void)g;
+                total += c.size;
+            }
+            for (const auto& [g, c] : prov->cohort_stats->cohorts) {
+                DemographicWeight w;
+                w.demographic = group_name(g);
+                w.population_fraction =
+                    total > 0 ? static_cast<float>(c.size) / static_cast<float>(total) : 0.0f;
+                w.turnout_weight = 1.0f;
+                weights.push_back(w);
+            }
+        }
+
+        // An active campaign for this office overrides the baseline approval and
+        // contributes resource/event modifiers (campaign system: later slice).
+        const std::unordered_map<std::string, float>* approval = &office.approval_by_demographic;
+        float resource_mod = 0.0f;
+        float event_total = 0.0f;
+        for (auto& camp : political_state_.campaigns) {
+            if (camp.office_id != office.id || camp.resolved)
+                continue;
+            if (!camp.current_approval_by_demographic.empty())
+                approval = &camp.current_approval_by_demographic;
+            resource_mod = compute_resource_modifier(camp.resource_deployment, cfg_.resource_scale,
+                                                     cfg_.resource_max_effect);
+            event_total =
+                compute_event_modifier_total(camp.event_modifiers, cfg_.event_modifier_cap);
+            camp.resolved = true;
+            break;
+        }
+
+        float raw = compute_raw_vote_share(*approval, weights);
+        float final_share = compute_final_vote_share(raw, resource_mod, event_total);
+        bool won = final_share >= static_cast<float>(office.win_threshold);
+        auto incumbent = static_cast<uint32_t>(office.current_holder_id);
+
+        if (won) {
+            if (incumbent != 0) {
+                NPCDelta nd;
+                nd.npc_id = incumbent;
+                nd.new_memory_entry = MemoryEntry{state.current_tick,
+                                                  MemoryType::event,
+                                                  static_cast<uint32_t>(office.id),
+                                                  0.8f,
+                                                  0.01f,
+                                                  true};
+                nd.motivation_delta = 0.05f;
+                delta.npc_deltas.push_back(nd);
+            }
+        } else {
+            // Incumbent lost: install the lowest-id active politician challenger
+            // in the province (other than the incumbent), else retain incumbent.
+            uint32_t challenger = 0;
+            if (prov) {
+                for (const auto& npc : state.significant_npcs) {
+                    if (npc.status != NPCStatus::active || npc.current_province_id != prov->id)
+                        continue;
+                    if (npc.role != NPCRole::politician || npc.id == incumbent)
+                        continue;
+                    if (challenger == 0 || npc.id < challenger)
+                        challenger = npc.id;
+                }
+            }
+            if (incumbent != 0) {
+                NPCDelta nd;
+                nd.npc_id = incumbent;
+                nd.new_memory_entry = MemoryEntry{state.current_tick,
+                                                  MemoryType::event,
+                                                  static_cast<uint32_t>(office.id),
+                                                  -0.6f,
+                                                  0.01f,
+                                                  true};
+                delta.npc_deltas.push_back(nd);
+            }
+            if (challenger != 0) {
+                office.current_holder_id = challenger;
+                NPCDelta nd;
+                nd.npc_id = challenger;
+                nd.new_memory_entry = MemoryEntry{state.current_tick,
+                                                  MemoryType::event,
+                                                  static_cast<uint32_t>(office.id),
+                                                  0.8f,
+                                                  0.01f,
+                                                  true};
+                nd.motivation_delta = 0.05f;
+                delta.npc_deltas.push_back(nd);
+            }
+        }
+
+        RegionDelta rd;
+        rd.region_id = office.province_id;
+        rd.institutional_trust_delta = won ? 0.02f : -0.01f;
+        delta.region_deltas.push_back(rd);
 
         office.election_due_tick = state.current_tick + office.term_length_ticks;
     }

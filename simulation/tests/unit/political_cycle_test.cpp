@@ -1,10 +1,44 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 #include "modules/political_cycle/political_cycle_module.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
+
+namespace {
+// Minimal world: one nation (given government type) + one province with a
+// single working_urban_mid cohort (so demographic weights are well-defined).
+WorldState make_political_world(uint32_t tick, GovernmentType gov) {
+    WorldState w{};
+    w.current_tick = tick;
+    w.world_seed = 1;
+    Nation n{};
+    n.id = 0;
+    n.government_type = gov;
+    w.nations.push_back(n);
+    Province p{};
+    p.id = 0;
+    p.nation_id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    PopulationCohort c;
+    c.group = DemographicGroup::working_urban_mid;
+    c.size = 1000;
+    p.cohort_stats->cohorts[c.group] = c;
+    w.provinces.push_back(std::move(p));
+    return w;
+}
+NPC make_politician(uint32_t id, uint32_t province) {
+    NPC npc{};
+    npc.id = id;
+    npc.role = NPCRole::politician;
+    npc.status = NPCStatus::active;
+    npc.current_province_id = province;
+    return npc;
+}
+}  // namespace
 
 TEST_CASE("PoliticalCycle: raw vote share weighted calculation", "[political_cycle][tier10]") {
     std::unordered_map<std::string, float> approval = {{"working_class", 0.7f},
@@ -99,4 +133,89 @@ TEST_CASE("PoliticalCycle: resource modifier at zero deployment", "[political_cy
     float mod = PoliticalCycleModule::compute_resource_modifier(0.0f, cfg.resource_scale,
                                                                 cfg.resource_max_effect);
     REQUIRE_THAT(mod, WithinAbs(0.0f, 0.001f));
+}
+
+// ===========================================================================
+// Election pipeline: office seeding, government gating, coalition-weighted
+// resolution, and incumbent turnover (built out from the former stub).
+// ===========================================================================
+
+TEST_CASE("PoliticalCycle: seeds one governor office per province", "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/1, GovernmentType::Democracy);
+    world.significant_npcs.push_back(make_politician(50, 0));
+
+    PoliticalCycleModule module;
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.state().offices.size() == 1);
+    const auto& office = module.state().offices[0];
+    REQUIRE(office.province_id == 0);
+    REQUIRE(office.current_holder_id == 50);  // the politician
+    REQUIRE(office.office_type == PoliticalOfficeType::governor);
+}
+
+TEST_CASE("PoliticalCycle: incumbent re-elected on high approval", "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/100, GovernmentType::Democracy);
+    world.significant_npcs.push_back(make_politician(50, 0));
+
+    PoliticalCycleModule module;
+    // Pre-seed the office so form_offices no-ops and we control the scenario.
+    PoliticalOffice office{};
+    office.id = 1;
+    office.province_id = 0;
+    office.current_holder_id = 50;
+    office.election_due_tick = 100;  // due now
+    office.win_threshold = 0.5f;
+    office.approval_by_demographic["working_urban_mid"] = 0.80f;  // strong approval
+    module.state().offices.push_back(office);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.state().offices[0].current_holder_id == 50);            // retained
+    REQUIRE(module.state().offices[0].election_due_tick == 100u + 1460u);  // rescheduled
+}
+
+TEST_CASE("PoliticalCycle: incumbent loses, challenger installed", "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/100, GovernmentType::Democracy);
+    world.significant_npcs.push_back(make_politician(50, 0));  // incumbent
+    world.significant_npcs.push_back(make_politician(60, 0));  // challenger
+
+    PoliticalCycleModule module;
+    PoliticalOffice office{};
+    office.id = 1;
+    office.province_id = 0;
+    office.current_holder_id = 50;
+    office.election_due_tick = 100;
+    office.win_threshold = 0.5f;
+    office.approval_by_demographic["working_urban_mid"] = 0.20f;  // weak -> loses
+    module.state().offices.push_back(office);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.state().offices[0].current_holder_id == 60);  // challenger installed
+}
+
+TEST_CASE("PoliticalCycle: autocracy skips election (holder unchanged)",
+          "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/100, GovernmentType::Autocracy);
+    world.significant_npcs.push_back(make_politician(50, 0));
+    world.significant_npcs.push_back(make_politician(60, 0));
+
+    PoliticalCycleModule module;
+    PoliticalOffice office{};
+    office.id = 1;
+    office.province_id = 0;
+    office.current_holder_id = 50;
+    office.election_due_tick = 100;
+    office.approval_by_demographic["working_urban_mid"] = 0.20f;  // would lose if held
+    module.state().offices.push_back(office);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.state().offices[0].current_holder_id == 50);  // no turnover under autocracy
+    REQUIRE(module.state().offices[0].election_due_tick == 100u + 1460u);
 }

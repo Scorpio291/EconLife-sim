@@ -58,6 +58,7 @@ struct Campaign {
 
 struct PoliticalOffice {
     uint64_t id = 0;
+    uint32_t province_id = 0;  // province this office governs
     PoliticalOfficeType office_type = PoliticalOfficeType::city_council;
     uint64_t current_holder_id = 0;
     uint64_t election_due_tick = 0;

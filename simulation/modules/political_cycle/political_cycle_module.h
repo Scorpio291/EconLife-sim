@@ -39,9 +39,20 @@ class PoliticalCycleModule : public ITickModule {
                                             float constituency_pressure);
     static bool compute_vote_passed(float votes_for, float votes_against, float majority_threshold);
 
+    // Test/inspection accessors for the module-private election state.
+    PoliticalCycleModuleState& state() { return political_state_; }
+    const PoliticalCycleModuleState& state() const { return political_state_; }
+
    private:
+    // Seed one governor office per province from world-gen data on first execute
+    // (idempotent; skipped if offices already present). Deterministic.
+    void form_offices(const WorldState& state);
+
     PoliticalCycleConfig cfg_;
     PoliticalCycleModuleState political_state_;
+    // One-shot formation guard. Not persisted: re-seeds after a load (offices
+    // are not yet in the persistence schema -- flagged follow-up).
+    bool formed_ = false;
 };
 
 }  // namespace econlife
