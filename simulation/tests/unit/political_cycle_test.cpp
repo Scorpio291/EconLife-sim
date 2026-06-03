@@ -219,3 +219,70 @@ TEST_CASE("PoliticalCycle: autocracy skips election (holder unchanged)",
     REQUIRE(module.state().offices[0].current_holder_id == 50);  // no turnover under autocracy
     REQUIRE(module.state().offices[0].election_due_tick == 100u + 1460u);
 }
+
+TEST_CASE("PoliticalCycle: endorsement boosts a demographic's approval",
+          "[political_cycle][tier10]") {
+    std::unordered_map<std::string, float> approval = {{"working_urban_mid", 0.50f}};
+    std::vector<Endorsement> endorsements;
+    Endorsement e;
+    e.primary_demographic = "working_urban_mid";
+    e.approval_bonus = 0.08f;
+    endorsements.push_back(e);
+
+    PoliticalCycleModule::apply_endorsement_bonuses(approval, endorsements);
+    REQUIRE_THAT(approval["working_urban_mid"], WithinAbs(0.58f, 1e-4f));
+
+    // Clamps to 1.0.
+    approval["working_urban_mid"] = 0.97f;
+    PoliticalCycleModule::apply_endorsement_bonuses(approval, endorsements);
+    REQUIRE_THAT(approval["working_urban_mid"], WithinAbs(1.0f, 1e-4f));
+}
+
+TEST_CASE("PoliticalCycle: campaign auto-activates within the lead-time window",
+          "[political_cycle][tier10]") {
+    // Election due 50 ticks out; lead time is 90, so a campaign should open.
+    auto world = make_political_world(/*tick=*/100, GovernmentType::Democracy);
+    world.significant_npcs.push_back(make_politician(50, 0));
+
+    PoliticalCycleModule module;
+    PoliticalOffice office{};
+    office.id = 1;
+    office.province_id = 0;
+    office.current_holder_id = 50;
+    office.election_due_tick = 150;  // 50 ticks away (< 90 lead time)
+    office.approval_by_demographic["working_urban_mid"] = 0.6f;
+    module.state().offices.push_back(office);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.state().campaigns.size() == 1);
+    const auto& camp = module.state().campaigns[0];
+    REQUIRE(camp.office_id == 1);
+    REQUIRE(camp.active_candidate_id == 50);
+    REQUIRE(camp.election_tick == 150);
+
+    // Idempotent: a second tick does not open a duplicate campaign.
+    world.current_tick = 101;
+    DeltaBuffer d2{};
+    module.execute(world, d2);
+    REQUIRE(module.state().campaigns.size() == 1);
+}
+
+TEST_CASE("PoliticalCycle: no campaign opens outside the lead-time window",
+          "[political_cycle][tier10]") {
+    auto world = make_political_world(/*tick=*/100, GovernmentType::Democracy);
+    world.significant_npcs.push_back(make_politician(50, 0));
+
+    PoliticalCycleModule module;
+    PoliticalOffice office{};
+    office.id = 1;
+    office.province_id = 0;
+    office.current_holder_id = 50;
+    office.election_due_tick = 1000;  // far away (> 90 lead time)
+    module.state().offices.push_back(office);
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+    REQUIRE(module.state().campaigns.empty());
+}

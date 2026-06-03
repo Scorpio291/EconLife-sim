@@ -80,6 +80,15 @@ bool PoliticalCycleModule::compute_vote_passed(float votes_for, float votes_agai
     return (votes_for / total) > majority_threshold;
 }
 
+void PoliticalCycleModule::apply_endorsement_bonuses(
+    std::unordered_map<std::string, float>& approval,
+    const std::vector<Endorsement>& endorsements) {
+    for (const auto& e : endorsements) {
+        float& a = approval[e.primary_demographic];
+        a = std::clamp(a + e.approval_bonus, 0.0f, 1.0f);
+    }
+}
+
 namespace {
 
 const char* group_name(DemographicGroup g) {
@@ -156,10 +165,39 @@ void PoliticalCycleModule::form_offices(const WorldState& state) {
     }
 }
 
+void PoliticalCycleModule::activate_campaigns(const WorldState& state) {
+    for (const auto& office : political_state_.offices) {
+        if (office.election_due_tick <= state.current_tick)
+            continue;
+        if (office.election_due_tick - state.current_tick > cfg_.campaign_lead_time_ticks)
+            continue;
+        bool active = false;
+        for (const auto& c : political_state_.campaigns)
+            if (c.office_id == office.id && !c.resolved) {
+                active = true;
+                break;
+            }
+        if (active)
+            continue;
+
+        Campaign camp{};
+        camp.id = office.id;  // one active campaign per office at a time
+        camp.active_candidate_id = office.current_holder_id;
+        camp.office_id = office.id;
+        camp.campaign_start_tick = state.current_tick;
+        camp.election_tick = office.election_due_tick;
+        camp.current_approval_by_demographic = office.approval_by_demographic;
+        apply_endorsement_bonuses(camp.current_approval_by_demographic, camp.endorsements);
+        political_state_.campaigns.push_back(std::move(camp));
+    }
+}
+
 void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Seed the office topology from world-gen data on the first tick so the
     // election pipeline is live in a fresh game.
     form_offices(state);
+    // Open campaigns for upcoming elections (within the lead-time window).
+    activate_campaigns(state);
 
     auto find_province = [&](uint32_t pid) -> const Province* {
         for (const auto& p : state.provinces)
@@ -215,6 +253,7 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
         for (auto& camp : political_state_.campaigns) {
             if (camp.office_id != office.id || camp.resolved)
                 continue;
+            apply_endorsement_bonuses(camp.current_approval_by_demographic, camp.endorsements);
             if (!camp.current_approval_by_demographic.empty())
                 approval = &camp.current_approval_by_demographic;
             resource_mod = compute_resource_modifier(camp.resource_deployment, cfg_.resource_scale,

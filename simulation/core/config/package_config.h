@@ -216,6 +216,8 @@ struct PoliticalCycleConfig {
     float resource_scale = 2.0f;
     float resource_max_effect = 0.15f;
     float event_modifier_cap = 0.20f;
+    // A campaign auto-activates this many ticks before an office's election.
+    uint32_t campaign_lead_time_ticks = 90;
 };
 
 struct MediaSystemConfig {

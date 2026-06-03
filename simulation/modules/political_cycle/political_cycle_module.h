@@ -39,6 +39,12 @@ class PoliticalCycleModule : public ITickModule {
                                             float constituency_pressure);
     static bool compute_vote_passed(float votes_for, float votes_against, float majority_threshold);
 
+    // Add each endorsement's approval_bonus to its demographic in `approval`,
+    // clamped to [0,1]. (Endorsements come from NPC endorsers; producer is a
+    // future extension, but the application logic is exercised here.)
+    static void apply_endorsement_bonuses(std::unordered_map<std::string, float>& approval,
+                                          const std::vector<Endorsement>& endorsements);
+
     // Test/inspection accessors for the module-private election state.
     PoliticalCycleModuleState& state() { return political_state_; }
     const PoliticalCycleModuleState& state() const { return political_state_; }
@@ -47,6 +53,11 @@ class PoliticalCycleModule : public ITickModule {
     // Seed one governor office per province from world-gen data on first execute
     // (idempotent; skipped if offices already present). Deterministic.
     void form_offices(const WorldState& state);
+
+    // Auto-activate a campaign for any office whose election is within the
+    // campaign lead-time window and has no active campaign yet (candidate =
+    // incumbent, approval copied from the office baseline + endorsements).
+    void activate_campaigns(const WorldState& state);
 
     PoliticalCycleConfig cfg_;
     PoliticalCycleModuleState political_state_;
