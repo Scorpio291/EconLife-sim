@@ -238,8 +238,11 @@ struct RegionCohortStats {
     // The 12 DemographicGroups; seeded at world gen, evolved monthly/annually.
     // `total_population` is recomputed as sum(cohort.size) after any change.
     std::map<DemographicGroup, PopulationCohort> cohorts;
-    float mean_income = 0.0f;       // size-weighted mean of cohort median_income
-    float gini_coefficient = 0.0f;  // income inequality across cohorts [0,1]
+    float mean_income = 0.0f;           // size-weighted mean of cohort median_income
+    float gini_coefficient = 0.0f;      // income inequality across cohorts [0,1]
+    float regional_wage_anchor = 0.0f;  // income-convergence target for cohorts
+                                        //   (proxy for the labor wage market, which
+                                        //   is module-private; seeded at world gen)
 
     // --- Age structure ---
     float median_age = 0.0f;

@@ -854,6 +854,12 @@ struct PopulationAgingConfig {
     float cohort_income_update_rate = 0.05f;
     float cohort_employment_update_rate = 0.02f;
     float max_education_drift_per_year = 0.01f;
+    // Annual births/deaths (applied to cohort sizes once per year). Birth count
+    // scales with healthcare access and stability (survival); deaths scale with
+    // instability and addiction, and are higher for retiree cohorts.
+    float base_annual_birth_rate = 0.012f;
+    float base_annual_death_rate = 0.008f;
+    float retiree_mortality_multiplier = 4.0f;
 };
 
 struct LodSystemConfig {

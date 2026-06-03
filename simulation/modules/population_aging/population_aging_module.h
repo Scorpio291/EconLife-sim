@@ -31,6 +31,9 @@ class PopulationAgingModule : public ITickModule {
                                          float max_drift);
     static float compute_gini_coefficient(const std::vector<float>& sorted_incomes);
     static bool is_monthly_tick(uint32_t current_tick);
+    static bool is_annual_tick(uint32_t current_tick);
+    // Size-weighted mean of cohort median_income (0 if no population).
+    static float compute_mean_income(const std::map<DemographicGroup, PopulationCohort>& cohorts);
 
     // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;

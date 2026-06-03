@@ -53,16 +53,143 @@ bool PopulationAgingModule::is_monthly_tick(uint32_t current_tick) {
     return (current_tick % TICKS_PER_MONTH) == 0;
 }
 
+bool PopulationAgingModule::is_annual_tick(uint32_t current_tick) {
+    return (current_tick % TICKS_PER_YEAR) == 0;
+}
+
+float PopulationAgingModule::compute_mean_income(
+    const std::map<DemographicGroup, PopulationCohort>& cohorts) {
+    double weighted = 0.0;
+    uint64_t total = 0;
+    for (const auto& [group, c] : cohorts) {
+        (void)group;
+        weighted += static_cast<double>(c.size) * static_cast<double>(c.median_income);
+        total += c.size;
+    }
+    if (total == 0)
+        return 0.0f;
+    return static_cast<float>(weighted / static_cast<double>(total));
+}
+
+namespace {
+
+bool is_retiree_group(DemographicGroup g) {
+    return g == DemographicGroup::retiree_urban || g == DemographicGroup::retiree_rural;
+}
+
+// Annual births (added to youth cohorts) and per-cohort deaths, applied in
+// place to a working copy of the cohort map. Deterministic: integer rounding,
+// canonical group order.
+void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
+                           float sick_rate, float addiction_rate,
+                           const PopulationAgingConfig& cfg) {
+    uint64_t total = 0;
+    for (const auto& [g, c] : cohorts) {
+        (void)g;
+        total += c.size;
+    }
+
+    // Births: survival scales with stability and healthcare (proxied by the
+    // inverse of sick_rate, since HealthcareProfile is not on WorldState).
+    float healthcare_proxy = std::clamp(1.0f - sick_rate, 0.0f, 1.0f);
+    float birth_rate =
+        cfg.base_annual_birth_rate * std::clamp(stability, 0.0f, 1.0f) * healthcare_proxy;
+    auto births = static_cast<uint32_t>(
+        std::llround(static_cast<double>(total) * static_cast<double>(birth_rate)));
+    cohorts[DemographicGroup::youth_urban].size += births / 2u;
+    cohorts[DemographicGroup::youth_rural].size += births - births / 2u;
+
+    // Deaths: per-cohort mortality rises with instability and addiction, and is
+    // multiplied for retiree cohorts.
+    float mortality_env = (1.0f + (1.0f - std::clamp(stability, 0.0f, 1.0f))) *
+                          (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f));
+    for (auto& [g, c] : cohorts) {
+        if (c.size == 0)
+            continue;
+        float mort = cfg.base_annual_death_rate * mortality_env;
+        if (is_retiree_group(g))
+            mort *= cfg.retiree_mortality_multiplier;
+        auto deaths = static_cast<uint32_t>(
+            std::llround(static_cast<double>(c.size) * static_cast<double>(mort)));
+        c.size = (deaths >= c.size) ? 0u : (c.size - deaths);
+    }
+}
+
+}  // namespace
+
 void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldState& state,
                                              DeltaBuffer& province_delta) {
     if (province_idx >= state.provinces.size())
         return;
 
-    // Monthly cadence for cohort convergence
+    const auto& province = state.provinces[province_idx];
+
+    // --- Background-population cohort lifecycle ---------------------------------
+    // Monthly: income + employment convergence. Annual: education drift +
+    // births/deaths. Aggregates (total_population, mean_income, gini) recomputed
+    // after any change. Skipped entirely for unseeded (empty) or zero-population
+    // provinces.
+    const bool monthly = is_monthly_tick(state.current_tick);
+    const bool annual = is_annual_tick(state.current_tick);
+    if (province.cohort_stats && !province.cohort_stats->cohorts.empty() && (monthly || annual)) {
+        const RegionCohortStats& cs = *province.cohort_stats;
+        uint64_t pop = 0;
+        for (const auto& [g, c] : cs.cohorts) {
+            (void)g;
+            pop += c.size;
+        }
+        if (pop > 0) {
+            std::map<DemographicGroup, PopulationCohort> next = cs.cohorts;
+
+            if (monthly) {
+                for (auto& [g, c] : next) {
+                    (void)g;
+                    if (c.size == 0)
+                        continue;
+                    c.median_income = compute_income_convergence(
+                        c.median_income, cs.regional_wage_anchor, cfg_.cohort_income_update_rate);
+                    c.employment_rate =
+                        compute_employment_convergence(c.employment_rate, cs.formal_employment_rate,
+                                                       cfg_.cohort_employment_update_rate);
+                }
+            }
+            if (annual) {
+                for (auto& [g, c] : next) {
+                    (void)g;
+                    if (c.size == 0)
+                        continue;
+                    c.education_level = compute_education_drift(
+                        c.education_level, province.demographics.education_level,
+                        cfg_.max_education_drift_per_year);
+                }
+                process_births_deaths(next, province.conditions.stability_score, cs.sick_rate,
+                                      cs.addiction_rate, cfg_);
+            }
+
+            // Recompute aggregates over the canonical (sorted) group order.
+            CohortStatsDelta cd;
+            cd.region_id = province_idx;
+            uint32_t new_total = 0;
+            std::vector<float> incomes;
+            incomes.reserve(next.size());
+            for (const auto& [g, c] : next) {
+                (void)g;
+                new_total += c.size;
+                incomes.push_back(c.median_income);
+            }
+            std::sort(incomes.begin(), incomes.end());
+            cd.total_population = new_total;
+            cd.mean_income = compute_mean_income(next);
+            cd.gini_coefficient = compute_gini_coefficient(incomes);
+            cd.cohorts = std::move(next);
+            province_delta.cohort_stats_deltas.push_back(std::move(cd));
+        }
+    }
+
+    // --- Province-level demographic stress proxies (legacy monthly signal) -----
     if (!is_monthly_tick(state.current_tick))
         return;
 
-    const auto& province = state.provinces[province_idx];
     const auto& demographics = province.demographics;
 
     RegionDelta rdelta;

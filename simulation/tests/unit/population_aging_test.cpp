@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/population_aging/population_aging_module.h"
@@ -124,4 +125,98 @@ TEST_CASE("PopulationAging: execute_province is a no-op off the monthly cadence"
     module.execute_province(0, world, delta);
 
     REQUIRE(delta.region_deltas.empty());
+}
+
+// ===========================================================================
+// Background-population cohort lifecycle (built out from the former stub)
+// ===========================================================================
+namespace {
+void seed_two_cohorts(RegionCohortStats& cs) {
+    PopulationCohort a;
+    a.group = DemographicGroup::working_urban_mid;
+    a.size = 1000;
+    a.median_income = 100.0f;
+    a.education_level = 0.50f;
+    a.employment_rate = 0.60f;
+    PopulationCohort b;
+    b.group = DemographicGroup::working_rural_low;
+    b.size = 500;
+    b.median_income = 50.0f;
+    b.education_level = 0.40f;
+    b.employment_rate = 0.50f;
+    cs.cohorts[a.group] = a;
+    cs.cohorts[b.group] = b;
+    cs.regional_wage_anchor = 150.0f;
+    cs.formal_employment_rate = 0.80f;
+}
+}  // namespace
+
+TEST_CASE("PopulationAging: monthly cohort income + employment convergence",
+          "[population_aging][tier11]") {
+    auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_MONTH);
+    seed_two_cohorts(*world.provinces[0].cohort_stats);
+
+    PopulationAgingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    REQUIRE(delta.cohort_stats_deltas.size() == 1);
+    apply_deltas(world, delta);
+
+    const auto& cohorts = world.provinces[0].cohort_stats->cohorts;
+    const auto& a = cohorts.at(DemographicGroup::working_urban_mid);
+    // income: 100 + 0.05*(150-100) = 102.5 ; employment: 0.6 + 0.02*(0.8-0.6) = 0.604
+    REQUIRE_THAT(a.median_income, WithinAbs(102.5f, 1e-3f));
+    REQUIRE_THAT(a.employment_rate, WithinAbs(0.604f, 1e-4f));
+    // total_population preserved on a monthly tick (no births/deaths), gini > 0.
+    REQUIRE(world.provinces[0].cohort_stats->total_population == 1500u);
+    REQUIRE(world.provinces[0].cohort_stats->gini_coefficient > 0.0f);
+}
+
+TEST_CASE("PopulationAging: annual education drift is capped", "[population_aging][tier11]") {
+    auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_YEAR);
+    world.provinces[0].demographics.education_level = 0.80f;  // target well above cohort 0.50
+    seed_two_cohorts(*world.provinces[0].cohort_stats);
+
+    PopulationAgingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    REQUIRE(delta.cohort_stats_deltas.size() == 1);
+    apply_deltas(world, delta);
+
+    // education moved by at most max_education_drift_per_year (0.01).
+    float edu = world.provinces[0]
+                    .cohort_stats->cohorts.at(DemographicGroup::working_urban_mid)
+                    .education_level;
+    REQUIRE(edu <= 0.50f + 0.01f + 1e-5f);
+    REQUIRE(edu > 0.50f);  // drifted up toward 0.80
+}
+
+TEST_CASE("PopulationAging: empty cohorts produce no cohort delta", "[population_aging][tier11]") {
+    auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_MONTH);
+    // cohorts left empty.
+    PopulationAgingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    REQUIRE(delta.cohort_stats_deltas.empty());
+}
+
+TEST_CASE("PopulationAging: better healthcare yields more net births",
+          "[population_aging][tier11]") {
+    PopulationAgingModule module;
+
+    auto run = [&](float sick_rate) -> uint32_t {
+        auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_YEAR);
+        auto& cs = *world.provinces[0].cohort_stats;
+        seed_two_cohorts(cs);
+        cs.sick_rate = sick_rate;
+        world.provinces[0].conditions.stability_score = 0.80f;
+        DeltaBuffer delta{};
+        module.execute_province(0, world, delta);
+        apply_deltas(world, delta);
+        return world.provinces[0].cohort_stats->total_population;
+    };
+
+    uint32_t healthy = run(0.10f);  // low sickness -> high birth survival
+    uint32_t sick = run(0.90f);     // high sickness -> low birth survival
+    REQUIRE(healthy > sick);
 }

@@ -169,6 +169,18 @@ struct TechnologyDelta {
     std::optional<float> maturation_level_update;  // replacement
 };
 
+// Full replacement of a province's background-population cohorts plus the
+// derived aggregates. Emitted by population_aging (the sole owner of the cohort
+// lifecycle) at monthly/annual cadence; apply_deltas overwrites
+// province.cohort_stats cohorts/total_population/mean_income/gini_coefficient.
+struct CohortStatsDelta {
+    uint32_t region_id;
+    std::map<DemographicGroup, PopulationCohort> cohorts;  // replacement
+    uint32_t total_population = 0;                         // sum(cohort.size)
+    float mean_income = 0.0f;
+    float gini_coefficient = 0.0f;
+};
+
 struct RegionDelta {
     uint32_t region_id;
     std::optional<float> stability_delta;   // additive; conditions.stability_score
@@ -468,6 +480,7 @@ struct DeltaBuffer {
     std::vector<ConstructionAwardRequest> new_construction_awards;      // merge: append
     std::vector<RacketSeedDelta> new_racket_seeds;                      // merge: append
     std::vector<LaunderingSeedDelta> new_laundering_seeds;              // merge: append
+    std::vector<CohortStatsDelta> cohort_stats_deltas;                  // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

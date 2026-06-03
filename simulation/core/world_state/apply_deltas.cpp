@@ -382,6 +382,25 @@ static void apply_evidence_deltas(WorldState& world, const std::vector<EvidenceD
 }
 
 // ---------------------------------------------------------------------------
+// apply_cohort_stats_deltas — full replacement of a province's cohort set and
+// derived aggregates (sole writer: population_aging). region_id indexes
+// world.provinces directly (province-parallel emit).
+// ---------------------------------------------------------------------------
+static void apply_cohort_stats_deltas(WorldState& world,
+                                      const std::vector<CohortStatsDelta>& deltas) {
+    for (const auto& d : deltas) {
+        if (d.region_id >= world.provinces.size())
+            continue;
+        auto& prov = world.provinces[d.region_id];
+        if (!prov.cohort_stats)
+            continue;
+        prov.cohort_stats->cohorts = d.cohorts;
+        prov.cohort_stats->total_population = d.total_population;
+        prov.cohort_stats->mean_income = d.mean_income;
+        prov.cohort_stats->gini_coefficient = std::clamp(d.gini_coefficient, 0.0f, 1.0f);
+    }
+}
+
 // apply_region_deltas
 // ---------------------------------------------------------------------------
 static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta>& deltas) {
@@ -691,6 +710,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_market_deltas(world, delta.market_deltas, ceil);
     apply_evidence_deltas(world, delta.evidence_deltas, evidence_decay_interval);
     apply_region_deltas(world, delta.region_deltas);
+    apply_cohort_stats_deltas(world, delta.cohort_stats_deltas);
     apply_currency_deltas(world, delta.currency_deltas);
     apply_technology_deltas(world, delta.technology_deltas);
     const float lod2_smoothing_rate =
@@ -825,6 +845,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_legal_case_seeds.clear();
     delta.new_racket_seeds.clear();
     delta.new_laundering_seeds.clear();
+    delta.cohort_stats_deltas.clear();
     delta.new_random_event_triggers.clear();
     delta.new_property_transactions.clear();
     delta.new_loan_requests.clear();
