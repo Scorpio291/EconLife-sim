@@ -268,6 +268,9 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
         if (d.owner_id_update.has_value()) {
             biz.owner_id = *d.owner_id_update;
         }
+        if (d.next_decision_tick_update.has_value()) {
+            biz.strategic_decision_tick = *d.next_decision_tick_update;
+        }
     }
 }
 

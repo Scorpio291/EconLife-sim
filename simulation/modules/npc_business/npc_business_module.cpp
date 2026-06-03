@@ -238,6 +238,16 @@ void NpcBusinessModule::execute_province(uint32_t province_idx, const WorldState
 
         // Apply the decision to deltas.
         apply_decision_to_deltas(*biz, result, province_delta);
+
+        // Advance the quarterly cadence. Without this the business stays at or
+        // past its decision tick and re-decides every tick (INTERFACE
+        // §Postconditions: "strategic_decision_tick advanced by
+        // TICKS_PER_QUARTER for each business that decided"). Fires for both
+        // approved and board-rejected decisions, matching the reset above.
+        BusinessDelta tick_delta{};
+        tick_delta.business_id = biz->id;
+        tick_delta.next_decision_tick_update = state.current_tick + cfg_.ticks_per_quarter;
+        province_delta.business_deltas.push_back(tick_delta);
     }
 }
 

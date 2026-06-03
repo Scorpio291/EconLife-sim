@@ -14,6 +14,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -152,6 +153,55 @@ TEST_CASE("test_business_executes_decision_on_quarterly_tick", "[npc_business][t
     bool has_deltas =
         !delta.npc_deltas.empty() || !delta.market_deltas.empty() || !delta.evidence_deltas.empty();
     REQUIRE(has_deltas);
+}
+
+// ===========================================================================
+// Regression: a decided business advances its quarterly cadence (does not
+// re-decide every tick). Bug: strategic_decision_tick was never advanced.
+// ===========================================================================
+
+TEST_CASE("test_decision_advances_quarterly_cadence", "[npc_business][tier4]") {
+    auto state = make_test_world_state();
+    state.current_tick = 100;
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = 0;
+    state.provinces.push_back(prov);
+
+    auto biz = make_test_business(1, BusinessProfile::fast_expander);
+    biz.strategic_decision_tick = 100;  // due now
+    biz.cash = 50000.0f;
+    state.npc_businesses.push_back(biz);
+
+    NpcBusinessModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    // The decision must emit a tick advance to current_tick + ticks_per_quarter.
+    NpcBusinessConfig cfg{};
+    bool found_advance = false;
+    for (const auto& bd : delta.business_deltas) {
+        if (bd.business_id == 1 && bd.next_decision_tick_update.has_value()) {
+            REQUIRE(*bd.next_decision_tick_update == 100u + cfg.ticks_per_quarter);
+            found_advance = true;
+        }
+    }
+    REQUIRE(found_advance);
+
+    // After applying, the business is no longer on its decision tick this tick,
+    // so a second execute the same tick produces no further decision.
+    apply_deltas(state, delta);
+    REQUIRE(state.npc_businesses[0].strategic_decision_tick == 100u + cfg.ticks_per_quarter);
+
+    DeltaBuffer delta2{};
+    module.execute_province(0, state, delta2);
+    bool re_decided = false;
+    for (const auto& bd : delta2.business_deltas) {
+        if (bd.business_id == 1 && bd.next_decision_tick_update.has_value())
+            re_decided = true;
+    }
+    REQUIRE_FALSE(re_decided);  // would be true under the old re-decide-every-tick bug
 }
 
 // ===========================================================================

@@ -96,6 +96,8 @@ struct BusinessDelta {
     std::optional<float> output_quality_update;    // replacement; latest production quality [0,1]
     std::optional<uint32_t> owner_id_update;       // replacement; ownership transfer (Phase 10
                                                    // business acquisition)
+    std::optional<uint32_t> next_decision_tick_update;  // replacement; npc_business advances the
+                                                        // quarterly strategic-decision cadence
 };
 
 // Business dissolved (market exit): removes entity from world.npc_businesses.
