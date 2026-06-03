@@ -24,8 +24,17 @@
 >   NationPoliticalCycleState not delta-updated (no NationDelta); module
 >   state not persisted; real enacted-policy effects await the consequence
 >   system (#4).
-> - #4 consequence system, #5 regional_conditions, #6 module finishes — not
->   yet started.
+> - **#4 consequence system — ENGINE BUILT** (GDD §21): ConsequenceCategory
+>   (8 types) + ConsequenceEntry + WorldState.consequence_queue; delay formula
+>   (BASE_DELAY × (1+variance) × awareness); ConsequenceDelta schedule/cancel
+>   routed by apply_deltas; firing in drain_deferred_work (investigation/legal
+>   → LegalCaseSeedDelta, media/political → trust, social → grievance,
+>   rival → dominance); persistence v17; fires after source death; cancellable.
+>   **Follow-up 4b (not done):** migrate the ~19 legacy consequence_deltas
+>   emitters (calendar, antitrust, npc_business, political_cycle, …) from the
+>   no-op new_entry_id to typed ConsequenceEntries with real
+>   source/target/awareness.
+> - #5 regional_conditions, #6 module finishes — not yet started.
 
 
 **Scope:** All ~49 modules with an `INTERFACE.md` spec, comparing spec ↔ shipped
