@@ -75,6 +75,11 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             npc->status = *d.new_status;
         }
 
+        // age_delta: additive (years); clamped non-negative
+        if (d.age_delta.has_value()) {
+            npc->age_years = std::max(0.0f, npc->age_years + *d.age_delta);
+        }
+
         // new_travel_status: replacement
         if (d.new_travel_status.has_value()) {
             npc->travel_status = *d.new_travel_status;

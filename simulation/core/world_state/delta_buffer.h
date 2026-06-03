@@ -45,6 +45,7 @@ struct NPCDelta {
     std::optional<AddictionState> set_addiction_state;  // replacement; full AddictionState override
                                                         // (drug_economy seeds; AddictionModule
                                                         // writes back each tick)
+    std::optional<float> age_delta;  // additive; population_aging advances age annually
 };
 
 struct PlayerDelta {

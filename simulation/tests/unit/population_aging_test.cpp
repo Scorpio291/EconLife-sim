@@ -220,3 +220,78 @@ TEST_CASE("PopulationAging: better healthcare yields more net births",
     uint32_t sick = run(0.90f);     // high sickness -> low birth survival
     REQUIRE(healthy > sick);
 }
+
+// ===========================================================================
+// Significant-NPC aging (annual age advancement + natural death)
+// ===========================================================================
+
+TEST_CASE("PopulationAging: natural death probability gating", "[population_aging][tier11]") {
+    // Below lifespan -> zero.
+    REQUIRE_THAT(PopulationAgingModule::compute_natural_death_probability(40.0f, 80.0f, 0.10f),
+                 WithinAbs(0.0f, 1e-6f));
+    // At lifespan -> base prob.
+    REQUIRE_THAT(PopulationAgingModule::compute_natural_death_probability(80.0f, 80.0f, 0.10f),
+                 WithinAbs(0.10f, 1e-4f));
+    // Well past lifespan -> clamps to 1.0.
+    REQUIRE_THAT(PopulationAgingModule::compute_natural_death_probability(10000.0f, 80.0f, 0.10f),
+                 WithinAbs(1.0f, 1e-4f));
+}
+
+TEST_CASE("PopulationAging: annual tick advances NPC age", "[population_aging][tier11]") {
+    auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_YEAR);
+    NPC npc{};
+    npc.id = 5;
+    npc.status = NPCStatus::active;
+    npc.current_province_id = 0;
+    npc.age_years = 40.0f;
+    world.significant_npcs.push_back(npc);
+
+    PopulationAgingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+
+    bool found = false;
+    for (const auto& nd : delta.npc_deltas) {
+        if (nd.npc_id == 5) {
+            REQUIRE(nd.age_delta.has_value());
+            REQUIRE_THAT(*nd.age_delta, WithinAbs(1.0f, 1e-6f));
+            REQUIRE_FALSE(nd.new_status.has_value());  // 40 << lifespan, no death
+            found = true;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("PopulationAging: NPC far past lifespan dies", "[population_aging][tier11]") {
+    auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_YEAR);
+    NPC npc{};
+    npc.id = 9;
+    npc.status = NPCStatus::active;
+    npc.current_province_id = 0;
+    npc.age_years = 10000.0f;  // death probability clamps to 1.0
+    world.significant_npcs.push_back(npc);
+
+    PopulationAgingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    apply_deltas(world, delta);
+
+    REQUIRE(world.significant_npcs[0].status == NPCStatus::dead);
+}
+
+TEST_CASE("PopulationAging: NPC aging only fires on annual ticks", "[population_aging][tier11]") {
+    auto world = make_one_province_world(/*tick=*/PopulationAgingModule::TICKS_PER_MONTH);  // 30
+    NPC npc{};
+    npc.id = 1;
+    npc.status = NPCStatus::active;
+    npc.current_province_id = 0;
+    npc.age_years = 40.0f;
+    world.significant_npcs.push_back(npc);
+
+    PopulationAgingModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    // Tick 30 is monthly but not annual: no NPC age delta.
+    for (const auto& nd : delta.npc_deltas)
+        REQUIRE(nd.npc_id != 1);
+}

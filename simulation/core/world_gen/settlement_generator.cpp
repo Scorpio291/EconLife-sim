@@ -205,6 +205,12 @@ void SettlementGenerator::create_npcs(WorldState& world, DeterministicRNG& rng,
             npc.current_province_id = p;
             npc.travel_status = static_cast<NPCTravelStatus>(0);  // resident
             npc.status = NPCStatus::active;
+            // Working-age spread (18-74), below natural_lifespan so no spurious
+            // first-year deaths; population_aging advances age each year. Uses an
+            // independent per-NPC RNG so it does not consume from the shared
+            // world-gen sequence (which would desync downstream generation).
+            DeterministicRNG age_rng(static_cast<uint64_t>(npc.id) * 0x9E3779B97F4A7C15ull);
+            npc.age_years = 18.0f + static_cast<float>(age_rng.next_uint(57));
 
             // Capital varies by role.
             float capital_base;

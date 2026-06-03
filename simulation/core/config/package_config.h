@@ -860,6 +860,10 @@ struct PopulationAgingConfig {
     float base_annual_birth_rate = 0.012f;
     float base_annual_death_rate = 0.008f;
     float retiree_mortality_multiplier = 4.0f;
+    // Significant-NPC natural death: NPCs past natural_lifespan_years face an
+    // annual death roll scaled up as health falls. Age advances 1 year per year.
+    float natural_lifespan_years = 80.0f;
+    float natural_death_annual_prob = 0.10f;  // at full health, past lifespan
 };
 
 struct LodSystemConfig {

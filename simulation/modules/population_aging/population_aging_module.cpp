@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -55,6 +56,14 @@ bool PopulationAgingModule::is_monthly_tick(uint32_t current_tick) {
 
 bool PopulationAgingModule::is_annual_tick(uint32_t current_tick) {
     return (current_tick % TICKS_PER_YEAR) == 0;
+}
+
+float PopulationAgingModule::compute_natural_death_probability(float age, float lifespan,
+                                                               float base_prob) {
+    if (age < lifespan)
+        return 0.0f;
+    float over = 1.0f + (age - lifespan) * 0.05f;  // +5% of base per year past lifespan
+    return std::clamp(base_prob * over, 0.0f, 1.0f);
 }
 
 float PopulationAgingModule::compute_mean_income(
@@ -123,6 +132,29 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
         return;
 
     const auto& province = state.provinces[province_idx];
+
+    // --- Significant-NPC aging (annual) ----------------------------------------
+    // Advance age one year and roll natural death for NPCs past their lifespan.
+    // Retirement role transitions are NOT modelled: there is no `retired`
+    // NPCRole/status in V1 (documented gap; see population_aging/INTERFACE.md).
+    if (is_annual_tick(state.current_tick)) {
+        DeterministicRNG tick_rng(state.world_seed ^ static_cast<uint64_t>(state.current_tick));
+        for (const auto& npc : state.significant_npcs) {
+            if (npc.status != NPCStatus::active || npc.current_province_id != province.id)
+                continue;
+            NPCDelta nd;
+            nd.npc_id = npc.id;
+            nd.age_delta = 1.0f;
+            float death_p = compute_natural_death_probability(
+                npc.age_years, cfg_.natural_lifespan_years, cfg_.natural_death_annual_prob);
+            if (death_p > 0.0f) {
+                DeterministicRNG npc_rng = tick_rng.fork(npc.id);
+                if (npc_rng.next_float() < death_p)
+                    nd.new_status = NPCStatus::dead;
+            }
+            province_delta.npc_deltas.push_back(nd);
+        }
+    }
 
     // --- Background-population cohort lifecycle ---------------------------------
     // Monthly: income + employment convergence. Annual: education drift +

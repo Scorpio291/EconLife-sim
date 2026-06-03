@@ -34,6 +34,10 @@ class PopulationAgingModule : public ITickModule {
     static bool is_annual_tick(uint32_t current_tick);
     // Size-weighted mean of cohort median_income (0 if no population).
     static float compute_mean_income(const std::map<DemographicGroup, PopulationCohort>& cohorts);
+    // Annual natural-death probability for a significant NPC. 0 below lifespan;
+    // past it, base_prob scaled up with years over lifespan. (NPC health is not
+    // a WorldState field, so age is the sole driver.)
+    static float compute_natural_death_probability(float age, float lifespan, float base_prob);
 
     // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;
