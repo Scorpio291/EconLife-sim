@@ -435,6 +435,17 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                 if (d.inequality_delta.has_value()) {
                     c.inequality_index = clamp01(safe_add(c.inequality_index, *d.inequality_delta));
                 }
+                if (d.regulatory_compliance_delta.has_value()) {
+                    c.regulatory_compliance_index = clamp01(
+                        safe_add(c.regulatory_compliance_index, *d.regulatory_compliance_delta));
+                }
+                if (d.drought_modifier_delta.has_value()) {
+                    c.drought_modifier =
+                        clamp01(safe_add(c.drought_modifier, *d.drought_modifier_delta));
+                }
+                if (d.flood_modifier_delta.has_value()) {
+                    c.flood_modifier = clamp01(safe_add(c.flood_modifier, *d.flood_modifier_delta));
+                }
 
                 // Population-fraction monitors live on cohort_stats since the
                 // schema-v5 consolidation. Initialise lazily if missing.

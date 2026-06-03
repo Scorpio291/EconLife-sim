@@ -32,6 +32,14 @@ class RegionalConditionsModule : public ITickModule {
     static float compute_criminal_dominance(float criminal_revenue, float total_revenue);
     static float compute_drought_recovery(float current_modifier, float recovery_rate);
     static float compute_inequality_from_gini(float gini_coefficient);
+    // Per-capita rate from a count and a population (0 if population is 0).
+    static float compute_population_rate(uint32_t count, uint32_t population);
+    // Size-weighted mean employment_rate across cohorts (0 if no population).
+    static float compute_formal_employment_rate(float weighted_employment, uint32_t total_size);
+    // Mean (1 - violation) across non-criminal facilities; 1.0 if none (vacuously clean).
+    static float compute_regulatory_compliance(float compliance_sum, uint32_t facility_count);
+    // Quarterly EMA smoothing of criminal dominance: (1-alpha)*prev + alpha*ratio.
+    static float compute_dominance_ema(float prev, float ratio, float alpha);
 
    private:
     RegionalConditionsConfig cfg_;

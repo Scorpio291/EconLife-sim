@@ -5,8 +5,20 @@
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
+#include "modules/addiction/addiction_types.h"  // AddictionStage
 
 namespace econlife {
+
+namespace {
+bool is_criminal_role(NPCRole r) {
+    return r == NPCRole::criminal_operator || r == NPCRole::criminal_enforcer ||
+           r == NPCRole::fixer;
+}
+bool is_addicted_stage(AddictionStage s) {
+    return s == AddictionStage::dependent || s == AddictionStage::active ||
+           s == AddictionStage::terminal;
+}
+}  // namespace
 
 float RegionalConditionsModule::compute_stability_recovery(float current_stability,
                                                            uint32_t instability_events) {
@@ -34,6 +46,30 @@ float RegionalConditionsModule::compute_inequality_from_gini(float gini_coeffici
     return std::clamp(gini_coefficient, 0.0f, 1.0f);
 }
 
+float RegionalConditionsModule::compute_population_rate(uint32_t count, uint32_t population) {
+    if (population == 0)
+        return 0.0f;
+    return std::clamp(static_cast<float>(count) / static_cast<float>(population), 0.0f, 1.0f);
+}
+
+float RegionalConditionsModule::compute_formal_employment_rate(float weighted_employment,
+                                                               uint32_t total_size) {
+    if (total_size == 0)
+        return 0.0f;
+    return std::clamp(weighted_employment / static_cast<float>(total_size), 0.0f, 1.0f);
+}
+
+float RegionalConditionsModule::compute_regulatory_compliance(float compliance_sum,
+                                                              uint32_t facility_count) {
+    if (facility_count == 0)
+        return 1.0f;  // vacuously clean — no facilities to violate compliance
+    return std::clamp(compliance_sum / static_cast<float>(facility_count), 0.0f, 1.0f);
+}
+
+float RegionalConditionsModule::compute_dominance_ema(float prev, float ratio, float alpha) {
+    return std::clamp((1.0f - alpha) * prev + alpha * ratio, 0.0f, 1.0f);
+}
+
 void RegionalConditionsModule::execute_province(uint32_t province_idx, const WorldState& state,
                                                 DeltaBuffer& province_delta) {
     if (province_idx >= state.provinces.size())
@@ -42,7 +78,6 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     const auto& province = state.provinces[province_idx];
     const auto& conditions = province.conditions;
     const auto& community = province.community;
-    const auto& demographics = province.demographics;
 
     // Population-fraction monitors now live on cohort_stats (post schema-v5
     // consolidation). Read through this local pointer alias; the rest of
@@ -68,51 +103,96 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
         compute_stability_recovery(conditions.stability_score, instability_events);
     rdelta.stability_delta = new_stability - conditions.stability_score;
 
-    // --- Inequality ---
-    // Weighted aggregation from income distribution fractions.
-    // High income concentration (large high-income fraction, small low-income fraction)
-    // pushes inequality upward. Use a simple Gini proxy: spread between high and low fraction.
-    {
-        float raw_inequality = demographics.income_high_fraction - demographics.income_low_fraction;
-        // Clamp raw signal to [0, 1], then compute delta toward it at slow convergence rate.
-        float target_inequality = std::clamp(raw_inequality, 0.0f, 1.0f);
-        // Nudge current inequality toward the target by a small fraction per tick.
-        constexpr float INEQUALITY_CONVERGENCE_RATE = 0.001f;
-        rdelta.inequality_delta =
-            INEQUALITY_CONVERGENCE_RATE * (target_inequality - conditions.inequality_index);
+    // --- Aggregation pass 1: NPCs physically in this province ---
+    const uint32_t population = cohort_stats->total_population;
+    uint32_t criminal_npc_count = 0;
+    uint32_t addicted_count = 0;
+    for (const auto& npc : state.significant_npcs) {
+        if (npc.status != NPCStatus::active || npc.current_province_id != province.id)
+            continue;
+        if (is_criminal_role(npc.role))
+            criminal_npc_count++;
+        if (is_addicted_stage(npc.addiction_state.stage))
+            addicted_count++;
     }
 
-    // --- Crime rate ---
-    // Criminal dominance drives crime rate upward; stability suppresses it.
-    // Drift toward (criminal_dominance * (1 - stability)) at slow rate.
-    {
-        float target_crime =
-            cohort_stats->criminal_dominance_index * (1.0f - conditions.stability_score);
-        constexpr float CRIME_CONVERGENCE_RATE = 0.002f;
-        rdelta.crime_rate_delta =
-            CRIME_CONVERGENCE_RATE * (target_crime - cohort_stats->crime_rate);
+    // --- Aggregation pass 2: businesses in this province ---
+    float criminal_revenue = 0.0f;
+    float total_revenue = 0.0f;
+    float compliance_sum = 0.0f;
+    uint32_t facility_count = 0;
+    for (const auto& biz : state.npc_businesses) {
+        if (biz.province_id != province.id)
+            continue;
+        total_revenue += biz.revenue_per_tick;
+        if (biz.criminal_sector) {
+            criminal_revenue += biz.revenue_per_tick;
+        } else {
+            compliance_sum += 1.0f - std::clamp(biz.regulatory_violation_severity, 0.0f, 1.0f);
+            facility_count++;
+        }
     }
 
-    // --- Addiction rate ---
-    // Addiction rate drifts toward the province's observed crime rate as a proxy
-    // for substance availability; decays naturally at a slow base rate.
-    {
-        constexpr float ADDICTION_DECAY_RATE = 0.0005f;
-        constexpr float ADDICTION_CRIME_COUPLING = 0.001f;
-        rdelta.addiction_rate_delta = ADDICTION_CRIME_COUPLING * cohort_stats->crime_rate -
-                                      ADDICTION_DECAY_RATE * cohort_stats->addiction_rate;
+    // --- Cohort employment (size-weighted) ---
+    float weighted_employment = 0.0f;
+    uint32_t total_cohort_size = 0;
+    for (const auto& [group, c] : cohort_stats->cohorts) {
+        (void)group;
+        weighted_employment += static_cast<float>(c.size) * c.employment_rate;
+        total_cohort_size += c.size;
     }
 
-    // --- Criminal dominance ---
-    // Criminal revenue proxy: crime_rate as fraction of all economic activity.
-    // Recalculate criminal dominance from current conditions.
+    // Zero-population province: neutral stability, zero per-capita metrics.
+    if (population == 0) {
+        rdelta.stability_delta = 0.5f - conditions.stability_score;
+        rdelta.crime_rate_delta = -cohort_stats->crime_rate;
+        rdelta.addiction_rate_delta = -cohort_stats->addiction_rate;
+        rdelta.formal_employment_rate_delta = -cohort_stats->formal_employment_rate;
+        province_delta.region_deltas.push_back(rdelta);
+        return;
+    }
+
+    // --- Inequality = gini (authoritative, from the cohort income distribution) ---
+    rdelta.inequality_delta = cohort_stats->gini_coefficient - conditions.inequality_index;
+
+    // --- Crime rate: criminal-NPC fraction of population (authoritative) ---
+    rdelta.crime_rate_delta =
+        compute_population_rate(criminal_npc_count, population) - cohort_stats->crime_rate;
+
+    // --- Addiction rate: dependent+ NPCs / population (authoritative) ---
+    rdelta.addiction_rate_delta =
+        compute_population_rate(addicted_count, population) - cohort_stats->addiction_rate;
+
+    // --- Formal employment: size-weighted mean of cohort employment_rate ---
+    rdelta.formal_employment_rate_delta =
+        compute_formal_employment_rate(weighted_employment, total_cohort_size) -
+        cohort_stats->formal_employment_rate;
+
+    // --- Regulatory compliance: mean(1 - violation) over non-criminal facilities ---
+    rdelta.regulatory_compliance_delta =
+        compute_regulatory_compliance(compliance_sum, facility_count) -
+        conditions.regulatory_compliance_index;
+
+    // --- Criminal dominance: criminal revenue share with quarterly EMA (alpha 0.1) ---
+    // No economy this tick -> carry the previous value forward (no delta).
+    if (total_revenue > 0.0f) {
+        float ratio = compute_criminal_dominance(criminal_revenue, total_revenue);
+        float ema = compute_dominance_ema(cohort_stats->criminal_dominance_index, ratio, 0.1f);
+        rdelta.criminal_dominance_delta = ema - cohort_stats->criminal_dominance_index;
+    }
+
+    // --- Agricultural modifiers: recover monotonically toward 1.0 ---
+    // (An active-weather-event signal is not exposed on WorldState; an event
+    // producer would lower these faster than recovery raises them.)
     {
-        float criminal_revenue_proxy = cohort_stats->crime_rate;
-        // Total revenue proxy = 1.0 (normalised); criminal share is the crime rate itself.
-        float new_dominance = compute_criminal_dominance(criminal_revenue_proxy, 1.0f);
-        constexpr float DOMINANCE_CONVERGENCE_RATE = 0.002f;
-        rdelta.criminal_dominance_delta =
-            DOMINANCE_CONVERGENCE_RATE * (new_dominance - cohort_stats->criminal_dominance_index);
+        float new_drought =
+            compute_drought_recovery(conditions.drought_modifier, cfg_.drought_recovery_rate);
+        if (new_drought != conditions.drought_modifier)
+            rdelta.drought_modifier_delta = new_drought - conditions.drought_modifier;
+        float new_flood =
+            compute_drought_recovery(conditions.flood_modifier, cfg_.flood_recovery_rate);
+        if (new_flood != conditions.flood_modifier)
+            rdelta.flood_modifier_delta = new_flood - conditions.flood_modifier;
     }
 
     // --- Social cohesion ---

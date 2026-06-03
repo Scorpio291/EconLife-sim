@@ -215,6 +215,10 @@ struct RegionDelta {
         infrastructure_rating_delta;  // additive; applied to province infrastructure_rating
     std::optional<float>
         avg_property_value_update;  // replacement; latest mean PropertyListing.market_value
+    std::optional<float>
+        regulatory_compliance_delta;  // additive; conditions.regulatory_compliance_index
+    std::optional<float> drought_modifier_delta;  // additive; conditions.drought_modifier (->1.0)
+    std::optional<float> flood_modifier_delta;    // additive; conditions.flood_modifier (->1.0)
 };
 
 // --- Cross-province communication ---
