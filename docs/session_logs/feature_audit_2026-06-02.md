@@ -13,8 +13,19 @@
 >   skill_supply / aggregate_skill_supply. Spec-vs-impl gaps worked around:
 >   labor wage market + HealthcareProfile + NPC.health are not on WorldState
 >   (proxied by regional_wage_anchor, sick_rate, age respectively).
-> - #3 political_cycle, #4 consequence system, #5 regional_conditions, #6
->   module finishes — not yet started.
+> - **#3 political_cycle STUB — BUILT** (3 slices): self-seeded governor
+>   offices, government-type gating (Autocracy/FailedState skip), real
+>   coalition-weighted election resolution from province cohorts with
+>   incumbent turnover (3a); campaign auto-activation + endorsement
+>   application (3b); full legislative pipeline — stage progression,
+>   NPC-legislator polling via compute_legislator_support, vote resolution,
+>   enacted→consequence, dead-sponsor→failed (3c). **Flagged (cross-module
+>   gaps, not internal):** no producer yet creates proposals/endorsements;
+>   NationPoliticalCycleState not delta-updated (no NationDelta); module
+>   state not persisted; real enacted-policy effects await the consequence
+>   system (#4).
+> - #4 consequence system, #5 regional_conditions, #6 module finishes — not
+>   yet started.
 
 
 **Scope:** All ~49 modules with an `INTERFACE.md` spec, comparing spec ↔ shipped
