@@ -1779,6 +1779,19 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
     // --- DeferredWorkQueue ---
     write_deferred_work_queue(w, state.deferred_work_queue);
 
+    // --- Consequence queue (schema v17) ---
+    w.write_u32(static_cast<uint32_t>(state.consequence_queue.size()));
+    for (const auto& e : state.consequence_queue) {
+        w.write_u32(e.id);
+        w.write_u8(static_cast<uint8_t>(e.category));
+        w.write_u32(e.source_npc_id);
+        w.write_u32(e.target_id);
+        w.write_u32(e.province_id);
+        w.write_u32(e.scheduled_tick);
+        w.write_bool(e.fired);
+        w.write_bool(e.cancelled);
+    }
+
     // --- Obligation network ---
     w.write_u32(static_cast<uint32_t>(state.obligation_network.size()));
     for (const auto& o : state.obligation_network)
@@ -2163,6 +2176,24 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
 
     // DeferredWorkQueue
     out_state.deferred_work_queue = read_deferred_work_queue(r);
+
+    // Consequence queue (schema v17+); older saves have none.
+    if (schema_ver >= 17u) {
+        uint32_t cq_count = r.read_u32();
+        out_state.consequence_queue.resize(cq_count);
+        for (uint32_t i = 0; i < cq_count; ++i) {
+            ConsequenceEntry e;
+            e.id = r.read_u32();
+            e.category = static_cast<ConsequenceCategory>(r.read_u8());
+            e.source_npc_id = r.read_u32();
+            e.target_id = r.read_u32();
+            e.province_id = r.read_u32();
+            e.scheduled_tick = r.read_u32();
+            e.fired = r.read_bool();
+            e.cancelled = r.read_bool();
+            out_state.consequence_queue[i] = e;
+        }
+    }
 
     // Obligations
     uint32_t ob_count = r.read_u32();

@@ -716,6 +716,19 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_evidence_deltas(world, delta.evidence_deltas, evidence_decay_interval);
     apply_region_deltas(world, delta.region_deltas);
     apply_cohort_stats_deltas(world, delta.cohort_stats_deltas);
+
+    // Consequence queue (GDD §21): schedule new entries and process cancellations.
+    for (const auto& cd : delta.consequence_deltas) {
+        if (cd.cancelled_entry_id.has_value()) {
+            for (auto& e : world.consequence_queue) {
+                if (e.id == *cd.cancelled_entry_id)
+                    e.cancelled = true;
+            }
+        }
+        if (cd.new_consequence.has_value()) {
+            world.consequence_queue.push_back(*cd.new_consequence);
+        }
+    }
     apply_currency_deltas(world, delta.currency_deltas);
     apply_technology_deltas(world, delta.technology_deltas);
     const float lod2_smoothing_rate =

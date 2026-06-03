@@ -5,6 +5,11 @@
 #include <cstdint>
 
 #include "core/tick/deferred_work.h"
+#include "core/tick/drain_deferred_work.h"
+#include "core/world_state/apply_deltas.h"
+#include "core/world_state/consequence.h"
+#include "core/world_state/delta_buffer.h"
+#include "core/world_state/world_state.h"
 
 using namespace econlife;
 
@@ -136,4 +141,119 @@ TEST_CASE("large queue maintains heap property", "[deferred_work][tier0]") {
         REQUIRE(item.due_tick > prev);
         prev = item.due_tick;
     }
+}
+
+// ===========================================================================
+// Consequence queue (GDD §21 delayed-consequence system)
+// ===========================================================================
+
+TEST_CASE("Consequence: base delay table + scheduling formula", "[consequence][tier0]") {
+    REQUIRE(consequence_base_delay(ConsequenceCategory::legal_proceeding) == 180u);
+    REQUIRE(consequence_base_delay(ConsequenceCategory::criminal_investigation) == 120u);
+    REQUIRE(consequence_base_delay(ConsequenceCategory::social_consequence) == 30u);
+    // variance01=0.5 -> 0 variance; awareness 1.0 -> delay == base.
+    REQUIRE(compute_consequence_delay(ConsequenceCategory::media_exposure, 0.5f, 1.0f) == 45u);
+    // awareness 2.0 doubles the delay.
+    REQUIRE(compute_consequence_delay(ConsequenceCategory::media_exposure, 0.5f, 2.0f) == 90u);
+    // variance01=0 -> -0.2 multiplier: 45 * 0.8 = 36.
+    REQUIRE(compute_consequence_delay(ConsequenceCategory::media_exposure, 0.0f, 1.0f) == 36u);
+}
+
+TEST_CASE("Consequence: due investigation fires a legal case seed", "[consequence][tier0]") {
+    WorldState w{};
+    w.current_tick = 100;
+    ConsequenceEntry e{};
+    e.id = 1;
+    e.category = ConsequenceCategory::criminal_investigation;
+    e.source_npc_id = 7;
+    e.target_id = 9;
+    e.province_id = 2;
+    e.scheduled_tick = 100;  // due now
+    w.consequence_queue.push_back(e);
+
+    DeltaBuffer d{};
+    DrainConfig cfg{};
+    drain_deferred_work(w, d, cfg);
+
+    REQUIRE(d.new_legal_case_seeds.size() == 1);
+    REQUIRE(d.new_legal_case_seeds[0].defendant_npc_id == 9);
+    REQUIRE(d.new_legal_case_seeds[0].lead_investigator_id == 7);
+    REQUIRE(d.new_legal_case_seeds[0].province_id == 2);
+    REQUIRE(w.consequence_queue.empty());  // pruned after firing
+}
+
+TEST_CASE("Consequence: does not fire before scheduled tick", "[consequence][tier0]") {
+    WorldState w{};
+    w.current_tick = 100;
+    ConsequenceEntry e{};
+    e.category = ConsequenceCategory::criminal_investigation;
+    e.scheduled_tick = 200;  // future
+    w.consequence_queue.push_back(e);
+
+    DeltaBuffer d{};
+    DrainConfig cfg{};
+    drain_deferred_work(w, d, cfg);
+
+    REQUIRE(d.new_legal_case_seeds.empty());
+    REQUIRE(w.consequence_queue.size() == 1);  // still pending
+}
+
+TEST_CASE("Consequence: cancelled entry does not fire", "[consequence][tier0]") {
+    WorldState w{};
+    w.current_tick = 100;
+    ConsequenceEntry e{};
+    e.category = ConsequenceCategory::criminal_investigation;
+    e.scheduled_tick = 100;
+    e.cancelled = true;
+    w.consequence_queue.push_back(e);
+
+    DeltaBuffer d{};
+    DrainConfig cfg{};
+    drain_deferred_work(w, d, cfg);
+
+    REQUIRE(d.new_legal_case_seeds.empty());
+    REQUIRE(w.consequence_queue.empty());  // cancelled entries are pruned
+}
+
+TEST_CASE("Consequence: fires even when the source NPC is absent/dead", "[consequence][tier0]") {
+    WorldState w{};
+    w.current_tick = 50;  // no significant_npcs at all
+    ConsequenceEntry e{};
+    e.category = ConsequenceCategory::media_exposure;
+    e.source_npc_id = 999;  // does not exist
+    e.province_id = 0;
+    e.scheduled_tick = 50;
+    w.consequence_queue.push_back(e);
+
+    DeltaBuffer d{};
+    DrainConfig cfg{};
+    drain_deferred_work(w, d, cfg);
+
+    REQUIRE(d.region_deltas.size() == 1);  // media_exposure -> institutional_trust hit
+    REQUIRE(w.consequence_queue.empty());
+}
+
+TEST_CASE("Consequence: ConsequenceDelta schedules and cancels via apply_deltas",
+          "[consequence][tier0]") {
+    WorldState w{};
+    w.current_tick = 10;
+
+    DeltaBuffer d{};
+    ConsequenceDelta cd{};
+    ConsequenceEntry e{};
+    e.id = 5;
+    e.category = ConsequenceCategory::social_consequence;
+    e.scheduled_tick = 40;
+    cd.new_consequence = e;
+    d.consequence_deltas.push_back(cd);
+    apply_deltas(w, d);
+    REQUIRE(w.consequence_queue.size() == 1);
+    REQUIRE(w.consequence_queue[0].id == 5);
+
+    DeltaBuffer d2{};
+    ConsequenceDelta cancel{};
+    cancel.cancelled_entry_id = 5;
+    d2.consequence_deltas.push_back(cancel);
+    apply_deltas(w, d2);
+    REQUIRE(w.consequence_queue[0].cancelled == true);
 }

@@ -6,6 +6,7 @@
 #include <vector>
 
 // Complete type definitions needed for std::optional and std::vector members.
+#include "consequence.h"                               // ConsequenceEntry, ConsequenceCategory
 #include "modules/calendar/calendar_types.h"           // CalendarEntry
 #include "modules/economy/economy_types.h"             // NPCBusiness (for NewBusinessDelta)
 #include "modules/production/production_types.h"       // Facility (for NewFacilityDelta)
@@ -83,10 +84,14 @@ struct EvidenceDelta {
 };
 
 struct ConsequenceDelta {
-    // Forward-declared; ConsequenceEntry defined in evidence module
-    // std::optional<ConsequenceEntry> new_entry;
-    std::optional<uint32_t> new_entry_id;  // placeholder until consequence types available
+    // Schedule a fully-formed consequence into WorldState.consequence_queue
+    // (GDD §21). The emitter computes scheduled_tick via compute_consequence_delay.
+    std::optional<ConsequenceEntry> new_consequence;
+    // Cancel a pending consequence by id (marks it cancelled; it will not fire).
     std::optional<uint32_t> cancelled_entry_id;
+    // Legacy placeholder id (pre-consequence-system). Modules still emitting this
+    // are not yet migrated to new_consequence; it is a no-op until then.
+    std::optional<uint32_t> new_entry_id;
 };
 
 struct BusinessDelta {

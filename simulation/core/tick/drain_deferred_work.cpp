@@ -16,6 +16,7 @@
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/world_state.h"
 #include "deferred_work.h"
+#include "modules/legal_process/legal_process_types.h"  // CaseSeverity
 
 namespace econlife {
 
@@ -46,10 +47,10 @@ static NPCIndex build_npc_index(const WorldState& world) {
 
 static void handle_consequence(const DeferredWorkItem& item, WorldState& world,
                                DeltaBuffer& delta) {
-    // Consequence execution: look up consequence_id and apply effects.
-    // ConsequenceEntry is not yet fully defined (placeholder in delta_buffer.h).
-    // For now, this is a no-op handler that will be filled in Session 16
-    // when the investigation → legal process pipeline is implemented.
+    // Legacy DeferredWorkQueue path. The live GDD §21 consequence system uses
+    // WorldState.consequence_queue, fired by process_consequence_queue() at the
+    // end of this drain; nothing schedules WorkType::consequence items, so this
+    // handler is intentionally inert.
     (void)item;
     (void)world;
     (void)delta;
@@ -277,6 +278,75 @@ static void handle_interception_check(const DeferredWorkItem& item, WorldState& 
 }
 
 // ---------------------------------------------------------------------------
+// process_consequence_queue — GDD §21 delayed-consequence firing.
+// Scans WorldState.consequence_queue for due, un-fired, un-cancelled entries
+// and applies a category-specific effect via the DeltaBuffer. Fires regardless
+// of whether the source NPC is still alive (the queue is the game's memory).
+// Fired/cancelled entries are pruned afterwards.
+// ---------------------------------------------------------------------------
+static void process_consequence_queue(WorldState& world, DeltaBuffer& delta) {
+    bool any_resolved = false;
+    for (auto& e : world.consequence_queue) {
+        if (e.fired || e.cancelled) {
+            any_resolved = true;
+            continue;
+        }
+        if (e.scheduled_tick > world.current_tick)
+            continue;
+
+        switch (e.category) {
+            case ConsequenceCategory::financial_investigation:
+            case ConsequenceCategory::criminal_investigation:
+            case ConsequenceCategory::legal_proceeding:
+            case ConsequenceCategory::whistle_blower_contact: {
+                LegalCaseSeedDelta seed{};
+                seed.defendant_npc_id = e.target_id;
+                seed.lead_investigator_id = e.source_npc_id;
+                seed.severity = static_cast<uint8_t>(
+                    e.category == ConsequenceCategory::legal_proceeding ? CaseSeverity::major
+                    : e.category == ConsequenceCategory::criminal_investigation
+                        ? CaseSeverity::serious
+                        : CaseSeverity::moderate);
+                seed.province_id = e.province_id;
+                seed.initial_evidence_weight = 0.30f;
+                delta.new_legal_case_seeds.push_back(seed);
+                break;
+            }
+            case ConsequenceCategory::media_exposure:
+            case ConsequenceCategory::political_consequence: {
+                RegionDelta rd;
+                rd.region_id = e.province_id;
+                rd.institutional_trust_delta = -0.03f;
+                delta.region_deltas.push_back(rd);
+                break;
+            }
+            case ConsequenceCategory::social_consequence: {
+                RegionDelta rd;
+                rd.region_id = e.province_id;
+                rd.grievance_delta = 0.03f;
+                delta.region_deltas.push_back(rd);
+                break;
+            }
+            case ConsequenceCategory::rival_escalation: {
+                RegionDelta rd;
+                rd.region_id = e.province_id;
+                rd.criminal_dominance_delta = 0.02f;
+                delta.region_deltas.push_back(rd);
+                break;
+            }
+        }
+        e.fired = true;
+        any_resolved = true;
+    }
+    if (any_resolved) {
+        auto& q = world.consequence_queue;
+        q.erase(std::remove_if(q.begin(), q.end(),
+                               [](const ConsequenceEntry& e) { return e.fired || e.cancelled; }),
+                q.end());
+    }
+}
+
+// ---------------------------------------------------------------------------
 // drain_deferred_work — main entry point
 // ---------------------------------------------------------------------------
 void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfig& cfg) {
@@ -340,6 +410,9 @@ void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfi
                 break;
         }
     }
+
+    // Fire any consequences scheduled for this tick (GDD §21).
+    process_consequence_queue(world, delta);
 }
 
 }  // namespace econlife

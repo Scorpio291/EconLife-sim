@@ -88,6 +88,11 @@ struct WorldState {
     // --- Deferred Work Queue (unified) ---
     DeferredWorkQueue deferred_work_queue;
 
+    // --- Consequence queue (GDD §21 delayed-consequence system) ---
+    // Scheduled future outcomes; fired by drain_deferred_work when due.
+    // Persisted (schema v17+); not cleared by player-character death.
+    std::vector<ConsequenceEntry> consequence_queue;
+
     // --- Obligation Network ---
     std::vector<ObligationNode> obligation_network;
 

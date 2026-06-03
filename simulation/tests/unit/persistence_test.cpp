@@ -112,8 +112,8 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // (payment_method, down_payment_fraction, interest_rate,
     // loan_maturity_ticks per entry). Earlier bumps (v3..v10) documented
     // in persistence_module.h:CURRENT_SCHEMA_VERSION.
-    // v16: background-population cohorts + NPC age_years (population_aging).
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 16);
+    // v17: consequence queue (GDD §21 delayed-consequence system).
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 17);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -792,4 +792,28 @@ TEST_CASE("Persistence: pending_legal_case_seeds defensively cleared on load (v8
     restored.pending_legal_case_seeds.push_back(stale);
     REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
     REQUIRE(restored.pending_legal_case_seeds.empty());
+}
+
+TEST_CASE("Persistence: round-trip preserves the consequence queue (v17)",
+          "[persistence][tier12][serialization]") {
+    auto world = test::create_test_world(11, 5, 1, 3);
+    ConsequenceEntry e{};
+    e.id = 42;
+    e.category = ConsequenceCategory::legal_proceeding;
+    e.source_npc_id = 7;
+    e.target_id = 9;
+    e.province_id = 0;
+    e.scheduled_tick = 5000;  // pending
+    world.consequence_queue.push_back(e);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.consequence_queue.size() == 1);
+    const auto& r = restored.consequence_queue[0];
+    REQUIRE(r.id == 42);
+    REQUIRE(r.category == ConsequenceCategory::legal_proceeding);
+    REQUIRE(r.target_id == 9);
+    REQUIRE(r.scheduled_tick == 5000u);
 }
