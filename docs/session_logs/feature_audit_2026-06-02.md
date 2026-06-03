@@ -1,5 +1,22 @@
 # EconLife Module Implementation Audit — 2026-06-02
 
+> **Progress update (2026-06-03):** Working the priority list from §6.
+> - **#1 npc_business tick bug — FIXED** (`next_decision_tick_update` delta;
+>   businesses no longer re-decide every tick).
+> - **#2 population_aging STUB — BUILT** (4 slices): cohort data model on
+>   RegionCohortStats (12 DemographicGroups), monthly income/employment
+>   convergence + annual education drift + births/deaths + aggregate
+>   (total_population/mean_income/gini) recompute via a new CohortStatsDelta,
+>   world-gen cohort seeding, persistence v16 (cohorts + NPC age_years), and
+>   significant-NPC annual aging + natural death. **Deferred (flagged):**
+>   retirement role transitions (no `retired` NPCRole exists); per-cohort
+>   skill_supply / aggregate_skill_supply. Spec-vs-impl gaps worked around:
+>   labor wage market + HealthcareProfile + NPC.health are not on WorldState
+>   (proxied by regional_wage_anchor, sick_rate, age respectively).
+> - #3 political_cycle, #4 consequence system, #5 regional_conditions, #6
+>   module finishes — not yet started.
+
+
 **Scope:** All ~49 modules with an `INTERFACE.md` spec, comparing spec ↔ shipped
 code. **Method:** six parallel auditors (one per module batch), each comparing
 the INTERFACE to the `.cpp`/`.h` with file:line evidence, **followed by a
