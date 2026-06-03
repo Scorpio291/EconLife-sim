@@ -34,7 +34,15 @@
 >   emitters (calendar, antitrust, npc_business, political_cycle, …) from the
 >   no-op new_entry_id to typed ConsequenceEntries with real
 >   source/target/awareness.
-> - #5 regional_conditions, #6 module finishes — not yet started.
+> - **#5 regional_conditions — DONE (deep):** replaced slow-convergence proxies
+>   with authoritative aggregation of every INTERFACE output — inequality=cohort
+>   gini, crime/addiction from NPC counts/states, formal_employment from cohort
+>   employment, regulatory_compliance = mean(1-violation) over non-criminal
+>   businesses, criminal_dominance = revenue share + EMA(0.1), drought/flood
+>   recovery, zero-pop safe defaults. New RegionDelta fields for compliance +
+>   drought + flood. Flagged: weather-event recovery gating needs an active-event
+>   signal not on WorldState.
+> - #4b consequence emitter migration, #6 module finishes — not yet started.
 
 
 **Scope:** All ~49 modules with an `INTERFACE.md` spec, comparing spec ↔ shipped
