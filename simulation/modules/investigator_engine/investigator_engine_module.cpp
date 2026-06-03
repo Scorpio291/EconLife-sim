@@ -326,7 +326,8 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
             found_case->formally_opened = true;
             found_case->opened_tick = state.current_tick;
             ConsequenceDelta cons;
-            cons.new_entry_id = inv->id;
+            cons.new_consequence = make_consequence(
+                inv->id, ConsequenceCategory::political_consequence, 0, 0, 0, state.current_tick);
             province_delta.consequence_deltas.push_back(cons);
         }
 
@@ -340,7 +341,8 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
         if (new_status >= InvestigatorMeterStatus::raid_imminent &&
             old_status < static_cast<uint8_t>(InvestigatorMeterStatus::raid_imminent)) {
             ConsequenceDelta cons;
-            cons.new_entry_id = inv->id;
+            cons.new_consequence = make_consequence(
+                inv->id, ConsequenceCategory::political_consequence, 0, 0, 0, state.current_tick);
             province_delta.consequence_deltas.push_back(cons);
 
             if (found_case->target_id != 0u) {

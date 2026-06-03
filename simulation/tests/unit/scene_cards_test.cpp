@@ -523,8 +523,8 @@ TEST_CASE("resolved card generates consequence delta", "[scene_cards][tier1]") {
 
     // Should have a consequence delta for the choice.
     REQUIRE(delta.consequence_deltas.size() == 1);
-    REQUIRE(delta.consequence_deltas[0].new_entry_id.has_value());
-    REQUIRE(delta.consequence_deltas[0].new_entry_id.value() == 777);
+    REQUIRE(delta.consequence_deltas[0].new_consequence.has_value());
+    REQUIRE(delta.consequence_deltas[0].new_consequence->id == 777);
 
     // Should also have an NPC memory delta.
     REQUIRE(delta.npc_deltas.size() == 1);

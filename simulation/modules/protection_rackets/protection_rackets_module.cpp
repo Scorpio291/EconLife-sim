@@ -220,7 +220,9 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
                     case RacketEscalationStage::property_damage: {
                         // Facility incident consequence (severity 0.4)
                         ConsequenceDelta cons;
-                        cons.new_entry_id = racket.target_business_id;
+                        cons.new_consequence = make_consequence(
+                            racket.target_business_id, ConsequenceCategory::social_consequence, 0,
+                            0, province.id, state.current_tick);
                         province_delta.consequence_deltas.push_back(cons);
 
                         // Physical evidence token
@@ -240,7 +242,9 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
                     case RacketEscalationStage::violence: {
                         // Personnel violence consequence
                         ConsequenceDelta cons;
-                        cons.new_entry_id = racket.target_business_id;
+                        cons.new_consequence = make_consequence(
+                            racket.target_business_id, ConsequenceCategory::social_consequence, 0,
+                            0, province.id, state.current_tick);
                         province_delta.consequence_deltas.push_back(cons);
 
                         // Testimonial evidence from witnesses
@@ -263,7 +267,9 @@ void ProtectionRacketsModule::execute_province(uint32_t province_idx, const Worl
                     case RacketEscalationStage::abandonment: {
                         // Business bankruptcy/exit
                         ConsequenceDelta cons;
-                        cons.new_entry_id = racket.target_business_id;
+                        cons.new_consequence = make_consequence(
+                            racket.target_business_id, ConsequenceCategory::social_consequence, 0,
+                            0, province.id, state.current_tick);
                         province_delta.consequence_deltas.push_back(cons);
                         break;
                     }

@@ -168,7 +168,7 @@ TEST_CASE("test_deadline_miss_queues_consequence_with_delay", "[calendar][tier1]
     // The consequence should be scheduled at deadline_tick + delay = 10 + 5 = 15.
     bool found_consequence = false;
     for (const auto& cd : delta.consequence_deltas) {
-        if (cd.new_entry_id.has_value() && cd.new_entry_id.value() == 15) {
+        if (cd.new_consequence.has_value() && cd.new_consequence->id == 15) {
             found_consequence = true;
         }
     }
@@ -246,7 +246,7 @@ TEST_CASE("test_npc_initiative_fires_on_miss", "[calendar][tier1]") {
     // Verify the NPC initiative delta uses npc_id as the entry id.
     bool found_initiative = false;
     for (const auto& cd : delta.consequence_deltas) {
-        if (cd.new_entry_id.has_value() && cd.new_entry_id.value() == 42) {
+        if (cd.new_consequence.has_value() && cd.new_consequence->id == 42) {
             found_initiative = true;
         }
     }
@@ -453,7 +453,7 @@ TEST_CASE("test_dead_npc_skips_relationship", "[calendar][tier1]") {
 
     // Step 2 (consequence) should still fire.
     REQUIRE(delta.consequence_deltas.size() == 1);
-    REQUIRE(delta.consequence_deltas[0].new_entry_id.has_value());
+    REQUIRE(delta.consequence_deltas[0].new_consequence.has_value());
 
     // Steps 1 and 4 (relationship and memory) should be skipped for dead NPC.
     // So npc_deltas should be empty -- no relationship delta, no memory delta.

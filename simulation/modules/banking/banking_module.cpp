@@ -179,16 +179,19 @@ void BankingModule::process_loan_repayment(LoanRecord& loan, const WorldState& s
         // Check for default after grace period.
         if (credit->consecutive_misses > cfg_.default_grace_ticks) {
             loan.in_default = true;
-            process_loan_default(loan, delta);
+            process_loan_default(loan, delta, state.current_tick);
         }
     }
 }
 
-void BankingModule::process_loan_default(LoanRecord& loan, DeltaBuffer& delta) {
+void BankingModule::process_loan_default(LoanRecord& loan, DeltaBuffer& delta,
+                                         uint32_t current_tick) {
     if (loan.purpose == LoanPurpose::criminal_informal) {
         // Queue violence escalation consequence.
         ConsequenceDelta consequence{};
-        consequence.new_entry_id = loan.id;
+        consequence.new_consequence =
+            make_consequence(static_cast<uint32_t>(loan.id),
+                             ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
         delta.consequence_deltas.push_back(consequence);
 
         // Also queue evidence for criminal enforcement action.
@@ -209,7 +212,9 @@ void BankingModule::process_loan_default(LoanRecord& loan, DeltaBuffer& delta) {
     } else if (loan.collateral_id != 0) {
         // Secured loan: queue collateral seizure consequence.
         ConsequenceDelta consequence{};
-        consequence.new_entry_id = loan.id;
+        consequence.new_consequence =
+            make_consequence(static_cast<uint32_t>(loan.id),
+                             ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
         delta.consequence_deltas.push_back(consequence);
 
         // Phase 5 — property_purchase loans additionally trigger

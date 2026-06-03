@@ -105,7 +105,9 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     compute_market_margin(compound.stage, compound.has_successor);
 
                 ConsequenceDelta cons;
-                cons.new_entry_id = compound.compound_id;
+                cons.new_consequence = make_consequence(compound.compound_id,
+                                                        ConsequenceCategory::political_consequence,
+                                                        0, 0, 0, state.current_tick);
                 delta.consequence_deltas.push_back(cons);
             }
         }

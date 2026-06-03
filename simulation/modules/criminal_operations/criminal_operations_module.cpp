@@ -346,7 +346,9 @@ void CriminalOperationsModule::process_strategic_decision(CriminalOrganization& 
             // Signal a personnel reduction by queuing a consequence entry
             // keyed to the org's leadership NPC.
             ConsequenceDelta cd;
-            cd.new_entry_id = org.leadership_npc_id;
+            cd.new_consequence =
+                make_consequence(org.leadership_npc_id, ConsequenceCategory::social_consequence,
+                                 org.leadership_npc_id, 0, 0, state.current_tick);
             delta.consequence_deltas.push_back(cd);
             break;
         }

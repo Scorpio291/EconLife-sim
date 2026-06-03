@@ -347,7 +347,7 @@ TEST_CASE("PoliticalCycle: floor vote resolves via NPC legislator poll",
     REQUIRE(module.state().proposals[0].status == LegislativeProposalStatus::enacted);
     bool consequence = false;
     for (const auto& c : d.consequence_deltas)
-        if (c.new_entry_id.has_value() && *c.new_entry_id == 7u)
+        if (c.new_consequence.has_value() && c.new_consequence->id == 7u)
             consequence = true;
     REQUIRE(consequence);
 }

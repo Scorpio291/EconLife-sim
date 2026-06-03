@@ -203,7 +203,9 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 }
 
                 ConsequenceDelta cons;
-                cons.new_entry_id = lcase.id;
+                cons.new_consequence = make_consequence(static_cast<uint32_t>(lcase.id),
+                                                        ConsequenceCategory::social_consequence, 0,
+                                                        0, 0, state.current_tick);
                 delta.consequence_deltas.push_back(cons);
                 continue;  // one transition per tick per case
             }
@@ -287,7 +289,9 @@ void LegalProcessModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 lcase.release_tick = state.current_tick + lcase.sentence_ticks;
                 lcase.double_jeopardy_until = lcase.release_tick + cfg_.double_jeopardy_cooldown;
                 ConsequenceDelta cons;
-                cons.new_entry_id = lcase.id;
+                cons.new_consequence = make_consequence(static_cast<uint32_t>(lcase.id),
+                                                        ConsequenceCategory::social_consequence, 0,
+                                                        0, 0, state.current_tick);
                 delta.consequence_deltas.push_back(cons);
                 // Fall through into convicted handling for the same tick so
                 // the imprisonment/fine branch resolves immediately.

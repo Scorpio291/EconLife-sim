@@ -143,7 +143,9 @@ void CalendarModule::execute_missed_deadline(const WorldState& state, DeltaBuffe
     // Scheduled at deadline_tick + consequence_delay_ticks.
     {
         ConsequenceDelta cons_delta{};
-        cons_delta.new_entry_id = deadline_tick + consequence.consequence_delay_ticks;
+        cons_delta.new_consequence =
+            make_consequence(deadline_tick + consequence.consequence_delay_ticks,
+                             ConsequenceCategory::social_consequence, 0, 0, 0, state.current_tick);
         // The new_entry_id field is a placeholder until the full consequence
         // system is implemented. We encode the due_tick as the entry id
         // so that tests can verify the scheduling delay.
@@ -156,7 +158,9 @@ void CalendarModule::execute_missed_deadline(const WorldState& state, DeltaBuffe
     if (consequence.npc_initiative) {
         ConsequenceDelta initiative_delta{};
         // Use npc_id as the entry id to identify this as an NPC unilateral action.
-        initiative_delta.new_entry_id = entry.npc_id;
+        initiative_delta.new_consequence =
+            make_consequence(entry.npc_id, ConsequenceCategory::social_consequence, 0, entry.npc_id,
+                             0, state.current_tick);
         delta.consequence_deltas.push_back(initiative_delta);
     }
 

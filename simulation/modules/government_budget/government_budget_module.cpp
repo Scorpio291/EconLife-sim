@@ -36,7 +36,7 @@ void GovernmentBudgetModule::execute(const WorldState& state, DeltaBuffer& delta
         process_quarterly_taxes(state, delta);
         process_intergovernmental_transfers();
         execute_spending(state, delta);
-        check_fiscal_health(delta);
+        check_fiscal_health(delta, state.current_tick);
         apply_spending_effects(delta);
         // Infrastructure runs last so its delta merges after spending effects.
         update_infrastructure(state, delta);
@@ -394,7 +394,7 @@ void GovernmentBudgetModule::update_infrastructure(const WorldState& state, Delt
 // Step 5: Fiscal Health Checks
 // ===========================================================================
 
-void GovernmentBudgetModule::check_fiscal_health(DeltaBuffer& delta) {
+void GovernmentBudgetModule::check_fiscal_health(DeltaBuffer& delta, uint32_t current_tick) {
     for (auto& budget : budgets_) {
         // Compute debt-to-revenue ratio.
         budget.debt_to_revenue_ratio =
@@ -412,22 +412,25 @@ void GovernmentBudgetModule::check_fiscal_health(DeltaBuffer& delta) {
         if (budget.debt_to_revenue_ratio > cfg_.debt_crisis_ratio) {
             // Fiscal crisis consequence.
             ConsequenceDelta consequence{};
-            consequence.new_entry_id =
-                static_cast<uint32_t>(budget.jurisdiction_id * 100 + 2);  // deterministic ID
+            consequence.new_consequence =
+                make_consequence(static_cast<uint32_t>(budget.jurisdiction_id * 100 + 2),
+                                 ConsequenceCategory::political_consequence, 0, 0, 0, current_tick);
             delta.consequence_deltas.push_back(consequence);
         } else if (budget.debt_to_revenue_ratio > cfg_.debt_warning_ratio) {
             // Fiscal pressure warning consequence.
             ConsequenceDelta consequence{};
-            consequence.new_entry_id =
-                static_cast<uint32_t>(budget.jurisdiction_id * 100 + 1);  // deterministic ID
+            consequence.new_consequence =
+                make_consequence(static_cast<uint32_t>(budget.jurisdiction_id * 100 + 1),
+                                 ConsequenceCategory::political_consequence, 0, 0, 0, current_tick);
             delta.consequence_deltas.push_back(consequence);
         }
 
         // Government insolvency: cash < 0.
         if (budget.cash < 0.0f) {
             ConsequenceDelta insolvency{};
-            insolvency.new_entry_id =
-                static_cast<uint32_t>(budget.jurisdiction_id * 100 + 3);  // deterministic ID
+            insolvency.new_consequence =
+                make_consequence(static_cast<uint32_t>(budget.jurisdiction_id * 100 + 3),
+                                 ConsequenceCategory::political_consequence, 0, 0, 0, current_tick);
             delta.consequence_deltas.push_back(insolvency);
         }
     }

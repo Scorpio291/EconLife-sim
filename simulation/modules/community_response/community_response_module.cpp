@@ -237,7 +237,9 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
             !pstate.opposition_org_exists) {
             pstate.opposition_org_exists = true;
             ConsequenceDelta cd;
-            cd.new_entry_id = province.id;  // Encodes province as pending org formation signal.
+            cd.new_consequence =
+                make_consequence(province.id, ConsequenceCategory::political_consequence, 0, 0,
+                                 province.id, state.current_tick);
             delta.consequence_deltas.push_back(cd);
         }
 

@@ -108,7 +108,7 @@ class GovernmentBudgetModule : public ITickModule {
     void update_infrastructure(const WorldState& state, DeltaBuffer& delta);
 
     // Step 5: Check fiscal health and queue consequences.
-    void check_fiscal_health(DeltaBuffer& delta);
+    void check_fiscal_health(DeltaBuffer& delta, uint32_t current_tick);
 
     // Step 6: Apply spending effects on region conditions.
     void apply_spending_effects(DeltaBuffer& delta);

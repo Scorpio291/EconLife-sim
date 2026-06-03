@@ -109,7 +109,8 @@ void TradeInfrastructureModule::process_interception_checks(uint32_t current_tic
 
             // Queue a consequence for the interception.
             ConsequenceDelta cd{};
-            cd.new_entry_id = shipment.id;
+            cd.new_consequence = make_consequence(
+                shipment.id, ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
             delta.consequence_deltas.push_back(cd);
         }
     }

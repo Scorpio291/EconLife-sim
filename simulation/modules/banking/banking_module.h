@@ -105,7 +105,7 @@ class BankingModule : public ITickModule {
     void process_loan_repayment(LoanRecord& loan, const WorldState& state, DeltaBuffer& delta);
 
     // Handle a loan that has entered default status.
-    void process_loan_default(LoanRecord& loan, DeltaBuffer& delta);
+    void process_loan_default(LoanRecord& loan, DeltaBuffer& delta, uint32_t current_tick);
 
     // Remove loans that have reached maturity with zero balance.
     void retire_matured_loans(uint32_t current_tick);

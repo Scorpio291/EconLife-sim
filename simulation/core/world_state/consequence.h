@@ -73,4 +73,23 @@ inline uint32_t compute_consequence_delay(ConsequenceCategory c, float variance0
     return static_cast<uint32_t>(std::lround(static_cast<double>(d)));
 }
 
+// Build a scheduled ConsequenceEntry. The per-id variance de-synchronises event
+// clustering deterministically (no RNG dependency): identical id+tick always
+// schedule the same fire tick. Modules assign `new_consequence` from this and
+// apply_deltas routes it into WorldState.consequence_queue.
+inline ConsequenceEntry make_consequence(uint32_t id, ConsequenceCategory category,
+                                         uint32_t source_npc_id, uint32_t target_id,
+                                         uint32_t province_id, uint32_t current_tick,
+                                         float awareness = 1.0f) {
+    float variance01 = static_cast<float>((id * 2654435761u) % 100000u) / 100000.0f;
+    ConsequenceEntry e{};
+    e.id = id;
+    e.category = category;
+    e.source_npc_id = source_npc_id;
+    e.target_id = target_id;
+    e.province_id = province_id;
+    e.scheduled_tick = current_tick + compute_consequence_delay(category, variance01, awareness);
+    return e;
+}
+
 }  // namespace econlife

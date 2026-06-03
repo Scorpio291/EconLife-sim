@@ -164,7 +164,9 @@ void SceneCardsModule::resolve_player_choices(const WorldState& state, DeltaBuff
         // the consequence delta for processing by the consequence system.
         if (choice->consequence_id != 0) {
             ConsequenceDelta cons_delta{};
-            cons_delta.new_entry_id = choice->consequence_id;
+            cons_delta.new_consequence =
+                make_consequence(choice->consequence_id, ConsequenceCategory::social_consequence, 0,
+                                 0, 0, state.current_tick);
             delta.consequence_deltas.push_back(cons_delta);
         }
     }

@@ -237,7 +237,7 @@ void NpcBusinessModule::execute_province(uint32_t province_idx, const WorldState
         }
 
         // Apply the decision to deltas.
-        apply_decision_to_deltas(*biz, result, province_delta);
+        apply_decision_to_deltas(*biz, result, province_delta, state.current_tick);
 
         // Advance the quarterly cadence. Without this the business stays at or
         // past its decision tick and re-decides every tick (INTERFACE
@@ -405,7 +405,7 @@ bool NpcBusinessModule::check_board_approval(const BoardComposition* board,
 
 void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
                                                  const BusinessDecisionResult& result,
-                                                 DeltaBuffer& delta) {
+                                                 DeltaBuffer& delta, uint32_t current_tick) {
     // --- BusinessDelta: deduct cash_spent from the business and update cost_per_tick ---
     // This is the primary financial outcome of every quarterly decision.
     if (result.cash_spent > 0.0f || result.cost_per_tick_delta != 0.0f) {
@@ -444,7 +444,8 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
         // system can schedule downstream effects (new facility, competitor response, etc.).
         // new_entry_id encodes the business id; the consequence engine resolves the type.
         ConsequenceDelta expansion_cons{};
-        expansion_cons.new_entry_id = biz.id;
+        expansion_cons.new_consequence = make_consequence(
+            biz.id, ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
         delta.consequence_deltas.push_back(expansion_cons);
     }
 
@@ -467,7 +468,8 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
         delta.dissolved_businesses.push_back(dissolve);
         ConsequenceDelta cons_delta{};
         // Use id offset to distinguish exit consequences from expansion consequences.
-        cons_delta.new_entry_id = biz.id + 1000000u;
+        cons_delta.new_consequence = make_consequence(
+            biz.id + 1000000u, ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
         delta.consequence_deltas.push_back(cons_delta);
     }
 

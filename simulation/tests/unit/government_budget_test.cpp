@@ -126,7 +126,7 @@ GovernmentBudget make_provincial_budget(uint32_t province_id, float cash = 50000
 [[maybe_unused]] const ConsequenceDelta* find_consequence(const DeltaBuffer& delta,
                                                           uint32_t entry_id) {
     for (const auto& c : delta.consequence_deltas) {
-        if (c.new_entry_id.has_value() && c.new_entry_id.value() == entry_id) {
+        if (c.new_consequence.has_value() && c.new_consequence->id == entry_id) {
             return &c;
         }
     }
@@ -545,7 +545,7 @@ TEST_CASE("test_fiscal_crisis_triggers_at_debt_ratio", "[government_budget][tier
     // The fiscal crisis consequence id is jurisdiction_id * 100 + 2 = 0 * 100 + 2 = 2.
     bool found_crisis = false;
     for (const auto& c : delta.consequence_deltas) {
-        if (c.new_entry_id.has_value() && c.new_entry_id.value() == 2) {
+        if (c.new_consequence.has_value() && c.new_consequence->id == 2) {
             found_crisis = true;
             break;
         }
@@ -579,10 +579,10 @@ TEST_CASE("test_fiscal_warning_at_threshold", "[government_budget][tier5]") {
     bool found_warning = false;
     bool found_crisis = false;
     for (const auto& c : delta.consequence_deltas) {
-        if (c.new_entry_id.has_value()) {
-            if (c.new_entry_id.value() == 1)
+        if (c.new_consequence.has_value()) {
+            if (c.new_consequence->id == 1)
                 found_warning = true;
-            if (c.new_entry_id.value() == 2)
+            if (c.new_consequence->id == 2)
                 found_crisis = true;
         }
     }
@@ -616,7 +616,7 @@ TEST_CASE("test_government_insolvency_negative_cash", "[government_budget][tier5
     // Check for insolvency consequence (id = 0 * 100 + 3 = 3).
     bool found_insolvency = false;
     for (const auto& c : delta.consequence_deltas) {
-        if (c.new_entry_id.has_value() && c.new_entry_id.value() == 3) {
+        if (c.new_consequence.has_value() && c.new_consequence->id == 3) {
             found_insolvency = true;
             break;
         }

@@ -350,7 +350,8 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         if (terminal_death) {
             npc_delta.new_status = NPCStatus::dead;
             ConsequenceDelta cons_delta{};
-            cons_delta.new_entry_id = npc_id;
+            cons_delta.new_consequence = make_consequence(
+                npc_id, ConsequenceCategory::social_consequence, 0, npc_id, 0, state.current_tick);
             province_delta.consequence_deltas.push_back(cons_delta);
         }
 

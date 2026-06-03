@@ -152,7 +152,9 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
 
             // ConsequenceDelta: register hostile-action consequence entry
             ConsequenceDelta cdelta;
-            cdelta.new_entry_id = obl.obligation_id;
+            cdelta.new_consequence =
+                make_consequence(obl.obligation_id, ConsequenceCategory::social_consequence,
+                                 obl.creditor_npc_id, 0, 0, state.current_tick);
             delta.consequence_deltas.push_back(cdelta);
 
             // new_obligation_nodes: publish a coercive counter-obligation from

@@ -474,7 +474,9 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
             // For now, we skip direct DWQ push — the orchestrator drains consequences
             // from DeltaBuffer.consequence_deltas instead.
             ConsequenceDelta cd{};
-            cd.new_entry_id = npc.id;
+            cd.new_consequence =
+                make_consequence(npc.id, ConsequenceCategory::social_consequence, npc.id, 0,
+                                 npc.current_province_id, state.current_tick);
             province_delta.consequence_deltas.push_back(cd);
 
             // Whistleblow creates evidence.

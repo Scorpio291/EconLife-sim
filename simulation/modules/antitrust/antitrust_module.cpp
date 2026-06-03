@@ -225,7 +225,9 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
                 // Encoded as new_entry_id = actor_id (placeholder until ConsequenceEntry
                 // type is available; consistent with the pattern in npc_business).
                 ConsequenceDelta enforcement;
-                enforcement.new_entry_id = actor_id;
+                enforcement.new_consequence =
+                    make_consequence(actor_id, ConsequenceCategory::political_consequence, 0, 0, 0,
+                                     state.current_tick);
                 delta.consequence_deltas.push_back(enforcement);
 
                 // Also generate a highly actionable evidence token for Tier 2 actors.

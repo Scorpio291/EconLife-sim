@@ -405,7 +405,9 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
                     // Enacted policy effect: queued as a consequence (placeholder
                     // id until the generic consequence system lands -- audit #4).
                     ConsequenceDelta cd;
-                    cd.new_entry_id = static_cast<uint32_t>(proposal.id);
+                    cd.new_consequence = make_consequence(
+                        static_cast<uint32_t>(proposal.id),
+                        ConsequenceCategory::political_consequence, 0, 0, 0, state.current_tick);
                     delta.consequence_deltas.push_back(cd);
                 }
                 break;

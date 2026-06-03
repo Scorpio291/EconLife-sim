@@ -205,7 +205,9 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
 
                 // Queue embargo_investigation consequence (cannot be suppressed)
                 ConsequenceDelta cons;
-                cons.new_entry_id = biz.id;
+                cons.new_consequence =
+                    make_consequence(biz.id, ConsequenceCategory::criminal_investigation, 0,
+                                     biz.owner_id, biz.province_id, state.current_tick);
                 province_delta.consequence_deltas.push_back(cons);
                 break;  // one per province per tick
             }

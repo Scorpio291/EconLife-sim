@@ -461,7 +461,7 @@ TEST_CASE("test_interception_generates_evidence_delta", "[trade_infrastructure][
 
     // Should have generated a consequence delta.
     REQUIRE(delta.consequence_deltas.size() == 1);
-    REQUIRE(delta.consequence_deltas[0].new_entry_id.has_value());
+    REQUIRE(delta.consequence_deltas[0].new_consequence.has_value());
 
     // Intercepted shipment should be removed from active list.
     REQUIRE(module.active_shipments().empty());

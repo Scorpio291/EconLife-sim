@@ -143,7 +143,9 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
 
             // Notify consequence system of critical/fatal health event.
             ConsequenceDelta cons_delta{};
-            cons_delta.new_entry_id = hr->npc_id;
+            cons_delta.new_consequence =
+                make_consequence(hr->npc_id, ConsequenceCategory::social_consequence, 0, hr->npc_id,
+                                 0, state.current_tick);
             province_delta.consequence_deltas.push_back(cons_delta);
         }
 
