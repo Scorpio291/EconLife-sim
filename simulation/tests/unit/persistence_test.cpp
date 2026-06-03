@@ -112,7 +112,8 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // (payment_method, down_payment_fraction, interest_rate,
     // loan_maturity_ticks per entry). Earlier bumps (v3..v10) documented
     // in persistence_module.h:CURRENT_SCHEMA_VERSION.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 15);
+    // v16: background-population cohorts + NPC age_years (population_aging).
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 16);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -153,6 +154,42 @@ TEST_CASE("Persistence: round-trip preserves global scalars",
     REQUIRE(restored.game_mode == GameMode::standard);
     REQUIRE(restored.current_schema_version == 1);
     REQUIRE(restored.network_health_dirty == true);
+}
+
+TEST_CASE("Persistence: round-trip preserves cohorts and NPC age (v16)",
+          "[persistence][tier12][serialization]") {
+    auto world = test::create_test_world(7, 5, 1, 3);
+    REQUIRE(world.provinces.size() == 1);
+    if (!world.provinces[0].cohort_stats)
+        world.provinces[0].cohort_stats = std::make_unique<RegionCohortStats>();
+    auto& cs = *world.provinces[0].cohort_stats;
+    cs.regional_wage_anchor = 123.0f;
+    cs.mean_income = 111.0f;
+    cs.gini_coefficient = 0.42f;
+    PopulationCohort c;
+    c.group = DemographicGroup::working_urban_mid;
+    c.size = 4321;
+    c.median_income = 200.0f;
+    c.education_level = 0.55f;
+    c.employment_rate = 0.66f;
+    cs.cohorts[c.group] = c;
+    cs.total_population = c.size;
+    REQUIRE_FALSE(world.significant_npcs.empty());
+    world.significant_npcs[0].age_years = 71.5f;
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.provinces[0].cohort_stats != nullptr);
+    const auto& rcs = *restored.provinces[0].cohort_stats;
+    REQUIRE_THAT(rcs.regional_wage_anchor, Catch::Matchers::WithinAbs(123.0f, 1e-3f));
+    REQUIRE_THAT(rcs.gini_coefficient, Catch::Matchers::WithinAbs(0.42f, 1e-3f));
+    REQUIRE(rcs.cohorts.count(DemographicGroup::working_urban_mid) == 1);
+    const auto& rc = rcs.cohorts.at(DemographicGroup::working_urban_mid);
+    REQUIRE(rc.size == 4321u);
+    REQUIRE_THAT(rc.median_income, Catch::Matchers::WithinAbs(200.0f, 1e-3f));
+    REQUIRE_THAT(restored.significant_npcs[0].age_years, Catch::Matchers::WithinAbs(71.5f, 1e-3f));
 }
 
 TEST_CASE("Persistence: round-trip preserves NPC data", "[persistence][tier12][serialization]") {

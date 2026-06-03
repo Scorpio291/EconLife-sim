@@ -296,6 +296,9 @@ void write_npc(ByteWriter& w, const NPC& npc) {
     // (which lack these) load with the defaults (health 1.0, terminal 0).
     w.write_float(npc.addiction_state.withdrawal_health);
     w.write_u32(npc.addiction_state.terminal_ticks);
+    // Schema v16: demographic age (population_aging). Trailing field; read_npc
+    // gates on schema_ver >= 16 so older saves load with the default (30).
+    w.write_float(npc.age_years);
 }
 
 void write_evidence_token(ByteWriter& w, const EvidenceToken& e) {
@@ -402,6 +405,22 @@ void write_province(ByteWriter& w, const Province& p) {
         w.write_float(p.cohort_stats->sick_rate);
         w.write_float(p.cohort_stats->homeless_rate);
         w.write_float(p.cohort_stats->unemployment_rate);
+        // v16: background-population cohorts + derived aggregates
+        // (population_aging). Read gated on schema_ver >= 16.
+        w.write_float(p.cohort_stats->mean_income);
+        w.write_float(p.cohort_stats->gini_coefficient);
+        w.write_float(p.cohort_stats->regional_wage_anchor);
+        w.write_u32(static_cast<uint32_t>(p.cohort_stats->cohorts.size()));
+        for (const auto& [group, c] : p.cohort_stats->cohorts) {
+            w.write_u8(static_cast<uint8_t>(group));
+            w.write_u32(c.size);
+            w.write_float(c.median_income);
+            w.write_float(c.education_level);
+            w.write_float(c.employment_rate);
+            w.write_float(c.political_lean);
+            w.write_float(c.grievance_contribution);
+            w.write_float(c.addiction_prevalence);
+        }
     }
 
     w.write_bool(p.has_karst);
@@ -1095,6 +1114,10 @@ NPC read_npc(ByteReader& r, uint32_t schema_ver) {
         npc.addiction_state.withdrawal_health = r.read_float();
         npc.addiction_state.terminal_ticks = r.read_u32();
     }
+    // Schema v16: demographic age. Older saves keep the default (30).
+    if (schema_ver >= 16u) {
+        npc.age_years = r.read_float();
+    }
     return npc;
 }
 
@@ -1160,7 +1183,7 @@ NPCBusiness read_business(ByteReader& r) {
     return b;
 }
 
-Province read_province(ByteReader& r) {
+Province read_province(ByteReader& r, uint32_t schema_ver) {
     Province p{};
     p.h3_index = r.read_u64();
     p.id = r.read_u32();
@@ -1206,6 +1229,28 @@ Province read_province(ByteReader& r) {
         p.cohort_stats->sick_rate = r.read_float();
         p.cohort_stats->homeless_rate = r.read_float();
         p.cohort_stats->unemployment_rate = r.read_float();
+        // v16: background-population cohorts + aggregates. v7..v15 saves lack
+        // these; cohorts stay empty (population_aging re-seeds nothing, but
+        // world_generator seeds fresh worlds).
+        if (schema_ver >= 16u) {
+            p.cohort_stats->mean_income = r.read_float();
+            p.cohort_stats->gini_coefficient = r.read_float();
+            p.cohort_stats->regional_wage_anchor = r.read_float();
+            uint32_t cohort_count = r.read_u32();
+            for (uint32_t i = 0; i < cohort_count; ++i) {
+                auto group = static_cast<DemographicGroup>(r.read_u8());
+                PopulationCohort c;
+                c.group = group;
+                c.size = r.read_u32();
+                c.median_income = r.read_float();
+                c.education_level = r.read_float();
+                c.employment_rate = r.read_float();
+                c.political_lean = r.read_float();
+                c.grievance_contribution = r.read_float();
+                c.addiction_prevalence = r.read_float();
+                p.cohort_stats->cohorts[group] = c;
+            }
+        }
     } else {
         p.cohort_stats.reset();
     }
@@ -2064,7 +2109,7 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     uint32_t prov_count = r.read_u32();
     out_state.provinces.resize(prov_count);
     for (uint32_t i = 0; i < prov_count; ++i)
-        out_state.provinces[i] = read_province(r);
+        out_state.provinces[i] = read_province(r, schema_ver);
 
     // Regions
     uint32_t region_count = r.read_u32();

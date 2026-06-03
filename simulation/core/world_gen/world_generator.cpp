@@ -664,6 +664,59 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
     province.cohort_stats->criminal_dominance_index =
         config.criminal_baseline + rng.next_float() * 0.05f;
     province.cohort_stats->formal_employment_rate = 0.6f + rng.next_float() * 0.25f;
+
+    // Background-population cohorts (population_aging). Distribute the province
+    // population across the 12 DemographicGroups with fixed deterministic
+    // weights, seeding per-group income/education/employment from the province
+    // demographics. regional_wage_anchor (education-linked) anchors the monthly
+    // income convergence. Weights sum to 1.0.
+    {
+        const auto total = static_cast<double>(province.demographics.total_population);
+        const float edu = province.demographics.education_level;
+        const float emp = province.cohort_stats->formal_employment_rate;
+        const float base_wage = 50.0f + 150.0f * edu;
+        province.cohort_stats->regional_wage_anchor = base_wage;
+
+        struct GroupSeed {
+            DemographicGroup group;
+            float weight;       // share of total population
+            float income_mult;  // x base_wage
+            float emp_rate;     // employment_rate
+            float edu_off;      // education offset vs province edu
+        };
+        const GroupSeed seeds[] = {
+            {DemographicGroup::youth_urban, 0.08f, 0.30f, 0.30f, -0.05f},
+            {DemographicGroup::youth_rural, 0.05f, 0.25f, 0.30f, -0.10f},
+            {DemographicGroup::working_urban_low, 0.12f, 0.60f, emp, -0.05f},
+            {DemographicGroup::working_urban_mid, 0.12f, 1.00f, emp, 0.00f},
+            {DemographicGroup::working_urban_high, 0.06f, 1.80f, emp, 0.15f},
+            {DemographicGroup::working_rural_low, 0.10f, 0.55f, emp, -0.10f},
+            {DemographicGroup::working_rural_mid, 0.08f, 0.90f, emp, -0.05f},
+            {DemographicGroup::working_rural_high, 0.04f, 1.60f, emp, 0.10f},
+            {DemographicGroup::retiree_urban, 0.08f, 0.70f, 0.05f, 0.00f},
+            {DemographicGroup::retiree_rural, 0.05f, 0.65f, 0.05f, -0.05f},
+            {DemographicGroup::student, 0.06f, 0.30f, 0.00f, 0.20f},
+            {DemographicGroup::unemployed, 0.16f, 0.10f, 0.00f, -0.05f},
+        };
+        for (const auto& s : seeds) {
+            PopulationCohort c;
+            c.group = s.group;
+            c.size = static_cast<uint32_t>(total * static_cast<double>(s.weight));
+            c.median_income = base_wage * s.income_mult;
+            c.education_level = std::clamp(edu + s.edu_off, 0.0f, 1.0f);
+            c.employment_rate = std::clamp(s.emp_rate, 0.0f, 1.0f);
+            c.addiction_prevalence = province.cohort_stats->addiction_rate;
+            province.cohort_stats->cohorts[s.group] = c;
+        }
+        uint32_t pop = 0;
+        for (const auto& [g, c] : province.cohort_stats->cohorts) {
+            (void)g;
+            pop += c.size;
+        }
+        province.cohort_stats->total_population = pop;
+        province.cohort_stats->mean_income = base_wage;
+    }
+
     province.conditions.regulatory_compliance_index = 0.7f + rng.next_float() * 0.2f;
     province.conditions.drought_modifier = 1.0f;
     province.conditions.flood_modifier = 1.0f;
