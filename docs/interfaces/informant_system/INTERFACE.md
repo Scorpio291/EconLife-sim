@@ -127,30 +127,39 @@ reference are cross-province.
 
 ---
 
-## Planned / not yet implemented
+## Recently implemented (was "planned")
 
-The following behavior was specified originally but is **not** in the shipped
-module. It is retained here as design intent for a future pass (and should be
-treated as the backlog, not the contract):
+The following behavior was originally specced as backlog and has since been
+built — it is now part of the contract:
 
 - **Player countermeasures** (`PlayerCountermeasure`: `pay_silence`,
-  `threaten_silence`, `relocate_witness`, `eliminate`) and their effects:
-  status transitions to `silenced`/`relocated`/`eliminated`, `PlayerDelta`
-  wealth deduction on pay_silence, a `whistleblower_silenced` obligation node,
-  `risk_tolerance` increase and negative memory on threaten_silence, NPC death
-  + knowledge removal + LE multiplier on eliminate, flip drop to `base * 0.2`
-  on relocate, and the corresponding countermeasure evidence trail.
-- **InvestigatorMeter fill** on disclosure
-  (`token.actionability * meter_fill_per_disclosure`) and the
-  `personnel_violence_multiplier` fill-rate spike on eliminate.
-- **Knowledge-type-specific token mapping** (identity_link -> financial,
-  activity -> testimonial, evidence_token -> documentary) and a
-  `confidence > 0.4` disclosure filter with
-  `actionability = confidence * cooperation_actionability_scale`. The current
-  implementation emits a flat `testimonial` token at fixed actionability for
-  every known-evidence entry.
+  `threaten_silence`, `relocate_witness`, `eliminate`): status transitions to
+  `silenced`/`relocated`/`eliminated`, `PlayerDelta` wealth deduction on
+  pay_silence, a `whistleblower_silenced` obligation node, `risk_tolerance`
+  increase and negative memory on threaten_silence, NPC death on eliminate,
+  flip drop to `base * 0.2` on relocate, and the corresponding countermeasure
+  evidence trail. Drained from `WorldState.pending_informant_countermeasures`.
+- **Knowledge-type-specific token mapping** (`identity_link -> financial`,
+  `evidence_token -> documentary`, `activity`/`relationship -> testimonial`)
+  with a `confidence > disclosure_confidence_threshold` (0.40) disclosure
+  filter and `actionability = confidence * cooperation_actionability_scale`.
+- **InvestigatorMeter fill** on disclosure: accumulated
+  `actionability * meter_fill_per_disclosure` is delivered to the lead
+  law-enforcement NPC in the informant's province (lowest active LE id),
+  targeting the most-incriminated subject, via
+  `NPCDelta.investigator_meter_fill_delta` + `investigator_meter_target`.
+  `drain_deferred_work` then stages/escalates the meter and opens a legal case
+  at `raid_imminent`.
+- Config knobs `disclosure_confidence_threshold`,
+  `cooperation_actionability_scale`, `meter_fill_per_disclosure` now exist on
+  `InformantConfig`.
+
+## Planned / not yet implemented
+
+Still backlog (design intent, not the contract):
+
+- The `personnel_violence_multiplier` fill-rate spike on `eliminate`.
 - **`arresting_le_npc_id` / `disclosed_knowledge_ids`** record fields and
-  delivery of tokens to a specific arresting LE NPC.
-- Config knobs referenced by the above that do not yet exist on
-  `InformantConfig`: `cooperation_actionability_scale`,
-  `meter_fill_per_disclosure`.
+  delivery of tokens to a *specific* arresting LE NPC. The current
+  implementation targets the province's lead LE NPC rather than a tracked
+  arresting officer.
