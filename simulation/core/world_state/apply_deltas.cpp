@@ -80,6 +80,11 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             npc->age_years = std::max(0.0f, npc->age_years + *d.age_delta);
         }
 
+        // risk_tolerance_delta: additive; clamped to [0,1]
+        if (d.risk_tolerance_delta.has_value()) {
+            npc->risk_tolerance = clamp01(npc->risk_tolerance + *d.risk_tolerance_delta);
+        }
+
         // new_travel_status: replacement
         if (d.new_travel_status.has_value()) {
             npc->travel_status = *d.new_travel_status;

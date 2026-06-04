@@ -49,6 +49,10 @@ class InformantSystemModule : public ITickModule {
     static float compute_compartmentalization_bonus(uint32_t level, float compartment_bonus);
 
    private:
+    // Drain WorldState.pending_informant_countermeasures (player_actions, same
+    // tick) and apply pay_silence / threaten_silence / relocate / eliminate.
+    void process_countermeasures(const WorldState& state, DeltaBuffer& delta);
+
     InformantConfig cfg_;
     std::vector<InformantRecord> records_;
 };

@@ -193,3 +193,121 @@ TEST_CASE("Informant: seeded record can flip and emit testimonial evidence",
     // Cooperation produced a testimonial evidence token from disclosed knowledge.
     REQUIRE_FALSE(delta.evidence_deltas.empty());
 }
+
+// ===========================================================================
+// Player countermeasures (pay / threaten / relocate / eliminate)
+// ===========================================================================
+namespace {
+// World with a player and one tracked informant record (npc not imprisoned, so
+// self-seeding/flip leave it alone and the countermeasure path is isolated).
+WorldState make_countermeasure_world(uint32_t informant_id, float player_wealth) {
+    WorldState w{};
+    w.current_tick = 10;
+    w.world_seed = 1;
+    PlayerCharacter player{};
+    player.id = 999;
+    player.wealth = player_wealth;
+    w.player = std::make_unique<PlayerCharacter>(player);
+    NPC npc{};
+    npc.id = informant_id;
+    npc.role = NPCRole::worker;
+    npc.status = NPCStatus::active;
+    npc.current_province_id = 0;
+    npc.risk_tolerance = 0.3f;
+    w.significant_npcs.push_back(npc);
+    return w;
+}
+void seed_record(InformantSystemModule& m, uint32_t npc_id) {
+    InformantRecord r{};
+    r.npc_id = npc_id;
+    r.status = InformantStatus::not_cooperating;
+    r.base_flip_rate = 0.005f;
+    m.records_mut().push_back(r);
+}
+}  // namespace
+
+TEST_CASE("Informant: pay_silence silences the informant and costs the player",
+          "[informant_system][tier9]") {
+    auto world = make_countermeasure_world(7, /*wealth=*/100000.0f);
+    InformantSystemModule module;
+    seed_record(module, 7);
+    world.pending_informant_countermeasures.push_back({7, /*pay_silence=*/0});
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.records()[0].status == InformantStatus::silenced);
+    REQUIRE(module.records()[0].flip_probability == 0.0f);
+    REQUIRE(delta.player_delta.wealth_delta.has_value());
+    REQUIRE(*delta.player_delta.wealth_delta < 0.0f);          // paid the silence cost
+    REQUIRE_FALSE(delta.new_obligation_nodes.empty());         // whistleblower_silenced favor
+    REQUIRE(world.pending_informant_countermeasures.empty());  // drained
+}
+
+TEST_CASE("Informant: pay_silence fails when the player cannot afford it",
+          "[informant_system][tier9]") {
+    auto world = make_countermeasure_world(7, /*wealth=*/10.0f);  // < pay_silence_cost
+    InformantSystemModule module;
+    seed_record(module, 7);
+    world.pending_informant_countermeasures.push_back({7, 0});
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.records()[0].status == InformantStatus::not_cooperating);  // unchanged
+    REQUIRE_FALSE(delta.player_delta.wealth_delta.has_value());
+}
+
+TEST_CASE("Informant: threaten raises risk tolerance and leaves a memory",
+          "[informant_system][tier9]") {
+    auto world = make_countermeasure_world(7, 100000.0f);
+    InformantSystemModule module;
+    seed_record(module, 7);
+    world.pending_informant_countermeasures.push_back({7, /*threaten=*/1});
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    bool found = false;
+    for (const auto& nd : delta.npc_deltas)
+        if (nd.npc_id == 7 && nd.risk_tolerance_delta.has_value() &&
+            nd.new_memory_entry.has_value())
+            found = true;
+    REQUIRE(found);
+}
+
+TEST_CASE("Informant: relocate moves the witness and slashes flip probability",
+          "[informant_system][tier9]") {
+    auto world = make_countermeasure_world(7, 100000.0f);
+    InformantSystemModule module;
+    seed_record(module, 7);
+    world.pending_informant_countermeasures.push_back({7, /*relocate=*/2});
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+    REQUIRE(module.records()[0].status == InformantStatus::relocated);
+    REQUIRE(module.records()[0].flip_probability < 0.005f);
+}
+
+TEST_CASE("Informant: eliminate kills the NPC and leaves physical evidence",
+          "[informant_system][tier9]") {
+    auto world = make_countermeasure_world(7, 100000.0f);
+    InformantSystemModule module;
+    seed_record(module, 7);
+    world.pending_informant_countermeasures.push_back({7, /*eliminate=*/3});
+
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    REQUIRE(module.records()[0].status == InformantStatus::eliminated);
+    bool dead = false;
+    bool phys = false;
+    for (const auto& nd : delta.npc_deltas)
+        if (nd.npc_id == 7 && nd.new_status.has_value() && *nd.new_status == NPCStatus::dead)
+            dead = true;
+    for (const auto& ev : delta.evidence_deltas)
+        if (ev.new_token.has_value() && ev.new_token->type == EvidenceType::physical)
+            phys = true;
+    REQUIRE(dead);
+    REQUIRE(phys);
+}

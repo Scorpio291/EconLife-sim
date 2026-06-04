@@ -182,6 +182,15 @@ struct AcquireBusinessAction {
     float down_payment_fraction;
 };
 
+// Player countermeasure against a potential/active informant. `countermeasure`
+// mirrors informant_system's PlayerCountermeasure: 0=pay_silence,
+// 1=threaten_silence, 2=relocate_witness, 3=eliminate. Routed by player_actions
+// into WorldState.pending_informant_countermeasures; informant_system drains it.
+struct InformantCountermeasureAction {
+    uint32_t informant_npc_id;
+    uint8_t countermeasure;
+};
+
 // ---------------------------------------------------------------------------
 // PlayerActionType enum — mirrors variant index for type dispatch
 // ---------------------------------------------------------------------------
@@ -207,6 +216,7 @@ enum class PlayerActionType : uint8_t {
     acquire_business = 17,
     request_construction_bids = 18,
     award_construction_bid = 19,
+    informant_countermeasure = 20,
 };
 
 // ---------------------------------------------------------------------------
@@ -219,7 +229,8 @@ using PlayerActionPayload =
                  InitiateContactAction, ListPropertyForSaleAction, UnlistPropertyAction,
                  MakePropertyOfferAction, CancelPendingTransactionAction, PlaceAuctionBidAction,
                  RequestZoningChangeAction, SubdividePropertyAction, MergeUnitsAction,
-                 AcquireBusinessAction, RequestConstructionBidsAction, AwardConstructionBidAction>;
+                 AcquireBusinessAction, RequestConstructionBidsAction, AwardConstructionBidAction,
+                 InformantCountermeasureAction>;
 
 // ---------------------------------------------------------------------------
 // PlayerAction — one queued player action

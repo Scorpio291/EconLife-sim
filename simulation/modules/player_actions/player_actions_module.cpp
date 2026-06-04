@@ -391,6 +391,22 @@ static void handle_make_property_offer(const MakePropertyOfferAction& action,
     delta.new_property_transactions.push_back(req);
 }
 
+static void handle_informant_countermeasure(const InformantCountermeasureAction& action,
+                                            const WorldState& state, DeltaBuffer& delta) {
+    (void)delta;
+    if (!state.player)
+        return;
+    // The target must be a real, non-dead NPC. Affordability of pay_silence is
+    // re-checked by informant_system (which owns the cost config).
+    const NPC* target = find_npc(state, action.informant_npc_id);
+    if (!target || target->status == NPCStatus::dead)
+        return;
+    // Queue for informant_system to drain this tick (same const_cast staging
+    // pattern player_actions uses for the deferred-work queue).
+    auto& mutable_world = const_cast<WorldState&>(state);
+    mutable_world.pending_informant_countermeasures.push_back(action);
+}
+
 static void handle_cancel_pending_transaction(const CancelPendingTransactionAction& action,
                                               const WorldState& state, DeltaBuffer& delta) {
     if (!state.player)
@@ -590,6 +606,8 @@ void PlayerActionsModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     handle_request_construction_bids(payload, state, delta);
                 } else if constexpr (std::is_same_v<T, AwardConstructionBidAction>) {
                     handle_award_construction_bid(payload, state, delta);
+                } else if constexpr (std::is_same_v<T, InformantCountermeasureAction>) {
+                    handle_informant_countermeasure(payload, state, delta);
                 }
             },
             action.payload);

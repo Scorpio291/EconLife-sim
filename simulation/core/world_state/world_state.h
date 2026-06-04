@@ -158,6 +158,12 @@ struct WorldState {
     // defensively cleared on load. Not persisted.
     std::vector<LaunderingSeedDelta> pending_laundering_seeds;
 
+    // pending_informant_countermeasures: written by player_actions (Tier 0) when
+    // the player issues a countermeasure against an informant. Drained by
+    // informant_system (Tier 9) the same tick. Empty at save (defensively
+    // cleared on load).
+    std::vector<InformantCountermeasureAction> pending_informant_countermeasures;
+
     // pending_random_event_triggers: written by any module observing a
     // condition that should start a specific ActiveRandomEvent (e.g.
     // currency_exchange when a currency's foreign reserves drop below

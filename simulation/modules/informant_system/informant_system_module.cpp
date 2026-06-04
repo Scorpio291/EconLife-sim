@@ -44,7 +44,125 @@ float InformantSystemModule::compute_flip_probability(
     return std::clamp(prob, 0.0f, max_flip_probability);
 }
 
+void InformantSystemModule::process_countermeasures(const WorldState& state, DeltaBuffer& delta) {
+    if (state.pending_informant_countermeasures.empty())
+        return;
+
+    auto find_record = [&](uint32_t npc_id) -> InformantRecord* {
+        for (auto& r : records_)
+            if (r.npc_id == npc_id)
+                return &r;
+        return nullptr;
+    };
+
+    for (const auto& cm : state.pending_informant_countermeasures) {
+        const NPC* npc = lookup_npc_by_id(state, cm.informant_npc_id);
+        uint32_t province = npc ? npc->current_province_id : 0;
+        InformantRecord* rec = find_record(cm.informant_npc_id);
+
+        switch (cm.countermeasure) {
+            case 0:  // pay_silence
+                // Fails if the player cannot afford it (record/NPC unchanged).
+                if (state.player && state.player->wealth >= cfg_.pay_silence_cost) {
+                    if (rec) {
+                        rec->status = InformantStatus::silenced;
+                        rec->flip_probability = 0.0f;
+                    }
+                    PlayerDelta pd{};
+                    pd.wealth_delta = -cfg_.pay_silence_cost;
+                    delta.player_delta.merge_from(std::move(pd));
+                    // Mutual-incrimination obligation: the silenced informant now
+                    // holds a whistleblower_silenced favor over the player.
+                    ObligationNode o{};
+                    o.id = 0;  // apply_deltas assigns
+                    o.creditor_npc_id = cm.informant_npc_id;
+                    o.debtor_npc_id = state.player->id;
+                    o.favor_type = FavorType::whistleblower_silenced;
+                    o.weight = 0.5f;
+                    o.created_tick = state.current_tick;
+                    o.is_active = true;
+                    delta.new_obligation_nodes.push_back(o);
+                    // Payment leaves a financial trail.
+                    EvidenceDelta ev{};
+                    ev.new_token = EvidenceToken{0,
+                                                 EvidenceType::financial,
+                                                 state.player->id,
+                                                 cm.informant_npc_id,
+                                                 0.40f,
+                                                 0.002f,
+                                                 state.current_tick,
+                                                 province,
+                                                 true};
+                    delta.evidence_deltas.push_back(ev);
+                }
+                break;
+            case 1: {  // threaten_silence
+                NPCDelta nd{};
+                nd.npc_id = cm.informant_npc_id;
+                nd.risk_tolerance_delta = 0.10f;
+                nd.new_memory_entry = MemoryEntry{state.current_tick,
+                                                  MemoryType::employment_negative,
+                                                  state.player ? state.player->id : 0u,
+                                                  -0.7f,
+                                                  0.003f,
+                                                  true};
+                delta.npc_deltas.push_back(nd);
+                break;
+            }
+            case 2:  // relocate_witness
+                if (rec) {
+                    rec->status = InformantStatus::relocated;
+                    rec->flip_probability = cfg_.base_flip_rate * 0.2f;
+                }
+                {
+                    EvidenceDelta ev{};
+                    ev.new_token = EvidenceToken{0,
+                                                 EvidenceType::physical,
+                                                 state.player ? state.player->id : 0u,
+                                                 cm.informant_npc_id,
+                                                 0.30f,
+                                                 0.002f,
+                                                 state.current_tick,
+                                                 province,
+                                                 true};
+                    delta.evidence_deltas.push_back(ev);
+                }
+                break;
+            case 3: {  // eliminate
+                if (rec)
+                    rec->status = InformantStatus::eliminated;
+                NPCDelta nd{};
+                nd.npc_id = cm.informant_npc_id;
+                nd.new_status = NPCStatus::dead;
+                delta.npc_deltas.push_back(nd);
+                // Violence leaves high-actionability physical evidence.
+                EvidenceDelta ev{};
+                ev.new_token = EvidenceToken{0,
+                                             EvidenceType::physical,
+                                             state.player ? state.player->id : 0u,
+                                             cm.informant_npc_id,
+                                             0.80f,
+                                             0.001f,
+                                             state.current_tick,
+                                             province,
+                                             true};
+                delta.evidence_deltas.push_back(ev);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    const_cast<std::vector<InformantCountermeasureAction>&>(state.pending_informant_countermeasures)
+        .clear();
+}
+
 void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Drain any player countermeasures issued this tick (pay/threaten/relocate/
+    // eliminate) before recruitment/flip processing.
+    process_countermeasures(state, delta);
+
     // Self-seed informant records for imprisoned criminal NPCs not yet tracked.
     // The recruitment signal is NPCStatus::imprisoned on a criminal-role NPC —
     // a WorldState fact this module observes directly (legal_process sets it
