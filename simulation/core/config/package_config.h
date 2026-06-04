@@ -782,6 +782,11 @@ struct MoneyLaunderingConfig {
     float commingle_capacity_fraction = 0.40f;
     float rate_commingle_max = 5000.0f;
     float crypto_evidence_skill_divisor = 10.0f;
+    // crypto_mixing evidence: traceability of the mixer and a proxy for LE
+    // intelligence capability (NPC skill levels are not modelled, so the LE term
+    // is a config proxy). Fed into compute_crypto_evidence_probability.
+    float crypto_mixer_traceability = 0.5f;
+    float crypto_le_skill_proxy = 0.5f;
     float fiu_token_threshold = 0.35f;
     float fiu_meter_fill_scale = 0.10f;
     uint32_t fiu_monthly_interval = 30;

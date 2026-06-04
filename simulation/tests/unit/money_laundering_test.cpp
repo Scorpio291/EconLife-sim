@@ -197,3 +197,64 @@ TEST_CASE("MoneyLaundering: end-to-end seed from criminal_operations becomes an 
     REQUIRE(launder.operations()[0].actor_id == 12);
     REQUIRE(state.pending_laundering_seeds.empty());
 }
+
+// =============================================================================
+// crypto / commingling method wiring (helpers were previously unused)
+// =============================================================================
+
+TEST_CASE("MoneyLaundering: commingling caps transfer to business cash flow",
+          "[money_laundering][tier8]") {
+    WorldState state{};
+    state.current_tick = 5;
+    state.world_seed = 1;
+    NPCBusiness front{};
+    front.id = 5;
+    front.province_id = 0;
+    front.revenue_per_tick = 100.0f;
+    front.criminal_sector = true;
+    state.npc_businesses.push_back(front);
+
+    MoneyLaunderingModule module;
+    LaunderingOperation op{};
+    op.id = 1;
+    op.actor_id = 1;
+    op.method = LaunderingMethod::cash_commingling;
+    op.dirty_amount = 100000.0f;
+    op.launder_rate_per_tick = 1000.0f;  // would move 1000/tick uncapped
+    op.conversion_loss_rate = 0.0f;
+    op.destination_business_id = 5;
+    op.started_tick = 0;
+    module.operations_mut().push_back(op);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    // capacity = revenue(100) * commingle_capacity_fraction(0.40) = 40 (< rate_commingle_max).
+    REQUIRE_THAT(module.operations()[0].laundered_so_far, WithinAbs(40.0f, 1e-3f));
+}
+
+TEST_CASE("MoneyLaundering: crypto-mixing generates probabilistic digital evidence",
+          "[money_laundering][tier8]") {
+    WorldState state{};
+    state.current_tick = 5;
+    state.world_seed = 1;
+
+    MoneyLaunderingModule module;
+    LaunderingOperation op{};
+    op.id = 2;
+    op.actor_id = 1;
+    op.method = LaunderingMethod::crypto_mixing;
+    op.dirty_amount = 100000.0f;
+    op.launder_rate_per_tick = 1000.0f;  // high rate -> high crypto exposure prob
+    op.conversion_loss_rate = 0.0f;
+    op.destination_business_id = 0;  // direct to player wealth
+    op.started_tick = 0;
+    module.operations_mut().push_back(op);
+
+    DeltaBuffer d{};
+    module.execute(state, d);
+    bool digital = false;
+    for (const auto& ev : d.evidence_deltas)
+        if (ev.new_token.has_value() && ev.new_token->type == EvidenceType::digital)
+            digital = true;
+    REQUIRE(digital);  // prob = 1000*0.5*0.5/10 = 25 (>=1) -> fires
+}

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -135,6 +136,21 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
         float transfer = compute_transfer_this_tick(op.launder_rate_per_tick, op.dirty_amount,
                                                     op.laundered_so_far);
 
+        // cash_commingling cannot inject more than the front business's cash flow
+        // plausibly explains: cap the transfer at the commingling capacity.
+        if (op.method == LaunderingMethod::cash_commingling && op.destination_business_id != 0) {
+            float dest_revenue = 0.0f;
+            for (const auto& biz : state.npc_businesses) {
+                if (biz.id == op.destination_business_id) {
+                    dest_revenue = biz.revenue_per_tick;
+                    break;
+                }
+            }
+            float capacity = compute_commingling_capacity(
+                dest_revenue, cfg_.commingle_capacity_fraction, cfg_.rate_commingle_max);
+            transfer = std::min(transfer, capacity);
+        }
+
         if (transfer <= 0.0f)
             continue;
 
@@ -221,13 +237,19 @@ void MoneyLaunderingModule::execute(const WorldState& state, DeltaBuffer& delta)
                 evidence_type = EvidenceType::documentary;
                 break;
 
-            case LaunderingMethod::crypto_mixing:
-                // Probability-based; simplified: generate every 10 ticks
-                generate_evidence = (state.current_tick >= op.started_tick) &&
-                                    ((state.current_tick - op.started_tick) % 10 == 0) &&
-                                    ((state.current_tick - op.started_tick) > 0);
+            case LaunderingMethod::crypto_mixing: {
+                // Probabilistic per-tick exposure: launder_rate * mixer_traceability *
+                // LE-intelligence proxy / divisor (NPC skills are not modelled, so the
+                // LE term is a config proxy). Deterministic per-op/tick RNG roll.
+                float prob = compute_crypto_evidence_probability(
+                    op.launder_rate_per_tick, cfg_.crypto_mixer_traceability,
+                    cfg_.crypto_le_skill_proxy, cfg_.crypto_evidence_skill_divisor);
+                DeterministicRNG rng(state.world_seed ^
+                                     (static_cast<uint64_t>(state.current_tick) << 21));
+                generate_evidence = rng.fork(op.id).next_float() < prob;
                 evidence_type = EvidenceType::digital;
                 break;
+            }
 
             case LaunderingMethod::cash_commingling:
                 generate_evidence =
