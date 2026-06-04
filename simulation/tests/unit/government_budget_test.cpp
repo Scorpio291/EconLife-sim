@@ -916,3 +916,31 @@ TEST_CASE("test_zero_tax_rate_zero_corporate_tax", "[government_budget][tier5]")
     float tax = GovernmentBudgetModule::compute_corporate_tax(businesses, 0.0f, 0);
     REQUIRE_THAT(tax, WithinAbs(0.0f, 0.001f));
 }
+
+// ===========================================================================
+// Income + property tax computed from real demographic / property data
+// (replaces the former flat placeholders).
+// ===========================================================================
+
+TEST_CASE("test_income_and_property_tax_from_real_data", "[government_budget][tier5]") {
+    auto state = make_test_world_state();
+    state.current_tick = 90;
+    auto& prov = state.provinces[0];
+    prov.cohort_stats->total_population = 1000;
+    prov.cohort_stats->working_age_fraction = 0.6f;
+    prov.cohort_stats->mean_income = 50.0f;  // per tick (from population_aging)
+    prov.avg_property_value = 200000.0f;     // from real_estate
+
+    GovernmentBudgetModule module;
+    auto national = make_national_budget(500000.0f);
+    module.add_budget(national);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // No businesses -> corporate tax 0. Income + property from real data:
+    //   income = 50*1000*0.6 * (0.60*0.40 + 0.30*0.85 + 0.10*1.00) * 0.30 * 90 = 481950
+    //   property = (1000/3)*200000 * (0.005/4) = 83333.33
+    const auto* budget = &module.budgets()[0];
+    REQUIRE_THAT(budget->revenue_own_taxes, WithinAbs(565283.0f, 150.0f));
+}

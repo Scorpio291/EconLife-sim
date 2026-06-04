@@ -108,7 +108,8 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state,
         // Since we don't have per-province cohort data yet, use demographic fractions
         // from Province.demographics as a proxy.
         if (prov.cohort_stats) {
-            float median_income_estimate = 1000.0f;  // placeholder per-tick income
+            // Per-tick income from the population_aging cohort aggregate.
+            float median_income_estimate = prov.cohort_stats->mean_income;
             float pop = static_cast<float>(prov.cohort_stats->total_population);
             float working_fraction = prov.cohort_stats->working_age_fraction;
 
@@ -135,8 +136,14 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state,
         // in budget_types.h but not yet on the Province struct.
         // For V1 bootstrap: use a fixed per-province estimate based on population.
         if (prov.cohort_stats) {
-            float property_estimate = static_cast<float>(prov.cohort_stats->total_population) *
-                                      10.0f;  // placeholder: $10 per capita per quarter
+            // Real estate base: real_estate publishes avg_property_value (mean
+            // PropertyListing.market_value); estimate the count of properties as
+            // population / household_size and tax the total at a quarterly rate.
+            float pop = static_cast<float>(prov.cohort_stats->total_population);
+            float estimated_properties =
+                (cfg_.household_size > 0.0f) ? pop / cfg_.household_size : 0.0f;
+            float total_property_value = prov.avg_property_value * estimated_properties;
+            float property_estimate = total_property_value * (cfg_.property_tax_annual_rate / 4.0f);
             national_property_tax += property_estimate;
         }
     }

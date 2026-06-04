@@ -323,6 +323,10 @@ struct GovernmentBudgetConfig {
     float cohort_mod_professional = 0.85f;
     float cohort_mod_corporate = 1.00f;
     float cohort_mod_criminal_adjacent = 0.10f;
+    // Property-tax estimate inputs: properties ~ population / household_size,
+    // each valued at the province avg_property_value, taxed at the annual rate.
+    float household_size = 3.0f;
+    float property_tax_annual_rate = 0.005f;
 };
 
 struct HealthcareConfig {
