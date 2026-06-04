@@ -194,6 +194,92 @@ TEST_CASE("Informant: seeded record can flip and emit testimonial evidence",
     REQUIRE_FALSE(delta.evidence_deltas.empty());
 }
 
+TEST_CASE("Informant: disclosure maps knowledge types, filters by confidence, fills LE meter",
+          "[informant_system][tier9][investigator_meter]") {
+    WorldState state{};
+    state.current_tick = 50;
+    state.world_seed = 12345;
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    NPC informant = make_imprisoned_criminal(7, NPCRole::criminal_operator);
+    informant.risk_tolerance = 0.95f;
+    // identity_link -> financial token.
+    KnowledgeEntry id_link{};
+    id_link.subject_id = 555;
+    id_link.type = KnowledgeType::identity_link;
+    id_link.confidence = 0.9f;
+    informant.known_evidence.push_back(id_link);
+    // activity -> testimonial token; same subject so it becomes primary.
+    KnowledgeEntry act{};
+    act.subject_id = 555;
+    act.type = KnowledgeType::activity;
+    act.confidence = 0.8f;
+    informant.known_evidence.push_back(act);
+    // Below threshold -> not disclosed at all.
+    KnowledgeEntry weak{};
+    weak.subject_id = 333;
+    weak.type = KnowledgeType::evidence_token;
+    weak.confidence = 0.2f;
+    informant.known_evidence.push_back(weak);
+    state.significant_npcs.push_back(informant);
+
+    // Lead LE NPC in the same province (lowest active LE id).
+    NPC le{};
+    le.id = 3;
+    le.role = NPCRole::law_enforcement;
+    le.status = NPCStatus::active;
+    le.current_province_id = 0;
+    state.significant_npcs.push_back(le);
+
+    state.npc_indices_by_province.resize(1);
+    state.npc_indices_by_province[0] = {0u, 1u};  // indices of informant + LE
+
+    InformantConfig cfg{};
+    cfg.base_flip_rate = 1.0f;
+    cfg.max_flip_probability = 1.0f;
+    InformantSystemModule module(cfg);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(module.records()[0].status == InformantStatus::cooperating);
+
+    // Two disclosures above threshold -> exactly two evidence tokens, with
+    // type-mapped kinds (financial from identity_link, testimonial from activity).
+    int financial = 0, testimonial = 0, other = 0;
+    for (const auto& ed : delta.evidence_deltas) {
+        REQUIRE(ed.new_token.has_value());
+        switch (ed.new_token->type) {
+            case EvidenceType::financial:
+                ++financial;
+                break;
+            case EvidenceType::testimonial:
+                ++testimonial;
+                break;
+            default:
+                ++other;
+                break;
+        }
+    }
+    REQUIRE(financial == 1);
+    REQUIRE(testimonial == 1);
+    REQUIRE(other == 0);  // weak entry (conf 0.2) was filtered out
+
+    // The lead LE NPC's investigator_meter was filled, targeting subject 555.
+    bool found_meter_fill = false;
+    for (const auto& nd : delta.npc_deltas) {
+        if (nd.npc_id == 3 && nd.investigator_meter_fill_delta.has_value()) {
+            found_meter_fill = true;
+            REQUIRE(*nd.investigator_meter_fill_delta > 0.0f);
+            REQUIRE(nd.investigator_meter_target.has_value());
+            REQUIRE(*nd.investigator_meter_target == 555u);
+        }
+    }
+    REQUIRE(found_meter_fill);
+}
+
 // ===========================================================================
 // Player countermeasures (pay / threaten / relocate / eliminate)
 // ===========================================================================

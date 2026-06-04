@@ -111,6 +111,13 @@ struct InformantConfig {
     float compartment_bonus_per_level = 0.05f;
     float pay_silence_cost = 50000.0f;
     float violence_multiplier = 3.0f;
+    // Disclosure (informant flip) tuning — see informant_system INTERFACE.md.
+    // Only knowledge with confidence above this threshold is disclosed.
+    float disclosure_confidence_threshold = 0.40f;
+    // Disclosed token actionability = confidence * cooperation_actionability_scale.
+    float cooperation_actionability_scale = 0.80f;
+    // InvestigatorMeter fill per disclosed token = actionability * this.
+    float meter_fill_per_disclosure = 0.15f;
 };
 
 struct LegalProcessConfig {

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
 #include <set>
 
 #include "core/rng/deterministic_rng.h"
@@ -252,19 +253,81 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
             rec.status = InformantStatus::cooperating;
             rec.cooperation_start_tick = state.current_tick;
 
+            // Disclosure: emit type-mapped evidence tokens for every piece of
+            // known_evidence above the confidence threshold, and accumulate the
+            // investigation pressure each disclosure adds. Knowledge entries are
+            // already in a deterministic order on the NPC.
+            float total_meter_fill = 0.0f;
+            uint32_t primary_subject = 0;
+            float primary_subject_weight = -1.0f;
+            std::map<uint32_t, float> subject_weight;
             for (const auto& ke : npc->known_evidence) {
-                // EvidenceDelta: testimonial evidence from informant-provided knowledge
+                if (ke.confidence <= cfg_.disclosure_confidence_threshold)
+                    continue;
+
+                // Knowledge-type-specific token mapping (INTERFACE.md):
+                //   identity_link -> financial, activity -> testimonial,
+                //   evidence_token -> documentary; relationship knowledge is
+                //   relational hearsay -> testimonial.
+                EvidenceType token_type = EvidenceType::testimonial;
+                switch (ke.type) {
+                    case KnowledgeType::identity_link:
+                        token_type = EvidenceType::financial;
+                        break;
+                    case KnowledgeType::evidence_token:
+                        token_type = EvidenceType::documentary;
+                        break;
+                    case KnowledgeType::activity:
+                    case KnowledgeType::relationship:
+                    default:
+                        token_type = EvidenceType::testimonial;
+                        break;
+                }
+
+                float actionability = ke.confidence * cfg_.cooperation_actionability_scale;
                 EvidenceDelta ev;
                 ev.new_token = EvidenceToken{0,
-                                             EvidenceType::testimonial,
+                                             token_type,
                                              npc->id,
                                              ke.subject_id,
-                                             0.50f,
+                                             actionability,
                                              0.003f,
                                              state.current_tick,
                                              npc->current_province_id,
                                              true};
                 delta.evidence_deltas.push_back(ev);
+
+                total_meter_fill += actionability * cfg_.meter_fill_per_disclosure;
+                float& w = subject_weight[ke.subject_id];
+                w += actionability;
+                if (w > primary_subject_weight) {
+                    primary_subject_weight = w;
+                    primary_subject = ke.subject_id;
+                }
+            }
+
+            // InvestigatorMeter fill on disclosure: deliver the accumulated
+            // pressure to the lead law-enforcement NPC in the informant's
+            // province (lowest active LE id = designated investigator),
+            // targeting the most-incriminated subject. drain_deferred_work
+            // stages/escalates the meter and opens a case at raid_imminent.
+            if (total_meter_fill > 0.0f && primary_subject != 0 &&
+                npc->current_province_id < state.npc_indices_by_province.size()) {
+                const NPC* lead_le = nullptr;
+                for (uint32_t idx : state.npc_indices_by_province[npc->current_province_id]) {
+                    const NPC& cand = state.significant_npcs[idx];
+                    if (cand.role != NPCRole::law_enforcement || cand.status != NPCStatus::active)
+                        continue;
+                    if (!lead_le || cand.id < lead_le->id)
+                        lead_le = &cand;
+                }
+                if (lead_le) {
+                    NPCDelta meter_delta;
+                    meter_delta.npc_id = lead_le->id;
+                    meter_delta.investigator_meter_fill_delta = total_meter_fill;
+                    meter_delta.investigator_meter_target = primary_subject;
+                    delta.npc_deltas.push_back(meter_delta);
+                }
             }
 
             // NPCDelta: reliability update — informant incurs implicit capital cost
