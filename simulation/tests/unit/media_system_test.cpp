@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/media_system/media_system_module.h"
@@ -249,4 +250,39 @@ TEST_CASE("Editorial filter suppresses story at player outlet", "[media_system][
         }
     }
     CHECK(found_memory);
+}
+
+// =============================================================================
+// Exposure -> reputation (replaces the former health_delta placeholder)
+// =============================================================================
+
+TEST_CASE("Damaging player-subject story erodes public reputation", "[media_system][tier7]") {
+    WorldState state{};
+    state.current_tick = 10;
+    state.world_seed = 1;
+    PlayerCharacter player{};
+    player.id = 999;
+    player.reputation.public_social = 0.0f;
+    player.reputation.public_business = 0.0f;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    MediaSystemModule module;
+    Story s{};
+    s.subject_id = 999;  // the player
+    s.outlet_id = 0;
+    s.tone = StoryTone::damaging;
+    s.evidence_weight = 1.0f;  // above crisis_evidence_threshold (0.40)
+    s.amplification = 5.0f;
+    s.published_tick = 10;
+    s.is_active = true;
+    module.active_stories().push_back(s);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+    apply_deltas(state, delta);
+
+    // Both public axes eroded; social hit harder than business (full vs half weight).
+    REQUIRE(state.player->reputation.public_social < 0.0f);
+    REQUIRE(state.player->reputation.public_business < 0.0f);
+    REQUIRE(state.player->reputation.public_social <= state.player->reputation.public_business);
 }

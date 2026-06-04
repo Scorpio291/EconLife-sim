@@ -35,6 +35,18 @@ void PlayerDelta::merge_from(PlayerDelta&& other) {
     if (other.exhaustion_delta.has_value()) {
         exhaustion_delta = exhaustion_delta.value_or(0.0f) + *other.exhaustion_delta;
     }
+    if (other.reputation_business_delta.has_value()) {
+        reputation_business_delta =
+            reputation_business_delta.value_or(0.0f) + *other.reputation_business_delta;
+    }
+    if (other.reputation_political_delta.has_value()) {
+        reputation_political_delta =
+            reputation_political_delta.value_or(0.0f) + *other.reputation_political_delta;
+    }
+    if (other.reputation_social_delta.has_value()) {
+        reputation_social_delta =
+            reputation_social_delta.value_or(0.0f) + *other.reputation_social_delta;
+    }
 
     // Replacement optionals: incoming wins when set.
     if (other.skill_delta.has_value()) {

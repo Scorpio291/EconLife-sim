@@ -178,6 +178,18 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
     if (d.wealth_delta.has_value()) {
         p.wealth = safe_add(p.wealth, *d.wealth_delta);
     }
+    if (d.reputation_business_delta.has_value()) {
+        p.reputation.public_business =
+            std::clamp(p.reputation.public_business + *d.reputation_business_delta, -1.0f, 1.0f);
+    }
+    if (d.reputation_political_delta.has_value()) {
+        p.reputation.public_political =
+            std::clamp(p.reputation.public_political + *d.reputation_political_delta, -1.0f, 1.0f);
+    }
+    if (d.reputation_social_delta.has_value()) {
+        p.reputation.public_social =
+            std::clamp(p.reputation.public_social + *d.reputation_social_delta, -1.0f, 1.0f);
+    }
     if (d.exhaustion_delta.has_value()) {
         p.health.exhaustion_accumulator =
             clamp01(safe_add(p.health.exhaustion_accumulator, *d.exhaustion_delta));

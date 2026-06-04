@@ -58,6 +58,10 @@ struct PlayerDelta {
     std::optional<RelationshipDelta> relationship_delta;  // replacement; latest update wins
     std::optional<uint32_t> new_province_id;              // replacement; player location
     std::optional<NPCTravelStatus> new_travel_status;     // replacement; travel state
+    std::optional<float> reputation_business_delta;  // additive; reputation.public_business [-1,1]
+    std::optional<float>
+        reputation_political_delta;                // additive; reputation.public_political [-1,1]
+    std::optional<float> reputation_social_delta;  // additive; reputation.public_social [-1,1]
 
     // Merge another PlayerDelta into this one.
     // Additive fields sum; replacement fields take the incoming value when set.

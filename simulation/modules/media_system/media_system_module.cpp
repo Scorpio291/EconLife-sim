@@ -313,12 +313,13 @@ void MediaSystemModule::convert_exposure(const WorldState& state, DeltaBuffer& d
             compute_exposure_delta(story.amplification, cfg_.exposure_per_amplification_unit);
 
         if (story.subject_id == state.player->id) {
-            // V1: accumulate into player health_delta as reputation proxy
-            if (!delta.player_delta.health_delta.has_value()) {
-                delta.player_delta.health_delta = 0.0f;
-            }
-            // Exposure doesn't directly damage health; this is a placeholder
-            // for the reputation system. The player delta tracks it.
+            // Damaging coverage of the player erodes public reputation: the
+            // social axis fully, the business axis at half weight (ReputationState
+            // axes are clamped to [-1,1] on application).
+            PlayerDelta rep{};
+            rep.reputation_social_delta = -exposure;
+            rep.reputation_business_delta = -exposure * 0.5f;
+            delta.player_delta.merge_from(std::move(rep));
         }
 
         // RegionDelta: ongoing damaging coverage raises regional grievance and
