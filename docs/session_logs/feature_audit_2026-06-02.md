@@ -171,13 +171,22 @@ line-by-line re-verified).
   as a stand-in. **Note:** this is the *generic scheduled-consequence*
   mechanism — the real `investigator_engine → legal_process → imprisonment`
   pipeline works independently and is **not** affected.
-- **`InvestigatorMeter` as a first-class NPC field doesn't exist.** Several
+- **`InvestigatorMeter` as a first-class NPC field doesn't exist.** ~~Several
   specs (facility_signals §19, antitrust, informant) describe writing
   `NPCDelta.investigator_meter.fill_rate`; in practice `investigator_engine`
   keeps its meter internally and upstream modules feed it via signals /
   `motivation_delta`. `legal_process` notes the same ("InvestigatorMeter records
   are not on WorldState yet"). Pervasive spec-vs-impl drift, not a functional
-  hole.
+  hole.~~ **DONE.** Promoted `InvestigatorMeter`/`InvestigatorMeterStatus` to
+  core (`npc.h`); every NPC now carries one. Filled additively via
+  `NPCDelta.investigator_meter_fill_delta` (+ `investigator_meter_target`),
+  clamped in `apply_deltas`, and decayed / re-staged / escalated centrally by
+  `drain_deferred_work::process_investigator_meters` (opens one
+  `LegalCaseSeedDelta` against the target at `raid_imminent`). First live
+  contributor: `weapons_trafficking` heavy-weapons embargo (corruption-proof
+  spike). Persisted as schema **v18** trailing NPC fields. `investigator_engine`
+  keeps its own signal-driven `cases_` as a parallel channel — the per-NPC
+  meter is the surfaced/persisted discrete-event accumulator.
 - **Supporting `shared_types.h` stubs**: `ObligationNode`,
   `InfluenceNetworkHealth`, `DialogueLine`/`PlayerChoice`, and `ConsequenceType`
   are minimal skeletons (`shared_types.h:3-10`), so the data models behind
