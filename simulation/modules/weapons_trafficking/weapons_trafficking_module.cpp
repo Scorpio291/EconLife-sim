@@ -200,9 +200,19 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
                             npc.status != NPCStatus::active) {
                             continue;
                         }
-                        // InvestigatorMeter spike — cannot be suppressed by corruption
-                        // In full impl, directly modifies InvestigatorMeter.current_level
-                        // Here, emit evidence with high actionability to represent the spike
+                        // InvestigatorMeter spike — cannot be suppressed by
+                        // corruption. Directly fills this LE NPC's first-class
+                        // investigator_meter (apply_deltas clamps to [0,1];
+                        // drain_deferred_work decays/stages it and opens a legal
+                        // case against the trafficker at raid_imminent).
+                        NPCDelta meter_delta;
+                        meter_delta.npc_id = npc.id;
+                        meter_delta.investigator_meter_fill_delta = cfg_.embargo_meter_spike;
+                        meter_delta.investigator_meter_target = biz.owner_id;
+                        province_delta.npc_deltas.push_back(meter_delta);
+
+                        // Mirror as a physical evidence token so the broader
+                        // evidence pipeline (investigator_engine bonus) also sees it.
                         EvidenceDelta ev;
                         ev.new_token = EvidenceToken{0,
                                                      EvidenceType::physical,

@@ -90,6 +90,30 @@ enum class NPCStatus : uint8_t {
 };
 
 // ============================================================================
+// InvestigatorMeter — first-class per-NPC investigation pressure meter.
+// Meaningful for law_enforcement / regulator NPCs. Filled by domain modules
+// (facility_signals, weapons_trafficking embargo, antitrust) via
+// NPCDelta.investigator_meter_fill_delta; decayed, staged, and escalated each
+// tick by drain_deferred_work (which opens a legal case at raid_imminent).
+// Promoted here from facility_signals_types.h so it can live on NPC.
+// ============================================================================
+enum class InvestigatorMeterStatus : uint8_t {
+    inactive = 0,
+    surveillance = 1,    // meter >= 0.30
+    formal_inquiry = 2,  // meter >= 0.60
+    raid_imminent = 3,   // meter >= 0.80
+};
+
+struct InvestigatorMeter {
+    float current_level = 0.0f;  // 0.0-1.0 accumulated investigation pressure
+    float fill_rate = 0.0f;      // per-tick increment (facility_signals)
+    InvestigatorMeterStatus status = InvestigatorMeterStatus::inactive;
+    uint32_t opened_tick = 0;     // tick the meter first became active
+    uint32_t target_npc_id = 0;   // who is under investigation (0 = none)
+    bool case_escalated = false;  // a legal case has already opened at raid_imminent
+};
+
+// ============================================================================
 // MemoryType — classification of NPC memory entries
 // ============================================================================
 
@@ -298,6 +322,9 @@ struct NPC {
 
     // --- State ---
     NPCStatus status;  // active, imprisoned, dead, fled, waiting
+
+    // --- Investigation (LE / regulator NPCs) ---
+    InvestigatorMeter investigator_meter;  // accumulated investigation pressure
 
     // --- Demographics ---
     float age_years = 30.0f;  // years; advanced annually by population_aging,

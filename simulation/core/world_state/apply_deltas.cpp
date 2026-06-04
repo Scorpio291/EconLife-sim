@@ -85,6 +85,23 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             npc->risk_tolerance = clamp01(npc->risk_tolerance + *d.risk_tolerance_delta);
         }
 
+        // investigator_meter: additive fill (clamped) + target assignment.
+        if (d.investigator_meter_target.has_value()) {
+            auto& m = npc->investigator_meter;
+            if (m.target_npc_id != *d.investigator_meter_target) {
+                m.target_npc_id = *d.investigator_meter_target;
+                if (m.opened_tick == 0 && m.current_level == 0.0f)
+                    m.opened_tick = world.current_tick;
+                m.case_escalated = false;  // new target -> fresh case window
+            }
+        }
+        if (d.investigator_meter_fill_delta.has_value()) {
+            auto& m = npc->investigator_meter;
+            if (m.opened_tick == 0)
+                m.opened_tick = world.current_tick;
+            m.current_level = clamp01(m.current_level + *d.investigator_meter_fill_delta);
+        }
+
         // new_travel_status: replacement
         if (d.new_travel_status.has_value()) {
             npc->travel_status = *d.new_travel_status;

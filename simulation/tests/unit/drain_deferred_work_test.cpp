@@ -274,3 +274,72 @@ TEST_CASE("drain: negative trust decays toward zero", "[drain_deferred_work][cor
     // Negative trust should move toward zero (increase)
     REQUIRE(w.significant_npcs[0].relationships[0].trust > -0.5f);
 }
+
+// ---------------------------------------------------------------------------
+// InvestigatorMeter — per-NPC investigation pressure, drained centrally.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("drain: investigator meter decays and stages by level",
+          "[drain_deferred_work][investigator_meter]") {
+    auto w = make_dwq_world();
+    auto& m = w.significant_npcs[0].investigator_meter;
+    m.current_level = 0.65f;  // formal_inquiry band
+    m.status = InvestigatorMeterStatus::inactive;
+
+    DeltaBuffer delta{};
+    drain_deferred_work(w, delta);
+
+    // Decays 0.01/tick, then stages on the decayed level (0.64 -> formal_inquiry).
+    REQUIRE_THAT(w.significant_npcs[0].investigator_meter.current_level, WithinAbs(0.64f, 1e-5f));
+    REQUIRE(w.significant_npcs[0].investigator_meter.status ==
+            InvestigatorMeterStatus::formal_inquiry);
+    // No target set, so no legal case seeded.
+    REQUIRE(delta.new_legal_case_seeds.empty());
+}
+
+TEST_CASE("drain: investigator meter opens a legal case at raid_imminent",
+          "[drain_deferred_work][investigator_meter]") {
+    auto w = make_dwq_world();
+    auto& m = w.significant_npcs[0].investigator_meter;
+    m.current_level = 0.95f;  // raid_imminent even after decay
+    m.status = InvestigatorMeterStatus::inactive;
+    m.target_npc_id = 777;
+    m.case_escalated = false;
+
+    DeltaBuffer delta{};
+    drain_deferred_work(w, delta);
+
+    REQUIRE(w.significant_npcs[0].investigator_meter.status ==
+            InvestigatorMeterStatus::raid_imminent);
+    REQUIRE(delta.new_legal_case_seeds.size() == 1);
+    const auto& seed = delta.new_legal_case_seeds.front();
+    REQUIRE(seed.defendant_npc_id == 777u);
+    REQUIRE(seed.lead_investigator_id == w.significant_npcs[0].id);
+    REQUIRE(w.significant_npcs[0].investigator_meter.case_escalated);
+
+    // Second drain on the same already-escalated meter must not re-seed a case.
+    DeltaBuffer delta2{};
+    drain_deferred_work(w, delta2);
+    REQUIRE(delta2.new_legal_case_seeds.empty());
+}
+
+TEST_CASE("drain: fully decayed investigator meter resets to inactive",
+          "[drain_deferred_work][investigator_meter]") {
+    auto w = make_dwq_world();
+    auto& m = w.significant_npcs[0].investigator_meter;
+    m.current_level = 0.005f;  // below the 0.01 decay step -> hits zero
+    m.status = InvestigatorMeterStatus::surveillance;
+    m.target_npc_id = 555;
+    m.case_escalated = true;
+    m.opened_tick = 3;
+
+    DeltaBuffer delta{};
+    drain_deferred_work(w, delta);
+
+    const auto& after = w.significant_npcs[0].investigator_meter;
+    REQUIRE_THAT(after.current_level, WithinAbs(0.0f, 1e-6f));
+    REQUIRE(after.status == InvestigatorMeterStatus::inactive);
+    REQUIRE(after.target_npc_id == 0u);
+    REQUIRE_FALSE(after.case_escalated);
+    REQUIRE(after.opened_tick == 0u);
+}

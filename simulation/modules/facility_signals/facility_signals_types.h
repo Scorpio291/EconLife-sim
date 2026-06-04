@@ -9,6 +9,10 @@
 #include <string>
 #include <vector>
 
+// InvestigatorMeter / InvestigatorMeterStatus are promoted to core (NPC owns
+// one) so this module shares the canonical definition rather than duplicating.
+#include "core/world_state/npc.h"
+
 namespace econlife {
 
 // ---------------------------------------------------------------------------
@@ -38,16 +42,6 @@ struct FacilityTypeSignalWeights {
 };
 
 // ---------------------------------------------------------------------------
-// InvestigatorMeterStatus — law enforcement meter status
-// ---------------------------------------------------------------------------
-enum class InvestigatorMeterStatus : uint8_t {
-    inactive = 0,
-    surveillance = 1,    // meter >= 0.30
-    formal_inquiry = 2,  // meter >= 0.60
-    raid_imminent = 3,   // meter >= 0.80
-};
-
-// ---------------------------------------------------------------------------
 // RegulatorMeterStatus — regulator scrutiny meter status
 // ---------------------------------------------------------------------------
 enum class RegulatorMeterStatus : uint8_t {
@@ -55,16 +49,6 @@ enum class RegulatorMeterStatus : uint8_t {
     notice_filed = 1,        // meter >= 0.25
     formal_audit = 2,        // meter >= 0.50
     enforcement_action = 3,  // meter >= 0.75
-};
-
-// ---------------------------------------------------------------------------
-// InvestigatorMeter — per-LE-NPC investigation meter
-// ---------------------------------------------------------------------------
-struct InvestigatorMeter {
-    float current_level;  // 0.0-1.0
-    float fill_rate;      // per-tick increment
-    InvestigatorMeterStatus status;
-    uint32_t opened_tick;  // when investigation formally opened
 };
 
 // ---------------------------------------------------------------------------

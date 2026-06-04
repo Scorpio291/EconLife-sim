@@ -299,6 +299,12 @@ void write_npc(ByteWriter& w, const NPC& npc) {
     // Schema v16: demographic age (population_aging). Trailing field; read_npc
     // gates on schema_ver >= 16 so older saves load with the default (30).
     w.write_float(npc.age_years);
+    // Schema v18: first-class InvestigatorMeter. Trailing fields gated on v18.
+    w.write_float(npc.investigator_meter.current_level);
+    w.write_u8(static_cast<uint8_t>(npc.investigator_meter.status));
+    w.write_u32(npc.investigator_meter.target_npc_id);
+    w.write_u32(npc.investigator_meter.opened_tick);
+    w.write_bool(npc.investigator_meter.case_escalated);
 }
 
 void write_evidence_token(ByteWriter& w, const EvidenceToken& e) {
@@ -1117,6 +1123,14 @@ NPC read_npc(ByteReader& r, uint32_t schema_ver) {
     // Schema v16: demographic age. Older saves keep the default (30).
     if (schema_ver >= 16u) {
         npc.age_years = r.read_float();
+    }
+    // Schema v18: first-class InvestigatorMeter. Older saves keep defaults.
+    if (schema_ver >= 18u) {
+        npc.investigator_meter.current_level = r.read_float();
+        npc.investigator_meter.status = static_cast<InvestigatorMeterStatus>(r.read_u8());
+        npc.investigator_meter.target_npc_id = r.read_u32();
+        npc.investigator_meter.opened_tick = r.read_u32();
+        npc.investigator_meter.case_escalated = r.read_bool();
     }
     return npc;
 }

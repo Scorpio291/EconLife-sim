@@ -113,7 +113,7 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // loan_maturity_ticks per entry). Earlier bumps (v3..v10) documented
     // in persistence_module.h:CURRENT_SCHEMA_VERSION.
     // v17: consequence queue (GDD §21 delayed-consequence system).
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 17);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 18);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -232,6 +232,29 @@ TEST_CASE("Persistence: round-trip preserves NPC data", "[persistence][tier12][s
     REQUIRE(rnpc.relationships.size() == 1);
     REQUIRE_THAT(rnpc.relationships[0].trust, WithinAbs(0.6f, 0.001));
     REQUIRE(rnpc.relationships[0].shared_secrets.size() == 3);
+}
+
+TEST_CASE("Persistence: round-trip preserves InvestigatorMeter (v18)",
+          "[persistence][tier12][serialization]") {
+    auto world = test::create_test_world(42, 20, 2, 5);
+
+    auto& npc = world.significant_npcs[0];
+    npc.investigator_meter.current_level = 0.72f;
+    npc.investigator_meter.status = InvestigatorMeterStatus::formal_inquiry;
+    npc.investigator_meter.target_npc_id = 4242;
+    npc.investigator_meter.opened_tick = 17;
+    npc.investigator_meter.case_escalated = true;
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    const auto& rm = restored.significant_npcs[0].investigator_meter;
+    REQUIRE_THAT(rm.current_level, WithinAbs(0.72f, 1e-3f));
+    REQUIRE(rm.status == InvestigatorMeterStatus::formal_inquiry);
+    REQUIRE(rm.target_npc_id == 4242u);
+    REQUIRE(rm.opened_tick == 17u);
+    REQUIRE(rm.case_escalated);
 }
 
 TEST_CASE("Persistence: round-trip preserves addiction withdrawal fields (v15)",

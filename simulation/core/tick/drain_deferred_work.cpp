@@ -347,6 +347,58 @@ static void process_consequence_queue(WorldState& world, DeltaBuffer& delta) {
 }
 
 // ---------------------------------------------------------------------------
+// process_investigator_meters — per-NPC InvestigatorMeter lifecycle.
+// Decays each active meter, derives its stage from the level, and opens a legal
+// case (LegalCaseSeedDelta) once it reaches raid_imminent. Domain modules
+// (facility_signals, weapons embargo, informant disclosure, antitrust) fill the
+// meter via NPCDelta; this runs at tick start on the accumulated levels.
+// ---------------------------------------------------------------------------
+static void process_investigator_meters(WorldState& world, DeltaBuffer& delta) {
+    constexpr float DECAY_PER_TICK = 0.01f;
+    constexpr float SURVEILLANCE = 0.30f;
+    constexpr float FORMAL_INQUIRY = 0.60f;
+    constexpr float RAID_IMMINENT = 0.80f;
+
+    for (auto& npc : world.significant_npcs) {
+        auto& m = npc.investigator_meter;
+        if (m.current_level <= 0.0f && m.status == InvestigatorMeterStatus::inactive)
+            continue;
+
+        m.current_level = std::max(0.0f, m.current_level - DECAY_PER_TICK);
+
+        InvestigatorMeterStatus status = InvestigatorMeterStatus::inactive;
+        if (m.current_level >= RAID_IMMINENT)
+            status = InvestigatorMeterStatus::raid_imminent;
+        else if (m.current_level >= FORMAL_INQUIRY)
+            status = InvestigatorMeterStatus::formal_inquiry;
+        else if (m.current_level >= SURVEILLANCE)
+            status = InvestigatorMeterStatus::surveillance;
+        m.status = status;
+
+        // Open a case once on reaching raid_imminent.
+        if (status == InvestigatorMeterStatus::raid_imminent && !m.case_escalated &&
+            m.target_npc_id != 0) {
+            LegalCaseSeedDelta seed{};
+            seed.defendant_npc_id = m.target_npc_id;
+            seed.lead_investigator_id = npc.id;
+            seed.severity = static_cast<uint8_t>(CaseSeverity::serious);
+            seed.province_id = npc.current_province_id;
+            seed.initial_evidence_weight = m.current_level;
+            delta.new_legal_case_seeds.push_back(seed);
+            m.case_escalated = true;
+        }
+
+        // Reset when fully decayed.
+        if (m.current_level <= 0.0f) {
+            m.status = InvestigatorMeterStatus::inactive;
+            m.target_npc_id = 0;
+            m.case_escalated = false;
+            m.opened_tick = 0;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // drain_deferred_work — main entry point
 // ---------------------------------------------------------------------------
 void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfig& cfg) {
@@ -413,6 +465,9 @@ void drain_deferred_work(WorldState& world, DeltaBuffer& delta, const DrainConfi
 
     // Fire any consequences scheduled for this tick (GDD §21).
     process_consequence_queue(world, delta);
+
+    // Per-NPC investigation meters (decay, stage, escalation to a legal case).
+    process_investigator_meters(world, delta);
 }
 
 }  // namespace econlife

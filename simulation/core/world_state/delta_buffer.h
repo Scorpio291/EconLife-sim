@@ -48,6 +48,10 @@ struct NPCDelta {
                                                         // writes back each tick)
     std::optional<float> age_delta;             // additive; population_aging advances age annually
     std::optional<float> risk_tolerance_delta;  // additive; clamped [0,1] (e.g. intimidation)
+    std::optional<float>
+        investigator_meter_fill_delta;  // additive; investigator_meter.current_level [0,1]
+    std::optional<uint32_t>
+        investigator_meter_target;  // replacement; investigator_meter.target_npc_id (sets opened)
 };
 
 struct PlayerDelta {

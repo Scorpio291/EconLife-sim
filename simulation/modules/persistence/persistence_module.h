@@ -153,7 +153,7 @@ class PersistenceModule : public ITickModule {
     //      v15: per-NPC AddictionState gains trailing withdrawal_health
     //      (f32) + terminal_ticks (u32). v4..v14 saves load these NPCs with
     //      the defaults (health 1.0, terminal_ticks 0).
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 17;
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 18;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"
