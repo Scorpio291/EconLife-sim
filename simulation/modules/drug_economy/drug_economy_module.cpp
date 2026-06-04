@@ -3,12 +3,49 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <string>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
 namespace econlife {
+
+namespace {
+// Derive the drug type a business produces from its facility's recipe output,
+// rather than assuming cannabis. Maps the primary (non-byproduct) output good
+// key to a DrugType; falls back to cannabis if no drug-producing facility/recipe
+// is found.
+DrugType drug_type_for_business(const WorldState& state, const NPCBusiness& biz) {
+    for (const auto& fac : state.facilities) {
+        if (fac.business_id != biz.id)
+            continue;
+        const Recipe* recipe = nullptr;
+        for (const auto& r : state.loaded_recipes) {
+            if (r.id == fac.recipe_id) {
+                recipe = &r;
+                break;
+            }
+        }
+        if (!recipe)
+            continue;
+        for (const auto& out : recipe->outputs) {
+            if (out.is_byproduct)
+                continue;
+            const std::string& g = out.good_id;
+            if (g.find("methamphetamine") != std::string::npos)
+                return DrugType::methamphetamine;
+            if (g.find("synthetic_opioid") != std::string::npos)
+                return DrugType::synthetic_opioid;
+            if (g.find("designer_drug") != std::string::npos)
+                return DrugType::designer_drug;
+            if (g.find("cannabis") != std::string::npos)
+                return DrugType::cannabis;
+        }
+    }
+    return DrugType::cannabis;  // fallback when no drug recipe is found
+}
+}  // namespace
 
 // ============================================================================
 // Static utility functions
@@ -91,9 +128,8 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         if (production_output <= 0.0f)
             continue;
 
-        // Assume cannabis type for province-based businesses; in full impl,
-        // drug type comes from the business's assigned recipe
-        DrugType drug_type = DrugType::cannabis;
+        // Drug type from the business's facility recipe output (cannabis fallback).
+        DrugType drug_type = drug_type_for_business(state, *biz);
 
         // Determine market tier (simplified: smaller businesses are retail)
         DrugMarketTier tier =

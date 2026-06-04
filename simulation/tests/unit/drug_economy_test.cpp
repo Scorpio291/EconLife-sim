@@ -345,3 +345,54 @@ TEST_CASE("DrugEconomy: revenue uses RegionalMarket informal spot price", "[drug
     REQUIRE(fallback > 0.0f);
     REQUIRE(with_market > fallback);  // 500 market price beats the 100 baseline
 }
+
+// =============================================================================
+// Drug type derived from the business's facility recipe (was cannabis-only)
+// =============================================================================
+
+TEST_CASE("DrugEconomy: drug type comes from the facility recipe output", "[drug_economy][tier8]") {
+    auto run = [](bool with_meth_recipe) -> uint32_t {
+        WorldState state{};
+        state.current_tick = 5;
+        state.world_seed = 1;
+        Province prov{};
+        prov.id = 0;
+        prov.cohort_stats = std::make_unique<RegionCohortStats>();
+        state.provinces.push_back(std::move(prov));
+
+        NPCBusiness biz{};
+        biz.id = 7;
+        biz.province_id = 0;
+        biz.criminal_sector = true;
+        biz.revenue_per_tick = 1000.0f;
+        biz.market_share = 0.0f;
+        state.npc_businesses.push_back(biz);
+
+        if (with_meth_recipe) {
+            Recipe r{};
+            r.id = "meth_cook";
+            RecipeOutput out{};
+            out.good_id = "methamphetamine";
+            out.is_byproduct = false;
+            r.outputs.push_back(out);
+            state.loaded_recipes.push_back(r);
+
+            Facility f{};
+            f.id = 1;
+            f.business_id = 7;
+            f.recipe_id = "meth_cook";
+            state.facilities.push_back(f);
+        }
+
+        DrugEconomyModule module;
+        DeltaBuffer d{};
+        module.execute_province(0, state, d);
+        for (const auto& md : d.market_deltas)
+            if (md.supply_delta.has_value() && *md.supply_delta > 0.0f)
+                return md.good_id;
+        return 9999u;
+    };
+
+    REQUIRE(run(true) == static_cast<uint32_t>(DrugType::methamphetamine));
+    REQUIRE(run(false) == static_cast<uint32_t>(DrugType::cannabis));  // fallback
+}
