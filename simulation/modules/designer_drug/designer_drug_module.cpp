@@ -47,8 +47,23 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
     bool monthly_check = should_check_detection(state.current_tick, cfg_.monthly_interval);
 
     for (auto& compound : compounds_) {
-        if (compound.stage == SchedulingStage::scheduled)
+        if (compound.stage == SchedulingStage::scheduled) {
+            // Scheduled compounds run no R&D / detection. They keep supplying the
+            // informal market via a successor product line; with no successor,
+            // supply drops to zero (INTERFACE).
+            if (compound.has_successor) {
+                constexpr float BASE_SUPPLY_PER_TICK = 10.0f;
+                MarketDelta supply_entry;
+                supply_entry.good_id = compound.compound_id;
+                supply_entry.region_id = compound.province_id;
+                supply_entry.supply_delta =
+                    BASE_SUPPLY_PER_TICK * compound.market_margin_multiplier;
+                delta.market_deltas.push_back(supply_entry);
+            }
+            compound.market_margin_multiplier =
+                compute_market_margin(compound.stage, compound.has_successor);
             continue;
+        }
 
         // BusinessDelta: R&D investment cost each tick for active (unscheduled) compounds
         // Find the criminal business owned by creator_actor_id in the compound's province
@@ -88,7 +103,16 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
         if (compound.stage == SchedulingStage::review_initiated) {
             uint32_t elapsed = state.current_tick - compound.review_start_tick;
-            if (elapsed >= compound.review_duration) {
+            // Slower (more corrupt) political systems take longer to schedule:
+            // political_delay = 1 + province corruption_index.
+            float political_delay = 1.0f;
+            for (const auto& prov : state.provinces) {
+                if (prov.id == compound.province_id) {
+                    political_delay = 1.0f + prov.political.corruption_index;
+                    break;
+                }
+            }
+            if (elapsed >= compute_review_duration(compound.review_duration, political_delay)) {
                 compound.stage = SchedulingStage::scheduled;
 
                 compound.has_successor = false;
@@ -112,9 +136,8 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
         }
 
-        // MarketDelta: compound enters/remains in informal market with initial supply
-        // Unscheduled compounds supply the formal market; scheduled ones the informal market.
-        // Emit a supply delta each tick to represent ongoing production availability.
+        // MarketDelta: unscheduled / under-review compounds supply the market each
+        // tick (scheduled compounds are handled at the top of the loop).
         if (compound.stage == SchedulingStage::unscheduled ||
             compound.stage == SchedulingStage::review_initiated) {
             // Use compound_id as the goods key proxy (maps to "designer_drug_{id}" in goods.csv)

@@ -75,3 +75,47 @@ TEST_CASE("DesignerDrug: scheduling stage enum values", "[designer_drug][tier9]"
     REQUIRE(static_cast<uint8_t>(SchedulingStage::review_initiated) == 1);
     REQUIRE(static_cast<uint8_t>(SchedulingStage::scheduled) == 2);
 }
+
+// =============================================================================
+// Post-scheduling supply behavior (execute path)
+// =============================================================================
+namespace {
+DesignerDrugCompound make_scheduled_compound(uint32_t id, bool has_successor) {
+    DesignerDrugCompound c{};
+    c.compound_id = id;
+    c.creator_actor_id = 1;
+    c.stage = SchedulingStage::scheduled;
+    c.has_successor = has_successor;
+    c.market_margin_multiplier = has_successor ? 1.0f : 0.8f;
+    c.province_id = 0;
+    c.review_duration = 180;
+    return c;
+}
+}  // namespace
+
+TEST_CASE("DesignerDrug: scheduled-with-successor keeps supplying; without-successor stops",
+          "[designer_drug][tier9]") {
+    WorldState state{};
+    state.current_tick = 5;  // not a monthly tick -> no detection churn
+    state.world_seed = 1;
+
+    DesignerDrugModule with_succ;
+    with_succ.compounds_mut().push_back(make_scheduled_compound(10, /*has_successor=*/true));
+    DeltaBuffer d1{};
+    with_succ.execute(state, d1);
+    bool supplied = false;
+    for (const auto& md : d1.market_deltas)
+        if (md.good_id == 10 && md.supply_delta.has_value() && *md.supply_delta > 0.0f)
+            supplied = true;
+    REQUIRE(supplied);  // successor line keeps the product on the informal market
+
+    DesignerDrugModule no_succ;
+    no_succ.compounds_mut().push_back(make_scheduled_compound(11, /*has_successor=*/false));
+    DeltaBuffer d2{};
+    no_succ.execute(state, d2);
+    bool supplied2 = false;
+    for (const auto& md : d2.market_deltas)
+        if (md.good_id == 11 && md.supply_delta.has_value() && *md.supply_delta > 0.0f)
+            supplied2 = true;
+    REQUIRE_FALSE(supplied2);  // no successor -> supply drops to zero
+}
