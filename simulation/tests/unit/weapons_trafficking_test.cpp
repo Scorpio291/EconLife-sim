@@ -188,3 +188,52 @@ TEST_CASE("WeaponsTrafficking: compliant manufacturer diverts nothing",
     REQUIRE_FALSE(any_supply);
     REQUIRE(delta.evidence_deltas.empty());
 }
+
+// =============================================================================
+// Embargo investigation on heavy/embargo-level diversion (execute path)
+// =============================================================================
+
+TEST_CASE("WeaponsTrafficking: heavy diversion opens a monthly embargo investigation",
+          "[weapons_trafficking][tier8]") {
+    WorldState state{};
+    state.world_seed = 1;
+    Province prov{};
+    prov.id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+
+    NPCBusiness biz{};
+    biz.id = 7;
+    biz.owner_id = 42;
+    biz.province_id = 0;
+    biz.sector = BusinessSector::manufacturing;
+    biz.regulatory_violation_severity = 0.80f;  // >= embargo_severity_threshold (0.70)
+    biz.revenue_per_tick = 1000.0f;
+    state.npc_businesses.push_back(biz);
+
+    WeaponsTraffickingModule module;
+
+    // Monthly tick -> embargo investigation consequence against the owner.
+    state.current_tick = 30;
+    DeltaBuffer d{};
+    module.execute_province(0, state, d);
+    bool embargo = false;
+    for (const auto& c : d.consequence_deltas) {
+        if (c.new_consequence.has_value() &&
+            c.new_consequence->category == ConsequenceCategory::criminal_investigation &&
+            c.new_consequence->target_id == 42) {
+            embargo = true;
+        }
+    }
+    REQUIRE(embargo);
+
+    // Off the monthly cadence -> no embargo consequence (avoids flooding courts).
+    state.current_tick = 5;
+    DeltaBuffer d2{};
+    module.execute_province(0, state, d2);
+    bool embargo2 = false;
+    for (const auto& c : d2.consequence_deltas)
+        if (c.new_consequence.has_value())
+            embargo2 = true;
+    REQUIRE_FALSE(embargo2);
+}

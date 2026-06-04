@@ -148,6 +148,20 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
                 EvidenceToken{0,      EvidenceType::physical, biz->owner_id, biz->owner_id, 0.35f,
                               0.002f, state.current_tick,     province.id,   true};
             province_delta.evidence_deltas.push_back(phys_ev);
+
+            // Heavy/embargoed-weapons diversion (high regulatory violation) opens
+            // an embargo investigation that local corruption cannot suppress (high
+            // awareness accelerates it). Routed through the consequence queue;
+            // gated monthly so a persistent trafficker does not flood the courts.
+            if (biz->regulatory_violation_severity >= cfg_.embargo_severity_threshold &&
+                (state.current_tick % 30u) == 0u) {
+                ConsequenceDelta embargo;
+                embargo.new_consequence = make_consequence(
+                    biz->id, ConsequenceCategory::criminal_investigation, /*source=*/0,
+                    /*target=*/biz->owner_id, province.id, state.current_tick,
+                    cfg_.embargo_awareness);
+                province_delta.consequence_deltas.push_back(embargo);
+            }
         }
 
         // Add diverted supply to informal market

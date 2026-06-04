@@ -859,6 +859,11 @@ struct WeaponsTraffickingConfig {
     float chain_custody_actionability = 0.60f;
     float embargo_meter_spike = 0.25f;
     float trust_threshold_diversion = 0.60f;
+    // Diversion at/above this regulatory-violation severity is treated as
+    // heavy/embargoed-weapons trafficking and triggers an embargo investigation
+    // (high awareness => not suppressible by local corruption).
+    float embargo_severity_threshold = 0.70f;
+    float embargo_awareness = 1.8f;
 };
 
 struct PopulationAgingConfig {
