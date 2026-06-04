@@ -112,9 +112,21 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
                                 cfg_.retail_quality_degradation);
         }
 
-        // Compute pricing
-        // In full impl, this reads from RegionalMarket informal layer
-        float spot_price = 100.0f;  // proxy
+        // Pricing: read the informal-market spot price for this drug good in this
+        // province from RegionalMarket (keyed (good_id<<32)|province_id); fall
+        // back to a baseline when no market exists for the good yet.
+        float spot_price = 100.0f;  // baseline fallback
+        {
+            const uint64_t key = (static_cast<uint64_t>(static_cast<uint32_t>(drug_type)) << 32) |
+                                 static_cast<uint64_t>(province.id);
+            auto it = state.market_index_by_good_province.find(key);
+            if (it != state.market_index_by_good_province.end() &&
+                it->second < state.regional_markets.size()) {
+                float p = state.regional_markets[it->second].spot_price;
+                if (p > 0.0f)
+                    spot_price = p;
+            }
+        }
         float revenue = 0.0f;
         if (tier == DrugMarketTier::wholesale) {
             revenue = production_output *

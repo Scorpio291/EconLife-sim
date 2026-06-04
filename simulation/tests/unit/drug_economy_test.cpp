@@ -297,3 +297,51 @@ TEST_CASE("DrugEconomy: skips NPCs already in the addiction pipeline",
     // Only the 5 NPCs at stage=none should be seeded.
     REQUIRE(count_seeded(delta) == 5);
 }
+
+// =============================================================================
+// Pricing reads the RegionalMarket informal spot price (was a 100.0 proxy)
+// =============================================================================
+
+TEST_CASE("DrugEconomy: revenue uses RegionalMarket informal spot price", "[drug_economy][tier8]") {
+    auto run = [](bool with_market) -> float {
+        WorldState state{};
+        state.current_tick = 5;
+        state.world_seed = 1;
+        Province prov{};
+        prov.id = 0;
+        prov.cohort_stats = std::make_unique<RegionCohortStats>();
+        state.provinces.push_back(std::move(prov));
+
+        NPCBusiness biz{};
+        biz.id = 7;
+        biz.province_id = 0;
+        biz.criminal_sector = true;
+        biz.revenue_per_tick = 1000.0f;
+        biz.market_share = 0.0f;  // retail tier
+        state.npc_businesses.push_back(biz);
+
+        if (with_market) {
+            RegionalMarket m{};
+            m.good_id = static_cast<uint32_t>(DrugType::cannabis);
+            m.province_id = 0;
+            m.spot_price = 500.0f;  // well above the 100 fallback
+            state.regional_markets.push_back(m);
+            state.market_index_by_good_province[(static_cast<uint64_t>(m.good_id) << 32) | 0ull] =
+                0;
+        }
+
+        DrugEconomyModule module;
+        DeltaBuffer d{};
+        module.execute_province(0, state, d);
+        for (const auto& bd : d.business_deltas)
+            if (bd.business_id == 7 && bd.cash_delta.has_value())
+                return *bd.cash_delta;
+        return -1.0f;
+    };
+
+    float with_market = run(true);
+    float fallback = run(false);
+    REQUIRE(with_market > 0.0f);
+    REQUIRE(fallback > 0.0f);
+    REQUIRE(with_market > fallback);  // 500 market price beats the 100 baseline
+}
