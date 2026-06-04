@@ -49,7 +49,20 @@
 >   political to avoid case loops; rest→social/political). Simplification:
 >   social/political consequences route to province 0 (firing-effect routing is a
 >   follow-up tune).
-> - #6 module finishes — not yet started.
+> - **#6 module finishes — DONE** (6 modules, one tested commit each):
+>   government_budget (income from cohort mean_income, property tax from
+>   avg_property_value); media_system (damaging coverage erodes player
+>   ReputationState via new PlayerDelta reputation deltas); designer_drug
+>   (political-delay-scaled review duration; post-scheduling supply with/without
+>   successor); money_laundering (commingling capacity cap + probabilistic crypto
+>   evidence — the unused helpers wired); weapons_trafficking (monthly embargo
+>   investigation consequence on heavy diversion); drug_economy (revenue priced
+>   from the RegionalMarket informal spot price). Documented larger follow-ups
+>   left out (need absent infrastructure): drug_economy recipe-registry output +
+>   cross-province TransitShipment; per-NPC InvestigatorMeter; weapons chain-of-
+>   custody / corrupt procurement.
+>
+> **All audit priority items (#1–#6, incl. #4b) are complete.** Suite: 1609/1609.
 
 
 **Scope:** All ~49 modules with an `INTERFACE.md` spec, comparing spec ↔ shipped
