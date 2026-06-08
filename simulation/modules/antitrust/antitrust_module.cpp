@@ -81,6 +81,10 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
 
     // Track which provinces have Tier 2 violations this check
     std::set<uint32_t> provinces_with_tier2;
+    // Most-dominant Tier 2 actor per province this check: province_id ->
+    // (actor_id, share). Used to target the structural remedy when a proposal
+    // passes this check.
+    std::map<uint32_t, std::pair<uint32_t, float>> dominant_actor_by_prov;
 
     for (const auto& mk : market_keys) {
         // Find total supply for this good in this province via the composite-
@@ -183,19 +187,14 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
             float share = compute_supply_share(output, total_actor_output);
 
             if (is_tier1_triggered(share)) {
-                // Find regulator NPC in this province
-                if (mk.province_id < state.npc_indices_by_province.size()) {
-                    for (uint32_t idx : state.npc_indices_by_province[mk.province_id]) {
-                        const NPC& npc = state.significant_npcs[idx];
-                        if (npc.role == NPCRole::regulator && npc.status == NPCStatus::active) {
-                            NPCDelta npc_delta;
-                            npc_delta.npc_id = npc.id;
-                            npc_delta.motivation_delta = compute_meter_fill_increment();
-                            delta.npc_deltas.push_back(npc_delta);
-                            break;  // one regulator per province
-                        }
-                    }
-                }
+                // Tier 1 (preliminary inquiry) is a CIVIL matter, not a criminal
+                // investigation: market-share dominance is read from public,
+                // auditable market records, so it deliberately does NOT fill the
+                // per-NPC InvestigatorMeter (whose terminal is a criminal raid /
+                // arrest). The preliminary inquiry is represented entirely by the
+                // documentary evidence token below; sustained dominance escalates
+                // through proposal pressure -> legislation -> the structural
+                // remedy applied at proposal generation.
 
                 // Generate actor-targeted evidence if share is significantly above threshold.
                 if (share > cfg_.market_share_threshold + 0.10f) {
@@ -217,6 +216,13 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
 
             if (is_tier2_triggered(share)) {
                 provinces_with_tier2.insert(mk.province_id);
+
+                // Remember the most-dominant actor in this province (highest
+                // share across all goods this check) for the structural remedy.
+                auto& dom = dominant_actor_by_prov[mk.province_id];
+                if (share > dom.second) {
+                    dom = {actor_id, share};
+                }
 
                 // Increment proposal pressure
                 proposal_pressure_[mk.province_id] += compute_pressure_increment();
@@ -280,6 +286,34 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
             proposal.created_tick = state.current_tick;
             proposal.target_market_share_cap = cfg_.market_share_threshold;
             proposals_.push_back(proposal);
+
+            // Structural remedy with teeth: the proposal passing imposes a civil
+            // penalty on the province's dominant actor — a fine proportional to
+            // its capital. This is the antitrust enforcement outcome (fine /
+            // divestiture pressure), distinct from any criminal proceeding.
+            auto dom_it = dominant_actor_by_prov.find(prov_id);
+            if (dom_it != dominant_actor_by_prov.end() && dom_it->second.first != 0) {
+                uint32_t actor_id = dom_it->second.first;
+                if (state.player && actor_id == state.player->id) {
+                    float fine = std::max(0.0f, state.player->wealth) *
+                                 cfg_.enforcement_fine_capital_fraction;
+                    if (fine > 0.0f) {
+                        if (delta.player_delta.wealth_delta.has_value())
+                            *delta.player_delta.wealth_delta -= fine;
+                        else
+                            delta.player_delta.wealth_delta = -fine;
+                    }
+                } else if (const NPC* actor = lookup_npc_by_id(state, actor_id)) {
+                    float fine =
+                        std::max(0.0f, actor->capital) * cfg_.enforcement_fine_capital_fraction;
+                    if (fine > 0.0f) {
+                        NPCDelta fine_delta;
+                        fine_delta.npc_id = actor_id;
+                        fine_delta.capital_delta = -fine;
+                        delta.npc_deltas.push_back(fine_delta);
+                    }
+                }
+            }
 
             // Reset pressure after proposal generation
             pressure = 0.0f;

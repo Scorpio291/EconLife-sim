@@ -658,6 +658,10 @@ struct AntitrustConfig {
     float proposal_pressure_decay_rate = 0.01f;
     float proposal_threshold = 0.50f;
     uint32_t monthly_interval = 30;
+    // Structural remedy: when an antitrust proposal passes, the province's
+    // dominant actor is fined this fraction of its capital (civil penalty,
+    // not a criminal case).
+    float enforcement_fine_capital_fraction = 0.15f;
 };
 
 struct FacilitySignalsConfig {

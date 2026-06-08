@@ -142,7 +142,8 @@ TEST_CASE("Criminal sector excluded from antitrust", "[antitrust][tier7]") {
     // The criminal business output is not in the actor_output map
 }
 
-TEST_CASE("Tier 1 triggers regulator meter fill", "[antitrust][tier7]") {
+TEST_CASE("Tier 1 generates documentary evidence, not a criminal/regulator meter fill",
+          "[antitrust][tier7]") {
     WorldState state{};
     state.current_tick = 30;
 
@@ -194,17 +195,26 @@ TEST_CASE("Tier 1 triggers regulator meter fill", "[antitrust][tier7]") {
     DeltaBuffer delta{};
     module.execute(state, delta);
 
-    // Actor 100 has 60% share (> 0.40 threshold), should trigger Tier 1
-    // Regulator meter should be filled
-    bool found_reg_fill = false;
+    // Actor 100 has 60% share (> 0.40 threshold) -> Tier 1. Antitrust is a
+    // civil matter read from public market data, so the regulator's behavior
+    // motivation must NOT be polluted and no investigation meter is filled.
     for (const auto& d : delta.npc_deltas) {
-        if (d.npc_id == 50 && d.motivation_delta.has_value()) {
-            found_reg_fill = true;
-            CHECK_THAT(*d.motivation_delta, WithinAbs(0.002f, 0.001f));
-            break;
+        if (d.npc_id == 50) {
+            CHECK_FALSE(d.motivation_delta.has_value());
+            CHECK_FALSE(d.investigator_meter_fill_delta.has_value());
         }
     }
-    CHECK(found_reg_fill);
+
+    // Tier 1 is represented by a documentary evidence token targeting the
+    // dominant actor (share 0.60 > threshold + 0.10).
+    bool found_doc_token = false;
+    for (const auto& ed : delta.evidence_deltas) {
+        if (ed.new_token.has_value() && ed.new_token->type == EvidenceType::documentary &&
+            ed.new_token->target_npc_id == 100u) {
+            found_doc_token = true;
+        }
+    }
+    CHECK(found_doc_token);
 }
 
 TEST_CASE("Tier 2 accumulates proposal pressure", "[antitrust][tier7]") {
@@ -253,6 +263,74 @@ TEST_CASE("Tier 2 accumulates proposal pressure", "[antitrust][tier7]") {
     // Actor 100 has 75% share (>= 0.70 threshold), Tier 2 triggered
     CHECK(module.proposal_pressure().count(0) > 0);
     CHECK(module.proposal_pressure()[0] > 0.0f);
+}
+
+TEST_CASE("Proposal passing fines the dominant actor (structural remedy)", "[antitrust][tier7]") {
+    WorldState state{};
+    state.current_tick = 30;
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = 0;
+    state.provinces.push_back(prov);
+
+    // Dominant business (75% share) owned by NPC 100.
+    NPCBusiness biz1{};
+    biz1.id = 1;
+    biz1.province_id = 0;
+    biz1.criminal_sector = false;
+    biz1.revenue_per_tick = 750.0f;
+    biz1.owner_id = 100;
+    state.npc_businesses.push_back(biz1);
+
+    NPCBusiness biz2{};
+    biz2.id = 2;
+    biz2.province_id = 0;
+    biz2.criminal_sector = false;
+    biz2.revenue_per_tick = 250.0f;
+    biz2.owner_id = 200;
+    state.npc_businesses.push_back(biz2);
+
+    RegionalMarket rm{};
+    rm.good_id = 1;
+    rm.province_id = 0;
+    rm.supply = 1000.0f;
+    state.regional_markets.push_back(rm);
+
+    // The dominant actor NPC with capital to fine.
+    NPC owner{};
+    owner.id = 100;
+    owner.role = NPCRole::corporate_executive;
+    owner.current_province_id = 0;
+    owner.status = NPCStatus::active;
+    owner.capital = 10000.0f;
+    state.significant_npcs.push_back(owner);
+
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    AntitrustModule module;
+    module.next_check_tick() = 30;
+    // Pre-load pressure so the proposal passes on this monthly check.
+    module.proposal_pressure()[0] = 0.50f;
+
+    rebuild_npc_indices(state);
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    // A proposal was generated this check.
+    CHECK_FALSE(module.proposals().empty());
+
+    // The dominant actor (NPC 100) was fined 15% of its 10000 capital = 1500.
+    bool found_fine = false;
+    for (const auto& d : delta.npc_deltas) {
+        if (d.npc_id == 100 && d.capital_delta.has_value() && *d.capital_delta < 0.0f) {
+            found_fine = true;
+            CHECK_THAT(*d.capital_delta, WithinAbs(-1500.0f, 1.0f));
+        }
+    }
+    CHECK(found_fine);
 }
 
 TEST_CASE("Pressure decays when no dominant actor", "[antitrust][tier7]") {

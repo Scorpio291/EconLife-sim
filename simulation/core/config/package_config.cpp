@@ -740,6 +740,8 @@ PackageConfig load_package_config(const std::string& config_dir) {
             at.value("proposal_threshold", cfg.antitrust.proposal_threshold);
         cfg.antitrust.monthly_interval =
             at.value("monthly_interval", cfg.antitrust.monthly_interval);
+        cfg.antitrust.enforcement_fine_capital_fraction = at.value(
+            "enforcement_fine_capital_fraction", cfg.antitrust.enforcement_fine_capital_fraction);
 
         const auto fs = j.value("facility_signals", nlohmann::json::object());
         cfg.facility_signals.default_weight =
