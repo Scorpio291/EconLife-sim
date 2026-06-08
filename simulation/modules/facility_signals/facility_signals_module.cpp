@@ -123,9 +123,6 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
     std::sort(province_businesses.begin(), province_businesses.end(),
               [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
 
-    // Aggregate criminal net_signal for LE meter fill
-    float criminal_signal_sum = 0.0f;
-
     for (const NPCBusiness* biz : province_businesses) {
         // Find signal entry pre-populated by init_for_tick().
         FacilitySignals* sig = nullptr;
@@ -150,84 +147,23 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
 
         // Compute net signal
         sig->net_signal = compute_net_signal(sig->base_signal_composite, effective_mitigation);
-
-        // Accumulate criminal signal for LE meter
-        if (biz->criminal_sector && sig->net_signal > 0.0f) {
-            criminal_signal_sum += sig->net_signal;
-        }
     }
 
-    // --- Phase 2: Update LE investigator meters ---
-    float regional_signal = criminal_signal_sum / cfg_.facility_count_normalizer;
-    float base_le_fill_rate = compute_le_fill_rate(
-        regional_signal, cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
-
-    std::vector<const NPC*> le_npcs;
-    if (province.id < state.npc_indices_by_province.size()) {
-        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
-            const NPC& npc = state.significant_npcs[idx];
-            if (npc.role == NPCRole::law_enforcement && npc.status == NPCStatus::active) {
-                le_npcs.push_back(&npc);
-            }
-        }
-    }
-    std::sort(le_npcs.begin(), le_npcs.end(),
-              [](const NPC* a, const NPC* b) { return a->id < b->id; });
-
-    for (const NPC* le_npc : le_npcs) {
-        float fill_rate = base_le_fill_rate;
-
-        if (criminal_signal_sum <= 0.0f) {
-            fill_rate = -cfg_.meter_decay_rate;
-        }
-
-        NPCDelta delta;
-        delta.npc_id = le_npc->id;
-        delta.motivation_delta = fill_rate;
-        province_delta.npc_deltas.push_back(delta);
-    }
-
-    // --- Phase 3: Update regulator scrutiny meters ---
-    std::vector<const NPC*> reg_npcs;
-    if (province.id < state.npc_indices_by_province.size()) {
-        for (uint32_t idx : state.npc_indices_by_province[province.id]) {
-            const NPC& npc = state.significant_npcs[idx];
-            if (npc.role == NPCRole::regulator && npc.status == NPCStatus::active) {
-                reg_npcs.push_back(&npc);
-            }
-        }
-    }
-    std::sort(reg_npcs.begin(), reg_npcs.end(),
-              [](const NPC* a, const NPC* b) { return a->id < b->id; });
-
-    // Regulators read chemical_waste and foot_traffic dimensions only
-    float regulatory_signal_sum = 0.0f;
-    for (const NPCBusiness* biz : province_businesses) {
-        for (const auto& fs : facility_signals_) {
-            if (fs.business_id == biz->id) {
-                float reg_signal =
-                    (fs.chemical_waste_signature + fs.foot_traffic_visibility) * 0.5f;
-                float effective_mit = fs.scrutiny_mitigation + karst_bonus;
-                effective_mit = std::clamp(effective_mit, 0.0f, 1.0f);
-                float net_reg = std::max(0.0f, reg_signal - effective_mit);
-                regulatory_signal_sum += net_reg;
-                break;
-            }
-        }
-    }
-
-    float reg_fill_rate =
-        compute_le_fill_rate(regulatory_signal_sum / cfg_.facility_count_normalizer,
-                             cfg_.detection_to_fill_rate_scale, cfg_.fill_rate_max);
-
-    for (const NPC* reg_npc : reg_npcs) {
-        float fill = (regulatory_signal_sum > 0.0f) ? reg_fill_rate : -cfg_.meter_decay_rate;
-
-        NPCDelta delta;
-        delta.npc_id = reg_npc->id;
-        delta.motivation_delta = fill;
-        province_delta.npc_deltas.push_back(delta);
-    }
+    // NOTE: This module is purely a *signal source*. It does not fill any NPC
+    // meter. The InvestigatorMeter (criminal — terminates in raid/arrest) and
+    // the regulator scrutiny meter (civil) are owned and advanced by
+    // `investigator_engine` (runs_after this module), which reads facility
+    // net_signals and manages case level/status/transitions. An earlier version
+    // wrote the per-tick fill rates into law-enforcement and regulator NPCs'
+    // `NPCDelta.motivation_delta` (the financial-gain behavior-weight slot) as a
+    // meter stand-in — that polluted those NPCs' motivations and filled nothing
+    // the rest of the system reads, so it has been removed.
+    //
+    // TODO(pipeline): the computed `facility_signals_` net_signals are not yet
+    // surfaced to `investigator_engine`, which currently approximates them via
+    // `regulatory_violation_severity`. Wiring them through requires a
+    // WorldState/delta channel for per-facility signals and is tracked
+    // separately.
 }
 
 void FacilitySignalsModule::execute(const WorldState& state, DeltaBuffer& delta) {

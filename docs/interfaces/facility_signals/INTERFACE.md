@@ -1,7 +1,18 @@
 # Module: facility_signals
 
+> **Design note (2026-06-08):** This module is a *signal source only* — it
+> computes per-facility signal composites and does **not** fill any NPC meter.
+> The InvestigatorMeter (criminal — terminates in raid/arrest) and the regulator
+> scrutiny meter (civil) are owned and advanced by `investigator_engine` (which
+> `runs_after` this module). An earlier implementation wrote the per-tick fill
+> rates into law-enforcement and regulator NPCs' `NPCDelta.motivation_delta`
+> (the financial-gain behavior-weight slot) as a meter stand-in — that polluted
+> those NPCs' motivations and filled nothing the rest of the system reads, so it
+> was removed. The meter/evidence/consequence outputs below describe
+> `investigator_engine`'s responsibility, not this module's.
+
 ## Purpose
-Computes observable signal composites for all facilities each tick (tick step 12), combining four physical signal dimensions (power consumption anomaly, chemical waste signature, foot traffic visibility, olfactory signature) into a weighted `base_signal_composite`, applying scrutiny mitigation to produce `net_signal`, and feeding the resulting signals into the InvestigatorMeter and RegulatorScrutinyMeter integration at tick step 13. This module implements TDD Section 16: Facility Signals and Scrutiny System.
+Computes observable signal composites for all facilities each tick, combining four physical signal dimensions (power consumption anomaly, chemical waste signature, foot traffic visibility, olfactory signature) into a weighted `base_signal_composite`, and applying scrutiny mitigation to produce `net_signal`. These signals are the input that `investigator_engine` consumes to advance investigator/regulator meters. This module implements TDD Section 16: Facility Signals and Scrutiny System.
 
 Facility signals are universal -- both criminal and legitimate facilities have signal profiles. The distinction is in who reads them: law enforcement filters to `criminal_sector == true` facilities; regulators read all facilities. Signal weights are per-facility-type data loaded from `facility_types.csv`, making the system fully moddable without engine code changes. Scrutiny mitigation for criminal facilities is derived from corrupted law enforcement authority coverage; for legitimate facilities, it comes from compliance investment.
 
@@ -13,17 +24,16 @@ Facility signals are universal -- both criminal and legitimate facilities have s
 - `current_tick` -- used for meter `opened_tick` recording and consequence scheduling
 - Facility types data file (loaded at startup) -- `FacilityTypeSignalWeights` per facility type: `w_power_consumption`, `w_chemical_waste`, `w_foot_traffic`, `w_olfactory` (must sum to 1.0)
 
-## Outputs (to DeltaBuffer)
-- `FacilityDelta.base_signal_composite` -- weighted sum of four signal dimensions per facility, clamped to [0.0, 1.0]
-- `FacilityDelta.net_signal` -- `max(0.0, base_signal_composite - scrutiny_mitigation)` per facility
-- `NPCDelta.investigator_meter.fill_rate` -- per-tick increment for law enforcement NPCs, derived from aggregate criminal facility `net_signal` in their province
-- `NPCDelta.investigator_meter.current_level` -- updated meter level after applying fill_rate
-- `NPCDelta.investigator_meter.status` -- status derived from threshold comparison (inactive, surveillance, formal_inquiry, raid_imminent)
-- `NPCDelta.regulator_scrutiny_meter.fill_rate` -- per-tick increment for regulator NPCs, derived from per-facility regulatory signal
-- `NPCDelta.regulator_scrutiny_meter.current_level` -- updated regulator meter level
-- `NPCDelta.regulator_scrutiny_meter.status` -- status derived from threshold comparison (inactive, notice_filed, formal_audit, enforcement_action)
-- `EvidenceDelta.new_token` -- physical evidence token created when InvestigatorMeter transitions to `surveillance`; documentary evidence token created when RegulatorScrutinyMeter transitions to `formal_audit`
-- Consequence entries -- `investigation_opens` queued when InvestigatorMeter reaches `formal_inquiry`; raid planned when reaching `raid_imminent` (delay 7-30 ticks, seed-deterministic)
+## Outputs
+- Per-facility `base_signal_composite` -- weighted sum of four signal dimensions, clamped to [0.0, 1.0] -- written to the module's `FacilitySignals` state.
+- Per-facility `net_signal` -- `max(0.0, base_signal_composite - scrutiny_mitigation)` -- written to the module's `FacilitySignals` state.
+- **This module writes nothing to the DeltaBuffer.** Meter advancement, status transitions, evidence-token emission (`surveillance`), and `investigation_opens`/raid consequences are all owned by `investigator_engine` (see its INTERFACE) — listed here previously by mistake.
+
+> **TODO(pipeline):** the computed `net_signal`s are not yet surfaced to
+> `investigator_engine`, which currently approximates them via
+> `regulatory_violation_severity`. Wiring them through requires a
+> WorldState/delta channel for per-facility signals (a `FacilityDelta`, which
+> does not yet exist) and is tracked separately.
 
 ## Preconditions
 - Evidence module has completed for this tick; new evidence tokens from other sources are available.

@@ -167,15 +167,16 @@ TEST_CASE("Facility signals execute province computes signals", "[facility_signa
     // Net = 0.65 - (0.1 + 0.10 karst) = 0.65 - 0.20 = 0.45
     CHECK_THAT(signals[0].net_signal, WithinAbs(0.45f, 0.01f));
 
-    // LE NPC should have a delta
-    REQUIRE(delta.npc_deltas.size() >= 1);
-    CHECK(delta.npc_deltas[0].npc_id == 10);
-    // Fill rate should be positive (criminal signal present)
-    CHECK(delta.npc_deltas[0].motivation_delta.has_value());
-    CHECK(*delta.npc_deltas[0].motivation_delta > 0.0f);
+    // This module is a signal source only: it must NOT fill any NPC meter or
+    // touch NPC motivation. Meter ownership belongs to investigator_engine.
+    for (const auto& d : delta.npc_deltas) {
+        CHECK_FALSE(d.motivation_delta.has_value());
+    }
 }
 
-TEST_CASE("Regulator reads chemical and traffic only", "[facility_signals][tier7]") {
+TEST_CASE("Regulator NPCs are not polluted by facility signals", "[facility_signals][tier7]") {
+    // The civil regulator-scrutiny meter is owned by investigator_engine, not
+    // this module. facility_signals must not write any delta to regulator NPCs.
     WorldState state{};
     state.current_tick = 100;
 
@@ -221,15 +222,9 @@ TEST_CASE("Regulator reads chemical and traffic only", "[facility_signals][tier7
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
-    // Regulator should see near-zero signal (chemical + traffic = 0)
-    // So regulator meter should decay
-    bool found_reg_delta = false;
+    // No delta should target the regulator NPC, and no motivation pollution.
     for (const auto& d : delta.npc_deltas) {
-        if (d.npc_id == 20 && d.motivation_delta.has_value()) {
-            found_reg_delta = true;
-            CHECK(*d.motivation_delta < 0.0f);  // decay
-            break;
-        }
+        CHECK(d.npc_id != 20u);
+        CHECK_FALSE(d.motivation_delta.has_value());
     }
-    CHECK(found_reg_delta);
 }
