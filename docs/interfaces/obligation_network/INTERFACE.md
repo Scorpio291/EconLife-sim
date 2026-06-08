@@ -18,7 +18,7 @@ In V1, `WorldState.obligation_network` tracks only `ObligationNode` entries wher
 - `ObligationNode.history` -- new `EscalationStep` entries appended on status transitions
 - Scene card schedule entries -- `obligation_escalation_demand` scene card queued on transition to `escalated`
 - Consequence entries -- `ConsequenceType::obligation_creditor_unilateral_action` queued on transition to `critical`
-- `NPCDelta.trust_delta` -- trust erosion from overdue obligations: `trust_delta = -0.001/tick` per overdue open obligation
+- `NPCDelta.updated_relationship` -- trust erosion from overdue obligations, written as the player's relationship with the creditor (upsert by `target_npc_id`): `trust += -0.001/tick` per overdue open obligation. When no relationship record exists yet, one is established rather than writing the erosion to the creditor's motivation vector. (`NPCDelta` has no `trust_delta` field; `RelationshipDelta.trust_delta` requires a pre-existing relationship.)
 - New `ObligationNode` entries -- created when favor events (from scene card outcomes or NPC behavior actions) generate new debts
 
 ## Preconditions
@@ -44,7 +44,7 @@ In V1, `WorldState.obligation_network` tracks only `ObligationNode` entries wher
 - Hostile action context gates: `report_to_law_enforcement`, `expose_player`, `public_accusation` are always available. `contact_rival_criminal_org` requires `player.reputation.street > 0.0`. `contact_rival_competitor` requires player to have active `NPCBusiness` operations.
 - Partial payment reduces `current_demand` by the payment fraction of `original_value`. Renegotiation resets `current_demand` to agreed value and resets `deadline_tick`, returning status to `open`.
 - FavorType determines obligation value: 16 favor types (financial_loan through whistleblower_silenced) each carry distinct `original_value` scaling.
-- Overdue obligations erode trust: `trust_delta = -0.001/tick` applied to the creditor-player relationship.
+- Overdue obligations erode trust: `-0.001/tick` applied to the player's relationship with the creditor via `NPCDelta.updated_relationship` (establishing the relationship if absent).
 - Floating-point accumulations use canonical sort order (`obligation_node_id` ascending) for deterministic processing.
 - Same seed + same inputs = identical obligation state regardless of core count.
 - All random draws go through `DeterministicRNG`.

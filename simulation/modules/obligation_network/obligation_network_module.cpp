@@ -191,12 +191,25 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
                 }
             }
 
-            if (current_rel && state.player) {
-                // Write proper updated_relationship (player's view of creditor) with
-                // decreased trust — delta is owned by the player NPC entry
+            if (state.player) {
+                // Write the trust erosion as a proper updated_relationship delta
+                // (player's view of the creditor), owned by the player NPC entry.
+                // `updated_relationship` upserts by target_npc_id, so when no
+                // record exists yet we establish one rather than mis-writing the
+                // erosion into the creditor's `motivation_delta` (the financial-
+                // gain behavior-weight slot, which is the wrong channel for a
+                // trust signal).
                 NPCDelta nd;
                 nd.npc_id = state.player->id;
-                Relationship updated_rel = *current_rel;
+                Relationship updated_rel{};
+                if (current_rel) {
+                    updated_rel = *current_rel;
+                } else {
+                    updated_rel.target_npc_id = obl.creditor_npc_id;
+                    updated_rel.trust = 0.0f;
+                    updated_rel.obligation_balance = 0.0f;
+                    updated_rel.recovery_ceiling = 1.0f;
+                }
                 updated_rel.trust = std::clamp(updated_rel.trust + erosion,  // erosion is negative
                                                0.0f, updated_rel.recovery_ceiling);
                 updated_rel.obligation_balance =
@@ -207,13 +220,6 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
                     updated_rel.recovery_ceiling = std::max(updated_rel.trust * 0.60f, 0.15f);
                 }
                 nd.updated_relationship = updated_rel;
-                delta.npc_deltas.push_back(nd);
-            } else {
-                // No existing relationship record — write creditor motivation_delta
-                // as a distrust signal until a relationship is established
-                NPCDelta nd;
-                nd.npc_id = obl.creditor_npc_id;
-                nd.motivation_delta = erosion;
                 delta.npc_deltas.push_back(nd);
             }
         }
