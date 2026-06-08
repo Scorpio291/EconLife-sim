@@ -1,46 +1,54 @@
 # Module: antitrust
 
-## Purpose
-Monitors market concentration per good per province on a monthly schedule, triggering regulatory responses when actors exceed the antitrust market share threshold (0.40) and legislative pressure when actors exceed the dominant price-mover threshold (0.70). The module implements TDD Section 41: Antitrust Trigger Model, wiring the existing `antitrust_market_share_threshold` to the `RegulatorScrutinyMeter` and the legislative system.
+> **Design note (2026-06-08):** Antitrust is a **civil** matter, not a criminal
+> one. An earlier version of this spec had Tier 1 fill a regulator's
+> `InvestigatorMeter` — but that meter's terminal is a criminal raid / arrest /
+> imprisonment, which is the wrong remedy for market dominance (a measured,
+> publicly-auditable state, not slowly-uncovered hidden activity). Tier 1 now
+> emits only documentary evidence; enforcement escalates through proposal
+> pressure → legislation → a **structural remedy** (a civil fine on the dominant
+> actor) applied when a proposal passes. The module fills **no** per-NPC meter.
 
-The antitrust check operates at actor level (player or NPCBusiness owner), not facility level, and runs monthly via `WorkType::antitrust_monthly_check` in the DeferredWorkQueue -- separate from the per-tick facility scrutiny loop. At the preliminary inquiry tier (0.40 threshold), a regulator NPC with antitrust specialization fills their InvestigatorMeter and may generate documentary evidence tokens from auditable public market records. At the dominant price-mover tier (0.70 threshold), sustained dominance accumulates `antitrust_proposal_pressure` in the province political state, eventually auto-generating antitrust legislation.
+## Purpose
+Monitors market concentration per good per province on a monthly schedule, triggering regulatory responses when actors exceed the antitrust market share threshold (0.40) and legislative pressure when actors exceed the dominant price-mover threshold (0.70). The module implements TDD Section 41: Antitrust Trigger Model, wiring the existing `antitrust_market_share_threshold` to the legislative system and a structural-remedy fine.
+
+The antitrust check operates at actor level (player or NPCBusiness owner), not facility level, and runs monthly via `WorkType::antitrust_monthly_check` in the DeferredWorkQueue -- separate from the per-tick facility scrutiny loop. At the preliminary inquiry tier (0.40 threshold), the module generates documentary evidence tokens from auditable public market records (no meter is filled). At the dominant price-mover tier (0.70 threshold), sustained dominance accumulates `antitrust_proposal_pressure` in the province political state, eventually auto-generating antitrust legislation; when a proposal passes, the province's dominant actor is fined a fraction of its capital (`enforcement_fine_capital_fraction`, default 0.15).
 
 ## Inputs (from WorldState)
 - `regional_markets` -- `supply` per `(good_id, province_id)` in the formal market layer; used to compute per-actor supply share
 - `npc_businesses` -- all business records; facility output per good per province is aggregated by owner to compute `actor_supply_share`; only formal market layer (not criminal_sector) businesses participate in antitrust checks
 - `provinces` -- province list for iterating goods and actors; `Province.political.antitrust_proposal_pressure` read and updated
-- `significant_npcs` -- regulator NPCs with `specialization: antitrust` in each province; their `InvestigatorMeter` or `RegulatorScrutinyMeter` is the enforcement target
+- `significant_npcs` -- NPC business owners (dominant actors, for the fine) and NPC legislators (proposal authors); `lookup_npc_by_id` resolves the dominant actor's capital
 - `player` -- player-owned facilities' output contributes to supply share calculation
 - `deferred_work_queue` -- `WorkType::antitrust_monthly_check` fires monthly
 - `current_tick` -- used for monthly scheduling and evidence token timestamps
 
 ## Outputs (to DeltaBuffer)
-- `NPCDelta.investigator_meter.fill_rate` -- additive fill from `config.antitrust.meter_fill_per_threshold_tick` (default 0.002) for regulator NPCs targeting actors above the 0.40 threshold
-- `EvidenceDelta.new_token` -- documentary evidence token generated when regulator meter crosses `formal_inquiry_threshold`; `actionability = actor_supply_share - config.antitrust.market_share_threshold`; `holder_npc_id = regulator.id`
+- `EvidenceDelta.new_token` -- documentary evidence token generated for any actor at Tier 1 (`actor_supply_share >= market_share_threshold + 0.10`); `type = documentary`, `target_npc_id = actor_id`, `actionability = actor_supply_share - config.antitrust.market_share_threshold`. A separate market-level financial token is emitted when HHI exceeds the concentration thresholds. **No per-NPC meter is filled** — Tier 1 is the civil preliminary inquiry, represented by public-record evidence only.
 - `ProvinceDelta.political.antitrust_proposal_pressure` -- incremented by `config.antitrust.dominance_proposal_pressure_per_tick` (default 0.005) while actor maintains >= 0.70 supply share; decays at `config.antitrust.proposal_pressure_decay_rate` (default 0.01) when share drops below threshold
-- Legislative proposal -- when `antitrust_proposal_pressure >= config.antitrust.proposal_threshold` (default 0.50), a `LegislativeProposal` of type `antitrust` is auto-generated by an NPC legislator in that province this quarter
+- Legislative proposal -- when `antitrust_proposal_pressure >= config.antitrust.proposal_threshold` (default 0.50), an `AntitrustProposal` is auto-generated by an NPC legislator in that province
+- **Structural remedy (teeth):** when a proposal passes, the province's dominant actor (highest Tier-2 share this check) is fined `config.antitrust.enforcement_fine_capital_fraction` (default 0.15) of its capital via `NPCDelta.capital_delta` (or `PlayerDelta.wealth_delta` if the dominant actor is the player). This is a civil penalty, not a criminal case.
 - DeferredWorkQueue entries -- reschedule `antitrust_monthly_check` at `current_tick + 30` after each execution
 
 ## Preconditions
 - Evidence module has completed for this tick; evidence token creation API is available.
 - Price engine has completed; `RegionalMarket.supply` values are current for this tick.
 - Production module has completed; facility output for this tick is recorded.
-- All regulator NPCs with antitrust specialization have valid `InvestigatorMeter` or `RegulatorScrutinyMeter` records.
 - `antitrust_monthly_check` DeferredWorkQueue item has fired for this tick (monthly cadence).
 
 ## Postconditions
 - Every `(good_id, province_id)` pair in the formal market layer has been scanned for actors exceeding the 0.40 supply share threshold.
-- Regulator meters have been filled for actors above the threshold.
-- Documentary evidence tokens have been generated for actors whose regulator meter crosses `formal_inquiry_threshold` this tick.
+- Documentary evidence tokens have been generated for actors above Tier 1 (no per-NPC meter is touched).
 - `antitrust_proposal_pressure` has been updated: incremented for provinces with dominant actors (>= 0.70 share), decayed for provinces where share dropped below 0.70.
-- Legislative proposals have been auto-generated for provinces where `antitrust_proposal_pressure >= proposal_threshold`.
+- Legislative proposals have been auto-generated for provinces where `antitrust_proposal_pressure >= proposal_threshold`, and the province's dominant actor has been fined.
 - `antitrust_monthly_check` has been rescheduled for `current_tick + 30`.
 
 ## Invariants
 - Supply share formula: `actor_supply_share = sum(output for facilities owned by actor producing good_id in province) / RegionalMarket.supply(good_id, province)`.
-- Tier 1 trigger: `actor_supply_share >= config.antitrust.market_share_threshold` (default 0.40). Fills regulator meter by `config.antitrust.meter_fill_per_threshold_tick` (default 0.002).
-- Tier 2 trigger: `actor_supply_share >= DOMINANT_PRICE_MOVER_THRESHOLD` (0.70). Increments `antitrust_proposal_pressure` by `config.antitrust.dominance_proposal_pressure_per_tick` (default 0.005).
-- Evidence token generated on meter crossing `formal_inquiry_threshold`: `type = documentary`, `subject_npc_id = actor_id`, `actionability = actor_supply_share - market_share_threshold`, `holder_npc_id = regulator.id`. Market share data is `public_info` -- formal market records are auditable.
+- Tier 1 trigger: `actor_supply_share >= config.antitrust.market_share_threshold` (default 0.40). Emits a documentary evidence token (no meter fill). `meter_fill_per_threshold_tick` is retained on the config for compatibility but is no longer applied.
+- Tier 2 trigger: `actor_supply_share >= DOMINANT_PRICE_MOVER_THRESHOLD` (0.70). Increments `antitrust_proposal_pressure` by `config.antitrust.dominance_proposal_pressure_per_tick` (default 0.005), and records the actor as the province's dominant actor (highest share wins) for the structural remedy.
+- Structural remedy: on proposal pass, the dominant actor is fined `enforcement_fine_capital_fraction` (default 0.15) of its capital (`NPCDelta.capital_delta`, or `PlayerDelta.wealth_delta` for the player). Civil penalty; no criminal `LegalCaseSeedDelta` is emitted.
+- Tier 1 documentary token: `type = documentary`, `target_npc_id = actor_id`, `actionability = actor_supply_share - market_share_threshold`. Market share data is `public_info` -- formal market records are auditable.
 - Proposal pressure decay: when dominant actor's share drops below 0.70, `antitrust_proposal_pressure -= config.antitrust.proposal_pressure_decay_rate` (default 0.01) per monthly check, clamped to 0.0.
 - Legislative proposal auto-generation: when `antitrust_proposal_pressure >= config.antitrust.proposal_threshold` (default 0.50), an NPC legislator generates an antitrust `LegislativeProposal`.
 - Only formal market layer is checked; `criminal_sector == true` businesses are excluded from antitrust supply share calculations.
@@ -49,11 +57,11 @@ The antitrust check operates at actor level (player or NPCBusiness owner), not f
 - All random draws go through `DeterministicRNG`.
 
 ## Failure Modes
-- Province has no regulator NPC with antitrust specialization: supply share is computed but no meter is filled and no evidence is generated. Log info (not warning -- some provinces may legitimately lack antitrust regulators). Proposal pressure still accumulates from Tier 2 checks.
+- Province has no NPC legislator: a proposal is still recorded with `proposer_npc_id = 0`. Documentary evidence and the structural-remedy fine are unaffected.
+- Dominant actor cannot be resolved (id is 0 or no matching NPC, e.g. a business with `owner_id == 0`): the proposal passes but no fine is applied that check.
 - `RegionalMarket.supply(good_id, province)` is zero (no production of that good): division by zero avoided by skipping goods with zero supply. No supply share computed.
 - Actor owns facilities in multiple provinces producing the same good: supply share is computed per-province independently, not aggregated across provinces.
 - NaN in supply share calculation: clamp to 0.0, log diagnostic. Actor is not flagged for that good this tick.
-- Regulator NPC is dead or fled: meter is frozen; no antitrust enforcement until replacement NPC is assigned. Proposal pressure continues accumulating independently.
 
 ## Performance Contract
 - Sequential execution: antitrust check fires monthly (every 30 ticks), not per-tick. Trivially cheap.
@@ -66,15 +74,14 @@ The antitrust check operates at actor level (player or NPCBusiness owner), not f
 - runs_before: ["political_cycle", "legal_process"]
 
 ## Test Scenarios
-- `test_below_threshold_no_action`: Actor with 30% supply share in a good. Verify no regulator meter fill and no evidence generated.
-- `test_tier1_threshold_fills_regulator_meter`: Actor with 45% supply share. Verify regulator meter fill_rate increases by `meter_fill_per_threshold_tick` (0.002).
-- `test_evidence_generated_on_formal_inquiry`: Actor at 50% share; regulator meter crosses `formal_inquiry_threshold` (0.60). Verify documentary evidence token created with `actionability = 0.10` (0.50 - 0.40).
+- `test_below_threshold_no_action`: Actor with 30% supply share in a good. Verify no evidence generated.
+- `test_tier1_generates_documentary_evidence`: Actor with 60% supply share. Verify a documentary evidence token targeting the actor is created, and that no regulator `motivation_delta` / `investigator_meter_fill_delta` is emitted.
 - `test_tier2_dominant_price_mover_pressure`: Actor with 75% supply share. Verify `antitrust_proposal_pressure` incremented by `dominance_proposal_pressure_per_tick` (0.005).
 - `test_pressure_decay_below_threshold`: Actor drops from 80% to 60% supply share. Verify `antitrust_proposal_pressure` decays by `proposal_pressure_decay_rate` (0.01) per monthly check.
-- `test_legislative_proposal_auto_generated`: `antitrust_proposal_pressure` reaches 0.50. Verify a `LegislativeProposal` of type `antitrust` is auto-generated by an NPC legislator.
+- `test_legislative_proposal_auto_generated`: `antitrust_proposal_pressure` reaches 0.50. Verify an `AntitrustProposal` is auto-generated.
+- `test_proposal_pass_fines_dominant_actor`: pressure pre-loaded to 0.50 with a 75%-share NPC owner. Verify the dominant actor is fined `enforcement_fine_capital_fraction` of its capital via `NPCDelta.capital_delta`.
 - `test_criminal_sector_excluded`: Criminal business with 60% informal market share. Verify no antitrust check triggered (criminal_sector excluded from formal market share calculation).
 - `test_zero_supply_good_skipped`: A good with zero supply in a province. Verify no division by zero and no supply share computed for that good.
 - `test_multi_province_independent`: Actor with 50% share in province A and 20% share in province B for the same good. Verify antitrust triggers only in province A, not province B.
-- `test_no_regulator_npc_logs_info`: Province without antitrust-specialist regulator. Verify no meter fill, but proposal pressure still accumulates for Tier 2.
 - `test_monthly_reschedule`: After antitrust check fires, verify `antitrust_monthly_check` is rescheduled at `current_tick + 30`.
-- `test_determinism_across_runs`: Run 90 ticks (3 monthly checks) of antitrust with same seed. Verify bit-identical regulator meter states and proposal pressure values.
+- `test_determinism_across_runs`: Run 90 ticks (3 monthly checks) of antitrust with same seed. Verify bit-identical proposal pressure values and fines.
