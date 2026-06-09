@@ -310,6 +310,9 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
         if (d.next_decision_tick_update.has_value()) {
             biz.strategic_decision_tick = *d.next_decision_tick_update;
         }
+        if (d.net_signal_update.has_value()) {
+            biz.net_signal = clamp01(*d.net_signal_update);
+        }
     }
 }
 

@@ -157,9 +157,13 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
               [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
 
     for (const auto* biz : criminal_businesses) {
-        // Use regulatory_violation_severity as proxy net_signal
-        // In full impl, this reads from FacilitySignals computed in facility_signals step
-        float net_signal = biz->regulatory_violation_severity;
+        // Read the facility detection signal published by facility_signals
+        // (Tier 7, runs before this module — its deltas are already applied to
+        // WorldState this tick). This replaces the earlier raw
+        // `regulatory_violation_severity` proxy: net_signal is the same activity
+        // level attenuated by scrutiny mitigation (corruption/karst concealment),
+        // which is the correct detectability input for the InvestigatorMeter.
+        float net_signal = biz->net_signal;
         criminal_net_signals.push_back(net_signal);
         actor_signal_map[biz->owner_id] += net_signal;
     }

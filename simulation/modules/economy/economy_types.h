@@ -436,6 +436,15 @@ struct NPCBusiness {
                                    //   profitable).
                                    // Updated monthly; not per-tick.
                                    // Full AR/AP model with invoice timing is EX scope.
+
+    // --- Facility detection signal (published by facility_signals, Tier 7) ---
+    float net_signal = 0.0f;  // [0.0, 1.0] Observable detection signal for this facility this
+                              // tick: max(0, base_signal_composite - scrutiny_mitigation).
+                              // Written each tick by facility_signals via
+                              // BusinessDelta::net_signal_update; consumed by investigator_engine
+                              // (Tier 8) as the criminal-facility net_signal feeding the
+                              // InvestigatorMeter. Derived, per-tick state — recomputed before any
+                              // consumer reads it, so it is NOT serialized (transient cache).
 };
 
 }  // namespace econlife

@@ -145,25 +145,45 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
             sig->power_consumption_anomaly, sig->chemical_waste_signature,
             sig->foot_traffic_visibility, sig->olfactory_signature, default_weights);
 
+        // Bootstrap derivation: until facility-type signal profiles
+        // (facility_types.csv) populate the four physical dimensions, businesses
+        // carry all-zero dimensions and would emit no signal. Derive an
+        // observable composite from the business's noncompliant/criminal activity
+        // level (regulatory_violation_severity) so the detection pipeline is live.
+        // This is the value investigator_engine previously borrowed *raw*; routing
+        // it through this module means it now correctly attenuates by scrutiny
+        // mitigation (corruption/karst concealment) before reaching investigators.
+        if (sig->base_signal_composite <= 0.0f && biz->regulatory_violation_severity > 0.0f) {
+            sig->base_signal_composite = std::clamp(biz->regulatory_violation_severity, 0.0f, 1.0f);
+        }
+
         // Compute net signal
         sig->net_signal = compute_net_signal(sig->base_signal_composite, effective_mitigation);
+
+        // Publish the net_signal onto the business so downstream modules
+        // (investigator_engine, Tier 8) can read it from WorldState this same tick
+        // — deltas are applied immediately after each module runs. Emit only when
+        // there is a value to set or a previous nonzero value to clear, to keep
+        // delta volume proportional to active signals rather than to the business
+        // count.
+        if (sig->net_signal > 0.0f || biz->net_signal > 0.0f) {
+            BusinessDelta bd;
+            bd.business_id = biz->id;
+            bd.net_signal_update = sig->net_signal;
+            province_delta.business_deltas.push_back(bd);
+        }
     }
 
     // NOTE: This module is purely a *signal source*. It does not fill any NPC
     // meter. The InvestigatorMeter (criminal — terminates in raid/arrest) and
     // the regulator scrutiny meter (civil) are owned and advanced by
-    // `investigator_engine` (runs_after this module), which reads facility
-    // net_signals and manages case level/status/transitions. An earlier version
-    // wrote the per-tick fill rates into law-enforcement and regulator NPCs'
-    // `NPCDelta.motivation_delta` (the financial-gain behavior-weight slot) as a
-    // meter stand-in — that polluted those NPCs' motivations and filled nothing
-    // the rest of the system reads, so it has been removed.
-    //
-    // TODO(pipeline): the computed `facility_signals_` net_signals are not yet
-    // surfaced to `investigator_engine`, which currently approximates them via
-    // `regulatory_violation_severity`. Wiring them through requires a
-    // WorldState/delta channel for per-facility signals and is tracked
-    // separately.
+    // `investigator_engine` (runs_after this module), which reads the published
+    // `NPCBusiness.net_signal` and manages case level/status/transitions. An
+    // earlier version wrote the per-tick fill rates into law-enforcement and
+    // regulator NPCs' `NPCDelta.motivation_delta` (the financial-gain
+    // behavior-weight slot) as a meter stand-in — that polluted those NPCs'
+    // motivations and filled nothing the rest of the system reads, so it has been
+    // removed.
 }
 
 void FacilitySignalsModule::execute(const WorldState& state, DeltaBuffer& delta) {

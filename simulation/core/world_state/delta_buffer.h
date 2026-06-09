@@ -113,6 +113,9 @@ struct BusinessDelta {
                                                    // business acquisition)
     std::optional<uint32_t> next_decision_tick_update;  // replacement; npc_business advances the
                                                         // quarterly strategic-decision cadence
+    std::optional<float> net_signal_update;  // replacement; per-tick facility detection signal
+                                             // published by facility_signals (Tier 7), clamped to
+                                             // [0,1] on apply. Consumed by investigator_engine.
 };
 
 // Business dissolved (market exit): removes entity from world.npc_businesses.

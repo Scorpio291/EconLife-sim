@@ -24,16 +24,13 @@ Facility signals are universal -- both criminal and legitimate facilities have s
 - `current_tick` -- used for meter `opened_tick` recording and consequence scheduling
 - Facility types data file (loaded at startup) -- `FacilityTypeSignalWeights` per facility type: `w_power_consumption`, `w_chemical_waste`, `w_foot_traffic`, `w_olfactory` (must sum to 1.0)
 
-## Outputs
-- Per-facility `base_signal_composite` -- weighted sum of four signal dimensions, clamped to [0.0, 1.0] -- written to the module's `FacilitySignals` state.
-- Per-facility `net_signal` -- `max(0.0, base_signal_composite - scrutiny_mitigation)` -- written to the module's `FacilitySignals` state.
-- **This module writes nothing to the DeltaBuffer.** Meter advancement, status transitions, evidence-token emission (`surveillance`), and `investigation_opens`/raid consequences are all owned by `investigator_engine` (see its INTERFACE) — listed here previously by mistake.
+## Outputs (to DeltaBuffer)
+- Per-facility `base_signal_composite` -- weighted sum of four signal dimensions, clamped to [0.0, 1.0] -- written to the module's `FacilitySignals` working state.
+- `BusinessDelta.net_signal_update` -- `max(0.0, base_signal_composite - scrutiny_mitigation)` per facility, published onto `NPCBusiness.net_signal`. This is the channel `investigator_engine` (Tier 8) reads to feed the InvestigatorMeter. Because the orchestrator applies each module's deltas immediately, this is visible to investigator_engine within the **same tick**. Emitted only when the new or previous value is nonzero (delta volume tracks active signals, not the business count). `net_signal` is derived per-tick state and is **not serialized** — facility_signals recomputes it before any consumer reads it.
+- **Meter advancement, status transitions, evidence-token emission (`surveillance`), and `investigation_opens`/raid consequences are owned by `investigator_engine`** (see its INTERFACE) — listed here previously by mistake.
 
-> **TODO(pipeline):** the computed `net_signal`s are not yet surfaced to
-> `investigator_engine`, which currently approximates them via
-> `regulatory_violation_severity`. Wiring them through requires a
-> WorldState/delta channel for per-facility signals (a `FacilityDelta`, which
-> does not yet exist) and is tracked separately.
+### Bootstrap signal derivation
+Until facility-type signal profiles (`facility_types.csv`) populate the four physical dimensions, businesses carry all-zero dimensions. When the computed composite is zero and `regulatory_violation_severity > 0`, the composite is derived from `regulatory_violation_severity` so the detection pipeline stays live. This is the value investigator_engine previously borrowed *raw*; routing it through this module means it is now attenuated by scrutiny mitigation (corruption/karst concealment) before reaching investigators. (Corruption coverage is applied downstream by investigator_engine's fill-rate modifier — this module applies only the signal-side mitigations, currently `scrutiny_mitigation` + karst bonus.)
 
 ## Preconditions
 - Evidence module has completed for this tick; new evidence tokens from other sources are available.

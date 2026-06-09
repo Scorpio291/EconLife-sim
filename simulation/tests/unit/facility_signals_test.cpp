@@ -172,6 +172,55 @@ TEST_CASE("Facility signals execute province computes signals", "[facility_signa
     for (const auto& d : delta.npc_deltas) {
         CHECK_FALSE(d.motivation_delta.has_value());
     }
+
+    // The net_signal must be published onto the business via BusinessDelta so
+    // investigator_engine can read it from WorldState this same tick.
+    REQUIRE(delta.business_deltas.size() == 1);
+    CHECK(delta.business_deltas[0].business_id == 1u);
+    REQUIRE(delta.business_deltas[0].net_signal_update.has_value());
+    CHECK_THAT(*delta.business_deltas[0].net_signal_update, WithinAbs(0.45f, 0.01f));
+}
+
+TEST_CASE("Facility signals: bootstrap signal derived from violation severity",
+          "[facility_signals][tier7]") {
+    // With no facility-type signal profile populated (all four physical
+    // dimensions zero), the net_signal is derived from the business's
+    // regulatory_violation_severity so the detection pipeline stays live.
+    WorldState state{};
+    state.current_tick = 100;
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = 0;
+    prov.has_karst = false;  // no concealment bonus -> net_signal == severity
+    state.provinces.push_back(prov);
+
+    NPCBusiness biz{};
+    biz.id = 1;
+    biz.province_id = 0;
+    biz.criminal_sector = true;
+    biz.regulatory_violation_severity = 0.4f;
+    state.npc_businesses.push_back(biz);
+
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    FacilitySignalsModule module;
+    module.init_for_tick(state);  // pre-populates a zero-dimension signal entry
+
+    rebuild_npc_indices(state);
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    // Composite derived from severity; net_signal == severity (no mitigation).
+    const auto& signals = module.facility_signals();
+    REQUIRE(signals.size() == 1);
+    CHECK_THAT(signals[0].net_signal, WithinAbs(0.4f, 0.001f));
+
+    REQUIRE(delta.business_deltas.size() == 1);
+    REQUIRE(delta.business_deltas[0].net_signal_update.has_value());
+    CHECK_THAT(*delta.business_deltas[0].net_signal_update, WithinAbs(0.4f, 0.001f));
 }
 
 TEST_CASE("Regulator NPCs are not polluted by facility signals", "[facility_signals][tier7]") {
