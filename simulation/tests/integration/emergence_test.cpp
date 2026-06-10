@@ -130,6 +130,16 @@ TEST_CASE("emergence: national legitimacy reacts to provincial conditions",
     CHECK(s.back().national_legitimacy < 0.40);
 }
 
+TEST_CASE("emergence: province stability does not fully collapse", "[emergence][integration]") {
+    // Was a [!shouldfail] ratchet (stability 0.80→0.00 and pinned). The
+    // democratic concession branch of the unrest response (institutional-trust
+    // restoration + grievance relief in the worst provinces) now keeps stability
+    // off the floor on the Federation baseline — the loop is (partially) closed,
+    // so this is a regression guard, not a known gap.
+    const auto& s = baseline();
+    CHECK(s.back().mean_stability > 0.05);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Group 2: known-broken loops — intended invariants, expected to fail today.
 // Drop the [!shouldfail] tag when the loop is fixed (the test will start passing).
@@ -144,15 +154,6 @@ TEST_CASE("emergence: criminal justice loop closes (some prosecution lands)",
     REQUIRE(s.back().criminals > 0);
     CHECK(any_year(
         s, [](const Snapshot& x) { return x.imprisoned > 0 || x.criminals_imprisoned > 0; }));
-}
-
-TEST_CASE("emergence: province stability does not collapse to zero",
-          "[emergence][integration][!shouldfail]") {
-    // Baseline: stability 0.80→0.00 and pinned. A living province should retain
-    // some stability; total collapse everywhere indicates a runaway with no
-    // effective restoring force.
-    const auto& s = baseline();
-    CHECK(s.back().mean_stability > 0.05);
 }
 
 TEST_CASE("emergence: community grievance relaxes from its peak (has a restoring force)",

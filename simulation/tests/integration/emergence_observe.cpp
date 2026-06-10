@@ -17,10 +17,8 @@
 using namespace econlife;
 using namespace econlife::emergence;
 
-TEST_CASE("emergence baseline: 10-year aggregate time series", "[.emergence-observe]") {
-    auto series = run_world_years(/*seed=*/42, /*npc_count=*/500, /*years=*/10);
-
-    std::printf("\n=== EMERGENCE BASELINE (seed=42, 500 NPCs, 6 provinces) ===\n");
+static void dump_series(const char* label, const std::vector<Snapshot>& series) {
+    std::printf("\n=== %s ===\n", label);
     std::printf(
         "yr | active wait imp dead | crim crImp | evid consq | crBiz sig | "
         "unemp griev | RESPONSE: stage(mean/max) cohes trust resrc | NATION govt legit\n");
@@ -36,9 +34,24 @@ TEST_CASE("emergence baseline: 10-year aggregate time series", "[.emergence-obse
             s.national_legitimacy);
     }
     std::printf(
-        "  response_stage ladder (GDD 14.2): 0 none 1 informal 2 organized 3 political_mob "
-        "4 economic_resist 5 direct_action 6 sustained_opposition\n");
-    std::printf("=== END BASELINE ===\n\n");
+        "  govt: 0 Democracy 1 Autocracy 2 Federation 3 FailedState | "
+        "stage 0..6 (none..sustained_opposition)\n");
+}
 
-    REQUIRE(series.back().tick == 10u * 365u);
+TEST_CASE("emergence baseline: 10-year aggregate time series", "[.emergence-observe]") {
+    // The unrest-response contrast: same mass-unemployment shock, three regimes.
+    constexpr uint64_t kSeed = 42;
+    constexpr uint32_t kNpcs = 500;
+    constexpr uint32_t kYears = 10;
+    constexpr int kDemocracy = 0, kAutocracy = 1, kFailedState = 3;
+
+    auto democracy = run_world_years(kSeed, kNpcs, kYears, 0.10f, kDemocracy);
+    auto autocracy = run_world_years(kSeed, kNpcs, kYears, 0.10f, kAutocracy);
+    auto failed = run_world_years(kSeed, kNpcs, kYears, 0.10f, kFailedState);
+
+    dump_series("DEMOCRACY (accountability: turnover + concession)", democracy);
+    dump_series("AUTOCRACY (suppression: martyr ratchet, possible collapse)", autocracy);
+    dump_series("FAILED STATE (fragmentation: criminal dominance rises)", failed);
+
+    REQUIRE(democracy.back().tick == kYears * 365u);
 }

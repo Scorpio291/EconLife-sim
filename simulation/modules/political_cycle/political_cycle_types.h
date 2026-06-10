@@ -83,11 +83,19 @@ struct DemographicWeight {
     float turnout_weight = 1.0f;
 };
 
+// Per-nation unrest-response state (autocratic suppression history).
+struct NationUnrestState {
+    uint32_t nation_id = 0;
+    uint32_t repression_count = 0;            // monthly crackdowns applied
+    float repression_grievance_floor = 0.0f;  // accumulated martyr backlash
+};
+
 // Module-internal state for political cycle
 struct PoliticalCycleModuleState {
     std::vector<PoliticalOffice> offices;
     std::vector<Campaign> campaigns;
     std::vector<LegislativeProposal> proposals;
+    std::vector<NationUnrestState> nation_unrest;
 };
 
 }  // namespace econlife

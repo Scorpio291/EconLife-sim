@@ -234,6 +234,23 @@ struct PoliticalCycleConfig {
     float legitimacy_grievance_weight = 0.50f;     // - grievance_level
     float legitimacy_unemployment_weight = 0.30f;  // - unemployment_rate
     float legitimacy_ema_alpha = 0.05f;            // smoothing toward target per tick
+
+    // --- Regime-differentiated unrest response (calibration doc) ---
+    // Fired on a monthly cadence when national_legitimacy < crisis threshold.
+    float legitimacy_crisis_threshold = 0.30f;  // below this the state must respond
+    // Autocracy — suppression.
+    float suppression_grievance_immediate = 0.15f;   // short-term dispersal (grievance cut)
+    float suppression_grievance_floor_rise = 0.06f;  // martyr ratchet per crackdown
+    float suppression_legitimacy_hit = 0.05f;        // legitimacy bleed per crackdown
+    float collapse_legitimacy_floor = 0.08f;         // only the most illegitimate regimes fall
+    uint32_t collapse_repression_count = 8;          // sustained crackdowns -> FailedState
+    // Democracy / Federation — accountability.
+    float crisis_approval_hit = 0.08f;          // incumbent approval craters per month in crisis
+    float concession_grievance_relief = 0.10f;  // policy relief in worst provinces per month
+    float concession_trust_restore = 0.02f;     // responsiveness rebuilds institutional trust
+    uint32_t concession_province_count = 2;     // concessions target the worst-off provinces
+    // FailedState — fragmentation.
+    float failed_state_dominance_rise = 0.02f;  // criminal economy fills the vacuum per month
 };
 
 struct MediaSystemConfig {

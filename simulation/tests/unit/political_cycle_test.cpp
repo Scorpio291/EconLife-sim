@@ -413,3 +413,77 @@ TEST_CASE("PoliticalCycle: national legitimacy rolls up provincial conditions",
     CHECK(world.nations[0].political_cycle.national_legitimacy < start);
     CHECK(world.nations[0].political_cycle.national_legitimacy < 0.4f);
 }
+
+// ===========================================================================
+// Regime-differentiated unrest response (calibration doc). Each test drives a
+// nation into a sustained legitimacy crisis and asserts the regime-appropriate
+// branch fires. Controlled worlds — substrate-independent and deterministic.
+// ===========================================================================
+
+namespace {
+// A one-province nation pinned in crisis (max grievance/unemployment, zero
+// stability/trust), with a nonzero starting approval so the approval hit shows.
+WorldState make_crisis_world(GovernmentType gov) {
+    auto w = make_political_world(/*tick=*/0, gov);
+    w.nations[0].political_cycle.national_approval = 0.6f;
+    auto& p = w.provinces[0];
+    p.community.grievance_level = 1.0f;
+    p.community.institutional_trust = 0.0f;
+    p.community.cohesion = 0.0f;
+    p.conditions.stability_score = 0.0f;
+    if (p.cohort_stats)
+        p.cohort_stats->unemployment_rate = 1.0f;
+    return w;
+}
+void run_module_ticks(WorldState& w, PoliticalCycleModule& m, uint32_t ticks) {
+    for (uint32_t t = 0; t < ticks; ++t) {
+        DeltaBuffer d{};
+        m.execute(w, d);
+        apply_deltas(w, d);
+        w.current_tick++;
+    }
+}
+}  // namespace
+
+TEST_CASE("PoliticalCycle: autocracy under sustained crisis collapses to a failed state",
+          "[political_cycle][tier10][unrest]") {
+    auto world = make_crisis_world(GovernmentType::Autocracy);
+    PoliticalCycleModule module;
+    run_module_ticks(world, module, 300);  // ~10 monthly crackdowns
+
+    // Legitimacy cratered, repression accumulated past the collapse count, and
+    // an illegitimate repressive regime falls (Romania/Iran-79 trajectory).
+    CHECK(world.nations[0].political_cycle.national_legitimacy < 0.08f);
+    CHECK(world.nations[0].government_type == GovernmentType::FailedState);
+    REQUIRE(module.state().nation_unrest.size() == 1);
+    CHECK(module.state().nation_unrest[0].repression_count >= 8u);
+}
+
+TEST_CASE("PoliticalCycle: democracy in crisis concedes (relief + approval hit, no collapse)",
+          "[political_cycle][tier10][unrest]") {
+    auto world = make_crisis_world(GovernmentType::Federation);  // holds elections
+    float start_grievance = world.provinces[0].community.grievance_level;
+    float start_approval = world.nations[0].political_cycle.national_approval;
+    PoliticalCycleModule module;
+    run_module_ticks(world, module, 200);
+
+    // Concession relieves grievance and rebuilds some trust; the incumbent's
+    // approval craters (-> turnover at the next election); the regime does NOT
+    // collapse — the ballot is the valve.
+    CHECK(world.provinces[0].community.grievance_level < start_grievance);
+    CHECK(world.provinces[0].community.institutional_trust > 0.0f);
+    CHECK(world.nations[0].political_cycle.national_approval < start_approval);
+    CHECK(world.nations[0].government_type == GovernmentType::Federation);
+}
+
+TEST_CASE("PoliticalCycle: failed state fragments (criminal dominance rises)",
+          "[political_cycle][tier10][unrest]") {
+    auto world = make_crisis_world(GovernmentType::FailedState);
+    REQUIRE(world.provinces[0].cohort_stats);
+    float start_dominance = world.provinces[0].cohort_stats->criminal_dominance_index;
+    PoliticalCycleModule module;
+    run_module_ticks(world, module, 200);
+
+    CHECK(world.provinces[0].cohort_stats->criminal_dominance_index > start_dominance);
+    CHECK(world.nations[0].government_type == GovernmentType::FailedState);
+}

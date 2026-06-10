@@ -237,6 +237,125 @@ float PoliticalCycleModule::compute_legitimacy_target(float institutional_trust,
     return std::clamp(raw, 0.0f, 1.0f);
 }
 
+float PoliticalCycleModule::compute_suppression_net_grievance(float repression_grievance_floor,
+                                                              float suppression_immediate) {
+    return repression_grievance_floor - suppression_immediate;
+}
+
+NationUnrestState& PoliticalCycleModule::unrest_state_for(uint32_t nation_id) {
+    for (auto& u : political_state_.nation_unrest)
+        if (u.nation_id == nation_id)
+            return u;
+    NationUnrestState u{};
+    u.nation_id = nation_id;
+    political_state_.nation_unrest.push_back(u);
+    return political_state_.nation_unrest.back();
+}
+
+void PoliticalCycleModule::process_national_unrest(const WorldState& state, DeltaBuffer& delta) {
+    // Responses (crackdowns, concessions, fragmentation) are discrete monthly
+    // events, not per-tick. Legitimacy itself updates every tick.
+    const bool monthly = state.current_tick > 0u && (state.current_tick % 30u == 0u);
+
+    for (const auto& nation : state.nations) {
+        // Collect this nation's provinces in world.provinces order (deterministic).
+        std::vector<const Province*> provs;
+        for (const auto& prov : state.provinces)
+            if (prov.nation_id == nation.id)
+                provs.push_back(&prov);
+        if (provs.empty())
+            continue;
+
+        // --- Population-weighted legitimacy roll-up, EMA-smoothed ---
+        double weight_sum = 0.0, weighted_target = 0.0;
+        for (const auto* p : provs) {
+            float unemployment = p->cohort_stats ? p->cohort_stats->unemployment_rate : 0.0f;
+            double pop =
+                p->cohort_stats ? static_cast<double>(p->cohort_stats->total_population) : 0.0;
+            double w = pop > 0.0 ? pop : 1.0;
+            float tgt = compute_legitimacy_target(p->community.institutional_trust,
+                                                  p->conditions.stability_score,
+                                                  p->community.grievance_level, unemployment, cfg_);
+            weighted_target += w * static_cast<double>(tgt);
+            weight_sum += w;
+        }
+        float target = static_cast<float>(weighted_target / weight_sum);
+        float current = nation.political_cycle.national_legitimacy;
+        float updated =
+            std::clamp(current + cfg_.legitimacy_ema_alpha * (target - current), 0.0f, 1.0f);
+
+        NationDelta nd;
+        nd.nation_id = nation.id;
+        nd.legitimacy_update = updated;
+
+        // --- Regime-differentiated response, monthly, when in legitimacy crisis ---
+        if (monthly && updated < cfg_.legitimacy_crisis_threshold) {
+            switch (nation.government_type) {
+                case GovernmentType::Democracy:
+                case GovernmentType::Federation: {
+                    // Accountability: incumbent approval craters (-> turnover at
+                    // the next election) and the government concedes — grievance
+                    // relief + trust restoration in the worst-off provinces.
+                    nd.approval_delta = -cfg_.crisis_approval_hit;
+                    std::vector<const Province*> by_grievance = provs;
+                    std::sort(by_grievance.begin(), by_grievance.end(),
+                              [](const Province* a, const Province* b) {
+                                  if (a->community.grievance_level != b->community.grievance_level)
+                                      return a->community.grievance_level >
+                                             b->community.grievance_level;
+                                  return a->id < b->id;  // deterministic tiebreak
+                              });
+                    uint32_t n = std::min<uint32_t>(cfg_.concession_province_count,
+                                                    static_cast<uint32_t>(by_grievance.size()));
+                    for (uint32_t i = 0; i < n; ++i) {
+                        RegionDelta rd;
+                        rd.region_id = by_grievance[i]->id;
+                        rd.grievance_delta = -cfg_.concession_grievance_relief;
+                        rd.institutional_trust_delta = cfg_.concession_trust_restore;
+                        delta.region_deltas.push_back(rd);
+                    }
+                    break;
+                }
+                case GovernmentType::Autocracy: {
+                    // Suppression: short-term dispersal, but a rising martyr floor
+                    // and a legitimacy bleed; sustained crackdowns while fully
+                    // illegitimate collapse the regime to a failed state.
+                    NationUnrestState& u = unrest_state_for(nation.id);
+                    u.repression_count += 1;
+                    u.repression_grievance_floor += cfg_.suppression_grievance_floor_rise;
+                    float net = compute_suppression_net_grievance(
+                        u.repression_grievance_floor, cfg_.suppression_grievance_immediate);
+                    for (const auto* p : provs) {
+                        RegionDelta rd;
+                        rd.region_id = p->id;
+                        rd.grievance_delta = net;
+                        delta.region_deltas.push_back(rd);
+                    }
+                    nd.legitimacy_update =
+                        std::clamp(updated - cfg_.suppression_legitimacy_hit, 0.0f, 1.0f);
+                    if (updated < cfg_.collapse_legitimacy_floor &&
+                        u.repression_count >= cfg_.collapse_repression_count) {
+                        nd.government_type_update =
+                            static_cast<uint8_t>(GovernmentType::FailedState);
+                    }
+                    break;
+                }
+                case GovernmentType::FailedState: {
+                    // Fragmentation: no valve; the criminal economy fills the void.
+                    for (const auto* p : provs) {
+                        RegionDelta rd;
+                        rd.region_id = p->id;
+                        rd.criminal_dominance_delta = cfg_.failed_state_dominance_rise;
+                        delta.region_deltas.push_back(rd);
+                    }
+                    break;
+                }
+            }
+        }
+        delta.nation_deltas.push_back(nd);
+    }
+}
+
 void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Seed the office topology from world-gen data on the first tick so the
     // election pipeline is live in a fresh game.
@@ -244,38 +363,8 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
     // Open campaigns for upcoming elections (within the lead-time window).
     activate_campaigns(state);
 
-    // --- National legitimacy roll-up (unrest response, design doc) ---
-    // Population-weighted aggregate of provincial conditions per nation, EMA-
-    // smoothed toward target. Runs after community_response (Tier order), so
-    // grievance/response are current for this tick. Provinces are visited in
-    // world.provinces order for deterministic accumulation.
-    for (const auto& nation : state.nations) {
-        double weight_sum = 0.0;
-        double weighted_target = 0.0;
-        for (const auto& prov : state.provinces) {
-            if (prov.nation_id != nation.id)
-                continue;
-            float unemployment = prov.cohort_stats ? prov.cohort_stats->unemployment_rate : 0.0f;
-            double pop =
-                prov.cohort_stats ? static_cast<double>(prov.cohort_stats->total_population) : 0.0;
-            double w = pop > 0.0 ? pop : 1.0;  // unpopulated provinces still count minimally
-            float target = compute_legitimacy_target(
-                prov.community.institutional_trust, prov.conditions.stability_score,
-                prov.community.grievance_level, unemployment, cfg_);
-            weighted_target += w * static_cast<double>(target);
-            weight_sum += w;
-        }
-        if (weight_sum <= 0.0)
-            continue;
-        float target = static_cast<float>(weighted_target / weight_sum);
-        float current = nation.political_cycle.national_legitimacy;
-        float updated = current + cfg_.legitimacy_ema_alpha * (target - current);
-
-        NationDelta nd;
-        nd.nation_id = nation.id;
-        nd.legitimacy_update = std::clamp(updated, 0.0f, 1.0f);
-        delta.nation_deltas.push_back(nd);
-    }
+    // National legitimacy roll-up + regime-differentiated unrest response.
+    process_national_unrest(state, delta);
 
     auto find_province = [&](uint32_t pid) -> const Province* {
         for (const auto& p : state.provinces)

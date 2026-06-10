@@ -46,6 +46,13 @@ class PoliticalCycleModule : public ITickModule {
                                            float grievance, float unemployment,
                                            const PoliticalCycleConfig& cfg);
 
+    // Net per-province grievance change from one autocratic crackdown: the
+    // accumulated martyr floor minus the short-term dispersal cut. Negative on
+    // early crackdowns (force quells), turns positive once the floor exceeds the
+    // dispersal — the "tighten your grip" ratchet.
+    static float compute_suppression_net_grievance(float repression_grievance_floor,
+                                                   float suppression_immediate);
+
     // Add each endorsement's approval_bonus to its demographic in `approval`,
     // clamped to [0,1]. (Endorsements come from NPC endorsers; producer is a
     // future extension, but the application logic is exercised here.)
@@ -57,6 +64,16 @@ class PoliticalCycleModule : public ITickModule {
     const PoliticalCycleModuleState& state() const { return political_state_; }
 
    private:
+    // National legitimacy roll-up + regime-differentiated unrest response.
+    // Aggregates each nation's provinces into national_legitimacy and, when a
+    // nation is in legitimacy crisis, fires the regime-appropriate monthly
+    // response (democratic concession+turnover / autocratic suppression /
+    // failed-state fragmentation). See docs/design/EconLife_Unrest_*.md.
+    void process_national_unrest(const WorldState& state, DeltaBuffer& delta);
+
+    // Get-or-create the per-nation unrest state (suppression history).
+    NationUnrestState& unrest_state_for(uint32_t nation_id);
+
     // Seed one governor office per province from world-gen data on first execute
     // (idempotent; skipped if offices already present). Deterministic.
     void form_offices(const WorldState& state);

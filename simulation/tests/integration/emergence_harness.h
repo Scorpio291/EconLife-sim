@@ -157,8 +157,12 @@ inline Snapshot capture(const WorldState& w) {
 
 // Run a freshly generated V1-scale world for `years` in-game years, capturing a
 // snapshot at year 0 and after each year. Returns the time series.
+// force_government_type: if >= 0, overrides every nation's government_type after
+// generation (cast from GovernmentType) so a regime's unrest-response branch can
+// be exercised regardless of what world-gen happened to pick.
 inline std::vector<Snapshot> run_world_years(uint64_t seed, uint32_t npc_count, uint32_t years,
-                                             float criminal_baseline = 0.10f) {
+                                             float criminal_baseline = 0.10f,
+                                             int force_government_type = -1) {
     WorldGeneratorConfig config{};
     config.seed = seed;
     config.province_count = 6;
@@ -168,6 +172,10 @@ inline std::vector<Snapshot> run_world_years(uint64_t seed, uint32_t npc_count, 
 
     auto [world, player] = WorldGenerator::generate_with_player(config);
     world.player = std::make_unique<PlayerCharacter>(std::move(player));
+    if (force_government_type >= 0) {
+        for (auto& n : world.nations)
+            n.government_type = static_cast<GovernmentType>(force_government_type);
+    }
 
     TickOrchestrator orch;
     register_base_game_modules(orch);
