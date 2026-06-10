@@ -28,8 +28,8 @@ Province-parallel execution: each province's investigators operate independently
 - `InvestigatorMeterDelta.status` — derived status from threshold comparison (inactive, surveillance, formal_inquiry, raid_imminent)
 - `InvestigatorMeterDelta.target_id` — resolved target from regional signal; argmax of known criminal actors' estimated signal contribution in province
 - `EvidenceTokenDelta` — new physical EvidenceToken generated when status transitions to surveillance; new evidence tokens from formal inquiry warrant execution
-- `ConsequenceDelta(investigation_opens)` — queued when status first reaches formal_inquiry
-- `ConsequenceDelta(raid_imminent)` — queued when status reaches raid_imminent; delay 7-30 ticks (seed-deterministic)
+- `ConsequenceDelta(investigation_opens)` — queued when status first reaches formal_inquiry **and a target is resolved** (`target_id != 0`). Category `criminal_investigation` with source = investigator, target = case target, province plumbed: when it fires (~120 ticks), `process_consequence_queue` seeds a legal case against the target. Defendant 0 means the player in legal_process, which is why an unresolved target queues nothing.
+- `ConsequenceDelta(raid_fallout)` — queued when status reaches raid_imminent. Category `media_exposure` (province plumbed): fires as a regional institutional-trust hit (~45 ticks), modeling the public fallout of a raid. The prosecution itself is NOT routed through this consequence — a criminal/legal category here would seed a second, duplicate case at fire time; the case comes from the direct `LegalCaseSeedDelta` below.
 - `LegalCaseSeedDelta` — emitted on the same first-time transition into raid_imminent when `target_id != 0`. Severity scales with meter level: 0.80–0.85 → moderate, 0.85–0.90 → serious, 0.90–0.95 → major, 0.95–1.00 → severe. `initial_evidence_weight` is set from `current_level` so the case clears legal_process's arrest threshold (0.35) in the same tick. Consumed by legal_process at Tier 9 from `state.pending_legal_case_seeds`.
 - `NPCDelta.knowledge_map` — KnowledgeEntry additions for investigators who discover evidence tokens or activity knowledge during surveillance
 

@@ -157,12 +157,9 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
               [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
 
     for (const auto* biz : criminal_businesses) {
-        // Read the facility detection signal published by facility_signals
-        // (Tier 7, runs before this module — its deltas are already applied to
-        // WorldState this tick). This replaces the earlier raw
-        // `regulatory_violation_severity` proxy: net_signal is the same activity
-        // level attenuated by scrutiny mitigation (corruption/karst concealment),
-        // which is the correct detectability input for the InvestigatorMeter.
+        // Facility detection signal published by facility_signals (runs before
+        // this module; deltas are applied immediately, so the value is current
+        // for this tick): activity level attenuated by scrutiny mitigation.
         float net_signal = biz->net_signal;
         criminal_net_signals.push_back(net_signal);
         actor_signal_map[biz->owner_id] += net_signal;
@@ -325,14 +322,20 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
             province_delta.npc_deltas.push_back(npc_delta);
         }
 
-        // Formal inquiry transition: mark opened, queue consequence
+        // Formal inquiry transition: mark opened, queue consequence.
+        // criminal_investigation consequences seed a legal case against
+        // target_id when they fire — and defendant 0 means the PLAYER in
+        // legal_process — so only queue once a target is resolved.
         if (new_status >= InvestigatorMeterStatus::formal_inquiry && !found_case->formally_opened) {
             found_case->formally_opened = true;
             found_case->opened_tick = state.current_tick;
-            ConsequenceDelta cons;
-            cons.new_consequence = make_consequence(
-                inv->id, ConsequenceCategory::criminal_investigation, 0, 0, 0, state.current_tick);
-            province_delta.consequence_deltas.push_back(cons);
+            if (found_case->target_id != 0u) {
+                ConsequenceDelta cons;
+                cons.new_consequence = make_consequence(
+                    inv->id, ConsequenceCategory::criminal_investigation, /*source=*/inv->id,
+                    /*target=*/found_case->target_id, province.id, state.current_tick);
+                province_delta.consequence_deltas.push_back(cons);
+            }
         }
 
         // Raid imminent transition: queue raid consequence and request a
@@ -344,9 +347,14 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
         // the arrest threshold (0.35).
         if (new_status >= InvestigatorMeterStatus::raid_imminent &&
             old_status < static_cast<uint8_t>(InvestigatorMeterStatus::raid_imminent)) {
+            // The prosecution path is the direct LegalCaseSeedDelta below; the
+            // queued consequence models the public fallout of a raid and fires
+            // as a regional institutional-trust hit (a criminal_investigation
+            // category here would seed a second, duplicate case at fire time).
             ConsequenceDelta cons;
-            cons.new_consequence = make_consequence(
-                inv->id, ConsequenceCategory::criminal_investigation, 0, 0, 0, state.current_tick);
+            cons.new_consequence =
+                make_consequence(inv->id, ConsequenceCategory::media_exposure, /*source=*/inv->id,
+                                 /*target=*/found_case->target_id, province.id, state.current_tick);
             province_delta.consequence_deltas.push_back(cons);
 
             if (found_case->target_id != 0u) {

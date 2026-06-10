@@ -128,14 +128,15 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 compound.market_margin_multiplier =
                     compute_market_margin(compound.stage, compound.has_successor);
 
-                // Drug scheduling is a legal/regulatory classification action,
-                // not an electoral/legislative event — route it through the
-                // legal_proceeding consequence channel (regulatory-paced delay)
-                // rather than political_consequence.
+                // Scheduling enactment fires as regional political fallout in
+                // the compound's province. Do NOT use legal/criminal categories
+                // here: those seed a legal case against target_id at fire time,
+                // and a classification action has no defendant (target 0 would
+                // prosecute the player).
                 ConsequenceDelta cons;
-                cons.new_consequence =
-                    make_consequence(compound.compound_id, ConsequenceCategory::legal_proceeding, 0,
-                                     0, 0, state.current_tick);
+                cons.new_consequence = make_consequence(
+                    compound.compound_id, ConsequenceCategory::political_consequence, 0, 0,
+                    compound.province_id, state.current_tick);
                 delta.consequence_deltas.push_back(cons);
             }
         }

@@ -174,54 +174,40 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
             delta.new_obligation_nodes.push_back(hostile_node);
         }
 
-        // Trust erosion for overdue obligation: write proper updated_relationship delta.
+        // Trust erosion for overdue obligation, written as an upsert on the
+        // player's relationship with the creditor. apply_deltas merges
+        // trust/obligation_balance ADDITIVELY into an existing relationship
+        // (the struct is initial values only on insert), so send the erosion
+        // itself — not the eroded absolute value, which would double-count.
         uint32_t overdue_ticks = state.current_tick - obl.deadline_tick;
-        if (overdue_ticks > 0) {
+        if (overdue_ticks > 0 && state.player) {
             float erosion = compute_trust_erosion(1u, cfg_.trust_erosion_per_tick);
 
-            // Find creditor's current relationship with the debtor (player) to
-            // build the updated relationship struct.
-            const Relationship* current_rel = nullptr;
-            if (state.player) {
+            Relationship rel_delta{};
+            rel_delta.target_npc_id = obl.creditor_npc_id;
+            rel_delta.trust = erosion;  // negative
+            rel_delta.obligation_balance = erosion;
+            rel_delta.last_interaction_tick = state.current_tick;
+            rel_delta.recovery_ceiling = 1.0f;  // "no change" under ratchet merge
+
+            if (went_hostile) {
+                // Hostile escalation lowers the recovery ceiling (§13 floor
+                // principle): 60% of post-erosion trust, floored at the 0.15
+                // minimum. apply_deltas ratchets the ceiling down on merge.
+                float current_trust = 0.0f;
                 for (const auto& rel : state.player->relationships) {
                     if (rel.target_npc_id == obl.creditor_npc_id) {
-                        current_rel = &rel;
+                        current_trust = rel.trust;
                         break;
                     }
                 }
+                rel_delta.recovery_ceiling = std::max((current_trust + erosion) * 0.60f, 0.15f);
             }
 
-            if (state.player) {
-                // Write the trust erosion as a proper updated_relationship delta
-                // (player's view of the creditor), owned by the player NPC entry.
-                // `updated_relationship` upserts by target_npc_id, so when no
-                // record exists yet we establish one rather than mis-writing the
-                // erosion into the creditor's `motivation_delta` (the financial-
-                // gain behavior-weight slot, which is the wrong channel for a
-                // trust signal).
-                NPCDelta nd;
-                nd.npc_id = state.player->id;
-                Relationship updated_rel{};
-                if (current_rel) {
-                    updated_rel = *current_rel;
-                } else {
-                    updated_rel.target_npc_id = obl.creditor_npc_id;
-                    updated_rel.trust = 0.0f;
-                    updated_rel.obligation_balance = 0.0f;
-                    updated_rel.recovery_ceiling = 1.0f;
-                }
-                updated_rel.trust = std::clamp(updated_rel.trust + erosion,  // erosion is negative
-                                               0.0f, updated_rel.recovery_ceiling);
-                updated_rel.obligation_balance =
-                    std::clamp(updated_rel.obligation_balance + erosion, -1.0f, 1.0f);
-                updated_rel.last_interaction_tick = state.current_tick;
-                if (went_hostile) {
-                    // Hostile escalation lowers recovery ceiling
-                    updated_rel.recovery_ceiling = std::max(updated_rel.trust * 0.60f, 0.15f);
-                }
-                nd.updated_relationship = updated_rel;
-                delta.npc_deltas.push_back(nd);
-            }
+            NPCDelta nd;
+            nd.npc_id = state.player->id;
+            nd.updated_relationship = rel_delta;
+            delta.npc_deltas.push_back(nd);
         }
     }
 }

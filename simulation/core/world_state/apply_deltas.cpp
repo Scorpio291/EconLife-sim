@@ -121,19 +121,28 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             npc->memory_log.push_back(*d.new_memory_entry);
         }
 
-        // updated_relationship: upsert by target_npc_id
+        // updated_relationship: upsert by target_npc_id.
+        // trust/fear/obligation_balance are DELTAS merged additively into an
+        // existing relationship; on insert the struct provides initial values.
         if (d.updated_relationship.has_value()) {
             const auto& rel = *d.updated_relationship;
             bool found = false;
             for (auto& existing : npc->relationships) {
                 if (existing.target_npc_id == rel.target_npc_id) {
-                    // Update: merge trust/fear additively, clamp
+                    // Update: merge trust/fear/obligation additively, clamp
                     existing.trust = clamp_neg1_1(existing.trust + rel.trust);
                     existing.fear = clamp01(existing.fear + rel.fear);
-                    existing.obligation_balance += rel.obligation_balance;
+                    existing.obligation_balance =
+                        clamp_neg1_1(existing.obligation_balance + rel.obligation_balance);
                     existing.last_interaction_tick = rel.last_interaction_tick;
                     if (rel.is_movement_ally)
                         existing.is_movement_ally = true;
+                    // recovery_ceiling: ratchet-down merge (§13 floor principle).
+                    // A delta may lower the ceiling (floored at the 0.15 minimum)
+                    // but never raise it; senders use 1.0 for "no change".
+                    if (rel.recovery_ceiling < existing.recovery_ceiling) {
+                        existing.recovery_ceiling = std::max(rel.recovery_ceiling, 0.15f);
+                    }
                     // Enforce recovery ceiling
                     if (existing.trust > existing.recovery_ceiling) {
                         existing.trust = existing.recovery_ceiling;
