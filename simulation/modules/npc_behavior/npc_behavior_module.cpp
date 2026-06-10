@@ -233,6 +233,11 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
     float crime_rate = province.cohort_stats->crime_rate;
     float stability = province.conditions.stability_score;
     float employment_rate = province.cohort_stats->formal_employment_rate;
+    // Informal labor floor: formal scarcity degrades pay toward subsistence,
+    // never to zero — there is always some work for willing bodies. Without
+    // this floor, wage = base_wage × employment_rate is a death spiral (low
+    // employment → worthless work → mass inaction → lower employment).
+    float effective_employment = std::max(employment_rate, cfg_.informal_wage_floor);
 
     // Process each NPC.
     for (const NPC* npc_ptr : province_npcs) {
@@ -270,8 +275,9 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
 
         std::vector<ActionCandidate> candidates;
 
-        // work: probability scales with employment rate
-        float work_prob = std::min(1.0f, 0.5f + employment_rate * 0.4f);
+        // work: probability scales with the effective (formal-or-informal)
+        // employment rate
+        float work_prob = std::min(1.0f, 0.5f + effective_employment * 0.4f);
         candidates.push_back({DailyAction::work,
                               {{OutcomeType::financial_gain, work_prob, 0.5f}},
                               0.0f,
@@ -402,9 +408,10 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
                 capital_change -= best_cost;
             }
 
-            // Work action earns income (simplified: base wage * employment rate).
+            // Work action earns income: base wage scaled by the effective
+            // employment rate, floored by informal/subsistence work.
             if (best_eval.action == DailyAction::work) {
-                float wage = cfg_.base_wage * employment_rate;
+                float wage = cfg_.base_wage * effective_employment;
                 capital_change += wage;
             }
 

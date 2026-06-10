@@ -203,6 +203,21 @@ TEST_CASE("emergence: the state responds to a legitimacy crisis (it does not jus
     CHECK(s.back().national_legitimacy > trough + 0.02);
 }
 
+TEST_CASE("emergence: unemployment never approaches 100 percent",
+          "[emergence][integration][!shouldfail]") {
+    // There is always some kind of work for willing bodies — even the worst
+    // real collapses top out far below total unemployment (Great Depression
+    // ~25%; informal/subsistence work absorbs the rest). The informal wage
+    // floor + spec-correct metric (active-without-employer = informal worker)
+    // are in, but unemployment still reads ~0.96 because the NPC decision
+    // engine is mis-calibrated: work's EV (weight 0.25 × prob ~0.78 × magnitude
+    // 0.5 ≈ 0.0975) sits below the inaction threshold (0.10) from day one, so
+    // ~96% of NPCs fall to `waiting` and count as unemployed. Flips when the
+    // GDD §3 utility/threshold calibration pass lands.
+    const auto& s = baseline();
+    CHECK(s.back().mean_unemployment < 0.60);
+}
+
 TEST_CASE("emergence: regional crime rate reflects the criminal population",
           "[emergence][integration][!shouldfail]") {
     // Baseline: crime_rate →0.00 even though 36 criminals and 2 criminal

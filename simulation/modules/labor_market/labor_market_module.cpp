@@ -73,39 +73,48 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
     // Step 4: Close expired postings.
     close_expired_postings(province_idx, state.current_tick);
 
-    // Step 5: Update unemployment_rate and formal_employment_rate monitors
-    // on cohort_stats. We measure across active significant_npcs in this
-    // province as a sample of the working-age population; the stored rates
-    // converge toward the sample fraction rather than being overwritten,
-    // so per-tick sampling noise smooths out.
+    // Step 5: Update unemployment_rate and formal_employment_rate monitors on
+    // cohort_stats, sampled from this province's significant NPCs. Stored rates
+    // converge toward the sample fraction (per-tick noise smooths out).
     //
-    // "Employed" = has an employment_record with employer_business_id != 0.
-    // "Unemployed" = active NPC with no employer. The two share the same
-    // denominator (count of active NPCs in this province), so:
-    //   sample_employed_fraction + sample_unemployed_fraction == 1.0
-    // when every active NPC has either an employment record or is counted
-    // unemployed. NPCs not yet seeded in employment_records_ are treated
-    // as unemployed (matches init_for_tick: every NPC eventually gets a
-    // record with employer_business_id = 0).
+    // Per RegionCohortStats: unemployment = working-age neither in formal NOR
+    // INFORMAL employment. Mapping onto observable NPC state:
+    //   - formal:   has an employment_record with employer_business_id != 0
+    //   - informal: status == active without a formal employer — an acting NPC
+    //     is out doing something (subsistence/day labor; npc_behavior's work
+    //     action pays an informal floor wage). There is always some work for
+    //     willing bodies, so activity without formal employment is informal
+    //     work, not unemployment.
+    //   - unemployed: status == waiting without a formal employer — the NPC
+    //     judged no action worth taking; out of work entirely.
+    // Labor force (denominator) = active + waiting. The previous version
+    // excluded `waiting` NPCs from the sample and counted every non-formal
+    // active NPC as unemployed, which pinned unemployment at 1.0 the moment the
+    // (still unwired) formal hiring market produced zero records.
     if (province_idx < state.npc_indices_by_province.size()) {
-        uint32_t active_count = 0;
-        uint32_t employed_count = 0;
+        uint32_t labor_force = 0;
+        uint32_t formal_count = 0;
+        uint32_t unemployed_count = 0;
         for (uint32_t idx : state.npc_indices_by_province[province_idx]) {
             const NPC& npc = state.significant_npcs[idx];
-            if (npc.status != NPCStatus::active)
-                continue;
-            ++active_count;
+            if (npc.status != NPCStatus::active && npc.status != NPCStatus::waiting)
+                continue;  // imprisoned/dead/fled are out of the labor force
+            ++labor_force;
             const EmploymentRecord* rec = find_employment(npc.id);
-            if (rec && rec->employer_business_id != 0) {
-                ++employed_count;
+            const bool formal = rec && rec->employer_business_id != 0;
+            if (formal) {
+                ++formal_count;
+            } else if (npc.status == NPCStatus::waiting) {
+                ++unemployed_count;
             }
         }
 
-        if (active_count > 0) {
+        if (labor_force > 0) {
             constexpr float RATE_CONVERGENCE = 0.05f;
-            const float emp_fraction =
-                static_cast<float>(employed_count) / static_cast<float>(active_count);
-            const float unemp_fraction = 1.0f - emp_fraction;
+            const float formal_fraction =
+                static_cast<float>(formal_count) / static_cast<float>(labor_force);
+            const float unemp_fraction =
+                static_cast<float>(unemployed_count) / static_cast<float>(labor_force);
 
             const auto& cs = state.provinces[province_idx].cohort_stats;
             const float cur_formal = cs ? cs->formal_employment_rate : 0.0f;
@@ -113,7 +122,7 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
 
             RegionDelta rd{};
             rd.region_id = state.provinces[province_idx].region_id;
-            rd.formal_employment_rate_delta = RATE_CONVERGENCE * (emp_fraction - cur_formal);
+            rd.formal_employment_rate_delta = RATE_CONVERGENCE * (formal_fraction - cur_formal);
             rd.unemployment_rate_delta = RATE_CONVERGENCE * (unemp_fraction - cur_unemp);
             province_delta.region_deltas.push_back(rd);
         }

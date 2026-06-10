@@ -126,6 +126,46 @@ and stays pinned for a decade.
 5. **Population monotonic decline** ~2%/yr (3.37M→2.76M). LOW. Possibly intended
    demographic drift; flag to confirm births/deaths balance is by design.
 
+## Update 2026-06-10 (later session): year-1 collapse root-caused
+
+Design steer: **unemployment can never approach 100% — there is always some kind
+of work for willing bodies** (even the worst real collapses top out ~25-30%
+formal unemployment; informal/subsistence work absorbs the rest).
+
+Diagnosis of the year-1 NPC-inactivity collapse, traced end to end:
+
+1. **No module creates JobPostings** — labor_market only consumes them (its only
+   producer reference is its own save-deserialization). The formal hiring market
+   is stillborn: no NPC is ever hired; all employment records stay employer=0.
+   (Cohort `formal_employment_rate` still reads ~0.1-0.6 because
+   population_aging's demographic convergence keeps the *stat* alive — the stat
+   is disconnected from actual hires.)
+2. **npc_behavior coupled work's value to the employment rate with no floor**:
+   `wage = base_wage × employment_rate`, `work_prob = 0.5 + rate × 0.4` — a
+   death spiral (low employment → worthless work → inaction → lower employment).
+   FIXED: informal/subsistence wage floor (`NpcBehaviorConfig.informal_wage_floor
+   = 0.30`) — formal scarcity degrades pay toward subsistence, never zero.
+3. **The unemployment metric violated its own spec** (RegionCohortStats:
+   unemployed = neither formal NOR INFORMAL): it counted every active NPC
+   without a formal employer as unemployed and EXCLUDED `waiting` NPCs from the
+   sample. FIXED: labor force = active + waiting; active-without-employer =
+   informal worker; waiting-without-employer = unemployed.
+4. **The real ignition (still open): the decision engine is born at the inaction
+   margin.** EV = motivation_weight × probability × magnitude; for work that is
+   0.25 × ~0.78 × 0.5 ≈ **0.0975 < inaction_threshold (0.10) on day one**, even
+   at healthy 70% employment. ~96% of NPCs fall to `waiting` within months
+   regardless of wages. This is a GDD §3 utility/threshold calibration pass on
+   npc_behavior's candidate magnitudes/probabilities vs `inaction_threshold` —
+   design-sensitive, deserves its own session, and is now THE keystone: fixing
+   it un-pins unemployment (→ grievance → cohesion → the opposition ladder →
+   regime-response timing all become meaningful).
+
+New ratchet: "unemployment never approaches 100 percent" (< 0.60 at horizon) —
+fails at ~0.96 until the §3 calibration lands. The missing JobPosting producer
+(npc_business labor demand) is a separate follow-up; the cohort stat is not a
+valid observable for it (population_aging keeps it nonzero), so it is tracked
+here rather than as a ratchet.
+
 ## Recommended road ahead
 
 1. **Close the criminal justice loop (#1).** Highest leverage and continues the

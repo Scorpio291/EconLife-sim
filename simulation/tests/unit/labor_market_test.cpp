@@ -823,18 +823,26 @@ TEST_CASE("labor_market: emits unemployment + formal_employment deltas convergin
     WorldState state = make_test_world_state();
     state.provinces.push_back(make_test_province(0));
 
-    NPC npc{};
-    npc.id = 100;
-    npc.current_province_id = 0;
-    npc.home_province_id = 0;
-    npc.status = NPCStatus::active;
-    npc.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
-    state.significant_npcs.push_back(npc);
+    // Labor force semantics (RegionCohortStats: unemployed = neither formal nor
+    // informal): an ACTIVE NPC without a formal employer is an informal worker,
+    // not unemployed; a WAITING NPC without an employer is unemployed. Labor
+    // force = active + waiting.
+    NPC informal{};
+    informal.id = 100;
+    informal.current_province_id = 0;
+    informal.home_province_id = 0;
+    informal.status = NPCStatus::active;  // no employer record -> informal work
+    informal.motivations.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
+    state.significant_npcs.push_back(informal);
+    NPC idle = informal;
+    idle.id = 101;
+    idle.status = NPCStatus::waiting;  // no employer record -> unemployed
+    state.significant_npcs.push_back(idle);
     rebuild_npc_indices(state);
 
     // Pre-state on cohort_stats: 70% formal employment, 30% unemployment.
-    // The single unemployed NPC drives the sample to 100% unemployed; the
-    // emitted deltas should drag the stored rates toward that.
+    // Sample: labor force 2, formal 0, unemployed 1 → formal sample 0.0,
+    // unemployment sample 0.5; deltas drag stored rates toward those.
     auto& cs = *state.provinces[0].cohort_stats;
     cs.formal_employment_rate = 0.7f;
     cs.unemployment_rate = 0.3f;
@@ -848,9 +856,9 @@ TEST_CASE("labor_market: emits unemployment + formal_employment deltas convergin
     bool found_formal = false;
     for (const auto& rd : delta.region_deltas) {
         if (rd.unemployment_rate_delta.has_value()) {
-            // sample = 1.0, current = 0.3 → 0.05 * 0.7 = +0.035.
+            // sample = 0.5, current = 0.3 → 0.05 * 0.2 = +0.010.
             REQUIRE(*rd.unemployment_rate_delta > 0.0f);
-            REQUIRE_THAT(*rd.unemployment_rate_delta, WithinAbs(0.035f, 0.001f));
+            REQUIRE_THAT(*rd.unemployment_rate_delta, WithinAbs(0.010f, 0.001f));
             found_unemp = true;
         }
         if (rd.formal_employment_rate_delta.has_value()) {

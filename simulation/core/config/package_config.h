@@ -90,6 +90,13 @@ struct NpcBehaviorConfig {
     float motivation_shift_rate = 0.001f;
     float risk_tolerance_default = 0.5f;
     float base_wage = 50.0f;
+    // Informal/subsistence labor floor: there is always SOME work for willing
+    // bodies (day labor, subsistence, barter). Work pays at least this fraction
+    // of base_wage regardless of the formal employment rate — without it, the
+    // wage = base_wage × employment_rate coupling is a death spiral (low
+    // employment → worthless work → mass inaction → lower employment), and
+    // unemployment pins at 1.0, which never happens in real economies.
+    float informal_wage_floor = 0.30f;
     float base_illicit_income = 80.0f;
     float shop_cost_fraction = 0.05f;
     uint32_t memory_log_cap = 500;

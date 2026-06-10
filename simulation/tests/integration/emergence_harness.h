@@ -52,6 +52,7 @@ struct Snapshot {
     int era = 0;
     double mean_stability = 0.0, mean_crime = 0.0, mean_gini = 0.0, mean_grievance = 0.0;
     double mean_dominance = 0.0, mean_unemployment = 0.0, total_population = 0.0;
+    double formal_employment = 0.0;  // mean cohort formal_employment_rate
     // Community response side (what grievance is supposed to drive)
     double mean_cohesion = 0.0, mean_inst_trust = 0.0, mean_resource_access = 0.0;
     double mean_response_stage = 0.0;
@@ -125,6 +126,7 @@ inline Snapshot capture(const WorldState& w) {
             s.mean_crime += p.cohort_stats->crime_rate;
             s.mean_dominance += p.cohort_stats->criminal_dominance_index;
             s.mean_unemployment += p.cohort_stats->unemployment_rate;
+            s.formal_employment += p.cohort_stats->formal_employment_rate;
             s.total_population += p.cohort_stats->total_population;
         }
     }
@@ -135,6 +137,7 @@ inline Snapshot capture(const WorldState& w) {
         s.mean_grievance /= static_cast<double>(np);
         s.mean_dominance /= static_cast<double>(np);
         s.mean_unemployment /= static_cast<double>(np);
+        s.formal_employment /= static_cast<double>(np);
         s.mean_cohesion /= static_cast<double>(np);
         s.mean_inst_trust /= static_cast<double>(np);
         s.mean_resource_access /= static_cast<double>(np);
