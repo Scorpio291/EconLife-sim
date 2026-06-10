@@ -29,7 +29,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
 #include <cmath>
 
 #include "tests/integration/emergence_harness.h"
@@ -58,7 +57,8 @@ const std::vector<Snapshot>& baseline() {
 template <typename Pred>
 bool any_year(const std::vector<Snapshot>& s, Pred p) {
     for (const auto& snap : s)
-        if (p(snap)) return true;
+        if (p(snap))
+            return true;
     return false;
 }
 }  // namespace
@@ -109,8 +109,8 @@ TEST_CASE("emergence: capital economy is active (wealth accumulates, stays bound
 }
 
 TEST_CASE("emergence: identical seed reproduces identical behavior", "[emergence][integration]") {
-    const auto& a = baseline();                       // reuse the shared run as run #1
-    auto b = run_world_years(kSeed, kNpcs, kYears);    // independent run #2
+    const auto& a = baseline();                      // reuse the shared run as run #1
+    auto b = run_world_years(kSeed, kNpcs, kYears);  // independent run #2
     const auto& fa = a.back();
     const auto& fb = b.back();
     CHECK(fa.evidence_pool == fb.evidence_pool);
@@ -132,9 +132,8 @@ TEST_CASE("emergence: criminal justice loop closes (some prosecution lands)",
     // close at least once given a criminal population over multiple years.
     const auto& s = baseline();
     REQUIRE(s.back().criminals > 0);
-    CHECK(any_year(s, [](const Snapshot& x) {
-        return x.imprisoned > 0 || x.criminals_imprisoned > 0;
-    }));
+    CHECK(any_year(
+        s, [](const Snapshot& x) { return x.imprisoned > 0 || x.criminals_imprisoned > 0; }));
 }
 
 TEST_CASE("emergence: province stability does not collapse to zero",
@@ -155,8 +154,28 @@ TEST_CASE("emergence: community grievance relaxes from its peak (has a restoring
     // Today grievance only ever climbs, so final == peak and this fails.
     const auto& s = baseline();
     double peak = 0.0;
-    for (const auto& snap : s) peak = std::max(peak, snap.mean_grievance);
+    for (const auto& snap : s)
+        peak = std::max(peak, snap.mean_grievance);
     CHECK(s.back().mean_grievance < peak - 0.02);
+}
+
+TEST_CASE("emergence: sustained mass grievance produces organized opposition",
+          "[emergence][integration][!shouldfail]") {
+    // GDD 14.4: when grievance is high (>=0.85) with leadership and resources,
+    // the community escalates to stage 6 (sustained_opposition) and an
+    // OppositionOrganization forms. Baseline: grievance pins at 1.0 and
+    // resource_access at ~1.0, but the escalation JAMS at stage 4
+    // (economic_resistance) and never reaches 6 — because cohesion collapses to
+    // 0.00 (gating direct_action at >=0.45) once NPCs fall inactive. The
+    // population is maximally aggrieved but structurally unable to organize. A
+    // society under sustained mass unemployment/grievance should produce
+    // organized opposition, not sit frozen at boycotts for a decade.
+    const auto& s = baseline();
+    REQUIRE(s.back().mean_grievance > 0.7);         // precondition: mass grievance exists
+    REQUIRE(s.back().mean_resource_access > 0.35);  // and the resource gate is satisfied
+    CHECK(any_year(s, [](const Snapshot& x) {
+        return x.max_response_stage >= 6;  // sustained_opposition reached somewhere
+    }));
 }
 
 TEST_CASE("emergence: regional crime rate reflects the criminal population",

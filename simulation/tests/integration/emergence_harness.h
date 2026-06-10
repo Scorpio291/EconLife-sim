@@ -18,9 +18,9 @@
 
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
+#include "core/world_gen/world_generator.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
-#include "core/world_gen/world_generator.h"
 #include "modules/register_base_game_modules.h"
 #include "modules/technology/technology_types.h"
 
@@ -52,6 +52,10 @@ struct Snapshot {
     int era = 0;
     double mean_stability = 0.0, mean_crime = 0.0, mean_gini = 0.0, mean_grievance = 0.0;
     double mean_dominance = 0.0, mean_unemployment = 0.0, total_population = 0.0;
+    // Community response side (what grievance is supposed to drive)
+    double mean_cohesion = 0.0, mean_inst_trust = 0.0, mean_resource_access = 0.0;
+    double mean_response_stage = 0.0;
+    int max_response_stage = 0;
     double price_spread = 0.0;
 };
 
@@ -65,16 +69,28 @@ inline Snapshot capture(const WorldState& w) {
     s.tick = w.current_tick;
     for (const auto& npc : w.significant_npcs) {
         switch (npc.status) {
-            case NPCStatus::active: s.active++; break;
-            case NPCStatus::imprisoned: s.imprisoned++; break;
-            case NPCStatus::dead: s.dead++; break;
-            case NPCStatus::fled: s.fled++; break;
-            case NPCStatus::waiting: s.waiting++; break;
+            case NPCStatus::active:
+                s.active++;
+                break;
+            case NPCStatus::imprisoned:
+                s.imprisoned++;
+                break;
+            case NPCStatus::dead:
+                s.dead++;
+                break;
+            case NPCStatus::fled:
+                s.fled++;
+                break;
+            case NPCStatus::waiting:
+                s.waiting++;
+                break;
         }
         if (is_criminal_role(npc.role)) {
             s.criminals++;
-            if (npc.status == NPCStatus::imprisoned) s.criminals_imprisoned++;
-            if (npc.status == NPCStatus::dead) s.criminals_dead++;
+            if (npc.status == NPCStatus::imprisoned)
+                s.criminals_imprisoned++;
+            if (npc.status == NPCStatus::dead)
+                s.criminals_dead++;
         }
         s.total_capital += npc.capital;
         s.max_capital = std::max(s.max_capital, static_cast<double>(npc.capital));
@@ -85,7 +101,8 @@ inline Snapshot capture(const WorldState& w) {
     for (const auto& b : w.npc_businesses) {
         if (b.criminal_sector) {
             s.criminal_businesses++;
-            if (b.net_signal > 0.0f) s.criminal_biz_with_signal++;
+            if (b.net_signal > 0.0f)
+                s.criminal_biz_with_signal++;
         }
     }
     s.era = static_cast<int>(w.technology.current_era);
@@ -95,6 +112,12 @@ inline Snapshot capture(const WorldState& w) {
         s.mean_stability += p.conditions.stability_score;
         s.mean_gini += p.conditions.inequality_index;
         s.mean_grievance += p.community.grievance_level;
+        s.mean_cohesion += p.community.cohesion;
+        s.mean_inst_trust += p.community.institutional_trust;
+        s.mean_resource_access += p.community.resource_access;
+        s.mean_response_stage += p.community.response_stage;
+        s.max_response_stage =
+            std::max(s.max_response_stage, static_cast<int>(p.community.response_stage));
         if (p.cohort_stats) {
             s.mean_crime += p.cohort_stats->crime_rate;
             s.mean_dominance += p.cohort_stats->criminal_dominance_index;
@@ -109,6 +132,10 @@ inline Snapshot capture(const WorldState& w) {
         s.mean_grievance /= static_cast<double>(np);
         s.mean_dominance /= static_cast<double>(np);
         s.mean_unemployment /= static_cast<double>(np);
+        s.mean_cohesion /= static_cast<double>(np);
+        s.mean_inst_trust /= static_cast<double>(np);
+        s.mean_resource_access /= static_cast<double>(np);
+        s.mean_response_stage /= static_cast<double>(np);
     }
     double pmin = 1e30, pmax = -1e30;
     for (const auto& m : w.regional_markets) {
