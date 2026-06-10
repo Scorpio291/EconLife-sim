@@ -44,7 +44,23 @@ diverging.
   Same capability model; distinction is trust level.
 
 ## Current Development Status
-Phase: Bootstrap (Pass 1: Core Modules, Tiers 0–5)
+Phase: Integration & behavioral validation. Breadth is largely in — ~50 V1
+modules exist and pass their unit tests (~1,600 fast tests). The open work is
+connective: closing cross-module feedback loops that were stubbed with proxies/
+stand-ins, and getting the simulation to produce the emergent behavior the GDD
+promises rather than just staying non-NaN and bounded.
+
+A 10-year orchestrated baseline (simulation/tests/integration/emergence_observe)
+shows several loops are broken/frozen — most notably the criminal
+detection→prosecution→imprisonment loop never closes, and province conditions
+(stability/grievance/unemployment) saturate to extremes with no restoring force.
+These are tracked as Catch [!shouldfail] ratchets in the opt-in "emergence"
+behavioral suite and written up in docs/session_logs/emergence_baseline_2026-06-10.md.
+
+Test gates:
+- Fast per-commit gate:  ctest -LE emergence   (excludes the slow behavioral runs)
+- Behavioral suite:      ctest -L emergence    (multi-year orchestrated runs; ~tens of seconds)
+
 See docs/design/EconLife_Feature_Tier_List.md for what is V1 scope.
 See docs/session_logs/ for AI session history.
 

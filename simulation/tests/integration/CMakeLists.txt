@@ -25,3 +25,42 @@ catch_discover_tests(econlife_integration_tests
         SKIP_RETURN_CODE 4
         LABELS "integration"
 )
+
+# ---------------------------------------------------------------------------
+# Emergence / behavioral suite — OPT-IN, label "emergence".
+#
+# Long-horizon (multi-year) runs through the full orchestrator that assert the
+# simulation produces the emergent behavior the GDD promises (and ratchet the
+# known-broken feedback loops via Catch [!shouldfail]). A single orchestrated
+# multi-year run is ~tens of seconds, so this is NOT part of the fast per-commit
+# gate. Run it explicitly:
+#     ctest -L emergence                       (the assertion suite, one process)
+#     ./econlife_emergence_tests "[.emergence-observe]"   (10-year human dump)
+# The fast gate excludes it:  ctest -LE emergence
+# ---------------------------------------------------------------------------
+add_executable(econlife_emergence_tests
+    emergence_observe.cpp
+    emergence_test.cpp
+)
+
+target_link_libraries(econlife_emergence_tests PRIVATE
+    Catch2::Catch2WithMain
+    econlife_modules
+)
+
+econlife_set_warnings(econlife_emergence_tests)
+econlife_maybe_werror(econlife_emergence_tests)
+econlife_relax_test_warnings(econlife_emergence_tests)
+
+# Register as a SINGLE ctest entry running the whole [emergence] tag in one
+# process, so the memoized shared world-run is reused across assertions (one run
+# for all guards + ratchets, plus one independent run for the determinism check)
+# instead of re-running per test case.
+add_test(NAME emergence_behavioral_suite
+    COMMAND econlife_emergence_tests "[emergence]"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(emergence_behavioral_suite PROPERTIES
+    LABELS "emergence"
+    TIMEOUT 600
+)
