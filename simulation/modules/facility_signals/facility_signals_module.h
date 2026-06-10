@@ -2,7 +2,7 @@
 
 // Facility Signals Module — province-parallel tick module that computes
 // observable signal composites for facilities, applies scrutiny mitigation,
-// and feeds results into investigator and regulator meters.
+// and publishes per-facility net_signal for investigator_engine to consume.
 //
 // See docs/interfaces/facility_signals/INTERFACE.md for the canonical specification.
 
@@ -19,7 +19,6 @@ namespace econlife {
 // Forward declarations
 struct WorldState;
 struct DeltaBuffer;
-struct NPC;
 
 // ---------------------------------------------------------------------------
 // FacilitySignalsModule — ITickModule implementation
@@ -55,20 +54,6 @@ class FacilitySignalsModule : public ITickModule {
 
     // Compute net signal after mitigation.
     static float compute_net_signal(float base_composite, float scrutiny_mitigation);
-
-    // Compute LE fill rate from aggregate regional criminal signal.
-    static float compute_le_fill_rate(float regional_signal, float detection_scale,
-                                      float fill_rate_max);
-
-    // Determine investigator meter status from current level.
-    InvestigatorMeterStatus evaluate_investigator_status(float current_level) const;
-
-    // Determine regulator meter status from current level.
-    RegulatorMeterStatus evaluate_regulator_status(float current_level) const;
-
-    // Apply corruption to fill rate.
-    static float apply_corruption_to_fill_rate(float fill_rate, float corruption_susceptibility,
-                                               float regional_corruption_coverage);
 
    private:
     FacilitySignalsConfig cfg_;

@@ -48,63 +48,8 @@ TEST_CASE("Net signal with zero mitigation", "[facility_signals][tier7]") {
     CHECK_THAT(net, WithinAbs(0.80f, 0.001f));
 }
 
-TEST_CASE("LE fill rate from regional signal", "[facility_signals][tier7]") {
-    // 3 criminal facilities: net_signals 0.5, 0.3, 0.2 => sum = 1.0
-    // regional = 1.0 / 5.0 = 0.2
-    // fill_rate = 0.2 * 0.005 = 0.001
-    float rate = FacilitySignalsModule::compute_le_fill_rate(0.2f, 0.005f, 0.01f);
-    CHECK_THAT(rate, WithinAbs(0.001f, 0.0001f));
-}
-
-TEST_CASE("LE fill rate clamped to max", "[facility_signals][tier7]") {
-    float rate = FacilitySignalsModule::compute_le_fill_rate(100.0f, 0.005f, 0.01f);
-    CHECK_THAT(rate, WithinAbs(0.01f, 0.0001f));
-}
-
-TEST_CASE("Investigator meter threshold surveillance", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.29f) ==
-          InvestigatorMeterStatus::inactive);
-    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.30f) ==
-          InvestigatorMeterStatus::surveillance);
-    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.59f) ==
-          InvestigatorMeterStatus::surveillance);
-}
-
-TEST_CASE("Investigator meter threshold formal inquiry", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.60f) ==
-          InvestigatorMeterStatus::formal_inquiry);
-    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.79f) ==
-          InvestigatorMeterStatus::formal_inquiry);
-}
-
-TEST_CASE("Investigator meter threshold raid imminent", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(0.80f) ==
-          InvestigatorMeterStatus::raid_imminent);
-    CHECK(FacilitySignalsModule{}.evaluate_investigator_status(1.0f) ==
-          InvestigatorMeterStatus::raid_imminent);
-}
-
-TEST_CASE("Regulator meter thresholds", "[facility_signals][tier7]") {
-    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.24f) ==
-          RegulatorMeterStatus::inactive);
-    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.25f) ==
-          RegulatorMeterStatus::notice_filed);
-    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.50f) ==
-          RegulatorMeterStatus::formal_audit);
-    CHECK(FacilitySignalsModule{}.evaluate_regulator_status(0.75f) ==
-          RegulatorMeterStatus::enforcement_action);
-}
-
-TEST_CASE("Corruption reduces fill rate", "[facility_signals][tier7]") {
-    // corruption_susceptibility=0.50, coverage=0.60 => factor = 1 - 0.30 = 0.70
-    float adjusted = FacilitySignalsModule::apply_corruption_to_fill_rate(0.005f, 0.50f, 0.60f);
-    CHECK_THAT(adjusted, WithinAbs(0.0035f, 0.0001f));
-}
-
-TEST_CASE("Full corruption eliminates fill rate", "[facility_signals][tier7]") {
-    float adjusted = FacilitySignalsModule::apply_corruption_to_fill_rate(0.005f, 1.0f, 1.0f);
-    CHECK_THAT(adjusted, WithinAbs(0.0f, 0.0001f));
-}
+// Fill-rate / meter-threshold / corruption helpers moved with meter ownership
+// to investigator_engine; see investigator_engine_test.cpp for their coverage.
 
 // =============================================================================
 // Integration tests

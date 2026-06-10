@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -30,67 +32,29 @@ float FacilitySignalsModule::compute_net_signal(float base_composite, float scru
     return std::max(0.0f, net);
 }
 
-float FacilitySignalsModule::compute_le_fill_rate(float regional_signal, float detection_scale,
-                                                  float fill_rate_max) {
-    float rate = regional_signal * detection_scale;
-    if (std::isnan(rate))
-        return 0.0f;
-    return std::clamp(rate, 0.0f, fill_rate_max);
-}
-
-InvestigatorMeterStatus FacilitySignalsModule::evaluate_investigator_status(
-    float current_level) const {
-    if (current_level >= cfg_.raid_threshold)
-        return InvestigatorMeterStatus::raid_imminent;
-    if (current_level >= cfg_.formal_inquiry_threshold)
-        return InvestigatorMeterStatus::formal_inquiry;
-    if (current_level >= cfg_.surveillance_threshold)
-        return InvestigatorMeterStatus::surveillance;
-    return InvestigatorMeterStatus::inactive;
-}
-
-RegulatorMeterStatus FacilitySignalsModule::evaluate_regulator_status(float current_level) const {
-    if (current_level >= cfg_.enforcement_threshold)
-        return RegulatorMeterStatus::enforcement_action;
-    if (current_level >= cfg_.audit_threshold)
-        return RegulatorMeterStatus::formal_audit;
-    if (current_level >= cfg_.notice_threshold)
-        return RegulatorMeterStatus::notice_filed;
-    return RegulatorMeterStatus::inactive;
-}
-
-float FacilitySignalsModule::apply_corruption_to_fill_rate(float fill_rate,
-                                                           float corruption_susceptibility,
-                                                           float regional_corruption_coverage) {
-    float factor = 1.0f - corruption_susceptibility * regional_corruption_coverage;
-    factor = std::clamp(factor, 0.0f, 1.0f);
-    return fill_rate * factor;
-}
-
 // ---------------------------------------------------------------------------
 // Pre-parallel initialization — populate signal entries for all businesses
 // ---------------------------------------------------------------------------
 
 void FacilitySignalsModule::init_for_tick(const WorldState& state) {
+    std::unordered_set<uint32_t> known;
+    known.reserve(facility_signals_.size());
+    for (const auto& fs : facility_signals_) {
+        known.insert(fs.business_id);
+    }
     for (const auto& biz : state.npc_businesses) {
-        bool found = false;
-        for (const auto& fs : facility_signals_) {
-            if (fs.business_id == biz.id) {
-                found = true;
-                break;
-            }
+        if (!known.insert(biz.id).second) {
+            continue;  // signal entry already exists
         }
-        if (!found) {
-            FacilitySignals fs{};
-            fs.facility_id = biz.id;
-            fs.business_id = biz.id;
-            fs.power_consumption_anomaly = 0.0f;
-            fs.chemical_waste_signature = 0.0f;
-            fs.foot_traffic_visibility = 0.0f;
-            fs.olfactory_signature = 0.0f;
-            fs.scrutiny_mitigation = 0.0f;
-            facility_signals_.push_back(fs);
-        }
+        FacilitySignals fs{};
+        fs.facility_id = biz.id;
+        fs.business_id = biz.id;
+        fs.power_consumption_anomaly = 0.0f;
+        fs.chemical_waste_signature = 0.0f;
+        fs.foot_traffic_visibility = 0.0f;
+        fs.olfactory_signature = 0.0f;
+        fs.scrutiny_mitigation = 0.0f;
+        facility_signals_.push_back(fs);
     }
 }
 
@@ -123,18 +87,21 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
     std::sort(province_businesses.begin(), province_businesses.end(),
               [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
 
+    // Index the signal entries pre-populated by init_for_tick(). Thread-safe:
+    // init_for_tick runs pre-parallel, so the vector does not grow here, and
+    // each entry is written only by its business's home-province thread.
+    std::unordered_map<uint32_t, FacilitySignals*> signal_by_business;
+    signal_by_business.reserve(facility_signals_.size());
+    for (auto& fs : facility_signals_) {
+        signal_by_business.emplace(fs.business_id, &fs);
+    }
+
     for (const NPCBusiness* biz : province_businesses) {
-        // Find signal entry pre-populated by init_for_tick().
-        FacilitySignals* sig = nullptr;
-        for (auto& fs : facility_signals_) {
-            if (fs.business_id == biz->id) {
-                sig = &fs;
-                break;
-            }
-        }
-        if (!sig) {
+        auto it = signal_by_business.find(biz->id);
+        if (it == signal_by_business.end()) {
             continue;  // Defensive: skip if not pre-populated (should not happen).
         }
+        FacilitySignals* sig = it->second;
 
         // Apply karst bonus to mitigation
         float effective_mitigation = sig->scrutiny_mitigation + karst_bonus;
@@ -147,12 +114,9 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
 
         // Bootstrap derivation: until facility-type signal profiles
         // (facility_types.csv) populate the four physical dimensions, businesses
-        // carry all-zero dimensions and would emit no signal. Derive an
-        // observable composite from the business's noncompliant/criminal activity
-        // level (regulatory_violation_severity) so the detection pipeline is live.
-        // This is the value investigator_engine previously borrowed *raw*; routing
-        // it through this module means it now correctly attenuates by scrutiny
-        // mitigation (corruption/karst concealment) before reaching investigators.
+        // carry all-zero dimensions and would emit no signal. Derive the
+        // composite from regulatory_violation_severity so the detection pipeline
+        // stays live; scrutiny mitigation still attenuates it below.
         if (sig->base_signal_composite <= 0.0f && biz->regulatory_violation_severity > 0.0f) {
             sig->base_signal_composite = std::clamp(biz->regulatory_violation_severity, 0.0f, 1.0f);
         }
@@ -160,13 +124,10 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
         // Compute net signal
         sig->net_signal = compute_net_signal(sig->base_signal_composite, effective_mitigation);
 
-        // Publish the net_signal onto the business so downstream modules
-        // (investigator_engine, Tier 8) can read it from WorldState this same tick
-        // — deltas are applied immediately after each module runs. Emit only when
-        // there is a value to set or a previous nonzero value to clear, to keep
-        // delta volume proportional to active signals rather than to the business
-        // count.
-        if (sig->net_signal > 0.0f || biz->net_signal > 0.0f) {
+        // Publish onto the business so investigator_engine (Tier 8) reads it
+        // from WorldState this same tick. Publish only on change: apply_deltas
+        // keeps biz.net_signal equal to the last published value.
+        if (sig->net_signal != biz->net_signal) {
             BusinessDelta bd;
             bd.business_id = biz->id;
             bd.net_signal_update = sig->net_signal;
@@ -174,16 +135,8 @@ void FacilitySignalsModule::execute_province(uint32_t province_idx, const WorldS
         }
     }
 
-    // NOTE: This module is purely a *signal source*. It does not fill any NPC
-    // meter. The InvestigatorMeter (criminal — terminates in raid/arrest) and
-    // the regulator scrutiny meter (civil) are owned and advanced by
-    // `investigator_engine` (runs_after this module), which reads the published
-    // `NPCBusiness.net_signal` and manages case level/status/transitions. An
-    // earlier version wrote the per-tick fill rates into law-enforcement and
-    // regulator NPCs' `NPCDelta.motivation_delta` (the financial-gain
-    // behavior-weight slot) as a meter stand-in — that polluted those NPCs'
-    // motivations and filled nothing the rest of the system reads, so it has been
-    // removed.
+    // This module is a signal source only — the investigator/regulator meters
+    // are owned and advanced by investigator_engine (see both INTERFACE.md).
 }
 
 void FacilitySignalsModule::execute(const WorldState& state, DeltaBuffer& delta) {
