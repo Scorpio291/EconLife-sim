@@ -39,6 +39,13 @@ class PoliticalCycleModule : public ITickModule {
                                             float constituency_pressure);
     static bool compute_vote_passed(float votes_for, float votes_against, float majority_threshold);
 
+    // National legitimacy target from one province's conditions (the
+    // population-weighted mean of this across a nation's provinces, EMA-smoothed,
+    // is the nation's legitimacy). Clamped to [0,1].
+    static float compute_legitimacy_target(float institutional_trust, float stability,
+                                           float grievance, float unemployment,
+                                           const PoliticalCycleConfig& cfg);
+
     // Add each endorsement's approval_bonus to its demographic in `approval`,
     // clamped to [0,1]. (Endorsements come from NPC endorsers; producer is a
     // future extension, but the application logic is exercised here.)

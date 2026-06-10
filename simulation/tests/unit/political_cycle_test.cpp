@@ -1,9 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/political_cycle/political_cycle_module.h"
+#include "tests/test_world_factory.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -371,4 +373,43 @@ TEST_CASE("PoliticalCycle: proposal with dead sponsor fails", "[political_cycle]
     DeltaBuffer d{};
     module.execute(world, d);
     REQUIRE(module.state().proposals[0].status == LegislativeProposalStatus::failed);
+}
+
+TEST_CASE("PoliticalCycle: legitimacy target rewards order, penalizes grievance",
+          "[political_cycle][tier10][legitimacy]") {
+    PoliticalCycleConfig cfg{};
+    // Healthy province: high trust+stability, no grievance/unemployment -> high.
+    float good = PoliticalCycleModule::compute_legitimacy_target(0.8f, 0.9f, 0.0f, 0.0f, cfg);
+    // Crisis province: max grievance + unemployment, no trust/stability -> floored.
+    float crisis = PoliticalCycleModule::compute_legitimacy_target(0.0f, 0.0f, 1.0f, 1.0f, cfg);
+    CHECK(good > crisis);
+    CHECK(crisis == 0.0f);  // clamped at the floor
+    CHECK(good > 0.5f);
+    CHECK(good <= 1.0f);
+}
+
+TEST_CASE("PoliticalCycle: national legitimacy rolls up provincial conditions",
+          "[political_cycle][tier10][legitimacy]") {
+    auto world = econlife::test::create_test_world(7, 30, 2, 5);
+    REQUIRE(world.nations.size() >= 1);
+    // Drive every province into crisis: max grievance, zero stability/trust.
+    for (auto& p : world.provinces) {
+        p.community.grievance_level = 1.0f;
+        p.community.institutional_trust = 0.0f;
+        p.conditions.stability_score = 0.0f;
+        if (p.cohort_stats)
+            p.cohort_stats->unemployment_rate = 1.0f;
+    }
+    float start = world.nations[0].political_cycle.national_legitimacy;  // 0.5 default
+
+    PoliticalCycleModule module;
+    // Run several ticks so the EMA moves meaningfully toward the crisis target.
+    for (int t = 0; t < 40; ++t) {
+        DeltaBuffer d{};
+        module.execute(world, d);
+        apply_deltas(world, d);
+        world.current_tick++;
+    }
+    CHECK(world.nations[0].political_cycle.national_legitimacy < start);
+    CHECK(world.nations[0].political_cycle.national_legitimacy < 0.4f);
 }

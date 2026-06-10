@@ -225,6 +225,15 @@ struct PoliticalCycleConfig {
     float event_modifier_cap = 0.20f;
     // A campaign auto-activates this many ticks before an office's election.
     uint32_t campaign_lead_time_ticks = 90;
+
+    // --- National legitimacy roll-up (unrest response, §14/§15) ---
+    // national_legitimacy aggregates provincial conditions (population-weighted),
+    // EMA-smoothed. Weights need not sum to 1; the raw score is clamped to [0,1].
+    float legitimacy_trust_weight = 0.35f;         // + institutional_trust
+    float legitimacy_stability_weight = 0.45f;     // + stability_score
+    float legitimacy_grievance_weight = 0.50f;     // - grievance_level
+    float legitimacy_unemployment_weight = 0.30f;  // - unemployment_rate
+    float legitimacy_ema_alpha = 0.05f;            // smoothing toward target per tick
 };
 
 struct MediaSystemConfig {

@@ -452,6 +452,32 @@ static void apply_cohort_stats_deltas(WorldState& world,
     }
 }
 
+// apply_nation_deltas
+// ---------------------------------------------------------------------------
+static void apply_nation_deltas(WorldState& world, const std::vector<NationDelta>& deltas) {
+    if (deltas.empty())
+        return;
+    std::unordered_map<uint32_t, Nation*> by_id;
+    by_id.reserve(world.nations.size());
+    for (auto& n : world.nations)
+        by_id[n.id] = &n;
+
+    for (const auto& d : deltas) {
+        auto it = by_id.find(d.nation_id);
+        if (it == by_id.end())
+            continue;
+        Nation& n = *it->second;
+        if (d.legitimacy_update.has_value())
+            n.political_cycle.national_legitimacy = clamp01(*d.legitimacy_update);
+        if (d.approval_delta.has_value())
+            n.political_cycle.national_approval =
+                clamp01(n.political_cycle.national_approval + *d.approval_delta);
+        if (d.government_type_update.has_value())
+            n.government_type = static_cast<GovernmentType>(*d.government_type_update);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_region_deltas
 // ---------------------------------------------------------------------------
 static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta>& deltas) {
@@ -772,6 +798,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_market_deltas(world, delta.market_deltas, ceil);
     apply_evidence_deltas(world, delta.evidence_deltas, evidence_decay_interval);
     apply_region_deltas(world, delta.region_deltas);
+    apply_nation_deltas(world, delta.nation_deltas);
     apply_cohort_stats_deltas(world, delta.cohort_stats_deltas);
 
     // Consequence queue (GDD §21): schedule new entries and process cancellations.

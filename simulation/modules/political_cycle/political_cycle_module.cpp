@@ -225,12 +225,57 @@ void PoliticalCycleModule::activate_campaigns(const WorldState& state) {
     }
 }
 
+float PoliticalCycleModule::compute_legitimacy_target(float institutional_trust, float stability,
+                                                      float grievance, float unemployment,
+                                                      const PoliticalCycleConfig& cfg) {
+    float raw = cfg.legitimacy_trust_weight * institutional_trust +
+                cfg.legitimacy_stability_weight * stability -
+                cfg.legitimacy_grievance_weight * grievance -
+                cfg.legitimacy_unemployment_weight * unemployment;
+    if (std::isnan(raw))
+        return 0.5f;
+    return std::clamp(raw, 0.0f, 1.0f);
+}
+
 void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Seed the office topology from world-gen data on the first tick so the
     // election pipeline is live in a fresh game.
     form_offices(state);
     // Open campaigns for upcoming elections (within the lead-time window).
     activate_campaigns(state);
+
+    // --- National legitimacy roll-up (unrest response, design doc) ---
+    // Population-weighted aggregate of provincial conditions per nation, EMA-
+    // smoothed toward target. Runs after community_response (Tier order), so
+    // grievance/response are current for this tick. Provinces are visited in
+    // world.provinces order for deterministic accumulation.
+    for (const auto& nation : state.nations) {
+        double weight_sum = 0.0;
+        double weighted_target = 0.0;
+        for (const auto& prov : state.provinces) {
+            if (prov.nation_id != nation.id)
+                continue;
+            float unemployment = prov.cohort_stats ? prov.cohort_stats->unemployment_rate : 0.0f;
+            double pop =
+                prov.cohort_stats ? static_cast<double>(prov.cohort_stats->total_population) : 0.0;
+            double w = pop > 0.0 ? pop : 1.0;  // unpopulated provinces still count minimally
+            float target = compute_legitimacy_target(
+                prov.community.institutional_trust, prov.conditions.stability_score,
+                prov.community.grievance_level, unemployment, cfg_);
+            weighted_target += w * static_cast<double>(target);
+            weight_sum += w;
+        }
+        if (weight_sum <= 0.0)
+            continue;
+        float target = static_cast<float>(weighted_target / weight_sum);
+        float current = nation.political_cycle.national_legitimacy;
+        float updated = current + cfg_.legitimacy_ema_alpha * (target - current);
+
+        NationDelta nd;
+        nd.nation_id = nation.id;
+        nd.legitimacy_update = std::clamp(updated, 0.0f, 1.0f);
+        delta.nation_deltas.push_back(nd);
+    }
 
     auto find_province = [&](uint32_t pid) -> const Province* {
         for (const auto& p : state.provinces)

@@ -120,6 +120,16 @@ TEST_CASE("emergence: identical seed reproduces identical behavior", "[emergence
     CHECK_THAT(fa.total_capital, WithinAbs(fb.total_capital, 1.0));
 }
 
+TEST_CASE("emergence: national legitimacy reacts to provincial conditions",
+          "[emergence][integration]") {
+    // Slice 1 of the unrest-response design: the national roll-up must respond —
+    // under the mass-grievance baseline, national legitimacy craters from its 0.5
+    // start. (That the response then has no effect is the ratchet below.)
+    const auto& s = baseline();
+    REQUIRE(s.back().mean_grievance > 0.7);  // there IS a national crisis
+    CHECK(s.back().national_legitimacy < 0.40);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Group 2: known-broken loops — intended invariants, expected to fail today.
 // Drop the [!shouldfail] tag when the loop is fixed (the test will start passing).
@@ -176,6 +186,20 @@ TEST_CASE("emergence: sustained mass grievance produces organized opposition",
     CHECK(any_year(s, [](const Snapshot& x) {
         return x.max_response_stage >= 6;  // sustained_opposition reached somewhere
     }));
+}
+
+TEST_CASE("emergence: the state responds to a legitimacy crisis (it does not just crater)",
+          "[emergence][integration][!shouldfail]") {
+    // Slice 2 target: a legitimacy crisis must provoke a STATE response that
+    // changes the trajectory — democratic turnover + concession, autocratic
+    // suppression, or failed-state fragmentation — so legitimacy recovers from
+    // its trough instead of flooring forever. Today legitimacy only craters and
+    // pins (no regime-differentiated response exists), so final == trough.
+    const auto& s = baseline();
+    double trough = 1.0;
+    for (const auto& snap : s)
+        trough = std::min(trough, snap.national_legitimacy);
+    CHECK(s.back().national_legitimacy > trough + 0.02);
 }
 
 TEST_CASE("emergence: regional crime rate reflects the criminal population",

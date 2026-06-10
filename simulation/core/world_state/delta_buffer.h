@@ -233,6 +233,18 @@ struct RegionDelta {
     std::optional<float> flood_modifier_delta;    // additive; conditions.flood_modifier (->1.0)
 };
 
+// NationDelta — national-level governance state (one per nation per tick at most).
+// Routed by apply_nation_deltas into WorldState.nations[].political_cycle.
+struct NationDelta {
+    uint32_t nation_id;
+    std::optional<float> legitimacy_update;  // replacement; national_legitimacy [0,1]. Derived per
+                                             // tick by political_cycle from aggregated provincial
+                                             // conditions; transient (not serialized).
+    std::optional<float> approval_delta;     // additive; national_approval [0,1]
+    std::optional<uint8_t> government_type_update;  // replacement; regime change (e.g. Autocracy
+                                                    // collapse -> FailedState)
+};
+
 // --- Cross-province communication ---
 // Effects take hold at the start of the following tick (one-tick propagation delay).
 
@@ -503,6 +515,7 @@ struct DeltaBuffer {
     std::vector<RacketSeedDelta> new_racket_seeds;                      // merge: append
     std::vector<LaunderingSeedDelta> new_laundering_seeds;              // merge: append
     std::vector<CohortStatsDelta> cohort_stats_deltas;                  // merge: append
+    std::vector<NationDelta> nation_deltas;                             // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

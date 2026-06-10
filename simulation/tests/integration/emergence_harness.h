@@ -56,6 +56,9 @@ struct Snapshot {
     double mean_cohesion = 0.0, mean_inst_trust = 0.0, mean_resource_access = 0.0;
     double mean_response_stage = 0.0;
     int max_response_stage = 0;
+    // National governance (player's home nation = nations[0])
+    double national_legitimacy = 0.5;
+    int home_government_type = 0;
     double price_spread = 0.0;
 };
 
@@ -136,6 +139,10 @@ inline Snapshot capture(const WorldState& w) {
         s.mean_inst_trust /= static_cast<double>(np);
         s.mean_resource_access /= static_cast<double>(np);
         s.mean_response_stage /= static_cast<double>(np);
+    }
+    if (!w.nations.empty()) {
+        s.national_legitimacy = w.nations[0].political_cycle.national_legitimacy;
+        s.home_government_type = static_cast<int>(w.nations[0].government_type);
     }
     double pmin = 1e30, pmax = -1e30;
     for (const auto& m : w.regional_markets) {

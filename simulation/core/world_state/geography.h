@@ -866,6 +866,12 @@ struct NationPoliticalCycleState {
     float national_approval;
     bool election_campaign_active;
     uint32_t next_election_tick;
+    // Does the population accept the government's right to rule. Aggregated each
+    // tick by political_cycle from provincial conditions (stability, institutional
+    // trust, grievance, unemployment). Drives the regime-differentiated unrest
+    // response. Derived per tick — recomputed before any consumer reads it — so
+    // it is NOT serialized (transient), like NPCBusiness.net_signal.
+    float national_legitimacy = 0.5f;
 };
 
 // ---------------------------------------------------------------------------
