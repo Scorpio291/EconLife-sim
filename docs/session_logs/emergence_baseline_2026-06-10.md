@@ -1,5 +1,61 @@
 # Emergence Baseline & Road Ahead — 2026-06-10
 
+## Milestone 2026-06-11: zero broken-loop ratchets remain
+
+Starting point (2026-06-10 baseline): the simulation FLATLINED — ~96% of NPCs
+idle, every province condition pinned at an extreme, criminal justice never
+closing, six `[!shouldfail]` ratchets documenting broken feedback loops.
+
+After this session, the emergence suite has **0 ratchets** — every feedback loop
+it tracks is alive and asserted as a passing guard. The six broken loops, closed:
+
+1. NPC activity collapse → decision-engine calibration (inaction gate to the
+   bottom of the EV scale) + informal wage floor. Population stays active;
+   unemployment is a real margin, not a pin.
+2. Grievance pinned at 1.0 → single-owner, material-grounded model; killed a
+   ~300/tick social_consequence firehose (npc_behavior per-action placeholder),
+   two continuous writers (regional_conditions, population_aging) and a
+   stage→grievance pump. Grievance now tracks conditions and relaxes.
+3. Province stability collapse & grievance saturation → downstream of (2); both
+   un-pin (stability recovers to ~0.8, grievance settles ~0.15).
+4. National legitimacy crater → grounded roll-up reflects (now healthy)
+   conditions; regime-differentiated response (suppression→collapse,
+   concession+turnover, fragmentation) built & unit-tested.
+5. Criminal justice loop → raids were seeded at `moderate` severity (below the
+   custodial floor) so convictions only fined; raised the raid floor to
+   `serious`. detection→raid→conviction→IMPRISONMENT→parole now closes
+   (dedicated fast-gate integration test).
+6. Crime-rate metric → wrong denominator (sample criminals / full population);
+   now the criminal fraction of the tracked-actor sample (~0.10).
+
+The crisis MECHANISMS (regime responses, community opposition formation) are
+validated by deterministic controlled-world unit tests, since the baseline world
+is now healthy by design (crises are player/event-driven, not spontaneous).
+
+## Next target: the formal labor market (the keystone gap)
+
+The single largest remaining integration gap. The formal labor market is
+STILLBORN: `labor_market.job_postings_` is only ever populated by save-
+deserialization — **no module creates JobPostings**, `npc_business` has no
+labor-demand model, and there is no production channel. So no NPC is ever
+formally hired; `formal_employment_rate` is propped up only by population_aging's
+cohort convergence (disconnected from actual hires). Building it
+(npc_business labor demand → a JobPosting seed-delta channel → labor_market
+hiring → real formal employment) would:
+  - make labor_market actually function;
+  - give `formal_employment_rate` a real producer;
+  - enable business failure → layoffs → unemployment → grievance → the unrest
+    pipeline END TO END (the deprived-world crisis scenario that's currently
+    untestable in the full sim);
+  - close the loop from the production/business economy into the social economy.
+This deserves an interface-first design pass (it spans npc_business + labor_market
++ a new delta channel).
+
+Other smaller follow-ups: consequence-seeded legal cases stall below the 0.35
+arrest threshold (evidence 0.30); wealth runaway (one actor hits the 1e9 capital
+ceiling within a year).
+
+
 ## Update 2026-06-11: grievance grounded → the world is healthy by default
 
 Grievance had MANY uncoordinated writers (npc_behavior's ~300/tick
