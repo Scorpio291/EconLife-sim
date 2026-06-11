@@ -130,12 +130,16 @@ TEST_CASE("emergence: national legitimacy reacts to provincial conditions",
     CHECK(s.back().national_legitimacy < 0.40);
 }
 
-TEST_CASE("emergence: province stability does not fully collapse", "[emergence][integration]") {
-    // Was a [!shouldfail] ratchet (stability 0.80→0.00 and pinned). The
-    // democratic concession branch of the unrest response (institutional-trust
-    // restoration + grievance relief in the worst provinces) now keeps stability
-    // off the floor on the Federation baseline — the loop is (partially) closed,
-    // so this is a regression guard, not a known gap.
+TEST_CASE("emergence: province stability does not fully collapse",
+          "[emergence][integration][!shouldfail]") {
+    // Re-demoted to a ratchet. It briefly passed after the democratic
+    // concession branch landed, but that pass was an artifact of the
+    // pre-calibration dynamics (a mostly-`waiting` population). With the
+    // decision engine calibrated and the population fully active, grievance
+    // STILL pins at ~1.0 — its generation (NPC memory-log negativity) is
+    // disconnected from material conditions (full informal employment, zero
+    // unemployment) — and pinned grievance drags stability back to 0. Flips
+    // for real when grievance generation is tied to actual conditions.
     const auto& s = baseline();
     CHECK(s.back().mean_stability > 0.05);
 }
@@ -203,17 +207,13 @@ TEST_CASE("emergence: the state responds to a legitimacy crisis (it does not jus
     CHECK(s.back().national_legitimacy > trough + 0.02);
 }
 
-TEST_CASE("emergence: unemployment never approaches 100 percent",
-          "[emergence][integration][!shouldfail]") {
-    // There is always some kind of work for willing bodies — even the worst
-    // real collapses top out far below total unemployment (Great Depression
-    // ~25%; informal/subsistence work absorbs the rest). The informal wage
-    // floor + spec-correct metric (active-without-employer = informal worker)
-    // are in, but unemployment still reads ~0.96 because the NPC decision
-    // engine is mis-calibrated: work's EV (weight 0.25 × prob ~0.78 × magnitude
-    // 0.5 ≈ 0.0975) sits below the inaction threshold (0.10) from day one, so
-    // ~96% of NPCs fall to `waiting` and count as unemployed. Flips when the
-    // GDD §3 utility/threshold calibration pass lands.
+TEST_CASE("emergence: unemployment never approaches 100 percent", "[emergence][integration]") {
+    // There is always some kind of work for willing bodies. With the decision
+    // engine calibrated (inaction gate at the bottom of the EV scale) and the
+    // informal wage floor in place, the population stays active and measured
+    // unemployment is the inaction margin (~0.0 on this baseline; frictional
+    // unemployment >0 will emerge as motivation profiles diversify). Guard:
+    // it must never again approach the 0.96-1.0 pathology.
     const auto& s = baseline();
     CHECK(s.back().mean_unemployment < 0.60);
 }

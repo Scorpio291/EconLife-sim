@@ -166,6 +166,36 @@ fails at ~0.96 until the §3 calibration lands. The missing JobPosting producer
 valid observable for it (population_aging keeps it nonzero), so it is tracked
 here rather than as a ratchet.
 
+## Update 2026-06-11: decision-engine calibration landed — activity restored
+
+inaction_threshold 0.10 → 0.03 (gate at the bottom of the achievable EV scale,
+per GDD §3). Observer results (seed 42, 500 NPCs, 10y, all three regimes):
+
+- **Activity collapse FIXED**: 500/500 NPCs active for a decade, zero `waiting`.
+- **Unemployment 0.96 → 0.00** (the inaction margin; frictional unemployment >0
+  will emerge as motivation profiles diversify). Ratchet "unemployment never
+  approaches 100 percent" flipped → promoted to a regression guard.
+- **New emergent behavior**: NPCs now FLEE deteriorating provinces (19/500 fled
+  by year 10) — migration responds to conditions.
+
+**Next root exposed — grievance generation is disconnected from material
+conditions.** With full informal employment, zero unemployment, and a fully
+active population, grievance STILL pins at ~1.0 by year 1 (and cohesion still
+zeroes, dragging stability to 0 and legitimacy to 0; the earlier "stability does
+not fully collapse" pass turned out to be an artifact of the mostly-waiting
+population and was re-demoted to a ratchet). Grievance is sampled from NPC
+memory-log negativity (community_response::compute_grievance_contribution), so
+a fully active population generating interaction memories saturates it
+regardless of economic reality. The fix target: tie grievance generation/decay
+to actual conditions (employment, income adequacy, addressed-vs-ignored
+grievances per GDD §14.2 intervention points), so a materially-okay world
+relaxes toward contentment and a deprived one escalates.
+
+Open ratchets after this pass (5): grievance disconnect (the new keystone),
+stability collapse (downstream of it), criminal justice loop, organized
+opposition (cohesion gate, partly downstream), crime-rate metric, legitimacy
+crisis response (downstream of grievance).
+
 ## Recommended road ahead
 
 1. **Close the criminal justice loop (#1).** Highest leverage and continues the
