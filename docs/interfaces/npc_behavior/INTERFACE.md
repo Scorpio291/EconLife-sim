@@ -45,7 +45,7 @@ Evaluates each significant NPC's motivations, selects daily actions via the expe
 
 ## Postconditions
 - Every active NPC has been evaluated (or skipped via lazy evaluation if no state change since last full evaluation).
-- NPCs whose best_action EV exceeded inaction_threshold have queued exactly one DeferredWorkItem (WorkType::consequence) in the deferred_work_queue.
+- Action-specific consequences only: an NPC queues a `ConsequenceDelta`/evidence only when its chosen action warrants one (whistleblow, criminal_activity, defection). Routine actions (work, shop, socialize, rest) queue NO consequence — an earlier placeholder emitted one `social_consequence` per acting NPC per tick, which at full population activity is a firehose (hundreds/tick) that pinned community `grievance_level` at the ceiling. Community reaction to routine life flows through NPC memory into `community_response`, the sole owner of `grievance_level`.
 - NPCs whose best_action EV was below inaction_threshold have status set to waiting.
 - All new MemoryEntry items respect MAX_MEMORY_ENTRIES cap; if at cap, lowest-decay entry is archived before append.
 - Knowledge confidence values have decayed by config.knowledge.confidence_decay_rate for entries not reinforced this tick.

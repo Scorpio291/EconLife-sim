@@ -60,6 +60,7 @@ Province-parallel: each province's condition aggregation is fully independent. R
   - `regulatory_compliance_index` — `mean(1.0 - facility.scrutiny_meter.current_level)` across all non-criminal facilities
   - `drought_modifier` — recovery toward 1.0 at `drought_recovery_rate` when no active drought event
   - `flood_modifier` — recovery toward 1.0 at `flood_recovery_rate` when flood event clears
+- Does NOT write `grievance_level`. Grievance has a single owner — `community_response` — whose material-deprivation + actor-wrong model already takes inequality and crime as inputs. This module previously also wrote grievance (inequality + crime + a stage→grievance feedback term); that second, uncoordinated writer stacked additively with others and helped pin grievance at the ceiling. Removed.
 
 ## Preconditions
 - `political_cycle` has completed (political approval ratings and corruption indices are current).

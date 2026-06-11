@@ -49,6 +49,11 @@ struct Snapshot {
     std::size_t evidence_pool = 0, consequence_queue = 0;
     std::size_t businesses = 0, criminal_businesses = 0;
     int criminal_biz_with_signal = 0;
+    // Economic substrate diagnostics
+    int insolvent_businesses = 0;        // cash < 0
+    double deferred_salary_total = 0.0;  // unpaid wages (wage-theft driver)
+    int npcs_with_wage_theft_memory = 0;
+    double mean_inequality = 0.0;
     int era = 0;
     double mean_stability = 0.0, mean_crime = 0.0, mean_gini = 0.0, mean_grievance = 0.0;
     double mean_dominance = 0.0, mean_unemployment = 0.0, total_population = 0.0;
@@ -108,6 +113,17 @@ inline Snapshot capture(const WorldState& w) {
             if (b.net_signal > 0.0f)
                 s.criminal_biz_with_signal++;
         }
+        if (b.cash < 0.0f)
+            s.insolvent_businesses++;
+        s.deferred_salary_total += b.deferred_salary_liability;
+    }
+    for (const auto& npc : w.significant_npcs) {
+        for (const auto& m : npc.memory_log) {
+            if (m.type == MemoryType::witnessed_wage_theft) {
+                s.npcs_with_wage_theft_memory++;
+                break;
+            }
+        }
     }
     s.era = static_cast<int>(w.technology.current_era);
 
@@ -116,6 +132,7 @@ inline Snapshot capture(const WorldState& w) {
         s.mean_stability += p.conditions.stability_score;
         s.mean_gini += p.conditions.inequality_index;
         s.mean_grievance += p.community.grievance_level;
+        s.mean_inequality += p.conditions.inequality_index;
         s.mean_cohesion += p.community.cohesion;
         s.mean_inst_trust += p.community.institutional_trust;
         s.mean_resource_access += p.community.resource_access;
@@ -135,6 +152,7 @@ inline Snapshot capture(const WorldState& w) {
         s.mean_crime /= static_cast<double>(np);
         s.mean_gini /= static_cast<double>(np);
         s.mean_grievance /= static_cast<double>(np);
+        s.mean_inequality /= static_cast<double>(np);
         s.mean_dominance /= static_cast<double>(np);
         s.mean_unemployment /= static_cast<double>(np);
         s.formal_employment /= static_cast<double>(np);

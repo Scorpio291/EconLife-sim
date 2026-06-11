@@ -205,22 +205,13 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     }
 
     // --- Grievance ---
-    // Grievance rises with high inequality and crime; decays passively.
-    // Community response stage amplifies grievance above stage 2.
-    {
-        constexpr float GRIEVANCE_DECAY_RATE = 0.0005f;
-        constexpr float GRIEVANCE_INEQUALITY_WEIGHT = 0.001f;
-        constexpr float GRIEVANCE_CRIME_WEIGHT = 0.001f;
-        constexpr float GRIEVANCE_STAGE_WEIGHT = 0.002f;
-        float stage_contribution =
-            (community.response_stage > 2)
-                ? static_cast<float>(community.response_stage - 2) * GRIEVANCE_STAGE_WEIGHT
-                : 0.0f;
-        rdelta.grievance_delta = GRIEVANCE_INEQUALITY_WEIGHT * conditions.inequality_index +
-                                 GRIEVANCE_CRIME_WEIGHT * cohort_stats->crime_rate +
-                                 stage_contribution -
-                                 GRIEVANCE_DECAY_RATE * community.grievance_level;
-    }
+    // Owned by community_response (material-deprivation + actor-wrong model with
+    // a built-in restoring force). This module previously ALSO wrote grievance
+    // (inequality + crime + a stage→grievance feedback term); that uncoordinated
+    // second writer — together with population_aging's — stacked additively and
+    // pinned grievance at the ceiling. Inequality and crime are already inputs to
+    // community_response's grievance target, and the stage term was a
+    // self-reinforcing pump. Removed; grievance has a single owner.
 
     // --- Institutional trust ---
     // Eroded by corruption and high crime; boosted by high stability.

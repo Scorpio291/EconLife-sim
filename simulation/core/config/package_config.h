@@ -674,6 +674,12 @@ struct CommunityResponseConfig {
     float memory_decay_floor = 0.01f;
     float grievance_normalizer = 10.0f;
     float grievance_shock_threshold = 0.15f;
+    // Grievance = material deprivation (GDD §14.2) + actor-specific wrongs.
+    // Without the material grounding, grievance is a pure memory accumulator
+    // that saturates to 1.0 regardless of economic reality and never relaxes.
+    float grievance_unemployment_weight = 0.70f;  // joblessness is the dominant systemic wrong
+    float grievance_inequality_weight = 0.40f;    // inequality drives a slower-burning grievance
+    float grievance_memory_weight = 0.40f;  // actor-specific wrongs modulate on top (bounded)
     float resistance_revenue_penalty = -0.15f;
     float trauma_grievance_floor_scale = 0.25f;
     float trauma_trust_ceiling_scale = 0.30f;

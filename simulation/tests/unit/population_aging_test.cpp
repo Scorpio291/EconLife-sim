@@ -110,9 +110,10 @@ TEST_CASE("PopulationAging: execute_province emits a RegionDelta on a monthly ti
     REQUIRE(rd.region_id == 0);
     REQUIRE(rd.stability_delta.has_value());
     REQUIRE(rd.inequality_delta.has_value());
-    REQUIRE(rd.grievance_delta.has_value());
-    // grievance = GRIEVANCE_UNEMPLOYMENT_WEIGHT(0.003) * income_low_fraction(0.40).
-    REQUIRE_THAT(*rd.grievance_delta, WithinAbs(0.0012f, 1e-5f));
+    // Grievance is no longer written here — it has a single owner
+    // (community_response). This module previously injected a constant
+    // income_low_fraction grievance pump every tick.
+    REQUIRE_FALSE(rd.grievance_delta.has_value());
 }
 
 TEST_CASE("PopulationAging: execute_province is a no-op off the monthly cadence",

@@ -323,6 +323,9 @@ static void process_consequence_queue(WorldState& world, DeltaBuffer& delta) {
             case ConsequenceCategory::social_consequence: {
                 RegionDelta rd;
                 rd.region_id = e.province_id;
+                // Genuine social harms (deaths, closures, defaults, interceptions)
+                // are rare, discrete events; community_response's EMA relaxes the
+                // bump back toward the material-conditions baseline afterward.
                 rd.grievance_delta = 0.03f;
                 delta.region_deltas.push_back(rd);
                 break;

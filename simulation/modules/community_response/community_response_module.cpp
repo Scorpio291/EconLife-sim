@@ -178,9 +178,23 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
 
             float npc_count = static_cast<float>(province_npcs.size());
             float cohesion_sample = cohesion_sum / npc_count;
-            float grievance_sample =
-                std::min(grievance_sum / (npc_count * cfg_.grievance_normalizer), 1.0f);
             float resource_sample = resource_sum / npc_count;
+
+            // Grievance target (GDD §14.2): a material-deprivation baseline plus a
+            // bounded actor-specific (memory) component. Material grounding is the
+            // restoring force the memory-only model lacked — when the economy is
+            // healthy (low unemployment/inequality) grievance relaxes toward a low
+            // baseline instead of saturating at the ceiling forever.
+            float unemployment =
+                province.cohort_stats ? province.cohort_stats->unemployment_rate : 0.0f;
+            float inequality = province.conditions.inequality_index;
+            float material_grievance =
+                std::min(1.0f, cfg_.grievance_unemployment_weight * unemployment +
+                                   cfg_.grievance_inequality_weight * inequality);
+            float memory_grievance =
+                std::min(grievance_sum / (npc_count * cfg_.grievance_normalizer), 1.0f);
+            float grievance_sample = std::min(
+                1.0f, material_grievance + cfg_.grievance_memory_weight * memory_grievance);
 
             // Check for grievance shock (per-tick increase > threshold).
             float grievance_raw_delta = grievance_sample - grievance;
@@ -243,24 +257,17 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
             delta.consequence_deltas.push_back(cd);
         }
 
-        // Stage-intensity grievance accumulation: higher stages drive additional grievance
-        // proportional to stage ordinal (quiescent = 0, sustained_opposition = 6).
-        // Per INTERFACE.md, stage checks fire every 7 ticks. Apply the bonus only at
-        // those intervals to prevent runaway positive feedback.
-        float stage_grievance_bonus = 0.0f;
-        if (state.current_tick % 7 == 0) {
-            static constexpr float stage_grievance_rate = 0.002f;
-            stage_grievance_bonus =
-                static_cast<float>(static_cast<uint8_t>(new_stage)) * stage_grievance_rate;
-        }
+        // NOTE: grievance is owned here. Escalation flows grievance → stage, not
+        // stage → grievance: a stage-intensity grievance bonus (removed) created a
+        // self-reinforcing pump that pinned grievance at the ceiling. The material
+        // grounding in grievance_sample is the restoring force.
 
         // Write deltas for this province.
         RegionDelta rd;
         rd.region_id = province.id;
         rd.cohesion_delta = cohesion - province.community.cohesion;
         rd.resource_access_delta = resource_access - province.community.resource_access;
-        rd.grievance_delta =
-            (grievance - province.community.grievance_level) + stage_grievance_bonus;
+        rd.grievance_delta = grievance - province.community.grievance_level;
         rd.institutional_trust_delta = inst_trust - province.community.institutional_trust;
         // Write response stage if it changed.
         if (static_cast<uint8_t>(new_stage) != current_stage) {

@@ -102,9 +102,12 @@ TEST_CASE("RegionalConditions: execute_province emits a RegionDelta",
     // compute_stability_recovery(0.80, 0) - 0.80 = +0.0002.
     REQUIRE(rd.stability_delta.has_value());
     REQUIRE_THAT(*rd.stability_delta, WithinAbs(0.0002f, 1e-5f));
-    // Crime/grievance signals are populated from cohort_stats, not left unset.
+    // Crime signal is populated from cohort_stats. Grievance is no longer
+    // written here — it has a single owner (community_response); this module
+    // previously also wrote grievance (inequality + crime + a stage feedback
+    // pump), an uncoordinated second writer.
     REQUIRE(rd.crime_rate_delta.has_value());
-    REQUIRE(rd.grievance_delta.has_value());
+    REQUIRE_FALSE(rd.grievance_delta.has_value());
 }
 
 TEST_CASE("RegionalConditions: execute is deterministic across runs",
@@ -120,7 +123,6 @@ TEST_CASE("RegionalConditions: execute is deterministic across runs",
     RegionDelta b = run();
     REQUIRE_THAT(a.stability_delta.value(), WithinAbs(b.stability_delta.value(), 0.0f));
     REQUIRE_THAT(a.crime_rate_delta.value(), WithinAbs(b.crime_rate_delta.value(), 0.0f));
-    REQUIRE_THAT(a.grievance_delta.value(), WithinAbs(b.grievance_delta.value(), 0.0f));
 }
 
 // ===========================================================================

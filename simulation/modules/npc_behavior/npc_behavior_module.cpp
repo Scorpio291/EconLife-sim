@@ -469,22 +469,15 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
             }
             npc_delta.new_memory_entry = new_mem;
 
-            // Queue DeferredWorkItem(consequence) for the chosen action.
-            DeferredWorkItem dwi{};
-            dwi.due_tick = state.current_tick + 1;
-            dwi.type = WorkType::consequence;
-            dwi.subject_id = npc.id;
-            dwi.payload = ConsequencePayload{npc.id};
-            // Note: We write to the non-const deferred_work_queue via const_cast
-            // only because DWQ items from behavior are always deferred to next tick.
-            // In the real orchestrator, the DWQ is passed separately.
-            // For now, we skip direct DWQ push — the orchestrator drains consequences
-            // from DeltaBuffer.consequence_deltas instead.
-            ConsequenceDelta cd{};
-            cd.new_consequence =
-                make_consequence(npc.id, ConsequenceCategory::social_consequence, npc.id, 0,
-                                 npc.current_province_id, state.current_tick);
-            province_delta.consequence_deltas.push_back(cd);
+            // NOTE: routine daily actions do NOT queue consequences. An earlier
+            // placeholder emitted a social_consequence for EVERY chosen action —
+            // with a fully active population that is hundreds of consequences per
+            // tick, each firing a grievance bump a month later: a firehose that
+            // pinned community grievance at the ceiling regardless of economic
+            // reality. Consequences from NPC behavior are action-specific (e.g.
+            // whistleblow/criminal_activity create evidence below); community
+            // anger flows through NPC memory into community_response's
+            // material-grounded grievance model.
 
             // Whistleblow creates evidence.
             if (best_eval.action == DailyAction::whistleblow) {

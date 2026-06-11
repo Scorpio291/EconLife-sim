@@ -61,6 +61,7 @@ Province-parallel: each province's demographic processing is fully independent. 
 - `DeferredWorkItem[]` — consequence entries for:
   - Named NPC promotion from background population when cohort events trigger (union organizer emerges, community leader steps forward)
   - Generational events (baby boom from high stability + high healthcare, population decline from low stability + low healthcare)
+- Does NOT write `grievance_level`. This module previously injected `+0.003 × income_low_fraction` into province grievance every tick — a constant, never-decaying pump off a static demographic, disconnected from current conditions. Economic deprivation is now grounded in `community_response`'s material grievance term (unemployment + inequality); grievance has a single owner. The per-cohort `grievance_contribution` field remains a demographic descriptor, not a province-grievance writer.
 
 ## Preconditions
 - Healthcare module has completed (health outcomes affect death rate calculations).

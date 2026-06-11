@@ -251,15 +251,14 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                   (target_inequality - province.conditions.inequality_index);
     }
 
-    // --- Grievance contribution from cohort dissatisfaction ---
-    // Unemployment and addiction in the background population raise grievance.
-    // Addiction prevalence across cohorts is reflected in the province addiction_rate.
-    {
-        constexpr float GRIEVANCE_UNEMPLOYMENT_WEIGHT = 0.003f;
-        // Use low-income fraction as a proxy for unemployment pressure since
-        // individual cohort employment_rate is on PopulationCohort, not Province.
-        rdelta.grievance_delta = GRIEVANCE_UNEMPLOYMENT_WEIGHT * demographics.income_low_fraction;
-    }
+    // --- Grievance ---
+    // Owned by community_response. This module previously injected
+    // `+0.003 × income_low_fraction` EVERY tick — a constant, never-decaying pump
+    // off a static demographic, disconnected from current conditions, which (with
+    // regional_conditions' writer) pinned grievance at the ceiling regardless of
+    // economic reality. Economic deprivation is now grounded in
+    // community_response's material grievance term (unemployment + inequality).
+    // Removed; grievance has a single owner.
 
     // Only push the delta if at least one field was set.
     province_delta.region_deltas.push_back(rdelta);
