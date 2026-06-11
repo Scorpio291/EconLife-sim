@@ -851,7 +851,9 @@ TEST_CASE("test_npcs_from_other_provinces_not_processed", "[npc_behavior][tier5]
 // ===========================================================================
 
 TEST_CASE("test_npc_behavior_constants", "[npc_behavior][tier5]") {
-    REQUIRE_THAT(NpcBehaviorModuleConfig{}.inaction_threshold, WithinAbs(0.10f, 0.001f));
+    // 0.03 per the GDD §3 calibration: the gate sits at the bottom of the
+    // achievable EV scale (see the [calibration] tests).
+    REQUIRE_THAT(NpcBehaviorModuleConfig{}.inaction_threshold, WithinAbs(0.03f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModuleConfig{}.min_risk_discount, WithinAbs(0.05f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModuleConfig{}.risk_sensitivity_coeff, WithinAbs(2.0f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModuleConfig{}.trust_ev_bonus, WithinAbs(0.3f, 0.001f));
@@ -860,4 +862,99 @@ TEST_CASE("test_npc_behavior_constants", "[npc_behavior][tier5]") {
     REQUIRE_THAT(NpcBehaviorConfig{}.knowledge_confidence_decay_rate, WithinAbs(0.001f, 0.0001f));
     REQUIRE_THAT(NpcBehaviorConfig{}.motivation_shift_rate, WithinAbs(0.001f, 0.0001f));
     REQUIRE(MAX_MEMORY_ENTRIES == 500);
+}
+
+// ===========================================================================
+// Decision-engine calibration (GDD §3): the inaction threshold sits at the
+// BOTTOM of the achievable EV scale, so NPCs act in normal conditions and
+// `waiting` is an edge state — not the default fate of 96% of the population.
+// ===========================================================================
+
+TEST_CASE("calibration: balanced NPC in normal conditions acts (does not fall to waiting)",
+          "[npc_behavior][tier5][calibration]") {
+    auto state = make_test_world_state(1);
+    state.provinces.push_back(make_test_province(0));  // employment 0.7, stability 0.5
+
+    NPC npc = make_test_npc(100, 0);  // uniform 1/8 motivation weights
+    state.significant_npcs.push_back(npc);
+    rebuild_npc_indices(state);
+
+    NpcBehaviorModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    // The NPC must NOT be set to waiting; its best candidate (work, EV ≈
+    // 0.125 × 0.78 × 0.5 ≈ 0.049) clears the calibrated threshold.
+    for (const auto& d : delta.npc_deltas) {
+        if (d.npc_id == 100 && d.new_status.has_value()) {
+            REQUIRE(*d.new_status != NPCStatus::waiting);
+        }
+    }
+}
+
+TEST_CASE("calibration: zero formal employment — informal work keeps a worker acting",
+          "[npc_behavior][tier5][calibration]") {
+    auto state = make_test_world_state(1);
+    auto prov = make_test_province(0);
+    prov.cohort_stats->formal_employment_rate = 0.0f;  // total formal collapse
+    prov.conditions.stability_score = 0.1f;
+    state.provinces.push_back(std::move(prov));
+
+    NPC npc = make_test_npc(100, 0);
+    // Financially-motivated worker (weights renormalized to sum 1).
+    npc.motivations.weights = {0.30f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f};
+    state.significant_npcs.push_back(npc);
+    rebuild_npc_indices(state);
+
+    NpcBehaviorModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    // There is always some kind of work for willing bodies: with the informal
+    // floor (effective employment 0.30 → work EV ≈ 0.30 × 0.62 × 0.5 ≈ 0.093)
+    // the worker keeps acting and earns informal income rather than idling.
+    bool stayed_active = true;
+    bool earned_income = false;
+    for (const auto& d : delta.npc_deltas) {
+        if (d.npc_id != 100)
+            continue;
+        if (d.new_status.has_value() && *d.new_status == NPCStatus::waiting)
+            stayed_active = false;
+        if (d.capital_delta.has_value() && *d.capital_delta > 0.0f)
+            earned_income = true;
+    }
+    REQUIRE(stayed_active);
+    REQUIRE(earned_income);
+}
+
+TEST_CASE("calibration: dismal conditions + mismatched profile can still produce waiting",
+          "[npc_behavior][tier5][calibration]") {
+    auto state = make_test_world_state(1);
+    auto prov = make_test_province(0);
+    prov.cohort_stats->formal_employment_rate = 0.0f;
+    prov.conditions.stability_score = 0.0f;
+    prov.cohort_stats->crime_rate = 0.0f;
+    state.provinces.push_back(std::move(prov));
+
+    // Profile with near-zero weight on every outcome the available daily
+    // actions can produce (financial/security/relationship/self-preservation/
+    // career), concentrated instead on power & ideology — nothing on offer
+    // matches what this NPC wants.
+    NPC npc = make_test_npc(100, 0);
+    npc.motivations.weights = {0.01f, 0.01f, 0.01f, 0.45f, 0.45f, 0.05f, 0.01f, 0.01f};
+    state.significant_npcs.push_back(npc);
+    rebuild_npc_indices(state);
+
+    NpcBehaviorModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    // The inaction gate still has teeth: this NPC waits.
+    bool went_waiting = false;
+    for (const auto& d : delta.npc_deltas) {
+        if (d.npc_id == 100 && d.new_status.has_value() && *d.new_status == NPCStatus::waiting) {
+            went_waiting = true;
+        }
+    }
+    REQUIRE(went_waiting);
 }

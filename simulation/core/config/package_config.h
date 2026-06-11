@@ -616,7 +616,15 @@ struct FinancialDistributionConfig {
 };
 
 struct NpcBehaviorModuleConfig {
-    float inaction_threshold = 0.10f;
+    // Inaction gate, calibrated to the achievable EV scale (GDD §3: routine
+    // decisions pick the highest-utility action; `waiting` is an edge state).
+    // EV = motivation_weight × probability × magnitude: a balanced NPC's best
+    // candidate lands at ~0.05 in normal conditions and ~0.11 at the
+    // financially-driven extreme. At 0.03, NPCs act in normal conditions and
+    // only idle when conditions are dismal AND their motivation profile poorly
+    // matches the available actions. (The previous 0.10 sat ABOVE the entire
+    // achievable scale, so ~96% of NPCs fell to `waiting` from day one.)
+    float inaction_threshold = 0.03f;
     float min_risk_discount = 0.05f;
     float risk_sensitivity_coeff = 2.0f;
     float trust_ev_bonus = 0.3f;
