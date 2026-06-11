@@ -1,5 +1,34 @@
 # Emergence Baseline & Road Ahead — 2026-06-10
 
+## Update 2026-06-11: grievance grounded → the world is healthy by default
+
+Grievance had MANY uncoordinated writers (npc_behavior's ~300/tick
+social_consequence firehose; regional_conditions + population_aging continuous
+pumps; a stage→grievance feedback loop). Consolidated to a single owner
+(community_response) with a material-deprivation-grounded model. Result: in the
+calibrated/healthy economy, grievance now settles ~0.15 instead of pinning at
+1.0, and the whole downstream un-pins — **stability recovers to ~0.8, legitimacy
+to ~0.42, cohesion holds, NPCs stay active**.
+
+Consequence: the **default baseline world is now healthy** — it does NOT enter
+crisis on its own. That is correct (the GDD's world is prosperous at the Y2000
+start; crises are player/event-driven), but it changes how we validate the
+unrest pipeline. The emergence suite now asserts the **healthy-world positive
+invariants** (grievance bounded, stability healthy, legitimacy reflects good
+conditions, unemployment ≈ inaction margin). The crisis MECHANISMS — autocratic
+suppression→collapse, democratic concession+turnover, failed-state fragmentation,
+and community escalation→opposition formation (GDD §14.4) — are validated by
+deterministic controlled-world UNIT tests ([political_cycle][unrest],
+[community_response][opposition]) instead of waiting for the baseline to break.
+
+**Open: an end-to-end "deprived/exploited world produces unrest" emergence
+scenario.** There is no persistent economic-deprivation source yet (no JobPosting
+producer → no real formal labor market; no mass-layoff/business-failure event;
+historical_trauma_index is config-only, never implemented). Once one exists, an
+emergence test can drive the full cascade economy→grievance→escalation→regime
+response end to end. This is now the highest-value next integration target.
+
+
 ## Why this exists
 
 The codebase is breadth-complete at the module level: ~50 V1 modules, 49

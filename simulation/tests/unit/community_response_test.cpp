@@ -367,3 +367,77 @@ TEST_CASE("test_historical_trauma_sets_floors", "[community_response][tier6]") {
     REQUIRE_THAT(grievance_floor, WithinAbs(0.15f, 0.001f));
     REQUIRE_THAT(trust_ceiling, WithinAbs(0.82f, 0.001f));
 }
+
+// ---------------------------------------------------------------------------
+// End-to-end opposition formation (GDD §14.4): when a province is at high
+// grievance with a qualifying leader and resource access, execute() escalates
+// to sustained_opposition and forms an OppositionOrganization (signalled via a
+// political_consequence). This preserves the mechanism the former end-to-end
+// emergence ratchet exercised, now that the healthy baseline world does not
+// enter crisis on its own.
+// ---------------------------------------------------------------------------
+TEST_CASE("CommunityResponse: high grievance + leadership + resources forms opposition",
+          "[community_response][tier6][opposition]") {
+    WorldState world{};
+    world.current_tick = 100;
+    world.world_seed = 1;
+
+    Province prov{};
+    prov.id = 0;
+    prov.region_id = 0;
+    prov.nation_id = 0;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.community.grievance_level = 0.95f;  // sustained mass grievance
+    prov.community.cohesion = 0.50f;
+    prov.community.institutional_trust = 0.30f;
+    prov.community.resource_access = 0.50f;  // >= 0.35 stage-6 gate
+    prov.community.response_stage =
+        static_cast<uint8_t>(CommunityResponseStage::direct_action);  // poised at stage 5
+    world.provinces.push_back(std::move(prov));
+
+    // A qualifying leader (community_leader, social_capital > 30) + residents.
+    NPC leader{};
+    leader.id = 1;
+    leader.role = NPCRole::community_leader;
+    leader.status = NPCStatus::active;
+    leader.current_province_id = 0;
+    leader.home_province_id = 0;
+    leader.social_capital = 50.0f;
+    world.significant_npcs.push_back(leader);
+    for (uint32_t i = 2; i <= 6; ++i) {
+        NPC n{};
+        n.id = i;
+        n.role = NPCRole::worker;
+        n.status = NPCStatus::active;
+        n.current_province_id = 0;
+        n.home_province_id = 0;
+        n.social_capital = 5.0f;
+        world.significant_npcs.push_back(n);
+    }
+    rebuild_npc_indices(world);
+
+    CommunityResponseModule module;
+    DeltaBuffer delta{};
+    module.execute(world, delta);
+
+    // Reaches sustained_opposition and signals opposition-org formation via a
+    // political_consequence.
+    bool reached_stage6 = false;
+    for (const auto& rd : delta.region_deltas) {
+        if (rd.region_id == 0 && rd.response_stage_replacement.has_value() &&
+            *rd.response_stage_replacement ==
+                static_cast<uint8_t>(CommunityResponseStage::sustained_opposition)) {
+            reached_stage6 = true;
+        }
+    }
+    CHECK(reached_stage6);
+
+    bool opposition_signalled = false;
+    for (const auto& cd : delta.consequence_deltas) {
+        if (cd.new_consequence.has_value() &&
+            cd.new_consequence->category == ConsequenceCategory::political_consequence) {
+            opposition_signalled = true;
+        }
+    }
+    CHECK(opposition_signalled);
+}

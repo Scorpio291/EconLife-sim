@@ -120,28 +120,38 @@ TEST_CASE("emergence: identical seed reproduces identical behavior", "[emergence
     CHECK_THAT(fa.total_capital, WithinAbs(fb.total_capital, 1.0));
 }
 
-TEST_CASE("emergence: national legitimacy reacts to provincial conditions",
+TEST_CASE("emergence: national legitimacy reflects (healthy) conditions",
           "[emergence][integration]") {
-    // Slice 1 of the unrest-response design: the national roll-up must respond —
-    // under the mass-grievance baseline, national legitimacy craters from its 0.5
-    // start. (That the response then has no effect is the ratchet below.)
+    // The national legitimacy roll-up tracks provincial conditions. With the
+    // economy functioning (grievance grounded in material conditions, ~0.15;
+    // unemployment ~0; stability recovered), legitimacy must NOT crater — a
+    // materially-healthy nation retains the population's consent. (Legitimacy
+    // CRATERING under a forced crisis, and the regime-differentiated response to
+    // it, are covered by the political_cycle [unrest] unit tests.)
     const auto& s = baseline();
-    REQUIRE(s.back().mean_grievance > 0.7);  // there IS a national crisis
-    CHECK(s.back().national_legitimacy < 0.40);
+    REQUIRE(s.back().mean_grievance < 0.5);  // economy is healthy on this baseline
+    CHECK(s.back().national_legitimacy > 0.25);
 }
 
-TEST_CASE("emergence: province stability does not fully collapse",
-          "[emergence][integration][!shouldfail]") {
-    // Re-demoted to a ratchet. It briefly passed after the democratic
-    // concession branch landed, but that pass was an artifact of the
-    // pre-calibration dynamics (a mostly-`waiting` population). With the
-    // decision engine calibrated and the population fully active, grievance
-    // STILL pins at ~1.0 — its generation (NPC memory-log negativity) is
-    // disconnected from material conditions (full informal employment, zero
-    // unemployment) — and pinned grievance drags stability back to 0. Flips
-    // for real when grievance generation is tied to actual conditions.
+TEST_CASE("emergence: province stability stays healthy (does not collapse)",
+          "[emergence][integration]") {
+    // Promoted from a ratchet. Grievance is now grounded in material conditions
+    // and relaxes (single owner: community_response), so it no longer pins the
+    // community at maximum escalation and drags stability to zero. A healthy
+    // baseline province retains real stability.
     const auto& s = baseline();
-    CHECK(s.back().mean_stability > 0.05);
+    CHECK(s.back().mean_stability > 0.20);
+}
+
+TEST_CASE("emergence: community grievance stays bounded (restoring force works)",
+          "[emergence][integration]") {
+    // Promoted from a ratchet. Grievance was a memory-only accumulator (plus a
+    // ~300/tick social_consequence firehose and uncoordinated writers) that
+    // pinned at 1.0 regardless of the economy. Now it is grounded in material
+    // deprivation with a single owner and a restoring force: on a healthy
+    // baseline it settles low instead of saturating at the ceiling.
+    const auto& s = baseline();
+    CHECK(s.back().mean_grievance < 0.5);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,52 +170,17 @@ TEST_CASE("emergence: criminal justice loop closes (some prosecution lands)",
         s, [](const Snapshot& x) { return x.imprisoned > 0 || x.criminals_imprisoned > 0; }));
 }
 
-TEST_CASE("emergence: community grievance relaxes from its peak (has a restoring force)",
-          "[emergence][integration][!shouldfail]") {
-    // Baseline: grievance rises monotonically toward 1.00 and stays pinned,
-    // which holds community response at maximum escalation forever. A healthy
-    // world relaxes grievance once conditions stop being worst-case. Stated
-    // horizon-independently: the final grievance should sit below its peak.
-    // Today grievance only ever climbs, so final == peak and this fails.
-    const auto& s = baseline();
-    double peak = 0.0;
-    for (const auto& snap : s)
-        peak = std::max(peak, snap.mean_grievance);
-    CHECK(s.back().mean_grievance < peak - 0.02);
-}
-
-TEST_CASE("emergence: sustained mass grievance produces organized opposition",
-          "[emergence][integration][!shouldfail]") {
-    // GDD 14.4: when grievance is high (>=0.85) with leadership and resources,
-    // the community escalates to stage 6 (sustained_opposition) and an
-    // OppositionOrganization forms. Baseline: grievance pins at 1.0 and
-    // resource_access at ~1.0, but the escalation JAMS at stage 4
-    // (economic_resistance) and never reaches 6 — because cohesion collapses to
-    // 0.00 (gating direct_action at >=0.45) once NPCs fall inactive. The
-    // population is maximally aggrieved but structurally unable to organize. A
-    // society under sustained mass unemployment/grievance should produce
-    // organized opposition, not sit frozen at boycotts for a decade.
-    const auto& s = baseline();
-    REQUIRE(s.back().mean_grievance > 0.7);         // precondition: mass grievance exists
-    REQUIRE(s.back().mean_resource_access > 0.35);  // and the resource gate is satisfied
-    CHECK(any_year(s, [](const Snapshot& x) {
-        return x.max_response_stage >= 6;  // sustained_opposition reached somewhere
-    }));
-}
-
-TEST_CASE("emergence: the state responds to a legitimacy crisis (it does not just crater)",
-          "[emergence][integration][!shouldfail]") {
-    // Slice 2 target: a legitimacy crisis must provoke a STATE response that
-    // changes the trajectory — democratic turnover + concession, autocratic
-    // suppression, or failed-state fragmentation — so legitimacy recovers from
-    // its trough instead of flooring forever. Today legitimacy only craters and
-    // pins (no regime-differentiated response exists), so final == trough.
-    const auto& s = baseline();
-    double trough = 1.0;
-    for (const auto& snap : s)
-        trough = std::min(trough, snap.national_legitimacy);
-    CHECK(s.back().national_legitimacy > trough + 0.02);
-}
+// NOTE: the former crisis ratchets "sustained mass grievance produces organized
+// opposition" and "the state responds to a legitimacy crisis" tested an end-to-end
+// crisis cascade that the broken (grievance-pinned) world produced involuntarily.
+// With the economy functioning, the baseline world is healthy and does NOT enter
+// crisis on its own — crises are player/event-driven. The crisis MECHANISMS are
+// validated directly and deterministically by the [political_cycle][unrest] unit
+// tests (autocratic suppression→collapse, democratic concession+turnover,
+// failed-state fragmentation) and the community_response opposition-formation unit
+// test. An end-to-end "deprived/exploited world produces unrest" emergence scenario
+// awaits a persistent economic-deprivation source (no JobPosting producer / mass-
+// layoff event yet) — tracked in the session log.
 
 TEST_CASE("emergence: unemployment never approaches 100 percent", "[emergence][integration]") {
     // There is always some kind of work for willing bodies. With the decision
