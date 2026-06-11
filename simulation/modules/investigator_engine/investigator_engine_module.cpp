@@ -361,18 +361,22 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
                 LegalCaseSeedDelta seed{};
                 seed.defendant_npc_id = found_case->target_id;
                 seed.lead_investigator_id = inv->id;
-                // Map meter level to severity: 0.80–0.85 → moderate(1),
-                // 0.85–0.90 → serious(2), 0.90–0.95 → major(3),
-                // 0.95–1.00 → severe(4). Linear bucket; severity_value =
-                // enum + 1 in legal_process.
+                // Map meter level to severity. A raid is only mounted after a
+                // sustained investigation crosses the raid threshold (0.80), so
+                // its floor is SERIOUS — custodial — not moderate: you do not
+                // raid an operation for a fine-worthy offense. The seed fires at
+                // the moment the meter crosses 0.80, so an 0.80-floor of
+                // `moderate` produced fine-only outcomes and the
+                // detection→prosecution→IMPRISONMENT loop never closed. Buckets:
+                // 0.80–0.90 → serious(2, custodial), 0.90–0.95 → major(3),
+                // 0.95–1.00 → severe(4). severity_value = enum + 1 in
+                // legal_process; custodial floor is severity_value >= 3.
                 float lvl = found_case->current_level;
-                uint8_t sev = 1;  // CaseSeverity::moderate
+                uint8_t sev = 2;  // CaseSeverity::serious (custodial)
                 if (lvl >= 0.95f)
                     sev = 4;  // severe
                 else if (lvl >= 0.90f)
                     sev = 3;  // major
-                else if (lvl >= 0.85f)
-                    sev = 2;  // serious
                 seed.severity = sev;
                 seed.province_id = found_case->province_id;
                 // Map meter to evidence weight so legal_process's

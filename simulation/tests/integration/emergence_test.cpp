@@ -159,16 +159,14 @@ TEST_CASE("emergence: community grievance stays bounded (restoring force works)"
 // Drop the [!shouldfail] tag when the loop is fixed (the test will start passing).
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_CASE("emergence: criminal justice loop closes (some prosecution lands)",
-          "[emergence][integration][!shouldfail]") {
-    // Evidence accrues and consequences queue, but the baseline shows ZERO
-    // imprisonments in 10 years. Detection→case→conviction→imprisonment must
-    // close at least once given a criminal population over multiple years.
-    const auto& s = baseline();
-    REQUIRE(s.back().criminals > 0);
-    CHECK(any_year(
-        s, [](const Snapshot& x) { return x.imprisoned > 0 || x.criminals_imprisoned > 0; }));
-}
+// NOTE: the former "criminal justice loop closes" ratchet is now a dedicated
+// fast-gate integration test ("Criminal justice loop closes: detection to
+// imprisonment" in criminal_subsystem_integration_test.cpp), which proves the
+// detection→raid→conviction→IMPRISONMENT→parole lifecycle end-to-end. The break
+// was raid cases seeded at `moderate` severity (below the custodial floor), so
+// convictions only ever fined. The meter needs ~a year to reach the raid
+// threshold, so a longer horizon than this suite's 3y window is the right place
+// to assert it.
 
 // NOTE: the former crisis ratchets "sustained mass grievance produces organized
 // opposition" and "the state responds to a legitimacy crisis" tested an end-to-end
