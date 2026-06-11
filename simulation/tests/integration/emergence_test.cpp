@@ -192,10 +192,12 @@ TEST_CASE("emergence: unemployment never approaches 100 percent", "[emergence][i
 }
 
 TEST_CASE("emergence: regional crime rate reflects the criminal population",
-          "[emergence][integration][!shouldfail]") {
-    // Baseline: crime_rate →0.00 even though 36 criminals and 2 criminal
-    // businesses persist. The regional crime metric is disconnected from the
-    // actual criminal presence it is meant to aggregate.
+          "[emergence][integration]") {
+    // Promoted from a ratchet. crime_rate was criminal-NPC count / full
+    // demographic population — off by the sampling ratio (~300 tracked NPCs vs
+    // ~500k people), reading ~1e-5 despite a persistent criminal presence. Now
+    // it is the criminal fraction of the tracked-actor sample, so it reflects
+    // the actual ~10% criminal baseline.
     const auto& s = baseline();
     REQUIRE(s.back().criminals > 0);
     CHECK(s.back().mean_crime > 0.001);

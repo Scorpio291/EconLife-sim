@@ -107,9 +107,11 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     const uint32_t population = cohort_stats->total_population;
     uint32_t criminal_npc_count = 0;
     uint32_t addicted_count = 0;
+    uint32_t active_npc_count = 0;  // tracked-actor sample size in this province
     for (const auto& npc : state.significant_npcs) {
         if (npc.status != NPCStatus::active || npc.current_province_id != province.id)
             continue;
+        ++active_npc_count;
         if (is_criminal_role(npc.role))
             criminal_npc_count++;
         if (is_addicted_stage(npc.addiction_state.stage))
@@ -155,9 +157,19 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     // --- Inequality = gini (authoritative, from the cohort income distribution) ---
     rdelta.inequality_delta = cohort_stats->gini_coefficient - conditions.inequality_index;
 
-    // --- Crime rate: criminal-NPC fraction of population (authoritative) ---
-    rdelta.crime_rate_delta =
-        compute_population_rate(criminal_npc_count, population) - cohort_stats->crime_rate;
+    // --- Crime rate: criminal fraction of the tracked-actor sample ---
+    // Significant NPCs are a SAMPLE of the population, not its full count; the
+    // background masses (cohorts) are not modeled per-person. Dividing the
+    // sample's criminal count by the full demographic population produced a
+    // crime_rate ~1e-5 (off by the sampling ratio, ~300 NPCs vs ~500k people),
+    // disconnected from the actual ~10% criminal presence. Use the sample as
+    // representative: crime_rate = criminal NPCs / active NPCs in the province.
+    // (A composite that also weights criminal business revenue / dominance per
+    // INTERFACE is a future refinement.)
+    float crime_sample = active_npc_count > 0 ? static_cast<float>(criminal_npc_count) /
+                                                    static_cast<float>(active_npc_count)
+                                              : 0.0f;
+    rdelta.crime_rate_delta = crime_sample - cohort_stats->crime_rate;
 
     // --- Addiction rate: dependent+ NPCs / population (authoritative) ---
     rdelta.addiction_rate_delta =

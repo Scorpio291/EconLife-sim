@@ -53,7 +53,7 @@ Province-parallel: each province's condition aggregation is fully independent. R
 - `ProvinceDelta[]` — updated RegionConditions per province:
   - `stability_score` — composite: `stability_score(t+1) = stability_score(t) + STABILITY_RECOVERY_RATE * (1 - stability_score(t)) - instability_events(t) * EVENT_STABILITY_IMPACT`
   - `inequality_index` — derived directly from `gini_coefficient` of current income distribution
-  - `crime_rate` — from criminal NPC activity count, criminal business revenue, and criminal_dominance_index
+  - `crime_rate` — criminal fraction of the tracked-actor sample: `criminal-role active significant NPCs / active significant NPCs in province`. Significant NPCs are a sample (the masses are not modeled per-person), so the population is NOT a valid denominator — dividing by `total_population` produced a ~1e-5 rate disconnected from the actual criminal presence. A composite that also weights criminal business revenue / `criminal_dominance_index` is a future refinement.
   - `addiction_rate` — aggregated from NPC AddictionStates (stages dependent through terminal) normalized by population
   - `criminal_dominance_index` — `criminal_revenue(region, t) / total_economic_activity(region, t)` with quarterly EMA smoothing (alpha = 0.1)
   - `formal_employment_rate` — fraction of working-age population in declared, taxed employment

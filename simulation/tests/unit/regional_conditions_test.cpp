@@ -179,18 +179,24 @@ NPCBusiness make_biz(uint32_t id, bool criminal, float revenue, float violation)
 }
 }  // namespace
 
-TEST_CASE("RegionalConditions: crime_rate from criminal NPC fraction",
+TEST_CASE("RegionalConditions: crime_rate from criminal fraction of the actor sample",
           "[regional_conditions][tier11]") {
     auto world = make_pop_world(100);
+    // crime_rate is the criminal fraction of the TRACKED ACTOR sample (significant
+    // NPCs), not of the full demographic population — the masses' criminality is
+    // not modeled per-person, and dividing the sample's criminal count by the full
+    // population produced a ~1e-5 rate disconnected from reality. Representative
+    // sample: 10 criminals + 90 workers = 100 active NPCs → 0.10.
     for (uint32_t i = 0; i < 10; ++i)
         world.significant_npcs.push_back(make_npc(100 + i, NPCRole::criminal_operator));
-    world.significant_npcs.push_back(make_npc(1, NPCRole::worker));
+    for (uint32_t i = 0; i < 90; ++i)
+        world.significant_npcs.push_back(make_npc(1000 + i, NPCRole::worker));
 
     RegionalConditionsModule module;
     DeltaBuffer delta{};
     module.execute_province(0, world, delta);
     apply_deltas(world, delta);
-    // 10 criminals / 100 population = 0.10
+    // 10 criminals / 100 active significant NPCs = 0.10
     REQUIRE_THAT(world.provinces[0].cohort_stats->crime_rate, WithinAbs(0.10f, 1e-4f));
 }
 
