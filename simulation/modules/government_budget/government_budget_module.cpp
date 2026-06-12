@@ -213,7 +213,10 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
                 const float seizable = npc.capital - seize_exemption;
                 if (seizable <= 0.0f)
                     continue;
-                float quarterly_seizure = seizable * seize_rate * rule_of_law * 0.25f;
+                // The kingpin's launderers/fixers shield part of it — the law does
+                // not bind equally. Individual, per NPC.
+                const float shielded = 1.0f - levy_avoidance_fraction(npc, cfg_);
+                float quarterly_seizure = seizable * seize_rate * rule_of_law * 0.25f * shielded;
                 quarterly_seizure = std::min(quarterly_seizure, npc.capital);
                 if (quarterly_seizure <= 0.0f)
                     continue;
@@ -238,7 +241,10 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
                 std::clamp(base_rate + (max_rate - base_rate) * (taxable / prog_scale), base_rate,
                            max_rate) *
                 redistribution;
-            float quarterly_tax = taxable * annual_rate * 0.25f;
+            // The wealthy and well-connected shield part of what they nominally owe
+            // through their own teams — the law does not bind equally. Individual.
+            const float shielded = 1.0f - levy_avoidance_fraction(npc, cfg_);
+            float quarterly_tax = taxable * annual_rate * 0.25f * shielded;
             quarterly_tax = std::min(quarterly_tax, npc.capital);  // never drive capital below 0
             if (quarterly_tax <= 0.0f)
                 continue;
@@ -719,6 +725,61 @@ float GovernmentBudgetModule::regime_rule_of_law_factor(GovernmentType type,
             return cfg.rule_of_law_failed_state;
     }
     return cfg.rule_of_law_democracy;  // defensive default
+}
+
+namespace {
+// Structural avoidance advantage conferred by an NPC's role: the enablers
+// (accountants, lawyers, bankers, fixers) and the politically protected dodge far
+// more than an ordinary actor of the same wealth.
+float avoidance_role_bonus(NPCRole r, const GovernmentBudgetConfig& cfg) {
+    switch (r) {
+        case NPCRole::accountant:
+        case NPCRole::lawyer:
+        case NPCRole::banker:
+        case NPCRole::fixer:
+            return cfg.avoidance_role_enabler;
+        case NPCRole::corporate_executive:
+            return cfg.avoidance_role_corporate;
+        case NPCRole::criminal_operator:
+        case NPCRole::criminal_enforcer:
+            return cfg.avoidance_role_criminal;
+        case NPCRole::politician:
+        case NPCRole::judge:
+        case NPCRole::appointed_official:
+        case NPCRole::regulator:
+            return cfg.avoidance_role_political;
+        default:
+            return 0.0f;
+    }
+}
+}  // namespace
+
+float GovernmentBudgetModule::levy_avoidance_fraction(const NPC& npc,
+                                                      const GovernmentBudgetConfig& cfg) {
+    float a = cfg.avoidance_base;
+    // Connections / institutional access.
+    a += cfg.avoidance_w_social *
+         std::clamp(npc.social_capital / cfg.avoidance_social_norm, 0.0f, 1.0f);
+    // Network reach: fixers, accountants, bankers a phone call away.
+    a += cfg.avoidance_w_contacts *
+         std::clamp(static_cast<float>(npc.contact_ids.size()) / cfg.avoidance_contacts_norm, 0.0f,
+                    1.0f);
+    // Appetite for aggressive schemes.
+    a += cfg.avoidance_w_risk * std::clamp(npc.risk_tolerance, 0.0f, 1.0f);
+    // Motivation to protect money (financial_gain weight; OutcomeType::financial_gain = 0).
+    a += cfg.avoidance_w_money * std::clamp(npc.motivations.weights[0], 0.0f, 1.0f);
+    // Role expertise: enablers and the politically protected shield structurally more.
+    a += avoidance_role_bonus(npc.role, cfg);
+    // Wealth affords better teams — a modest contribution, not the whole story.
+    const float wealth_factor = std::clamp(
+        (npc.capital - cfg.avoidance_wealth_threshold) / cfg.avoidance_wealth_scale, 0.0f, 1.0f);
+    a += cfg.avoidance_w_wealth * wealth_factor;
+    // Stable per-NPC innate aptitude (cunning, inherited advisors) not captured by
+    // the fields above — deterministically derived from the NPC id so it is fixed
+    // for an individual but varies across the population.
+    const float innate = static_cast<float>((npc.id * 2654435761u) % 1000u) / 1000.0f;  // [0,1)
+    a += cfg.avoidance_w_innate * innate;
+    return std::clamp(a, 0.0f, cfg.avoidance_max);
 }
 
 // ===========================================================================

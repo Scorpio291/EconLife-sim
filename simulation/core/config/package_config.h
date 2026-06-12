@@ -419,6 +419,33 @@ struct GovernmentBudgetConfig {
     float rule_of_law_autocracy = 0.30f;  // elite capture: the connected go untouched
     float rule_of_law_federation = 1.00f;
     float rule_of_law_failed_state = 0.00f;
+
+    // --- Individual avoidance: the law does not bind equally ---
+    // A significant NPC with a fortune is not one of the masses — they have teams
+    // (lawyers, accountants, offshore structures, laundering networks) and political
+    // protection that shield a fraction of any levy (tax OR seizure). This is
+    // deliberately NOT a flat function of wealth: it is composed from the
+    // individual's OWN attributes, so two equally-rich actors with different
+    // connections, savvy, and role dodge by very different amounts. Each weight is
+    // an additive contribution to the shielded fraction, clamped to avoidance_max.
+    // Applied as (1 - avoidance) on the computed quarterly levy.
+    float avoidance_max = 0.85f;  // cap — even the best-shielded pay something
+    float avoidance_base = 0.0f;
+    float avoidance_w_social = 0.25f;     // social_capital: lobbyists, officials, access
+    float avoidance_social_norm = 80.0f;  // social_capital scale for normalization
+    float avoidance_w_contacts = 0.15f;   // contact_ids: fixers/accountants/bankers on call
+    float avoidance_contacts_norm = 10.0f;
+    float avoidance_w_risk = 0.10f;    // appetite for aggressive schemes
+    float avoidance_w_money = 0.10f;   // financial_gain motivation weight
+    float avoidance_w_wealth = 0.15f;  // affords better teams — modest, not the whole story
+    float avoidance_wealth_threshold = 1.0e6f;  // shielding capacity ramps above a millionaire
+    float avoidance_wealth_scale = 1.0e8f;
+    float avoidance_w_innate = 0.15f;      // stable per-NPC aptitude (cunning, inherited advisors)
+    float avoidance_role_enabler = 0.30f;  // accountant / lawyer / banker / fixer
+    float avoidance_role_corporate = 0.20f;  // corporate_executive: corporate structures
+    float avoidance_role_criminal = 0.25f;   // criminal_operator: laundering networks
+    float avoidance_role_political =
+        0.20f;  // politician / judge / official / regulator: protection
 };
 
 struct HealthcareConfig {

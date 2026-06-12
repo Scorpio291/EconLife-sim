@@ -21,6 +21,7 @@ namespace econlife {
 struct WorldState;
 struct DeltaBuffer;
 struct NPCBusiness;
+struct NPC;
 enum class GovernmentType : uint8_t;
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,13 @@ class GovernmentBudgetModule : public ITickModule {
     // a kleptocratic Autocracy shields its criminal-political elite, a FailedState
     // has no enforcement. Configurable via GovernmentBudgetConfig::rule_of_law_*.
     static float regime_rule_of_law_factor(GovernmentType type, const GovernmentBudgetConfig& cfg);
+
+    // Fraction in [0, avoidance_max] of a levy (tax or seizure) that this specific
+    // NPC shields through their own teams/connections/role — the law does not bind
+    // equally. INDIVIDUAL, not a flat function of wealth: composed from the NPC's
+    // social capital, contacts, savvy, role, a modest wealth term, and a stable
+    // innate aptitude, so equally-rich actors dodge by different amounts.
+    static float levy_avoidance_fraction(const NPC& npc, const GovernmentBudgetConfig& cfg);
 
    private:
     GovernmentBudgetConfig cfg_;

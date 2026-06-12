@@ -51,6 +51,22 @@ criminal fortune. There is no automatic march toward equality — concentration 
 default, reversed only where institutions (fiscal capacity AND rule of law) enforce
 it.
 
+**...and the law does not bind equally.** A second correction: a flat levy (even a
+progressive one) overstates how much the very top actually pays. A significant NPC
+with a fortune is not one of the masses — they have teams (lawyers, accountants,
+offshore structures, laundering networks) and political protection that shield part
+of any levy. `levy_avoidance_fraction(npc, cfg)` computes that shielded fraction
+INDIVIDUALLY, not as a flat function of wealth: it is composed from the NPC's own
+`social_capital`, `contact_ids`, `risk_tolerance`, `financial_gain` motivation, role
+(accountant/lawyer/banker/fixer and the politically protected dodge structurally
+more; criminal operators launder), a modest wealth term, and a stable id-derived
+innate aptitude — so two equally-rich actors with different connections/savvy dodge
+by very different amounts. Both the redistribution tax and the rule-of-law seizure
+are multiplied by `(1 - avoidance)`, capped so even the best-shielded pay something.
+Effect: the effective rate flattens at the very top, so concentration is sticky even
+in accountable states — exactly because the ultra-rich are individually modeled
+actors who can buy their way around the rules.
+
 **Inequality was blind to it.** `inequality_index` tracked only the cohort
 *income* gini — which a single owner hoarding *capital* does not move — so the
 concentration never reached `community_response`. Added
