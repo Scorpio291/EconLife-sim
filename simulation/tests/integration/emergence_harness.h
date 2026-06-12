@@ -46,6 +46,8 @@ struct Snapshot {
     int active = 0, imprisoned = 0, dead = 0, fled = 0, waiting = 0;
     int criminals = 0, criminals_imprisoned = 0, criminals_dead = 0;
     double total_capital = 0.0, max_capital = 0.0;
+    int richest_role = -1;          // NPCRole of the wealthiest NPC
+    bool richest_is_owner = false;  // does the richest NPC own a business?
     std::size_t evidence_pool = 0, consequence_queue = 0;
     std::size_t businesses = 0, criminal_businesses = 0;
     int criminal_biz_with_signal = 0;
@@ -102,7 +104,16 @@ inline Snapshot capture(const WorldState& w) {
                 s.criminals_dead++;
         }
         s.total_capital += npc.capital;
-        s.max_capital = std::max(s.max_capital, static_cast<double>(npc.capital));
+        if (static_cast<double>(npc.capital) >= s.max_capital) {
+            s.max_capital = static_cast<double>(npc.capital);
+            s.richest_role = static_cast<int>(npc.role);
+            s.richest_is_owner = false;
+            for (const auto& b : w.npc_businesses)
+                if (b.owner_id == npc.id) {
+                    s.richest_is_owner = true;
+                    break;
+                }
+        }
     }
     s.evidence_pool = w.evidence_pool.size();
     s.consequence_queue = w.consequence_queue.size();
