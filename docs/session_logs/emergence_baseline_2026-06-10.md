@@ -1,5 +1,52 @@
 # Emergence Baseline & Road Ahead — 2026-06-10
 
+## Update 2026-06-12: wealth runaway closed — bounded, and now visible as grievance
+
+The "wealth runaway" follow-up (one actor hitting the 1e9 capital ceiling within
+a year, noted below) is closed. It had two halves: the runaway itself, and the
+fact that nothing in the social economy could *see* it.
+
+**Root cause (the blow-up).** Two compounding bugs:
+1. `banking` credited business_capital loan proceeds to BOTH the business cash
+   AND the owner's personal capital — double-creating money every origination.
+2. `business.revenue_per_tick` was unbounded (`output ≤ market_supply_ceiling`
+   × `price ≤ market_price_ceiling` ≈ 1e14), so a revenue-scaled loan compounded:
+   owner wealth → income-scaled consumption → prices → revenue → bigger loan.
+Fixes: loan proceeds credit the business only (owner is borrower, not recipient);
+added `SafetyCeilingsConfig::business_revenue_ceiling = 1e7` and clamp
+`revenue_per_tick` to it. This un-pinned max capital from 1e9 to a bounded value.
+(In practice `maxBizRev` settles ~1e3, so the revenue ceiling is a pure safety
+net, never the operating point — the residual accumulation is criminal-economy
+proceeds, not business profit.)
+
+**No restoring force (the slow runaway).** Even bounded, owner/criminal capital
+accumulated monotonically — profit/proceeds flow IN every tick with no
+wealth-proportional outflow. Added a **progressive personal wealth tax**
+(`government_budget`, quarterly): significant-NPC capital above an exemption is
+taxed at a rate climbing with wealth (5%→75% annual), deducted via NPCDelta and
+credited to the national budget (funding the services/welfare that relieve
+grievance — redistribution loop). The richer the actor, the harder the brake, so
+accumulation now settles at a finite plateau. Empirically the richest actor (a
+criminal kingpin) plateaus at ~3e8 instead of pinning at the 1e9 ceiling.
+
+**Inequality was blind to it.** `inequality_index` tracked only the cohort
+*income* gini — which a single owner hoarding *capital* does not move — so the
+concentration never reached `community_response`. Added
+`RegionalConditionsModule::compute_wealth_concentration()` (normalized top-decile
+capital share of the province's significant NPCs); the inequality target is now
+`max(cohort_income_gini, 0.85 × wealth_concentration)`. So a boom that funnels
+capital to a few owners registers as inequality → grievance. **A boom that
+concentrates wealth now breeds resentment.** The 0.85 weight keeps a single rich
+owner from alone pegging inequality (broad concentration is required), so the
+healthy 200-NPC/3y baseline stays under the `grievance < 0.5` guard while the
+longer 300-NPC/5y kingpin-accumulation scenario correctly escalates past it.
+
+Diagnostic (`[.emergence-econ]`, seed 42, 300 NPCs, 5y): richest actor plateaus
+at ~3e8 (was: pinned 1e9 in year 1); grievance climbs 0.13 → 0.55 as inequality
+tracks the concentration 0.24 → 0.35 — the previously invisible
+concentration→resentment loop now fires. Emergence suite stays green (27
+assertions, 10 cases); fast gate green.
+
 ## Milestone 2026-06-11: zero broken-loop ratchets remain
 
 Starting point (2026-06-10 baseline): the simulation FLATLINED — ~96% of NPCs
@@ -92,8 +139,10 @@ demand is a real business decision rather than a labor_market-internal heuristic
 then layoffs on business distress → unemployment → the crisis cascade.
 
 Other smaller follow-ups: consequence-seeded legal cases stall below the 0.35
-arrest threshold (evidence 0.30); wealth runaway (one actor hits the 1e9 capital
-ceiling within a year).
+arrest threshold (evidence 0.30); ~~wealth runaway (one actor hits the 1e9 capital
+ceiling within a year)~~ — RESOLVED 2026-06-12, see the update at the top of this
+file (banking double-credit + uncapped revenue fixed; progressive wealth tax adds
+a restoring force; wealth concentration now feeds inequality→grievance).
 
 
 ## Update 2026-06-11: grievance grounded → the world is healthy by default
