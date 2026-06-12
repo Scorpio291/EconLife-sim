@@ -122,6 +122,11 @@ class LaborMarketModule : public ITickModule {
     std::unordered_map<uint32_t, std::vector<WorkerApplication>> applications_;
     // Monotonic id source for generated postings, kept past any deserialised id.
     uint32_t next_posting_id_ = 1;
+    // NPCs laid off in the current (pre-parallel) hiring cycle. The employment
+    // record is cleared pre-parallel (safe); execute_province reads this list
+    // (read-only, safe in parallel) to emit the employment_negative memory in
+    // the laid-off NPC's province.
+    std::vector<uint32_t> laid_off_this_cycle_;
 
     // Rebuild employment_index_ from employment_records_. Idempotent.
     void rebuild_employment_index() const;

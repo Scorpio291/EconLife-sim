@@ -988,6 +988,12 @@ struct LaborModuleConfig {
     uint32_t job_posting_duration_ticks = 60;
     uint32_t applicants_per_posting = 4;
     uint32_t max_new_postings_per_business = 2;  // per monthly hiring cycle
+    // Distress layoffs: a business can only sustain the headcount its margin can
+    // pay (`(revenue - cost) / offered_wage`). When it is over that — because
+    // revenue fell or costs rose — it sheds the excess (formal -> informal work,
+    // and an employment_negative memory that feeds community grievance). This is
+    // the bridge from business health into the social economy.
+    uint32_t max_layoffs_per_business = 3;  // per monthly cycle (gradual, not a cliff)
 };
 
 struct PackageConfig {

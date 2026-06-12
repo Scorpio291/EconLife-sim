@@ -948,3 +948,48 @@ TEST_CASE("labor_market: posting generation garbage-collects resolved postings",
         CHECK(p.id != 500u);
     CHECK(module.applications().find(500) == module.applications().end());
 }
+
+TEST_CASE("labor_market: unprofitable business lays off staff (distress -> informal + grievance)",
+          "[labor_market][tier2][demand]") {
+    auto state = make_test_world_state();
+    state.provinces.push_back(make_test_province(0));
+    // An UNPROFITABLE business (cost > revenue) that currently employs workers.
+    auto biz = make_test_business(1, 0, 1000.0f);
+    biz.revenue_per_tick = 100.0f;
+    biz.cost_per_tick = 300.0f;  // margin negative -> affordable headcount 0
+    state.npc_businesses.push_back(biz);
+    for (uint32_t i = 0; i < 5; ++i) {
+        auto npc = make_test_npc(100 + i, 0);
+        state.significant_npcs.push_back(npc);
+    }
+    rebuild_npc_indices(state);
+
+    LaborMarketModule module;
+    // Seed the 5 NPCs as employed by the business.
+    state.current_tick = 1;
+    module.init_for_tick(state);  // creates employment records (employer 0)
+    for (auto& rec : module.employment_records())
+        rec.employer_business_id = 1;  // make them employed
+
+    // Monthly cycle: generate_job_postings runs the distress-layoff pass.
+    state.current_tick = 30;
+    module.init_for_tick(state);
+
+    // Some employees were laid off (employer cleared); capped per cycle.
+    int still_employed = 0;
+    for (const auto& rec : module.employment_records())
+        if (rec.employer_business_id == 1)
+            still_employed++;
+    CHECK(still_employed < 5);
+
+    // execute_province emits an employment_negative memory for the laid-off NPCs
+    // in this province — the channel that feeds community grievance.
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+    bool layoff_memory = false;
+    for (const auto& d : delta.npc_deltas)
+        if (d.new_memory_entry.has_value() &&
+            d.new_memory_entry->type == MemoryType::employment_negative)
+            layoff_memory = true;
+    CHECK(layoff_memory);
+}

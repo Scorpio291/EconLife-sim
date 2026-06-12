@@ -114,11 +114,46 @@ void LaborMarketModule::generate_job_postings(const WorldState& state) {
 
     const float offered_wage = lcfg_.revenue_per_worker * lcfg_.wage_revenue_fraction;
 
+    // Employees per business, by npc_id ascending (deterministic layoff order).
+    std::unordered_map<uint32_t, std::vector<uint32_t>> employees_by_business;
+    for (const auto& rec : employment_records_)
+        if (rec.employer_business_id != 0)
+            employees_by_business[rec.employer_business_id].push_back(rec.npc_id);
+    for (auto& [bid, v] : employees_by_business)
+        std::sort(v.begin(), v.end());
+
+    laid_off_this_cycle_.clear();
+
     for (const NPCBusiness* b : bizs) {
+        // Headcount the business can both want (scale) and afford (margin).
+        float scale_target = b->revenue_per_tick / lcfg_.revenue_per_worker;
+        float affordable = (b->revenue_per_tick - b->cost_per_tick) / std::max(0.01f, offered_wage);
         uint32_t target =
-            static_cast<uint32_t>(std::clamp(b->revenue_per_tick / lcfg_.revenue_per_worker, 1.0f,
+            static_cast<uint32_t>(std::clamp(std::min(scale_target, affordable), 0.0f,
                                              static_cast<float>(lcfg_.max_workers_per_business)));
-        uint32_t have = headcount[b->id] + open_postings[b->id];
+
+        uint32_t current = headcount[b->id];
+        // --- Distress layoffs: over what the margin can pay -> shed the excess ---
+        if (current > target) {
+            uint32_t excess = std::min(current - target, lcfg_.max_layoffs_per_business);
+            auto it = employees_by_business.find(b->id);
+            if (it != employees_by_business.end()) {
+                // Lay off the highest-id (proxy for most-recently-hired) first.
+                for (uint32_t k = 0; k < excess && !it->second.empty(); ++k) {
+                    uint32_t npc_id = it->second.back();
+                    it->second.pop_back();
+                    if (EmploymentRecord* rec = find_employment(npc_id)) {
+                        rec->employer_business_id = 0;
+                        rec->offered_wage = 0.0f;
+                        rec->deferred_salary_ticks = 0;
+                    }
+                    laid_off_this_cycle_.push_back(npc_id);
+                }
+            }
+            continue;  // a business shedding staff does not also post jobs
+        }
+
+        uint32_t have = current + open_postings[b->id];
         if (have >= target)
             continue;
         auto& pool = unemployed_by_province[b->province_id];
@@ -186,6 +221,31 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
 
     // Step 4: Close expired postings.
     close_expired_postings(province_idx, state.current_tick);
+
+    // Step 4b: Emit the employment_negative memory for NPCs laid off (their
+    // employment record was already cleared pre-parallel in generate_job_postings)
+    // who live in this province. This is read-only over laid_off_this_cycle_, so
+    // it is safe under province-parallel dispatch. The memory feeds community
+    // grievance — the bridge from business distress to social response.
+    if (province_idx < state.provinces.size()) {
+        const uint32_t pid = state.provinces[province_idx].id;
+        for (uint32_t npc_id : laid_off_this_cycle_) {
+            const NPC* npc = find_npc(state, npc_id);
+            if (!npc || npc->current_province_id != pid)
+                continue;
+            NPCDelta layoff{};
+            layoff.npc_id = npc_id;
+            MemoryEntry mem{};
+            mem.tick_timestamp = state.current_tick;
+            mem.type = MemoryType::employment_negative;
+            mem.subject_id = 0;  // the (former) employer; not tracked post-clear
+            mem.emotional_weight = -0.5f;
+            mem.decay = 1.0f;
+            mem.is_actionable = false;
+            layoff.new_memory_entry = mem;
+            province_delta.npc_deltas.push_back(layoff);
+        }
+    }
 
     // Step 5: Update unemployment_rate and formal_employment_rate monitors on
     // cohort_stats, sampled from this province's significant NPCs. Stored rates
