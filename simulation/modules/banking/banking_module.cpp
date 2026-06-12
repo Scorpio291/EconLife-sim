@@ -343,13 +343,14 @@ void BankingModule::process_loan_origination(const WorldState& state, DeltaBuffe
 
         active_loans_.push_back(loan);
 
-        // Credit the loan proceeds to the business owner's capital.
-        NPCDelta npc_delta{};
-        npc_delta.npc_id = biz->owner_id;
-        npc_delta.capital_delta = loan_amount;
-        delta.npc_deltas.push_back(npc_delta);
-
-        // Also credit the business cash directly.
+        // Credit the loan proceeds to the BUSINESS only. A business_capital loan
+        // is working capital for the business — the owner is the borrower (liable
+        // for repayment) but does not pocket the principal as personal wealth.
+        // Previously the proceeds were credited to BOTH the business cash AND the
+        // owner's personal capital, double-creating money and feeding a runaway:
+        // owner wealth -> consumption (income-scaled demand) -> market prices ->
+        // business revenue -> a larger revenue-scaled loan -> more owner wealth,
+        // which compounded one criminal owner to the capital ceiling within a year.
         BusinessDelta biz_delta{};
         biz_delta.business_id = biz->id;
         biz_delta.cash_delta = loan_amount;

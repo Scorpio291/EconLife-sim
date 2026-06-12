@@ -42,14 +42,13 @@ TEST_CASE("emergence econ diagnostic: grievance vs the economic substrate", "[.e
     auto s = run_world_years(/*seed=*/42, /*npc_count=*/300, /*years=*/5);
     std::printf("\n=== ECON DIAGNOSTIC (seed 42, 300 NPCs, Federation) ===\n");
     std::printf(
-        "yr | unemp griev ineq | formalEmp | insolvBiz npcsWageTheft | "
-        "totCap maxCap richestRole ownr\n");
+        "yr | griev ineq | maxCap richestRole | maxBizCash maxBizRev crimBiz\n");
     for (std::size_t i = 0; i < s.size(); ++i) {
         const auto& x = s[i];
-        std::printf("%2zu | %.2f  %.2f  %.2f |   %.2f    | %4d %5d | %.2e %.2e role=%d %s\n", i,
-                    x.mean_unemployment, x.mean_grievance, x.mean_inequality, x.formal_employment,
-                    x.insolvent_businesses, x.npcs_with_wage_theft_memory, x.total_capital,
-                    x.max_capital, x.richest_role, x.richest_is_owner ? "OWNER" : "-");
+        std::printf("%2zu | %.2f  %.2f | %.2e role=%d%s | %.2e %.2e %s\n", i, x.mean_grievance,
+                    x.mean_inequality, x.max_capital, x.richest_role,
+                    x.richest_is_owner ? "(own)" : "", x.max_business_cash, x.max_business_revenue,
+                    x.richest_biz_criminal ? "CRIM" : "legit");
     }
     std::printf("=== END ECON DIAGNOSTIC ===\n\n");
     REQUIRE(s.back().tick == 5u * 365u);

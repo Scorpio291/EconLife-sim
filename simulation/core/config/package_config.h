@@ -183,6 +183,13 @@ struct SafetyCeilingsConfig {
     float business_cash_ceiling = 1.0e10f;
     float market_supply_ceiling = 1.0e8f;
     float market_price_ceiling = 1.0e6f;
+    // Per-tick business revenue ceiling. Without it, revenue is unbounded
+    // (output up to market_supply_ceiling × price up to market_price_ceiling can
+    // reach ~1e14), which fed a wealth runaway: huge revenue -> a revenue-scaled
+    // bank loan + owner draws -> owner wealth -> demand -> prices -> more revenue.
+    // Normal business revenue is ~1e3/tick, so 1e7 (10,000x) does not constrain
+    // legitimate growth while cutting the runaway off at the source.
+    float business_revenue_ceiling = 1.0e7f;
 };
 
 struct RandomEventsConfig {

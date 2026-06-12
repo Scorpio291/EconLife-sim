@@ -305,7 +305,8 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
                 std::clamp(biz.cash, -ceil.business_cash_ceiling, ceil.business_cash_ceiling);
         }
         if (d.revenue_per_tick_update.has_value()) {
-            biz.revenue_per_tick = std::max(0.0f, *d.revenue_per_tick_update);
+            biz.revenue_per_tick =
+                std::clamp(*d.revenue_per_tick_update, 0.0f, ceil.business_revenue_ceiling);
         }
         if (d.cost_per_tick_update.has_value()) {
             biz.cost_per_tick = std::max(0.0f, *d.cost_per_tick_update);

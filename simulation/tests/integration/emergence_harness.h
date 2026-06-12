@@ -53,6 +53,9 @@ struct Snapshot {
     int criminal_biz_with_signal = 0;
     // Economic substrate diagnostics
     int insolvent_businesses = 0;        // cash < 0
+    double max_business_cash = 0.0;
+    double max_business_revenue = 0.0;
+    bool richest_biz_criminal = false;  // is the highest-cash business criminal?
     double deferred_salary_total = 0.0;  // unpaid wages (wage-theft driver)
     int npcs_with_wage_theft_memory = 0;
     double mean_inequality = 0.0;
@@ -126,6 +129,12 @@ inline Snapshot capture(const WorldState& w) {
         }
         if (b.cash < 0.0f)
             s.insolvent_businesses++;
+        if (static_cast<double>(b.cash) >= s.max_business_cash) {
+            s.max_business_cash = static_cast<double>(b.cash);
+            s.richest_biz_criminal = b.criminal_sector;
+        }
+        s.max_business_revenue =
+            std::max(s.max_business_revenue, static_cast<double>(b.revenue_per_tick));
         s.deferred_salary_total += b.deferred_salary_liability;
     }
     for (const auto& npc : w.significant_npcs) {
