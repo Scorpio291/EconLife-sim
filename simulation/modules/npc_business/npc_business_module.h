@@ -100,7 +100,7 @@ class NpcBusinessModule : public ITickModule {
     // Apply a decision result to the delta buffer.
     static void apply_decision_to_deltas(const NPCBusiness& biz,
                                          const BusinessDecisionResult& result, DeltaBuffer& delta,
-                                         uint32_t current_tick);
+                                         uint32_t current_tick, const NpcBusinessConfig& cfg);
 };
 
 }  // namespace econlife

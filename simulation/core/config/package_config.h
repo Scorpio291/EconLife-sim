@@ -327,6 +327,15 @@ struct NpcBusinessConfig {
     float cost_cutter_layoff_fraction = 0.10f;
     float board_captured_threshold = 0.25f;
     float board_risky_block_threshold = 0.70f;
+    // Organic growth: a profitable legit business that reinvests compounds its
+    // output capacity (and thus revenue) each strategic decision; a loss-making one
+    // contracts. This is what lets successful legit enterprise build owner wealth —
+    // a dispersed legit upper class — instead of leaving crime the only path to
+    // riches. Per-decision (≈quarterly) multipliers; revenue is clamped to the
+    // safety ceiling on apply. Facility-based firms have revenue recomputed by
+    // production each tick, so this persists only for the abstract firms it targets.
+    float organic_growth_rate = 0.10f;   // profitable + expanding: +10% per decision
+    float organic_decline_rate = 0.06f;  // loss-making: -6% per decision
 };
 
 // ---------------------------------------------------------------------------

@@ -237,7 +237,7 @@ void NpcBusinessModule::execute_province(uint32_t province_idx, const WorldState
         }
 
         // Apply the decision to deltas.
-        apply_decision_to_deltas(*biz, result, province_delta, state.current_tick);
+        apply_decision_to_deltas(*biz, result, province_delta, state.current_tick, cfg_);
 
         // Advance the quarterly cadence. Without this the business stays at or
         // past its decision tick and re-decides every tick (INTERFACE
@@ -405,7 +405,8 @@ bool NpcBusinessModule::check_board_approval(const BoardComposition* board,
 
 void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
                                                  const BusinessDecisionResult& result,
-                                                 DeltaBuffer& delta, uint32_t current_tick) {
+                                                 DeltaBuffer& delta, uint32_t current_tick,
+                                                 const NpcBusinessConfig& cfg) {
     // --- BusinessDelta: deduct cash_spent from the business and update cost_per_tick ---
     // This is the primary financial outcome of every quarterly decision.
     if (result.cash_spent > 0.0f || result.cost_per_tick_delta != 0.0f) {
@@ -418,6 +419,32 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
             biz_delta.cost_per_tick_update = biz.cost_per_tick + result.cost_per_tick_delta;
         }
         delta.business_deltas.push_back(biz_delta);
+    }
+
+    // --- Organic revenue growth/decline (legit businesses) ---
+    // Expansion must actually GROW the firm, not merely nudge market supply. A
+    // profitable legit business that reinvests compounds its output capacity (more
+    // staff, locations, throughput) and so its revenue; a sustained loss-maker
+    // contracts. This is the channel that lets successful legit enterprise build
+    // owner wealth — a real, dispersed legit upper class — rather than leaving crime
+    // as the only road to riches. Facility-based firms have revenue recomputed by
+    // production each tick (this write is overwritten, harmlessly), so the growth
+    // persists for the abstract facility-less firms it is meant for.
+    // apply_business_deltas clamps revenue_per_tick to the safety ceiling.
+    if (!biz.criminal_sector && biz.revenue_per_tick > 0.0f) {
+        float growth = 0.0f;
+        const float margin = compute_profit_margin(biz);
+        if ((result.expand || result.enter_new_market) && margin > 0.0f) {
+            growth = cfg.organic_growth_rate;
+        } else if (margin < 0.0f) {
+            growth = -cfg.organic_decline_rate;
+        }
+        if (growth != 0.0f) {
+            BusinessDelta growth_delta{};
+            growth_delta.business_id = biz.id;
+            growth_delta.revenue_per_tick_update = biz.revenue_per_tick * (1.0f + growth);
+            delta.business_deltas.push_back(growth_delta);
+        }
     }
 
     // Workforce changes (hiring or layoffs).

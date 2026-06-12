@@ -177,6 +177,19 @@ void ProductionModule::process_business(const NPCBusiness& biz, const WorldState
     // Look up facilities for this business.
     const auto* facilities = facility_registry_.find_by_business(biz.id);
     if (!facilities || facilities->empty()) {
+        // Facility-less legit businesses still run real operations (services, trade,
+        // light manufacturing modelled abstractly via revenue_per_tick rather than a
+        // recipe). Without a cash inflow here they would only ever PAY OUT (wages,
+        // owner draws) and never accumulate, so legit enterprise could not build
+        // wealth — only crime could. Credit their operating profit so successful
+        // legit firms enrich their owners like real businesses. Criminal businesses
+        // are excluded: their cash is credited by the criminal-economy modules.
+        if (!biz.criminal_sector && biz.revenue_per_tick > 0.0f) {
+            BusinessDelta biz_delta{};
+            biz_delta.business_id = biz.id;
+            biz_delta.cash_delta = biz.revenue_per_tick - biz.cost_per_tick;
+            delta.business_deltas.push_back(biz_delta);
+        }
         return;
     }
 

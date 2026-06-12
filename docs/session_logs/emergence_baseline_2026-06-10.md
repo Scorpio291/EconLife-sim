@@ -88,6 +88,23 @@ run. The general restoring force (banking double-credit + revenue cap, then the
 tax/seizure) brought the dominant fortune off the 1e9 ceiling. Emergence suite stays
 green (27 assertions, 10 cases); fast gate green.
 
+**...but only crime made anyone rich — so the legit economy was fixed too.** The
+three-regime diagnostic exposed a deeper gap: legit owners topped out at ~2e5 while
+criminals reached ~3e8, so the redistribution tax had almost no legit target and the
+regime divergence could not show in legit wealth. Two structural bugs: (1) production
+only credits cash for businesses with registered FACILITIES; facility-less legit
+firms (services/trade/light mfg, modelled abstractly via `revenue_per_tick`) got NO
+cash inflow — they could only pay out wages/draws and never accumulate; (2) the
+`expand` decision added zero capacity (a cosmetic market-supply nudge + a placeholder
+consequence), so facility firms never grew either. Fixes: production now credits
+facility-less legit firms their operating profit (`revenue - cost`); and a profitable
+legit business that reinvests now COMPOUNDS its `revenue_per_tick`
+(`NpcBusinessConfig::organic_growth_rate`, +10%/decision, clamped to the safety
+ceiling) while loss-makers contract. Successful legit enterprise now builds a real,
+dispersed upper class — giving the regime-scaled tax a legit target so "some places
+better, some worse" can finally show in legit wealth, not just the (evading) criminal
+fortune.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
