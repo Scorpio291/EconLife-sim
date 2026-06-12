@@ -54,6 +54,46 @@ TEST_CASE("emergence econ diagnostic: grievance vs the economic substrate", "[.e
     REQUIRE(s.back().tick == 5u * 365u);
 }
 
+TEST_CASE("emergence shock: depression drives the unrest cascade end-to-end",
+          "[.emergence-shock]") {
+    // Inject a persistent supply/output collapse at the start of year 2 and watch
+    // the cascade run through the REAL orchestrator: output -> revenue collapse ->
+    // distress layoffs (employment_negative + wage-theft memories) -> grievance ->
+    // community-response escalation -> regime-differentiated response. Nothing here
+    // writes grievance/stage/legitimacy directly; the shock only throttles factory
+    // output. Years 0-1 are the pre-shock baseline; the shock bites from year 2 on.
+    constexpr uint64_t kSeed = 42;
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 5;
+    constexpr int kDemocracy = 0, kAutocracy = 1;
+
+    DepressionShock shock{};
+    shock.onset_tick = 365;        // start of year 2
+    shock.output_retained = 0.05f; // factories fall to 5% of output
+
+    auto demo = run_world_years(kSeed, kNpcs, kYears, 0.10f, kDemocracy, shock);
+    auto auto_ = run_world_years(kSeed, kNpcs, kYears, 0.10f, kAutocracy, shock);
+
+    dump_series("SHOCK: democracy under depression (concession response)", demo);
+    dump_series("SHOCK: autocracy under depression (suppression -> possible collapse)", auto_);
+
+    // Economic-substrate trace so the cause is visible alongside the social effect.
+    auto trace = [](const char* label, const std::vector<Snapshot>& s) {
+        std::printf("\n=== ECON TRACE: %s ===\n", label);
+        std::printf("yr | formalEmp unemp | insolvBiz wageTheftMemos | grievance maxStage\n");
+        for (std::size_t i = 0; i < s.size(); ++i) {
+            const auto& x = s[i];
+            std::printf("%2zu |   %.2f    %.2f |  %4d      %5d        |   %.2f      %d\n", i,
+                        x.formal_employment, x.mean_unemployment, x.insolvent_businesses,
+                        x.npcs_with_wage_theft_memory, x.mean_grievance, x.max_response_stage);
+        }
+    };
+    trace("democracy under depression", demo);
+    trace("autocracy under depression", auto_);
+
+    REQUIRE(demo.back().tick == kYears * 365u);
+}
+
 TEST_CASE("emergence baseline: 10-year aggregate time series", "[.emergence-observe]") {
     // The unrest-response contrast: same mass-unemployment shock, three regimes.
     constexpr uint64_t kSeed = 42;

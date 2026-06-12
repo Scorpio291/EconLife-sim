@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -201,9 +202,17 @@ inline Snapshot capture(const WorldState& w) {
 // force_government_type: if >= 0, overrides every nation's government_type after
 // generation (cast from GovernmentType) so a regime's unrest-response branch can
 // be exercised regardless of what world-gen happened to pick.
+// Post-tick hook: invoked after each execute_tick with the (mutable) world and the
+// 1-based global tick index. Lets a scenario inject a persistent EXOGENOUS shock
+// between ticks (e.g. a demand/revenue collapse) so the unrest cascade runs through
+// the REAL modules — layoffs, memories, grievance grounding, escalation, regime
+// response — rather than by writing grievance directly. Default: no-op.
+using TickHook = std::function<void(WorldState&, uint32_t)>;
+
 inline std::vector<Snapshot> run_world_years(uint64_t seed, uint32_t npc_count, uint32_t years,
                                              float criminal_baseline = 0.10f,
-                                             int force_government_type = -1) {
+                                             int force_government_type = -1,
+                                             const TickHook& post_tick = {}) {
     WorldGeneratorConfig config{};
     config.seed = seed;
     config.province_count = 6;
@@ -226,13 +235,40 @@ inline std::vector<Snapshot> run_world_years(uint64_t seed, uint32_t npc_count, 
     std::vector<Snapshot> series;
     series.reserve(years + 1);
     series.push_back(capture(world));
+    uint32_t global_tick = 0;
     for (uint32_t y = 0; y < years; ++y) {
         for (uint32_t t = 0; t < 365; ++t) {
             orch.execute_tick(world, pool);
+            ++global_tick;
+            if (post_tick)
+                post_tick(world, global_tick);
         }
         series.push_back(capture(world));
     }
     return series;
 }
+
+// A persistent economic-deprivation shock applied between ticks: during
+// [onset_tick, end_tick) it forces every production facility to a fraction of its
+// output rate, modelling a depression / supply collapse. This is the right lever
+// because production READS facility.output_rate_modifier and never overwrites it
+// (unlike revenue_per_tick, which production recomputes from output x price every
+// tick), so the shock persists. Output collapse -> revenue collapse -> labor_market
+// sheds workers it can no longer afford (distress layoffs -> employment_negative
+// memories), which cuts worker_count -> output further (self-reinforcing), and
+// businesses that cannot make payroll defer salary (wage-theft memories). The whole
+// unrest cascade then runs through the REAL modules — nothing touches grievance,
+// the response stage, or legitimacy directly.
+struct DepressionShock {
+    uint32_t onset_tick = 365;        // start of year 2 by default
+    uint32_t end_tick = 0xFFFFFFFFu;  // persistent to end of run by default
+    float output_retained = 0.05f;    // facilities run at this fraction of baseline
+    void operator()(WorldState& world, uint32_t tick) const {
+        if (tick < onset_tick || tick >= end_tick)
+            return;
+        for (auto& f : world.facilities)
+            f.output_rate_modifier = output_retained;
+    }
+};
 
 }  // namespace econlife::emergence
