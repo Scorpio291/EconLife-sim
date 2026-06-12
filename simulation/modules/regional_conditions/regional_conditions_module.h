@@ -32,6 +32,12 @@ class RegionalConditionsModule : public ITickModule {
     static float compute_criminal_dominance(float criminal_revenue, float total_revenue);
     static float compute_drought_recovery(float current_modifier, float recovery_rate);
     static float compute_inequality_from_gini(float gini_coefficient);
+    // Significant-NPC wealth concentration: top-decile capital share, normalized
+    // so an equal distribution -> 0 and full concentration in the top decile -> 1.
+    // Captures the wealth gap the cohort *income* gini is blind to (a single owner
+    // accumulating capital does not move income gini, but does move this). Mutates
+    // the input vector (sorts it) for in-place efficiency.
+    static float compute_wealth_concentration(std::vector<float>& capitals);
     // Per-capita rate from a count and a population (0 if population is 0).
     static float compute_population_rate(uint32_t count, uint32_t population);
     // Size-weighted mean employment_rate across cohorts (0 if no population).

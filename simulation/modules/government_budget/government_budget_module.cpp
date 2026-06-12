@@ -63,8 +63,7 @@ void GovernmentBudgetModule::execute(const WorldState& state, DeltaBuffer& delta
 // Step 1: Quarterly Tax Collection
 // ===========================================================================
 
-void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state,
-                                                     DeltaBuffer& /* delta */) {
+void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, DeltaBuffer& delta) {
     // Collect taxes for the national budget.
     GovernmentBudget* national = find_budget(GovernmentLevel::national, 0);
     if (!national)
@@ -148,7 +147,46 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state,
         }
     }
 
-    float total_tax_revenue = national_corporate_tax + national_income_tax + national_property_tax;
+    // --- Progressive personal wealth tax (restoring force on capital) ---
+    // A wealth-proportional outflow that the per-tick profit distribution lacks.
+    // Without it, owner capital accumulates monotonically toward the safety
+    // ceiling. Tax significant-NPC capital above an exemption at a rate that
+    // climbs with wealth; deduct via NPCDelta and fund the national budget (which
+    // pays for the services/welfare that relieve grievance — redistribution loop).
+    // NPCs iterate in significant_npcs order (id-ascending from world_generator),
+    // so the accumulation is deterministic.
+    float national_wealth_tax = 0.0f;
+    const float exemption = cfg_.wealth_tax_exemption;
+    const float base_rate = cfg_.wealth_tax_base_rate;
+    const float max_rate = cfg_.wealth_tax_max_rate;
+    const float prog_scale =
+        cfg_.wealth_tax_progressivity_scale > 0.0f ? cfg_.wealth_tax_progressivity_scale : 1.0f;
+    if (max_rate > 0.0f) {
+        for (const auto& npc : state.significant_npcs) {
+            if (npc.status != NPCStatus::active)
+                continue;
+            const float taxable = npc.capital - exemption;
+            if (taxable <= 0.0f)
+                continue;
+            // Marginal rate rises linearly from base_rate at the exemption to
+            // max_rate once taxable wealth reaches prog_scale, then is capped.
+            const float annual_rate = std::clamp(
+                base_rate + (max_rate - base_rate) * (taxable / prog_scale), base_rate, max_rate);
+            float quarterly_tax = taxable * annual_rate * 0.25f;
+            quarterly_tax = std::min(quarterly_tax, npc.capital);  // never drive capital below 0
+            if (quarterly_tax <= 0.0f)
+                continue;
+            national_wealth_tax += quarterly_tax;
+
+            NPCDelta nd{};
+            nd.npc_id = npc.id;
+            nd.capital_delta = -quarterly_tax;
+            delta.npc_deltas.push_back(nd);
+        }
+    }
+
+    float total_tax_revenue =
+        national_corporate_tax + national_income_tax + national_property_tax + national_wealth_tax;
     national->revenue_own_taxes = total_tax_revenue;
     national->total_revenue =
         national->revenue_own_taxes + national->revenue_transfers_in + national->revenue_other;

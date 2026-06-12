@@ -374,6 +374,21 @@ struct GovernmentBudgetConfig {
     // each valued at the province avg_property_value, taxed at the annual rate.
     float household_size = 3.0f;
     float property_tax_annual_rate = 0.005f;
+
+    // --- Progressive personal wealth tax (restoring force on capital) ---
+    // Business profit distribution credits owner capital every tick with no
+    // wealth-proportional outflow, so capital accumulates monotonically toward
+    // the safety ceiling. This quarterly tax is that missing outflow: it deducts
+    // from significant-NPC capital above an exemption at a rate that climbs with
+    // wealth, and credits the proceeds to the national budget (funding the
+    // services/welfare that relieve grievance — closing the redistribution loop).
+    // The progressivity makes it a genuine restoring force: the richer the actor,
+    // the harder the brake, so accumulation settles at a finite level instead of
+    // running away. Disabled by setting the rates to 0.
+    float wealth_tax_exemption = 1.0e5f;            // capital below this is untaxed
+    float wealth_tax_base_rate = 0.05f;             // annual marginal rate at the exemption
+    float wealth_tax_max_rate = 0.75f;              // annual marginal rate cap for the very rich
+    float wealth_tax_progressivity_scale = 1.0e6f;  // taxable wealth at which the cap is reached
 };
 
 struct HealthcareConfig {
@@ -901,6 +916,12 @@ struct RegionalConditionsConfig {
     float infrastructure_decay_rate = 0.0002f;
     float drought_recovery_rate = 0.005f;
     float flood_recovery_rate = 0.01f;
+    // Weight on the significant-NPC wealth-concentration signal when it exceeds the
+    // cohort income gini as the province inequality target. < 1.0 so that a single
+    // dominant owner cannot alone peg inequality; broad concentration is needed to
+    // dominate. 0.85 lets a fully-concentrated boom reach ~0.85 inequality (feeding
+    // grievance) while leaving headroom below the saturation ceiling.
+    float wealth_inequality_weight = 0.85f;
 };
 
 struct TrustUpdatesConfig {

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -44,6 +45,27 @@ float RegionalConditionsModule::compute_drought_recovery(float current_modifier,
 
 float RegionalConditionsModule::compute_inequality_from_gini(float gini_coefficient) {
     return std::clamp(gini_coefficient, 0.0f, 1.0f);
+}
+
+float RegionalConditionsModule::compute_wealth_concentration(std::vector<float>& capitals) {
+    const std::size_t n = capitals.size();
+    if (n < 2)
+        return 0.0f;
+    double total = 0.0;
+    for (float c : capitals)
+        total += static_cast<double>(std::max(0.0f, c));
+    if (total <= 0.0)
+        return 0.0f;
+    // Descending sort so the top decile is the prefix. Determinism: capitals come
+    // from a province-ordered NPC scan; equal values sort stably either way.
+    std::sort(capitals.begin(), capitals.end(), std::greater<float>());
+    const std::size_t k = std::max<std::size_t>(1, n / 10);
+    double top = 0.0;
+    for (std::size_t i = 0; i < k; ++i)
+        top += static_cast<double>(std::max(0.0f, capitals[i]));
+    const float share = static_cast<float>(top / total);
+    const float fair = static_cast<float>(k) / static_cast<float>(n);  // equal-share baseline
+    return std::clamp((share - fair) / (1.0f - fair), 0.0f, 1.0f);
 }
 
 float RegionalConditionsModule::compute_population_rate(uint32_t count, uint32_t population) {
@@ -107,11 +129,13 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     const uint32_t population = cohort_stats->total_population;
     uint32_t criminal_npc_count = 0;
     uint32_t addicted_count = 0;
-    uint32_t active_npc_count = 0;  // tracked-actor sample size in this province
+    uint32_t active_npc_count = 0;    // tracked-actor sample size in this province
+    std::vector<float> npc_capitals;  // for significant-NPC wealth concentration
     for (const auto& npc : state.significant_npcs) {
         if (npc.status != NPCStatus::active || npc.current_province_id != province.id)
             continue;
         ++active_npc_count;
+        npc_capitals.push_back(npc.capital);
         if (is_criminal_role(npc.role))
             criminal_npc_count++;
         if (is_addicted_stage(npc.addiction_state.stage))
@@ -154,8 +178,19 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
         return;
     }
 
-    // --- Inequality = gini (authoritative, from the cohort income distribution) ---
-    rdelta.inequality_delta = cohort_stats->gini_coefficient - conditions.inequality_index;
+    // --- Inequality: cohort income gini, raised by significant-NPC wealth concentration ---
+    // The cohort gini measures income spread across the demographic masses but is
+    // blind to wealth concentration among the tracked actors: when a boom funnels
+    // capital to a handful of owners, income gini barely moves while the top-decile
+    // wealth share spikes. Take the worse of the two signals so a "booming but
+    // unequal" economy registers as high inequality (which feeds community_response
+    // grievance — i.e. a boom that concentrates wealth breeds resentment). The
+    // wealth term is weighted below 1.0 so a single rich owner alone cannot peg
+    // inequality; broad concentration is required to dominate the income signal.
+    const float wealth_concentration = compute_wealth_concentration(npc_capitals);
+    const float inequality_target = std::max(cohort_stats->gini_coefficient,
+                                             cfg_.wealth_inequality_weight * wealth_concentration);
+    rdelta.inequality_delta = inequality_target - conditions.inequality_index;
 
     // --- Crime rate: criminal fraction of the tracked-actor sample ---
     // Significant NPCs are a SAMPLE of the population, not its full count; the
