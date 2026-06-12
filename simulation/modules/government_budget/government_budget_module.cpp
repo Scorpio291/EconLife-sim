@@ -17,6 +17,7 @@
 #include <cstring>
 #include <limits>
 #include <numeric>
+#include <utility>
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
@@ -24,6 +25,15 @@
 #include "modules/economy/economy_types.h"
 
 namespace econlife {
+
+namespace {
+// Criminal-role NPCs hold illicit wealth: hidden from the taxman (so the wealth
+// tax never reaches it) but exposed to enforcement seizure where rule of law exists.
+bool is_criminal_role(NPCRole r) {
+    return r == NPCRole::criminal_operator || r == NPCRole::criminal_enforcer ||
+           r == NPCRole::fixer;
+}
+}  // namespace
 
 // ===========================================================================
 // GovernmentBudgetModule — tick execution
@@ -147,51 +157,83 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
         }
     }
 
-    // --- Progressive personal wealth tax (regime-dependent restoring force) ---
+    // --- Regime-dependent restoring force on concentrated wealth ---
     // Capital concentrates by default (profit + criminal proceeds flow in with no
-    // wealth-proportional outflow). This is the only force pushing it back, and it
-    // is deliberately NOT universal: its strength is scaled per nation by
-    // government type, so an accountable welfare state bounds concentration while a
-    // kleptocratic autocracy or collapsed state lets the rich keep compounding.
-    // Tax significant-NPC capital above an exemption at a rate that climbs with
-    // wealth, scaled by the NPC's nation's redistribution factor; deduct via
-    // NPCDelta and fund the national budget. NPCs iterate in significant_npcs order
-    // (id-ascending), so the accumulation is deterministic.
-    float national_wealth_tax = 0.0f;
+    // wealth-proportional outflow). Nothing equalizes it automatically; the only
+    // forces pushing back are STATE institutions, and they act on legit and illicit
+    // wealth through different channels — both scaled per nation by government type:
+    //   * legit wealth  -> progressive REDISTRIBUTION tax (fiscal capacity + will),
+    //   * illicit wealth -> rule-of-law SEIZURE (enforcement against proceeds of crime).
+    // Criminal proceeds are hidden from the revenue service, so the tax never reaches
+    // them — only enforcement does; criminal NPCs therefore pay the seizure INSTEAD
+    // of the tax. Both factors are looked up per NPC via their province's nation, so
+    // an accountable state bounds concentration while a kleptocracy (shielding its
+    // elite) or a failed state (no apparatus) lets it run. NPCs iterate in
+    // significant_npcs order (id-ascending), so accumulation is deterministic.
+    float national_wealth_tax = 0.0f;  // legit wealth (redistribution)
+    float national_seizure = 0.0f;     // illicit wealth (rule of law)
     const float exemption = cfg_.wealth_tax_exemption;
     const float base_rate = cfg_.wealth_tax_base_rate;
     const float max_rate = cfg_.wealth_tax_max_rate;
     const float prog_scale =
         cfg_.wealth_tax_progressivity_scale > 0.0f ? cfg_.wealth_tax_progressivity_scale : 1.0f;
-    if (max_rate > 0.0f) {
-        // Map province_id -> redistribution factor via its nation's government type,
-        // so the restoring force varies by place (a province in a social democracy
-        // redistributes; one in a kleptocracy does not).
-        std::map<uint32_t, float> province_redistribution;
+    const float seize_exemption = cfg_.criminal_seizure_exemption;
+    const float seize_rate = cfg_.criminal_seizure_annual_rate;
+    {
+        // Map province_id -> {redistribution, rule_of_law} via its nation's government
+        // type, so BOTH the restoring force on legit wealth and the seizure of illicit
+        // wealth vary by place: a province in a social democracy redistributes AND
+        // enforces; a kleptocracy does neither for its elite; a failed state has no
+        // fiscal or enforcement apparatus at all.
+        std::map<uint32_t, std::pair<float, float>> province_factors;
         for (const Province& prov : state.provinces) {
-            float factor = cfg_.wealth_tax_redistribution_democracy;  // default
+            float redistribution = cfg_.wealth_tax_redistribution_democracy;
+            float rule_of_law = cfg_.rule_of_law_democracy;
             for (const Nation& nation : state.nations) {
                 if (nation.id == prov.nation_id) {
-                    factor = regime_redistribution_factor(nation.government_type, cfg_);
+                    redistribution = regime_redistribution_factor(nation.government_type, cfg_);
+                    rule_of_law = regime_rule_of_law_factor(nation.government_type, cfg_);
                     break;
                 }
             }
-            province_redistribution[prov.id] = factor;
+            province_factors[prov.id] = {redistribution, rule_of_law};
         }
 
         for (const auto& npc : state.significant_npcs) {
             if (npc.status != NPCStatus::active)
                 continue;
+            auto fit = province_factors.find(npc.current_province_id);
+            const float redistribution = fit != province_factors.end() ? fit->second.first : 1.0f;
+            const float rule_of_law = fit != province_factors.end() ? fit->second.second : 1.0f;
+
+            if (is_criminal_role(npc.role)) {
+                // Illicit wealth: stripped by enforcement, not the revenue service.
+                if (rule_of_law <= 0.0f || seize_rate <= 0.0f)
+                    continue;  // no enforcement — illicit fortune concentrates unchecked
+                const float seizable = npc.capital - seize_exemption;
+                if (seizable <= 0.0f)
+                    continue;
+                float quarterly_seizure = seizable * seize_rate * rule_of_law * 0.25f;
+                quarterly_seizure = std::min(quarterly_seizure, npc.capital);
+                if (quarterly_seizure <= 0.0f)
+                    continue;
+                national_seizure += quarterly_seizure;
+                NPCDelta nd{};
+                nd.npc_id = npc.id;
+                nd.capital_delta = -quarterly_seizure;
+                delta.npc_deltas.push_back(nd);
+                continue;
+            }
+
+            // Legit wealth: progressive redistribution tax.
+            if (max_rate <= 0.0f || redistribution <= 0.0f)
+                continue;  // no functioning fiscal state — wealth concentrates unchecked
             const float taxable = npc.capital - exemption;
             if (taxable <= 0.0f)
                 continue;
-            auto rit = province_redistribution.find(npc.current_province_id);
-            const float redistribution = rit != province_redistribution.end() ? rit->second : 1.0f;
-            if (redistribution <= 0.0f)
-                continue;  // no functioning fiscal state — wealth concentrates unchecked
-            // Marginal rate rises linearly from base_rate at the exemption to
-            // max_rate once taxable wealth reaches prog_scale, then is capped, then
-            // scaled by the regime's redistribution strength.
+            // Marginal rate rises linearly from base_rate at the exemption to max_rate
+            // once taxable wealth reaches prog_scale, then is capped, then scaled by
+            // the regime's redistribution strength.
             const float annual_rate =
                 std::clamp(base_rate + (max_rate - base_rate) * (taxable / prog_scale), base_rate,
                            max_rate) *
@@ -201,7 +243,6 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
             if (quarterly_tax <= 0.0f)
                 continue;
             national_wealth_tax += quarterly_tax;
-
             NPCDelta nd{};
             nd.npc_id = npc.id;
             nd.capital_delta = -quarterly_tax;
@@ -209,8 +250,8 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
         }
     }
 
-    float total_tax_revenue =
-        national_corporate_tax + national_income_tax + national_property_tax + national_wealth_tax;
+    float total_tax_revenue = national_corporate_tax + national_income_tax + national_property_tax +
+                              national_wealth_tax + national_seizure;
     national->revenue_own_taxes = total_tax_revenue;
     national->total_revenue =
         national->revenue_own_taxes + national->revenue_transfers_in + national->revenue_other;
@@ -663,6 +704,21 @@ float GovernmentBudgetModule::regime_redistribution_factor(GovernmentType type,
             return cfg.wealth_tax_redistribution_failed_state;
     }
     return cfg.wealth_tax_redistribution_democracy;  // defensive default
+}
+
+float GovernmentBudgetModule::regime_rule_of_law_factor(GovernmentType type,
+                                                        const GovernmentBudgetConfig& cfg) {
+    switch (type) {
+        case GovernmentType::Democracy:
+            return cfg.rule_of_law_democracy;
+        case GovernmentType::Autocracy:
+            return cfg.rule_of_law_autocracy;
+        case GovernmentType::Federation:
+            return cfg.rule_of_law_federation;
+        case GovernmentType::FailedState:
+            return cfg.rule_of_law_failed_state;
+    }
+    return cfg.rule_of_law_democracy;  // defensive default
 }
 
 // ===========================================================================

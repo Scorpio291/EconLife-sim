@@ -25,17 +25,31 @@ every tick with no wealth-proportional outflow. The fix is NOT to assume wealth
 auto-equalizes — it does not, in the model or the real world. Concentration is the
 default; the only thing that reverses it is a state with the policy and capacity to
 redistribute. Added a **regime-dependent progressive wealth tax**
-(`government_budget`, quarterly): significant-NPC capital above an exemption is
-taxed at a rate climbing with wealth (5%→75% annual), **scaled per nation by
-government type** via `regime_redistribution_factor()` (Democracy/Federation 1.0 —
-accountable welfare states; Autocracy 0.25 — kleptocratic elite capture, the rich
-go largely untaxed; FailedState 0.0 — no fiscal apparatus). The factor is looked up
-per NPC through their province's `nation_id`, so it varies by *place*. Proceeds
-fund the national budget (services/welfare that relieve grievance). Result: an
-accountable state bounds the top fortune (the criminal kingpin plateaus at ~3e8
-instead of the 1e9 ceiling) while a kleptocracy or failed state lets concentration
-run — "some places better, some worse," driven by institutions, not by an automatic
-march toward equality.
+(`government_budget`, quarterly) with TWO regime-scaled levers, because legit and
+illicit wealth are constrained by different institutions:
+
+1. **Legit wealth → progressive redistribution tax.** Non-criminal NPC capital
+   above an exemption is taxed at a rate climbing with wealth (5%→75% annual),
+   scaled per nation by `regime_redistribution_factor()` (Democracy/Federation 1.0 —
+   accountable welfare states; Autocracy 0.25 — kleptocratic elite capture, the rich
+   go largely untaxed; FailedState 0.0 — no fiscal apparatus).
+2. **Illicit wealth → rule-of-law seizure.** Criminal proceeds are hidden from the
+   revenue service, so the tax never reaches them — only ENFORCEMENT does. A
+   separate quarterly seizure strips criminal-role NPC capital, scaled per nation by
+   `regime_rule_of_law_factor()` (Democracy/Federation 1.0 — real rule of law seizes
+   proceeds of crime; Autocracy 0.30 — the criminal-political elite are shielded;
+   FailedState 0.0 — no enforcement at all). Criminal NPCs pay this INSTEAD of the
+   tax.
+
+Both factors are looked up per NPC through their province's `nation_id`, so the
+restoring force varies by *place*; proceeds fund the national budget. This was the
+correction the first cut got wrong: the tax alone left the dominant (criminal)
+fortune untouched in every regime (a three-regime diagnostic showed maxCap
+regime-invariant — illicit wealth evades taxation, realistically), so the visible
+"some places better, some worse" only emerges once rule-of-law seizure governs the
+criminal fortune. There is no automatic march toward equality — concentration is the
+default, reversed only where institutions (fiscal capacity AND rule of law) enforce
+it.
 
 **Inequality was blind to it.** `inequality_index` tracked only the cohort
 *income* gini — which a single owner hoarding *capital* does not move — so the
@@ -50,13 +64,13 @@ healthy 200-NPC/3y baseline stays under the `grievance < 0.5` guard while the
 longer 300-NPC/5y kingpin-accumulation scenario correctly escalates past it.
 
 Diagnostic (`[.emergence-econ]`) now runs the SAME seed-42 economy under three
-regimes (Federation / Autocracy / FailedState) so the divergence is visible in one
-place: the accountable state bounds the top fortune and keeps inequality/grievance
-lower; the kleptocracy and failed state let capital compound further and inequality
-bite harder. Under the (default, accountable) baseline the richest actor plateaus
-at ~3e8 (was: pinned 1e9 in year 1) and grievance climbs as inequality tracks the
-concentration — the previously invisible concentration→resentment loop now fires.
-Emergence suite stays green (27 assertions, 10 cases); fast gate green.
+regimes (Federation / Autocracy / FailedState) and reports legit (tax-exposed) vs
+illicit (enforcement-exposed) top fortunes separately, so each lever's effect is
+visible: the accountable state strips the criminal fortune and taxes legit wealth
+(lower concentration); the kleptocracy shields its elite; the failed state lets both
+run. The general restoring force (banking double-credit + revenue cap, then the
+tax/seizure) brought the dominant fortune off the 1e9 ceiling. Emergence suite stays
+green (27 assertions, 10 cases); fast gate green.
 
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance

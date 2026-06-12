@@ -56,13 +56,11 @@ TEST_CASE("emergence econ diagnostic: regime-dependent wealth concentration", "[
         auto s = run_world_years(/*seed=*/42, /*npc_count=*/300, /*years=*/5,
                                  /*criminal_baseline=*/0.10f, /*force_government_type=*/r.govt);
         std::printf("\n=== ECON DIAGNOSTIC (seed 42, 300 NPCs) — %s ===\n", r.name);
-        std::printf("yr | griev ineq | maxCap richestRole | maxBizCash maxBizRev crimBiz\n");
+        std::printf("yr | griev ineq | maxLegitCap(taxed) maxCrimCap(enforced)\n");
         for (std::size_t i = 0; i < s.size(); ++i) {
             const auto& x = s[i];
-            std::printf("%2zu | %.2f  %.2f | %.2e role=%d%s | %.2e %.2e %s\n", i, x.mean_grievance,
-                        x.mean_inequality, x.max_capital, x.richest_role,
-                        x.richest_is_owner ? "(own)" : "", x.max_business_cash,
-                        x.max_business_revenue, x.richest_biz_criminal ? "CRIM" : "legit");
+            std::printf("%2zu | %.2f  %.2f | legit %.2e   crim %.2e\n", i, x.mean_grievance,
+                        x.mean_inequality, x.max_legit_capital, x.max_criminal_capital);
         }
         REQUIRE(s.back().tick == 5u * 365u);
     }

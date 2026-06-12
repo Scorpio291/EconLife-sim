@@ -402,6 +402,23 @@ struct GovernmentBudgetConfig {
     float wealth_tax_redistribution_autocracy = 0.25f;
     float wealth_tax_redistribution_federation = 1.00f;
     float wealth_tax_redistribution_failed_state = 0.00f;
+
+    // --- Regime-dependent rule of law: seizure of illicit (criminal) wealth ---
+    // Criminal proceeds are hidden from the taxman, so the income/wealth tax never
+    // reaches them — the only thing that bounds an illicit fortune is enforcement,
+    // and that varies by regime. A state with real rule of law seizes proceeds of
+    // crime (asset forfeiture); a kleptocratic autocracy shields its criminal-
+    // political elite; a failed state has no enforcement apparatus at all. This
+    // quarterly seizure strips a fraction of criminal-role NPCs' capital above an
+    // exemption, scaled per nation by the rule_of_law factor; proceeds fund the
+    // national budget. Criminal NPCs pay this INSTEAD of the wealth tax (their
+    // wealth is exposed to enforcement, not to the revenue service).
+    float criminal_seizure_exemption = 1.0e5f;   // illicit capital below this is below notice
+    float criminal_seizure_annual_rate = 0.60f;  // annual fraction seized at full rule of law
+    float rule_of_law_democracy = 1.00f;
+    float rule_of_law_autocracy = 0.30f;  // elite capture: the connected go untouched
+    float rule_of_law_federation = 1.00f;
+    float rule_of_law_failed_state = 0.00f;
 };
 
 struct HealthcareConfig {

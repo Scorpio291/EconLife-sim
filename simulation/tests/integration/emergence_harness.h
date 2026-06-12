@@ -47,16 +47,18 @@ struct Snapshot {
     int active = 0, imprisoned = 0, dead = 0, fled = 0, waiting = 0;
     int criminals = 0, criminals_imprisoned = 0, criminals_dead = 0;
     double total_capital = 0.0, max_capital = 0.0;
-    int richest_role = -1;          // NPCRole of the wealthiest NPC
-    bool richest_is_owner = false;  // does the richest NPC own a business?
+    double max_legit_capital = 0.0;     // wealthiest non-criminal NPC (tax-exposed)
+    double max_criminal_capital = 0.0;  // wealthiest criminal NPC (enforcement-exposed)
+    int richest_role = -1;              // NPCRole of the wealthiest NPC
+    bool richest_is_owner = false;      // does the richest NPC own a business?
     std::size_t evidence_pool = 0, consequence_queue = 0;
     std::size_t businesses = 0, criminal_businesses = 0;
     int criminal_biz_with_signal = 0;
     // Economic substrate diagnostics
-    int insolvent_businesses = 0;        // cash < 0
+    int insolvent_businesses = 0;  // cash < 0
     double max_business_cash = 0.0;
     double max_business_revenue = 0.0;
-    bool richest_biz_criminal = false;  // is the highest-cash business criminal?
+    bool richest_biz_criminal = false;   // is the highest-cash business criminal?
     double deferred_salary_total = 0.0;  // unpaid wages (wage-theft driver)
     int npcs_with_wage_theft_memory = 0;
     double mean_inequality = 0.0;
@@ -118,6 +120,11 @@ inline Snapshot capture(const WorldState& w) {
                     break;
                 }
         }
+        if (is_criminal_role(npc.role))
+            s.max_criminal_capital =
+                std::max(s.max_criminal_capital, static_cast<double>(npc.capital));
+        else
+            s.max_legit_capital = std::max(s.max_legit_capital, static_cast<double>(npc.capital));
     }
     s.evidence_pool = w.evidence_pool.size();
     s.consequence_queue = w.consequence_queue.size();

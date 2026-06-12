@@ -95,6 +95,12 @@ class GovernmentBudgetModule : public ITickModule {
     static float regime_redistribution_factor(GovernmentType type,
                                               const GovernmentBudgetConfig& cfg);
 
+    // Per-regime rule-of-law strength in [0,1] scaling the seizure of illicit
+    // (criminal) wealth: a state with real rule of law strips proceeds of crime,
+    // a kleptocratic Autocracy shields its criminal-political elite, a FailedState
+    // has no enforcement. Configurable via GovernmentBudgetConfig::rule_of_law_*.
+    static float regime_rule_of_law_factor(GovernmentType type, const GovernmentBudgetConfig& cfg);
+
    private:
     GovernmentBudgetConfig cfg_;
     std::vector<GovernmentBudget> budgets_;
