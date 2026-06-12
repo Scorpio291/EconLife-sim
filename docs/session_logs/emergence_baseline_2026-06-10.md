@@ -51,6 +51,46 @@ hiring → real formal employment) would:
 This deserves an interface-first design pass (it spans npc_business + labor_market
 + a new delta channel).
 
+### Concrete design (scoped this session, ready to implement)
+
+A self-contained first slice keeps everything inside `labor_market` (it already
+owns `job_postings_`, `applications_`, `employment_records_`, and *fills*
+postings via `process_hiring_decisions` — it just never *creates* them). New
+pre-parallel step `generate_job_postings(state)` in `init_for_tick` (single-
+threaded, safe to push to the shared vectors), on the monthly cadence:
+  - per business (deterministic by id): `target = clamp(revenue_per_tick /
+    revenue_per_worker, 1, max_workers)`; `have = current_employees +
+    open_unfilled_postings`; post `min(target-have, max_new_per_cycle)` jobs.
+  - each posting: `offered_wage ≈ revenue_per_worker × 0.4` (keeps wage bill
+    ≈ 40% of revenue → businesses stay solvent), `min_skill_level 0`,
+    `channel public_board`, `expires = tick + duration`.
+  - generate `applicants_per_posting` `WorkerApplication`s from the province's
+    unemployed (employer==0) active NPCs, `salary_expectation ≤ offered` so they
+    accept; advance a per-province cursor so applicants differ across postings.
+
+Edge cases found (must handle):
+  1. **Posting id counter** — add `next_posting_id_`, initialised past any
+     deserialised posting id, to avoid collisions.
+  2. **Garbage collection** — `close_expired_postings` currently only marks
+     `filled=true` (it never GCs). With a live producer, `job_postings_` and
+     `applications_` grow unboundedly; add a sweep that erases filled/expired
+     postings and their `applications_` entries.
+  3. **Solvency tuning** — validate via the econ diagnostic that business cash
+     stays positive after wage bills (the `revenue_per_worker` / `0.4` wage
+     fraction are the dials).
+  4. **Re-validate the emergence suite** — formal employment rising changes
+     `formal_employment_rate` (good) but must not destabilise grievance/stability
+     (unemployment is the `waiting` margin, unaffected; but confirm).
+
+New `LaborModuleConfig` dials: `revenue_per_worker`, `max_workers_per_business`,
+`job_posting_duration_ticks`, `applicants_per_posting`,
+`max_new_postings_per_business`.
+
+Slice 2 (later): move labor demand into `npc_business` proper (target headcount
+as a business-strategy output) via a `JobPostingSeedDelta` channel, so the
+demand is a real business decision rather than a labor_market-internal heuristic;
+then layoffs on business distress → unemployment → the crisis cascade.
+
 Other smaller follow-ups: consequence-seeded legal cases stall below the 0.35
 arrest threshold (evidence 0.30); wealth runaway (one actor hits the 1e9 capital
 ceiling within a year).

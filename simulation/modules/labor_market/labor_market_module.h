@@ -120,9 +120,18 @@ class LaborMarketModule : public ITickModule {
     std::unordered_map<uint32_t, std::vector<NPCSkillEntry>> npc_skills_;
     RegionalWageMap regional_wages_;
     std::unordered_map<uint32_t, std::vector<WorkerApplication>> applications_;
+    // Monotonic id source for generated postings, kept past any deserialised id.
+    uint32_t next_posting_id_ = 1;
 
     // Rebuild employment_index_ from employment_records_. Idempotent.
     void rebuild_employment_index() const;
+
+    // Pre-parallel (single-threaded) labor-demand step: each business posts jobs
+    // to staff up toward a scale-derived headcount, with applicants drawn from
+    // the province's unemployed. Runs on the monthly cadence. Also garbage-
+    // collects filled/expired postings and their applications (the producer is
+    // live now, so postings would otherwise grow unbounded).
+    void generate_job_postings(const WorldState& state);
 
     // --- Per-province processing ---
 

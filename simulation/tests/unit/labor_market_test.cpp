@@ -871,3 +871,80 @@ TEST_CASE("labor_market: emits unemployment + formal_employment deltas convergin
     REQUIRE(found_unemp);
     REQUIRE(found_formal);
 }
+
+// ---------------------------------------------------------------------------
+// Formal labor demand: businesses post jobs to staff up toward a scale-derived
+// headcount, and unemployed NPCs are hired into them. Previously NO module
+// created postings, so the formal market was stillborn (formal_employment
+// decayed to ~0).
+// ---------------------------------------------------------------------------
+TEST_CASE("labor_market: businesses post jobs and hire the unemployed",
+          "[labor_market][tier2][demand]") {
+    auto state = make_test_world_state();
+    state.provinces.push_back(make_test_province(0));
+    // A business with revenue to support several workers.
+    auto biz = make_test_business(1, 0, 800.0f);  // revenue_per_tick 100 by default
+    biz.revenue_per_tick = 800.0f;                // -> target ~10 workers at rpw 80
+    state.npc_businesses.push_back(biz);
+    // Five unemployed active worker NPCs in the province.
+    for (uint32_t i = 0; i < 5; ++i) {
+        auto npc = make_test_npc(100 + i, 0);
+        state.significant_npcs.push_back(npc);
+    }
+    rebuild_npc_indices(state);
+
+    LaborMarketModule module;
+    // Tick 30 = monthly hiring cadence; init_for_tick seeds records + posts jobs.
+    state.current_tick = 30;
+    module.init_for_tick(state);
+
+    // Postings were created for the understaffed business.
+    REQUIRE_FALSE(module.job_postings().empty());
+    for (const auto& p : module.job_postings()) {
+        REQUIRE(p.business_id == 1u);
+        REQUIRE(p.offered_wage > 0.0f);
+        REQUIRE(p.expires_tick > p.posted_tick);
+    }
+
+    // Run the province to fill them.
+    DeltaBuffer delta{};
+    module.execute_province(0, state, delta);
+
+    // At least one unemployed NPC got a formal employer.
+    int hired = 0;
+    for (const auto& rec : module.employment_records())
+        if (rec.employer_business_id == 1u)
+            hired++;
+    CHECK(hired > 0);
+}
+
+TEST_CASE("labor_market: posting generation garbage-collects resolved postings",
+          "[labor_market][tier2][demand]") {
+    auto state = make_test_world_state();
+    state.provinces.push_back(make_test_province(0));
+    rebuild_npc_indices(state);
+
+    LaborMarketModule module;
+    // Seed a filled (resolved) posting and a stale application directly.
+    module.job_postings().push_back(JobPosting{500,
+                                               0,
+                                               1,
+                                               0,
+                                               SkillDomain::Trade,
+                                               0.0f,
+                                               50.0f,
+                                               HiringChannel::public_board,
+                                               0,
+                                               100,
+                                               {},
+                                               /*filled=*/true});
+    module.applications()[500] = {};
+
+    state.current_tick = 30;
+    module.init_for_tick(state);  // GC sweep runs here
+
+    // The resolved posting and its applications were collected.
+    for (const auto& p : module.job_postings())
+        CHECK(p.id != 500u);
+    CHECK(module.applications().find(500) == module.applications().end());
+}

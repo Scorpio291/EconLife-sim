@@ -679,7 +679,7 @@ struct CommunityResponseConfig {
     // that saturates to 1.0 regardless of economic reality and never relaxes.
     float grievance_unemployment_weight = 0.70f;  // joblessness is the dominant systemic wrong
     float grievance_inequality_weight = 0.40f;    // inequality drives a slower-burning grievance
-    float grievance_memory_weight = 0.40f;  // actor-specific wrongs modulate on top (bounded)
+    float grievance_memory_weight = 0.40f;        // actor-specific wrongs modulate on top (bounded)
     float resistance_revenue_penalty = -0.15f;
     float trauma_grievance_floor_scale = 0.25f;
     float trauma_trust_ceiling_scale = 0.30f;
@@ -977,6 +977,17 @@ struct LaborModuleConfig {
     uint32_t deferred_salary_max_ticks = 30;
     float personal_referral_trust_min = 0.4f;
     uint32_t monthly_tick_interval = 30;
+
+    // --- Formal labor demand (job-posting generation) ---
+    // A business posts jobs to staff up toward a headcount derived from its
+    // scale. offered_wage is kept a fraction of revenue_per_worker so the wage
+    // bill stays solvent (~wage_revenue_fraction of revenue at full staffing).
+    float revenue_per_worker = 80.0f;        // revenue_per_tick that supports one formal worker
+    float wage_revenue_fraction = 0.40f;     // offered_wage = revenue_per_worker * this
+    uint32_t max_workers_per_business = 12;  // headcount cap
+    uint32_t job_posting_duration_ticks = 60;
+    uint32_t applicants_per_posting = 4;
+    uint32_t max_new_postings_per_business = 2;  // per monthly hiring cycle
 };
 
 struct PackageConfig {

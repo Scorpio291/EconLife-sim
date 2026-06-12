@@ -1,7 +1,9 @@
 # Module: labor_market
 
 ## Purpose
-Matches unemployed NPCs to job postings through three hiring channels (public board, professional network, personal referral), processes hiring and firing decisions, adjusts regional wages based on labor supply/demand imbalance, and tracks employer reputation from worker memory logs. Province-parallel -- each province's labor market is independent.
+Generates formal labor demand (businesses post jobs to staff up toward a scale-derived headcount), matches unemployed NPCs to those postings through three hiring channels (public board, professional network, personal referral), processes hiring and firing decisions, adjusts regional wages based on labor supply/demand imbalance, and tracks employer reputation from worker memory logs. Province-parallel -- each province's labor market is independent.
+
+> **Posting producer (added 2026-06-11):** `generate_job_postings(state)` runs pre-parallel in `init_for_tick` on the monthly cadence. Per business (id order): `target = clamp(revenue_per_tick / revenue_per_worker, 1, max_workers_per_business)`; if `current_employees + open_postings < target`, post up to `max_new_postings_per_business` jobs (`offered_wage = revenue_per_worker * wage_revenue_fraction` so the wage bill stays solvent ~40% of revenue), each with `applicants_per_posting` applicants drawn from the province's unemployed (active, no formal employer), `salary_expectation <= offered_wage` so they accept. The same step garbage-collects filled/expired postings + their applications (the producer is live, so the lists would otherwise grow unbounded). Before this, NO module created postings — the formal market was stillborn and `formal_employment_rate` decayed to ~0. Slice 2 will move the headcount decision into `npc_business` (a real business-strategy output via a JobPosting seed-delta) and add distress layoffs.
 
 ## Inputs (from WorldState)
 - `provinces[].regional_wage_by_skill` — per-SkillDomain wage rate (per-tick currency), updated monthly

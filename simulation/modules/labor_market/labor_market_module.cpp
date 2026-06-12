@@ -46,6 +46,120 @@ void LaborMarketModule::init_for_tick(const WorldState& state) {
     for (const auto& npc : state.named_background_npcs) {
         ensure_record(npc.id);
     }
+
+    // Generate formal labor demand (also runs pre-parallel, so it can safely
+    // grow job_postings_/applications_).
+    generate_job_postings(state);
+}
+
+void LaborMarketModule::generate_job_postings(const WorldState& state) {
+    // --- Garbage-collect resolved postings every cycle so the producer below
+    // does not grow job_postings_/applications_ without bound. A posting is
+    // resolved once it is filled (close_expired_postings marks unfilled-expired
+    // ones filled too). ---
+    if (!job_postings_.empty()) {
+        std::vector<JobPosting> keep;
+        keep.reserve(job_postings_.size());
+        for (auto& p : job_postings_) {
+            const bool resolved = p.filled || p.expires_tick <= state.current_tick;
+            if (resolved) {
+                applications_.erase(p.id);
+            } else {
+                keep.push_back(std::move(p));
+            }
+        }
+        job_postings_ = std::move(keep);
+    }
+
+    // Postings are created on the monthly hiring cadence only.
+    if (state.current_tick == 0 || state.current_tick % lcfg_.monthly_tick_interval != 0)
+        return;
+
+    // Keep the id source ahead of anything loaded from a save.
+    for (const auto& p : job_postings_)
+        next_posting_id_ = std::max(next_posting_id_, p.id + 1);
+
+    // Current formal headcount and open-vacancy counts per business.
+    std::unordered_map<uint32_t, uint32_t> headcount;
+    for (const auto& rec : employment_records_)
+        if (rec.employer_business_id != 0)
+            ++headcount[rec.employer_business_id];
+    std::unordered_map<uint32_t, uint32_t> open_postings;
+    for (const auto& p : job_postings_)
+        if (!p.filled && p.expires_tick > state.current_tick)
+            ++open_postings[p.business_id];
+
+    // Unemployed (no formal employer), active NPCs per province, sorted by id
+    // for deterministic applicant selection.
+    std::unordered_map<uint32_t, std::vector<uint32_t>> unemployed_by_province;
+    for (const auto& npc : state.significant_npcs) {
+        if (npc.status != NPCStatus::active)
+            continue;
+        const EmploymentRecord* rec = find_employment(npc.id);
+        if (rec && rec->employer_business_id != 0)
+            continue;
+        unemployed_by_province[npc.current_province_id].push_back(npc.id);
+    }
+    for (auto& [pid, pool] : unemployed_by_province)
+        std::sort(pool.begin(), pool.end());
+    std::unordered_map<uint32_t, std::size_t> cursor;  // per-province applicant cursor
+
+    // Businesses in id order (determinism).
+    std::vector<const NPCBusiness*> bizs;
+    bizs.reserve(state.npc_businesses.size());
+    for (const auto& b : state.npc_businesses)
+        bizs.push_back(&b);
+    std::sort(bizs.begin(), bizs.end(),
+              [](const NPCBusiness* a, const NPCBusiness* b) { return a->id < b->id; });
+
+    const float offered_wage = lcfg_.revenue_per_worker * lcfg_.wage_revenue_fraction;
+
+    for (const NPCBusiness* b : bizs) {
+        uint32_t target =
+            static_cast<uint32_t>(std::clamp(b->revenue_per_tick / lcfg_.revenue_per_worker, 1.0f,
+                                             static_cast<float>(lcfg_.max_workers_per_business)));
+        uint32_t have = headcount[b->id] + open_postings[b->id];
+        if (have >= target)
+            continue;
+        auto& pool = unemployed_by_province[b->province_id];
+        if (pool.empty())
+            continue;
+        uint32_t vacancies = std::min(target - have, lcfg_.max_new_postings_per_business);
+
+        for (uint32_t v = 0; v < vacancies; ++v) {
+            JobPosting jp{};
+            jp.id = next_posting_id_++;
+            jp.owner_id = b->owner_id;
+            jp.business_id = b->id;
+            jp.province_id = b->province_id;
+            jp.required_domain = SkillDomain::Trade;  // general labor; refined in slice 2
+            jp.min_skill_level = 0.0f;
+            jp.offered_wage = offered_wage;
+            jp.channel = HiringChannel::public_board;
+            jp.posted_tick = state.current_tick;
+            jp.expires_tick = state.current_tick + lcfg_.job_posting_duration_ticks;
+            jp.filled = false;
+
+            // Generate applicants from the province's unemployed pool. A
+            // salary_expectation at or below the offer guarantees acceptance.
+            auto& apps = applications_[jp.id];
+            for (uint32_t a = 0; a < lcfg_.applicants_per_posting && !pool.empty(); ++a) {
+                std::size_t& cur = cursor[b->province_id];
+                if (cur >= pool.size())
+                    cur = 0;  // wrap; a small pool can apply to multiple postings
+                uint32_t app_npc = pool[cur++];
+                WorkerApplication wa{};
+                wa.applicant_npc_id = app_npc;
+                wa.skill_level = get_npc_skill(app_npc, jp.required_domain);
+                wa.salary_expectation = offered_wage * 0.8f;
+                wa.loyalty_prior = 0.0f;
+                wa.background_visible = false;
+                jp.applicant_ids.push_back(app_npc);
+                apps.push_back(wa);
+            }
+            job_postings_.push_back(std::move(jp));
+        }
+    }
 }
 
 void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState& state,

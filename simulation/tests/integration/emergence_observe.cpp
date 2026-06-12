@@ -38,18 +38,18 @@ static void dump_series(const char* label, const std::vector<Snapshot>& series) 
         "stage 0..6 (none..sustained_opposition)\n");
 }
 
-TEST_CASE("emergence econ diagnostic: grievance vs the economic substrate",
-          "[.emergence-econ]") {
+TEST_CASE("emergence econ diagnostic: grievance vs the economic substrate", "[.emergence-econ]") {
     auto s = run_world_years(/*seed=*/42, /*npc_count=*/300, /*years=*/5);
     std::printf("\n=== ECON DIAGNOSTIC (seed 42, 300 NPCs, Federation) ===\n");
     std::printf(
-        "yr | unemp griev ineq | insolventBiz/biz  deferredSalary  npcsWageTheft | maxCap\n");
+        "yr | unemp griev ineq | formalEmp | insolventBiz/biz  deferredSalary  npcsWageTheft | "
+        "maxCap\n");
     for (std::size_t i = 0; i < s.size(); ++i) {
         const auto& x = s[i];
-        std::printf("%2zu | %.2f  %.2f  %.2f | %4d/%-4zu  %12.0f  %5d | %.2e\n", i,
-                    x.mean_unemployment, x.mean_grievance, x.mean_inequality, x.insolvent_businesses,
-                    x.businesses, x.deferred_salary_total, x.npcs_with_wage_theft_memory,
-                    x.max_capital);
+        std::printf("%2zu | %.2f  %.2f  %.2f |   %.2f    | %4d/%-4zu  %12.0f  %5d | %.2e\n", i,
+                    x.mean_unemployment, x.mean_grievance, x.mean_inequality, x.formal_employment,
+                    x.insolvent_businesses, x.businesses, x.deferred_salary_total,
+                    x.npcs_with_wage_theft_memory, x.max_capital);
     }
     std::printf("=== END ECON DIAGNOSTIC ===\n\n");
     REQUIRE(s.back().tick == 5u * 365u);
