@@ -147,14 +147,16 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
         }
     }
 
-    // --- Progressive personal wealth tax (restoring force on capital) ---
-    // A wealth-proportional outflow that the per-tick profit distribution lacks.
-    // Without it, owner capital accumulates monotonically toward the safety
-    // ceiling. Tax significant-NPC capital above an exemption at a rate that
-    // climbs with wealth; deduct via NPCDelta and fund the national budget (which
-    // pays for the services/welfare that relieve grievance — redistribution loop).
-    // NPCs iterate in significant_npcs order (id-ascending from world_generator),
-    // so the accumulation is deterministic.
+    // --- Progressive personal wealth tax (regime-dependent restoring force) ---
+    // Capital concentrates by default (profit + criminal proceeds flow in with no
+    // wealth-proportional outflow). This is the only force pushing it back, and it
+    // is deliberately NOT universal: its strength is scaled per nation by
+    // government type, so an accountable welfare state bounds concentration while a
+    // kleptocratic autocracy or collapsed state lets the rich keep compounding.
+    // Tax significant-NPC capital above an exemption at a rate that climbs with
+    // wealth, scaled by the NPC's nation's redistribution factor; deduct via
+    // NPCDelta and fund the national budget. NPCs iterate in significant_npcs order
+    // (id-ascending), so the accumulation is deterministic.
     float national_wealth_tax = 0.0f;
     const float exemption = cfg_.wealth_tax_exemption;
     const float base_rate = cfg_.wealth_tax_base_rate;
@@ -162,16 +164,38 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
     const float prog_scale =
         cfg_.wealth_tax_progressivity_scale > 0.0f ? cfg_.wealth_tax_progressivity_scale : 1.0f;
     if (max_rate > 0.0f) {
+        // Map province_id -> redistribution factor via its nation's government type,
+        // so the restoring force varies by place (a province in a social democracy
+        // redistributes; one in a kleptocracy does not).
+        std::map<uint32_t, float> province_redistribution;
+        for (const Province& prov : state.provinces) {
+            float factor = cfg_.wealth_tax_redistribution_democracy;  // default
+            for (const Nation& nation : state.nations) {
+                if (nation.id == prov.nation_id) {
+                    factor = regime_redistribution_factor(nation.government_type, cfg_);
+                    break;
+                }
+            }
+            province_redistribution[prov.id] = factor;
+        }
+
         for (const auto& npc : state.significant_npcs) {
             if (npc.status != NPCStatus::active)
                 continue;
             const float taxable = npc.capital - exemption;
             if (taxable <= 0.0f)
                 continue;
+            auto rit = province_redistribution.find(npc.current_province_id);
+            const float redistribution = rit != province_redistribution.end() ? rit->second : 1.0f;
+            if (redistribution <= 0.0f)
+                continue;  // no functioning fiscal state — wealth concentrates unchecked
             // Marginal rate rises linearly from base_rate at the exemption to
-            // max_rate once taxable wealth reaches prog_scale, then is capped.
-            const float annual_rate = std::clamp(
-                base_rate + (max_rate - base_rate) * (taxable / prog_scale), base_rate, max_rate);
+            // max_rate once taxable wealth reaches prog_scale, then is capped, then
+            // scaled by the regime's redistribution strength.
+            const float annual_rate =
+                std::clamp(base_rate + (max_rate - base_rate) * (taxable / prog_scale), base_rate,
+                           max_rate) *
+                redistribution;
             float quarterly_tax = taxable * annual_rate * 0.25f;
             quarterly_tax = std::min(quarterly_tax, npc.capital);  // never drive capital below 0
             if (quarterly_tax <= 0.0f)
@@ -624,6 +648,21 @@ bool GovernmentBudgetModule::is_quarterly_tick(uint32_t current_tick, uint32_t t
     if (current_tick == 0)
         return false;
     return (current_tick % ticks_per_quarter) == 0;
+}
+
+float GovernmentBudgetModule::regime_redistribution_factor(GovernmentType type,
+                                                           const GovernmentBudgetConfig& cfg) {
+    switch (type) {
+        case GovernmentType::Democracy:
+            return cfg.wealth_tax_redistribution_democracy;
+        case GovernmentType::Autocracy:
+            return cfg.wealth_tax_redistribution_autocracy;
+        case GovernmentType::Federation:
+            return cfg.wealth_tax_redistribution_federation;
+        case GovernmentType::FailedState:
+            return cfg.wealth_tax_redistribution_failed_state;
+    }
+    return cfg.wealth_tax_redistribution_democracy;  // defensive default
 }
 
 // ===========================================================================

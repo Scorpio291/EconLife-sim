@@ -375,20 +375,33 @@ struct GovernmentBudgetConfig {
     float household_size = 3.0f;
     float property_tax_annual_rate = 0.005f;
 
-    // --- Progressive personal wealth tax (restoring force on capital) ---
-    // Business profit distribution credits owner capital every tick with no
-    // wealth-proportional outflow, so capital accumulates monotonically toward
-    // the safety ceiling. This quarterly tax is that missing outflow: it deducts
-    // from significant-NPC capital above an exemption at a rate that climbs with
-    // wealth, and credits the proceeds to the national budget (funding the
-    // services/welfare that relieve grievance — closing the redistribution loop).
-    // The progressivity makes it a genuine restoring force: the richer the actor,
-    // the harder the brake, so accumulation settles at a finite level instead of
-    // running away. Disabled by setting the rates to 0.
+    // --- Progressive personal wealth tax (regime-dependent restoring force) ---
+    // Business profit and criminal proceeds credit owner capital every tick with
+    // no wealth-proportional outflow, so capital concentrates by default — as it
+    // does in the real world. The ONLY thing that pushes it back is a state with
+    // the policy and capacity to redistribute. This quarterly progressive tax is
+    // that mechanism: it deducts from significant-NPC capital above an exemption
+    // at a rate that climbs with wealth, and funds the national budget (the
+    // services/welfare that relieve grievance). It is NOT universal — its strength
+    // is scaled per nation by government type (see wealth_tax_redistribution_*),
+    // so an accountable welfare state bounds concentration while a kleptocratic
+    // autocracy or a collapsed state does not. There is no automatic march toward
+    // equality; redistribution happens only where institutions enforce it.
     float wealth_tax_exemption = 1.0e5f;            // capital below this is untaxed
     float wealth_tax_base_rate = 0.05f;             // annual marginal rate at the exemption
     float wealth_tax_max_rate = 0.75f;              // annual marginal rate cap for the very rich
     float wealth_tax_progressivity_scale = 1.0e6f;  // taxable wealth at which the cap is reached
+    // Per-regime redistribution strength: a [0,1] multiplier on the wealth tax,
+    // reflecting fiscal capacity + political will to tax the powerful. Real-world
+    // spread: Nordic-style social democracy redistributes heavily; a federation of
+    // accountable states likewise; a kleptocratic autocracy lets elites capture
+    // the state (nominal taxes, unenforced on the rich); a failed state has no
+    // functioning fiscal apparatus at all. Indexed by GovernmentType value
+    // (0 Democracy, 1 Autocracy, 2 Federation, 3 FailedState).
+    float wealth_tax_redistribution_democracy = 1.00f;
+    float wealth_tax_redistribution_autocracy = 0.25f;
+    float wealth_tax_redistribution_federation = 1.00f;
+    float wealth_tax_redistribution_failed_state = 0.00f;
 };
 
 struct HealthcareConfig {

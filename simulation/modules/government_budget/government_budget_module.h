@@ -21,6 +21,7 @@ namespace econlife {
 struct WorldState;
 struct DeltaBuffer;
 struct NPCBusiness;
+enum class GovernmentType : uint8_t;
 
 // ---------------------------------------------------------------------------
 // GovernmentBudgetModule — ITickModule implementation for fiscal operations
@@ -86,6 +87,13 @@ class GovernmentBudgetModule : public ITickModule {
     // Returns true if current_tick is a quarterly boundary (multiple of ticks_per_quarter).
     // Tick 0 is NOT treated as quarterly to avoid processing before the world is initialized.
     static bool is_quarterly_tick(uint32_t current_tick, uint32_t ticks_per_quarter = 90);
+
+    // Per-regime redistribution strength in [0,1] scaling the progressive wealth
+    // tax: an accountable welfare state (Democracy/Federation) redistributes
+    // fully, a kleptocratic Autocracy only weakly (elite capture), a FailedState
+    // not at all. Configurable via GovernmentBudgetConfig::wealth_tax_redistribution_*.
+    static float regime_redistribution_factor(GovernmentType type,
+                                              const GovernmentBudgetConfig& cfg);
 
    private:
     GovernmentBudgetConfig cfg_;

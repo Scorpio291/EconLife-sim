@@ -1,6 +1,6 @@
 # Emergence Baseline & Road Ahead — 2026-06-10
 
-## Update 2026-06-12: wealth runaway closed — bounded, and now visible as grievance
+## Update 2026-06-12: wealth runaway closed — regime-dependent restoring force, now visible as grievance
 
 The "wealth runaway" follow-up (one actor hitting the 1e9 capital ceiling within
 a year, noted below) is closed. It had two halves: the runaway itself, and the
@@ -19,15 +19,23 @@ added `SafetyCeilingsConfig::business_revenue_ceiling = 1e7` and clamp
 net, never the operating point — the residual accumulation is criminal-economy
 proceeds, not business profit.)
 
-**No restoring force (the slow runaway).** Even bounded, owner/criminal capital
-accumulated monotonically — profit/proceeds flow IN every tick with no
-wealth-proportional outflow. Added a **progressive personal wealth tax**
+**No restoring force — but not a universal one (this is not a utopia).** Even
+bounded, owner/criminal capital accumulated monotonically: profit/proceeds flow IN
+every tick with no wealth-proportional outflow. The fix is NOT to assume wealth
+auto-equalizes — it does not, in the model or the real world. Concentration is the
+default; the only thing that reverses it is a state with the policy and capacity to
+redistribute. Added a **regime-dependent progressive wealth tax**
 (`government_budget`, quarterly): significant-NPC capital above an exemption is
-taxed at a rate climbing with wealth (5%→75% annual), deducted via NPCDelta and
-credited to the national budget (funding the services/welfare that relieve
-grievance — redistribution loop). The richer the actor, the harder the brake, so
-accumulation now settles at a finite plateau. Empirically the richest actor (a
-criminal kingpin) plateaus at ~3e8 instead of pinning at the 1e9 ceiling.
+taxed at a rate climbing with wealth (5%→75% annual), **scaled per nation by
+government type** via `regime_redistribution_factor()` (Democracy/Federation 1.0 —
+accountable welfare states; Autocracy 0.25 — kleptocratic elite capture, the rich
+go largely untaxed; FailedState 0.0 — no fiscal apparatus). The factor is looked up
+per NPC through their province's `nation_id`, so it varies by *place*. Proceeds
+fund the national budget (services/welfare that relieve grievance). Result: an
+accountable state bounds the top fortune (the criminal kingpin plateaus at ~3e8
+instead of the 1e9 ceiling) while a kleptocracy or failed state lets concentration
+run — "some places better, some worse," driven by institutions, not by an automatic
+march toward equality.
 
 **Inequality was blind to it.** `inequality_index` tracked only the cohort
 *income* gini — which a single owner hoarding *capital* does not move — so the
@@ -41,11 +49,27 @@ owner from alone pegging inequality (broad concentration is required), so the
 healthy 200-NPC/3y baseline stays under the `grievance < 0.5` guard while the
 longer 300-NPC/5y kingpin-accumulation scenario correctly escalates past it.
 
-Diagnostic (`[.emergence-econ]`, seed 42, 300 NPCs, 5y): richest actor plateaus
-at ~3e8 (was: pinned 1e9 in year 1); grievance climbs 0.13 → 0.55 as inequality
-tracks the concentration 0.24 → 0.35 — the previously invisible
-concentration→resentment loop now fires. Emergence suite stays green (27
-assertions, 10 cases); fast gate green.
+Diagnostic (`[.emergence-econ]`) now runs the SAME seed-42 economy under three
+regimes (Federation / Autocracy / FailedState) so the divergence is visible in one
+place: the accountable state bounds the top fortune and keeps inequality/grievance
+lower; the kleptocracy and failed state let capital compound further and inequality
+bite harder. Under the (default, accountable) baseline the richest actor plateaus
+at ~3e8 (was: pinned 1e9 in year 1) and grievance climbs as inequality tracks the
+concentration — the previously invisible concentration→resentment loop now fires.
+Emergence suite stays green (27 assertions, 10 cases); fast gate green.
+
+**Still open (the people-push axis).** Redistribution here is the *policy* lever
+(a state chooses to tax). The complementary *people* lever — sustained grievance
+forcing a regime to redistribute (democratic concession) or to suppress (autocratic
+crackdown) — is the regime-response branch, which is unit-tested but does not yet
+fire from the orchestrated economy: a production shock drives community response to
+stage 4 (economic_resistance) via wage-theft memories, but national legitimacy
+plateaus ~0.40 (never crossing the 0.30 crisis threshold) because measured
+unemployment stays ~0 — the informal-wage floor is absolute, and this generated
+world's economy is informal/criminal-dominated so a formal-production shock barely
+moves the formal-employment / business-distress signals that drive grievance.
+Closing that (a depression that produces real, bounded unemployment) is the next
+target — it is what lets the people-push axis reach the regime-response tier.
 
 ## Milestone 2026-06-11: zero broken-loop ratchets remain
 

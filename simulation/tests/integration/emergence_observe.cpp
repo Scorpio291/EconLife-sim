@@ -38,20 +38,35 @@ static void dump_series(const char* label, const std::vector<Snapshot>& series) 
         "stage 0..6 (none..sustained_opposition)\n");
 }
 
-TEST_CASE("emergence econ diagnostic: grievance vs the economic substrate", "[.emergence-econ]") {
-    auto s = run_world_years(/*seed=*/42, /*npc_count=*/300, /*years=*/5);
-    std::printf("\n=== ECON DIAGNOSTIC (seed 42, 300 NPCs, Federation) ===\n");
-    std::printf(
-        "yr | griev ineq | maxCap richestRole | maxBizCash maxBizRev crimBiz\n");
-    for (std::size_t i = 0; i < s.size(); ++i) {
-        const auto& x = s[i];
-        std::printf("%2zu | %.2f  %.2f | %.2e role=%d%s | %.2e %.2e %s\n", i, x.mean_grievance,
-                    x.mean_inequality, x.max_capital, x.richest_role,
-                    x.richest_is_owner ? "(own)" : "", x.max_business_cash, x.max_business_revenue,
-                    x.richest_biz_criminal ? "CRIM" : "legit");
+TEST_CASE("emergence econ diagnostic: regime-dependent wealth concentration", "[.emergence-econ]") {
+    // Wealth concentrates by default; only a state with the policy + capacity to
+    // redistribute pushes it back. Run the SAME economy under three regimes and
+    // watch the divergence: an accountable welfare state (Federation) bounds the
+    // top fortune and keeps inequality/grievance lower; a kleptocratic Autocracy
+    // taxes the rich only weakly so capital compounds further; a FailedState has
+    // no fiscal apparatus at all and lets concentration run unchecked.
+    struct Regime {
+        const char* name;
+        int govt;
+    };
+    const Regime regimes[] = {{"Federation (accountable welfare state)", 2},
+                              {"Autocracy (kleptocratic, elite capture)", 1},
+                              {"FailedState (no fiscal apparatus)", 3}};
+    for (const auto& r : regimes) {
+        auto s = run_world_years(/*seed=*/42, /*npc_count=*/300, /*years=*/5,
+                                 /*criminal_baseline=*/0.10f, /*force_government_type=*/r.govt);
+        std::printf("\n=== ECON DIAGNOSTIC (seed 42, 300 NPCs) — %s ===\n", r.name);
+        std::printf("yr | griev ineq | maxCap richestRole | maxBizCash maxBizRev crimBiz\n");
+        for (std::size_t i = 0; i < s.size(); ++i) {
+            const auto& x = s[i];
+            std::printf("%2zu | %.2f  %.2f | %.2e role=%d%s | %.2e %.2e %s\n", i, x.mean_grievance,
+                        x.mean_inequality, x.max_capital, x.richest_role,
+                        x.richest_is_owner ? "(own)" : "", x.max_business_cash,
+                        x.max_business_revenue, x.richest_biz_criminal ? "CRIM" : "legit");
+        }
+        REQUIRE(s.back().tick == 5u * 365u);
     }
     std::printf("=== END ECON DIAGNOSTIC ===\n\n");
-    REQUIRE(s.back().tick == 5u * 365u);
 }
 
 TEST_CASE("emergence shock: depression drives the unrest cascade end-to-end",
@@ -68,8 +83,8 @@ TEST_CASE("emergence shock: depression drives the unrest cascade end-to-end",
     constexpr int kDemocracy = 0, kAutocracy = 1;
 
     DepressionShock shock{};
-    shock.onset_tick = 365;        // start of year 2
-    shock.output_retained = 0.05f; // factories fall to 5% of output
+    shock.onset_tick = 365;         // start of year 2
+    shock.output_retained = 0.05f;  // factories fall to 5% of output
 
     auto demo = run_world_years(kSeed, kNpcs, kYears, 0.10f, kDemocracy, shock);
     auto auto_ = run_world_years(kSeed, kNpcs, kYears, 0.10f, kAutocracy, shock);
