@@ -107,12 +107,24 @@ class ProductionModule : public ITickModule {
 
     void process_business(const NPCBusiness& biz, const WorldState& state, DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,
-                          DeterministicRNG& rng);
+                          float electricity_ratio, DeterministicRNG& rng);
 
     void process_facility(const NPCBusiness& biz, const Facility& facility, const WorldState& state,
                           DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,
-                          DeterministicRNG& rng);
+                          float electricity_ratio, DeterministicRNG& rng);
+
+    // Generate the province's electricity for this tick from its endowment and
+    // emit the resulting market deltas (electricity supply produced/consumed; fossil
+    // fuel burned). Returns the brownout ratio = clamp(generation / demand, 0, 1):
+    // 1.0 = demand fully met, < 1.0 = energy shortfall throttling production output.
+    // Renewables (solar/wind/geothermal capacity + hydro) generate matter-free; the
+    // shortfall burns the province's fossil-fuel stock, consuming that matter — so
+    // energy is bound to physics: fuel matter -> electricity -> work.
+    float generate_province_energy(uint32_t province_idx, const WorldState& state,
+                                   const std::vector<const NPCBusiness*>& province_businesses,
+                                   std::unordered_map<std::string, float>& available_supply,
+                                   DeltaBuffer& delta) const;
 
     float get_price_for_business(const NPCBusiness& biz, uint32_t good_id,
                                  const WorldState& state) const;

@@ -147,9 +147,15 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
         }
     }
 
+    // Energy pre-pass: generate the province's electricity from its endowment
+    // (burning fossil fuel for the renewable shortfall) before any facility runs,
+    // so the same-tick brownout ratio throttles production when energy is scarce.
+    const float electricity_ratio = generate_province_energy(
+        province_idx, state, province_businesses, available_supply, province_delta);
+
     // Process each business.
     for (const NPCBusiness* biz : province_businesses) {
-        process_business(*biz, state, province_delta, available_supply, rng);
+        process_business(*biz, state, province_delta, available_supply, electricity_ratio, rng);
     }
 }
 
@@ -168,7 +174,7 @@ void ProductionModule::execute(const WorldState& state, DeltaBuffer& delta) {
 void ProductionModule::process_business(const NPCBusiness& biz, const WorldState& state,
                                         DeltaBuffer& delta,
                                         std::unordered_map<std::string, float>& available_supply,
-                                        DeterministicRNG& rng) {
+                                        float electricity_ratio, DeterministicRNG& rng) {
     // Skip bankrupt businesses: cash <= 0 and no revenue.
     if (biz.cash <= 0.0f && biz.revenue_per_tick <= 0.0f) {
         return;
@@ -204,7 +210,7 @@ void ProductionModule::process_business(const NPCBusiness& biz, const WorldState
             continue;
         }
 
-        process_facility(biz, facility, state, delta, available_supply, rng);
+        process_facility(biz, facility, state, delta, available_supply, electricity_ratio, rng);
     }
 }
 
@@ -237,6 +243,107 @@ static const ResourceDeposit* find_extractable_deposit(const WorldState& state,
     return best;
 }
 
+float ProductionModule::generate_province_energy(
+    uint32_t province_idx, const WorldState& state,
+    const std::vector<const NPCBusiness*>& province_businesses,
+    std::unordered_map<std::string, float>& available_supply, DeltaBuffer& delta) const {
+    // 1. Electricity demand = sum of energy_per_tick over operational, era-available
+    //    facilities in this province.
+    const auto current_era = static_cast<uint8_t>(state.technology.current_era);
+    float demand = 0.0f;
+    for (const NPCBusiness* biz : province_businesses) {
+        const auto* facs = facility_registry_.find_by_business(biz->id);
+        if (facs == nullptr)
+            continue;
+        for (const Facility& f : *facs) {
+            if (!f.is_operational || f.province_id != province_idx)
+                continue;
+            const Recipe* r = recipe_registry_.find(f.recipe_id);
+            if (r == nullptr || r->era_available > current_era)
+                continue;
+            demand += r->energy_per_tick;
+        }
+    }
+    if (demand <= 0.0f) {
+        return 1.0f;  // no energy needed → no brownout
+    }
+
+    // 2. Renewable generation (matter-free flow; capacity is not depleted).
+    float renewable = 0.0f;
+    if (province_idx < state.provinces.size()) {
+        const Province& prov = state.provinces[province_idx];
+        for (const ResourceDeposit& dep : prov.deposits) {
+            if (dep.type == ResourceType::SolarPotential ||
+                dep.type == ResourceType::WindPotential || dep.type == ResourceType::Geothermal) {
+                renewable += dep.quantity * dep.quality * cfg_.renewable_mwh_per_capacity;
+            }
+        }
+        // Hydropower from river flow regime: sustained (perennial/glacier-fed) flow
+        // supports steady generation; ephemeral flow only seasonal.
+        switch (prov.geography.river_flow_regime) {
+            case RiverFlowRegime::RainfedPerennial:
+            case RiverFlowRegime::SnowmeltPerennial:
+            case RiverFlowRegime::Glacierfed:
+                renewable += cfg_.hydro_mwh_perennial;
+                break;
+            case RiverFlowRegime::SnowmeltEphemeral:
+            case RiverFlowRegime::RainfedEphemeral:
+                renewable += cfg_.hydro_mwh_seasonal;
+                break;
+            case RiverFlowRegime::None:
+                break;
+        }
+    }
+    const float renewable_used = std::min(renewable, demand);
+
+    // 3. Fossil top-up: burn the province's fuel stock to cover the shortfall,
+    //    consuming that matter. Canonical fuel order for deterministic accumulation.
+    float fossil_gen = 0.0f;
+    float gap = demand - renewable_used;
+    if (gap > 0.0f) {
+        static const char* kFuels[] = {"crude_oil", "natural_gas", "thermal_coal"};
+        for (const char* fuel : kFuels) {
+            if (gap - fossil_gen <= 0.0f)
+                break;
+            auto it = available_supply.find(fuel);
+            if (it == available_supply.end() || it->second <= 0.0f)
+                continue;
+            const float fuel_needed = (gap - fossil_gen) / cfg_.fossil_mwh_per_fuel_unit;
+            const float burn = std::min(fuel_needed, it->second);
+            if (burn <= 0.0f)
+                continue;
+            it->second -= burn;  // scratch: keep within-tick coordination consistent
+            fossil_gen += burn * cfg_.fossil_mwh_per_fuel_unit;
+            const uint32_t fuel_gid = lookup_good_id(state, fuel);
+            if (fuel_gid != 0) {
+                MarketDelta md{};
+                md.good_id = fuel_gid;
+                md.region_id = province_idx;
+                md.supply_delta = -burn;  // fuel matter consumed for energy
+                delta.market_deltas.push_back(md);
+            }
+        }
+    }
+
+    const float generation = renewable_used + fossil_gen;
+    const float consumed = std::min(generation, demand);
+
+    // Electricity as a real good: generated this tick and consumed by production.
+    // Net market supply = generation - consumed (≈0; electricity is not stored at
+    // grid scale). demand_buffer carries the consumption signal for price formation.
+    const uint32_t elec_gid = lookup_good_id(state, "electricity");
+    if (elec_gid != 0) {
+        MarketDelta md{};
+        md.good_id = elec_gid;
+        md.region_id = province_idx;
+        md.supply_delta = generation - consumed;
+        md.demand_buffer_delta = demand;
+        delta.market_deltas.push_back(md);
+    }
+
+    return std::max(0.0f, std::min(1.0f, generation / demand));
+}
+
 // ===========================================================================
 // ProductionModule — per-facility processing
 // ===========================================================================
@@ -244,7 +351,7 @@ static const ResourceDeposit* find_extractable_deposit(const WorldState& state,
 void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& facility,
                                         const WorldState& state, DeltaBuffer& delta,
                                         std::unordered_map<std::string, float>& available_supply,
-                                        DeterministicRNG& /*rng*/) {
+                                        float electricity_ratio, DeterministicRNG& /*rng*/) {
     // Look up recipe. Recipe ↔ facility cross-validation runs at world load
     // (RecipeCatalog::validate_against_goods); silently skipping here keeps
     // a stale or mod-introduced recipe_id from breaking determinism.
@@ -420,7 +527,7 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
     for (const RecipeOutput* output : sorted_outputs) {
         float actual_output = output->quantity_per_tick * output_multiplier * bottleneck_ratio *
-                              worker_multiplier * facility.output_rate_modifier;
+                              worker_multiplier * facility.output_rate_modifier * electricity_ratio;
 
         // Clamp NaN or negative to 0.
         if (std::isnan(actual_output) || actual_output < 0.0f) {

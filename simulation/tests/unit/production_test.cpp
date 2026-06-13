@@ -1000,3 +1000,87 @@ TEST_CASE("test_extraction_capped_by_remaining_quantity", "[production][tier1][e
     REQUIRE_THAT(delta.deposit_deltas[0].quantity_extracted,
                  Catch::Matchers::WithinAbs(3.0f, 0.001f));
 }
+
+// ===========================================================================
+// Phase 4 (energy): electricity generated from endowment, consumed by production
+// ===========================================================================
+
+namespace {
+
+// A recipe that consumes energy but no material inputs, so output is governed
+// purely by the energy (brownout) factor.
+Recipe make_energy_recipe(float energy_per_tick) {
+    Recipe recipe{};
+    recipe.id = "energy_widget";
+    recipe.name = "Energy Widget";
+    recipe.facility_type_key = "manufacturing";
+    recipe.inputs = {};
+    recipe.outputs = {RecipeOutput{"widget", 5.0f, 0.6f, false}};
+    recipe.min_tech_tier = 1;
+    recipe.base_cost_per_tick = 10.0f;
+    recipe.is_technology_intensive = false;
+    recipe.key_technology_node = "";
+    recipe.era_available = 0;
+    recipe.energy_per_tick = energy_per_tick;
+    return recipe;
+}
+
+DeltaBuffer run_energy_widget(WorldState& state, uint32_t province_id,
+                              const std::vector<ResourceDeposit>& deposits) {
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+    add_market(state, "widget", province_id, 0.0f, 20.0f);
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    prov.deposits = deposits;
+    state.provinces.push_back(std::move(prov));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_energy_recipe(10.0f));
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "energy_widget"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+    return delta;
+}
+
+}  // anonymous namespace
+
+TEST_CASE("test_energy_renewable_meets_demand_full_output", "[production][tier1][energy]") {
+    // WindPotential capacity 1000 * quality 1.0 * 0.02 = 20 MWh >= demand 10 → no
+    // brownout, full output, and no fuel burned (renewables are matter-free).
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_energy_widget(state, province_id,
+                                   {make_deposit(1, ResourceType::WindPotential, 1000.0f, 1.0f)});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(5.0f, 0.001f));
+    // No fossil fuel consumed.
+    auto oil = summarize_deltas(delta, "crude_oil", province_id);
+    REQUIRE(oil.supply_count == 0);
+}
+
+TEST_CASE("test_energy_shortage_browns_out_production", "[production][tier1][energy]") {
+    // No renewables and no fuel → zero generation → full brownout → zero output.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_energy_widget(state, province_id, {});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE(widget.total_supply_delta == 0.0f);
+}
+
+TEST_CASE("test_energy_partial_generation_scales_output", "[production][tier1][energy]") {
+    // WindPotential 250 * 1.0 * 0.02 = 5 MWh vs demand 10 → ratio 0.5 → half output.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_energy_widget(state, province_id,
+                                   {make_deposit(1, ResourceType::WindPotential, 250.0f, 1.0f)});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(2.5f, 0.001f));
+}

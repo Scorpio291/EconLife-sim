@@ -168,8 +168,30 @@ ground — and makes P1+P2 productive rather than idling randomly-placed mines. 
 output for a given seed changes (deterministically); macro top-line metrics are not
 where specialization shows (that lives in per-province production mix), so the
 behavioral gates stay green. Remaining: P4 — primary sector reads its endowment in full
-(energy_cost_baseline from hydro/geothermal/fossil with fuel consumed to meet demand;
+(energy as a real good from hydro/geothermal/fossil with fuel consumed to meet demand;
 fisheries Schaefer module; agriculture yield from soil/arable/climate).
+
+**Resource economy Phase 4a: energy as a generated, consumed good — bind energy to
+physics.** Energy was pure-cost (`energy_per_tick` only fed `base_cost`; fuels were
+extracted but never burned). The architect chose the *full electricity good* over
+V1's abstracted-cost model. Implemented inside ProductionModule (it already runs first,
+is province-parallel, and reads markets/facilities/deposits — avoids new-module
+plumbing): an `electricity` good (added to the catalog) is generated per province each
+tick in an energy pre-pass before facilities run. Renewables (solar/wind/geothermal
+deposit capacity + hydro from `river_flow_regime`) generate matter-free; the shortfall
+to meet the province's installed energy demand BURNS the province's fossil-fuel stock
+(crude_oil/natural_gas/thermal_coal), consuming that matter (`supply_delta = -burned`).
+The brownout ratio = clamp(generation/demand, 0, 1) throttles every facility's output
+that tick. So energy is now conserved physics: fuel matter → electricity → work, with
+renewables as free flows. Comparative-advantage signal: river/fuel-rich provinces run
+at full output; provinces poor in both brown out and are output-limited; fossil-
+dependent ones draw down finite reserves. Recipes with `energy_per_tick == 0` (and the
+existing hand-built test recipes) see ratio 1.0 — no behavior change — so the gates
+that don't model energy are unaffected. Fast gate (+3 energy tests); emergence 27/27.
+Calibration is deliberately generous (hydro/renewable yields sized so brownouts hit
+only genuinely energy-poor provinces) to avoid an economy-wide output collapse; the
+magnitude can be sharpened later. Remaining P4: fisheries Schaefer module; agriculture
+yield from soil/arable/climate.
 
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance

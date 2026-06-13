@@ -823,6 +823,21 @@ struct ProductionConfig {
     float worker_productivity_diminishing = 0.15f;
     float minimum_input_fraction = 0.1f;
     float informal_price_discount = 0.7f;
+
+    // --- Energy (electricity as a generated, consumed good) ---
+    // Electricity is generated each tick from the province's endowment and consumed
+    // by production (recipe.energy_per_tick). Bind energy to physics: renewable
+    // capacity (solar/wind/geothermal deposits + hydro) generates electricity
+    // matter-free; the shortfall is met by BURNING the province's fossil fuel stock
+    // (coal/gas/oil), consuming that matter. If generation can't meet demand,
+    // production browns out (output scaled by the supply/demand ratio). Energy-rich
+    // provinces run at full output; fossil-dependent ones draw down finite reserves;
+    // energy-poor ones are output-limited — the comparative-advantage signal.
+    float renewable_mwh_per_capacity = 0.02f;  // electricity per unit deposit capacity·quality
+    float hydro_mwh_perennial = 2000.0f;       // hydro generation by river_flow_regime
+    float hydro_mwh_seasonal = 800.0f;
+    float fossil_mwh_per_fuel_unit = 50.0f;  // electricity per unit fossil fuel burned
+    float electricity_base_price = 30.0f;
 };
 
 struct RndConfig {

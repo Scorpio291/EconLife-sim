@@ -13,3 +13,4 @@ real_estate_commercial,Commercial Real Estate,5,unit,financial,500000.00,false,f
 company_shares,Company Shares,5,unit,financial,100.00,false,false,1
 government_bond,Government Bond,5,unit,financial,1000.00,false,false,1
 commodity_futures,Commodity Futures,5,unit,financial,500.00,false,false,1
+electricity,Electricity,0,MWh,energy,30.00,false,false,1
