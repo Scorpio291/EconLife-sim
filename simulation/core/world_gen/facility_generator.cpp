@@ -83,6 +83,41 @@ void FacilityGenerator::create_facilities(WorldState& world, DeterministicRNG& r
                     available.push_back(r);
                 }
             }
+
+            // Endowment-driven placement: an extraction facility is only viable
+            // where the province physically holds the resource it would extract.
+            // Restrict extraction-category facilities to recipes whose
+            // extracted_resource matches a deposit present in this province — you
+            // build a mine where the ore is, not at random. This is the complement
+            // to the production-side gating (P1): without it, randomly-placed mines
+            // would sit on the wrong deposit and produce nothing. If no extraction
+            // recipe matches the local geology, no extraction facility is created
+            // here (skip), leaving any deposits the province lacks the industry for
+            // as unexploited potential.
+            if (ft->category == "extraction") {
+                const std::vector<ResourceDeposit>* prov_deposits =
+                    (biz.province_id < world.provinces.size())
+                        ? &world.provinces[biz.province_id].deposits
+                        : nullptr;
+                auto province_has_deposit = [&](ResourceType t) {
+                    if (prov_deposits == nullptr)
+                        return false;
+                    for (const auto& dep : *prov_deposits) {
+                        if (dep.type == t)
+                            return true;
+                    }
+                    return false;
+                };
+                std::vector<const Recipe*> matched;
+                for (const auto* r : available) {
+                    if (r->extracted_resource.has_value() &&
+                        province_has_deposit(*r->extracted_resource)) {
+                        matched.push_back(r);
+                    }
+                }
+                available = std::move(matched);
+            }
+
             if (available.empty())
                 continue;
 

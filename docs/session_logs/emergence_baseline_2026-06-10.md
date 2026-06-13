@@ -155,6 +155,22 @@ consuming regional fuel stock (renewables matter-free) — honors V1's "energy i
 regional cost, no buildable power plants" while conserving energy + fuel-matter; it
 folds into P4. Fast gate 1631/1631 (+1 conservation contract test); emergence 27/27.
 
+**Resource economy Phase 3: endowment-driven facility placement.** The direct
+complement to P1 — without it, `facility_generator` assigned extraction recipes at
+random, so under P1's gating most mines sat on the wrong deposit and produced nothing.
+P3 restricts extraction-category facilities (mine/oil_well/quarry/logging_camp) to
+recipes whose `extracted_resource` matches a deposit the province actually holds: you
+build a mine where the ore is. If the local geology matches no extraction recipe, no
+extraction facility is created there, leaving deposits the province lacks the industry
+for as unexploited potential (existence ≠ exploitation, again). This seeds comparative
+advantage structurally — a province's primary sector is now shaped by what is in its
+ground — and makes P1+P2 productive rather than idling randomly-placed mines. World-gen
+output for a given seed changes (deterministically); macro top-line metrics are not
+where specialization shows (that lives in per-province production mix), so the
+behavioral gates stay green. Remaining: P4 — primary sector reads its endowment in full
+(energy_cost_baseline from hydro/geothermal/fossil with fuel consumed to meet demand;
+fisheries Schaefer module; agriculture yield from soil/arable/climate).
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
