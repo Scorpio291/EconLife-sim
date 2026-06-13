@@ -1084,3 +1084,68 @@ TEST_CASE("test_energy_partial_generation_scales_output", "[production][tier1][e
     auto widget = summarize_deltas(delta, "widget", province_id);
     REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(2.5f, 0.001f));
 }
+
+// ===========================================================================
+// Waste: processes emit category-typed waste (conservation of matter)
+// ===========================================================================
+
+TEST_CASE("test_production_emits_category_waste", "[production][tier1][waste]") {
+    // A petroleum-category output (refining) throws off hazardous waste at the
+    // hazardous rate; matter that isn't the product becomes waste, not nothing.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    auto catalog = std::make_unique<GoodsCatalog>();
+    catalog->push_back_loaded(
+        GoodDefinition{1, "diesel", "Diesel", 1, "tonne", "petroleum", 80.0f, false, false, 1});
+    catalog->push_back_loaded(GoodDefinition{2, "hazardous_waste", "Hazardous Waste", 0, "tonne",
+                                             "waste", 0.0f, false, false, 1});
+    state.goods_catalog = std::move(catalog);
+
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+
+    // Markets keyed by catalog numeric_id (lookup_good_id uses the catalog now).
+    RegionalMarket m_diesel{};
+    m_diesel.good_id = 1;
+    m_diesel.province_id = province_id;
+    m_diesel.spot_price = 80.0f;
+    m_diesel.equilibrium_price = 80.0f;
+    m_diesel.supply = 0.0f;
+    state.regional_markets.push_back(m_diesel);
+    RegionalMarket m_haz{};
+    m_haz.good_id = 2;
+    m_haz.province_id = province_id;
+    m_haz.supply = 0.0f;
+    state.regional_markets.push_back(m_haz);
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(std::move(prov));
+
+    Recipe refine{};
+    refine.id = "diesel_refining";
+    refine.name = "Diesel Refining";
+    refine.facility_type_key = "processing";
+    refine.outputs = {RecipeOutput{"diesel", 10.0f, 0.6f, false}};
+    refine.min_tech_tier = 1;
+    refine.era_available = 0;
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(refine);
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "diesel_refining"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // 10 diesel * 0.35 hazardous rate = 3.5 hazardous_waste (good_id 2).
+    float haz = 0.0f;
+    for (const auto& md : delta.market_deltas) {
+        if (md.good_id == 2 && md.region_id == province_id && md.supply_delta.has_value()) {
+            haz += md.supply_delta.value();
+        }
+    }
+    REQUIRE_THAT(haz, Catch::Matchers::WithinAbs(3.5f, 0.001f));
+}

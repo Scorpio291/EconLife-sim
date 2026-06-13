@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "core/good_id_hash.h"
 #include "core/rng/deterministic_rng.h"
@@ -242,6 +243,32 @@ static const ResourceDeposit* find_extractable_deposit(const WorldState& state,
     }
     return best;
 }
+
+// Waste typing by output good category (conservation: matter not embodied in the
+// product leaves the process as waste that must be handled). Returns the waste good
+// and the per-unit-output rate; {nullptr, 0} for goods with no physical waste stream
+// (services, financial, energy, and waste itself). Covers every product via category.
+namespace {
+struct WasteSpec {
+    const char* good;
+    float rate;
+};
+WasteSpec waste_for_category(const std::string& cat, const ProductionConfig& cfg) {
+    if (cat == "petroleum" || cat == "chemicals" || cat == "pharmaceutical")
+        return {"hazardous_waste", cfg.waste_rate_hazardous};
+    if (cat == "electronics")
+        return {"hazardous_waste", cfg.waste_rate_ewaste};
+    if (cat == "heavy_industry" || cat == "metals" || cat == "geological" || cat == "vehicle" ||
+        cat == "vehicles")
+        return {"industrial_waste", cfg.waste_rate_heavy};
+    if (cat == "construction" || cat == "structural")
+        return {"industrial_waste", cfg.waste_rate_construction};
+    if (cat == "food_beverage" || cat == "food_processing" || cat == "agricultural" ||
+        cat == "biological" || cat == "textiles" || cat == "apparel" || cat == "timber")
+        return {"industrial_waste", cfg.waste_rate_light};
+    return {nullptr, 0.0f};
+}
+}  // namespace
 
 float ProductionModule::generate_province_energy(
     uint32_t province_idx, const WorldState& state,
@@ -525,6 +552,10 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
     }
     float deposit_extracted = 0.0f;  // primary resource drawn from the deposit this tick
 
+    // Waste accumulated this tick by waste good (industrial_waste / hazardous_waste).
+    float hazardous_waste = 0.0f;
+    float industrial_waste = 0.0f;
+
     for (const RecipeOutput* output : sorted_outputs) {
         float actual_output = output->quantity_per_tick * output_multiplier * bottleneck_ratio *
                               worker_multiplier * facility.output_rate_modifier * electricity_ratio;
@@ -573,7 +604,41 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         // Calculate revenue using appropriate price.
         float price = get_price_for_business(biz, output_gid, state);
         total_revenue += actual_output * price;
+
+        // Waste: a category-typed share of this output's throughput leaves the
+        // process as waste (refining/chemicals → hazardous; mining/heavy industry →
+        // industrial tailings; etc.). Requires the goods catalog for the category.
+        if (state.goods_catalog) {
+            const auto* def = state.goods_catalog->find(output->good_id);
+            if (def != nullptr) {
+                const WasteSpec ws = waste_for_category(def->category, cfg_);
+                if (ws.good != nullptr) {
+                    const float w = actual_output * ws.rate;
+                    if (std::strcmp(ws.good, "hazardous_waste") == 0)
+                        hazardous_waste += w;
+                    else
+                        industrial_waste += w;
+                }
+            }
+        }
     }
+
+    // Emit accumulated waste into the province as supply that must be handled
+    // (it disperses via the standard surplus decay until processed).
+    auto emit_waste = [&](const char* good, float qty) {
+        if (qty <= 0.0f)
+            return;
+        const uint32_t gid = lookup_good_id(state, good);
+        if (gid == 0)
+            return;
+        MarketDelta md{};
+        md.good_id = gid;
+        md.region_id = biz.province_id;
+        md.supply_delta = qty;
+        delta.market_deltas.push_back(md);
+    };
+    emit_waste("hazardous_waste", hazardous_waste);
+    emit_waste("industrial_waste", industrial_waste);
 
     // Deplete the deposit by the primary resource extracted this tick. This is
     // what makes located resources finite: a worked deposit runs down and

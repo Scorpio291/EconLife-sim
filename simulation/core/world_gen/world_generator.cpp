@@ -969,6 +969,27 @@ void WorldGenerator::create_markets(WorldState& world, DeterministicRNG& rng,
             m.good_id = good->numeric_id;
             m.province_id = p;
 
+            // Waste goods are infrastructure markets, not part of the procedurally
+            // varied tradeable economy: seed them with fixed, RNG-FREE values. This
+            // is deliberate — consuming RNG here would shift the world-gen stream for
+            // every downstream stage (facilities, population, tech) whenever a waste
+            // good is added, silently reshaping the world. Keeping them RNG-neutral
+            // makes the world robust to adding waste/utility goods. They start empty;
+            // production and consumption fill them each tick.
+            if (good->category == "waste") {
+                m.equilibrium_price = good->base_price;
+                m.spot_price = good->base_price;
+                m.adjustment_rate = 0.05f;
+                m.supply = 0.0f;
+                m.demand_buffer = 0.0f;
+                m.import_price_ceiling = 0.0f;
+                m.export_price_floor = 0.0f;
+                world.regional_markets.push_back(m);
+                world.provinces[p].market_ids.push_back(
+                    static_cast<uint32_t>(world.regional_markets.size()) - 1);
+                continue;
+            }
+
             // Base price from CSV, with local variation.
             float local_variation = 0.85f + rng.next_float() * 0.30f;  // 0.85-1.15
             m.equilibrium_price = good->base_price * local_variation;

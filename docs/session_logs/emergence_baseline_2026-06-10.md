@@ -193,6 +193,29 @@ only genuinely energy-poor provinces) to avoid an economy-wide output collapse; 
 magnitude can be sharpened later. Remaining P4: fisheries Schaefer module; agriculture
 yield from soil/arable/climate.
 
+**Resource economy waste pass: waste-as-conserved-matter.** Processes do not vanish
+matter — the share not embodied in the product leaves as waste that must be handled.
+Three new
+`waste`-category goods (`industrial_waste`, `hazardous_waste`, `municipal_waste`).
+Production emits waste proportional to each output's throughput, typed by the output
+good's **category** (a pass that covers EVERY product without per-recipe authoring):
+petroleum/chemicals/pharma + electronics → hazardous; heavy industry/metals/mining/
+vehicles/construction + food/textiles/timber → industrial; services/financial/energy →
+none. `npc_spending` emits `municipal_waste` from civilian consumption (and skips waste
+goods as consumer purchases). Waste accumulates per province and disperses via the
+standard surplus decay until handled. Conservation now spans the whole chain incl.
+consumption. World-gen robustness: waste markets are seeded RNG-FREE (fixed values) —
+`create_markets` runs before facilities/population/tech, so consuming RNG for added
+goods would silently reshape the whole world downstream (a first attempt cratered
+national legitimacy exactly this way, via the shifted facility/population world). With
+waste goods RNG-neutral the world is identical to the prior baseline regardless of how
+many waste/utility goods exist. Adds a production-waste test. Remaining: agriculture-endowment yield
+(first attempt cratered national legitimacy via the output/employment path and broke
+the daily_growth unit tests — reverted; needs calibration + test updates as its own
+pass); fisheries Schaefer module; a waste-handling sink + pollution→health/grievance
+feedback (so unhandled waste bites — it currently accumulates/disperses with no
+consequence yet).
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic

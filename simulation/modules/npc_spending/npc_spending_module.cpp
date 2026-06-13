@@ -154,7 +154,18 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
     // Per-market demand buffer — pre-allocated outside market loop to avoid per-market allocation.
     std::vector<float> npc_demand_this_market(province_npcs.size(), 0.0f);
 
+    // Waste goods are not consumer purchases; skip them as demand markets, and
+    // accumulate the municipal waste that consumption generates this tick.
+    const uint32_t muni_waste_id = lookup_good_id(state, "municipal_waste");
+    const uint32_t ind_waste_id = lookup_good_id(state, "industrial_waste");
+    const uint32_t haz_waste_id = lookup_good_id(state, "hazardous_waste");
+    float municipal_waste_generated = 0.0f;
+
     for (const auto* market : province_markets) {
+        if (market->good_id == muni_waste_id || market->good_id == ind_waste_id ||
+            market->good_id == haz_waste_id) {
+            continue;  // nobody buys waste
+        }
         float total_demand = 0.0f;
         std::fill(npc_demand_this_market.begin(), npc_demand_this_market.end(), 0.0f);
 
@@ -204,6 +215,19 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
         md.demand_buffer_delta = total_demand;  // full demand reaches price_engine
         md.supply_delta = -consumed;            // only consumed goods leave supply
         province_delta.market_deltas.push_back(md);
+
+        // Conservation: consumed matter becomes municipal waste, not nothing.
+        municipal_waste_generated += consumed * cfg_.civilian_waste_rate;
+    }
+
+    // Emit the province's municipal waste for this tick (accumulates until handled;
+    // disperses via the standard surplus decay).
+    if (muni_waste_id != 0 && municipal_waste_generated > 0.0f) {
+        MarketDelta waste_md;
+        waste_md.good_id = muni_waste_id;
+        waste_md.region_id = province.id;
+        waste_md.supply_delta = municipal_waste_generated;
+        province_delta.market_deltas.push_back(waste_md);
     }
 
     // Emit NPCDelta for each NPC that spent capital this tick.

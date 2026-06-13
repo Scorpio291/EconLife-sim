@@ -783,6 +783,10 @@ struct NpcSpendingConfig {
     float default_price_elasticity = -1.0f;
     float default_base_price = 10.0f;
     float default_quality_weight = 0.0f;
+    // Civilian waste: a fraction of consumed goods becomes municipal_waste each tick
+    // (conservation — consumption does not annihilate matter; it produces garbage
+    // that accumulates in the province until handled).
+    float civilian_waste_rate = 0.30f;
 };
 
 struct AntitrustConfig {
@@ -838,6 +842,20 @@ struct ProductionConfig {
     float hydro_mwh_seasonal = 800.0f;
     float fossil_mwh_per_fuel_unit = 50.0f;  // electricity per unit fossil fuel burned
     float electricity_base_price = 30.0f;
+
+    // --- Waste / byproducts (conservation: processes do not vanish matter; the
+    // share not embodied in the product becomes waste that must be handled) ---
+    // Production emits waste proportional to output, typed by the output good's
+    // category: dirty industries (petroleum/chemicals refining) throw off large
+    // volumes of hazardous waste; heavy industry/mining throw off industrial waste
+    // and tailings; light/organic industries less. Covers every product via its
+    // category — no per-recipe authoring. Waste accumulates in the province (and
+    // disperses via the standard surplus decay) until handled.
+    float waste_rate_hazardous = 0.35f;   // petroleum, chemicals, pharma → hazardous_waste
+    float waste_rate_ewaste = 0.20f;      // electronics → hazardous_waste
+    float waste_rate_heavy = 0.25f;       // heavy_industry, metals, geological, vehicles
+    float waste_rate_construction = 0.20f;  // construction, structural
+    float waste_rate_light = 0.12f;       // food, agricultural, textiles, timber, biological
 };
 
 struct RndConfig {
