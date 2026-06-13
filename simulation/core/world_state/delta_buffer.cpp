@@ -101,6 +101,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(new_laundering_seeds, std::move(other.new_laundering_seeds));
     move_extend(cohort_stats_deltas, std::move(other.cohort_stats_deltas));
     move_extend(nation_deltas, std::move(other.nation_deltas));
+    move_extend(deposit_deltas, std::move(other.deposit_deltas));
 }
 
 }  // namespace econlife

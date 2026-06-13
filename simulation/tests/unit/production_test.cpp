@@ -840,3 +840,124 @@ TEST_CASE("test_init_for_tick_picks_up_newly_constructed_facility",
         REQUIRE(steel.total_supply_delta > 0.0f);
     }
 }
+
+// ===========================================================================
+// Phase 1: extraction binds to finite, located deposits
+// ===========================================================================
+
+namespace {
+
+// A deposit-bound extraction recipe: no inputs, one raw output, tied to a
+// geological ResourceType. era_available 0 so era gating never interferes.
+Recipe make_iron_extraction_recipe() {
+    Recipe recipe{};
+    recipe.id = "iron_mining";
+    recipe.name = "Iron Mining";
+    recipe.facility_type_key = "mine";
+    recipe.inputs = {};
+    recipe.outputs = {RecipeOutput{"iron_ore", 10.0f, 0.6f, false}};
+    recipe.min_tech_tier = 1;
+    recipe.base_cost_per_tick = 50.0f;
+    recipe.is_technology_intensive = false;
+    recipe.key_technology_node = "";
+    recipe.era_available = 0;
+    recipe.extracted_resource = ResourceType::IronOre;
+    return recipe;
+}
+
+ResourceDeposit make_deposit(uint32_t id, ResourceType type, float quantity_remaining,
+                             float quality = 1.0f, float accessibility = 1.0f,
+                             uint8_t era_unlock = 0) {
+    ResourceDeposit d{};
+    d.id = id;
+    d.type = type;
+    d.quantity = quantity_remaining;
+    d.quality = quality;
+    d.depth = 0.2f;
+    d.accessibility = accessibility;
+    d.depletion_rate = 0.0f;
+    d.quantity_remaining = quantity_remaining;
+    d.era_unlock = era_unlock;
+    return d;
+}
+
+// Run a single iron mine in a province that holds the given deposits; return the
+// resulting delta buffer.
+DeltaBuffer run_iron_mine(WorldState& state, uint32_t province_id,
+                          const std::vector<ResourceDeposit>& deposits) {
+    auto biz = make_test_business(1, province_id);
+    biz.sector = BusinessSector::energy;
+    state.npc_businesses.push_back(biz);
+
+    add_market(state, "iron_ore", province_id, 0.0f, 20.0f);
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    prov.deposits = deposits;
+    state.provinces.push_back(std::move(prov));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_iron_extraction_recipe());
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "iron_mining"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+    return delta;
+}
+
+}  // anonymous namespace
+
+TEST_CASE("test_extraction_requires_and_depletes_deposit", "[production][tier1][extraction]") {
+    // A mine over a matching, usable deposit produces ore AND draws the deposit down.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    auto delta =
+        run_iron_mine(state, province_id, {make_deposit(700, ResourceType::IronOre, 1000.0f)});
+
+    // Quality 1.0 → scale 1.0 → full 10 units of ore produced.
+    auto ore = summarize_deltas(delta, "iron_ore", province_id);
+    REQUIRE(ore.supply_count == 1);
+    REQUIRE_THAT(ore.total_supply_delta, Catch::Matchers::WithinAbs(10.0f, 0.001f));
+
+    // The deposit is depleted by the extracted amount.
+    REQUIRE(delta.deposit_deltas.size() == 1);
+    REQUIRE(delta.deposit_deltas[0].deposit_id == 700);
+    REQUIRE(delta.deposit_deltas[0].province_id == province_id);
+    REQUIRE_THAT(delta.deposit_deltas[0].quantity_extracted,
+                 Catch::Matchers::WithinAbs(10.0f, 0.001f));
+}
+
+TEST_CASE("test_extraction_without_deposit_produces_nothing", "[production][tier1][extraction]") {
+    // The existence precondition: no matching deposit in the province → no output,
+    // no depletion. A resource that is not located here cannot be exploited here.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    // Province holds only a Copper deposit — wrong type for an iron mine.
+    auto delta =
+        run_iron_mine(state, province_id, {make_deposit(800, ResourceType::Copper, 1000.0f)});
+
+    auto ore = summarize_deltas(delta, "iron_ore", province_id);
+    REQUIRE(ore.supply_count == 0);
+    REQUIRE(ore.total_supply_delta == 0.0f);
+    REQUIRE(delta.deposit_deltas.empty());
+}
+
+TEST_CASE("test_extraction_capped_by_remaining_quantity", "[production][tier1][extraction]") {
+    // A nearly-exhausted deposit yields only its remainder, then goes to zero.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    // Only 3 units remain; recipe would otherwise produce 10.
+    auto delta =
+        run_iron_mine(state, province_id, {make_deposit(900, ResourceType::IronOre, 3.0f)});
+
+    auto ore = summarize_deltas(delta, "iron_ore", province_id);
+    REQUIRE_THAT(ore.total_supply_delta, Catch::Matchers::WithinAbs(3.0f, 0.001f));
+    REQUIRE(delta.deposit_deltas.size() == 1);
+    REQUIRE_THAT(delta.deposit_deltas[0].quantity_extracted,
+                 Catch::Matchers::WithinAbs(3.0f, 0.001f));
+}

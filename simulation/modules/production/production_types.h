@@ -6,10 +6,16 @@
 // and facility types.
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace econlife {
+
+// Forward-declared so the recipe type can reference a geological resource
+// without pulling in the full geography header. ResourceType is defined in
+// core/world_state/geography.h; .cpp files that resolve the link include it.
+enum class ResourceType : uint8_t;
 
 // ---------------------------------------------------------------------------
 // Production Constants — defaults; overridable via production_config.json
@@ -55,6 +61,14 @@ struct Recipe {
     bool is_technology_intensive;       // if true, quality is capped by maturation level
     std::string key_technology_node;    // tech node for maturation cap; "" for commodities
     uint8_t era_available;              // era when recipe becomes available (1-5)
+
+    // Extraction binding: if set, this recipe extracts a finite geological/biological
+    // resource and may only run where the province holds a matching ResourceDeposit
+    // that is era-unlocked, accessible, and not yet exhausted. Output scales with the
+    // deposit's quality and is capped by its remaining quantity; running the recipe
+    // depletes the deposit. Unset (nullopt) = not deposit-bound (legacy/abstract
+    // extraction, or a resource type not yet in the ResourceType enum).
+    std::optional<ResourceType> extracted_resource;
 };
 
 // ---------------------------------------------------------------------------

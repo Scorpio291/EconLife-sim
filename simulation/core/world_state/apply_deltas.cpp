@@ -479,6 +479,25 @@ static void apply_nation_deltas(WorldState& world, const std::vector<NationDelta
 }
 
 // ---------------------------------------------------------------------------
+// apply_deposit_deltas — deplete finite resource deposits from extraction.
+// ---------------------------------------------------------------------------
+static void apply_deposit_deltas(WorldState& world, const std::vector<DepositDelta>& deltas) {
+    if (deltas.empty())
+        return;
+    for (const auto& d : deltas) {
+        if (d.province_id >= world.provinces.size())
+            continue;
+        for (auto& dep : world.provinces[d.province_id].deposits) {
+            if (dep.id == d.deposit_id) {
+                dep.quantity_remaining =
+                    std::max(0.0f, dep.quantity_remaining - d.quantity_extracted);
+                break;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_region_deltas
 // ---------------------------------------------------------------------------
 static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta>& deltas) {
@@ -800,6 +819,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_evidence_deltas(world, delta.evidence_deltas, evidence_decay_interval);
     apply_region_deltas(world, delta.region_deltas);
     apply_nation_deltas(world, delta.nation_deltas);
+    apply_deposit_deltas(world, delta.deposit_deltas);
     apply_cohort_stats_deltas(world, delta.cohort_stats_deltas);
 
     // Consequence queue (GDD §21): schedule new entries and process cancellations.

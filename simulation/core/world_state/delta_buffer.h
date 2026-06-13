@@ -118,6 +118,17 @@ struct BusinessDelta {
                                              // [0,1] on apply. Consumed by investigator_engine.
 };
 
+// Depletion of a finite geological/biological deposit from extraction this tick.
+// Emitted by production when an extraction-bound recipe runs against a province
+// deposit. Applied additively (quantity_remaining -= quantity_extracted, clamped
+// at 0) in deterministic (province_id, deposit_id) order. This is the mechanism
+// that makes located resources finite and exhaustible.
+struct DepositDelta {
+    uint32_t province_id;
+    uint32_t deposit_id;
+    float quantity_extracted;  // >= 0; subtracted from ResourceDeposit.quantity_remaining
+};
+
 // Business dissolved (market exit): removes entity from world.npc_businesses.
 struct DissolvedBusinessDelta {
     uint32_t business_id;
@@ -516,6 +527,7 @@ struct DeltaBuffer {
     std::vector<LaunderingSeedDelta> new_laundering_seeds;              // merge: append
     std::vector<CohortStatsDelta> cohort_stats_deltas;                  // merge: append
     std::vector<NationDelta> nation_deltas;                             // merge: append
+    std::vector<DepositDelta> deposit_deltas;                           // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

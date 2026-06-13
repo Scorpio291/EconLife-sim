@@ -208,6 +208,35 @@ void ProductionModule::process_business(const NPCBusiness& biz, const WorldState
     }
 }
 
+// Find a usable deposit of the given resource type in a province for extraction.
+// "Usable" = era-unlocked, accessible (accessibility > 0), and not exhausted.
+// Among candidates, prefers the highest-grade deposit, tie-broken by lowest id
+// for determinism. Returns nullptr if the province holds no usable deposit of
+// the type — the existence precondition for exploitation.
+static const ResourceDeposit* find_extractable_deposit(const WorldState& state,
+                                                       uint32_t province_id, ResourceType type) {
+    if (province_id >= state.provinces.size()) {
+        return nullptr;
+    }
+    const auto current_era = static_cast<uint8_t>(state.technology.current_era);
+    const ResourceDeposit* best = nullptr;
+    for (const ResourceDeposit& dep : state.provinces[province_id].deposits) {
+        if (dep.type != type)
+            continue;
+        if (dep.era_unlock > current_era)
+            continue;
+        if (dep.accessibility <= 0.0f)
+            continue;
+        if (dep.quantity_remaining <= 0.0f)
+            continue;
+        if (best == nullptr || dep.quality > best->quality ||
+            (dep.quality == best->quality && dep.id < best->id)) {
+            best = &dep;
+        }
+    }
+    return best;
+}
+
 // ===========================================================================
 // ProductionModule — per-facility processing
 // ===========================================================================
@@ -227,6 +256,33 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
     // Skip recipes not yet available in the current era.
     if (recipe->era_available > static_cast<uint8_t>(state.technology.current_era)) {
         return;
+    }
+
+    // Extraction binding: a deposit-bound recipe can only run where the province
+    // physically holds a matching, usable deposit. This is the existence
+    // precondition — a resource that is not located here cannot be exploited here.
+    // "Usable" = era-unlocked, accessible (accessibility > 0; permafrost/locked
+    // deposits seed to 0 until thaw + tech), and not yet exhausted. The chosen
+    // deposit's quality scales output and its remaining quantity caps it; running
+    // the recipe depletes it (emitted as a DepositDelta). If no usable deposit
+    // exists, the facility produces nothing and incurs no cost — it simply has
+    // nothing to extract.
+    const ResourceDeposit* extraction_deposit = nullptr;
+    std::string extraction_primary_good;
+    if (recipe->extracted_resource.has_value()) {
+        extraction_deposit =
+            find_extractable_deposit(state, biz.province_id, *recipe->extracted_resource);
+        if (extraction_deposit == nullptr) {
+            return;
+        }
+        // Primary extracted good = first non-byproduct output (output_1). Only the
+        // primary draws the deposit down; byproducts ride along without depleting it.
+        for (const auto& out : recipe->outputs) {
+            if (!out.is_byproduct) {
+                extraction_primary_good = out.good_id;
+                break;
+            }
+        }
     }
 
     // Compute tech tier bonus.
@@ -346,6 +402,15 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
     float total_revenue = 0.0f;
 
+    // Extraction output is scaled by deposit grade: higher-quality ore/reserves
+    // yield more usable output per unit of effort.
+    float extraction_quality_scale = 1.0f;
+    if (extraction_deposit != nullptr) {
+        extraction_quality_scale =
+            0.5f + 0.5f * std::max(0.0f, std::min(1.0f, extraction_deposit->quality));
+    }
+    float deposit_extracted = 0.0f;  // primary resource drawn from the deposit this tick
+
     for (const RecipeOutput* output : sorted_outputs) {
         float actual_output = output->quantity_per_tick * output_multiplier * bottleneck_ratio *
                               worker_multiplier * facility.output_rate_modifier;
@@ -353,6 +418,19 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         // Clamp NaN or negative to 0.
         if (std::isnan(actual_output) || actual_output < 0.0f) {
             actual_output = 0.0f;
+        }
+
+        // Extraction: scale every output by deposit grade, and cap the primary
+        // extracted good by what physically remains in the deposit (a nearly
+        // exhausted deposit yields only its remainder before going to zero).
+        if (extraction_deposit != nullptr) {
+            actual_output *= extraction_quality_scale;
+            if (output->good_id == extraction_primary_good) {
+                float cap =
+                    std::max(0.0f, extraction_deposit->quantity_remaining - deposit_extracted);
+                actual_output = std::min(actual_output, cap);
+                deposit_extracted += actual_output;
+            }
         }
 
         if (actual_output <= 0.0f) {
@@ -381,6 +459,17 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         // Calculate revenue using appropriate price.
         float price = get_price_for_business(biz, output_gid, state);
         total_revenue += actual_output * price;
+    }
+
+    // Deplete the deposit by the primary resource extracted this tick. This is
+    // what makes located resources finite: a worked deposit runs down and
+    // eventually exhausts, ending extraction there.
+    if (extraction_deposit != nullptr && deposit_extracted > 0.0f) {
+        DepositDelta dd{};
+        dd.province_id = biz.province_id;
+        dd.deposit_id = extraction_deposit->id;
+        dd.quantity_extracted = deposit_extracted;
+        delta.deposit_deltas.push_back(dd);
     }
 
     // Operating cost scales with bottleneck_ratio: zero production = zero variable cost.

@@ -116,6 +116,11 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
         db.dissolved_businesses.push_back(d);
     }
     {
+        DepositDelta d{};
+        d.province_id = tag;
+        db.deposit_deltas.push_back(d);
+    }
+    {
         NewBusinessDelta d{};
         d.new_business.id = tag;
         db.new_businesses.push_back(d);
@@ -186,6 +191,7 @@ TEST_CASE("test_delta_buffer_merge_covers_every_field", "[world_state][delta_buf
     REQUIRE(dst.new_obligation_nodes.size() == 2);
     REQUIRE(dst.cross_province_deltas.size() == 2);
     REQUIRE(dst.dissolved_businesses.size() == 2);
+    REQUIRE(dst.deposit_deltas.size() == 2);
     REQUIRE(dst.new_businesses.size() == 2);
     REQUIRE(dst.scene_card_choice_deltas.size() == 2);
     REQUIRE(dst.calendar_commit_deltas.size() == 2);

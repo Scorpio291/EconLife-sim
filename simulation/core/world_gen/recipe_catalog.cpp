@@ -6,11 +6,43 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
+#include <unordered_map>
 
 #include "core/world_gen/goods_catalog.h"
+#include "core/world_state/geography.h"
 
 namespace econlife {
+
+// Maps the recipes CSV `extracted_resource` column (a ResourceType enum name) to
+// the enum value. Empty / unrecognized => nullopt (recipe is not deposit-bound).
+// Only resource types present in the ResourceType enum are gated; ores whose
+// type is not yet modelled (tin, zinc, nickel, rare_earth, phosphate, sulfur)
+// are left unbound until their ResourceType is added.
+static std::optional<ResourceType> parse_resource_type(const std::string& s) {
+    if (s.empty())
+        return std::nullopt;
+    static const std::unordered_map<std::string, ResourceType> kMap = {
+        {"IronOre", ResourceType::IronOre},
+        {"Copper", ResourceType::Copper},
+        {"Bauxite", ResourceType::Bauxite},
+        {"Lithium", ResourceType::Lithium},
+        {"Coal", ResourceType::Coal},
+        {"CrudeOil", ResourceType::CrudeOil},
+        {"NaturalGas", ResourceType::NaturalGas},
+        {"LimestoneSilica", ResourceType::LimestoneSilica},
+        {"Timber", ResourceType::Timber},
+        {"Gold", ResourceType::Gold},
+        {"Uranium", ResourceType::Uranium},
+        {"Potash", ResourceType::Potash},
+        {"Sand", ResourceType::Sand},
+        {"Aggregate", ResourceType::Aggregate},
+        {"PlatinumGroupMetals", ResourceType::PlatinumGroupMetals},
+    };
+    auto it = kMap.find(s);
+    return it == kMap.end() ? std::nullopt : std::optional<ResourceType>(it->second);
+}
 
 // ---------------------------------------------------------------------------
 // CSV parsing helpers (shared with goods_catalog.cpp)
@@ -165,6 +197,12 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
         recipe.key_technology_node = fields[20];
         recipe.is_technology_intensive = !recipe.key_technology_node.empty();
         recipe.era_available = static_cast<uint8_t>(parse_uint(fields[21], 1));
+
+        // Optional column 22: extracted_resource (ResourceType enum name). Present
+        // on extraction recipes; absent on other recipe CSVs (which have 22 columns).
+        if (fields.size() > 22) {
+            recipe.extracted_resource = parse_resource_type(fields[22]);
+        }
 
         // Derive base_cost_per_tick from energy cost (placeholder formula).
         recipe.base_cost_per_tick = recipe.energy_per_tick * 10.0f + recipe.labor_per_tick * 5.0f;

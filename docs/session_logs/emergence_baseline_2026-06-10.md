@@ -105,6 +105,33 @@ dispersed upper class — giving the regime-scaled tax a legit target so "some p
 better, some worse" can finally show in legit wealth, not just the (evading) criminal
 fortune.
 
+**Resource-driven economy — the foundation (Phase 1 of 4: extraction binds to finite,
+located deposits).** Pulling on "everything is downstream of world gen and the seeded
+resources" exposed that the rich geological model (tectonic-seeded `ResourceDeposit`
+with grade/quantity/accessibility/depletion, `FisheriesProfile` Schaefer model, soil/
+climate) was almost entirely *unwired* from the running economy: extraction recipes
+had **no input and conjured raw materials from nothing** (`iron_mining → iron_ore 10`),
+production never read or depleted deposits, and `facility_generator` assigned mining
+recipes at **random** with no reference to a province's actual deposits — so geology
+did not constrain anything and comparative advantage could not emerge. The architecture
+turns on **endowment ≠ exploitation**: a deposit must *exist* (seeded) before it can be
+exploited, but existence does not force exploitation. Phase 1 implements the existence
+precondition and finiteness: an extraction-bound recipe (new `extracted_resource`
+column → `Recipe::extracted_resource`) produces **only** where the province holds a
+matching deposit that is era-unlocked, accessible, and not exhausted; output scales with
+deposit grade and is capped by `quantity_remaining`; extraction **depletes** it (new
+`DepositDelta`). No deposit → no output, no cost. Scope is confirmed V1 (Feature Tier
+List: extraction facilities, geological/biological resource layers, *deposit depletion
+over time*, environmental consequences). Remaining arc: **P2** production debits
+intermediate inputs from located stock (conservation; the production INTERFACE already
+requires it); **P3** endowment-driven facility placement at world gen (mines matched to
+deposits, energy-intensive industry where power is cheap, fishing where coastal access
+allows) — note P1's gating + P3's placement are complementary (gating without placement
+leaves randomly-placed mines that don't match local deposits idle); **P4** primary
+sector reads its endowment (energy_cost_baseline from hydro/geothermal/fossil, a
+fisheries module running the Schaefer dynamics, agriculture yield from soil/arable/
+climate). Fast gate green (1630/1630, +3 extraction tests).
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
