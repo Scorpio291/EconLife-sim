@@ -458,15 +458,14 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
         delta.npc_deltas.push_back(npc_delta);
     }
 
-    // Market supply adjustments from expansion.
+    // Expansion decision: schedule downstream effects.
+    // Conservation note: expansion does NOT conjure market supply. The previous
+    // implementation added `cash_spent * 0.001` of supply to a market keyed by
+    // the sector enum cast to a good_id — which both created matter from money
+    // and mis-attributed it to whatever good held that id. Capacity growth now
+    // flows through compounding revenue_per_tick (organic_growth_rate); physical
+    // output only ever comes from production consuming located inputs.
     if (result.expand || result.enter_new_market) {
-        MarketDelta market_delta{};
-        market_delta.good_id = static_cast<uint32_t>(biz.sector);
-        market_delta.region_id = biz.province_id;
-        // Expansion increases future supply capacity.
-        market_delta.supply_delta = result.cash_spent * 0.001f;
-        delta.market_deltas.push_back(market_delta);
-
         // Significant expansion decision: emit ConsequenceDelta so the consequence
         // system can schedule downstream effects (new facility, competitor response, etc.).
         // new_entry_id encodes the business id; the consequence engine resolves the type.
@@ -474,16 +473,6 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
         expansion_cons.new_consequence = make_consequence(
             biz.id, ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
         delta.consequence_deltas.push_back(expansion_cons);
-    }
-
-    // Market supply adjustments from contraction.
-    if (result.contract) {
-        MarketDelta market_delta{};
-        market_delta.good_id = static_cast<uint32_t>(biz.sector);
-        market_delta.region_id = biz.province_id;
-        // Contraction decreases supply.
-        market_delta.supply_delta = result.cost_per_tick_delta * 10.0f;
-        delta.market_deltas.push_back(market_delta);
     }
 
     // Market exit (hiring_target_change <= -1000 signals full exit).

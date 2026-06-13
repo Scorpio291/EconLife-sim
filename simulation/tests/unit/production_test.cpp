@@ -841,6 +841,45 @@ TEST_CASE("test_init_for_tick_picks_up_newly_constructed_facility",
     }
 }
 
+TEST_CASE("test_production_debits_input_supply", "[production][tier1][conservation]") {
+    // Conservation: consuming inputs must DEPLETE the located input stock, not
+    // merely register demand. (Interface spec: "input supply decreases and output
+    // supply increases by recipe-specified amounts.") Without this, the stock
+    // gains outputs while never losing inputs — matter created each tick.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+
+    add_market(state, "iron_ore", province_id, 100.0f);
+    add_market(state, "coking_coal", province_id, 50.0f);
+    add_market(state, "steel", province_id, 0.0f, 15.0f);
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(std::move(prov));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_steel_recipe());
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "steel_smelting"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // Inputs are physically drawn down: -10 iron_ore, -5 coking_coal.
+    auto iron = summarize_deltas(delta, "iron_ore", province_id);
+    REQUIRE_THAT(iron.total_supply_delta, Catch::Matchers::WithinAbs(-10.0f, 0.001f));
+    auto coal = summarize_deltas(delta, "coking_coal", province_id);
+    REQUIRE_THAT(coal.total_supply_delta, Catch::Matchers::WithinAbs(-5.0f, 0.001f));
+
+    // Output is added: +8 steel. Net stock change reflects the transformation.
+    auto steel = summarize_deltas(delta, "steel", province_id);
+    REQUIRE_THAT(steel.total_supply_delta, Catch::Matchers::WithinAbs(8.0f, 0.001f));
+}
+
 // ===========================================================================
 // Phase 1: extraction binds to finite, located deposits
 // ===========================================================================

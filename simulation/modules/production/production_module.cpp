@@ -351,6 +351,13 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             demand_delta.good_id = input_gid;
             demand_delta.region_id = biz.province_id;
             demand_delta.demand_buffer_delta = consumed;
+            // Conservation: the consumed input matter physically LEAVES the located
+            // stock — it is transformed into output below, not merely "demanded".
+            // Without this the stock would gain outputs while never losing inputs,
+            // creating matter each tick. (Interface spec §Postconditions: "input
+            // supply decreases and output supply increases".) The demand_buffer_delta
+            // above is the price signal; this supply_delta is the physical draw-down.
+            demand_delta.supply_delta = -consumed;
             delta.market_deltas.push_back(demand_delta);
         }
     }

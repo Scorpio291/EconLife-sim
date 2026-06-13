@@ -132,6 +132,29 @@ sector reads its endowment (energy_cost_baseline from hydro/geothermal/fossil, a
 fisheries module running the Schaefer dynamics, agriculture yield from soil/arable/
 climate). Fast gate green (1630/1630, +3 extraction tests).
 
+**Resource economy Phase 2: matter conservation — bind it to physics.** With
+extraction made finite (P1), the next physical law: matter is neither created nor
+destroyed, only moved or transformed. Audited every `supply_delta` source. Two
+legit-chain leaks closed: (1) **production now debits its inputs from the located
+stock** (`supply_delta = -consumed`, not merely a demand signal) — the spec
+postcondition ("input supply decreases, output supply increases") that the impl had
+never honored, so the stock used to gain outputs while never losing inputs (matter
+created every tick); (2) **`npc_business` no longer conjures supply from cash** — the
+old code added `cash_spent * 0.001` of "supply" to a market keyed by the *sector enum
+cast to a good_id*, both creating matter from money and mis-attributing it; capacity
+growth already flows through compounding `revenue_per_tick`. Net: located goods stock
+is now mass-conserved — sources are extraction (from finite deposits) + production
+output + agriculture/transit; sinks are consumption + surplus decay + production input
+use. Known remaining proxy: the criminal/drug chain still uses a placeholder precursor
+(`good_id 9999`, demand-only) — separate stubbed-proxy plumbing, out of P2 scope.
+**Energy is still pure-cost (not physical):** `energy_per_tick` is only a money term
+in `base_cost`, `energy_cost_baseline` is unused, and fuels (coal/oil/gas) are
+extracted but never consumed for energy. Binding energy to physics — regional energy
+price from the hydro/geothermal/fossil endowment, with facility energy demand
+consuming regional fuel stock (renewables matter-free) — honors V1's "energy is a
+regional cost, no buildable power plants" while conserving energy + fuel-matter; it
+folds into P4. Fast gate 1631/1631 (+1 conservation contract test); emergence 27/27.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
