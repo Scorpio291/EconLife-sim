@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 
+#include "core/world_state/apply_deltas.h"  // markets_in_province, lookup_good_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/addiction/addiction_types.h"  // AddictionStage
@@ -270,6 +271,53 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
             TRUST_CORRUPTION_WEIGHT * province.political.corruption_index +
             TRUST_CRIME_WEIGHT * cohort_stats->crime_rate +
             TRUST_STABILITY_WEIGHT * conditions.stability_score;
+    }
+
+    // --- Waste handling + pollution ---
+    // Read the province's accumulated waste, handle (remove) a fraction of it, and
+    // let the hazardous-weighted residual raise sick_rate (pollution illness). This
+    // is what makes waste "must be handled" bite: provinces that out-generate their
+    // handling capacity accumulate waste and pay in public health.
+    {
+        const uint32_t ind_id = lookup_good_id(state, "industrial_waste");
+        const uint32_t haz_id = lookup_good_id(state, "hazardous_waste");
+        const uint32_t muni_id = lookup_good_id(state, "municipal_waste");
+        float ind = 0.0f, haz = 0.0f, muni = 0.0f;
+        for (uint32_t mi : markets_in_province(state, province_idx)) {
+            const auto& mk = state.regional_markets[mi];
+            if (mk.good_id == ind_id)
+                ind = mk.supply;
+            else if (mk.good_id == haz_id)
+                haz = mk.supply;
+            else if (mk.good_id == muni_id)
+                muni = mk.supply;
+        }
+
+        const float handle_frac =
+            std::min(0.95f, cfg_.waste_handling_base +
+                                cfg_.waste_handling_infra * province.infrastructure_rating);
+        const float haz_handle = handle_frac * cfg_.waste_handling_hazardous_scale;
+        auto handle = [&](uint32_t gid, float stock, float frac) {
+            if (gid == 0 || stock <= 0.0f || frac <= 0.0f)
+                return;
+            MarketDelta md{};
+            md.good_id = gid;
+            md.region_id = province_idx;
+            md.supply_delta = -stock * frac;
+            province_delta.market_deltas.push_back(md);
+        };
+        handle(ind_id, ind, handle_frac);
+        handle(muni_id, muni, handle_frac);
+        handle(haz_id, haz, haz_handle);
+
+        // Pollution from the hazardous-weighted residual. Saturating in [0,1) so the
+        // effect is robust to the absolute scale of waste in the world.
+        const float weighted = haz * cfg_.hazardous_pollution_weight + ind + muni;
+        if (weighted > 0.0f) {
+            const float pollution = weighted / (weighted + cfg_.waste_pollution_halfsat);
+            const float sick_contribution = pollution * cfg_.waste_pollution_sick_scale;
+            rdelta.sick_rate_delta = rdelta.sick_rate_delta.value_or(0.0f) + sick_contribution;
+        }
     }
 
     province_delta.region_deltas.push_back(rdelta);

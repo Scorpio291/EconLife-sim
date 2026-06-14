@@ -209,12 +209,21 @@ consumption. World-gen robustness: waste markets are seeded RNG-FREE (fixed valu
 goods would silently reshape the whole world downstream (a first attempt cratered
 national legitimacy exactly this way, via the shifted facility/population world). With
 waste goods RNG-neutral the world is identical to the prior baseline regardless of how
-many waste/utility goods exist. Adds a production-waste test. Remaining: agriculture-endowment yield
-(first attempt cratered national legitimacy via the output/employment path and broke
-the daily_growth unit tests — reverted; needs calibration + test updates as its own
-pass); fisheries Schaefer module; a waste-handling sink + pollution→health/grievance
-feedback (so unhandled waste bites — it currently accumulates/disperses with no
-consequence yet).
+many waste/utility goods exist. Adds a production-waste test.
+
+**Waste handling + pollution consequence — unhandled waste now bites.** `regional_conditions`
+(Tier 11, after production/spending) now reads each province's accumulated waste and
+(1) HANDLES it — removes a fraction each tick scaling with `infrastructure_rating`
+(waste-management capacity; hazardous is harder to handle), so waste only builds where
+generation out-paces handling; and (2) the hazardous-weighted residual POLLUTES — a
+saturating function (robust to absolute waste scale) raises `sick_rate`, which drives
+mortality via `population_aging`. Routed to **health, not grievance** (grievance has a
+single owner, `community_response` — the lesson from the earlier multi-writer pin).
+Constants conservative (strong handling, gentle pollution) to stay clear of the
+emergence guards. Remaining: agriculture-endowment yield (first attempt cratered
+national legitimacy via the output/employment path and broke the daily_growth unit
+tests — reverted; needs calibration + test updates as its own pass); fisheries Schaefer
+module.
 
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance

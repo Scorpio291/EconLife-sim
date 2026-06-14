@@ -1021,6 +1021,20 @@ struct RegionalConditionsConfig {
     // dominate. 0.85 lets a fully-concentrated boom reach ~0.85 inequality (feeding
     // grievance) while leaving headroom below the saturation ceiling.
     float wealth_inequality_weight = 0.85f;
+
+    // --- Waste handling + pollution ---
+    // Each tick a province "handles" (removes) a fraction of its accumulated waste —
+    // waste management capacity, scaling with infrastructure — so unhandled waste
+    // only builds where generation outpaces handling (dirty/low-infrastructure
+    // provinces). The residual pollutes: a saturating function of the hazardous-
+    // weighted waste stock raises sick_rate (pollution illness → mortality via
+    // population_aging). Routed to health, NOT grievance (single-owner discipline).
+    float waste_handling_base = 0.40f;        // baseline fraction handled per tick
+    float waste_handling_infra = 0.40f;       // additional handling × infrastructure_rating
+    float waste_handling_hazardous_scale = 0.5f;  // hazardous waste is harder to handle
+    float hazardous_pollution_weight = 3.0f;  // hazardous waste pollutes far more per unit
+    float waste_pollution_halfsat = 500.0f;   // weighted-waste stock at half-max pollution
+    float waste_pollution_sick_scale = 0.02f;  // max per-tick sick_rate contribution
 };
 
 struct TrustUpdatesConfig {
