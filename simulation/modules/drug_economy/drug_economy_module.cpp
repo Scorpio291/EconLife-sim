@@ -6,6 +6,7 @@
 #include <string>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_good_id
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -98,6 +99,32 @@ void DrugEconomyModule::init_for_tick(const WorldState& state) {
 // Province-parallel execution
 // ============================================================================
 
+namespace {
+// Real precursor good + units consumed per unit of drug output, by recipe.
+// Conservation: synthetic drugs are made FROM drug_precursors (themselves
+// synthesised from naphtha + acid), drawn from the located market stock — not
+// conjured. cocaine/heroin are not produced here (EX-reserved in DrugType); their
+// coca_leaf/poppy chain runs conserved through the production module. Cannabis has
+// no cultivation chain yet, so it is left unbound (proxy) until one is added.
+struct DrugPrecursor {
+    const char* good;
+    float ratio;
+};
+DrugPrecursor precursor_for_drug(DrugType d) {
+    switch (d) {
+        case DrugType::methamphetamine:
+            return {"drug_precursors", 2.0f};
+        case DrugType::synthetic_opioid:
+            return {"drug_precursors", 1.5f};
+        case DrugType::designer_drug:
+            return {"drug_precursors", 1.0f};
+        case DrugType::cannabis:
+        default:
+            return {nullptr, 0.0f};
+    }
+}
+}  // namespace
+
 void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
     if (province_idx >= state.provinces.size())
@@ -122,14 +149,39 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
 
     // Process each drug business
     for (const auto* biz : drug_businesses) {
-        // Simplified: each criminal business produces a drug type based on sector
-        // In full impl, this reads from the recipe registry
-        float production_output = biz->revenue_per_tick * 0.1f;  // proxy for drug output
-        if (production_output <= 0.0f)
+        // Output CAPACITY is still a proxy off business scale (full recipe-driven
+        // production is the production module's job); but synthetic drugs are now
+        // gated by — and consume — real located drug_precursors. You cannot cook
+        // what you have no precursors for.
+        const float capacity = biz->revenue_per_tick * 0.1f;
+        if (capacity <= 0.0f)
             continue;
 
         // Drug type from the business's facility recipe output (cannabis fallback).
         DrugType drug_type = drug_type_for_business(state, *biz);
+
+        // Bottleneck output on real precursor availability and record the draw-down.
+        const DrugPrecursor pre = precursor_for_drug(drug_type);
+        float production_output = capacity;
+        float precursor_consumed = 0.0f;
+        uint32_t precursor_gid = 0;
+        if (pre.good != nullptr && pre.ratio > 0.0f) {
+            precursor_gid = lookup_good_id(state, pre.good);
+            float available = 0.0f;
+            if (precursor_gid != 0) {
+                const uint64_t pkey = (static_cast<uint64_t>(precursor_gid) << 32) |
+                                      static_cast<uint64_t>(province.id);
+                auto pit = state.market_index_by_good_province.find(pkey);
+                if (pit != state.market_index_by_good_province.end() &&
+                    pit->second < state.regional_markets.size()) {
+                    available = std::max(0.0f, state.regional_markets[pit->second].supply);
+                }
+            }
+            production_output = std::min(capacity, available / pre.ratio);
+            precursor_consumed = production_output * pre.ratio;
+        }
+        if (production_output <= 0.0f)
+            continue;
 
         // Determine market tier (simplified: smaller businesses are retail)
         DrugMarketTier tier =
@@ -186,15 +238,15 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         biz_revenue.output_quality_update = output_quality;
         province_delta.business_deltas.push_back(biz_revenue);
 
-        // Compute precursor consumption (meth requires 2x precursor)
-        if (drug_type == DrugType::methamphetamine) {
-            float precursor =
-                compute_precursor_consumption(production_output, cfg_.precursor_ratio_meth);
-            MarketDelta precursor_demand;
-            precursor_demand.good_id = 9999;  // proxy precursor good_id
-            precursor_demand.region_id = province.id;
-            precursor_demand.demand_buffer_delta = precursor;
-            province_delta.market_deltas.push_back(precursor_demand);
+        // Conservation: the precursors physically consumed LEAVE the located stock
+        // (supply draw-down), with a matching demand signal for price formation.
+        if (precursor_gid != 0 && precursor_consumed > 0.0f) {
+            MarketDelta precursor_md;
+            precursor_md.good_id = precursor_gid;
+            precursor_md.region_id = province.id;
+            precursor_md.supply_delta = -precursor_consumed;
+            precursor_md.demand_buffer_delta = precursor_consumed;
+            province_delta.market_deltas.push_back(precursor_md);
         }
 
         // Generate evidence tokens for drug operations

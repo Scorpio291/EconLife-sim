@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/good_id_hash.h"
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
@@ -382,6 +383,16 @@ TEST_CASE("DrugEconomy: drug type comes from the facility recipe output", "[drug
             f.business_id = 7;
             f.recipe_id = "meth_cook";
             state.facilities.push_back(f);
+
+            // Conservation: synthetic drugs now consume real drug_precursors, so the
+            // province must hold a precursor stock for meth to be produced at all.
+            RegionalMarket pre{};
+            pre.good_id = good_id_hash("drug_precursors");
+            pre.province_id = 0;
+            pre.supply = 1000.0f;
+            state.regional_markets.push_back(pre);
+            state.market_index_by_good_province[(static_cast<uint64_t>(pre.good_id) << 32) | 0ull] =
+                state.regional_markets.size() - 1;
         }
 
         DrugEconomyModule module;

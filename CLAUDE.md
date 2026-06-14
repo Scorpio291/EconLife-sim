@@ -51,11 +51,15 @@ stand-ins, and getting the simulation to produce the emergent behavior the GDD
 promises rather than just staying non-NaN and bounded.
 
 A 10-year orchestrated baseline (simulation/tests/integration/emergence_observe)
-shows several loops are broken/frozen — most notably the criminal
-detection→prosecution→imprisonment loop never closes, and province conditions
-(stability/grievance/unemployment) saturate to extremes with no restoring force.
-These are tracked as Catch [!shouldfail] ratchets in the opt-in "emergence"
-behavioral suite and written up in docs/session_logs/emergence_baseline_2026-06-10.md.
+originally showed several loops broken/frozen. As of the 2026-06-11 milestone the
+known broken-loop ratchets have been retired (e.g. the criminal
+detection→prosecution→imprisonment loop now CLOSES — proven by a fast-gate test,
+simulation/tests/integration/criminal_subsystem_integration_test.cpp; province
+conditions gained restoring forces). Subsequent work grounded the economy in
+conserved, located resources (extraction→production→energy→waste→fisheries/
+agriculture) and is grounding the criminal economy likewise. See
+docs/session_logs/emergence_baseline_2026-06-10.md for the running history; that log,
+not this paragraph, is the source of truth for current loop status.
 
 Test gates:
 - Fast per-commit gate:  ctest -LE emergence   (excludes the slow behavioral runs)

@@ -246,6 +246,28 @@ without crashing total food. The daily_growth unit tests get a neutral test prov
 (Vertisol + arable 0.75 → endowment exactly 1.0) so their assertions are unaffected.
 This completes the resource-economy arc P1–P4. Fast gate; emergence 27/27.
 
+**Criminal economy — grounding drug production in conserved precursors (slice 1).** A
+three-agent deep dive mapped the criminal/grey-zone subsystems. Findings: the
+enforcement loop (detection→prosecution→imprisonment) is CLOSED (fast-gate test) — the
+CLAUDE.md "broken loop" note was stale and is now corrected. The grey-zone/concealment
+scaffolding (money_laundering, regulatory_violation_severity + scrutiny meter,
+visibility scopes, facility_signals, alternative_identity) is comparatively mature.
+The weak point is the criminal *production* economy: it runs on proxies that violate
+the conservation the legit economy now obeys. Specifically `drug_economy` produced in a
+parallel proxy economy — output = `revenue_per_tick × 0.1`, a fake precursor
+(`good_id 9999`, demand-only), drug supply keyed by the `DrugType` enum value cast to a
+good_id (separate from the real cocaine/heroin catalog goods). (coca/poppy→cocaine/
+heroin are EX-reserved in DrugType and already run conserved through the production
+module's synthesis recipes when seeded.) Slice 1: synthetic drugs (meth/synthetic/
+designer) now CONSUME real located `drug_precursors` — availability-bottlenecked and
+debited from province stock (`supply_delta = -consumed`) — and the `9999` placeholder
+is gone. Cannabis (the fallback majority) stays on the proxy for now: it has no
+cultivation recipe, so gating it would collapse it — adding a cannabis cultivation
+chain is the next slice. Remaining criminal-grounding work: cannabis cultivation;
+unify drug supply onto real good-ids / route through production and retire the parallel
+enum-keyed economy; weapons-diversion conservation (debit formal stock); designer_drug
+revenue+inputs; wire alternative_identity discovery into the investigator engine.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
