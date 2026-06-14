@@ -123,6 +123,25 @@ DrugPrecursor precursor_for_drug(DrugType d) {
             return {nullptr, 0.0f};
     }
 }
+
+// The real catalog good a drug type trades as. Previously the module cast the
+// DrugType enum value straight to a good_id (0..3), which COLLIDED with the first
+// catalog goods (iron_ore=0, copper_ore=1, ...): drug supply/price/demand were
+// silently read from and written to the iron-ore/copper/bauxite markets. Keying by
+// the real good fixes that corruption.
+const char* drug_good_string(DrugType d) {
+    switch (d) {
+        case DrugType::methamphetamine:
+            return "methamphetamine";
+        case DrugType::synthetic_opioid:
+            return "synthetic_opioid";
+        case DrugType::designer_drug:
+            return "designer_drug";
+        case DrugType::cannabis:
+        default:
+            return "cannabis_processed";
+    }
+}
 }  // namespace
 
 void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState& state,
@@ -159,6 +178,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
 
         // Drug type from the business's facility recipe output (cannabis fallback).
         DrugType drug_type = drug_type_for_business(state, *biz);
+        const uint32_t drug_gid = lookup_good_id(state, drug_good_string(drug_type));
 
         // Bottleneck output on real precursor availability and record the draw-down.
         const DrugPrecursor pre = precursor_for_drug(drug_type);
@@ -205,8 +225,8 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         // back to a baseline when no market exists for the good yet.
         float spot_price = 100.0f;  // baseline fallback
         {
-            const uint64_t key = (static_cast<uint64_t>(static_cast<uint32_t>(drug_type)) << 32) |
-                                 static_cast<uint64_t>(province.id);
+            const uint64_t key =
+                (static_cast<uint64_t>(drug_gid) << 32) | static_cast<uint64_t>(province.id);
             auto it = state.market_index_by_good_province.find(key);
             if (it != state.market_index_by_good_province.end() &&
                 it->second < state.regional_markets.size()) {
@@ -223,9 +243,9 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
             revenue = production_output * spot_price;
         }
 
-        // Add supply to informal market
+        // Add supply to the informal market, keyed by the REAL drug good id.
         MarketDelta supply_delta;
-        supply_delta.good_id = static_cast<uint32_t>(drug_type);
+        supply_delta.good_id = drug_gid;
         supply_delta.region_id = province.id;
         supply_delta.supply_delta = production_output;
         province_delta.market_deltas.push_back(supply_delta);
@@ -267,8 +287,11 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
         float demand = compute_addiction_demand(
             addiction_rate, province.cohort_stats->total_population, cfg_.demand_per_addict);
 
+        // Aggregate addiction demand, keyed to a real drug good (cannabis_processed,
+        // the most-consumed) rather than good_id 0 (which is iron_ore — the old
+        // collision). Per-drug-type demand splitting is a later refinement.
         MarketDelta demand_delta;
-        demand_delta.good_id = 0;  // aggregate drug demand
+        demand_delta.good_id = lookup_good_id(state, "cannabis_processed");
         demand_delta.region_id = province.id;
         demand_delta.demand_buffer_delta = demand;
         province_delta.market_deltas.push_back(demand_delta);

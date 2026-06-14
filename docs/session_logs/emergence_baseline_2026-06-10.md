@@ -268,6 +268,20 @@ unify drug supply onto real good-ids / route through production and retire the p
 enum-keyed economy; weapons-diversion conservation (debit formal stock); designer_drug
 revenue+inputs; wire alternative_identity discovery into the investigator engine.
 
+**Criminal economy unification — Phase 1: real drug good-ids (fix the collision).** Wrote
+the phased plan (docs/design/EconLife_Criminal_Economy_Unification_Plan.md) and executed
+Phase 1. `drug_economy` had cast the `DrugType` enum value (0–3) straight to a good_id
+for drug supply, price lookup, and addiction demand (`good_id 0`) — colliding with the
+first catalog goods (iron_ore=0, copper_ore=1, bauxite=2…), so the drug economy was
+silently reading from and writing into the iron-ore/copper/bauxite markets. Fixed: a
+`DrugType → real catalog good` map (cannabis→cannabis_processed, meth→methamphetamine,
+etc.); supply, price, and addiction demand are now keyed by the real good id via
+`lookup_good_id`. This moves drug pricing off iron-ore's ~12 onto the real drug goods'
+300–2000 band (a deliberate revenue recalibration) — validated: fast gate 1637/1637
+(criminal-justice loop green), emergence 27/27; the bounded-wealth machinery (ceiling +
+regime tax/seizure) held the surge. Next: Phase 2 (route drug production through the
+production module, retire the revenue×0.1 proxy).
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic

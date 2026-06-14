@@ -323,7 +323,7 @@ TEST_CASE("DrugEconomy: revenue uses RegionalMarket informal spot price", "[drug
 
         if (with_market) {
             RegionalMarket m{};
-            m.good_id = static_cast<uint32_t>(DrugType::cannabis);
+            m.good_id = good_id_hash("cannabis_processed");  // real drug good (no enum collision)
             m.province_id = 0;
             m.spot_price = 500.0f;  // well above the 100 fallback
             state.regional_markets.push_back(m);
@@ -404,6 +404,6 @@ TEST_CASE("DrugEconomy: drug type comes from the facility recipe output", "[drug
         return 9999u;
     };
 
-    REQUIRE(run(true) == static_cast<uint32_t>(DrugType::methamphetamine));
-    REQUIRE(run(false) == static_cast<uint32_t>(DrugType::cannabis));  // fallback
+    REQUIRE(run(true) == good_id_hash("methamphetamine"));
+    REQUIRE(run(false) == good_id_hash("cannabis_processed"));  // fallback
 }
