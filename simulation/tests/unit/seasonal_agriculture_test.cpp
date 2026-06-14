@@ -57,7 +57,10 @@ Province make_test_province(uint32_t id, float latitude = 45.0f) {
     prov.geography.elevation_avg_m = 100.0f;
     prov.geography.terrain_roughness = 0.3f;
     prov.geography.forest_coverage = 0.2f;
-    prov.geography.arable_land_fraction = 0.6f;
+    // arable 0.75 + Vertisol (fertility 1.0) → land_endowment exactly 1.0, so the
+    // daily_growth assertions below are unaffected by the soil/arable yield scaling.
+    prov.geography.arable_land_fraction = 0.75f;
+    prov.soil_type = SoilType::Vertisol;
     prov.geography.coastal_length_km = 0.0f;
     prov.geography.is_landlocked = true;
     prov.geography.port_capacity = 0.0f;

@@ -28,6 +28,31 @@ static constexpr double LOCAL_PI = M_PI;
 
 namespace econlife {
 
+// Province soil-type fertility multiplier on crop yield, centered near 1.0 so it
+// redistributes output by geology (comparative advantage) without crashing total
+// food: black soils (Mollisol) and river floodplains (Alluvial) are breadbaskets;
+// deserts/permafrost are poor cropland but not zero. Deliberately gentle.
+static float soil_fertility(SoilType soil) {
+    switch (soil) {
+        case SoilType::Mollisol:
+        case SoilType::Alluvial:
+            return 1.30f;
+        case SoilType::Andisol:
+            return 1.25f;
+        case SoilType::Vertisol:
+        case SoilType::Oxisol:
+        case SoilType::Entisol:
+            return 1.0f;
+        case SoilType::Spodosol:
+        case SoilType::Histosol:
+        case SoilType::Aridisol:
+            return 0.8f;
+        case SoilType::Cryosol:
+            return 0.6f;
+    }
+    return 1.0f;
+}
+
 // ===========================================================================
 // Utility
 // ===========================================================================
@@ -317,8 +342,15 @@ void SeasonalAgricultureModule::process_annual_facility(uint32_t facility_id,
         }
 
         case SeasonPhase::growing: {
-            // Accumulate yield.
-            float daily_growth = fs.base_growth_rate * drought_mod * flood_mod * soil_health;
+            // Accumulate yield, bound to the province's land endowment: soil-type
+            // fertility and the arable-land fraction (FAO GAEZ) scale growth, so a
+            // farm on black earth out-yields one on desert — agricultural comparative
+            // advantage. Gentle and centered near 1.0 to redistribute, not crash, food.
+            const float land_endowment =
+                soil_fertility(province.soil_type) *
+                (0.7f + 0.4f * std::clamp(province.geography.arable_land_fraction, 0.0f, 1.0f));
+            float daily_growth =
+                fs.base_growth_rate * drought_mod * flood_mod * soil_health * land_endowment;
 
             // Monoculture penalty: if years_same_crop >= threshold, degrade soil.
             if (fs.years_same_crop >= cfg_.monoculture_penalty_threshold) {

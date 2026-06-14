@@ -231,8 +231,20 @@ Effort below the intrinsic growth rate is sustainable; raising it (config/mods)
 overfishes toward collapse — the shared-access problem the struct documents. Stock is
 updated via a new `FisheriesDelta` (mirrors P1's `DepositDelta`; applied clamped to
 [0,K]). Landlocked provinces (`NoAccess`) don't fish. Adds fisheries tests + merge-
-coverage. Remaining P4: agriculture-endowment yield (reverted earlier; needs its own
-calibrated pass).
+coverage.
+
+**Resource economy P4b: agriculture endowment (redone, calibrated).** Re-landed the
+soil/arable yield binding that was reverted earlier. Post-mortem: the original revert
+was misattributed — the legitimacy crater that run was the WASTE goods' world-gen RNG
+shift (fixed by RNG-neutral waste markets), not agriculture; agriculture had only
+broken the daily_growth unit tests (they assert exact values). This pass: crop
+`daily_growth` is scaled by `soil_fertility(soil_type)` (Mollisol/Alluvial 1.30×,
+Andisol 1.25×, moderate soils 1.0×, poor 0.8×, Cryosol 0.6×) and arable land
+(`0.7 + 0.4·arable_land_fraction`) — deliberately gentle and centered near 1.0 so it
+redistributes output by geology (the agricultural comparative-advantage signal)
+without crashing total food. The daily_growth unit tests get a neutral test province
+(Vertisol + arable 0.75 → endowment exactly 1.0) so their assertions are unaffected.
+This completes the resource-economy arc P1–P4. Fast gate; emergence 27/27.
 
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
