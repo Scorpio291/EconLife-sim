@@ -180,6 +180,54 @@ void SeasonalAgricultureModule::execute_province(uint32_t province_idx, const Wo
         const ContinuousFacilityInfo& info = continuous_facilities_.at(fid);
         process_continuous_facility(fid, info, fac, province, state, province_delta);
     }
+
+    // Fisheries: Schaefer surplus-production dynamics for this province's stock.
+    process_fisheries(province_idx, province, state, province_delta);
+}
+
+void SeasonalAgricultureModule::process_fisheries(uint32_t province_idx, const Province& province,
+                                                  const WorldState& state,
+                                                  DeltaBuffer& province_delta) {
+    const FisheriesProfile& fish = province.fisheries;
+    if (fish.access_type == FishingAccessType::NoAccess || fish.carrying_capacity <= 0.0f) {
+        return;  // landlocked / no fishery
+    }
+
+    const float N = std::max(0.0f, fish.current_stock);
+    const float K = fish.carrying_capacity;
+    const float r = fish.intrinsic_growth_rate;
+
+    // Seasonal closure: no fishing during the closed fraction of the year (ice,
+    // spawning). Stock still grows; it just isn't harvested.
+    const uint32_t tick_of_year = state.current_tick % cfg_.ticks_per_year;
+    const float year_frac =
+        static_cast<float>(tick_of_year) / static_cast<float>(cfg_.ticks_per_year);
+    const bool closed = year_frac < fish.seasonal_closure;
+
+    // Logistic growth replenishes the stock; effort harvests a fraction of it.
+    const float growth = r * N * (1.0f - (K > 0.0f ? N / K : 0.0f));
+    const float harvest = closed ? 0.0f : cfg_.fishing_effort * N;
+
+    // Update stock (growth − harvest), applied/clamped to [0, K] on apply.
+    const float stock_delta = growth - harvest;
+    if (stock_delta != 0.0f) {
+        FisheriesDelta fd{};
+        fd.province_id = province_idx;
+        fd.stock_delta = stock_delta;
+        province_delta.fisheries_deltas.push_back(fd);
+    }
+
+    // Land the catch as fish_wild supply (normalized stock → tonnes).
+    if (harvest > 0.0f) {
+        const uint32_t gid = lookup_good_id(state, "fish_wild");
+        if (gid != 0) {
+            MarketDelta md{};
+            md.good_id = gid;
+            md.region_id = province_idx;
+            md.supply_delta = harvest * cfg_.fishing_catch_to_tonnes;
+            province_delta.market_deltas.push_back(md);
+        }
+    }
 }
 
 void SeasonalAgricultureModule::execute(const WorldState& state, DeltaBuffer& delta) {

@@ -220,10 +220,19 @@ saturating function (robust to absolute waste scale) raises `sick_rate`, which d
 mortality via `population_aging`. Routed to **health, not grievance** (grievance has a
 single owner, `community_response` — the lesson from the earlier multi-writer pin).
 Constants conservative (strong handling, gentle pollution) to stay clear of the
-emergence guards. Remaining: agriculture-endowment yield (first attempt cratered
-national legitimacy via the output/employment path and broke the daily_growth unit
-tests — reverted; needs calibration + test updates as its own pass); fisheries Schaefer
-module.
+emergence guards.
+
+**Resource economy: fisheries (Schaefer surplus-production).** The seeded
+`FisheriesProfile` was never fished. `seasonal_agriculture` (biological primary sector,
+province-parallel) now runs the Schaefer model per coastal/freshwater province each
+tick: logistic growth `r·N·(1−N/K)` replenishes the stock; fishing effort harvests a
+fraction, landed as `fish_wild` supply; a seasonal closure pauses harvest (not growth).
+Effort below the intrinsic growth rate is sustainable; raising it (config/mods)
+overfishes toward collapse — the shared-access problem the struct documents. Stock is
+updated via a new `FisheriesDelta` (mirrors P1's `DepositDelta`; applied clamped to
+[0,K]). Landlocked provinces (`NoAccess`) don't fish. Adds fisheries tests + merge-
+coverage. Remaining P4: agriculture-endowment yield (reverted earlier; needs its own
+calibrated pass).
 
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance

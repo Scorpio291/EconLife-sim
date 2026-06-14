@@ -838,3 +838,50 @@ TEST_CASE("facilities processed in ascending id order for determinism",
     REQUIRE(delta.market_deltas[1].good_id == soy_id);
     REQUIRE(delta.market_deltas[2].good_id == wheat_id);
 }
+
+// ===========================================================================
+// Fisheries (Schaefer surplus-production model)
+// ===========================================================================
+
+TEST_CASE("fisheries: a stocked coastal province lands a catch and updates stock",
+          "[seasonal_agriculture][tier2][fisheries]") {
+    constexpr uint32_t province_id = 0;
+    auto state = make_test_world_state(100);
+    auto prov = make_test_province(province_id);
+    prov.fisheries.access_type = FishingAccessType::Inshore;
+    prov.fisheries.carrying_capacity = 1.0f;
+    prov.fisheries.current_stock = 0.85f;
+    prov.fisheries.intrinsic_growth_rate = 0.4f;
+    prov.fisheries.seasonal_closure = 0.0f;  // open year-round for the test
+    state.provinces.push_back(std::move(prov));
+
+    SeasonalAgricultureModule module;
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // Catch landed as fish_wild: effort 0.06 * stock 0.85 * 5000 t = 255 t.
+    auto fish = summarize_supply(delta, "fish_wild", province_id);
+    REQUIRE(fish.count == 1);
+    REQUIRE_THAT(fish.total_supply, Catch::Matchers::WithinAbs(255.0f, 1.0f));
+    // Stock is updated (a fisheries delta is emitted).
+    REQUIRE(delta.fisheries_deltas.size() == 1);
+    REQUIRE(delta.fisheries_deltas[0].province_id == province_id);
+}
+
+TEST_CASE("fisheries: landlocked province lands no catch",
+          "[seasonal_agriculture][tier2][fisheries]") {
+    constexpr uint32_t province_id = 0;
+    auto state = make_test_world_state(100);
+    auto prov = make_test_province(province_id);
+    prov.fisheries.access_type = FishingAccessType::NoAccess;
+    prov.fisheries.carrying_capacity = 0.0f;
+    state.provinces.push_back(std::move(prov));
+
+    SeasonalAgricultureModule module;
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    auto fish = summarize_supply(delta, "fish_wild", province_id);
+    REQUIRE(fish.count == 0);
+    REQUIRE(delta.fisheries_deltas.empty());
+}

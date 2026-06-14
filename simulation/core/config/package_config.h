@@ -504,6 +504,16 @@ struct SeasonalAgricultureConfig {
     float livestock_base = 0.85f;
     float livestock_amplitude = 0.10f;
     float timber_multiplier = 1.0f;
+
+    // --- Fisheries (Schaefer surplus-production model) ---
+    // Coastal/freshwater provinces fish their stock each tick: logistic growth
+    // (r·N·(1−N/K)) replenishes it; fishing effort harvests a fraction. Effort
+    // below the intrinsic growth rate is sustainable; push it higher (config/mods)
+    // and the stock is overfished toward collapse — the shared-access problem.
+    // current_stock and carrying_capacity are normalized [0,1]; catch is scaled to
+    // tonnes of fish_wild for the market.
+    float fishing_effort = 0.06f;          // fraction of stock harvested per tick
+    float fishing_catch_to_tonnes = 5000.0f;  // normalized-stock → fish_wild tonnes
 };
 
 struct RealEstateConfig {

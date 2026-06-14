@@ -498,6 +498,21 @@ static void apply_deposit_deltas(WorldState& world, const std::vector<DepositDel
 }
 
 // ---------------------------------------------------------------------------
+// apply_fisheries_deltas — update province fish stock (Schaefer dynamics).
+// ---------------------------------------------------------------------------
+static void apply_fisheries_deltas(WorldState& world, const std::vector<FisheriesDelta>& deltas) {
+    if (deltas.empty())
+        return;
+    for (const auto& d : deltas) {
+        if (d.province_id >= world.provinces.size())
+            continue;
+        auto& fish = world.provinces[d.province_id].fisheries;
+        fish.current_stock =
+            std::clamp(safe_add(fish.current_stock, d.stock_delta), 0.0f, fish.carrying_capacity);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_region_deltas
 // ---------------------------------------------------------------------------
 static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta>& deltas) {
@@ -820,6 +835,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_region_deltas(world, delta.region_deltas);
     apply_nation_deltas(world, delta.nation_deltas);
     apply_deposit_deltas(world, delta.deposit_deltas);
+    apply_fisheries_deltas(world, delta.fisheries_deltas);
     apply_cohort_stats_deltas(world, delta.cohort_stats_deltas);
 
     // Consequence queue (GDD §21): schedule new entries and process cancellations.

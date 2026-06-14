@@ -129,6 +129,15 @@ struct DepositDelta {
     float quantity_extracted;  // >= 0; subtracted from ResourceDeposit.quantity_remaining
 };
 
+// Update to a province's fish stock from this tick's Schaefer dynamics (logistic
+// growth minus harvest). Applied additively to FisheriesProfile.current_stock,
+// clamped to [0, carrying_capacity]. Lets a renewable stock be fished sustainably
+// — or overfished to collapse (the shared-access problem).
+struct FisheriesDelta {
+    uint32_t province_id;
+    float stock_delta;  // signed; added to current_stock
+};
+
 // Business dissolved (market exit): removes entity from world.npc_businesses.
 struct DissolvedBusinessDelta {
     uint32_t business_id;
@@ -528,6 +537,7 @@ struct DeltaBuffer {
     std::vector<CohortStatsDelta> cohort_stats_deltas;                  // merge: append
     std::vector<NationDelta> nation_deltas;                             // merge: append
     std::vector<DepositDelta> deposit_deltas;                           // merge: append
+    std::vector<FisheriesDelta> fisheries_deltas;                       // merge: append
 
     // Merge another DeltaBuffer into this one. Vectors are move-extended;
     // player_delta merges through PlayerDelta::merge_from. After the call

@@ -109,6 +109,11 @@ class SeasonalAgricultureModule : public ITickModule {
     void process_continuous_facility(uint32_t facility_id, const ContinuousFacilityInfo& info,
                                      const Facility& facility, const Province& province,
                                      const WorldState& state, DeltaBuffer& delta);
+
+    // Schaefer surplus-production fisheries dynamics for a province's fish stock:
+    // logistic growth + effort-based harvest, landed as fish_wild supply.
+    void process_fisheries(uint32_t province_idx, const Province& province, const WorldState& state,
+                           DeltaBuffer& province_delta);
 };
 
 }  // namespace econlife
