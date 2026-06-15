@@ -407,3 +407,73 @@ TEST_CASE("DrugEconomy: drug type comes from the facility recipe output", "[drug
     REQUIRE(run(true) == good_id_hash("methamphetamine"));
     REQUIRE(run(false) == good_id_hash("cannabis_processed"));  // fallback
 }
+
+// =============================================================================
+// Enforcement bite + organizational resilience
+// =============================================================================
+
+TEST_CASE("DrugEconomy: imprisoned operator suppresses output but does not kill it",
+          "[drug_economy][tier8][enforcement]") {
+    auto run = [](NPCStatus owner_status) -> float {
+        WorldState state{};
+        state.current_tick = 5;
+        state.world_seed = 1;
+        Province prov{};
+        prov.id = 0;
+        prov.cohort_stats = std::make_unique<RegionCohortStats>();
+        state.provinces.push_back(std::move(prov));
+
+        NPC owner{};
+        owner.id = 50;
+        owner.status = owner_status;
+        owner.current_province_id = 0;
+        state.significant_npcs.push_back(owner);
+
+        NPCBusiness biz{};
+        biz.id = 7;
+        biz.province_id = 0;
+        biz.criminal_sector = true;
+        biz.revenue_per_tick = 1000.0f;
+        biz.market_share = 0.0f;
+        biz.owner_id = 50;
+        state.npc_businesses.push_back(biz);
+
+        Recipe r{};
+        r.id = "meth_cook";
+        RecipeOutput out{};
+        out.good_id = "methamphetamine";
+        out.is_byproduct = false;
+        r.outputs.push_back(out);
+        state.loaded_recipes.push_back(r);
+        Facility f{};
+        f.id = 1;
+        f.business_id = 7;
+        f.recipe_id = "meth_cook";
+        state.facilities.push_back(f);
+        RegionalMarket pre{};
+        pre.good_id = good_id_hash("drug_precursors");
+        pre.province_id = 0;
+        pre.supply = 1000.0f;
+        state.regional_markets.push_back(pre);
+        state.market_index_by_good_province[(static_cast<uint64_t>(pre.good_id) << 32) | 0ull] =
+            state.regional_markets.size() - 1;
+
+        rebuild_npc_indices(state);
+        DrugEconomyModule module;
+        DeltaBuffer d{};
+        module.execute_province(0, state, d);
+        const uint32_t meth_gid = good_id_hash("methamphetamine");
+        float out_supply = 0.0f;
+        for (const auto& md : d.market_deltas)
+            if (md.good_id == meth_gid && md.supply_delta.has_value() && *md.supply_delta > 0.0f)
+                out_supply += *md.supply_delta;
+        return out_supply;
+    };
+
+    const float active = run(NPCStatus::active);
+    const float jailed = run(NPCStatus::imprisoned);
+    REQUIRE(active > 0.0f);
+    REQUIRE(jailed > 0.0f);  // resilience: a deputy keeps it running — not killed
+    REQUIRE(jailed < active);
+    REQUIRE_THAT(jailed, WithinAbs(active * 0.5f, active * 0.05f));  // ~floor (0.5)
+}

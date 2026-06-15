@@ -7,6 +7,24 @@ P1–P4) — retiring the revenue-scalar proxies and enum-keyed proxy markets.
 
 This plan is the source of truth for the effort; update it as phases land.
 
+> **Update 2026-06-15 — reprioritized around the crime *balancing loop*.**
+> Phase 1 (real drug good-ids; commit `fe35ed6`) landed and is gate-green, but the
+> long-horizon diagnostic ran away: realistic drug prices exposed that **crime has no
+> negative feedback**. The detection→prosecution→imprisonment loop jails *individuals*
+> but never touches the *enterprise* — production/drug modules don't check operator
+> status, and a lucrative criminal business never goes bankrupt. So crime grows
+> unchecked everywhere, and the corruption-modulated detection variance is toothless.
+> The fix is NOT a revenue cap (a fake rail) but **closing the balancing loop**:
+> enforcement must suppress the criminal economy, with strength set by governance/
+> corruption, so crime-infested vs well-managed provinces emerge (Juárez vs Singapore).
+> **Keystone (this update):** an imprisoned operator drops their criminal enterprise to
+> a resilience floor (`DrugEconomyConfig::operator_imprisoned_output`, default 0.5) —
+> the org keeps running on a deputy and recovers on release (organized crime is hard to
+> dismantle by decapitation). Crime suppression then = imprisonment rate = enforcement
+> strength = governance. Implemented for `drug_economy` first; extend to weapons/
+> rackets/criminal-production next. This balancing work now leads; the conservation
+> phases below continue on top of it.
+
 ---
 
 ## 1. Principle

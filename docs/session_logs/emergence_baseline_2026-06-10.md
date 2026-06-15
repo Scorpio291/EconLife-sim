@@ -282,6 +282,24 @@ etc.); supply, price, and addiction demand are now keyed by the real good id via
 regime tax/seizure) held the surge. Next: Phase 2 (route drug production through the
 production module, retire the revenue×0.1 proxy).
 
+**Criminal economy — the balancing keystone: enforcement bite with organizational
+resilience.** Phase 1's realistic drug prices made the long-horizon diagnostic run away,
+which exposed the real gap: crime has NO negative feedback. The detection→prosecution→
+imprisonment loop jails *individuals* but never touches the *enterprise* — production and
+drug modules don't check operator status, and lucrative crime never goes bankrupt. So
+crime grows unchecked everywhere and the corruption-modulated detection variance is
+toothless. Per the "don't build fake rails; some places are crime-infested, others
+well-managed" steer, the fix is to close the loop, not cap revenue. Keystone: a criminal
+business whose operator (`owner_id`) is imprisoned runs at a reduced **resilience floor**
+(`DrugEconomyConfig::operator_imprisoned_output`, 0.5) — a deputy keeps it going (gangs/
+mafias survive decapitation) and it recovers fully on release. Crime suppression is thus
+proportional to how often operators are jailed = enforcement strength, throttled by
+corruption = governance. Well-policed, low-corruption provinces trend crime-light; weak/
+corrupt ones stay crime-infested — emergent divergence, and organized crime is never
+fully eliminated. Implemented for `drug_economy` (dominant criminal output + the
+hyperactivity source); fast gate 1638/1638 (criminal-justice loop green), emergence
+27/27. Extend the same operator-status gate to weapons/rackets/criminal-production next.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic

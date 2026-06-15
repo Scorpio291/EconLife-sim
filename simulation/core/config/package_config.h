@@ -1017,6 +1017,17 @@ struct DrugEconomyConfig {
     // stops seeding new NPCs this tick. Keeps growth bounded; further
     // progression is driven by AddictionModule's stage transitions.
     float addiction_seeding_saturation_cap = 0.05f;
+
+    // Enforcement bite + organizational resilience. When a criminal business's
+    // operator (owner_id) is imprisoned, the enterprise does NOT shut down — a
+    // deputy keeps it running at reduced capacity (gangs/mafias are extremely hard
+    // to dismantle by decapitation), and it recovers fully on the operator's
+    // release/parole. So enforcement SUPPRESSES the criminal economy in proportion
+    // to how often operators are jailed (which scales with enforcement strength and
+    // is throttled by corruption) — the balancing feedback that makes well-policed,
+    // low-corruption places crime-light and weak/corrupt places crime-infested,
+    // without ever fully eliminating organized crime.
+    float operator_imprisoned_output = 0.5f;  // output multiplier while operator jailed
 };
 
 struct RegionalConditionsConfig {

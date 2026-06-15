@@ -168,11 +168,23 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
 
     // Process each drug business
     for (const auto* biz : drug_businesses) {
+        // Enforcement bite (organizational resilience): if the operator is in
+        // prison the enterprise runs at reduced capacity — a deputy keeps it going,
+        // organized crime is not killed by decapitation — and recovers on release.
+        // Crime is thus suppressed in proportion to how often operators are jailed
+        // (enforcement strength, throttled by corruption) — the balancing feedback.
+        float op_factor = 1.0f;
+        if (biz->owner_id != 0) {
+            const NPC* op = lookup_npc_by_id(state, biz->owner_id);
+            if (op != nullptr && op->status == NPCStatus::imprisoned)
+                op_factor = cfg_.operator_imprisoned_output;
+        }
+
         // Output CAPACITY is still a proxy off business scale (full recipe-driven
         // production is the production module's job); but synthetic drugs are now
         // gated by — and consume — real located drug_precursors. You cannot cook
         // what you have no precursors for.
-        const float capacity = biz->revenue_per_tick * 0.1f;
+        const float capacity = biz->revenue_per_tick * 0.1f * op_factor;
         if (capacity <= 0.0f)
             continue;
 
