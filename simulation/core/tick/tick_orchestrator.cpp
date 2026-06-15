@@ -159,6 +159,20 @@ void TickOrchestrator::execute_tick(WorldState& state, ThreadPool& thread_pool) 
         }
     }
 
+    // Prune spent (retired) evidence tokens. The evidence_pool is otherwise
+    // append-only and is scanned in full every tick by several modules
+    // (investigator_engine, legal_process, media_system, evidence, ...); decayed
+    // tokens are retired (is_active=false) but never removed, so the pool grows
+    // without bound and per-tick cost balloons over long horizons (a latent O(n^2)).
+    // Every consumer already skips inactive tokens, so erasing them is
+    // behavior-neutral; the stable erase-remove keeps it deterministic.
+    {
+        auto& pool = state.evidence_pool;
+        pool.erase(std::remove_if(pool.begin(), pool.end(),
+                                  [](const EvidenceToken& t) { return !t.is_active; }),
+                   pool.end());
+    }
+
     // Pre-step: Drain deferred work queue — process all items due at current_tick.
     // Items scheduled in tick N fire at the START of tick N+1 (before any module runs).
     // Conceptually "Step 2: drain queue" in TDD §6, but execution-order-wise it

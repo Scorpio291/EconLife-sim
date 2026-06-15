@@ -300,6 +300,19 @@ fully eliminated. Implemented for `drug_economy` (dominant criminal output + the
 hyperactivity source); fast gate 1638/1638 (criminal-justice loop green), emergence
 27/27. Extend the same operator-status gate to weapons/rackets/criminal-production next.
 
+**Perf: prune the append-only evidence pool (latent O(n²)).** Chasing the long-horizon
+diagnostic slowdown (which the keystone did NOT resolve) led to the real cause: it was
+never crime *volume* — `evidence_pool` is append-only and scanned in full every tick by
+~6 modules (investigator_engine, legal_process, media_system, evidence, designer_drug,
+alternative_identity). Decayed tokens are retired (`is_active=false`, decay handler
+`actionability < 0.01`) but never removed, so the pool grows without bound and per-tick
+cost balloons over a multi-year run — a pre-existing O(n²) that Phase 1's more-active
+drug economy merely amplified. Fix: the tick orchestrator prunes `is_active==false`
+tokens each tick (stable erase-remove, deterministic). Every consumer already skips
+inactive tokens, so it's behavior-neutral — confirmed: fast gate 1638/1638 (incl.
+determinism tests), emergence 27/27 unchanged. This is the actual resolution of the
+diagnostic runaway.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
