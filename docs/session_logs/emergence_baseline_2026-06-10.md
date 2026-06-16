@@ -365,6 +365,23 @@ and is a foundational step toward a Dwarf-Fortress-style history-generation phas
 (generate physical world + resources, then run the orchestrator to grow the economy/
 society emergently): physical substrate fixed, economy a decoupled layer on top.
 
+**Mechanical history generation adopted (design decision) + P0 (founding-seed mode).**
+Architect chose forward-simulated history over backward-narrated flavor: the starting
+world becomes the *true outcome* of running the orchestrator for decades/centuries from
+a minimal founding seed, scoped to the **whole planet at LOD 2** (the player's region
+materialized to LOD 0 at entry). Recorded in the WorldGen spec + Feature Tier List
+(an adopted EXTENSION beyond documented V1); full architecture in
+docs/design/EconLife_Mechanical_History_Generation_Plan.md (key enabler: `run_world_years`
+already runs the orchestrator headless for N years; gaps are founding seed, entity
+genesis, deep-time LOD, player entry). P0 landed: `WorldGeneratorConfig::founding_seed_mode`
+(default false → unchanged full-seed "instant world" default) emits the physical
+substrate + founding population but **skips the pre-built economy** (no seeded
+businesses/facilities) — firms must emerge through history. New test confirms a founding
+world has provinces/deposits/population/markets but zero businesses/facilities; default
+path byte-identical (additive, guarded skip). Next: P1 history-gen driver (run the
+orchestrator forward from the founding seed) + P2 entity genesis (firms/settlements
+forming from near-zero) + P3 deep-time LOD.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic

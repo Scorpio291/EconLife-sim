@@ -37,6 +37,14 @@ struct WorldGeneratorConfig {
     float resource_richness = 1.0f;    // 0.5-2.0 multiplier on deposit quantities
     float corruption_baseline = 0.2f;  // 0.0-1.0 starting corruption
     float criminal_baseline = 0.05f;   // 0.0-1.0 starting criminal dominance
+
+    // Founding-seed mode (mechanical history generation, P0): emit the physical
+    // substrate + a founding population but NO pre-built economy — businesses,
+    // firms, and fortunes must EMERGE by running the orchestrator forward through
+    // pre-game history, rather than being hand-seeded at t=0. Default false keeps
+    // the current full-seed "instant world" path (the fast default / fallback).
+    // See docs/design/EconLife_Mechanical_History_Generation_Plan.md.
+    bool founding_seed_mode = false;
     std::string goods_directory;       // path to packages/base_game/goods/
     std::string recipes_directory;     // path to packages/base_game/recipes/
     std::string

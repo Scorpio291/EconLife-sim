@@ -268,11 +268,16 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     create_markets(world, markets_rng, *catalog_owned, config);
     world.goods_catalog = std::move(catalog_owned);
 
-    // Step 5: NPC population
+    // Step 5: NPC population (the founding population — emerges/grows during history)
     SettlementGenerator::create_npcs(world, rng, config);
 
-    // Step 6: Businesses
-    SettlementGenerator::create_businesses(world, rng, config);
+    // Step 6: Businesses — SKIPPED in founding-seed mode. The economy is not
+    // hand-seeded; firms emerge by running pre-game history forward (P2 entity
+    // genesis). Facilities (Step 7) are likewise skipped since they attach to
+    // businesses. The full-seed default builds the economy here as before.
+    if (!config.founding_seed_mode) {
+        SettlementGenerator::create_businesses(world, rng, config);
+    }
 
     // Step 7: Facilities (assign recipes to businesses)
     RecipeCatalog recipe_catalog;

@@ -166,6 +166,35 @@ TEST_CASE("WorldGenerator  - generates valid WorldState", "[world_gen][generator
     CHECK_FALSE(world.regional_markets.empty());
 }
 
+TEST_CASE("WorldGenerator  - founding-seed mode: substrate + population, no pre-built economy",
+          "[world_gen][generator][founding]") {
+    WorldGeneratorConfig config{};
+    config.seed = 12345;
+    config.province_count = 6;
+    config.npc_count = 200;
+    config.founding_seed_mode = true;
+
+    auto world = WorldGenerator::generate(config);
+
+    // Physical substrate + founding population are present (world gen -> resources)...
+    CHECK(world.provinces.size() == 6);
+    CHECK_FALSE(world.significant_npcs.empty());
+    CHECK_FALSE(world.regional_markets.empty());
+    bool any_deposit = false;
+    for (const auto& p : world.provinces) {
+        if (!p.deposits.empty()) {
+            any_deposit = true;
+            break;
+        }
+    }
+    CHECK(any_deposit);
+
+    // ...but the economy is NOT hand-seeded: firms/facilities must EMERGE through
+    // forward-simulated history (P2), not be placed at t=0.
+    CHECK(world.npc_businesses.empty());
+    CHECK(world.facilities.empty());
+}
+
 TEST_CASE("WorldGenerator  - deterministic: same seed produces same world",
           "[world_gen][determinism]") {
     WorldGeneratorConfig config{};

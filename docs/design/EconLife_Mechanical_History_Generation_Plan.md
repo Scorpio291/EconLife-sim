@@ -58,6 +58,37 @@ across the globe), not a handful of provinces. This is the same insight V1's LOD
 was built on, extended from "rest of world during play" to "the whole world across deep
 time." Full-detail-everywhere (LOD 0 globally) remains EX; statistical-planet is V1.
 
+## 2b. Timeline span: earliest history → space age and beyond
+
+The simulated timeline is the **full arc of human development**, and the player chooses
+*where on it to enter* — from the earliest founding settlements through agrarian,
+classical, industrial, and modern eras into the space age and beyond. The starting
+"present" is not fixed at year 2000; **2000 becomes just one selectable entry point** on
+a much longer line.
+
+This makes the **era system the spine** of the whole design, and it is the largest
+content/design lift:
+- **The era arc must extend backward.** Today the era enum is anchored at 2000
+  (`era_1_turn_of_millennium`) and runs forward to ~2250 (`era_10_divergence`, which
+  already includes the space economy / post-scarcity / space colonialism — the "and
+  beyond"). It has **no pre-2000 eras**. The full vision needs the arc re-based to span
+  pre-history → agrarian → classical → industrial → modern → space → post-scarcity.
+- **Per-era content across the whole span.** Goods, recipes, facilities, and tech nodes
+  already carry `era_available` gating — the *mechanism* exists — but the *content* must
+  be authored for every era (subsistence farming and handicraft → industrial mass
+  production → information → biological/space manufacturing). This is Civilization-scale
+  content breadth.
+- **Per-era economic regimes.** The dynamics themselves shift by era: subsistence/barter
+  and reciprocity → market formation → industrial capitalism → post-scarcity. The
+  conservation/production *machinery* is era-agnostic (it works at any tech level — a
+  major asset), but the behavioral models layered on top vary by era.
+
+The founding seed (P0) is therefore literally "earliest history"; history-gen runs the
+arc forward through eras; entry is "pick an era (and place)." Realistically this is a
+generational, content-heavy effort — the engine and the era *mechanism* support it; the
+mountain is the era arc + per-era content + per-era regimes. It should be staged era-band
+by era-band rather than attempted whole.
+
 ## 3. Target architecture
 
 ```
@@ -135,6 +166,53 @@ PLAYER ENTRY: choose location (+ time); refine that region to full LOD; optional
   regionally varied (rich/poor, crime-light/infested, stable/volatile), neither collapsed
   nor exploded. Reuse the emergence behavioral gates over long horizons as acceptance
   tests; tune founding density, growth/decline rates, and balancing strengths.
+
+## 5a. Era-band staging — building the full timeline incrementally
+
+The full arc (earliest history → space age and beyond) is **not built at once**. It is
+staged **era-band by era-band**: each band is a coherent economic/tech epoch with its
+own content (goods/recipes/facilities/tech) and economic regime, validated through
+history-gen (run the band, confirm it produces a reasonable, varied, emergent world)
+before the next band is added on top. Because history-gen runs *forward from the
+founding*, the natural build order is forward — but the well-understood anchor is the
+**modern band (today's content)**, so bands are added on either side of it as priorities
+dictate.
+
+**The bands** (a working decomposition; the era enum is re-based to span them):
+
+| Band | Epoch | Economic regime | Content focus | Status |
+|---|---|---|---|---|
+| 0 | Founding | none (pre-economy) | physical substrate + founding population | **P0 done** |
+| 1 | Subsistence | household / barter / reciprocity (no money or markets) | foraging, subsistence farming, handicraft; carrying-capacity population | new |
+| 2 | Agrarian + market formation | surplus → trade → proto-markets → money/coinage; early specialization, towns, early states | settled agriculture, crafts, trade goods, money emergence | new |
+| 3 | Pre-industrial / mercantile | guilds, long-distance trade, banking origins, mercantile states | workshops, shipping, early finance | new |
+| 4 | Industrial | factories, wage labor, capital markets, fossil energy, urbanization | mass production, the existing extraction→production→energy resource economy | new (connects to current engine) |
+| 5 | **Modern (≈2000)** | services, finance, globalization | **the current content anchor — eras 1+** | **exists** |
+| 6 | Near-future | automation, fusion, information capital | eras 2–7 forward arc | exists |
+| 7 | Space age & beyond | post-scarcity, space colonialism, bifurcation | eras 8–10 | exists (partial) |
+
+**Per-band deliverable (the repeating unit of work):**
+1. **Era definition** — add the era(s) to the (re-based) era enum + progression triggers
+   (what advances out of the band: surplus/population/tech thresholds).
+2. **Content** — goods, recipes, facilities, tech nodes tagged `era_available` for the
+   band (authored data; no engine change thanks to the data-driven catalog + the
+   world-gen↔goods RNG decoupling, so adding them is world-neutral).
+3. **Economic regime** — the behavioral layer for the band (e.g., non-market household
+   production in Band 1; money/market emergence in Band 2). The conserved
+   extraction→production→consumption core is reused; the regime is a layer on top.
+4. **Entity genesis for the band** — what forms and dies (settlements→towns→cities;
+   households→workshops→firms; tribes→states→nations).
+5. **History-gen validation** — run the band forward from its entry seed and assert a
+   *reasonable, varied, emergent* world (populated, regionally differentiated, neither
+   collapsed nor runaway) — reuse the emergence behavioral gates over long horizons.
+
+**Recommended sequence.** Don't chase the whole timeline. First make the **engine**
+era-spanning-ready (P1 history driver, P2 entity genesis, P3 deep-time LOD) using the
+*existing* modern content (Band 5) as the test economy — this proves history-gen end to
+end without authoring new eras. Then add bands outward **one at a time**, each its own
+validated milestone: Band 4 (industrial — closest to the current resource economy) →
+Band 1–3 backward toward the founding, and Band 6–7 forward (mostly content-completion).
+Each band ships playable on its own (the player can start in any completed band).
 
 ## 6. Risks & open decisions
 
