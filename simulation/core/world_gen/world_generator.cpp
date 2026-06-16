@@ -175,6 +175,14 @@ bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGenerato
 // WorldGenerator::generate — main entry point
 // ===========================================================================
 
+// RNG-fork salts that isolate the goods/production layer from the world-gen
+// stream. Markets and facility/recipe assignment fork their own deterministic
+// streams from these so that editing the goods/recipe catalog can never advance
+// the shared stream and reshape resources, population, or nations. Arbitrary fixed
+// constants; only their stability matters (changing them re-rolls those layers).
+static constexpr uint32_t kGoodsLayerRngSalt = 0x600D0001u;
+static constexpr uint32_t kProductionLayerRngSalt = 0x600D0002u;
+
 WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     DeterministicRNG rng(config.seed);
 
@@ -251,7 +259,13 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     if (!config.goods_directory.empty()) {
         catalog_owned->load_from_directory(config.goods_directory);
     }
-    create_markets(world, rng, *catalog_owned, config);
+    // Markets are the GOODS layer: they read the generated world but must NOT
+    // advance the world-gen RNG stream, so adding/editing goods can never reshape
+    // resources, population, or nations. Draw from an independent forked stream.
+    // (Dependency direction is strictly world gen -> resources; goods/production is
+    // a separate, decoupled layer.)
+    DeterministicRNG markets_rng = rng.fork(kGoodsLayerRngSalt);
+    create_markets(world, markets_rng, *catalog_owned, config);
     world.goods_catalog = std::move(catalog_owned);
 
     // Step 5: NPC population
@@ -282,8 +296,12 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     }
 
     if (recipe_catalog.size() > 0 && facility_type_catalog.size() > 0) {
-        FacilityGenerator::create_facilities(world, rng, recipe_catalog, facility_type_catalog,
-                                             config);
+        // Facility/recipe assignment is the PRODUCTION layer: like markets, it reads
+        // the world but must not advance the world-gen stream, so adding/editing
+        // recipes never reshapes resources/population. Independent forked stream.
+        DeterministicRNG facilities_rng = rng.fork(kProductionLayerRngSalt);
+        FacilityGenerator::create_facilities(world, facilities_rng, recipe_catalog,
+                                             facility_type_catalog, config);
     }
 
     // Store loaded recipes in WorldState for production module access.

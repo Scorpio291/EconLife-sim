@@ -347,6 +347,24 @@ play (post-P2 nothing approaches the caps): fast gate + emergence unchanged. If 
 runaway remains it will now surface as large-but-finite wealth (debuggable) rather than a
 silent peg at an arbitrary number.
 
+**Decoupled the goods/production layer from the world-gen RNG stream.** Architectural
+directive: the dependency must be strictly `world gen → base resources` (deposits/
+fisheries/soil/climate), and the goods + production catalog (markets, recipes, facility
+assignment) must NOT advance the world-gen RNG — so editing/adding goods or recipes can
+never reshape resources, population, or nations (the fragility that cratered legitimacy
+in the waste pass and blocked further content work). Fix: `create_markets` and
+`FacilityGenerator::create_facilities` now draw from independent forked streams
+(`rng.fork(kGoodsLayerRngSalt / kProductionLayerRngSalt)`); `fork()` is const and does
+not advance the parent, so the shared stream used by resources/population/nations is
+untouched by the catalog. One-time re-baseline of the world for a given seed (markets/
+facilities no longer consume the shared stream); determinism holds (forks are
+deterministic — same seed → same world), and emergence + world-gen integration are
+unchanged: fast gate 1652/1652, emergence 27/27. This unblocks the remaining content
+work (cannabis cultivation, weapons goods) — adding recipes/goods is now world-neutral —
+and is a foundational step toward a Dwarf-Fortress-style history-generation phase
+(generate physical world + resources, then run the orchestrator to grow the economy/
+society emergently): physical substrate fixed, economy a decoupled layer on top.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
