@@ -179,6 +179,11 @@ struct EvidenceConfig {
 };
 
 struct SafetyCeilingsConfig {
+    // npc_capital_ceiling / business_cash_ceiling are NOT wealth caps — wealth is
+    // bounded by the economy, not an arbitrary number (real fortunes have no
+    // ceiling). They are used only as crash sentinels: non-finite (inf/NaN) values
+    // are clamped to them so a genuine bug can't poison the sim. apply_deltas floors
+    // capital at 0 but applies no upper magnitude cap.
     float npc_capital_ceiling = 1.0e9f;
     float business_cash_ceiling = 1.0e10f;
     float market_supply_ceiling = 1.0e8f;

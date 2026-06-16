@@ -61,13 +61,16 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             continue;
         NPC* npc = it->second;
 
-        // capital_delta: additive, floor at 0, ceiling at ceil.npc_capital_ceiling
+        // capital_delta: additive. Floor at 0; NO arbitrary upper wealth cap —
+        // personal wealth is bounded by what the economy produces, not a magic
+        // number (real fortunes have no ceiling). npc_capital_ceiling is used only
+        // as a crash sentinel for non-finite values (a genuine bug guard).
         if (d.capital_delta.has_value()) {
             npc->capital = safe_add(npc->capital, *d.capital_delta);
             if (std::isinf(npc->capital) || std::isnan(npc->capital)) {
                 npc->capital = ceil.npc_capital_ceiling;
             }
-            npc->capital = std::clamp(npc->capital, 0.0f, ceil.npc_capital_ceiling);
+            npc->capital = std::max(0.0f, npc->capital);
         }
 
         // new_status: replacement
@@ -297,12 +300,12 @@ static void apply_business_deltas(WorldState& world, const std::vector<BusinessD
 
         if (d.cash_delta.has_value()) {
             biz.cash = safe_add(biz.cash, *d.cash_delta);
+            // Crash sentinel ONLY for non-finite values; no arbitrary cap on
+            // business wealth (it is bounded by the economy, not a magic number).
             if (std::isinf(biz.cash) || std::isnan(biz.cash)) {
                 biz.cash = (biz.cash > 0.0f || std::isnan(biz.cash)) ? ceil.business_cash_ceiling
                                                                      : -ceil.business_cash_ceiling;
             }
-            biz.cash =
-                std::clamp(biz.cash, -ceil.business_cash_ceiling, ceil.business_cash_ceiling);
         }
         if (d.revenue_per_tick_update.has_value()) {
             biz.revenue_per_tick =

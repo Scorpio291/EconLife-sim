@@ -333,6 +333,20 @@ profiling/benchmark concern, not the criminal explosion. Remaining criminal grou
 route synthesis through the production module's real recipes + cannabis cultivation
 chain; weapons real goods; designer_drug revenue. Per-tick perf needs a profiling pass.
 
+**Removed the arbitrary wealth caps (crash-sentinel only now).** The `npc_capital_ceiling`
+(1e9) and `business_cash_ceiling` (1e10) were band-aids added while runaway *bugs*
+existed (banking double-credit; the drug revenue-feedback loop, now fixed in P2) — never
+a statement that wealth is capped. With the runaways fixed they were vestigial, and an
+arbitrary number capping wealth is itself a fake rail (real fortunes have no ceiling —
+there is now a trillionaire). `apply_deltas` no longer clamps capital/cash to a magnitude
+cap; it floors capital at 0 and uses the ceilings ONLY as crash sentinels for non-finite
+(inf/NaN) values. Wealth is now bounded by what the economy actually produces. Kept:
+`business_revenue_ceiling` (a per-tick *rate* limiter that catches explosions without
+capping total wealth) and the market supply/price sentinels. Behavior-neutral in current
+play (post-P2 nothing approaches the caps): fast gate + emergence unchanged. If a latent
+runaway remains it will now surface as large-but-finite wealth (debuggable) rather than a
+silent peg at an arbitrary number.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
