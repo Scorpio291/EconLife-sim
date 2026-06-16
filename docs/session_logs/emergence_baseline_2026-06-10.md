@@ -309,9 +309,29 @@ alternative_identity). Decayed tokens are retired (`is_active=false`, decay hand
 cost balloons over a multi-year run — a pre-existing O(n²) that Phase 1's more-active
 drug economy merely amplified. Fix: the tick orchestrator prunes `is_active==false`
 tokens each tick (stable erase-remove, deterministic). Every consumer already skips
-inactive tokens, so it's behavior-neutral — confirmed: fast gate 1638/1638 (incl.
-determinism tests), emergence 27/27 unchanged. This is the actual resolution of the
-diagnostic runaway.
+inactive tokens, so it's behavior-neutral — fast gate 1638/1638 (incl. determinism
+tests), emergence 27/27 unchanged. (A real latent perf fix — but it did NOT resolve the
+diagnostic slowdown; see Phase 2 below for the actual cause.)
+
+**Criminal unification Phase 2: break the revenue-feedback explosion.** The diagnostic
+data finally pinpointed it: `drug_economy` set `production_output = revenue_per_tick *
+0.1` and then wrote that drug revenue back as the business's `revenue_per_tick` — a
+positive-feedback loop (`output→revenue→output`). It looked stable only because drug
+prices were accidentally tiny (the iron-ore good_id collision, ~12); once Phase 1 gave
+drugs their real prices (300–2000), the loop ran at ×30–200/tick and **pinned criminal
+wealth at the 1e9 safety ceiling within ~1 year — even in Federation (strong, clean
+governance)** (inequality 0.81, grievance crossing 0.5). Fix: output is now a fixed
+per-business production capacity (`DrugEconomyConfig::base_drug_output`, a real
+throughput limit), bottlenecked by real precursors and scaled by the enforcement
+factor — never derived from the business's own revenue. Result: Federation criminal
+wealth at yr5 fell from **1.00e9 → 8.88e5** (~1000×), bounded and growing in line with
+legit (~7.4e5); the runaway is gone. Keystone (enforcement bite) + governance now
+operate on a stable base. NOTE: this did NOT speed up the long-horizon diagnostic
+(still ~16 min/regime) — that slowdown is the **cumulative per-tick cost of the whole
+resource-economy arc** (energy/waste/fisheries/agriculture/conservation), a separate
+profiling/benchmark concern, not the criminal explosion. Remaining criminal grounding:
+route synthesis through the production module's real recipes + cannabis cultivation
+chain; weapons real goods; designer_drug revenue. Per-tick perf needs a profiling pass.
 
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance

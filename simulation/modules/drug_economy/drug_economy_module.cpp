@@ -180,11 +180,11 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
                 op_factor = cfg_.operator_imprisoned_output;
         }
 
-        // Output CAPACITY is still a proxy off business scale (full recipe-driven
-        // production is the production module's job); but synthetic drugs are now
-        // gated by — and consume — real located drug_precursors. You cannot cook
-        // what you have no precursors for.
-        const float capacity = biz->revenue_per_tick * 0.1f * op_factor;
+        // Output CAPACITY is a fixed per-business throughput (NOT revenue-derived —
+        // that was the explosive feedback loop), bottlenecked below by real
+        // precursor availability and scaled by the enforcement factor. You cannot
+        // cook what you have no precursors for, nor more than your operation can run.
+        const float capacity = cfg_.base_drug_output * op_factor;
         if (capacity <= 0.0f)
             continue;
 

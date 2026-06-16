@@ -1028,6 +1028,15 @@ struct DrugEconomyConfig {
     // low-corruption places crime-light and weak/corrupt places crime-infested,
     // without ever fully eliminating organized crime.
     float operator_imprisoned_output = 0.5f;  // output multiplier while operator jailed
+
+    // Base per-business drug output capacity per tick. Output is this fixed capacity
+    // (a real throughput limit — labor/facilities/distribution), bottlenecked by
+    // real precursor availability and scaled by the enforcement factor. It is NOT
+    // derived from the business's own revenue: the old `revenue_per_tick * 0.1`
+    // proxy was a positive-feedback loop (output→revenue→output) that, once drugs
+    // got realistic prices, exploded criminal wealth to the safety ceiling in ~1
+    // year. Anchoring output to capacity + inputs breaks that loop structurally.
+    float base_drug_output = 5.0f;
 };
 
 struct RegionalConditionsConfig {
