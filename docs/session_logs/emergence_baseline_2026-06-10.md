@@ -382,6 +382,21 @@ path byte-identical (additive, guarded skip). Next: P1 history-gen driver (run t
 orchestrator forward from the founding seed) + P2 entity genesis (firms/settlements
 forming from near-zero) + P3 deep-time LOD.
 
+**History-gen P1: the forward-run driver.** Productionized the headless multi-year run
+(previously only the emergence test harness) into a first-class engine capability:
+`generate_world_with_history(gen_config, pkg_config, history_years, threads)` (new
+`simulation/modules/history_generator.{h,cpp}`, in the `econlife_modules` lib alongside
+`register_base_game_modules`). It generates a world, then advances the full base-game
+orchestrator for `history_years × 365` ticks before any player agency, returning the
+evolved world — history is simply the *gameplay engine running before the player
+arrives*. Deterministic from seed (single-threaded pool → reproducible). Integration
+tests (`history_gen_integration_test.cpp`, in the fast gate): a founding-seed world runs
+2 years forward — valid, finite, deterministic (same seed → identical evolved world); a
+full-seed economy survives a 2-year run (businesses persist, capitals finite);
+`history_years==0` returns the fresh world unchanged. Founding-seed firms don't bootstrap
+yet (no entity genesis — that's P2); P1 proves the driver. Fast gate + emergence green.
+Next: P2 entity genesis (settlements/firms forming from near-zero) → P3 deep-time LOD.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic
