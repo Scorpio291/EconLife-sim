@@ -49,6 +49,12 @@ class BusinessLifecycleModule : public ITickModule {
 
     // Spawn new businesses in sectors that emerge with new_era.
     void spawn_era_entrants(const WorldState& state, DeltaBuffer& delta, uint8_t new_era) const;
+
+    // Continuous, opportunity-driven firm genesis (own monthly cadence, runs
+    // every tick the cadence is due — independent of era transitions). Firms are
+    // born when a province is under its supportable firm target, founded by a
+    // local resident who commits their own capital. Self-limiting at saturation.
+    void genesis_from_opportunity(const WorldState& state, DeltaBuffer& delta) const;
 };
 
 }  // namespace econlife

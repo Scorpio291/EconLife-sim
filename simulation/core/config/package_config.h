@@ -367,6 +367,24 @@ struct BusinessLifecycleConfig {
     // Revenue floor: no single-era shock can drop a business below this fraction
     // of its pre-transition revenue (prevents instant death from stacking penalties).
     float stranded_revenue_floor = 0.20f;
+
+    // --- Continuous opportunity-driven firm genesis ---
+    // Businesses are born from unmet local opportunity, not only at era
+    // transitions. A province supports about (resident named-NPCs /
+    // firms_per_resident_denominator) legitimate firms — the same ~1-per-10
+    // density world gen seeds (SettlementGenerator::create_businesses). A
+    // founding-seed world (zero firms) therefore bootstraps toward the same
+    // equilibrium the full seed starts at, while an already-seeded world sits
+    // at saturation and genesis stays quiet (protecting the emergence baseline).
+    // Founders are real residents who commit their own capital — no money from
+    // nothing — so firm formation is bound to accumulated local wealth.
+    bool genesis_enabled = true;
+    uint32_t genesis_cadence_ticks = 30;            // evaluate monthly
+    float firms_per_resident_denominator = 10.0f;   // target = residents / this
+    float genesis_saturation_deadband = 0.10f;      // spawn only while >10% under target
+    float genesis_gap_fill_fraction = 0.10f;        // fill 10% of the unmet gap per evaluation
+    float founder_min_capital = 6000.0f;            // a founder needs at least this to start
+    float founder_investment_fraction = 0.30f;      // and seeds the firm with this share of it
 };
 
 struct GovernmentBudgetConfig {

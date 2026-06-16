@@ -73,9 +73,55 @@ TEST_CASE("history gen: founding-seed world runs forward, valid, deterministic",
         CHECK(w1.significant_npcs[0].id == w2.significant_npcs[0].id);
         CHECK(w1.significant_npcs[0].capital == w2.significant_npcs[0].capital);
     }
-    // NOTE: with the founding seed and no entity genesis yet (P2), the economy does
-    // not bootstrap firms within this short run — this test asserts the driver runs
-    // the founding world forward soundly; emergence of firms is validated once P2 lands.
+    REQUIRE(w1.npc_businesses.size() == w2.npc_businesses.size());
+}
+
+TEST_CASE("history gen: founding-seed world bootstraps an economy from zero firms",
+          "[history][integration]") {
+    // A founding seed starts with population but no firms. Opportunity-driven
+    // firm genesis (P2) must grow an economy: firms form from local founders who
+    // commit capital, so by the end of a short forward run the world has businesses
+    // it did not start with — and those firms are legitimate and located.
+    constexpr uint32_t kYears = 3;
+
+    // Sanity: the bare founding seed really does start with zero firms.
+    WorldState fresh = generate_world_with_history(base_config(42, true), PackageConfig{}, 0, 1);
+    REQUIRE(fresh.npc_businesses.empty());
+    auto total_capital = [](const WorldState& w) {
+        double t = 0.0;
+        for (const auto& n : w.significant_npcs)
+            t += n.capital;
+        return t;
+    };
+    auto solvent = [](const WorldState& w) {
+        int n = 0;
+        for (const auto& npc : w.significant_npcs)
+            if (npc.capital > 1000.0f)
+                ++n;
+        return n;
+    };
+
+    WorldState w = generate_world_with_history(base_config(42, true), PackageConfig{}, kYears, 1);
+    CHECK(w.current_tick == kYears * 365u);
+    CHECK(all_capitals_finite(w));
+
+    // Firms emerged from nothing — one founding wave at least seeds each province
+    // with a viable enterprise, so the count clears a low floor.
+    CHECK(w.npc_businesses.size() >= w.provinces.size());
+    for (const auto& b : w.npc_businesses) {
+        CHECK(b.province_id < w.provinces.size());  // located
+        CHECK_FALSE(b.criminal_sector);             // genesis seeds legitimate firms
+        CHECK(b.revenue_per_tick > 0.0f);           // earns from real activity
+    }
+
+    // The economy functions, not just exists. A founding population has no firms,
+    // hence no wages, so it spends down its seed savings (a deep year-1 dip); genesis
+    // firms then circulate income and the developing economy RECOVERS — aggregate
+    // capital grows year over year through the run, and a real share of the
+    // population is solvent at the end (income reaches people, not just owners).
+    WorldState w1 = generate_world_with_history(base_config(42, true), PackageConfig{}, 1, 1);
+    CHECK(total_capital(w) > total_capital(w1));            // growing as it develops
+    CHECK(solvent(w) > static_cast<int>(w.significant_npcs.size() / 4));  // broad-based income
 }
 
 TEST_CASE("history gen: full-seed economy survives a multi-year forward run",

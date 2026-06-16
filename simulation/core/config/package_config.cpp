@@ -1057,6 +1057,21 @@ PackageConfig load_package_config(const std::string& config_dir) {
         cfg.business_lifecycle.stranded_revenue_floor =
             j.value("stranded_revenue_floor", cfg.business_lifecycle.stranded_revenue_floor);
 
+        // Continuous opportunity-driven firm genesis knobs (all default to the
+        // struct value when absent, so existing config files need no changes).
+        auto& bl = cfg.business_lifecycle;
+        bl.genesis_enabled = j.value("genesis_enabled", bl.genesis_enabled);
+        bl.genesis_cadence_ticks = j.value("genesis_cadence_ticks", bl.genesis_cadence_ticks);
+        bl.firms_per_resident_denominator =
+            j.value("firms_per_resident_denominator", bl.firms_per_resident_denominator);
+        bl.genesis_saturation_deadband =
+            j.value("genesis_saturation_deadband", bl.genesis_saturation_deadband);
+        bl.genesis_gap_fill_fraction =
+            j.value("genesis_gap_fill_fraction", bl.genesis_gap_fill_fraction);
+        bl.founder_min_capital = j.value("founder_min_capital", bl.founder_min_capital);
+        bl.founder_investment_fraction =
+            j.value("founder_investment_fraction", bl.founder_investment_fraction);
+
         // Parse BusinessSector from string.
         auto parse_sector = [](const std::string& s) -> BusinessSector {
             if (s == "food_beverage")

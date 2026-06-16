@@ -397,6 +397,55 @@ full-seed economy survives a 2-year run (businesses persist, capitals finite);
 yet (no entity genesis — that's P2); P1 proves the driver. Fast gate + emergence green.
 Next: P2 entity genesis (settlements/firms forming from near-zero) → P3 deep-time LOD.
 
+## Update 2026-06-16: History-gen P2 (firm genesis) — a founding world bootstraps an economy
+
+**Firms are now born from local opportunity, not just hand-seeded at world gen.**
+`BusinessLifecycleModule` gained a continuous, opportunity-driven genesis path
+(`genesis_from_opportunity`) that runs on its own monthly cadence (independent of
+era transitions). Each province has a supportable firm target = `residents /
+firms_per_resident_denominator` (default 10) — the *same ~1-per-10 density world
+gen seeds* — so a founding-seed world (zero firms) grows toward the equilibrium the
+full seed starts at, while an already-seeded world sits at saturation and genesis
+stays quiet (a 10% deadband). Firms are founded by **real local residents who commit
+their own capital** (NPC `capital_delta` debit → firm `cash`): no money minted from
+nothing, formation bound to accumulated local wealth.
+
+**Two findings drove the design:**
+1. *A founding world has no income floor.* With no firms there are no wages, so NPC
+   capital drains to ~0 within a month. The first genesis cohort therefore fires at
+   the **founding moment (tick 1)**, while founders' savings are intact — the earliest
+   entrepreneurs form firms now, and those firms create the wages that sustain later
+   formation. (Realistic: settlements bootstrap from whoever can first open a farm/shop.)
+2. *Don't drop a modern firm into a vacuum.* Per design feedback, a solo owner-operator
+   (farmer, baker, smith, shopkeeper) produces real value from **their own labour applied
+   to local resources**, independent of employees. Genesis firm earning power is now
+   grounded in *what the firm does with the province's endowment* — agriculture tracks
+   `agricultural_productivity` (worked land), processing follows local farming, retail/
+   services track the local customer base — not a generic demand number. A solo firm is
+   viable on its own (operating profit flows to the owner via production →
+   financial_distribution regardless of headcount; lower cost ratio reflects paying
+   oneself rather than a payroll). This is the project's resource-endowment grounding
+   applied to firm formation: fertile ground sustains farmers, a populace sustains shops.
+
+**Result (seed 42, 6 provinces, 150 NPCs, single-thread history run):** the founding
+economy goes from **0 firms → ~11**, median NPC capital 0 → ~1,150 (solvent), aggregate
+population capital **growing** 240k → 1.07M over 5 years (was a flat ~77k subsistence
+trap before this pass), ~98/149 NPCs solvent. It converges toward — but stays below — the
+full-seed equilibrium (~20 firms), exactly the realistic *developing-economy* trajectory:
+a founding world matures over its long history run rather than appearing fully-formed.
+Genesis perturbs the full seed only marginally (18 → 20 firms; within the deadband) and
+**emergence stays 27/27**. Determinism preserved (RNG forked from `world_seed + tick`,
+deterministic province/resident iteration).
+
+Validated by `history_gen_integration_test.cpp` (fast gate): a founding-seed world now
+bootstraps from zero firms to ≥ provinces firms, all located/legitimate/revenue-positive,
+with aggregate capital growing beyond the un-run world (the economy *functions*, not just
+exists). Fast gate + emergence green.
+
+Still abstract (facility-less) firms — full production-grounding (genesis firms owning
+Facilities that produce real catalog goods from deposits/recipes) is the next genesis
+slice, alongside settlement/state genesis. Next: P3 deep-time LOD.
+
 **Still open (the people-push axis).** Redistribution here is the *policy* lever
 (a state chooses to tax). The complementary *people* lever — sustained grievance
 forcing a regime to redistribute (democratic concession) or to suppress (autocratic

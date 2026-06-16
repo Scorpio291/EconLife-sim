@@ -1,5 +1,14 @@
 {
   "stranded_revenue_floor": 0.20,
+
+  "genesis_enabled": true,
+  "genesis_cadence_ticks": 30,
+  "firms_per_resident_denominator": 10.0,
+  "genesis_saturation_deadband": 0.10,
+  "genesis_gap_fill_fraction": 0.10,
+  "founder_min_capital": 6000.0,
+  "founder_investment_fraction": 0.30,
+
   "stranded_sectors": {
     "2": [
       { "sector": "energy",              "revenue_penalty": 0.10, "cost_increase": 0.08 }
