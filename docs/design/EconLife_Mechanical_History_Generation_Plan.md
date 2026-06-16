@@ -40,6 +40,24 @@ simulated years. The recent work is exactly what makes forward history viable:
   grievance/conditions). These are what let civilizations *rise and fall* rather than
   monotonically grow or collapse — the "crashing and evolving" of the vision.
 
+## 2a. Scale: the whole planet (via LOD), not a 6-province slice
+
+The world is **planet-scale**. This is not new architecture — it's the existing LOD
+design applied globally:
+- **H3 hexagonal grid (res 2–9)** already provides a planet-scale cell system;
+  `target_province_count` is a parameter (V1 default 6). Planet scope raises it
+  (provinces as H3-cell aggregations across the globe).
+- **The LOD tiers (V1) are the planet-scale enabler:** LOD 0 (full, individual NPCs/
+  firms), LOD 1 (simplified trade partners), **LOD 2 (statistical — cohorts/aggregate
+  economy, "global signals without proportional compute").**
+
+Therefore **mechanical history runs the entire planet at LOD 2** (statistical cohort/
+aggregate dynamics everywhere), with LOD 0 detail materialized **only** for the player's
+chosen region at entry. The founding seed is **planet-wide** (sparse founding population
+across the globe), not a handful of provinces. This is the same insight V1's LOD system
+was built on, extended from "rest of world during play" to "the whole world across deep
+time." Full-detail-everywhere (LOD 0 globally) remains EX; statistical-planet is V1.
+
 ## 3. Target architecture
 
 ```
@@ -105,9 +123,12 @@ PLAYER ENTRY: choose location (+ time); refine that region to full LOD; optional
 - **P2 — Entity genesis.** Settlement founding/growth/abandonment; firm genesis from
   opportunity; nation formation/fragmentation — enough that a world grows from the
   founding seed into a populated, varied one. *The hardest phase.*
-- **P3 — Deep-time LOD.** Run history at coarse LOD so centuries are tractable
-  (target: a few minutes for ~150–300 yrs). Define the cohort/aggregate economic model
-  used during history and the full-LOD materialization at entry.
+- **P3 — Deep-time LOD at planet scale.** Run the *whole planet's* history at **LOD 2**
+  (statistical cohort/aggregate — the existing tier) so centuries across thousands of
+  provinces are tractable (target: minutes, not hours). Harden the LOD-2 economic model
+  for long-horizon use, and define full-LOD-0 **materialization** (instantiating
+  individual NPCs/firms from cohort aggregates) for the player's region at entry. This is
+  the make-or-break feasibility gate; it reuses and extends V1's LOD 0/1/2 system.
 - **P4 — Player entry.** Snapshot at chosen time; location/region selection; full-LOD
   promotion of the chosen region; optional continue-running.
 - **P5 — Calibration & validation.** History must yield *reasonable* worlds — populated,
