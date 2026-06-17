@@ -184,6 +184,62 @@ TEST_CASE("test_basic_consumer_demand_adds_to_demand_buffer", "[npc_spending][ti
     REQUIRE_THAT(total_demand, WithinAbs(5.0f, 0.01f));
 }
 
+TEST_CASE("test_background_population_eats_food", "[npc_spending][tier6]") {
+    // Part C: the background population consumes food even with NO significant NPCs.
+    // food_need = total_population * per_capita_food_per_tick = 10000 * 0.0008 = 8.0,
+    // all on flour (the only basket good present) -> demand 8.0, supply depleted by 8.0.
+    NpcSpendingModule module;
+
+    WorldState state{};
+    state.current_tick = 100;
+    state.world_seed = 42;
+
+    Province p{};
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 10000;
+    p.id = 0;
+    state.provinces.push_back(p);  // no significant NPCs in this province
+
+    const uint32_t flour_id = lookup_good_id(state, "flour");
+    const uint32_t steel_id = lookup_good_id(state, "steel");
+
+    RegionalMarket flour{};
+    flour.good_id = flour_id;
+    flour.province_id = 0;
+    flour.spot_price = 10.0f;
+    flour.supply = 100.0f;
+    state.regional_markets.push_back(flour);
+
+    // A non-food good must see no subsistence demand (people eat food, not steel).
+    RegionalMarket steel{};
+    steel.good_id = steel_id;
+    steel.province_id = 0;
+    steel.spot_price = 10.0f;
+    steel.supply = 100.0f;
+    state.regional_markets.push_back(steel);
+
+    rebuild_npc_indices(state);
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    float flour_demand = 0.0f, flour_supply = 0.0f, steel_demand = 0.0f;
+    for (const auto& md : delta.market_deltas) {
+        if (md.region_id != 0)
+            continue;
+        if (md.good_id == flour_id) {
+            if (md.demand_buffer_delta)
+                flour_demand += *md.demand_buffer_delta;
+            if (md.supply_delta)
+                flour_supply += *md.supply_delta;
+        } else if (md.good_id == steel_id && md.demand_buffer_delta) {
+            steel_demand += *md.demand_buffer_delta;
+        }
+    }
+    REQUIRE_THAT(flour_demand, WithinAbs(8.0f, 0.01f));   // population food demand
+    REQUIRE_THAT(flour_supply, WithinAbs(-8.0f, 0.01f));  // matter actually consumed
+    REQUIRE(steel_demand == 0.0f);                        // non-food untouched
+}
+
 TEST_CASE("test_inactive_npc_excluded", "[npc_spending][tier6]") {
     NpcSpendingModule module;
 

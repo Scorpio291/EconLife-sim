@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 #include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/delta_buffer.h"
@@ -131,7 +132,11 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
     std::sort(province_npcs.begin(), province_npcs.end(),
               [](const NPC* a, const NPC* b) { return a->id < b->id; });
 
-    if (province_npcs.empty())
+    // The background population also consumes (food subsistence, below), so we run
+    // even when there are no significant NPCs — only bail if there is truly no one.
+    const uint32_t population =
+        province.cohort_stats ? province.cohort_stats->total_population : 0;
+    if (province_npcs.empty() && population == 0)
         return;
 
     // For each regional market in this province, compute consumer demand.
@@ -145,6 +150,42 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
     std::sort(
         province_markets.begin(), province_markets.end(),
         [](const RegionalMarket* a, const RegionalMarket* b) { return a->good_id < b->good_id; });
+
+    // Background-population food subsistence (Part C — demand-side grounding). The
+    // whole province population eats, not just the significant NPCs. Size the need by
+    // head count and spread it across the food-basket goods present here, proportional
+    // to what is actually on the shelf ("eat what's available"); with nothing on the
+    // shelf, split evenly so the unmet demand still signals scarcity to price_engine.
+    // The resulting per-good demand is fused into the per-market total below, so it
+    // never double-spends supply with NPC demand. Population is not charged cash
+    // (cohorts are abstract); the demand raises price, which producers earn against.
+    std::unordered_map<uint32_t, float> background_food_demand;
+    if (population > 0 && cfg_.per_capita_food_per_tick > 0.0f && !cfg_.food_basket.empty()) {
+        std::unordered_set<uint32_t> basket_ids;
+        for (const auto& name : cfg_.food_basket) {
+            const uint32_t gid = lookup_good_id(state, name);
+            if (gid != 0)
+                basket_ids.insert(gid);
+        }
+        std::vector<const RegionalMarket*> basket_markets;  // province_markets order (good_id asc)
+        float basket_supply_total = 0.0f;
+        for (const auto* market : province_markets) {
+            if (basket_ids.count(market->good_id) != 0) {
+                basket_markets.push_back(market);
+                basket_supply_total += std::max(market->supply, 0.0f);
+            }
+        }
+        if (!basket_markets.empty()) {
+            const float food_need = static_cast<float>(population) * cfg_.per_capita_food_per_tick;
+            const float even_weight = 1.0f / static_cast<float>(basket_markets.size());
+            for (const auto* market : basket_markets) {
+                const float weight = basket_supply_total > 0.0f
+                                         ? std::max(market->supply, 0.0f) / basket_supply_total
+                                         : even_weight;
+                background_food_demand[market->good_id] = food_need * weight;
+            }
+        }
+    }
 
     // Track total spending per NPC across all markets for NPCDelta emission.
     // NPCs are charged only for the goods they actually receive (consumed share),
@@ -191,6 +232,15 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
 
             total_demand += demand;
             npc_demand_this_market[ni] = demand;
+        }
+
+        // Fuse background-population food demand for this good (if any) into the total
+        // before a single capped consumption — NPC and population draw the same shelf,
+        // so this is the conservation-correct place to combine them. Only NPCs are
+        // charged cash (Pass 2 uses npc_demand_this_market); the population is not.
+        if (const auto bg_it = background_food_demand.find(market->good_id);
+            bg_it != background_food_demand.end()) {
+            total_demand += bg_it->second;
         }
 
         if (total_demand <= 0.0f)

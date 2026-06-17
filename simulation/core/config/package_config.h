@@ -820,6 +820,21 @@ struct NpcSpendingConfig {
     // (conservation — consumption does not annihilate matter; it produces garbage
     // that accumulates in the province until handled).
     float civilian_waste_rate = 0.30f;
+
+    // Background-population food subsistence (Part C — demand-side grounding).
+    // The whole province population must eat, not just the significant NPCs. Each
+    // tick the background population generates inelastic (necessity) demand for the
+    // food basket below, sized by head count: food_need = total_population *
+    // per_capita_food_per_tick, distributed across the basket proportional to local
+    // availability ("eat what's on the shelf"). This demand is fused with NPC demand
+    // per market so the two never double-spend the same supply; the population has no
+    // individual wallet (cohorts are abstract), so it is not charged cash — the demand
+    // signal raises food prices, which is what food producers earn against.
+    float per_capita_food_per_tick = 0.0008f;  // subsistence food units per person per tick
+    std::vector<std::string> food_basket = {
+        "flour",       "rice",          "beef",          "pork",
+        "poultry_meat", "dairy_products", "fish_wild",     "fish_farmed",
+        "packaged_food", "refined_sugar", "soy_oil_refined"};
 };
 
 struct AntitrustConfig {
