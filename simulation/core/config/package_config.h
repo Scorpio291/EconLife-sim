@@ -875,6 +875,12 @@ struct ProductionConfig {
     float worker_productivity_diminishing = 0.15f;
     float minimum_input_fraction = 0.1f;
     float informal_price_discount = 0.7f;
+    // Yield-modifier inputs (Part C / GDD agriculture model): the fraction of full
+    // output a recipe yields when a yield-modifier input (fertilizer for crops, corn
+    // feed for livestock) is entirely absent. The subsistence/"hunter-gatherer" base
+    // from which the food chain bootstraps before the fertilizer/feed industry exists;
+    // applying the modifier input scales output from this floor up to 1.0 (full yield).
+    float yield_modifier_floor = 0.4f;
 
     // --- Energy (electricity as a generated, consumed good) ---
     // Electricity is generated each tick from the province's endowment and consumed

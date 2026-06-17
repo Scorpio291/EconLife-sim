@@ -137,7 +137,8 @@ bool RecipeCatalog::load_from_directory(const std::string& recipes_dir) {
 //  21: min_tech_tier
 //  22: key_technology_node
 //  23: era_available
-//  24: extracted_resource  (optional; extraction recipes only)
+//  24: extracted_resource     (optional; extraction recipes only)
+//  25: yield_modifier_inputs  (optional; ';'-separated input keys that boost yield, not gate it)
 
 bool RecipeCatalog::load_csv(const std::string& filepath) {
     std::ifstream file(filepath);
@@ -207,6 +208,23 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
         // on extraction recipes; absent on other recipe CSVs (which have 24 columns).
         if (fields.size() > 24) {
             recipe.extracted_resource = parse_resource_type(fields[24]);
+        }
+
+        // Optional column 25: yield_modifier_inputs — a ';'-separated list of input good
+        // keys that BOOST yield rather than gate it (fertilizer for crops, corn feed for
+        // livestock). Marks the matching RecipeInput so production treats it as a modifier,
+        // letting the food chain bootstrap from a subsistence base. See RecipeInput::yield_modifier.
+        if (fields.size() > 25 && !fields[25].empty()) {
+            std::stringstream modss(fields[25]);
+            std::string mod_key;
+            while (std::getline(modss, mod_key, ';')) {
+                mod_key = trim(mod_key);
+                for (auto& in : recipe.inputs) {
+                    if (in.good_id == mod_key) {
+                        in.yield_modifier = true;
+                    }
+                }
+            }
         }
 
         // Derive base_cost_per_tick from total motive-power need + labor (placeholder

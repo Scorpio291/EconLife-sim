@@ -25,6 +25,7 @@
 #include "core/world_gen/world_generator.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/production/production_module.h"
 #include "modules/register_base_game_modules.h"
 
 using namespace econlife;
@@ -441,4 +442,77 @@ TEST_CASE("WorldGenerator provinces show economic differentiation after 30 ticks
         stability_values.insert(std::round(p.conditions.stability_score * 100.0f));
     }
     CHECK(stability_values.size() >= 2);  // at least 2 distinct outcomes
+}
+
+// ===========================================================================
+// Food chain bootstraps from a subsistence base (Part C, yield-modifier model)
+//
+// This is the first integration test to load the FULL production layer (goods +
+// recipes + facility types) so production actually runs end-to-end. Before the
+// yield-modifier fix, staple crops hard-required fertilizer_npk (and livestock
+// hard-required corn), so at genesis — before the fertilizer/feed industry exists —
+// food production was pinned at zero (a bootstrap deadlock). With fertilizer/feed as
+// yield MODIFIERS (GDD agriculture model), farms produce a subsistence base from
+// land+labor alone, so grain flows and the food chain comes alive.
+// ===========================================================================
+TEST_CASE("WorldGenerator food chain bootstraps without fertilizer",
+          "[integration][world_gen][economy][food]") {
+    namespace fs = std::filesystem;
+    auto find_path = [](const char* leaf) -> std::string {
+        const char* roots[] = {"packages/base_game/", "../packages/base_game/",
+                               "../../packages/base_game/", "../../../packages/base_game/"};
+        for (const auto* r : roots) {
+            std::string p = std::string(r) + leaf;
+            if (fs::exists(p))
+                return fs::canonical(p).string();
+        }
+        return "";
+    };
+
+    WorldGeneratorConfig config{};
+    config.seed = 42;
+    config.province_count = 6;
+    config.npc_count = 300;
+    config.goods_directory = find_path("goods");
+    config.recipes_directory = find_path("recipes");
+    config.facility_types_filepath = find_path("facility_types/facility_types.csv");
+    REQUIRE(!config.facility_types_filepath.empty());  // full production layer must load
+
+    auto [world, player] = WorldGenerator::generate_with_player(config);
+    world.player = std::make_unique<PlayerCharacter>(std::move(player));
+    REQUIRE(world.facilities.size() > 0);  // production actually runs
+
+    // Let the orchestrator settle the economy (labor_market staffs facilities, etc.).
+    run_orchestrated_ticks(world, 30);
+
+    // Measure production FLOW, not residual stock: under population-scale food demand,
+    // anything produced is consumed the same tick, so market supply nets to ~0 even when
+    // production is healthy. Run one standalone production tick and sum the output
+    // (supply_delta) for the staple grains — this is the bootstrap signal.
+    ProductionModule prod;
+    prod.init_from_world_state(world);
+    DeltaBuffer pdelta{};
+    for (const auto& p : world.provinces)
+        prod.execute_province(p.id, world, pdelta);
+
+    auto staple_flow = [&](const char* name) -> float {
+        const GoodDefinition* def = world.goods_catalog ? world.goods_catalog->find(name) : nullptr;
+        if (!def)
+            return 0.0f;
+        float produced = 0.0f;
+        for (const auto& md : pdelta.market_deltas)
+            if (md.good_id == def->numeric_id && md.supply_delta.has_value() &&
+                *md.supply_delta > 0.0f)
+                produced += *md.supply_delta;
+        return produced;
+    };
+
+    float wheat = staple_flow("wheat"), corn = staple_flow("corn");
+    float rice = staple_flow("rice"), soy = staple_flow("soybeans");
+    float staple_production = wheat + corn + rice + soy;
+    INFO("staple production flow: wheat=" << wheat << " corn=" << corn << " rice=" << rice
+                                          << " soy=" << soy);
+    // The food chain is no longer frozen: at least one staple is produced from the
+    // subsistence base despite ~zero fertilizer supply at genesis.
+    CHECK(staple_production > 0.0f);
 }

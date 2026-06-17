@@ -30,6 +30,13 @@ struct ProductionConstants {
 struct RecipeInput {
     std::string good_id;      // string identifier matching goods data file
     float quantity_per_tick;  // units consumed per tick at baseline
+    // Yield-modifier inputs (Part C, GDD agriculture model) BOOST output rather than
+    // gate it: a farm yields a subsistence base with no fertilizer and scales up to full
+    // yield when fertilizer is applied; livestock graze without corn-feed, boosted by it.
+    // A hard input (false) still zeroes output when absent (bottleneck). This lets the
+    // food chain bootstrap from a primitive base before the fertilizer/feed industry
+    // exists. See production_module input split and ProductionConfig::yield_modifier_floor.
+    bool yield_modifier = false;
 };
 
 // ---------------------------------------------------------------------------

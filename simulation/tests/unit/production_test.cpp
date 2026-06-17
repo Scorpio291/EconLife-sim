@@ -1347,3 +1347,82 @@ TEST_CASE("test_production_emits_category_waste", "[production][tier1][waste]") 
     }
     REQUIRE_THAT(haz, Catch::Matchers::WithinAbs(3.5f, 0.001f));
 }
+
+// ---------------------------------------------------------------------------
+// Yield-modifier inputs (Part C): fertilizer/feed BOOST yield rather than gate it.
+// A farm produces a subsistence base with no fertilizer, scaling to full yield when
+// applied. This is what lets the food chain bootstrap before the fertilizer industry
+// exists. floor = ProductionConfig::yield_modifier_floor (0.4); base wheat output = 15.
+// ---------------------------------------------------------------------------
+namespace {
+Recipe make_wheat_recipe() {
+    Recipe recipe{};
+    recipe.id = "wheat_farming";
+    recipe.name = "Wheat Farming";
+    // fertilizer_npk is a yield-modifier input (boosts, does not gate).
+    recipe.inputs = {RecipeInput{"fertilizer_npk", 1.0f, /*yield_modifier=*/true}};
+    recipe.outputs = {RecipeOutput{"wheat", 15.0f, 0.5f, false}};
+    recipe.min_tech_tier = 1;
+    recipe.base_cost_per_tick = 100.0f;
+    recipe.is_technology_intensive = false;
+    recipe.key_technology_node = "";
+    return recipe;
+}
+}  // namespace
+
+TEST_CASE("test_yield_modifier_floor_without_fertilizer", "[production][tier1]") {
+    // No fertilizer on the shelf: the farm still produces at the subsistence floor
+    // (0.4 * 15 = 6.0) and consumes NO fertilizer.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+    add_market(state, "fertilizer_npk", province_id, 0.0f);  // none available
+    add_market(state, "wheat", province_id, 0.0f, 28.0f);
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_wheat_recipe());
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "wheat_farming"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    auto wheat = summarize_deltas(delta, "wheat", province_id);
+    REQUIRE(wheat.supply_count == 1);
+    REQUIRE_THAT(wheat.total_supply_delta, WithinAbs(6.0f, 0.001f));  // 15 * 0.4 floor
+    // No fertilizer was consumed (none applied).
+    auto fert = summarize_deltas(delta, "fertilizer_npk", province_id);
+    REQUIRE(fert.total_demand_delta == 0.0f);
+}
+
+TEST_CASE("test_yield_modifier_full_with_fertilizer", "[production][tier1]") {
+    // Fertilizer fully available: full yield (15.0) and 1.0 fertilizer consumed.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+    add_market(state, "fertilizer_npk", province_id, 100.0f);  // plentiful
+    add_market(state, "wheat", province_id, 0.0f, 28.0f);
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_wheat_recipe());
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "wheat_farming"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    auto wheat = summarize_deltas(delta, "wheat", province_id);
+    REQUIRE(wheat.supply_count == 1);
+    REQUIRE_THAT(wheat.total_supply_delta, WithinAbs(15.0f, 0.001f));  // full yield
+    // Fertilizer applied and consumed (physical draw-down).
+    auto fert = summarize_deltas(delta, "fertilizer_npk", province_id);
+    REQUIRE_THAT(fert.total_demand_delta, WithinAbs(1.0f, 0.001f));
+}

@@ -515,7 +515,14 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
     // The bottleneck ratio is the minimum ratio of (available / required)
     // across all inputs. If any input is insufficient, output is clamped
     // proportionally.
-    float bottleneck_ratio = 1.0f;
+    // Hard inputs GATE output (bottleneck ratio); yield-modifier inputs (fertilizer for
+    // crops, corn feed for livestock) instead BOOST it. A recipe with no fertilizer still
+    // yields a subsistence base, scaling up to full yield as the modifier input is applied
+    // — this is what lets the food chain bootstrap before the fertilizer/feed industry
+    // exists (GDD agriculture yield model; CLAUDE.md: spec wins over the hard-input CSV).
+    float bottleneck_ratio = 1.0f;  // from hard (gating) inputs only
+    float modifier_avail = 1.0f;    // min availability across yield-modifier inputs (in [0,1])
+    bool has_modifier_input = false;
 
     // Sort inputs by good_id ascending for deterministic floating-point accumulation.
     std::vector<const RecipeInput*> sorted_inputs;
@@ -537,16 +544,30 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             available = it->second;
         }
         float ratio = available / required;
-        bottleneck_ratio = std::min(bottleneck_ratio, ratio);
+        if (input->yield_modifier) {
+            has_modifier_input = true;
+            modifier_avail = std::min(modifier_avail, std::max(0.0f, std::min(1.0f, ratio)));
+        } else {
+            bottleneck_ratio = std::min(bottleneck_ratio, ratio);
+        }
     }
 
     // Clamp bottleneck to [0, 1].
     bottleneck_ratio = std::max(0.0f, std::min(1.0f, bottleneck_ratio));
 
-    // Consume inputs (proportional to bottleneck ratio).
-    // Record derived demand for each consumed input.
+    // Yield-modifier factor: subsistence floor with no modifier input, rising to 1.0 as
+    // the modifier is fully applied. 1.0 (no effect) when the recipe has no modifier input.
+    float yield_modifier_factor =
+        has_modifier_input
+            ? cfg_.yield_modifier_floor + (1.0f - cfg_.yield_modifier_floor) * modifier_avail
+            : 1.0f;
+
+    // Consume inputs. Hard inputs are drawn at the bottleneck ratio; yield-modifier inputs
+    // only in proportion to how much was actually applied (modifier_avail), so unfertilized
+    // farming consumes no fertilizer. Record derived demand for each consumed input.
     for (const RecipeInput* input : sorted_inputs) {
-        float consumed = input->quantity_per_tick * bottleneck_ratio;
+        float draw = input->yield_modifier ? bottleneck_ratio * modifier_avail : bottleneck_ratio;
+        float consumed = input->quantity_per_tick * draw;
         if (consumed <= 0.0f) {
             continue;
         }
@@ -639,7 +660,8 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
 
     for (const RecipeOutput* output : sorted_outputs) {
         float actual_output = output->quantity_per_tick * output_multiplier * bottleneck_ratio *
-                              worker_multiplier * facility.output_rate_modifier * power_ratio;
+                              yield_modifier_factor * worker_multiplier *
+                              facility.output_rate_modifier * power_ratio;
 
         // Clamp NaN or negative to 0.
         if (std::isnan(actual_output) || actual_output < 0.0f) {
