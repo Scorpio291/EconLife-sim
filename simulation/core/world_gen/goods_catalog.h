@@ -14,7 +14,9 @@ namespace econlife {
 // GoodDefinition — one tradeable good loaded from CSV
 // ---------------------------------------------------------------------------
 struct GoodDefinition {
-    uint32_t numeric_id;       // assigned at load time, sequential from 0
+    uint32_t numeric_id;       // assigned at load time, sequential from 1
+                               // (0 is reserved as the "no good / unknown" sentinel
+                               //  returned by lookup_good_id(); no real good is 0)
     std::string good_id;       // string key from CSV (e.g., "iron_ore", "wheat")
     std::string display_name;  // human-readable name
     uint8_t tier;              // 0-4; determines supply chain depth
@@ -55,7 +57,12 @@ class GoodsCatalog {
 
    private:
     std::vector<GoodDefinition> goods_;
-    uint32_t next_numeric_id_ = 0;
+    // Real goods are numbered from 1; 0 is reserved as the invalid/"unknown good"
+    // sentinel (lookup_good_id() returns 0 for a string the catalog doesn't hold).
+    // Numbering real goods from 0 would make the first-loaded good indistinguishable
+    // from "not found", and consumers that treat good_id 0 as invalid would silently
+    // drop it (e.g. production skips outputs whose gid resolves to 0).
+    uint32_t next_numeric_id_ = 1;
 };
 
 }  // namespace econlife

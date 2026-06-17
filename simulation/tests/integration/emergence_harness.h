@@ -193,9 +193,12 @@ inline Snapshot capture(const WorldState& w) {
         s.national_legitimacy = w.nations[0].political_cycle.national_legitimacy;
         s.home_government_type = static_cast<int>(w.nations[0].government_type);
     }
+    // good_id 1 is the first real catalog good (ids are 1-based; 0 is the
+    // invalid/unknown sentinel). This samples one representative good's
+    // cross-province price spread.
     double pmin = 1e30, pmax = -1e30;
     for (const auto& m : w.regional_markets) {
-        if (m.good_id == 0) {
+        if (m.good_id == 1) {
             pmin = std::min(pmin, static_cast<double>(m.spot_price));
             pmax = std::max(pmax, static_cast<double>(m.spot_price));
         }

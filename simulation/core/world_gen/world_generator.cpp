@@ -964,12 +964,14 @@ void WorldGenerator::create_markets(WorldState& world, DeterministicRNG& rng,
         };
 
         for (uint32_t p = 0; p < static_cast<uint32_t>(world.provinces.size()); ++p) {
-            for (uint32_t g = 0; g < 10; ++g) {
+            // Good ids are 1-based (0 is the invalid/unknown sentinel), so the
+            // fallback markets occupy ids 1..10, indexing fallback_goods by g-1.
+            for (uint32_t g = 1; g <= 10; ++g) {
                 RegionalMarket m{};
                 m.good_id = g;
                 m.province_id = p;
-                m.spot_price = fallback_goods[g].price * (0.8f + rng.next_float() * 0.4f);
-                m.equilibrium_price = fallback_goods[g].price;
+                m.spot_price = fallback_goods[g - 1].price * (0.8f + rng.next_float() * 0.4f);
+                m.equilibrium_price = fallback_goods[g - 1].price;
                 m.adjustment_rate = 0.05f + rng.next_float() * 0.05f;
                 m.supply = 80.0f + rng.next_float() * 120.0f;
                 m.demand_buffer = 0.0f;

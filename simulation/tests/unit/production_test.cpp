@@ -776,6 +776,81 @@ TEST_CASE("test_unknown_good_suppresses_market_deltas", "[production][tier1]") {
     REQUIRE_THAT(total_revenue, WithinAbs(0.0f, 1e-6f));
 }
 
+// Regression for the good-id-0 sentinel collision. Real good_ids are 1-based;
+// 0 is the "no good / unknown" sentinel returned by lookup_good_id(). Before the
+// fix, the first good loaded into the catalog received numeric_id 0, which
+// production treats as unknown and drops (no supply, no revenue) — so the
+// first good in the catalog was silently unsellable everywhere. This verifies
+// the first real good (id 1) is produced and booked as revenue.
+TEST_CASE("test_first_catalog_good_is_sellable", "[production][tier1]") {
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(prov);
+
+    // Catalog whose FIRST good carries the first real id (1), not the sentinel 0.
+    auto cat = std::make_unique<GoodsCatalog>();
+    GoodDefinition first{};
+    first.numeric_id = 1;
+    first.good_id = "grain";
+    first.base_price = 25.0f;
+    cat->push_back_loaded(first);
+    state.goods_catalog = std::move(cat);
+    REQUIRE(lookup_good_id(state, "grain") == 1u);  // resolvable, not the sentinel
+
+    // Market for the first good (keyed by the catalog id, with a real price).
+    RegionalMarket grain_market{};
+    grain_market.good_id = 1;
+    grain_market.province_id = province_id;
+    grain_market.spot_price = 25.0f;
+    grain_market.equilibrium_price = 25.0f;
+    grain_market.supply = 0.0f;
+    grain_market.demand_buffer = 0.0f;
+    state.regional_markets.push_back(grain_market);
+    rebuild_npc_indices(state);
+
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+
+    Recipe grain_recipe{};
+    grain_recipe.id = "grow_grain";
+    grain_recipe.name = "Grow Grain";
+    grain_recipe.inputs = {};
+    grain_recipe.outputs = {RecipeOutput{"grain", 10.0f, 0.6f, false}};
+    grain_recipe.min_tech_tier = 1;
+    grain_recipe.base_cost_per_tick = 0.0f;
+    grain_recipe.is_technology_intensive = false;
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(grain_recipe);
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "grow_grain"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    // The first good is produced: a positive supply delta lands on its market...
+    bool emitted_supply = false;
+    for (const auto& md : delta.market_deltas) {
+        if (md.good_id == 1u && md.region_id == province_id && md.supply_delta.has_value() &&
+            md.supply_delta.value() > 0.0f) {
+            emitted_supply = true;
+        }
+    }
+    REQUIRE(emitted_supply);
+
+    // ...and is booked as revenue (≈ 10 units * 25.0), not dropped as "unknown".
+    float total_revenue = 0.0f;
+    for (const auto& bd : delta.business_deltas) {
+        if (bd.business_id == 1 && bd.revenue_per_tick_update.has_value()) {
+            total_revenue += bd.revenue_per_tick_update.value();
+        }
+    }
+    REQUIRE(total_revenue > 0.0f);
+}
+
 TEST_CASE("test_init_for_tick_picks_up_newly_constructed_facility",
           "[production][tier1][construction]") {
     // Phase 11 (construction) delivers new facilities via NewFacilityDelta,

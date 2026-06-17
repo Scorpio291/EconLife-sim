@@ -136,9 +136,10 @@ TEST_CASE("GoodsCatalog  - numeric IDs are sequential", "[world_gen][goods_catal
     REQUIRE(catalog.load_from_directory(tmp_dir));
     REQUIRE(catalog.size() == 3);
 
-    CHECK(catalog.goods()[0].numeric_id == 0);
-    CHECK(catalog.goods()[1].numeric_id == 1);
-    CHECK(catalog.goods()[2].numeric_id == 2);
+    // Real goods are numbered from 1; 0 is reserved as the invalid/unknown sentinel.
+    CHECK(catalog.goods()[0].numeric_id == 1);
+    CHECK(catalog.goods()[1].numeric_id == 2);
+    CHECK(catalog.goods()[2].numeric_id == 3);
 
     cleanup_temp_dir(tmp_dir);
 }
