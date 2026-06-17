@@ -9,6 +9,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "core/config/package_config.h"
@@ -22,6 +23,20 @@ struct WorldState;
 struct DeltaBuffer;
 struct NPCBusiness;
 class DeterministicRNG;
+
+// ---------------------------------------------------------------------------
+// ProvincePower — per-form availability ratios from the motive-power pre-pass.
+// Each ratio is clamp(supplied/demanded, 0, 1) for that power form across the
+// province this tick: 1.0 = fully met, < 1.0 = shortfall. A facility's output
+// is scaled by the bottleneck across only the forms its recipe requires (a
+// form with a zero requirement does not constrain it), so a water/biomass-
+// powered recipe is unaffected by an electricity shortage and vice versa.
+// ---------------------------------------------------------------------------
+struct ProvincePower {
+    float electricity = 1.0f;  // recipe.energy_per_tick
+    float mechanical = 1.0f;   // recipe.mechanical_per_tick
+    float fuel = 1.0f;         // recipe.fuel_per_tick (process heat)
+};
 
 // ---------------------------------------------------------------------------
 // RecipeRegistry — holds all loaded recipes, keyed by recipe id.
@@ -107,24 +122,36 @@ class ProductionModule : public ITickModule {
 
     void process_business(const NPCBusiness& biz, const WorldState& state, DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,
-                          float electricity_ratio, DeterministicRNG& rng);
+                          const ProvincePower& power, DeterministicRNG& rng);
 
     void process_facility(const NPCBusiness& biz, const Facility& facility, const WorldState& state,
                           DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,
-                          float electricity_ratio, DeterministicRNG& rng);
+                          const ProvincePower& power, DeterministicRNG& rng);
 
-    // Generate the province's electricity for this tick from its endowment and
-    // emit the resulting market deltas (electricity supply produced/consumed; fossil
-    // fuel burned). Returns the brownout ratio = clamp(generation / demand, 0, 1):
-    // 1.0 = demand fully met, < 1.0 = energy shortfall throttling production output.
-    // Renewables (solar/wind/geothermal capacity + hydro) generate matter-free; the
-    // shortfall burns the province's fossil-fuel stock, consuming that matter — so
-    // energy is bound to physics: fuel matter -> electricity -> work.
-    float generate_province_energy(uint32_t province_idx, const WorldState& state,
-                                   const std::vector<const NPCBusiness*>& province_businesses,
-                                   std::unordered_map<std::string, float>& available_supply,
-                                   DeltaBuffer& delta) const;
+    // Supply the province's motive power for this tick from its endowment and emit
+    // the resulting market deltas (electricity produced/consumed; biomass/fossil fuel
+    // burned). Returns the per-form availability ratios (see ProvincePower). The three
+    // forms draw on one fuel pool: electricity (renewables matter-free, shortfall by
+    // burning fossil), mechanical (water/wind direct-drive matter-free, shortfall by
+    // burning fuel for steam), and process heat (burning fuel). Combustion is sequenced
+    // through the shared `available_supply` scratch so fuel matter is conserved across
+    // all three consumers. Energy is bound to physics: fuel matter -> work; renewable
+    // flows are free and non-depleting.
+    ProvincePower supply_province_power(uint32_t province_idx, const WorldState& state,
+                                        const std::vector<const NPCBusiness*>& province_businesses,
+                                        std::unordered_map<std::string, float>& available_supply,
+                                        DeltaBuffer& delta) const;
+
+    // Burn the province's fuel stock to supply `energy_needed` (MWh-equivalent),
+    // drawing goods from `available_supply` in the given canonical order and emitting
+    // negative supply MarketDeltas for the matter consumed. Mutates `available_supply`
+    // so sequential calls within a tick see the dwindling stock (conservation). Returns
+    // the energy actually supplied (<= energy_needed, limited by stock).
+    float burn_fuels(const std::vector<std::pair<std::string, float>>& fuels, float energy_needed,
+                     uint32_t province_idx, const WorldState& state,
+                     std::unordered_map<std::string, float>& available_supply,
+                     DeltaBuffer& delta) const;
 
     float get_price_for_business(const NPCBusiness& biz, uint32_t good_id,
                                  const WorldState& state) const;

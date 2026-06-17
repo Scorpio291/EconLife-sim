@@ -1161,6 +1161,129 @@ TEST_CASE("test_energy_partial_generation_scales_output", "[production][tier1][e
 }
 
 // ===========================================================================
+// Phase B2 (motive power): mechanical work + process heat as era-appropriate
+// power forms, supplied per province from water/wind flow and burnt fuel.
+// ===========================================================================
+namespace {
+
+// A widget recipe parameterised by its power-form requirements (no material
+// inputs, so output is governed purely by the motive-power ratios).
+Recipe make_power_recipe(float energy, float mechanical, float fuel) {
+    Recipe recipe{};
+    recipe.id = "power_widget";
+    recipe.name = "Power Widget";
+    recipe.facility_type_key = "manufacturing";
+    recipe.inputs = {};
+    recipe.outputs = {RecipeOutput{"widget", 5.0f, 0.6f, false}};
+    recipe.min_tech_tier = 1;
+    recipe.base_cost_per_tick = 10.0f;
+    recipe.era_available = 0;
+    recipe.energy_per_tick = energy;
+    recipe.mechanical_per_tick = mechanical;
+    recipe.fuel_per_tick = fuel;
+    return recipe;
+}
+
+DeltaBuffer run_power_widget(WorldState& state, uint32_t province_id, const Recipe& recipe,
+                             const std::vector<ResourceDeposit>& deposits, RiverFlowRegime regime,
+                             const std::vector<std::pair<std::string, float>>& fuel_stock) {
+    auto biz = make_test_business(1, province_id);
+    state.npc_businesses.push_back(biz);
+    add_market(state, "widget", province_id, 0.0f, 20.0f);
+    for (const auto& [good, stock] : fuel_stock) {
+        add_market(state, good, province_id, stock);
+    }
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    prov.deposits = deposits;
+    prov.geography.river_flow_regime = regime;
+    state.provinces.push_back(std::move(prov));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(recipe);
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "power_widget"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+    return delta;
+}
+
+}  // namespace
+
+TEST_CASE("test_mechanical_water_flow_full_output", "[production][tier1][energy]") {
+    // A perennial river supplies abundant mechanical work (water wheel): a
+    // mechanical-only recipe runs at full output with no fuel burned, and with no
+    // electricity in the province at all — power forms are independent.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_power_widget(state, province_id, make_power_recipe(0.0f, 10.0f, 0.0f), {},
+                                  RiverFlowRegime::RainfedPerennial, {});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(5.0f, 0.001f));
+    // No electricity good emitted (no electricity demand), no fuel burned.
+    REQUIRE(summarize_deltas(delta, "electricity", province_id).supply_count == 0);
+    REQUIRE(summarize_deltas(delta, "wood_chips", province_id).supply_count == 0);
+}
+
+TEST_CASE("test_mechanical_no_flow_burns_biomass_steam", "[production][tier1][energy]") {
+    // No water/wind flow: the mechanical shortfall is met by burning biomass (steam),
+    // consuming that matter. demand 10 MWh / 15 MWh-per-unit = 0.667 wood_chips burned.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_power_widget(state, province_id, make_power_recipe(0.0f, 10.0f, 0.0f), {},
+                                  RiverFlowRegime::None, {{"wood_chips", 100.0f}});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(5.0f, 0.001f));
+    auto wood = summarize_deltas(delta, "wood_chips", province_id);
+    REQUIRE_THAT(wood.total_supply_delta, Catch::Matchers::WithinAbs(-10.0f / 15.0f, 0.001f));
+}
+
+TEST_CASE("test_fuel_heat_burns_biomass", "[production][tier1][energy]") {
+    // Process heat is met purely by burning fuel. demand 30 MWh / 15 = 2.0 wood_chips.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_power_widget(state, province_id, make_power_recipe(0.0f, 0.0f, 30.0f), {},
+                                  RiverFlowRegime::None, {{"wood_chips", 100.0f}});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(5.0f, 0.001f));
+    auto wood = summarize_deltas(delta, "wood_chips", province_id);
+    REQUIRE_THAT(wood.total_supply_delta, Catch::Matchers::WithinAbs(-2.0f, 0.001f));
+}
+
+TEST_CASE("test_fuel_heat_shortage_scales_output", "[production][tier1][energy]") {
+    // Only 1.0 wood_chips (15 MWh) for a 30 MWh heat demand → ratio 0.5 → half output.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_power_widget(state, province_id, make_power_recipe(0.0f, 0.0f, 30.0f), {},
+                                  RiverFlowRegime::None, {{"wood_chips", 1.0f}});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(2.5f, 0.001f));
+}
+
+TEST_CASE("test_power_forms_share_one_fuel_pool_conserved", "[production][tier1][energy]") {
+    // A recipe needing both electricity and heat, with thermal_coal as the only fuel.
+    // Electricity burns coal first (10 MWh / 50 = 0.2), then heat burns the remaining
+    // stock (30 MWh / 50 = 0.6). Total coal consumed = 0.8, drawn from one shared pool;
+    // the sequential burn must not exceed the 100-unit stock.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    auto delta = run_power_widget(state, province_id, make_power_recipe(10.0f, 0.0f, 30.0f), {},
+                                  RiverFlowRegime::None, {{"thermal_coal", 100.0f}});
+
+    auto widget = summarize_deltas(delta, "widget", province_id);
+    REQUIRE_THAT(widget.total_supply_delta, Catch::Matchers::WithinAbs(5.0f, 0.001f));
+    auto coal = summarize_deltas(delta, "thermal_coal", province_id);
+    REQUIRE_THAT(coal.total_supply_delta, Catch::Matchers::WithinAbs(-0.8f, 0.001f));
+}
+
+// ===========================================================================
 // Waste: processes emit category-typed waste (conservation of matter)
 // ===========================================================================
 

@@ -874,6 +874,17 @@ struct ProductionConfig {
     float hydro_mwh_perennial = 2000.0f;       // hydro generation by river_flow_regime
     float hydro_mwh_seasonal = 800.0f;
     float fossil_mwh_per_fuel_unit = 50.0f;  // electricity per unit fossil fuel burned
+    // --- Motive power (mechanical work + process heat) ---
+    // Beyond electricity, recipes can require mechanical work (mills, hammers, pumps:
+    // recipe.mechanical_per_tick) and process heat (smelting, kilns: recipe.fuel_per_tick).
+    // Mechanical is met by water/wind direct-drive (the same non-depleting renewable
+    // flows as hydro/wind electricity), with any shortfall by burning fuel (steam).
+    // Heat is met by burning fuel. Burning biomass (wood) and fossil consumes that
+    // matter — conserved, drawn from the same province stock as electricity generation,
+    // so the three power forms compete for one fuel pool. Biomass first (era-appropriate),
+    // then fossil. Provinces with no flows and no fuel are power-poor — a real disadvantage,
+    // not a hard rail; recipes needing no power (muscle only) are unaffected.
+    float biomass_mwh_per_fuel_unit = 15.0f;  // work/heat per unit biomass burned
     float electricity_base_price = 30.0f;
 
     // --- Waste / byproducts (conservation: processes do not vanish matter; the
