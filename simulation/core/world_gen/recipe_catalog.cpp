@@ -209,8 +209,13 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
             recipe.extracted_resource = parse_resource_type(fields[24]);
         }
 
-        // Derive base_cost_per_tick from energy cost (placeholder formula).
-        recipe.base_cost_per_tick = recipe.energy_per_tick * 10.0f + recipe.labor_per_tick * 5.0f;
+        // Derive base_cost_per_tick from total motive-power need + labor (placeholder
+        // formula). All power forms cost the same per unit here, so reassigning a recipe's
+        // requirement across forms (e.g. electricity -> mechanical) leaves operating cost
+        // unchanged; the per-form physical sourcing differs in the production pre-pass.
+        recipe.base_cost_per_tick =
+            (recipe.energy_per_tick + recipe.mechanical_per_tick + recipe.fuel_per_tick) * 10.0f +
+            recipe.labor_per_tick * 5.0f;
 
         // Build indexes before moving.
         size_t idx = recipes_.size();
