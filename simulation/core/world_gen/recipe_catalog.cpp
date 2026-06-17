@@ -120,7 +120,7 @@ bool RecipeCatalog::load_from_directory(const std::string& recipes_dir) {
 // ---------------------------------------------------------------------------
 // RecipeCatalog — load single CSV
 // ---------------------------------------------------------------------------
-// Expected columns (22):
+// Expected columns (24; extraction adds an optional 25th, extracted_resource):
 //  0: recipe_key
 //  1: facility_type_key
 //  2: display_name
@@ -131,10 +131,13 @@ bool RecipeCatalog::load_from_directory(const std::string& recipes_dir) {
 //  11-13: output_1_key, output_1_qty, output_1_is_byproduct
 //  14-16: output_2_key, output_2_qty, output_2_is_byproduct
 //  17: labor_per_tick
-//  18: energy_per_tick
-//  19: min_tech_tier
-//  20: key_technology_node
-//  21: era_available
+//  18: energy_per_tick     (electricity)
+//  19: mechanical_per_tick (rotary/reciprocating work)
+//  20: fuel_per_tick       (process heat / chemical energy)
+//  21: min_tech_tier
+//  22: key_technology_node
+//  23: era_available
+//  24: extracted_resource  (optional; extraction recipes only)
 
 bool RecipeCatalog::load_csv(const std::string& filepath) {
     std::ifstream file(filepath);
@@ -155,7 +158,7 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
         }
 
         auto fields = split_csv_line(line);
-        if (fields.size() < 22)
+        if (fields.size() < 24)
             continue;
 
         Recipe recipe{};
@@ -193,15 +196,17 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
 
         recipe.labor_per_tick = parse_float(fields[17]);
         recipe.energy_per_tick = parse_float(fields[18]);
-        recipe.min_tech_tier = parse_uint(fields[19]);
-        recipe.key_technology_node = fields[20];
+        recipe.mechanical_per_tick = parse_float(fields[19]);
+        recipe.fuel_per_tick = parse_float(fields[20]);
+        recipe.min_tech_tier = parse_uint(fields[21]);
+        recipe.key_technology_node = fields[22];
         recipe.is_technology_intensive = !recipe.key_technology_node.empty();
-        recipe.era_available = static_cast<uint8_t>(parse_uint(fields[21], 1));
+        recipe.era_available = static_cast<uint8_t>(parse_uint(fields[23], 1));
 
-        // Optional column 22: extracted_resource (ResourceType enum name). Present
-        // on extraction recipes; absent on other recipe CSVs (which have 22 columns).
-        if (fields.size() > 22) {
-            recipe.extracted_resource = parse_resource_type(fields[22]);
+        // Optional column 24: extracted_resource (ResourceType enum name). Present
+        // on extraction recipes; absent on other recipe CSVs (which have 24 columns).
+        if (fields.size() > 24) {
+            recipe.extracted_resource = parse_resource_type(fields[24]);
         }
 
         // Derive base_cost_per_tick from energy cost (placeholder formula).

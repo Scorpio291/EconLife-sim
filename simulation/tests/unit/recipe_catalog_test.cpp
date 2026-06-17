@@ -30,19 +30,20 @@ static const char* VALID_CSV =
     "input_3_key,input_3_qty,input_4_key,input_4_qty,"
     "output_1_key,output_1_qty,output_1_is_byproduct,"
     "output_2_key,output_2_qty,output_2_is_byproduct,"
-    "labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available\n"
+    "labor_per_tick,energy_per_tick,mechanical_per_tick,fuel_per_tick,"
+    "min_tech_tier,key_technology_node,era_available\n"
     "iron_smelting,smelter,Iron Smelting,"
     "iron_ore,5,coking_coal,2,,,,,"
     "steel,3,0,,,0,"
-    "80,5.0,2,,1\n"
+    "80,5.0,0,0,2,,1\n"
     "copper_smelting,smelter,Copper Smelting,"
     "copper_ore,4,,,,,,,"
     "copper_wire_rod,2,0,copper_pipe,1,1,"
-    "40,3.0,2,,1\n"
+    "40,3.0,0,0,2,,1\n"
     "silicon_wafer_fab,electronics_factory,Silicon Wafer Fabrication,"
     "silica_sand,3,industrial_gas,1,,,,,"
     "silicon_wafer,1,0,,,0,"
-    "30,5.0,4,semiconductor_fabrication,2\n";
+    "30,5.0,0,0,4,semiconductor_fabrication,2\n";
 
 TEST_CASE("RecipeCatalog - load single CSV", "[module][production]") {
     RecipeCatalog catalog;
@@ -181,11 +182,12 @@ constexpr const char* TYPO_RECIPE_CSV =
     "input_3_key,input_3_qty,input_4_key,input_4_qty,"
     "output_1_key,output_1_qty,output_1_is_byproduct,"
     "output_2_key,output_2_qty,output_2_is_byproduct,"
-    "labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available\n"
+    "labor_per_tick,energy_per_tick,mechanical_per_tick,fuel_per_tick,"
+    "min_tech_tier,key_technology_node,era_available\n"
     "broken_bake,bakery,Broken Bake,"
     "wheet,2,,,,,,,"
     "bread,1,0,,,0,"
-    "10,1.0,0,,1\n";
+    "10,1.0,0,0,0,,1\n";
 
 GoodsCatalog load_iron_goods(const std::string& dir_name) {
     auto dir = fs::temp_directory_path() / dir_name;
@@ -212,11 +214,12 @@ TEST_CASE("RecipeCatalog::validate_against_goods - clean catalog", "[module][pro
         "input_3_key,input_3_qty,input_4_key,input_4_qty,"
         "output_1_key,output_1_qty,output_1_is_byproduct,"
         "output_2_key,output_2_qty,output_2_is_byproduct,"
-        "labor_per_tick,energy_per_tick,min_tech_tier,key_technology_node,era_available\n"
+        "labor_per_tick,energy_per_tick,mechanical_per_tick,fuel_per_tick,"
+    "min_tech_tier,key_technology_node,era_available\n"
         "iron_smelting,smelter,Iron Smelting,"
         "iron_ore,5,coking_coal,2,,,,,"
         "steel,3,0,,,0,"
-        "80,5.0,2,,1\n");
+        "80,5.0,0,0,2,,1\n");
     RecipeCatalog recipes;
     REQUIRE(recipes.load_csv(recipe_path));
 

@@ -214,18 +214,31 @@ the emergence suite is the behavioral backstop.
 
 ---
 
-## 6. Open questions for review
+## 6. Decisions & open questions
 
-1. **Save migration (A):** reject pre-schema-19 saves, or migrate persisted ids +1? (Lean:
-   reject — pre-game, no worlds to preserve.)
-2. **Recipe schema (B):** reinterpret the single `energy_per_tick` by era, or add explicit
-   `mechanical_per_tick` / `fuel_per_tick` columns (data-driven, modder-legible, needs CSV
-   migration)? (Lean: explicit columns.)
-3. **Muscle accounting (B):** does muscle-as-power draw on the *same* labor the labor-market
-   already allocates (so power competes with staffing), or a separate budget? Must avoid
-   double-counting labor.
-4. **Grounding order (C):** food/agriculture-first (real demand) vs extraction-first
-   (purest endowment but no downstream). (Lean: food/agriculture-first.)
-5. **Era boundaries (B):** the sim starts Jan 2000 with dynamic era progression — confirm
-   how the "early/pre-industrial" power forms map onto the era enum and the history-
-   generation backstory, so era-scaling lands on the right thresholds.
+Resolved in review:
+1. **Save migration (A):** RESOLVED — no change needed. Ids round-trip as stored and there
+   are no committed pre-fix binary saves; a schema bump is deferred until Parts B/C touch
+   the format. (Implemented in commit "number goods from 1…".)
+2. **Recipe schema (B):** RESOLVED — explicit columns. `mechanical_per_tick` and
+   `fuel_per_tick` added alongside `labor_per_tick` (muscle) and `energy_per_tick`
+   (electricity). Data-driven and modder-legible. (Implemented in B1.)
+3. **Muscle accounting (B):** RESOLVED (lean adopted) — `labor_per_tick` stays the
+   staffing/cost signal it is today; muscle-as-power is treated as "met" when the facility
+   is staffed, so we do not add a second labor drain and do not double-count the
+   labor-market allocation. The physically-supplied forms B2 grounds are mechanical, fuel,
+   and electricity.
+5. **Power gating / era boundaries (B):** RESOLVED — fluid start, no calendar anchor, and
+   **emergent supply-gating** (no hardcoded era cutoffs). Electricity exists only where
+   generation capacity exists; a province with no generators simply has no electricity, so
+   electricity-only recipes can't run there while water/wind/biomass-powered ones can. Era
+   affects only recipe *availability* (`era_available`).
+
+Still open:
+4. **Grounding order (C):** food/agriculture-first (real demand: people eat) vs
+   extraction-first (purest endowment but no downstream consumer). (Lean: food/agriculture-
+   first.) Decide when Part C begins.
+6. **Fuel good (B2/B-data):** burn the existing wood goods (softwood/hardwood logs,
+   wood_chips) as biomass, or add a dedicated `charcoal` good (historically the
+   metallurgical fuel)? (Lean: start with existing wood goods; revisit charcoal with the
+   B-data pass.)

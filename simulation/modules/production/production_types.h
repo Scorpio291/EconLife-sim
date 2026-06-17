@@ -56,7 +56,15 @@ struct Recipe {
     std::vector<RecipeOutput> outputs;  // output goods produced
     uint32_t min_tech_tier;             // minimum technology tier required
     float labor_per_tick;               // labor units required per tick
-    float energy_per_tick;              // energy units required per tick
+    float energy_per_tick;              // electricity units required per tick
+    // Motive-power requirements (Part B). A recipe's work can need distinct
+    // physical forms, each supplied per province from era-appropriate sources
+    // (muscle ← labor; mechanical ← water/wind, later electric motors; process
+    // heat ← biomass, later fossil; electricity ← energy_per_tick). Parsed from
+    // CSV; 0 = that form is not required. Not yet consumed by production until the
+    // motive-power pre-pass lands (B2); inert reference data until then.
+    float mechanical_per_tick;          // rotary/reciprocating work (mills, hammers, pumps, bellows)
+    float fuel_per_tick;                // process heat / chemical energy (smelting, kilns, drying)
     float base_cost_per_tick;           // operating cost per tick at baseline
     bool is_technology_intensive;       // if true, quality is capped by maturation level
     std::string key_technology_node;    // tech node for maturation cap; "" for commodities
