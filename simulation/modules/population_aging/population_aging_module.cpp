@@ -90,7 +90,7 @@ bool is_retiree_group(DemographicGroup g) {
 // place to a working copy of the cohort map. Deterministic: integer rounding,
 // canonical group order.
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
-                           float sick_rate, float addiction_rate,
+                           float sick_rate, float addiction_rate, float food_surplus,
                            const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
@@ -98,20 +98,28 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
         total += c.size;
     }
 
+    // Food coupling (the Malthusian loop). Both factors are NEUTRAL at
+    // surplus == 1.0, so market eras (where surplus is always 1.0) are unchanged.
+    // A surplus lifts births toward a cap; a deficit (surplus < 1) raises mortality.
+    const float surplus = std::clamp(food_surplus, 0.0f, 10.0f);
+    const float birth_food_factor = std::clamp(surplus, 0.0f, cfg.food_surplus_birth_cap);
+    const float famine_mortality_factor =
+        surplus < 1.0f ? (1.0f + cfg.food_deficit_mortality_strength * (1.0f - surplus)) : 1.0f;
+
     // Births: survival scales with stability and healthcare (proxied by the
     // inverse of sick_rate, since HealthcareProfile is not on WorldState).
     float healthcare_proxy = std::clamp(1.0f - sick_rate, 0.0f, 1.0f);
-    float birth_rate =
-        cfg.base_annual_birth_rate * std::clamp(stability, 0.0f, 1.0f) * healthcare_proxy;
+    float birth_rate = cfg.base_annual_birth_rate * std::clamp(stability, 0.0f, 1.0f) *
+                       healthcare_proxy * birth_food_factor;
     auto births = static_cast<uint32_t>(
         std::llround(static_cast<double>(total) * static_cast<double>(birth_rate)));
     cohorts[DemographicGroup::youth_urban].size += births / 2u;
     cohorts[DemographicGroup::youth_rural].size += births - births / 2u;
 
-    // Deaths: per-cohort mortality rises with instability and addiction, and is
-    // multiplied for retiree cohorts.
+    // Deaths: per-cohort mortality rises with instability, addiction, and famine,
+    // and is multiplied for retiree cohorts.
     float mortality_env = (1.0f + (1.0f - std::clamp(stability, 0.0f, 1.0f))) *
-                          (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f));
+                          (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f)) * famine_mortality_factor;
     for (auto& [g, c] : cohorts) {
         if (c.size == 0)
             continue;
@@ -195,7 +203,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                         cfg_.max_education_drift_per_year);
                 }
                 process_births_deaths(next, province.conditions.stability_score, cs.sick_rate,
-                                      cs.addiction_rate, cfg_);
+                                      cs.addiction_rate, cs.subsistence_surplus_ratio, cfg_);
             }
 
             // Recompute aggregates over the canonical (sorted) group order.

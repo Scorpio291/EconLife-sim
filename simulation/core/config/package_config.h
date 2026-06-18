@@ -1191,6 +1191,14 @@ struct PopulationAgingConfig {
     // annual death roll scaled up as health falls. Age advances 1 year per year.
     float natural_lifespan_years = 80.0f;
     float natural_death_annual_prob = 0.10f;  // at full health, past lifespan
+    // Subsistence food coupling (the Malthusian loop). cohort_stats->
+    // subsistence_surplus_ratio scales births up to a cap and raises mortality
+    // under a deficit. Both are NEUTRAL at surplus == 1.0 (and surplus is 1.0 in
+    // market eras, where the commons module is inert), so this changes nothing
+    // outside the pre-market regime. Pre-market: surplus > 1 grows the population
+    // toward carrying capacity; surplus < 1 (famine) culls it back.
+    float food_surplus_birth_cap = 1.5f;          // max birth multiplier from surplus
+    float food_deficit_mortality_strength = 1.5f;  // extra mortality per unit of deficit
 };
 
 struct LodSystemConfig {

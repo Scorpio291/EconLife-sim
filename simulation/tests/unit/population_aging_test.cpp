@@ -81,6 +81,26 @@ TEST_CASE("PopulationAging: config defaults match spec", "[population_aging][tie
 // so these also lock in the gate: a delta on a monthly tick, none off-month.
 
 namespace {
+// A one-province world at an annual tick with a populated working cohort, set up
+// to exercise births/deaths under a given subsistence food surplus.
+WorldState make_annual_cohort_world(float surplus) {
+    WorldState w{};
+    w.current_tick = PopulationAgingModule::TICKS_PER_YEAR;  // annual births/deaths fire
+    w.world_seed = 1;
+    Province p{};
+    p.id = 0;
+    p.conditions.stability_score = 0.9f;  // high stability so births occur
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->subsistence_surplus_ratio = surplus;
+    p.cohort_stats->sick_rate = 0.0f;
+    p.cohort_stats->addiction_rate = 0.0f;
+    PopulationCohort workers{};
+    workers.size = 100000;
+    p.cohort_stats->cohorts[DemographicGroup::working_urban_mid] = workers;
+    w.provinces.push_back(std::move(p));
+    return w;
+}
+
 WorldState make_one_province_world(uint32_t tick) {
     WorldState w{};
     w.current_tick = tick;
@@ -96,6 +116,26 @@ WorldState make_one_province_world(uint32_t tick) {
     return w;
 }
 }  // namespace
+
+TEST_CASE("PopulationAging: subsistence surplus drives the Malthusian loop",
+          "[population_aging][subsistence][tier11]") {
+    PopulationAgingModule module;
+    auto annual_population = [&](float surplus) {
+        WorldState w = make_annual_cohort_world(surplus);
+        DeltaBuffer d{};
+        module.execute_province(0, w, d);
+        REQUIRE(d.cohort_stats_deltas.size() == 1);
+        return d.cohort_stats_deltas[0].total_population;
+    };
+
+    const uint32_t fed = annual_population(1.0f);      // exactly fed: neutral
+    const uint32_t surplus = annual_population(1.5f);  // surplus: population grows
+    const uint32_t famine = annual_population(0.5f);   // deficit: population is culled
+
+    CHECK(surplus > fed);    // a food surplus lifts births
+    CHECK(famine < fed);     // a deficit raises mortality
+    CHECK(famine < surplus);
+}
 
 TEST_CASE("PopulationAging: execute_province emits a RegionDelta on a monthly tick",
           "[population_aging][tier11]") {
