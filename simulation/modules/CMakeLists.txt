@@ -20,6 +20,7 @@ add_subdirectory(technology)
 add_subdirectory(supply_chain)
 add_subdirectory(labor_market)
 add_subdirectory(seasonal_agriculture)
+add_subdirectory(subsistence)
 
 # Tier 3: Depends on supply chain
 add_subdirectory(price_engine)
@@ -101,6 +102,7 @@ target_link_libraries(econlife_modules PUBLIC
     econlife_supply_chain
     econlife_labor_market
     econlife_seasonal_agriculture
+    econlife_subsistence
     econlife_price_engine
     econlife_trade_infrastructure
     econlife_financial_distribution

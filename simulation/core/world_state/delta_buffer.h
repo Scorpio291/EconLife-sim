@@ -251,6 +251,9 @@ struct RegionDelta {
         regulatory_compliance_delta;  // additive; conditions.regulatory_compliance_index
     std::optional<float> drought_modifier_delta;  // additive; conditions.drought_modifier (->1.0)
     std::optional<float> flood_modifier_delta;    // additive; conditions.flood_modifier (->1.0)
+    std::optional<float>
+        subsistence_surplus_replacement;  // replacement; cohort_stats->subsistence_surplus_ratio
+                                          // (commons food production / need this tick)
 };
 
 // NationDelta — national-level governance state (one per nation per tick at most).

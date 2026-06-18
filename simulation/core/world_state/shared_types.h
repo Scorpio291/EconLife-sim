@@ -270,6 +270,13 @@ struct RegionCohortStats {
                                      // `formal_employment_rate` (which
                                      // excludes the informal economy).
 
+    // Subsistence food surplus: produced / needed for the whole province
+    // population this tick, written by the subsistence (commons) module in
+    // pre-market eras. 1.0 = exactly fed; >1.0 = a surplus that frees labor for
+    // specialists/trade; <1.0 = a deficit. Defaults to 1.0 ("fed") so the field
+    // is behaviour-neutral when the module is inert (modern, market-fed eras).
+    float subsistence_surplus_ratio = 1.0f;
+
     // Zero all fields. Use after construction or when resetting a province.
     void reset() { *this = RegionCohortStats{}; }
 };

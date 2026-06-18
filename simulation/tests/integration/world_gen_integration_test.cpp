@@ -108,6 +108,43 @@ TEST_CASE("WorldGenerator world runs 365 ticks at V1 scale", "[integration][worl
 }
 
 // ===========================================================================
+// Subsistence (commons) economy feeds a dawn world
+// ===========================================================================
+
+TEST_CASE("subsistence: a dawn world feeds its population from the commons",
+          "[integration][subsistence][dawn]") {
+    WorldGeneratorConfig config{};
+    config.seed = 7;
+    config.province_count = 6;
+    config.npc_count = 200;
+    config.goods_directory = find_goods_dir();
+    config.starting_era = 1;  // the dawn — subsistence economic regime
+
+    auto world = WorldGenerator::generate(config);
+    REQUIRE(world.technology.current_era == 1);
+    const EraDefinition* dawn = world.era_catalog.by_index(1);
+    REQUIRE(dawn != nullptr);
+    REQUIRE(dawn->economic_regime == "subsistence");
+
+    run_orchestrated_ticks(world, 30);
+    REQUIRE(world.current_tick == 30);
+
+    // The commons module ran for real: every populated province has a finite,
+    // non-negative surplus, and at least one shows a value other than the 1.0
+    // default (i.e. a genuine produced/needed balance was computed from the land).
+    int computed = 0;
+    for (const auto& p : world.provinces) {
+        REQUIRE(p.cohort_stats);
+        const float s = p.cohort_stats->subsistence_surplus_ratio;
+        REQUIRE_FALSE(std::isnan(s));
+        CHECK(s >= 0.0f);
+        if (p.cohort_stats->total_population > 0 && s != 1.0f)
+            ++computed;
+    }
+    CHECK(computed >= 1);
+}
+
+// ===========================================================================
 // Province conditions stay clamped over full year
 // ===========================================================================
 

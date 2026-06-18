@@ -512,6 +512,33 @@ struct PriceEngineConfig {
     float default_base_price = 1.0f;
 };
 
+// Commons subsistence (pre-market food production). Drives the SubsistenceModule:
+// in subsistence/barter-regime eras the whole province population produces food
+// directly from the land (no firms, no markets), and the surplus over need is the
+// master variable that later frees labour for specialists and trade.
+struct SubsistenceConfig {
+    // Economic regimes (era_catalog economic_regime) in which the commons food path
+    // is active. In any other regime the module is inert (markets feed the population).
+    std::vector<std::string> active_regimes = {"subsistence", "barter"};
+
+    // Per-head food need per tick (same unit as the food output below).
+    float per_capita_food_per_tick = 1.0f;
+
+    // Natural-capital weights: how much each province endowment contributes to the
+    // food-carrying ceiling. Food potential is a labour-worked draw on these.
+    float weight_agricultural_productivity = 1.0f;  // farmland / soil fertility
+    float weight_arable_land = 0.5f;                 // arable fraction
+    float weight_forest_forage = 0.3f;               // forageable biomass
+    float weight_fisheries = 0.4f;                   // fish stock
+
+    // Carrying ceiling scale: max food a province's natural capital can yield is
+    // capacity_per_unit * (weighted natural capital). Output approaches this ceiling
+    // as labour grows (diminishing returns), so fixed land caps how many it feeds.
+    float ceiling_per_capital_unit = 4000.0f;
+    // Labour at which output reaches ~63% of the natural-capital ceiling (1 - 1/e).
+    float labor_half_saturation = 1500.0f;
+};
+
 struct SeasonalAgricultureConfig {
     uint32_t ticks_per_year = 365;
     uint32_t planting_duration_ticks = 7;
@@ -1252,6 +1279,7 @@ struct PackageConfig {
     CommodityTradingConfig commodity_trading;
     PriceEngineConfig price_engine;
     SeasonalAgricultureConfig seasonal_agriculture;
+    SubsistenceConfig subsistence;
     RealEstateConfig real_estate;
     FinancialDistributionConfig financial_distribution;
     NpcBehaviorModuleConfig npc_behavior_module;

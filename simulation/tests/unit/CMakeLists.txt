@@ -11,6 +11,7 @@ add_executable(econlife_unit_tests
     random_events_test.cpp
     supply_chain_test.cpp
     seasonal_agriculture_test.cpp
+    subsistence_test.cpp
     labor_market_test.cpp
     price_engine_test.cpp
     trade_infrastructure_test.cpp

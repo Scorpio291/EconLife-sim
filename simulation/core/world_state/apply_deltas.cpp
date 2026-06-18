@@ -588,6 +588,16 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     cs.unemployment_rate =
                         clamp01(safe_add(cs.unemployment_rate, *d.unemployment_rate_delta));
                 }
+                if (d.subsistence_surplus_replacement.has_value()) {
+                    // Replacement; recomputed each tick by the subsistence module.
+                    // Clamp to a sane non-negative range (0 = total famine).
+                    float v = *d.subsistence_surplus_replacement;
+                    if (!(v >= 0.0f))
+                        v = 0.0f;
+                    if (v > 10.0f)
+                        v = 10.0f;
+                    cs.subsistence_surplus_ratio = v;
+                }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =
                         clamp01(safe_add(prov.community.cohesion, *d.cohesion_delta));
