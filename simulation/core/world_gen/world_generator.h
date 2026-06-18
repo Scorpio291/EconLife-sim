@@ -32,7 +32,8 @@ struct WorldGeneratorConfig {
     uint64_t seed = 42;
     uint32_t province_count = 6;       // V1 target: 6
     uint32_t npc_count = 2000;         // V1 target: 2,000 significant NPCs
-    uint8_t starting_era = 1;          // era 1 = year 2000
+    uint8_t starting_era = 0;          // 0 = use the era_catalog's data-driven default
+                                       // entry era (currently the modern anchor, era 5)
     uint8_t max_good_tier = 1;         // tier 0-1 goods available at start
     float resource_richness = 1.0f;    // 0.5-2.0 multiplier on deposit quantities
     float corruption_baseline = 0.2f;  // 0.0-1.0 starting corruption
@@ -377,7 +378,7 @@ class WorldGenerator {
     // Generate a complete WorldState from config + CSV data.
     // Returns a fully wired WorldState ready for tick execution.
     // The PlayerCharacter must be wired separately (world.player = &player).
-    static WorldState generate(const WorldGeneratorConfig& config);
+    static WorldState generate(WorldGeneratorConfig config);
 
     // Generate and also create a default PlayerCharacter.
     // Returns {WorldState, PlayerCharacter} pair.

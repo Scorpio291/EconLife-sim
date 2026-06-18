@@ -150,10 +150,15 @@ void FacilityGenerator::create_facilities(WorldState& world, DeterministicRNG& r
 void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng,
                                         const TechnologyCatalog& tech_catalog,
                                         const WorldGeneratorConfig& config) {
-    // Initialize GlobalTechnologyState.
-    world.technology.current_era = SimulationEra::era_1_turn_of_millennium;
+    // Initialize GlobalTechnologyState. Era and base year are data-driven: the world
+    // enters at config.starting_era (already resolved from the era_catalog default).
+    world.technology.current_era = config.starting_era;
     world.technology.era_started_tick = 0;
-    world.technology.base_year = 2000;
+    if (const EraDefinition* e = world.era_catalog.by_index(config.starting_era)) {
+        world.technology.base_year = e->start_year;
+    } else {
+        world.technology.base_year = 2000;
+    }
 
     // Seed initial domain knowledge from config defaults.
     TechnologyConfig tech_config;

@@ -243,7 +243,7 @@ TEST_CASE("ActorTechnologyState aggregate init backward compat", "[technology][s
 
 TEST_CASE("GlobalTechnologyState defaults", "[technology][state]") {
     GlobalTechnologyState gts;
-    CHECK(gts.current_era == SimulationEra::era_1_turn_of_millennium);
+    CHECK(gts.current_era == kDefaultEntryEra);  // modern anchor (era 5)
     CHECK(gts.era_started_tick == 0);
     CHECK(gts.base_year == 2000);
     CHECK(gts.active_research_projects.empty());
@@ -300,9 +300,10 @@ TEST_CASE("Load base game technology_nodes.csv", "[technology][catalog][data]") 
     auto baseline = catalog.baseline_nodes();
     CHECK(baseline.size() >= 10);
 
-    // All baseline nodes should have era_available == 1.
+    // Baseline nodes are available from the modern anchor (era 5) under the re-based
+    // timeline. (Placing primitive baseline tech at the dawn is later content work.)
     for (const auto* node : baseline) {
-        CHECK(node->era_available == 1);
+        CHECK(node->era_available == 5);
         CHECK(node->is_baseline == true);
     }
 
@@ -337,11 +338,10 @@ TEST_CASE("Load base game maturation_ceilings.csv", "[technology][catalog][data]
     TechnologyCatalog catalog;
     REQUIRE(catalog.load_ceilings_csv(ceilings_path));
 
-    // EV should not be researchable in era 1.
-    CHECK(catalog.ceiling_for("electric_vehicle", 1) < 0.0f);
-
-    // EV should be researchable in era 2.
-    CHECK(catalog.ceiling_for("electric_vehicle", 2) > 0.0f);
+    // Re-based timeline: EV's old era_1 (-1.0) now sits at era 5; it is not
+    // researchable through the modern anchor and opens at era 6 (old era 2).
+    CHECK(catalog.ceiling_for("electric_vehicle", 5) < 0.0f);
+    CHECK(catalog.ceiling_for("electric_vehicle", 6) > 0.0f);
 
     // Baseline extraction should have full ceiling in all eras.
     CHECK_THAT(catalog.ceiling_for("basic_extraction", 1),
@@ -349,13 +349,15 @@ TEST_CASE("Load base game maturation_ceilings.csv", "[technology][catalog][data]
 }
 
 // ===========================================================================
-// SimulationEra enum values
+// Data-driven era timeline (re-based: dawn = era 1, modern = era 5)
 // ===========================================================================
 
-TEST_CASE("SimulationEra enum values match spec", "[technology][era]") {
-    CHECK(static_cast<uint8_t>(SimulationEra::era_1_turn_of_millennium) == 1);
-    CHECK(static_cast<uint8_t>(SimulationEra::era_5_transition) == 5);
-    CHECK(static_cast<uint8_t>(SimulationEra::era_10_divergence) == 10);
-    CHECK(MAX_ERA == 10);
-    CHECK(V1_MAX_ERA == 5);
+TEST_CASE("Era timeline matches the re-based spec", "[technology][era]") {
+    EraCatalog cat;
+    cat.load_builtin_default();
+    CHECK(cat.find("turn_of_millennium")->index == 5);  // modern anchor
+    CHECK(cat.find("divergence")->index == 14);          // last era
+    CHECK(cat.max_era() == 14);
+    CHECK(cat.v1_max_era() == 9);  // V1 spans the dawn through "transition"
+    CHECK(cat.by_index(1)->key == "subsistence");  // the dawn
 }

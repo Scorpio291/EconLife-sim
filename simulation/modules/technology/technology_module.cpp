@@ -197,8 +197,10 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
 }
 
 void TechnologyModule::check_era_transition(const WorldState& state, DeltaBuffer& delta) {
-    uint8_t current_era = static_cast<uint8_t>(state.technology.current_era);
-    if (current_era >= MAX_ERA)
+    uint8_t current_era = state.technology.current_era;
+    // The timeline length is data-driven: cap advancement at the catalog's last era.
+    uint8_t max_era = state.era_catalog.max_era();
+    if (max_era == 0 || current_era >= max_era)
         return;
 
     uint8_t target_era = current_era + 1;

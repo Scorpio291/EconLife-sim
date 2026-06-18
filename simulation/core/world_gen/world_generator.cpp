@@ -183,7 +183,7 @@ bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGenerato
 static constexpr uint32_t kGoodsLayerRngSalt = 0x600D0001u;
 static constexpr uint32_t kProductionLayerRngSalt = 0x600D0002u;
 
-WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
+WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     DeterministicRNG rng(config.seed);
 
     WorldState world{};
@@ -252,6 +252,19 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
     detect_special_features(world, rng, config);
 
+    // Data-driven era timeline (the spine). Load from data if a dir is given; otherwise
+    // fall back to the builtin default so the world always carries a valid timeline.
+    // Must precede market/goods/facility generation, which gate on the starting era.
+    if (config.eras_directory.empty() ||
+        !world.era_catalog.load_from_directory(config.eras_directory)) {
+        world.era_catalog.load_builtin_default();
+    }
+    // Resolve the starting era data-drivenly: 0 means "the catalog's default entry"
+    // (the is_default_entry row in eras.csv). Downstream gating reads config.starting_era.
+    if (config.starting_era == 0) {
+        config.starting_era = world.era_catalog.default_entry_index();
+    }
+
     // Step 4: Markets from goods catalog. Transfer catalog ownership to
     // WorldState so runtime modules can resolve string good_ids to the
     // same numeric_id that create_markets() stamped onto RegionalMarket.
@@ -267,13 +280,6 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     DeterministicRNG markets_rng = rng.fork(kGoodsLayerRngSalt);
     create_markets(world, markets_rng, *catalog_owned, config);
     world.goods_catalog = std::move(catalog_owned);
-
-    // Data-driven era timeline (the spine). Load from data if a dir is given; otherwise
-    // fall back to the builtin default so the world always carries a valid timeline.
-    if (config.eras_directory.empty() ||
-        !world.era_catalog.load_from_directory(config.eras_directory)) {
-        world.era_catalog.load_builtin_default();
-    }
 
     // Step 5: NPC population (the founding population — emerges/grows during history)
     SettlementGenerator::create_npcs(world, rng, config);

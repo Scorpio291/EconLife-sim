@@ -12,31 +12,21 @@
 // (core header) to avoid circular dependencies. This header provides the
 // module-specific types that build on top of them.
 #include "core/world_state/shared_types.h"
+#include "core/world_gen/era_catalog.h"  // MAX_ERA_CAPACITY (data-driven era timeline)
 
 namespace econlife {
 
 // ---------------------------------------------------------------------------
-// SimulationEra — ten eras from year 2000 to 2250+.
-// V1 covers Eras 1-5. EX eras are engine-supported but content is post-V1.
-// Era transitions are evaluated each tick via weighted scoring.
-// ---------------------------------------------------------------------------
-enum class SimulationEra : uint8_t {
-    era_1_turn_of_millennium = 1,  // 2000-2007
-    era_2_disruption = 2,          // 2007-2013
-    era_3_acceleration = 3,        // 2013-2019
-    era_4_fracture = 4,            // 2019-2024
-    era_5_transition = 5,          // 2024-2035
-
-    // EX eras
-    era_6_convergence = 6,   // 2035-2050
-    era_7_reckoning = 7,     // 2050-2075
-    era_8_synthesis = 8,     // 2075-2100
-    era_9_expansion = 9,     // 2100-2150
-    era_10_divergence = 10,  // 2150-2250+
-};
-
-constexpr uint8_t MAX_ERA = 10;
-constexpr uint8_t V1_MAX_ERA = 5;
+// Eras are data-driven (see EraCatalog / packages/base_game/eras/eras.csv). The
+// timeline runs from the dawn (era 1, Subsistence) forward; the modern "Turn of
+// the Millennium" (~2000) is era 5. An era is a 1-based uint8 index; the catalog
+// is the source of truth for how many eras exist, their regimes, scope, and the
+// default entry point. There is no hardcoded SimulationEra enum any more.
+//
+// kDefaultEntryEra is the struct-init fallback used only when a WorldState is
+// built piecemeal (e.g. unit tests) without world-gen resolving the era from the
+// catalog. It mirrors the is_default_entry row in eras.csv (the modern anchor).
+constexpr uint8_t kDefaultEntryEra = 5;
 
 // ---------------------------------------------------------------------------
 // ResearchDomain — categorization of technology research.
@@ -96,7 +86,9 @@ struct TechnologyNode {
 // ---------------------------------------------------------------------------
 struct MaturationCeilingEntry {
     std::string node_key;
-    float era_ceilings[MAX_ERA];  // indexed by (era - 1)
+    // Indexed by (era - 1). Sized to MAX_ERA_CAPACITY so the data-driven era count
+    // can grow without a recompile; only the first era_catalog.max_era() are loaded.
+    float era_ceilings[MAX_ERA_CAPACITY];
 };
 
 // ---------------------------------------------------------------------------
@@ -148,8 +140,8 @@ struct EraTrigger {
 // Stored in WorldState. Updated by TechnologyModule each tick.
 // ---------------------------------------------------------------------------
 struct GlobalTechnologyState {
-    SimulationEra current_era = SimulationEra::era_1_turn_of_millennium;
-    uint32_t era_started_tick = 0;  // tick when current era began
+    uint8_t current_era = kDefaultEntryEra;  // 1-based era index (see EraCatalog)
+    uint32_t era_started_tick = 0;           // tick when current era began
 
     // Domain knowledge levels (0.0-1.0 per domain, rising from publications).
     float domain_knowledge[RESEARCH_DOMAIN_COUNT] = {};

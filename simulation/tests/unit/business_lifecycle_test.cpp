@@ -19,11 +19,12 @@ namespace {
 
 WorldState make_world_with_business(uint32_t business_id, BusinessSector sector,
                                     uint32_t province_id, uint32_t current_tick,
-                                    uint32_t era_started_tick, SimulationEra era) {
+                                    uint32_t era_started_tick, uint8_t era) {
     WorldState w{};
     w.current_tick = current_tick;
     w.world_seed = 1;
     w.game_mode = GameMode::standard;
+    w.era_catalog.load_builtin_default();
     w.technology.current_era = era;
     w.technology.era_started_tick = era_started_tick;
 
@@ -64,10 +65,10 @@ TEST_CASE("BusinessLifecycle: no-op when not on era transition tick",
     // era_started_tick + 1 != current_tick → module should do nothing.
     auto state = make_world_with_business(
         /*business_id=*/1, BusinessSector::energy, /*province=*/0,
-        /*current_tick=*/100, /*era_started_tick=*/50, SimulationEra::era_3_acceleration);
+        /*current_tick=*/100, /*era_started_tick=*/50, /*acceleration=*/7);
 
     auto cfg = make_cfg_with_stranded_sector(
-        /*target_era=*/3, BusinessSector::energy, /*revenue_penalty=*/0.5f, /*cost_increase=*/0.2f);
+        /*target_era=*/7, BusinessSector::energy, /*revenue_penalty=*/0.5f, /*cost_increase=*/0.2f);
 
     BusinessLifecycleModule module(cfg);
     DeltaBuffer delta{};
@@ -83,10 +84,10 @@ TEST_CASE("BusinessLifecycle: stranded-asset penalty applied on era-transition t
     // is stranded, so the business sees a revenue cut and cost bump.
     auto state = make_world_with_business(
         /*business_id=*/1, BusinessSector::energy, /*province=*/0,
-        /*current_tick=*/51, /*era_started_tick=*/50, SimulationEra::era_3_acceleration);
+        /*current_tick=*/51, /*era_started_tick=*/50, /*acceleration=*/7);
 
     auto cfg = make_cfg_with_stranded_sector(
-        /*target_era=*/3, BusinessSector::energy, /*revenue_penalty=*/0.4f, /*cost_increase=*/0.3f);
+        /*target_era=*/7, BusinessSector::energy, /*revenue_penalty=*/0.4f, /*cost_increase=*/0.3f);
 
     BusinessLifecycleModule module(cfg);
     DeltaBuffer delta{};
@@ -110,10 +111,10 @@ TEST_CASE("BusinessLifecycle: stranded_revenue_floor caps the cut", "[business_l
     // of original = 20) clamps it.
     auto state = make_world_with_business(
         /*business_id=*/1, BusinessSector::energy, /*province=*/0,
-        /*current_tick=*/51, /*era_started_tick=*/50, SimulationEra::era_3_acceleration);
+        /*current_tick=*/51, /*era_started_tick=*/50, /*acceleration=*/7);
 
     auto cfg = make_cfg_with_stranded_sector(
-        /*target_era=*/3, BusinessSector::energy, /*revenue_penalty=*/0.9f, /*cost_increase=*/0.0f);
+        /*target_era=*/7, BusinessSector::energy, /*revenue_penalty=*/0.9f, /*cost_increase=*/0.0f);
 
     BusinessLifecycleModule module(cfg);
     DeltaBuffer delta{};
@@ -129,10 +130,10 @@ TEST_CASE("BusinessLifecycle: businesses outside the stranded sector untouched",
           "[business_lifecycle][tier2]") {
     auto state = make_world_with_business(
         /*business_id=*/1, BusinessSector::technology, /*province=*/0,
-        /*current_tick=*/51, /*era_started_tick=*/50, SimulationEra::era_3_acceleration);
+        /*current_tick=*/51, /*era_started_tick=*/50, /*acceleration=*/7);
 
     auto cfg = make_cfg_with_stranded_sector(
-        /*target_era=*/3, BusinessSector::energy, /*revenue_penalty=*/0.4f, /*cost_increase=*/0.3f);
+        /*target_era=*/7, BusinessSector::energy, /*revenue_penalty=*/0.4f, /*cost_increase=*/0.3f);
 
     BusinessLifecycleModule module(cfg);
     DeltaBuffer delta{};

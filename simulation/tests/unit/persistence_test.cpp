@@ -711,7 +711,7 @@ TEST_CASE("Persistence: round-trip preserves GlobalTechnologyState",
     world.world_seed = 1;
     world.game_mode = GameMode::standard;
 
-    world.technology.current_era = SimulationEra::era_3_acceleration;
+    world.technology.current_era = /*acceleration=*/7;
     world.technology.era_started_tick = 4380;  // ~ year 12
     for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
         world.technology.domain_knowledge[i] = 0.1f * static_cast<float>(i + 1);
@@ -744,7 +744,7 @@ TEST_CASE("Persistence: round-trip preserves GlobalTechnologyState",
     WorldState restored{};
     REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
 
-    REQUIRE(restored.technology.current_era == SimulationEra::era_3_acceleration);
+    REQUIRE(restored.technology.current_era == /*acceleration=*/7);
     REQUIRE(restored.technology.era_started_tick == 4380);
     for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
         REQUIRE(restored.technology.domain_knowledge[i] == 0.1f * static_cast<float>(i + 1));

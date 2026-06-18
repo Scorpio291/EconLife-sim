@@ -869,7 +869,7 @@ MaturationProject read_maturation_project(ByteReader& r) {
 // is config-loaded reference data and not persisted; the engine reloads it
 // from packages/base_game/config/rnd_config.json on startup.
 void write_global_technology_state(ByteWriter& w, const GlobalTechnologyState& g) {
-    w.write_u8(static_cast<uint8_t>(g.current_era));
+    w.write_u8(g.current_era);
     w.write_u32(g.era_started_tick);
     for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
         w.write_float(g.domain_knowledge[i]);
@@ -882,7 +882,7 @@ void write_global_technology_state(ByteWriter& w, const GlobalTechnologyState& g
 }
 
 void read_global_technology_state(ByteReader& r, GlobalTechnologyState& g) {
-    g.current_era = static_cast<SimulationEra>(r.read_u8());
+    g.current_era = r.read_u8();
     g.era_started_tick = r.read_u32();
     for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
         g.domain_knowledge[i] = r.read_float();

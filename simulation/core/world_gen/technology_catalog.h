@@ -49,6 +49,9 @@ class TechnologyCatalog {
     std::vector<TechnologyNode> nodes_;
     std::unordered_map<std::string, size_t> node_index_;  // node_key -> index in nodes_
     std::unordered_map<std::string, MaturationCeilingEntry> ceilings_;
+    // Number of era columns present in the loaded ceilings data. Eras beyond this
+    // are "not defined" (ceiling_for returns -1.0). Data-driven: widens with the CSV.
+    uint8_t era_column_count_ = 0;
 };
 
 }  // namespace econlife

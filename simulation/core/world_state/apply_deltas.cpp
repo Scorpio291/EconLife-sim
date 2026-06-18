@@ -718,9 +718,9 @@ static void apply_technology_deltas(WorldState& world, const std::vector<Technol
         // Era transition (replacement, irreversible forward-only).
         if (td.new_era.has_value()) {
             uint8_t target = *td.new_era;
-            uint8_t current = static_cast<uint8_t>(world.technology.current_era);
+            uint8_t current = world.technology.current_era;
             if (target > current) {
-                world.technology.current_era = static_cast<SimulationEra>(target);
+                world.technology.current_era = target;
                 world.technology.era_started_tick = world.current_tick;
             }
         }

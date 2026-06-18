@@ -17,11 +17,12 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-WorldState make_world_with_tech(SimulationEra era, uint32_t current_tick) {
+WorldState make_world_with_tech(uint8_t era, uint32_t current_tick) {
     WorldState w{};
     w.current_tick = current_tick;
     w.world_seed = 1;
     w.game_mode = GameMode::standard;
+    w.era_catalog.load_builtin_default();  // era logic reads the data-driven timeline
     w.technology.current_era = era;
     w.technology.era_started_tick = 0;
 
@@ -37,7 +38,7 @@ WorldState make_world_with_tech(SimulationEra era, uint32_t current_tick) {
 
 TEST_CASE("Technology: domain_knowledge decay emits TechnologyDelta with negative delta",
           "[technology][tier1]") {
-    auto state = make_world_with_tech(SimulationEra::era_1_turn_of_millennium, /*tick=*/1);
+    auto state = make_world_with_tech(/*era=*/5, /*tick=*/1);
     // Seed domain_knowledge high enough that the per-tick decay
     // (current * knowledge_decay_rate; default 0.0001) clears the
     // skip-negligible-decay threshold (|decay| > 0.0001, strictly).
@@ -62,7 +63,7 @@ TEST_CASE("Technology: domain_knowledge decay emits TechnologyDelta with negativ
 }
 
 TEST_CASE("Technology: zero domain_knowledge produces no decay delta", "[technology][tier1]") {
-    auto state = make_world_with_tech(SimulationEra::era_1_turn_of_millennium, /*tick=*/1);
+    auto state = make_world_with_tech(/*era=*/5, /*tick=*/1);
     // All domain_knowledge entries default to 0.0 — module should emit no
     // decay deltas for them.
 

@@ -121,15 +121,20 @@ bool TechnologyCatalog::load_ceilings_csv(const std::string& filepath) {
         }
 
         auto fields = split_csv_line(trimmed);
-        // node_key + 10 era columns = 11 minimum
-        if (fields.size() < 11)
+        // node_key + at least one era column. The number of era columns is
+        // data-driven (eras.csv); read whatever the row provides, up to capacity.
+        if (fields.size() < 2)
             continue;
 
-        MaturationCeilingEntry entry;
+        MaturationCeilingEntry entry{};  // zero-init: unspecified eras default to 0.0
         entry.node_key = fields[0];
-        for (size_t i = 0; i < 10 && i + 1 < fields.size(); ++i) {
+        size_t cols = 0;
+        for (size_t i = 0; i < MAX_ERA_CAPACITY && i + 1 < fields.size(); ++i) {
             entry.era_ceilings[i] = std::strtof(fields[i + 1].c_str(), nullptr);
+            cols = i + 1;
         }
+        if (cols > era_column_count_)
+            era_column_count_ = static_cast<uint8_t>(cols);
 
         ceilings_[entry.node_key] = entry;
     }
@@ -192,8 +197,8 @@ float TechnologyCatalog::ceiling_for(const std::string& node_key, uint8_t era) c
     auto it = ceilings_.find(node_key);
     if (it == ceilings_.end())
         return 1.0f;  // no ceiling data = no restriction
-    if (era < 1 || era > MAX_ERA)
-        return -1.0f;
+    if (era < 1 || era > era_column_count_)
+        return -1.0f;  // era beyond the defined ceiling table = not researchable
     return it->second.era_ceilings[era - 1];
 }
 
