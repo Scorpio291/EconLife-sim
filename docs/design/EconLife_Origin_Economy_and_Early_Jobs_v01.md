@@ -1,11 +1,39 @@
 # Origin Economy & Early Jobs — Design Note (v01)
 
-*Status: proposal for review. Companion to `EconLife_Mechanical_History_Generation_Plan.md`
-(the "Mechanical History Generation" plan, hereafter **MHG**). This note details the
-**job/role and production model for the earliest era-bands (MHG Bands 0–2)** — the part
-the MHG plan names ("subsistence; foraging, subsistence farming, handicraft; household/
-barter") but does not yet flesh out. It does not re-argue the founding-seed architecture,
-the era-arc re-basing, or the LOD/performance plan; see MHG for those.*
+*Status: partially implemented (see "Implementation status" below). Companion to
+`EconLife_Mechanical_History_Generation_Plan.md` (the "Mechanical History Generation" plan,
+hereafter **MHG**). This note details the **job/role and production model for the earliest
+era-bands (MHG Bands 0–2)** — the part the MHG plan names ("subsistence; foraging,
+subsistence farming, handicraft; household/barter") but does not yet flesh out.*
+
+## Implementation status (as built)
+Direction settled with the project owner: **build forward from the beginning of time**;
+**the modern (≈2000) framing is opt-in, not the default**; **everything era/tech is
+data-driven so eras can be added/reordered without a recompile**; **dawn production is
+pure-commons** (population works the land directly — no firms/facilities/markets — with
+facilities emerging only later when surplus funds them).
+
+Landed on `claude/great-archimedes-REyt1`:
+- **Era spine is data-driven** — `packages/base_game/eras/eras.csv` + `EraCatalog`. The
+  timeline runs dawn (era 1, Subsistence) → modern (era 5, ≈2000) → era 14. Per-era
+  `economic_regime` / `is_default_entry` / `v1_in_scope` are data. The hardcoded
+  `SimulationEra` enum is gone; `current_era` is a uint8 index. Resolves open decision #1
+  toward a data-driven occupation/era model (occupations still TODO — see §4, brick 4).
+- **Subsistence commons module** (`simulation/modules/subsistence/`) — resolves open
+  decision #2 as **pure commons (model B)**: in subsistence/barter eras the province
+  population produces food from natural capital (carrying-capacity curve), no facilities.
+  Records `cohort_stats->subsistence_surplus_ratio` (the master variable of §1).
+  Regime-gated → inert in market eras (behaviour-preserving).
+- **Surplus→population loop** — `population_aging` births/deaths are scaled by the surplus
+  (neutral at 1.0): the Malthusian dynamic toward carrying capacity.
+
+Still open / next: surplus→specialization→firm genesis (the §6 progression), primitive
+**occupations** as a data-driven table (§4, open decision #1), and flipping the default
+entry era to the dawn once it is fully playable (one-line `is_default_entry` change, since
+world-gen already resolves the entry era from the catalog).
+
+---
+
 
 ## 0. Why this note exists
 Two facts frame the problem:
