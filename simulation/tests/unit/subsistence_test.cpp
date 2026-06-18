@@ -91,3 +91,51 @@ TEST_CASE("execute_province produces a surplus at the dawn and is inert in the m
         CHECK(delta.region_deltas.empty());
     }
 }
+
+TEST_CASE("subsistence: a food surplus accrues proto-capital to resident founders",
+          "[subsistence][tier1]") {
+    SubsistenceModule mod;
+
+    // Dawn world, fertile province with a resident significant NPC (a "head").
+    WorldState w{};
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 1;  // subsistence regime
+    w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
+
+    NPC head{};
+    head.id = 42;
+    head.home_province_id = 0;
+    head.capital = 0.0f;
+    w.significant_npcs.push_back(head);
+    w.npc_indices_by_home_province.resize(1);
+    w.npc_indices_by_home_province[0].push_back(0);  // index of the head in significant_npcs
+
+    DeltaBuffer delta{};
+    mod.execute_province(0, w, delta);
+
+    // Surplus province -> the resident head accrues stored proto-capital.
+    float credited = 0.0f;
+    for (const auto& nd : delta.npc_deltas) {
+        if (nd.npc_id == 42 && nd.capital_delta.has_value())
+            credited += *nd.capital_delta;
+    }
+    CHECK(credited > 0.0f);
+
+    SECTION("a deficit province accrues nothing") {
+        WorldState poor{};
+        poor.era_catalog.load_builtin_default();
+        poor.technology.current_era = 1;
+        // Tiny natural capital + large population -> deficit (surplus < 1).
+        poor.provinces.push_back(make_province(0, /*ag=*/0.01f, /*population=*/50000));
+        NPC h{};
+        h.id = 7;
+        h.home_province_id = 0;
+        poor.significant_npcs.push_back(h);
+        poor.npc_indices_by_home_province.resize(1);
+        poor.npc_indices_by_home_province[0].push_back(0);
+        DeltaBuffer d{};
+        mod.execute_province(0, poor, d);
+        for (const auto& nd : d.npc_deltas)
+            CHECK_FALSE(nd.capital_delta.has_value());
+    }
+}

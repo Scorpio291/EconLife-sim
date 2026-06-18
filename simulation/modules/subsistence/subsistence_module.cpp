@@ -74,6 +74,32 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     rd.region_id = prov.region_id;
     rd.subsistence_surplus_replacement = ratio;
     province_delta.region_deltas.push_back(rd);
+
+    // Proto-capital: food produced beyond need is stored (grain/herds/tools) and
+    // controlled by the resident heads/founders — the origin of capital. Split the
+    // surplus pool evenly among this province's resident significant NPCs. This is
+    // the wealth that later funds the first firms (genesis is founder-capital-gated).
+    if (cfg_.proto_capital_rate > 0.0f && ratio > 1.0f &&
+        province_idx < state.npc_indices_by_home_province.size()) {
+        const auto& residents = state.npc_indices_by_home_province[province_idx];
+        if (!residents.empty()) {
+            const float surplus_food = output - static_cast<float>(population) * cfg_.per_capita_food_per_tick;
+            if (surplus_food > 0.0f) {
+                const float pool = cfg_.proto_capital_rate * surplus_food;
+                const float share = pool / static_cast<float>(residents.size());
+                if (share > 0.0f) {
+                    for (uint32_t idx : residents) {
+                        if (idx >= state.significant_npcs.size())
+                            continue;
+                        NPCDelta nd{};
+                        nd.npc_id = state.significant_npcs[idx].id;
+                        nd.capital_delta = share;
+                        province_delta.npc_deltas.push_back(nd);
+                    }
+                }
+            }
+        }
+    }
 }
 
 void SubsistenceModule::execute(const WorldState&, DeltaBuffer&) {

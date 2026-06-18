@@ -537,6 +537,14 @@ struct SubsistenceConfig {
     float ceiling_per_capital_unit = 4000.0f;
     // Labour at which output reaches ~63% of the natural-capital ceiling (1 - 1/e).
     float labor_half_saturation = 1500.0f;
+
+    // Proto-capital: the food surplus *above* subsistence is stored (grain, herds,
+    // tools) and controlled by the province's resident heads/founders — the origin
+    // of capital and inequality. Each tick a pool of proto_capital_rate * (surplus
+    // food beyond need) accrues, split among resident significant NPCs. This is the
+    // wealth that later funds the first firms (founder-capital-gated genesis). 0
+    // disables it. Active only in the commons regimes (same gate as production).
+    float proto_capital_rate = 0.02f;
 };
 
 struct SeasonalAgricultureConfig {
