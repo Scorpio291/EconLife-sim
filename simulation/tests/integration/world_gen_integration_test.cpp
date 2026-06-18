@@ -345,12 +345,13 @@ TEST_CASE("GoodsCatalog loads all tier 0-4 goods from base_game CSVs",
     // Should have loaded goods from all 5 tier files.
     CHECK(catalog.size() > 50);  // at minimum 58 tier-0 goods
 
-    // Verify tier 0 goods.
-    auto tier0 = catalog.goods_available_at(1, 0);
+    // Verify tier 0 goods (queried at the modern anchor, era 5, where the
+    // re-based timeline places today's economy).
+    auto tier0 = catalog.goods_available_at(5, 0);
     CHECK(tier0.size() >= 50);
 
     // Verify tier 0+1 goods.
-    auto tier01 = catalog.goods_available_at(1, 1);
+    auto tier01 = catalog.goods_available_at(5, 1);
     CHECK(tier01.size() > tier0.size());
 
     // Spot-check specific goods.
