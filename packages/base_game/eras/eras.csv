@@ -1,0 +1,15 @@
+era_index,era_key,display_name,start_year,economic_regime,is_default_entry,v1_in_scope
+1,subsistence,Subsistence,-10000,subsistence,0,1
+2,agrarian,Agrarian,-3000,barter,0,1
+3,preindustrial,Pre-Industrial,1500,mercantile,0,1
+4,industrial,Industrial,1800,industrial,0,1
+5,turn_of_millennium,Turn of the Millennium,2000,modern,1,1
+6,disruption,Disruption,2007,modern,0,1
+7,acceleration,Acceleration,2013,modern,0,1
+8,fracture,Fracture,2019,modern,0,1
+9,transition,Transition,2024,modern,0,1
+10,convergence,Convergence,2035,near_future,0,0
+11,reckoning,Reckoning,2050,near_future,0,0
+12,synthesis,Synthesis,2075,near_future,0,0
+13,expansion,Expansion,2100,space_age,0,0
+14,divergence,Divergence,2150,space_age,0,0

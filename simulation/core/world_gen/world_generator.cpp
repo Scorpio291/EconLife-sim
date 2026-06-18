@@ -268,6 +268,13 @@ WorldState WorldGenerator::generate(const WorldGeneratorConfig& config) {
     create_markets(world, markets_rng, *catalog_owned, config);
     world.goods_catalog = std::move(catalog_owned);
 
+    // Data-driven era timeline (the spine). Load from data if a dir is given; otherwise
+    // fall back to the builtin default so the world always carries a valid timeline.
+    if (config.eras_directory.empty() ||
+        !world.era_catalog.load_from_directory(config.eras_directory)) {
+        world.era_catalog.load_builtin_default();
+    }
+
     // Step 5: NPC population (the founding population — emerges/grows during history)
     SettlementGenerator::create_npcs(world, rng, config);
 

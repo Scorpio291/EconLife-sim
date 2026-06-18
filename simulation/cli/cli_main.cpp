@@ -190,6 +190,10 @@ static std::string find_technology_directory() {
     return find_base_game_path("technology");
 }
 
+static std::string find_eras_directory() {
+    return find_base_game_path("eras");
+}
+
 static void print_header() {
     std::printf("%-6s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n", "Tick",
                 "AvgCapital", "AvgPrice", "Stability", "Crime", "Grievance", "Cohesion", "BizCash");
@@ -274,6 +278,7 @@ int main(int argc, char* argv[]) {
     gen_config.recipes_directory = find_recipes_directory();
     gen_config.facility_types_filepath = find_facility_types_filepath();
     gen_config.technology_directory = find_technology_directory();
+    gen_config.eras_directory = find_eras_directory();
 
     if (!gen_config.goods_directory.empty()) {
         std::fprintf(diag, "Goods directory: %s\n", gen_config.goods_directory.c_str());

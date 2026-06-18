@@ -54,6 +54,7 @@ add_executable(econlife_unit_tests
     drain_deferred_work_test.cpp
     world_generator_test.cpp
     recipe_catalog_test.cpp
+    era_catalog_test.cpp
     facility_type_catalog_test.cpp
     technology_catalog_test.cpp
     delta_buffer_merge_test.cpp

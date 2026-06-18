@@ -1,0 +1,84 @@
+#include <catch2/catch_test_macros.hpp>
+
+#include <filesystem>
+#include <string>
+
+#include "core/world_gen/era_catalog.h"
+
+using namespace econlife;
+
+namespace {
+// Locate packages/base_game/eras from any plausible build/working dir.
+std::string find_eras_dir() {
+    namespace fs = std::filesystem;
+    const char* candidates[] = {
+        "packages/base_game/eras",
+        "../packages/base_game/eras",
+        "../../packages/base_game/eras",
+        "../../../packages/base_game/eras",
+    };
+    for (const auto* c : candidates) {
+        if (fs::exists(fs::path(c) / "eras.csv"))
+            return fs::canonical(c).string();
+    }
+    return "";
+}
+}  // namespace
+
+TEST_CASE("EraCatalog builtin default defines the re-based timeline", "[era_catalog][tier0]") {
+    EraCatalog cat;
+    cat.load_builtin_default();
+
+    REQUIRE(cat.size() == 14);
+    CHECK(cat.max_era() == 14);
+    // V1 spans the dawn through "transition" (the old era 5, now index 9).
+    CHECK(cat.v1_max_era() == 9);
+
+    // The dawn is era 1, the modern anchor (turn of the millennium) is era 5.
+    const EraDefinition* dawn = cat.by_index(1);
+    REQUIRE(dawn != nullptr);
+    CHECK(dawn->key == "subsistence");
+    CHECK(dawn->economic_regime == "subsistence");
+
+    const EraDefinition* modern = cat.find("turn_of_millennium");
+    REQUIRE(modern != nullptr);
+    CHECK(modern->index == 5);
+    CHECK(modern->start_year == 2000);
+
+    // The default entry era (until the dawn becomes playable) is the modern anchor.
+    CHECK(cat.default_entry_index() == 5);
+}
+
+TEST_CASE("EraCatalog loads the base-game CSV matching the builtin default",
+          "[era_catalog][tier0]") {
+    std::string dir = find_eras_dir();
+    if (dir.empty()) {
+        WARN("packages/base_game/eras not found from test working dir; skipping CSV load");
+        return;
+    }
+    EraCatalog from_csv;
+    REQUIRE(from_csv.load_from_directory(dir));
+
+    EraCatalog builtin;
+    builtin.load_builtin_default();
+
+    REQUIRE(from_csv.size() == builtin.size());
+    CHECK(from_csv.default_entry_index() == builtin.default_entry_index());
+    CHECK(from_csv.v1_max_era() == builtin.v1_max_era());
+    for (uint8_t i = 1; i <= builtin.max_era(); ++i) {
+        const EraDefinition* a = from_csv.by_index(i);
+        const EraDefinition* b = builtin.by_index(i);
+        REQUIRE(a != nullptr);
+        REQUIRE(b != nullptr);
+        CHECK(a->key == b->key);
+        CHECK(a->start_year == b->start_year);
+        CHECK(a->economic_regime == b->economic_regime);
+        CHECK(a->v1_in_scope == b->v1_in_scope);
+    }
+}
+
+TEST_CASE("EraCatalog rejects missing dir and out-of-range indices", "[era_catalog][tier0]") {
+    EraCatalog cat;
+    CHECK_FALSE(cat.load_from_directory("/no/such/eras/dir"));
+    CHECK(cat.empty());
+}
