@@ -56,6 +56,7 @@ add_executable(econlife_unit_tests
     world_generator_test.cpp
     recipe_catalog_test.cpp
     era_catalog_test.cpp
+    world_class_test.cpp
     occupation_catalog_test.cpp
     facility_type_catalog_test.cpp
     technology_catalog_test.cpp

@@ -4,6 +4,7 @@ add_executable(econlife_integration_tests
     world_gen_integration_test.cpp
     criminal_subsystem_integration_test.cpp
     history_gen_integration_test.cpp
+    society_evolution_test.cpp
 )
 
 target_link_libraries(econlife_integration_tests PRIVATE
