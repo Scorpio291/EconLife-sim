@@ -182,6 +182,10 @@ bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGenerato
 // constants; only their stability matters (changing them re-rolls those layers).
 static constexpr uint32_t kGoodsLayerRngSalt = 0x600D0001u;
 static constexpr uint32_t kProductionLayerRngSalt = 0x600D0002u;
+// Founding population in the pre-market commons regimes is a small fraction of the
+// modern-scale provincial population, so a dawn world starts within the land's
+// subsistence carrying capacity. Tuned against the society-evolution harness.
+static constexpr float kCommonsFoundingPopulationScale = 0.004f;
 
 WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     DeterministicRNG rng(config.seed);
@@ -201,6 +205,33 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // that reference nation_id/region_id have valid data. form_nations() later
     // replaces these with physics-derived multi-nation assignment.
     create_nation(world, config.province_count);
+
+    // Data-driven era + occupation catalogs, loaded BEFORE province generation so the
+    // starting era / economic regime can shape the founding world (population scale,
+    // business seeding, gating). Catalog loads draw no RNG, so this does not perturb
+    // the deterministic world-gen stream.
+    if (config.eras_directory.empty() ||
+        !world.era_catalog.load_from_directory(config.eras_directory)) {
+        world.era_catalog.load_builtin_default();
+    }
+    if (config.starting_era == 0) {
+        config.starting_era = world.era_catalog.default_entry_index();
+    }
+    if (config.occupations_directory.empty() ||
+        !world.occupation_catalog.load_from_directory(config.occupations_directory)) {
+        world.occupation_catalog.load_builtin_default();
+    }
+    // Founding population scale: a dawn (pre-market commons) world starts as a SMALL
+    // dispersed band, not a modern-scale provincial population, so it sits within the
+    // land's subsistence carrying capacity rather than instantly famine-crashing.
+    {
+        const EraDefinition* se = world.era_catalog.by_index(config.starting_era);
+        const std::string regime = se ? se->economic_regime : std::string();
+        const bool commons = (regime == "subsistence" || regime == "barter");
+        // Auto-shrink only if the caller hasn't already dialed it down.
+        if (commons && config.founding_population_scale >= 1.0f)
+            config.founding_population_scale = kCommonsFoundingPopulationScale;
+    }
 
     // Step 2: Provinces with varied geography
     create_provinces(world, rng, config);
@@ -251,24 +282,6 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // permafrost provinces. Applies fjord transit cost to Maritime links.
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
     detect_special_features(world, rng, config);
-
-    // Data-driven era timeline (the spine). Load from data if a dir is given; otherwise
-    // fall back to the builtin default so the world always carries a valid timeline.
-    // Must precede market/goods/facility generation, which gate on the starting era.
-    if (config.eras_directory.empty() ||
-        !world.era_catalog.load_from_directory(config.eras_directory)) {
-        world.era_catalog.load_builtin_default();
-    }
-    // Resolve the starting era data-drivenly: 0 means "the catalog's default entry"
-    // (the is_default_entry row in eras.csv). Downstream gating reads config.starting_era.
-    if (config.starting_era == 0) {
-        config.starting_era = world.era_catalog.default_entry_index();
-    }
-    // Data-driven occupation vocabulary (the livelihood layer).
-    if (config.occupations_directory.empty() ||
-        !world.occupation_catalog.load_from_directory(config.occupations_directory)) {
-        world.occupation_catalog.load_builtin_default();
-    }
 
     // Step 4: Markets from goods catalog. Transfer catalog ownership to
     // WorldState so runtime modules can resolve string good_ids to the
@@ -663,6 +676,15 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
             province.climate.koppen_zone = KoppenZone::Cfb;
             province.energy_cost_baseline = 0.05f + rng.next_float() * 0.03f;
             break;
+    }
+
+    // Founding population scale: shrink the modern-scale population for dawn worlds
+    // (1.0 = no change in market eras). Keeps a small floor so no province is empty.
+    if (config.founding_population_scale < 1.0f) {
+        const double scaled = static_cast<double>(province.demographics.total_population) *
+                              static_cast<double>(config.founding_population_scale);
+        province.demographics.total_population =
+            std::max(200u, static_cast<uint32_t>(scaled));
     }
 
     // Common geography fields.

@@ -46,6 +46,12 @@ struct WorldGeneratorConfig {
     // the current full-seed "instant world" path (the fast default / fallback).
     // See docs/design/EconLife_Mechanical_History_Generation_Plan.md.
     bool founding_seed_mode = false;
+    // Founding population scale: multiplier on each province's generated population.
+    // 1.0 = full modern-scale (market eras). World-gen lowers it automatically in the
+    // pre-market commons regimes (subsistence/barter) so a dawn world starts as a
+    // small dispersed band that fits inside the land's subsistence carrying capacity
+    // instead of instantly famine-crashing. Override to tune; <1.0 is respected.
+    float founding_population_scale = 1.0f;
     std::string goods_directory;       // path to packages/base_game/goods/
     std::string recipes_directory;     // path to packages/base_game/recipes/
     std::string
