@@ -151,6 +151,10 @@ TEST_CASE("subsistence: a dawn world feeds its population from the commons",
         if (npc.occupation != 0)
             ++with_livelihood;
     CHECK(with_livelihood >= 1);
+
+    // No anachronistic firms at the dawn: the economy is livelihoods, not
+    // businesses. Firms emerge only once a market regime / Band-2 conditions exist.
+    CHECK(world.npc_businesses.empty());
 }
 
 // ===========================================================================

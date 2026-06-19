@@ -385,6 +385,12 @@ struct BusinessLifecycleConfig {
     float genesis_gap_fill_fraction = 0.10f;        // fill 10% of the unmet gap per evaluation
     float founder_min_capital = 6000.0f;            // a founder needs at least this to start
     float founder_investment_fraction = 0.30f;      // and seeds the firm with this share of it
+    // Economic regimes (era_catalog economic_regime) in which the flat per-resident
+    // genesis runs. In pre-market regimes (subsistence/barter/...) firms are an
+    // anachronism — the economy is livelihoods, not businesses — so genesis is
+    // suppressed there until a livelihood realistically becomes a firm (employs
+    // non-household labour). Empty = run in every regime (legacy behaviour).
+    std::vector<std::string> genesis_active_regimes = {"modern", "near_future", "space_age"};
 };
 
 struct GovernmentBudgetConfig {

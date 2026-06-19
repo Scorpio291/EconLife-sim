@@ -228,6 +228,24 @@ void BusinessLifecycleModule::genesis_from_opportunity(const WorldState& state,
     if (state.current_tick != 1 && state.current_tick % cfg_.genesis_cadence_ticks != 0)
         return;
 
+    // Regime gate: firms are an anachronism in the pre-market (commons) regimes —
+    // the dawn economy is livelihoods, not businesses. Run the flat per-resident
+    // genesis only in regimes where firms are realistic (modern and beyond). An
+    // empty list keeps the legacy "every regime" behaviour.
+    if (!cfg_.genesis_active_regimes.empty()) {
+        const EraDefinition* era = state.era_catalog.by_index(state.technology.current_era);
+        const std::string regime = era ? era->economic_regime : std::string();
+        bool active = false;
+        for (const auto& r : cfg_.genesis_active_regimes) {
+            if (r == regime) {
+                active = true;
+                break;
+            }
+        }
+        if (!active)
+            return;
+    }
+
     const float denom = std::max(1.0f, cfg_.firms_per_resident_denominator);
 
     // Owners already committed — existing firms plus any spawned earlier this

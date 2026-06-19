@@ -289,11 +289,16 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // Step 5: NPC population (the founding population — emerges/grows during history)
     SettlementGenerator::create_npcs(world, rng, config);
 
-    // Step 6: Businesses — SKIPPED in founding-seed mode. The economy is not
-    // hand-seeded; firms emerge by running pre-game history forward (P2 entity
-    // genesis). Facilities (Step 7) are likewise skipped since they attach to
-    // businesses. The full-seed default builds the economy here as before.
-    if (!config.founding_seed_mode) {
+    // Step 6: Businesses — SKIPPED in founding-seed mode (the economy emerges by
+    // running history forward) and in the pre-market (commons) regimes, where the
+    // dawn economy is livelihoods, not firms — a "business" is an anachronism
+    // before it realistically exists. Seeded only in market regimes (modern+);
+    // Facilities (Step 7) attach to businesses, so they are empty when none seed.
+    const EraDefinition* start_era_def = world.era_catalog.by_index(config.starting_era);
+    const std::string start_regime = start_era_def ? start_era_def->economic_regime : std::string();
+    const bool market_regime = (start_regime == "modern" || start_regime == "near_future" ||
+                                start_regime == "space_age");
+    if (!config.founding_seed_mode && market_regime) {
         SettlementGenerator::create_businesses(world, rng, config);
     }
 
