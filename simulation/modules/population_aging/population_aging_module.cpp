@@ -98,13 +98,19 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
         total += c.size;
     }
 
-    // Food coupling (the Malthusian loop). Both factors are NEUTRAL at
-    // surplus == 1.0, so market eras (where surplus is always 1.0) are unchanged.
-    // A surplus lifts births toward a cap; a deficit (surplus < 1) raises mortality.
+    // Food coupling (the Malthusian loop). All factors are NEUTRAL at surplus == 1.0,
+    // so market eras (where surplus is always 1.0) are unchanged. A surplus lifts
+    // births toward a cap AND relieves mortality (well-fed survival); a deficit
+    // (surplus < 1) raises mortality.
     const float surplus = std::clamp(food_surplus, 0.0f, 10.0f);
     const float birth_food_factor = std::clamp(surplus, 0.0f, cfg.food_surplus_birth_cap);
-    const float famine_mortality_factor =
-        surplus < 1.0f ? (1.0f + cfg.food_deficit_mortality_strength * (1.0f - surplus)) : 1.0f;
+    float famine_mortality_factor;
+    if (surplus < 1.0f) {
+        famine_mortality_factor = 1.0f + cfg.food_deficit_mortality_strength * (1.0f - surplus);
+    } else {
+        famine_mortality_factor = std::max(
+            cfg.food_mortality_floor, 1.0f - cfg.food_surplus_mortality_relief * (surplus - 1.0f));
+    }
 
     // Births: survival scales with stability and healthcare (proxied by the
     // inverse of sick_rate, since HealthcareProfile is not on WorldState).
@@ -202,8 +208,18 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                         c.education_level, province.demographics.education_level,
                         cfg_.max_education_drift_per_year);
                 }
-                process_births_deaths(next, province.conditions.stability_score, cs.sick_rate,
-                                      cs.addiction_rate, cs.subsistence_surplus_ratio, cfg_);
+                // Pre-market demographics are food-driven: floor the effective
+                // stability in commons regimes so the modern political "stability"
+                // proxy (which a subsistence world tanks for lacking markets) doesn't
+                // crush births — surplus drives the dynamics instead.
+                float eff_stability = province.conditions.stability_score;
+                if (const EraDefinition* era =
+                        state.era_catalog.by_index(state.technology.current_era)) {
+                    if (era->economic_regime == "subsistence" || era->economic_regime == "barter")
+                        eff_stability = std::max(eff_stability, cfg_.commons_stability_floor);
+                }
+                process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
+                                      cs.subsistence_surplus_ratio, cfg_);
             }
 
             // Recompute aggregates over the canonical (sorted) group order.

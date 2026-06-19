@@ -1216,8 +1216,21 @@ struct PopulationAgingConfig {
     // market eras, where the commons module is inert), so this changes nothing
     // outside the pre-market regime. Pre-market: surplus > 1 grows the population
     // toward carrying capacity; surplus < 1 (famine) culls it back.
-    float food_surplus_birth_cap = 1.5f;          // max birth multiplier from surplus
+    float food_surplus_birth_cap = 2.5f;          // max birth multiplier from surplus
     float food_deficit_mortality_strength = 1.5f;  // extra mortality per unit of deficit
+    // A surplus also RELIEVES mortality (well-fed people survive better), neutral at
+    // surplus == 1.0. This lets a fed pre-market population hold/grow despite the
+    // dawn's low stability inflating base mortality — and it stabilises the
+    // population below carrying capacity under pressure, leaving a permanent surplus
+    // margin (the headroom that funds specialists/scholars).
+    float food_surplus_mortality_relief = 0.6f;  // mortality cut per unit of surplus
+    float food_mortality_floor = 0.5f;           // mortality never falls below this fraction
+    // Pre-market (commons) demographics are FOOD-driven, not politics-driven: a
+    // subsistence band's births/deaths track the harvest, not the modern political
+    // "stability" proxy (which a dawn world tanks for simply lacking income/markets).
+    // In commons regimes the effective stability used by births/deaths is floored
+    // here so low modern-stability doesn't crush reproduction; surplus does the work.
+    float commons_stability_floor = 0.8f;
 };
 
 struct LodSystemConfig {
