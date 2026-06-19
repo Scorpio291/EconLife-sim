@@ -203,6 +203,41 @@ This is the CI gate that catches calibration regressions on everything added nex
 ## 5. Part D — Make the loops consequential (so evolution can happen)
 The harness only shows "evolution" if the loops have teeth. Fold in the
 "consequences are thin" debt:
+
+### The knowledge engine — how a society actually moves *forward*
+The harness already exposed the gap: dawn societies reach `Developing` but **plateau
+at era 1** — surplus rises, specialists emerge, yet nothing advances. That is the
+**Malthusian trap**: in a pure subsistence economy population tracks carrying
+capacity, so surplus is always competed back to ~1. The *only* escape is raising
+productivity faster than population — and that is what **knowledge** does.
+
+So there is a third livelihood layer above food (Layer 1) and crafts/services
+(Layer 2): **knowledge-producers** — scholars, scribes, mathematicians, astronomers,
+priests-as-researchers. (Historically the earliest: Egyptian geometry for land and
+flood, astronomy for the calendar, writing for administration ~5000-6000 BC.) The
+loop:
+
+> surplus frees scholars → scholars produce **knowledge** (feeds the existing
+> `technology` module: domain_knowledge, research, era transitions) → knowledge
+> **raises the carrying ceiling** (better farming/tools) and **advances eras** →
+> a higher ceiling frees *more* surplus → more scholars. A virtuous cycle — the
+> actual engine of "moving forward."
+
+Design consequences:
+- **Era progression must be knowledge-driven, not calendar-driven.** Re-base the
+  hardcoded calendar-year era triggers so advancing out of subsistence requires
+  *accumulated knowledge* (which scholars produce), gated by surplus/population.
+- **Progress is contingent, not guaranteed** — exactly the "we have no idea how it
+  would have moved forward" point. A society with surplus but no scholars (none
+  freed, or surplus spent on other specialists / hoarded by elites) **stagnates** —
+  rich but static. Whether and *which* scholars emerge is an emergent variable that
+  shapes (or stalls) the whole trajectory. This is what turns `Developing` into a
+  real `Thriving`/era-advancing arc — and what makes the Deathworlders test
+  meaningful (a hard world that nonetheless funds knowledge is what forges an
+  advanced species).
+- Likely the single highest-value build for *watching a society move forward*.
+
+### Other teeth
 - **Occupations do work** — specialists actually contribute (craft goods, healing
   lowers sick_rate, traders enable exchange), so specialization has a payoff/cost.
 - **Proto-capital concentrates** — current even split produces equality; weight
