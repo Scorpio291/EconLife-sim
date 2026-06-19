@@ -30,6 +30,32 @@ The same harness serves as **exploration tool** (see what a world does) and
 If that curve emerges from the mechanics rather than being scripted, the foundation
 is working. The harness is how we'd see it.
 
+### Harshness is relative — Earth *is* a deathworld
+Crucial framing: a world is only a "deathworld" relative to who is adapted to it. By
+galactic-fiction standards **Earth is a deathworld** — endemic disease, storms,
+quakes, drought/flood, wide seasonal temperature swings, large predators, a heavy
+1g pull — and that hostility is precisely what *forged* a capable, resilient species.
+A true paradise would never have produced one.
+
+So harshness must NOT be modeled as a flat penalty. The relationship is a curve with
+a **survivable-adversity band**:
+- **Below it (paradise)** → soft, stagnant; no necessity drives specialization or
+  invention; and a population bred here is fragile if conditions ever worsen.
+- **Inside it (Earthlike → hard-but-survivable)** → the **crucible**: sustained
+  pressure that doesn't kill forges surplus discipline, specialization, and — over
+  generations — an *adapted, hardened population* (see §5, adaptation loop).
+- **Above it (deathworld)** → adversity outruns adaptation; extinction or bare
+  subsistence.
+
+This re-anchors the presets: **Earthlike is the mid-HIGH reference, not the gentle
+baseline.** The same absolute world is a graveyard to an unadapted (paradise-bred)
+society and home to a hardened one — which the harness can test directly via
+*transplant* runs (drop a soft society onto a hard world, or vice-versa).
+
+If the engine reproduces "adversity forges capability, up to a lethal threshold"
+without it being scripted, that is the strongest possible signal the foundation
+works.
+
 ## 1. Why now / what it fixes
 We just closed three dawn loops (food→surplus→population, →proto-capital,
 →specialization) but they have **no long-horizon behavioral test** — the emergence
@@ -42,21 +68,42 @@ calibration with an observable, gateable spectrum.
 ---
 
 ## 2. Part A — The world dial (paradise ↔ deathworld)
-A small set of **normalized axes**, each scaling underlying fields that already exist.
-Composable presets; any axis overridable. Data-driven (`packages/base_game/world_archetypes/*.csv`)
-so worlds are authored/tuned without recompiling, and eventually exposed in the UI.
+Two layers: **planetary baseline** (constants of the body) and **world axes**
+(regional/temporal harshness). Composable presets; any knob overridable. Data-driven
+(`packages/base_game/world_archetypes/*.csv`) so worlds are authored/tuned without
+recompiling, and eventually exposed in the UI. Together they cover the popular-fiction
+"Earth is a deathworld" factors: disease, disasters, storms, seasonal temperature
+swing, predators, and gravity.
 
-**Proposed axes (0..1, or a multiplier):**
+**Layer 1 — Planetary baseline** (global multipliers; per MHG, `PlanetaryParameters`
+already abstracts the body):
+- **Gravity** — the standout. Not "bounty" or "volatility"; it raises the **baseline
+  cost of all effort**: less food output per worker (harder labour), costlier
+  construction/transit, higher injury/exertion mortality. A heavy world taxes
+  everything at once — a quiet, pervasive form of harshness distinct from acute
+  hazards.
+- **Insolation / base temperature**, **day length**, **atmospheric density** —
+  global scalars on growing potential, metabolic load, and activity.
 
-| Axis | Scales (existing fields) | Paradise → Deathworld |
-|---|---|---|
-| **Bounty** | agricultural_productivity, arable_land_fraction, forest_coverage, fisheries carrying_capacity, deposit richness, subsistence `ceiling_per_capital_unit` | abundant → barren |
-| **Volatility** | drought/flood frequency & severity, growing-season variance, random-disaster rate, year-to-year yield variance | stable → chaotic |
-| **Hostility** | baseline sick_rate / disease pressure, natural-death pressure, hazard/predation, (later) raiding | benign → lethal |
-| **Isolation** *(optional)* | transit costs, trade access, neighbour connectivity | connected → cut off |
+**Layer 2 — World axes (0..1, or a multiplier):**
 
-**Presets** (compose the axes): `paradise`, `temperate`, `harsh`, `deathworld`
-(+ mixed, e.g. `fertile_but_plagued` = high Bounty, high Hostility).
+| Axis | Covers (Earth-as-deathworld factors) | Scales (existing fields) | Paradise → Deathworld |
+|---|---|---|---|
+| **Bounty** | scarcity of food/resources | agricultural_productivity, arable_land_fraction, forest_coverage, fisheries carrying_capacity, deposit richness, subsistence `ceiling_per_capital_unit` | abundant → barren |
+| **Seasonality** | large seasonal temperature variance, growing-season length | climate temp amplitude, growing-season window, year-to-year yield variance | mild → extreme swings |
+| **Cataclysm** | natural disasters, storms, floods, droughts, quakes, outbreaks (acute) | drought/flood frequency & severity, random-disaster rate | calm → frequent/severe |
+| **Hostility** | endemic disease load, large predators, (later) raiding | baseline sick_rate / disease pressure, natural-death pressure, predation hazard | benign → lethal |
+| **Isolation** *(optional)* | connectivity, trade reach | transit costs, trade access, neighbour connectivity | connected → cut off |
+
+**Presets** (compose the axes), anchored so **`earthlike` is mid-HIGH harshness —
+the survivable-deathworld crucible — not the gentle baseline**:
+- `paradise` — sub-Earth harshness across the board (stagnation risk).
+- `earthlike` — the reference: real disease/disaster/seasonality/predators at 1g; the
+  forge that produces capable societies.
+- `harsh` — above Earth; survivable only with discipline and luck.
+- `deathworld` — supra-Earth on multiple axes; mostly lethal, rare hardened survivors.
+- mixed, e.g. `fertile_but_plagued` (high Bounty, high Hostility) or `heavy_eden`
+  (abundant, calm, but punishing gravity).
 
 **Design notes:**
 - The dial spans **two timing layers** — world-gen-time (geography/natural capital,
@@ -112,6 +159,15 @@ The harness only shows "evolution" if the loops have teeth. Fold in the
 - **Crystallization rule** — a livelihood becomes an `NPCBusiness` when a specialist
   accumulates capital **and** employs surplus-freed labour to meet unmet demand
   (the "when is it a business" answer, made mechanical). Needs Band-2 content.
+- **Population adaptation / hardiness loop** — the mechanism behind "Earth made us
+  tough." Sustained *survivable* pressure (hostility/seasonality/cataclysm a society
+  endures without collapsing) slowly raises a population's hardiness (mortality
+  resistance, disease tolerance, labour under load); abundance/calm lets it drift
+  back down. This makes harshness **relative to the adapted population**: a hardened
+  people cope where a paradise-bred one would perish, and it is what lets the
+  *transplant* tests in §0 mean something. Likely sits on the trait/demographics
+  model (see `EconLife_Trait_System.md`); a later phase, but it is the loop that
+  turns "adversity" into "capability" rather than just "death".
 
 ## 6. Part E — Enabling work (threaded throughout)
 - **Test-suite tiering** — the full V1 integration suite is ~20 min in debug; split a
