@@ -14,6 +14,7 @@ add_library(econlife_core STATIC
     world_gen/goods_catalog.cpp
     world_gen/recipe_catalog.cpp
     world_gen/era_catalog.cpp
+    world_gen/occupation_catalog.cpp
     world_gen/facility_type_catalog.cpp
     world_gen/technology_catalog.cpp
     world_gen/world_generator.cpp

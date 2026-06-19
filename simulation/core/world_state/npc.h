@@ -280,6 +280,11 @@ struct NPC {
     uint32_t id;
     NPCRole role;  // see NPCRole enum
 
+    // Livelihood (the pre-firm economy): 1-based index into WorldState.occupation_catalog,
+    // 0 = none. Assigned in commons regimes (forager/farmer/... and surplus-funded
+    // specialists like trader/healer). 0 in market eras, where `role` carries the model.
+    uint16_t occupation = 0;
+
     // --- Motivation model ---
     MotivationVector motivations;  // weighted map of: money, career, ideology,
                                    //   revenge, stability, power, survival.

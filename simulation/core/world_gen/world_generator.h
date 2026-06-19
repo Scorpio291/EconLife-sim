@@ -52,6 +52,7 @@ struct WorldGeneratorConfig {
         facility_types_filepath;  // path to packages/base_game/facility_types/facility_types.csv
     std::string technology_directory;  // path to packages/base_game/technology/
     std::string eras_directory;        // path to packages/base_game/eras/ (data-driven era timeline)
+    std::string occupations_directory; // path to packages/base_game/occupations/ (livelihood vocabulary)
     std::string output_world_file;  // if non-empty, write world.json to this path after generation
     std::string output_encyclopedia_file;  // if non-empty, write world_encyclopedia.json
     CommentaryDepth commentary_depth = CommentaryDepth::full;  // §10.6: "full" | "minimal" | "none"

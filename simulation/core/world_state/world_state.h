@@ -18,6 +18,7 @@
 
 // Complete type definitions needed for std::vector/std::map value members and unique_ptr members
 #include "core/world_gen/era_catalog.h"                // EraCatalog (data-driven era timeline)
+#include "core/world_gen/occupation_catalog.h"         // OccupationCatalog (livelihood vocabulary)
 #include "core/world_gen/goods_catalog.h"              // GoodsCatalog (unique_ptr member)
 #include "geography.h"                                 // Nation, Province, Region
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
@@ -82,6 +83,10 @@ struct WorldState {
     // source of truth for how many eras exist, their regimes, scope, and default
     // entry point — so eras can be added/reordered in data without a recompile.
     EraCatalog era_catalog;
+
+    // Data-driven occupation vocabulary (the livelihood layer that precedes firms).
+    // Populated at world-gen; source of truth for what occupations exist.
+    OccupationCatalog occupation_catalog;
 
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)

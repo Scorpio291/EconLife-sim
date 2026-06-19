@@ -545,6 +545,11 @@ struct SubsistenceConfig {
     // wealth that later funds the first firms (founder-capital-gated genesis). 0
     // disables it. Active only in the commons regimes (same gate as production).
     float proto_capital_rate = 0.02f;
+
+    // Specialization: the share of a province's resident livelihoods that surplus
+    // can free from food work into Layer-2 specialists (artisan/healer/trader/...).
+    // 0 at surplus <= 1 (all hands needed for food), rising with surplus to this cap.
+    float max_specialist_fraction = 0.5f;
 };
 
 struct SeasonalAgricultureConfig {

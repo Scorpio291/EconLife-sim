@@ -59,6 +59,11 @@ class SubsistenceModule : public ITickModule {
     // Is the commons food path active in `regime`? (regime ∈ cfg.active_regimes)
     bool regime_active(std::string_view regime) const;
 
+    // How many of `residents` a surplus can free into Layer-2 specialists.
+    // 0 when surplus <= 1; rises with surplus toward max_specialist_fraction.
+    static uint32_t specialist_count(uint32_t residents, float surplus,
+                                     const SubsistenceConfig& cfg);
+
    private:
     SubsistenceConfig cfg_;
 };

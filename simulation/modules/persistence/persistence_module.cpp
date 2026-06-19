@@ -305,6 +305,8 @@ void write_npc(ByteWriter& w, const NPC& npc) {
     w.write_u32(npc.investigator_meter.target_npc_id);
     w.write_u32(npc.investigator_meter.opened_tick);
     w.write_bool(npc.investigator_meter.case_escalated);
+    // Schema v20: livelihood occupation.
+    w.write_u32(static_cast<uint32_t>(npc.occupation));
 }
 
 void write_evidence_token(ByteWriter& w, const EvidenceToken& e) {
@@ -1133,6 +1135,10 @@ NPC read_npc(ByteReader& r, uint32_t schema_ver) {
         npc.investigator_meter.target_npc_id = r.read_u32();
         npc.investigator_meter.opened_tick = r.read_u32();
         npc.investigator_meter.case_escalated = r.read_bool();
+    }
+    // Schema v20: livelihood occupation (commons economy). Older saves default to 0.
+    if (schema_ver >= 20u) {
+        npc.occupation = static_cast<uint16_t>(r.read_u32());
     }
     return npc;
 }

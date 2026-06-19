@@ -78,6 +78,11 @@ static void apply_npc_deltas(WorldState& world, const std::vector<NPCDelta>& del
             npc->status = *d.new_status;
         }
 
+        // new_occupation: replacement (livelihood assignment, commons regimes)
+        if (d.new_occupation.has_value()) {
+            npc->occupation = *d.new_occupation;
+        }
+
         // age_delta: additive (years); clamped non-negative
         if (d.age_delta.has_value()) {
             npc->age_years = std::max(0.0f, npc->age_years + *d.age_delta);

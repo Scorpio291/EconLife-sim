@@ -36,6 +36,7 @@ struct RelationshipDelta {
 struct NPCDelta {
     uint32_t npc_id;
     std::optional<float> capital_delta;                // additive
+    std::optional<uint16_t> new_occupation;            // replacement; NPC.occupation (livelihood)
     std::optional<NPCStatus> new_status;               // replacement
     std::optional<NPCTravelStatus> new_travel_status;  // replacement
     std::optional<MemoryEntry> new_memory_entry;       // appended to memory_log

@@ -29,6 +29,14 @@ float SubsistenceModule::surplus_ratio(float output, uint32_t population,
     return output / need;
 }
 
+uint32_t SubsistenceModule::specialist_count(uint32_t residents, float surplus,
+                                             const SubsistenceConfig& cfg) {
+    if (residents == 0 || surplus <= 1.0f)
+        return 0;
+    float freed = std::min(surplus - 1.0f, std::max(0.0f, cfg.max_specialist_fraction));
+    return static_cast<uint32_t>(static_cast<float>(residents) * freed);
+}
+
 bool SubsistenceModule::regime_active(std::string_view regime) const {
     for (const auto& r : cfg_.active_regimes) {
         if (r == regime)
@@ -75,30 +83,60 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     rd.subsistence_surplus_replacement = ratio;
     province_delta.region_deltas.push_back(rd);
 
-    // Proto-capital: food produced beyond need is stored (grain/herds/tools) and
-    // controlled by the resident heads/founders — the origin of capital. Split the
-    // surplus pool evenly among this province's resident significant NPCs. This is
-    // the wealth that later funds the first firms (genesis is founder-capital-gated).
-    if (cfg_.proto_capital_rate > 0.0f && ratio > 1.0f &&
-        province_idx < state.npc_indices_by_home_province.size()) {
-        const auto& residents = state.npc_indices_by_home_province[province_idx];
-        if (!residents.empty()) {
-            const float surplus_food = output - static_cast<float>(population) * cfg_.per_capita_food_per_tick;
-            if (surplus_food > 0.0f) {
-                const float pool = cfg_.proto_capital_rate * surplus_food;
-                const float share = pool / static_cast<float>(residents.size());
-                if (share > 0.0f) {
-                    for (uint32_t idx : residents) {
-                        if (idx >= state.significant_npcs.size())
-                            continue;
-                        NPCDelta nd{};
-                        nd.npc_id = state.significant_npcs[idx].id;
-                        nd.capital_delta = share;
-                        province_delta.npc_deltas.push_back(nd);
-                    }
-                }
-            }
+    if (province_idx >= state.npc_indices_by_home_province.size())
+        return;
+    const auto& residents = state.npc_indices_by_home_province[province_idx];
+    if (residents.empty())
+        return;
+
+    // Livelihoods: assign each resident an occupation. Everyone is a food producer
+    // (Layer 1) by default; a surplus frees a share into Layer-2 specialists
+    // (artisan/healer/trader/...). These are self-employed livelihoods, NOT firms —
+    // a business only crystallizes later when a livelihood employs others.
+    const auto layer1 = state.occupation_catalog.in_layer(1);
+    const auto layer2 = state.occupation_catalog.in_layer(2);
+    const uint32_t specialists =
+        specialist_count(static_cast<uint32_t>(residents.size()), ratio, cfg_);
+
+    // Proto-capital: food beyond need is stored (grain/herds/tools), controlled by
+    // the resident heads/founders — the origin of capital. Split evenly; it is the
+    // wealth that later funds the first firms (genesis is founder-capital-gated).
+    const float surplus_food = output - static_cast<float>(population) * cfg_.per_capita_food_per_tick;
+    const float proto_share =
+        (cfg_.proto_capital_rate > 0.0f && ratio > 1.0f && surplus_food > 0.0f)
+            ? (cfg_.proto_capital_rate * surplus_food) / static_cast<float>(residents.size())
+            : 0.0f;
+
+    for (uint32_t i = 0; i < residents.size(); ++i) {
+        const uint32_t idx = residents[i];
+        if (idx >= state.significant_npcs.size())
+            continue;
+        const NPC& npc = state.significant_npcs[idx];
+
+        // Choose this resident's livelihood.
+        uint16_t occ = npc.occupation;
+        const OccupationDefinition* chosen = nullptr;
+        if (i < specialists && !layer2.empty()) {
+            const OccupationDefinition* cand = layer2[i % layer2.size()];
+            if (ratio >= cand->min_surplus)
+                chosen = cand;
         }
+        if (chosen == nullptr && !layer1.empty())
+            chosen = layer1[i % layer1.size()];
+        if (chosen != nullptr)
+            occ = chosen->index;
+
+        const bool occupation_changed = (occ != npc.occupation);
+        if (!occupation_changed && proto_share <= 0.0f)
+            continue;  // nothing to write for this resident
+
+        NPCDelta nd{};
+        nd.npc_id = npc.id;
+        if (occupation_changed)
+            nd.new_occupation = occ;
+        if (proto_share > 0.0f)
+            nd.capital_delta = proto_share;
+        province_delta.npc_deltas.push_back(nd);
     }
 }
 

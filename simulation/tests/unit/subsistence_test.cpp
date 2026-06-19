@@ -92,6 +92,55 @@ TEST_CASE("execute_province produces a surplus at the dawn and is inert in the m
     }
 }
 
+TEST_CASE("subsistence: surplus frees a share of livelihoods into specialists",
+          "[subsistence][tier1]") {
+    SubsistenceConfig cfg{};
+    cfg.max_specialist_fraction = 0.5f;
+    // No surplus -> everyone works the land.
+    CHECK(SubsistenceModule::specialist_count(100, 1.0f, cfg) == 0);
+    CHECK(SubsistenceModule::specialist_count(100, 0.7f, cfg) == 0);
+    // Surplus frees a share, capped by max_specialist_fraction.
+    CHECK(SubsistenceModule::specialist_count(100, 1.2f, cfg) == 20);
+    CHECK(SubsistenceModule::specialist_count(100, 3.0f, cfg) == 50);  // capped at 50%
+}
+
+TEST_CASE("subsistence: a surplus dawn province assigns specialist occupations",
+          "[subsistence][tier1]") {
+    SubsistenceModule mod;
+    WorldState w{};
+    w.era_catalog.load_builtin_default();
+    w.occupation_catalog.load_builtin_default();
+    w.technology.current_era = 1;  // subsistence regime
+    w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
+
+    // A handful of resident heads.
+    w.npc_indices_by_home_province.resize(1);
+    for (uint32_t i = 0; i < 10; ++i) {
+        NPC n{};
+        n.id = 100 + i;
+        n.home_province_id = 0;
+        w.significant_npcs.push_back(n);
+        w.npc_indices_by_home_province[0].push_back(i);
+    }
+
+    DeltaBuffer delta{};
+    mod.execute_province(0, w, delta);
+
+    // Every resident gets a livelihood; with surplus, some are Layer-2 specialists.
+    int assigned = 0, specialists = 0;
+    for (const auto& nd : delta.npc_deltas) {
+        if (!nd.new_occupation.has_value())
+            continue;
+        ++assigned;
+        const OccupationDefinition* o = w.occupation_catalog.by_index(*nd.new_occupation);
+        REQUIRE(o != nullptr);
+        if (o->layer == 2)
+            ++specialists;
+    }
+    CHECK(assigned == 10);
+    CHECK(specialists >= 1);
+}
+
 TEST_CASE("subsistence: a food surplus accrues proto-capital to resident founders",
           "[subsistence][tier1]") {
     SubsistenceModule mod;

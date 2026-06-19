@@ -264,6 +264,11 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     if (config.starting_era == 0) {
         config.starting_era = world.era_catalog.default_entry_index();
     }
+    // Data-driven occupation vocabulary (the livelihood layer).
+    if (config.occupations_directory.empty() ||
+        !world.occupation_catalog.load_from_directory(config.occupations_directory)) {
+        world.occupation_catalog.load_builtin_default();
+    }
 
     // Step 4: Markets from goods catalog. Transfer catalog ownership to
     // WorldState so runtime modules can resolve string good_ids to the

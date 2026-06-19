@@ -1,0 +1,11 @@
+occupation_key,display_name,layer,min_surplus
+forager,Forager,1,1.0
+hunter,Hunter,1,1.0
+fisher,Fisher,1,1.0
+farmer,Subsistence Farmer,1,1.0
+herder,Herder,1,1.0
+artisan,Artisan,2,1.10
+builder,Builder,2,1.20
+healer,Healer,2,1.20
+trader,Trader,2,1.15
+elder,Elder,2,1.10

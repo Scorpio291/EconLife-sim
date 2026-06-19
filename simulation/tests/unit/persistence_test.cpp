@@ -114,7 +114,8 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // in persistence_module.h:CURRENT_SCHEMA_VERSION.
     // v17: consequence queue (GDD §21 delayed-consequence system).
     // v19: cohort_stats->subsistence_surplus_ratio (commons food economy).
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 19);
+    // v20: per-NPC occupation (livelihood).
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 20);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

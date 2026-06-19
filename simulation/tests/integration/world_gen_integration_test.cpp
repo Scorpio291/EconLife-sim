@@ -142,6 +142,15 @@ TEST_CASE("subsistence: a dawn world feeds its population from the commons",
             ++computed;
     }
     CHECK(computed >= 1);
+
+    // Livelihoods: the commons economy assigns occupations to resident NPCs (no
+    // firms involved). At the dawn most NPCs should hold a livelihood, not "none".
+    REQUIRE(world.occupation_catalog.size() > 0);
+    int with_livelihood = 0;
+    for (const auto& npc : world.significant_npcs)
+        if (npc.occupation != 0)
+            ++with_livelihood;
+    CHECK(with_livelihood >= 1);
 }
 
 // ===========================================================================
