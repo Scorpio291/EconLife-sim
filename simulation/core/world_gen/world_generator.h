@@ -52,6 +52,10 @@ struct WorldGeneratorConfig {
     // small dispersed band that fits inside the land's subsistence carrying capacity
     // instead of instantly famine-crashing. Override to tune; <1.0 is respected.
     float founding_population_scale = 1.0f;
+    // World-spectrum Bounty dial: multiplier on each province's natural capital
+    // (agricultural productivity, arable land, forage, fisheries), clamped to [0,1].
+    // 1.0 = earthlike; >1 pushes toward a fertile paradise, <1 toward a barren world.
+    float bounty_scale = 1.0f;
     std::string goods_directory;       // path to packages/base_game/goods/
     std::string recipes_directory;     // path to packages/base_game/recipes/
     std::string

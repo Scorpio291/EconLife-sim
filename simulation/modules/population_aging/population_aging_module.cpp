@@ -125,7 +125,8 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     // Deaths: per-cohort mortality rises with instability, addiction, and famine,
     // and is multiplied for retiree cohorts.
     float mortality_env = (1.0f + (1.0f - std::clamp(stability, 0.0f, 1.0f))) *
-                          (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f)) * famine_mortality_factor;
+                          (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f)) * famine_mortality_factor *
+                          cfg.hazard_mortality_multiplier;  // world-spectrum hazard (1.0 = earthlike)
     for (auto& [g, c] : cohorts) {
         if (c.size == 0)
             continue;

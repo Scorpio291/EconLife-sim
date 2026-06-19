@@ -1231,6 +1231,10 @@ struct PopulationAgingConfig {
     // In commons regimes the effective stability used by births/deaths is floored
     // here so low modern-stability doesn't crush reproduction; surplus does the work.
     float commons_stability_floor = 0.8f;
+    // World-spectrum Hazard dial: multiplier on cohort mortality from the world's
+    // Deathworld Class (1.0 = earthlike/Class 12). Higher on harsher worlds. NEUTRAL
+    // at 1.0, so it changes nothing unless an archetype dials it.
+    float hazard_mortality_multiplier = 1.0f;
 };
 
 struct LodSystemConfig {

@@ -16,8 +16,10 @@
 #include <string>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
+#include "core/world_gen/world_class.h"
 #include "core/world_gen/world_generator.h"
 #include "core/world_state/world_state.h"
 #include "modules/register_base_game_modules.h"
@@ -104,23 +106,29 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     return s;
 }
 
-// Boot a dawn (era 1, founding-seed) world and run it `years` in-game years,
+// Boot a dawn (era 1, founding-seed) world shaped by `arch` (the world-spectrum
+// dial: Bounty + Deathworld-Class hazard) and run it `years` in-game years,
 // capturing one SocietySnapshot per year (plus the t=0 snapshot).
 inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t npc_count,
-                                                      uint32_t years) {
+                                                      uint32_t years, const WorldArchetype& arch) {
     WorldGeneratorConfig config{};
     config.seed = seed;
     config.province_count = 6;
     config.npc_count = npc_count;
-    config.starting_era = 1;          // the dawn (subsistence regime)
+    config.starting_era = 1;           // the dawn (subsistence regime)
     config.founding_seed_mode = true;  // no hand-seeded economy; it must emerge
     config.goods_directory = find_goods_dir_society();
+    config.bounty_scale = arch.bounty;  // Bounty dial -> natural capital
     // eras/occupations dirs left empty -> builtin catalogs (match the CSVs).
 
     WorldState world = WorldGenerator::generate(config);
 
+    // Hazard dial -> cohort mortality (from the Deathworld Class).
+    PackageConfig pkg{};
+    pkg.population_aging.hazard_mortality_multiplier = hazard_mortality_multiplier(arch.hazard);
+
     TickOrchestrator orch;
-    register_base_game_modules(orch);
+    register_base_game_modules(orch, pkg);
     orch.finalize_registration();
     ThreadPool pool(1);
 
@@ -133,6 +141,12 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
         series.push_back(capture_society(world, y + 1));
     }
     return series;
+}
+
+// Convenience: a default earthlike dawn (Class 12, bounty 1.0).
+inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t npc_count,
+                                                      uint32_t years) {
+    return run_society_years(seed, npc_count, years, archetype_earthlike());
 }
 
 // How a society's run turned out.

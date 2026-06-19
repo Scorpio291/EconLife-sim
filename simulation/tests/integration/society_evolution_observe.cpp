@@ -45,3 +45,25 @@ TEST_CASE("society observe: dawn trajectories across seeds", "[.society-observe]
         "specialists among livelihoods. capital: total proto-capital. gini: its "
         "inequality.\n");
 }
+
+TEST_CASE("society observe: the world spectrum (garden -> earthlike -> deathworld)",
+          "[.society-spectrum]") {
+    // Same seed, three points on the dial — watch how the society's fate shifts with
+    // the world's Bounty + Deathworld Class.
+    constexpr uint64_t kSeed = 42;
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 50;
+    const WorldArchetype archs[] = {archetype_garden(), archetype_earthlike(),
+                                    archetype_deathworld()};
+    for (const auto& a : archs) {
+        char label[96];
+        std::snprintf(label, sizeof(label), "%s (Class %.1f, bounty %.2f)", a.name,
+                      deathworld_class(a.hazard), a.bounty);
+        auto series = run_society_years(kSeed, kNpcs, kYears, a);
+        dump_society(label, series);
+        REQUIRE(series.size() == kYears + 1);
+    }
+    std::printf(
+        "\n  the Deathworlders test: garden tends to stagnate, deathworld to "
+        "kill/stall, earthlike to develop.\n");
+}

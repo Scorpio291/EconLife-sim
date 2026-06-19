@@ -283,6 +283,22 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
     detect_special_features(world, rng, config);
 
+    // World-spectrum Bounty dial: scale each province's finalized natural capital
+    // (food/forage potential) so a world can be dialed from barren to fertile. Runs
+    // after all natural-capital stages, before markets/subsistence read it. 1.0 = no
+    // change; draws no RNG (deterministic). Fields are normalized [0,1].
+    if (config.bounty_scale != 1.0f) {
+        const float b = config.bounty_scale;
+        auto scale01 = [b](float v) { return std::clamp(v * b, 0.0f, 1.0f); };
+        for (auto& p : world.provinces) {
+            p.agricultural_productivity = scale01(p.agricultural_productivity);
+            p.geography.arable_land_fraction = scale01(p.geography.arable_land_fraction);
+            p.geography.forest_coverage = scale01(p.geography.forest_coverage);
+            p.fisheries.carrying_capacity = scale01(p.fisheries.carrying_capacity);
+            p.fisheries.current_stock = scale01(p.fisheries.current_stock);
+        }
+    }
+
     // Step 4: Markets from goods catalog. Transfer catalog ownership to
     // WorldState so runtime modules can resolve string good_ids to the
     // same numeric_id that create_markets() stamped onto RegionalMarket.

@@ -88,4 +88,28 @@ inline WorldHazardProfile deathworld_profile() {
     return WorldHazardProfile{2.4f, 1.6f, 1.4f, 2.2f, 2.7f, 2.5f};  // sum ~12.8
 }
 
+// ---------------------------------------------------------------------------
+// WorldArchetype — the two headline dials together: Bounty (resource abundance /
+// development potential) and the Hazard profile (the Deathworld Class / survival
+// difficulty). This is what world-gen + the harness consume to slide a world from
+// garden to deathworld. Bounty scales the land's natural capital; the hazard's
+// Class scales mortality pressure.
+// ---------------------------------------------------------------------------
+struct WorldArchetype {
+    const char* name = "earthlike";
+    float bounty = 1.0f;          // natural-capital multiplier (1.0 = earthlike)
+    WorldHazardProfile hazard{};  // Earth (Class 12) by default
+};
+
+// Mortality multiplier from the Deathworld Class, anchored so Earth (Class 12) = 1.0.
+// Garden worlds are dramatically safer; worlds harsher than Earth add mortality more
+// incrementally (Earth is already near the deathworld end — per the lore).
+inline float hazard_mortality_multiplier(const WorldHazardProfile& p) {
+    return std::clamp(deathworld_class(p) / 12.0f, 0.15f, 3.0f);
+}
+
+inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_profile()}; }
+inline WorldArchetype archetype_earthlike() { return {"earthlike", 1.0f, earth_profile()}; }
+inline WorldArchetype archetype_deathworld() { return {"deathworld", 0.4f, deathworld_profile()}; }
+
 }  // namespace econlife
