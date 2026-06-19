@@ -56,6 +56,19 @@ If the engine reproduces "adversity forges capability, up to a lethal threshold"
 without it being scripted, that is the strongest possible signal the foundation
 works.
 
+### The headline success criterion (the Deathworlders test)
+We adopt the *Deathworlders* (Jenkinsverse) **Deathworld Class** scale as the world's
+headline rating (§2): Garden (1–3) → Typical (4–7) → Harsh (8–10) → Deathworld
+(11–13) → Extreme (14+), with **Earth = Class 12**. The series' central premise — the
+galaxy assumed advanced intelligence could only arise on gentle **Garden Worlds**,
+and a technological species from a **Class-12 Deathworld** overturns that — *is* our
+prime calibration target, stated as canon:
+
+> A `garden` world should reliably survive but tend to **stagnate**; a `deathworld`
+> should mostly **kill or stall** — yet a fertile Class-12 (`earthlike`) world should,
+> at least sometimes, **forge an advanced, resilient society** that out-toughs any
+> Garden-World society. That rare-but-real outcome, emerging unscripted, is the bar.
+
 ## 1. Why now / what it fixes
 We just closed three dawn loops (food→surplus→population, →proto-capital,
 →specialization) but they have **no long-horizon behavioral test** — the emergence
@@ -67,43 +80,81 @@ calibration with an observable, gateable spectrum.
 
 ---
 
-## 2. Part A — The world dial (paradise ↔ deathworld)
-Two layers: **planetary baseline** (constants of the body) and **world axes**
-(regional/temporal harshness). Composable presets; any knob overridable. Data-driven
-(`packages/base_game/world_archetypes/*.csv`) so worlds are authored/tuned without
-recompiling, and eventually exposed in the UI. Together they cover the popular-fiction
-"Earth is a deathworld" factors: disease, disasters, storms, seasonal temperature
-swing, predators, and gravity.
+## 2. Part A — The world dial & the Deathworld Class
+The headline knob/output is a **Deathworld Class**, adopting the scale from *The
+Deathworlders* (Jenkinsverse): a single derived number that aggregates a world's
+hazards, with named bands. You can dial the underlying factors and watch the class
+fall out, or pick a target class/preset and let it distribute.
 
-**Layer 1 — Planetary baseline** (global multipliers; per MHG, `PlanetaryParameters`
-already abstracts the body):
-- **Gravity** — the standout. Not "bounty" or "volatility"; it raises the **baseline
-  cost of all effort**: less food output per worker (harder labour), costlier
-  construction/transit, higher injury/exertion mortality. A heavy world taxes
-  everything at once — a quiet, pervasive form of harshness distinct from acute
-  hazards.
-- **Insolation / base temperature**, **day length**, **atmospheric density** —
-  global scalars on growing potential, metabolic load, and activity.
+| Class | Band | Description |
+|---|---|---|
+| 1–3 | **Garden** | extremely safe; minimal predators/disease/hazards |
+| 4–7 | **Typical** | most species evolve here |
+| 8–10 | **Harsh** | stronger gravity, tougher climate, more aggressive ecosystems |
+| 11–13 | **Deathworld** | survival demands constant adaptation |
+| 14+ | **Extreme** | beyond most deathworld standards |
 
-**Layer 2 — World axes (0..1, or a multiplier):**
+**Earth = Class 12** is the calibration anchor: the `earthlike` preset must compute
+to ~12. (Per the source, the exact formula is unspecified and deliberately subjective
+— rated from the perspective of fragile galactics, possibly an *under*-estimate — so
+we define our own derived score, anchored to Earth≈12, not a canon formula.)
 
-| Axis | Covers (Earth-as-deathworld factors) | Scales (existing fields) | Paradise → Deathworld |
+### Two orthogonal dimensions: Hazard (the Class) × Bounty
+A key separation: the **Class measures hazard** (how hard it is to *survive*), while
+**Bounty** measures resource abundance (how much there is to *develop with*). They are
+independent — a world can be deadly *and* fertile, or safe *and* barren. This gives a
+2-D space with Earth in the most interesting quadrant:
+
+```
+              high Bounty
+                  │
+   fertile garden │ FERTILE CRUCIBLE  ← Earth (Class 12, fertile):
+   (soft, rich,   │ deadly enough to forge, rich enough to fund
+    stagnant)     │ development
+  ────────────────┼──────────────── high Hazard (Class) →
+   barren garden  │ barren deathworld
+   (poor, stuck)  │ (kills, or bare subsistence forever)
+                  │
+              low Bounty
+```
+The hypothesis (§0) in these terms: advanced society needs **hazard high enough to
+forge capability** *and* **bounty high enough to fund it** — Earth hits both.
+
+### Factors that compute the Class (covering the Jenkinsverse list)
+Data-driven (`packages/base_game/world_archetypes/*.csv`); each scales fields that
+mostly already exist. **Planetary baseline** (body constants; per MHG
+`PlanetaryParameters` already abstracts the body) + **world axes** (regional/temporal).
+
+| Factor | Layer | Jenkinsverse factor | Scales (engine) |
 |---|---|---|---|
-| **Bounty** | scarcity of food/resources | agricultural_productivity, arable_land_fraction, forest_coverage, fisheries carrying_capacity, deposit richness, subsistence `ceiling_per_capital_unit` | abundant → barren |
-| **Seasonality** | large seasonal temperature variance, growing-season length | climate temp amplitude, growing-season window, year-to-year yield variance | mild → extreme swings |
-| **Cataclysm** | natural disasters, storms, floods, droughts, quakes, outbreaks (acute) | drought/flood frequency & severity, random-disaster rate | calm → frequent/severe |
-| **Hostility** | endemic disease load, large predators, (later) raiding | baseline sick_rate / disease pressure, natural-death pressure, predation hazard | benign → lethal |
-| **Isolation** *(optional)* | connectivity, trade reach | transit costs, trade access, neighbour connectivity | connected → cut off |
+| **Gravity** | planetary | surface gravity | baseline cost of *all* effort — food/worker, construction, transit, exertion mortality |
+| **Atmosphere** | planetary | atmospheric conditions | breathability/toxicity, metabolic load |
+| **Radiation** | planetary | radiation levels | chronic mortality/illness, surface habitability |
+| **Insolation / day length** | planetary | (climate base) | growing potential, activity rhythm |
+| **Seasonality** | axis | climate extremes | temp amplitude, growing-season window, yield variance |
+| **Cataclysm** | axis | geological activity + storms | quakes/volcanoes + floods/droughts/wildfires; disaster rate & severity |
+| **Biohazard** | axis | predators, toxic flora/fauna, disease/parasites, evolutionary competition | sick_rate/disease pressure, predation, toxicity, natural-death pressure |
+| **Bounty** *(not a hazard)* | axis | — | agricultural_productivity, arable_land, forage, fisheries, deposits, subsistence ceiling |
+| **Isolation** *(not a hazard)* | axis | — | transit costs, trade access, connectivity |
 
-**Presets** (compose the axes), anchored so **`earthlike` is mid-HIGH harshness —
-the survivable-deathworld crucible — not the gentle baseline**:
-- `paradise` — sub-Earth harshness across the board (stagnation risk).
-- `earthlike` — the reference: real disease/disaster/seasonality/predators at 1g; the
-  forge that produces capable societies.
-- `harsh` — above Earth; survivable only with discipline and luck.
-- `deathworld` — supra-Earth on multiple axes; mostly lethal, rare hardened survivors.
-- mixed, e.g. `fertile_but_plagued` (high Bounty, high Hostility) or `heavy_eden`
-  (abundant, calm, but punishing gravity).
+`Class = weighted_aggregate(gravity, atmosphere, radiation, seasonality, cataclysm,
+biohazard, …)`. Bounty and Isolation sit *outside* the class (they shape development,
+not danger). Gravity is the standout hazard — a quiet, pervasive tax that, unlike
+acute events, makes *everything* cost more all the time.
+
+**Presets** (by class; Earthlike anchored at the mid-high reference, not the easy
+baseline):
+- `garden` (Class ~2) — safe and gentle; **stagnation risk**, and a fragile,
+  unadapted population.
+- `typical` (Class ~5) — most "baseline" worlds.
+- `earthlike` (Class 12, fertile) — the **fertile crucible**: real
+  gravity/disease/predators/disasters/seasons, but bountiful. The reference that
+  *should* be able to forge an advanced society.
+- `deathworld` (Class ~13) — survival demands constant adaptation; mostly lethal,
+  rare hardened survivors.
+- `extreme` (Class 14+) — almost always fatal to a founding population.
+- mixed, e.g. `barren_deathworld` (high hazard, low bounty — kills or stalls) or
+  `heavy_eden` (low biohazard but punishing gravity).
 
 **Design notes:**
 - The dial spans **two timing layers** — world-gen-time (geography/natural capital,
@@ -134,13 +185,18 @@ Extend the existing emergence harness (`simulation/tests/integration/emergence_h
   Developing | OvershootCrash | Thriving`. This is the unit the gate reasons about.
 
 ## 4. Part C — Calibration as response-plausibility
-Not a single "acceptable" band — assert the **spectrum behaves sensibly**:
-- **Monotonic response**: harsher Bounty/Volatility/Hostility ⇒ lower steady-state
-  population, less surplus, slower/no development; gentler ⇒ growth & progression.
-  (Run a sweep of archetypes; assert the ordering holds.)
-- **Per-archetype envelopes**: `deathworld` mostly `Extinct`/`BareSubsistence`;
-  `paradise` survives (rarely `Extinct`); `temperate` produces `Developing` at a
-  meaningful rate. Bands, not exact values.
+Not a single "acceptable" band — assert the **spectrum behaves sensibly across the
+Deathworld Class**:
+- **Monotonic response**: rising Class (hazard) ⇒ lower survival, lower steady-state
+  population, slower/no development; rising Bounty ⇒ more surplus & faster development.
+  (Sweep Class × Bounty; assert the ordering holds.)
+- **Per-band envelopes** (Class bands, not exact values):
+  `garden` survives but mostly `BareSubsistence`/stagnant; `typical` develops at a
+  modest rate; `deathworld` mostly `Extinct`/`OvershootCrash`; `extreme` almost always
+  `Extinct`.
+- **The Deathworlders bar**: a fertile **Class-12 `earthlike`** world produces a
+  `Thriving`/advanced trajectory at a meaningful-but-minority rate — more than a
+  `deathworld`, and reaching *higher capability/hardiness* than a `garden` ever does.
 - **Invariants always**: finite/bounded, deterministic, no runaway.
 This is the CI gate that catches calibration regressions on everything added next.
 
@@ -202,13 +258,19 @@ dialing worlds and watching the first trajectories, even before the loops have f
 teeth.
 
 ## 8. Open decisions
-1. **Axis set** — Bounty / Volatility / Hostility (+ Isolation)? Or a different
-   decomposition?
-2. **Single dial vs multi-axis** — one "harshness" slider (simple) or independent
-   axes (richer; enables `fertile_but_plagued`)? (Recommend multi-axis with presets.)
-3. **Where the dial lives** — pure config now, with a UI surface later? (Recommend
-   yes — headless config first, UI consumes the same presets.)
+1. **Factor set & Class weighting** — the hazard factors (gravity, atmosphere,
+   radiation, seasonality, cataclysm, biohazard) and the weights that aggregate them
+   into a Class, anchored so `earthlike` ≈ 12. What's the weighting, and is the Class
+   a simple weighted sum or something non-linear (e.g. multiple high factors compound)?
+2. **Hazard vs Bounty as the two headline dials** — confirm the orthogonal split
+   (Class = survival difficulty; Bounty = development potential), with Earth in the
+   "fertile crucible" quadrant?
+3. **Where the dial lives** — config now (`WorldArchetypeConfig`), UI later consuming
+   the same presets? (Recommend yes.)
 4. **First slice** — build P1 (harness) or P2 (dial) first? (Recommend **P1**: the
    ability to *observe* is the prerequisite for tuning anything.)
-5. **Scope/Tier** — is the spectrum a V1 feature or a post-V1 calibration tool?
-   (Affects how much UI vs headless-only.)
+5. **Scope/Tier** — V1 feature or post-V1 calibration tool? (Affects UI vs
+   headless-only.)
+6. **Adaptation depth** — is the population hardiness loop (§5) in scope soon, or a
+   later phase? It's what makes "Class is relative to the adapted population" real and
+   gives the transplant tests meaning.
