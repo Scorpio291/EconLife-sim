@@ -5,12 +5,12 @@
 // Deathworlders* (Jenkinsverse): Garden (1-3), Typical (4-7), Harsh (8-10),
 // Deathworld (11-13), Extreme (14+), with Earth = Class 12.
 //
-// Canon leaves the exact formula unspecified, so this is our own: each HAZARD
-// factor contributes additive "class points", and the class is their sum. The
-// Earth profile is calibrated to total 12. Class measures *survival difficulty*
-// only — Bounty (resource abundance / development potential) and Isolation are
-// deliberately NOT part of it (a world can be deadly and fertile, or safe and
-// barren). See docs/design/EconLife_World_Spectrum_and_Evolution_Plan.md.
+// The Class is CALCULATED from the individual world settings you choose (gravity,
+// disease, predators, radiation, seasonality, geology, atmosphere) — it is not
+// hand-set. Each setting contributes weighted "class points"; the Earth defaults
+// are calibrated to sum to ~12. Class measures *survival difficulty* only — Bounty
+// (resource abundance / development potential) is deliberately not part of it.
+// See docs/design/EconLife_World_Spectrum_and_Evolution_Plan.md.
 
 #include <algorithm>
 #include <cstdint>
@@ -18,31 +18,48 @@
 
 namespace econlife {
 
-// Hazard factors as class-point contributions. The Earth profile (the builtin
-// default below) sums to 12.0. Scale a factor up for a harsher world, down for a
-// gentler one. Non-negative.
-struct WorldHazardProfile {
-    float gravity = 2.0f;      // surface gravity: a pervasive tax on all effort
-    float atmosphere = 1.5f;   // breathability / toxicity / pressure
-    float radiation = 1.0f;    // ambient radiation load
-    float seasonality = 2.0f;  // seasonal temperature swing / climate extremes
-    float cataclysm = 2.5f;    // geology (quakes/volcanoes) + storms/floods/wildfires
-    float biohazard = 3.0f;    // predators + toxic flora/fauna + disease + competition
+// ---------------------------------------------------------------------------
+// WorldHazardSettings — the dials you choose. Each is a natural/normalized
+// intensity; the Earth defaults compute to ~Class 12. Gravity is in Earth g's;
+// the rest are 0..1 "how severe is this factor".
+// ---------------------------------------------------------------------------
+struct WorldHazardSettings {
+    float gravity_g = 1.0f;     // surface gravity in Earth g's (Earth = 1.0)
+    float disease = 0.60f;      // endemic disease / parasite load
+    float predators = 0.50f;    // large-predator / dangerous-fauna pressure
+    float radiation = 0.20f;    // ambient radiation level (Earth low)
+    float seasonality = 0.60f;  // seasonal temperature swing / climate extremes
+    float geology = 0.60f;      // tectonic activity + storms/floods/wildfires
+    float atmosphere = 0.30f;   // atmospheric hostility / toxicity (Earth breathable)
+};
 
-    float sum() const { return gravity + atmosphere + radiation + seasonality + cataclysm + biohazard; }
+// Per-factor weights (class points) the settings are scored against. Defaults are
+// calibrated so the Earth settings above total ~12. Tunable — not baked into the
+// scoring function.
+struct HazardScoringWeights {
+    float gravity = 2.0f;       // points per g
+    float disease = 3.0f;       // points at setting 1.0
+    float predators = 3.0f;
+    float radiation = 5.0f;
+    float seasonality = 3.333f;
+    float geology = 4.0f;
+    float atmosphere = 4.333f;
 };
 
 enum class WorldClassBand : uint8_t {
-    garden = 0,      // 1-3   : extremely safe
-    typical = 1,     // 4-7   : most species evolve here
-    harsh = 2,       // 8-10  : tougher gravity/climate/ecosystems
-    deathworld = 3,  // 11-13 : survival demands constant adaptation
-    extreme = 4,     // 14+   : beyond most deathworld standards
+    garden = 0,      // 1-3
+    typical = 1,     // 4-7
+    harsh = 2,       // 8-10
+    deathworld = 3,  // 11-13
+    extreme = 4,     // 14+
 };
 
-// The class is the factor sum, floored at 1 (no world is below Class 1).
-inline float deathworld_class(const WorldHazardProfile& p) {
-    return std::max(1.0f, p.sum());
+// Calculate the Deathworld Class from the chosen settings (floored at 1).
+inline float deathworld_class(const WorldHazardSettings& s, const HazardScoringWeights& w = {}) {
+    const float c = s.gravity_g * w.gravity + s.disease * w.disease + s.predators * w.predators +
+                    s.radiation * w.radiation + s.seasonality * w.seasonality +
+                    s.geology * w.geology + s.atmosphere * w.atmosphere;
+    return std::max(1.0f, c);
 }
 
 inline WorldClassBand class_band(float cls) {
@@ -73,43 +90,41 @@ inline std::string_view class_band_name(WorldClassBand b) {
     return "Unknown";
 }
 
-// --- Reference profiles (anchors / presets) ---
+// --- Reference settings (anchors / presets) ---
 
-// Earth: the builtin default, Class 12 — a fertile deathworld.
-inline WorldHazardProfile earth_profile() { return WorldHazardProfile{}; }
+// Earth: the calibration anchor, ~Class 12 — a fertile deathworld.
+inline WorldHazardSettings earth_hazard() { return WorldHazardSettings{}; }
 
-// A gentle Garden world (~Class 2): minimal hazards on every axis.
-inline WorldHazardProfile garden_profile() {
-    return WorldHazardProfile{0.3f, 0.2f, 0.1f, 0.4f, 0.4f, 0.4f};  // sum ~1.8
+// A gentle Garden world (~Class 2-3): low on every hazard.
+inline WorldHazardSettings garden_hazard() {
+    return WorldHazardSettings{/*g*/ 0.7f, /*dis*/ 0.05f, /*pred*/ 0.05f, /*rad*/ 0.02f,
+                               /*seas*/ 0.10f, /*geo*/ 0.05f, /*atmo*/ 0.05f};
 }
 
-// A world harsher than Earth but still in the Deathworld band (~Class 12.8).
-inline WorldHazardProfile deathworld_profile() {
-    return WorldHazardProfile{2.4f, 1.6f, 1.4f, 2.2f, 2.7f, 2.5f};  // sum ~12.8
+// A world harsher than Earth, still in the Deathworld band (~Class 13).
+inline WorldHazardSettings deathworld_hazard() {
+    return WorldHazardSettings{/*g*/ 1.1f, /*dis*/ 0.60f, /*pred*/ 0.55f, /*rad*/ 0.25f,
+                               /*seas*/ 0.62f, /*geo*/ 0.62f, /*atmo*/ 0.35f};
 }
 
 // ---------------------------------------------------------------------------
-// WorldArchetype — the two headline dials together: Bounty (resource abundance /
-// development potential) and the Hazard profile (the Deathworld Class / survival
-// difficulty). This is what world-gen + the harness consume to slide a world from
-// garden to deathworld. Bounty scales the land's natural capital; the hazard's
-// Class scales mortality pressure.
+// WorldArchetype — the two headline dials: Bounty (resource abundance) + the
+// Hazard settings (which compute the Deathworld Class). Consumed by world-gen +
+// the society harness to slide a world from garden to deathworld.
 // ---------------------------------------------------------------------------
 struct WorldArchetype {
     const char* name = "earthlike";
-    float bounty = 1.0f;          // natural-capital multiplier (1.0 = earthlike)
-    WorldHazardProfile hazard{};  // Earth (Class 12) by default
+    float bounty = 1.0f;            // natural-capital multiplier (1.0 = earthlike)
+    WorldHazardSettings hazard{};   // -> Deathworld Class (computed)
 };
 
-// Mortality multiplier from the Deathworld Class, anchored so Earth (Class 12) = 1.0.
-// Garden worlds are dramatically safer; worlds harsher than Earth add mortality more
-// incrementally (Earth is already near the deathworld end — per the lore).
-inline float hazard_mortality_multiplier(const WorldHazardProfile& p) {
-    return std::clamp(deathworld_class(p) / 12.0f, 0.15f, 3.0f);
+// Mortality multiplier from the (computed) Deathworld Class, anchored so Earth = 1.0.
+inline float hazard_mortality_multiplier(const WorldHazardSettings& s) {
+    return std::clamp(deathworld_class(s) / 12.0f, 0.15f, 3.0f);
 }
 
-inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_profile()}; }
-inline WorldArchetype archetype_earthlike() { return {"earthlike", 1.0f, earth_profile()}; }
-inline WorldArchetype archetype_deathworld() { return {"deathworld", 0.4f, deathworld_profile()}; }
+inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_hazard()}; }
+inline WorldArchetype archetype_earthlike() { return {"earthlike", 1.0f, earth_hazard()}; }
+inline WorldArchetype archetype_deathworld() { return {"deathworld", 0.4f, deathworld_hazard()}; }
 
 }  // namespace econlife
