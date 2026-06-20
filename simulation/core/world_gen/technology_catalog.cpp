@@ -88,6 +88,18 @@ bool TechnologyCatalog::load_nodes_csv(const std::string& filepath) {
         node.unlocks_recipe = fields[9];
         node.unlocks_facility_type = fields[10];
         node.is_baseline = (fields[11] == "1" || fields[11] == "true");
+        // Optional trailing world-economy effect multipliers (default 1.0). Guard
+        // > 0 so an empty/blank column keeps the neutral default rather than zeroing.
+        auto parse_mult = [](const std::string& s, float fallback) {
+            float v = std::strtof(s.c_str(), nullptr);
+            return v > 0.0f ? v : fallback;
+        };
+        if (fields.size() > 12)
+            node.knowledge_mult = parse_mult(fields[12], 1.0f);
+        if (fields.size() > 13)
+            node.food_mult = parse_mult(fields[13], 1.0f);
+        if (fields.size() > 14)
+            node.mortality_mult = parse_mult(fields[14], 1.0f);
 
         node_index_[node.node_key] = nodes_.size();
         nodes_.push_back(std::move(node));
@@ -200,6 +212,18 @@ float TechnologyCatalog::ceiling_for(const std::string& node_key, uint8_t era) c
     if (era < 1 || era > era_column_count_)
         return -1.0f;  // era beyond the defined ceiling table = not researchable
     return it->second.era_ceilings[era - 1];
+}
+
+EraTechEffects TechnologyCatalog::aggregate_effects(uint8_t era) const {
+    EraTechEffects e{};
+    for (const auto& n : nodes_) {
+        if (n.era_available <= era) {
+            e.knowledge_mult *= n.knowledge_mult;
+            e.food_mult *= n.food_mult;
+            e.mortality_mult *= n.mortality_mult;
+        }
+    }
+    return e;
 }
 
 }  // namespace econlife

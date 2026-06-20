@@ -26,20 +26,18 @@
 
 namespace econlife::society {
 
-inline std::string find_goods_dir_society() {
+inline std::string find_base_game_subdir(const char* sub) {
     namespace fs = std::filesystem;
-    static const char* candidates[] = {
-        "packages/base_game/goods",
-        "../packages/base_game/goods",
-        "../../packages/base_game/goods",
-        "../../../packages/base_game/goods",
-    };
-    for (const auto* c : candidates) {
-        if (fs::exists(c) && fs::is_directory(c))
-            return fs::canonical(c).string();
+    for (const std::string prefix : {"packages/base_game/", "../packages/base_game/",
+                                     "../../packages/base_game/", "../../../packages/base_game/"}) {
+        std::string p = prefix + sub;
+        if (fs::exists(p) && fs::is_directory(p))
+            return fs::canonical(p).string();
     }
     return "";
 }
+
+inline std::string find_goods_dir_society() { return find_base_game_subdir("goods"); }
 
 // One annual observation of the whole society (observable WorldState only).
 struct SocietySnapshot {
@@ -119,6 +117,7 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     config.starting_era = 1;           // the dawn (subsistence regime)
     config.founding_seed_mode = true;  // no hand-seeded economy; it must emerge
     config.goods_directory = find_goods_dir_society();
+    config.technology_directory = find_base_game_subdir("technology");  // tech tree + effects
     config.bounty_scale = arch.bounty;       // Bounty dial -> natural capital
     config.hazard_settings = arch.hazard;    // Hazard settings -> per-module effects
     config.founding_hardiness = founding_hardiness;  // 0 = native (adapted); >0 = transplant

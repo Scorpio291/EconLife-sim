@@ -461,6 +461,13 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     }
     FacilityGenerator::seed_technology(world, rng, tech_catalog, config);
 
+    // Precompute per-era aggregated tech-tree effects so runtime modules (knowledge,
+    // subsistence, population) can apply them without the catalog. As the world
+    // advances eras, more nodes' effects come online.
+    world.tech_effects_by_era.clear();
+    for (uint8_t era = 1; era <= world.era_catalog.max_era(); ++era)
+        world.tech_effects_by_era.push_back(tech_catalog.aggregate_effects(era));
+
     // Step 9: Stage 11 — Output world.json if path configured.
     if (!config.output_world_file.empty()) {
         write_world_json(world, config.output_world_file);

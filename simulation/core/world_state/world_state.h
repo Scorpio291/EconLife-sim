@@ -95,6 +95,16 @@ struct WorldState {
     // Class. Defaults to Earth (~Class 12).
     WorldHazardSettings hazard_settings;
 
+    // Per-era aggregated tech-tree effects (index = era-1), computed at world-gen
+    // from the technology catalog. As the world advances eras, more nodes' effects
+    // apply. Read by the knowledge/subsistence/population modules. Empty => neutral.
+    std::vector<EraTechEffects> tech_effects_by_era;
+    EraTechEffects tech_effects_for_era(uint8_t era) const {
+        if (era >= 1 && era <= tech_effects_by_era.size())
+            return tech_effects_by_era[era - 1];
+        return EraTechEffects{};
+    }
+
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)
     std::vector<NPCBusiness> npc_businesses;

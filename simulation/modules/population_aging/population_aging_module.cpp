@@ -234,6 +234,9 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // adapted population.
                 float hazard_mortality = std::clamp(
                     world_hazard / std::max(cs.hardiness, cfg_.hardiness_floor), 0.15f, 3.0f);
+                // Medicine (germ theory, …) from the tech tree cuts mortality.
+                hazard_mortality *=
+                    state.tech_effects_for_era(state.technology.current_era).mortality_mult;
 
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       cs.subsistence_surplus_ratio, hazard_mortality, cfg_);

@@ -79,14 +79,17 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.
     const float knowledge_factor =
         1.0f + cfg_.knowledge_productivity_coupling * state.technology.knowledge_level;
+    // Food techs (plough/irrigation/heavy-plough/watermill) raise the carrying ceiling.
+    const float tech_food_factor =
+        state.tech_effects_for_era(state.technology.current_era).food_mult;
     // Seasonality (relative to Earth) cuts food reliability via lean seasons; gravity
     // does NOT affect the harvest. Earthlike seasonality is neutral.
     const float seasonality_factor = std::clamp(
         1.0f - cfg_.seasonality_food_penalty *
                    (state.hazard_settings.seasonality - earth_hazard().seasonality),
         0.3f, 1.3f);
-    const float output =
-        subsistence_output(natural_capital, labor, cfg_) * knowledge_factor * seasonality_factor;
+    const float output = subsistence_output(natural_capital, labor, cfg_) * knowledge_factor *
+                         seasonality_factor * tech_food_factor;
     const float ratio = surplus_ratio(output, population, cfg_);
 
     RegionDelta rd{};

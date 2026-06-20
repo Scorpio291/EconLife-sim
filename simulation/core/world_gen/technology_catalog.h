@@ -45,6 +45,10 @@ class TechnologyCatalog {
     // Returns -1.0 if the node is not researchable in that era.
     float ceiling_for(const std::string& node_key, uint8_t era) const;
 
+    // Aggregate the world-economy effects of every node available at `era`
+    // (era_available <= era), as the product of each node's multipliers.
+    EraTechEffects aggregate_effects(uint8_t era) const;
+
    private:
     std::vector<TechnologyNode> nodes_;
     std::unordered_map<std::string, size_t> node_index_;  // node_key -> index in nodes_

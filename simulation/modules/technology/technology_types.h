@@ -78,6 +78,22 @@ struct TechnologyNode {
     std::string unlocks_recipe;       // recipe_key unlocked on research (empty = none)
     std::string unlocks_facility_type;  // facility_type_key unlocked (empty = none)
     bool is_baseline = false;           // true = available at game start, no research needed
+
+    // World-economy effects (multipliers, 1.0 = no effect). Applied once the world
+    // reaches this node's era; aggregated across all available nodes. This is how the
+    // tech tree drives the economy: knowledge techs (writing/printing) compound the
+    // knowledge rate, food techs (plough/irrigation) raise the carrying ceiling,
+    // medicine (germ theory) cuts mortality. Optional trailing CSV columns.
+    float knowledge_mult = 1.0f;  // scholar knowledge production
+    float food_mult = 1.0f;       // subsistence carrying ceiling
+    float mortality_mult = 1.0f;  // cohort mortality (e.g. medicine < 1.0)
+};
+
+// Aggregated tech-tree effects active at a given era (product over available nodes).
+struct EraTechEffects {
+    float knowledge_mult = 1.0f;
+    float food_mult = 1.0f;
+    float mortality_mult = 1.0f;
 };
 
 // ---------------------------------------------------------------------------

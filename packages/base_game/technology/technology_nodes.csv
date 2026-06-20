@@ -1,4 +1,4 @@
-node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline
+node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline,knowledge_mult,food_mult,mortality_mult
 # Baseline technologies (available at game start, year 2000)
 basic_extraction,materials_science,Basic Extraction Methods,8,0.0,0,,baseline,,,mine,1
 basic_agriculture,biotechnology,Basic Agriculture,8,0.0,0,,baseline,,,,1
@@ -107,47 +107,47 @@ novel_psychoactive,illicit_chemistry,Novel Psychoactive Substances,11,2.5,0,synt
 # era. Expandable: add rows. Recipe/facility unlocks to be wired with per-era
 # content. Domains use best-fit modern domains (pure-knowledge techs -> software_systems).
 # ---- Era 1: Neolithic ----
-agriculture,biotechnology,Agriculture,1,1.0,0,,product_unlock,agriculture,,,0
-animal_husbandry,biotechnology,Animal Husbandry,1,1.0,0,,product_unlock,animal_husbandry,,,0
+agriculture,biotechnology,Agriculture,1,1.0,0,,product_unlock,agriculture,,,0,1,1.5,1
+animal_husbandry,biotechnology,Animal Husbandry,1,1.0,0,,product_unlock,animal_husbandry,,,0,1,1.2,1
 pottery,materials_science,Pottery,1,1.0,0,,product_unlock,pottery,,,0
 weaving,materials_science,Weaving,1,1.0,0,,product_unlock,weaving,,,0
 stone_masonry,materials_science,Stone Masonry,1,1.5,0,,product_unlock,stone_masonry,,,0
-crop_rotation_basics,biotechnology,Crop Rotation,1,1.5,0,agriculture,product_unlock,crop_rotation_basics,,,0
+crop_rotation_basics,biotechnology,Crop Rotation,1,1.5,0,agriculture,product_unlock,crop_rotation_basics,,,0,1,1.2,1
 # ---- Era 2: Bronze Age ----
 bronze_smelting,chemical_synthesis,Bronze Smelting,2,2.0,0,pottery,product_unlock,bronze_smelting,,,0
-writing,software_systems,Writing,2,2.0,0,,product_unlock,writing,,,0
-arithmetic,software_systems,Arithmetic,2,2.0,0,writing,product_unlock,arithmetic,,,0
+writing,software_systems,Writing,2,2.0,0,,product_unlock,writing,,,0,1.3,1,1
+arithmetic,software_systems,Arithmetic,2,2.0,0,writing,product_unlock,arithmetic,,,0,1.2,1,1
 the_wheel,mechanical_engineering,The Wheel,2,2.0,0,,product_unlock,the_wheel,,,0
-the_plough,mechanical_engineering,The Plough,2,2.0,0,animal_husbandry,product_unlock,the_plough,,,0
-irrigation,climate_and_environment,Irrigation,2,2.0,0,agriculture,product_unlock,irrigation,,,0
+the_plough,mechanical_engineering,The Plough,2,2.0,0,animal_husbandry,product_unlock,the_plough,,,0,1,1.3,1
+irrigation,climate_and_environment,Irrigation,2,2.0,0,agriculture,product_unlock,irrigation,,,0,1,1.3,1
 sailing,mechanical_engineering,Sailing,2,2.5,0,,product_unlock,sailing,,,0
-geometry,software_systems,Geometry,2,2.5,0,arithmetic,product_unlock,geometry,,,0
+geometry,software_systems,Geometry,2,2.5,0,arithmetic,product_unlock,geometry,,,0,1.15,1,1
 # ---- Era 3: Iron Age ----
 iron_smelting,chemical_synthesis,Iron Smelting,3,3.0,0,bronze_smelting,product_unlock,iron_smelting,,,0
-the_alphabet,software_systems,The Alphabet,3,3.0,0,writing,product_unlock,the_alphabet,,,0
+the_alphabet,software_systems,The Alphabet,3,3.0,0,writing,product_unlock,the_alphabet,,,0,1.2,1,1
 coinage,financial_instruments,Coinage,3,3.0,0,arithmetic,product_unlock,coinage,,,0
 masonry_arch,materials_science,The Arch,3,3.0,0,stone_masonry,product_unlock,masonry_arch,,,0
 # ---- Era 4: Classical ----
-formal_mathematics,software_systems,Formal Mathematics,4,4.0,0,geometry,product_unlock,formal_mathematics,,,0
+formal_mathematics,software_systems,Formal Mathematics,4,4.0,0,geometry,product_unlock,formal_mathematics,,,0,1.3,1,1
 mechanics,mechanical_engineering,Mechanics,4,4.0,0,formal_mathematics,product_unlock,mechanics,,,0
 concrete,materials_science,Concrete,4,4.0,0,masonry_arch,product_unlock,concrete,,,0
-aqueducts,mechanical_engineering,Aqueducts,4,4.0,0,concrete;mechanics,product_unlock,aqueducts,,,0
+aqueducts,mechanical_engineering,Aqueducts,4,4.0,0,concrete;mechanics,product_unlock,aqueducts,,,0,1,1,0.92
 astronomy,climate_and_environment,Astronomy,4,4.0,0,formal_mathematics,product_unlock,astronomy,,,0
 codified_law,financial_instruments,Codified Law,4,4.0,0,writing,product_unlock,codified_law,,,0
 road_network,mechanical_engineering,Road Network,4,4.0,0,the_wheel;masonry_arch,product_unlock,road_network,,,0
 # ---- Era 5: Medieval ----
-heavy_plough,mechanical_engineering,Heavy Plough,5,5.0,0,the_plough;iron_smelting,product_unlock,heavy_plough,,,0
-watermill,energy_systems,Watermill,5,5.0,0,mechanics,product_unlock,watermill,,,0
+heavy_plough,mechanical_engineering,Heavy Plough,5,5.0,0,the_plough;iron_smelting,product_unlock,heavy_plough,,,0,1,1.4,1
+watermill,energy_systems,Watermill,5,5.0,0,mechanics,product_unlock,watermill,,,0,1,1.2,1
 windmill,energy_systems,Windmill,5,5.0,0,watermill,product_unlock,windmill,,,0
-algebra,software_systems,Algebra,5,5.0,0,formal_mathematics,product_unlock,algebra,,,0
+algebra,software_systems,Algebra,5,5.0,0,formal_mathematics,product_unlock,algebra,,,0,1.2,1,1
 optics,materials_science,Optics,5,5.5,0,formal_mathematics,product_unlock,optics,,,0
 mechanical_clock,mechanical_engineering,Mechanical Clock,5,5.5,0,mechanics,product_unlock,mechanical_clock,,,0
-the_university,software_systems,The University,5,5.0,0,the_alphabet,product_unlock,the_university,,,0
+the_university,software_systems,The University,5,5.0,0,the_alphabet,product_unlock,the_university,,,0,1.5,1,1
 gunpowder,chemical_synthesis,Gunpowder,5,5.5,0,iron_smelting,product_unlock,gunpowder,,,0
 banking,financial_instruments,Banking,5,5.0,0,coinage,product_unlock,banking,,,0
 # ---- Era 6: Early Modern ----
-printing_press,mechanical_engineering,Printing Press,6,6.0,1,the_alphabet;mechanical_clock,product_unlock,printing_press,,,0
-scientific_method,software_systems,Scientific Method,6,6.5,0,the_university;algebra,product_unlock,scientific_method,,,0
+printing_press,mechanical_engineering,Printing Press,6,6.0,1,the_alphabet;mechanical_clock,product_unlock,printing_press,,,0,2.0,1,1
+scientific_method,software_systems,Scientific Method,6,6.5,0,the_university;algebra,product_unlock,scientific_method,,,0,2.0,1,1
 navigation,climate_and_environment,Navigation,6,6.0,1,astronomy;sailing,product_unlock,navigation,,,0
 ballistics,mechanical_engineering,Ballistics,6,6.0,1,gunpowder;mechanics,product_unlock,ballistics,,,0
 double_entry_bookkeeping,financial_instruments,Double-Entry Bookkeeping,6,6.0,0,banking;arithmetic,product_unlock,double_entry_bookkeeping,,,0
@@ -160,5 +160,5 @@ railways,mechanical_engineering,Railways,7,7.0,1,steam_engine;steel,product_unlo
 steel,materials_science,Steel,7,7.0,1,iron_smelting,product_unlock,steel,,,0
 electricity,energy_systems,Electricity,7,7.5,1,scientific_method,product_unlock,electricity,,,0
 telegraph,information_security,Telegraph,7,7.0,1,electricity,product_unlock,telegraph,,,0
-germ_theory,biotechnology,Germ Theory,7,7.5,0,scientific_method;the_telescope,product_unlock,germ_theory,,,0
+germ_theory,biotechnology,Germ Theory,7,7.5,0,scientific_method;the_telescope,product_unlock,germ_theory,,,0,1,1,0.6
 industrial_chemistry,chemical_synthesis,Industrial Chemistry,7,7.5,1,scientific_method,product_unlock,industrial_chemistry,,,0

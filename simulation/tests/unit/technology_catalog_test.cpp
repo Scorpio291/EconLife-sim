@@ -360,6 +360,37 @@ TEST_CASE("Historical tech tree: nodes per era 1-7 and every prerequisite resolv
     CHECK(catalog.find("steam_engine")->era_available == 7);
 }
 
+TEST_CASE("Tech effects: parsed from CSV and aggregate (compound) by era",
+          "[technology][catalog]") {
+    // Two knowledge techs in different eras; effects compound as the era rises.
+    std::string csv =
+        R"(node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline,knowledge_mult,food_mult,mortality_mult
+writing,software_systems,Writing,2,2.0,0,,product_unlock,writing,,,0,1.5,1,1
+plough,mechanical_engineering,Plough,2,2.0,0,,product_unlock,plough,,,0,1,2.0,1
+printing,mechanical_engineering,Printing,4,4.0,0,,product_unlock,printing,,,0,2.0,1,1
+medicine,biotechnology,Medicine,4,4.0,0,,product_unlock,medicine,,,0,1,1,0.5
+)";
+    auto path = write_temp_csv("test_effects.csv", csv);
+    TechnologyCatalog catalog;
+    REQUIRE(catalog.load_nodes_csv(path));
+
+    CHECK_THAT(catalog.find("writing")->knowledge_mult, Catch::Matchers::WithinAbs(1.5f, 0.001f));
+
+    // Era 1: no nodes available -> neutral.
+    auto e1 = catalog.aggregate_effects(1);
+    CHECK_THAT(e1.knowledge_mult, Catch::Matchers::WithinAbs(1.0f, 0.001f));
+
+    // Era 2: writing (1.5 knowledge) + plough (2.0 food).
+    auto e2 = catalog.aggregate_effects(2);
+    CHECK_THAT(e2.knowledge_mult, Catch::Matchers::WithinAbs(1.5f, 0.001f));
+    CHECK_THAT(e2.food_mult, Catch::Matchers::WithinAbs(2.0f, 0.001f));
+
+    // Era 4: writing*printing knowledge (1.5*2.0=3.0), medicine mortality 0.5.
+    auto e4 = catalog.aggregate_effects(4);
+    CHECK_THAT(e4.knowledge_mult, Catch::Matchers::WithinAbs(3.0f, 0.001f));
+    CHECK_THAT(e4.mortality_mult, Catch::Matchers::WithinAbs(0.5f, 0.001f));
+}
+
 TEST_CASE("Load base game maturation_ceilings.csv", "[technology][catalog][data]") {
     namespace fs = std::filesystem;
     std::string ceilings_path;

@@ -40,6 +40,10 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             production += static_cast<double>(o->knowledge_output);
     }
     production *= static_cast<double>(cfg_.production_scalar);
+    // Tech-tree compounding: writing/university/printing/scientific-method multiply
+    // the knowledge rate, so advancement accelerates as the world learns to learn.
+    production *= static_cast<double>(
+        state.tech_effects_for_era(state.technology.current_era).knowledge_mult);
 
     const float level = state.technology.knowledge_level;
     const double decay = static_cast<double>(cfg_.decay_per_year) * static_cast<double>(level);
