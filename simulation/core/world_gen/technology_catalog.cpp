@@ -2,6 +2,7 @@
 
 #include "core/world_gen/technology_catalog.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -223,6 +224,11 @@ EraTechEffects TechnologyCatalog::aggregate_effects(uint8_t era) const {
             e.mortality_mult *= n.mortality_mult;
         }
     }
+    // Sanity bounds: many multipliers compound, so cap the boosts and floor the
+    // mortality relief to keep the aggregate sane (no runaway, no near-zero deaths).
+    e.knowledge_mult = std::min(e.knowledge_mult, 8.0f);
+    e.food_mult = std::min(e.food_mult, 6.0f);
+    e.mortality_mult = std::max(e.mortality_mult, 0.35f);
     return e;
 }
 

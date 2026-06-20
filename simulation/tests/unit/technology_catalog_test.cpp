@@ -345,11 +345,14 @@ TEST_CASE("Historical tech tree: nodes per era 1-7 and every prerequisite resolv
         CHECK(count >= 1);
     }
 
-    // The tree is well-formed: every prerequisite names a node that exists.
+    // The tree is well-formed: every prerequisite exists AND comes no later than the
+    // node that needs it (no forward references in time).
     for (const auto& n : catalog.all()) {
         for (const auto& pre : n.prerequisites) {
             INFO(n.node_key << " requires " << pre);
-            CHECK(catalog.find(pre) != nullptr);
+            const auto* p = catalog.find(pre);
+            REQUIRE(p != nullptr);
+            CHECK(p->era_available <= n.era_available);
         }
     }
 

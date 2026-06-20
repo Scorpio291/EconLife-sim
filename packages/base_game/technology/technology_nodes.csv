@@ -162,3 +162,83 @@ electricity,energy_systems,Electricity,7,7.5,1,scientific_method,product_unlock,
 telegraph,information_security,Telegraph,7,7.0,1,electricity,product_unlock,telegraph,,,0
 germ_theory,biotechnology,Germ Theory,7,7.5,0,scientific_method;the_telescope,product_unlock,germ_theory,,,0,1,1,0.6
 industrial_chemistry,chemical_synthesis,Industrial Chemistry,7,7.5,1,scientific_method,product_unlock,industrial_chemistry,,,0
+# ===========================================================================
+# Tech tree EXPANSION (eras 1-7). Deepens each era. Uniform 15 cols
+# (knowledge_mult,food_mult,mortality_mult; 1=neutral). Expandable: add rows.
+# ---- Era 1: Neolithic (expansion) ----
+fire_making,materials_science,Fire-Making,1,0.5,0,,product_unlock,fire_making,,,0,1,1,1
+foraging_lore,biotechnology,Foraging Lore,1,1.0,0,,product_unlock,foraging_lore,,,0,1,1.1,1
+fishing_nets,mechanical_engineering,Fishing Nets,1,1.0,0,weaving,product_unlock,fishing_nets,,,0,1,1.1,1
+basketry,materials_science,Basketry,1,1.0,0,weaving,product_unlock,basketry,,,0,1,1,1
+leatherworking,materials_science,Leatherworking,1,1.0,0,animal_husbandry,product_unlock,leatherworking,,,0,1,1,1
+dugout_canoe,mechanical_engineering,Dugout Canoe,1,1.0,0,,product_unlock,dugout_canoe,,,0,1,1,1
+mudbrick,materials_science,Mudbrick,1,1.0,0,pottery,product_unlock,mudbrick,,,0,1,1,1
+food_storage,materials_science,Food Storage,1,1.2,0,pottery,product_unlock,food_storage,,,0,1,1.15,1
+the_loom,mechanical_engineering,The Loom,1,1.2,0,weaving,product_unlock,the_loom,,,0,1,1,1
+herbal_medicine,biotechnology,Herbal Medicine,1,1.2,0,foraging_lore,product_unlock,herbal_medicine,,,0,1,1,0.97
+# ---- Era 2: Bronze Age (expansion) ----
+copper_mining,materials_science,Copper Mining,2,2.0,0,bronze_smelting,product_unlock,copper_mining,,,0,1,1,1
+the_potters_wheel,mechanical_engineering,Potter's Wheel,2,2.0,0,pottery;the_wheel,product_unlock,the_potters_wheel,,,0,1,1.05,1
+bronze_tools,materials_science,Bronze Tools,2,2.0,0,bronze_smelting,product_unlock,bronze_tools,,,0,1,1.15,1
+bronze_weapons,materials_science,Bronze Weapons,2,2.0,0,bronze_smelting,product_unlock,bronze_weapons,,,0,1,1,1
+the_chariot,mechanical_engineering,The Chariot,2,2.5,0,the_wheel;animal_husbandry,product_unlock,the_chariot,,,0,1,1,1
+glassmaking,chemical_synthesis,Glassmaking,2,2.5,0,pottery,product_unlock,glassmaking,,,0,1,1,1
+the_calendar,climate_and_environment,The Calendar,2,2.0,0,arithmetic,product_unlock,the_calendar,,,0,1.1,1,1
+brewing,biotechnology,Brewing,2,2.0,0,pottery;agriculture,product_unlock,brewing,,,0,1,1,1
+weights_and_measures,financial_instruments,Weights and Measures,2,2.0,0,arithmetic,product_unlock,weights_and_measures,,,0,1.05,1,1
+# ---- Era 3: Iron Age (expansion) ----
+iron_tools,materials_science,Iron Tools,3,3.0,0,iron_smelting,product_unlock,iron_tools,,,0,1,1.2,1
+iron_weapons,materials_science,Iron Weapons,3,3.0,0,iron_smelting,product_unlock,iron_weapons,,,0,1,1,1
+the_iron_plough,mechanical_engineering,Iron Plough,3,3.0,0,iron_smelting;the_plough,product_unlock,the_iron_plough,,,0,1,1.2,1
+glass_blowing,chemical_synthesis,Glass Blowing,3,3.0,0,glassmaking,product_unlock,glass_blowing,,,0,1,1,1
+the_abacus,software_systems,The Abacus,3,3.0,0,arithmetic,product_unlock,the_abacus,,,0,1.1,1,1
+libraries,software_systems,Libraries,3,3.0,0,writing,product_unlock,libraries,,,0,1.2,1,1
+the_lateen_sail,mechanical_engineering,Lateen Sail,3,3.0,0,sailing,product_unlock,the_lateen_sail,,,0,1,1,1
+cavalry,mechanical_engineering,Cavalry,3,3.0,0,animal_husbandry;iron_weapons,product_unlock,cavalry,,,0,1,1,1
+# ---- Era 4: Classical (expansion) ----
+the_screw,mechanical_engineering,The Screw,4,4.0,0,mechanics,product_unlock,the_screw,,,0,1,1.05,1
+the_water_clock,mechanical_engineering,Water Clock,4,4.0,0,mechanics,product_unlock,the_water_clock,,,0,1,1,1
+the_crane,mechanical_engineering,The Crane,4,4.0,0,mechanics,product_unlock,the_crane,,,0,1,1,1
+the_dome,materials_science,The Dome,4,4.0,0,concrete;masonry_arch,product_unlock,the_dome,,,0,1,1,1
+the_codex,software_systems,The Codex,4,4.0,0,the_alphabet,product_unlock,the_codex,,,0,1.15,1,1
+philosophy,software_systems,Philosophy,4,4.0,0,writing,product_unlock,philosophy,,,0,1.2,1,1
+hippocratic_medicine,biotechnology,Hippocratic Medicine,4,4.0,0,philosophy,product_unlock,hippocratic_medicine,,,0,1,1,0.95
+cartography,climate_and_environment,Cartography,4,4.0,0,astronomy;geometry,product_unlock,cartography,,,0,1,1,1
+sanitation_sewers,climate_and_environment,Sewers,4,4.0,0,aqueducts,product_unlock,sanitation_sewers,,,0,1,1,0.93
+the_gear_train,mechanical_engineering,Gear Train,4,4.5,0,mechanics,product_unlock,the_gear_train,,,0,1,1,1
+# ---- Era 5: Medieval (expansion) ----
+the_horse_collar,mechanical_engineering,Horse Collar,5,5.0,0,animal_husbandry,product_unlock,the_horse_collar,,,0,1,1.15,1
+the_stirrup,mechanical_engineering,The Stirrup,5,5.0,0,cavalry,product_unlock,the_stirrup,,,0,1,1,1
+three_field_system,biotechnology,Three-Field System,5,5.0,0,crop_rotation_basics,product_unlock,three_field_system,,,0,1,1.2,1
+the_blast_furnace,chemical_synthesis,Blast Furnace,5,5.5,0,iron_smelting,product_unlock,the_blast_furnace,,,0,1,1,1
+the_spinning_wheel,mechanical_engineering,Spinning Wheel,5,5.0,0,the_loom,product_unlock,the_spinning_wheel,,,0,1,1,1
+papermaking,materials_science,Papermaking,5,5.0,0,weaving,product_unlock,papermaking,,,0,1.15,1,1
+the_compass,mechanical_engineering,The Compass,5,5.0,0,iron_smelting,product_unlock,the_compass,,,0,1,1,1
+the_astrolabe,mechanical_engineering,The Astrolabe,5,5.0,0,astronomy;optics,product_unlock,the_astrolabe,,,0,1,1,1
+eyeglasses,materials_science,Eyeglasses,5,5.0,0,optics,product_unlock,eyeglasses,,,0,1.05,1,1
+the_sternpost_rudder,mechanical_engineering,Sternpost Rudder,5,5.0,0,sailing,product_unlock,the_sternpost_rudder,,,0,1,1,1
+arabic_numerals,software_systems,Arabic Numerals,5,5.0,0,algebra,product_unlock,arabic_numerals,,,0,1.15,1,1
+# ---- Era 6: Early Modern (expansion) ----
+the_caravel,mechanical_engineering,The Caravel,6,6.0,1,navigation;the_sternpost_rudder,product_unlock,the_caravel,,,0,1,1,1
+the_musket,mechanical_engineering,The Musket,6,6.0,1,ballistics,product_unlock,the_musket,,,0,1,1,1
+the_microscope,materials_science,The Microscope,6,6.0,1,optics,product_unlock,the_microscope,,,0,1.1,1,1
+the_barometer,materials_science,The Barometer,6,6.0,1,scientific_method,product_unlock,the_barometer,,,0,1,1,1
+the_pendulum_clock,mechanical_engineering,Pendulum Clock,6,6.0,1,mechanical_clock,product_unlock,the_pendulum_clock,,,0,1,1,1
+calculus,software_systems,Calculus,6,6.5,0,formal_mathematics;algebra,product_unlock,calculus,,,0,1.3,1,1
+the_stock_exchange,financial_instruments,Stock Exchange,6,6.5,0,joint_stock_company,product_unlock,the_stock_exchange,,,0,1,1,1
+the_newspaper,software_systems,The Newspaper,6,6.0,0,printing_press,product_unlock,the_newspaper,,,0,1.2,1,1
+chemistry_early,chemical_synthesis,Early Chemistry,6,6.5,0,scientific_method,product_unlock,chemistry_early,,,0,1.05,1,1
+inoculation,biotechnology,Inoculation,6,6.5,0,the_microscope,product_unlock,inoculation,,,0,1,1,0.9
+# ---- Era 7: Industrial (expansion) ----
+spinning_jenny,mechanical_engineering,Spinning Jenny,7,7.0,1,the_spinning_wheel,product_unlock,spinning_jenny,,,0,1,1,1
+power_loom,mechanical_engineering,Power Loom,7,7.0,1,spinning_jenny;steam_engine,product_unlock,power_loom,,,0,1,1,1
+the_steamship,mechanical_engineering,The Steamship,7,7.0,1,steam_engine;the_caravel,product_unlock,the_steamship,,,0,1,1,1
+the_dynamo,energy_systems,The Dynamo,7,7.0,1,electricity,product_unlock,the_dynamo,,,0,1,1,1
+the_battery,energy_systems,The Battery,7,7.0,1,electricity,product_unlock,the_battery,,,0,1,1,1
+the_telephone,information_security,The Telephone,7,7.0,1,telegraph,product_unlock,the_telephone,,,0,1.1,1,1
+vaccination,biotechnology,Vaccination,7,7.5,0,inoculation;germ_theory,product_unlock,vaccination,,,0,1,1,0.7
+anesthesia,biotechnology,Anesthesia,7,7.0,1,chemistry_early,product_unlock,anesthesia,,,0,1,1,0.9
+internal_combustion,mechanical_engineering,Internal Combustion,7,7.5,1,industrial_chemistry;steam_engine,product_unlock,internal_combustion,,,0,1,1,1
+the_bessemer_process,materials_science,Bessemer Process,7,7.0,1,steel,product_unlock,the_bessemer_process,,,0,1,1,1
+sanitation_modern,climate_and_environment,Modern Sanitation,7,7.0,0,germ_theory,product_unlock,sanitation_modern,,,0,1,1,0.8
+mechanized_agriculture,mechanical_engineering,Mechanized Agriculture,7,7.5,1,steam_engine;the_iron_plough,product_unlock,mechanized_agriculture,,,0,1,1.5,1
