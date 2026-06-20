@@ -7,7 +7,7 @@
 // -> firms -> era advance), or overshoot and crash.
 //
 // Companion to emergence_harness.h (which observes a modern, era-5 world). This one
-// is the lab for the world-spectrum / Deathworld-Class work; see
+// is the lab for the world-spectrum / World-Class work; see
 // docs/design/EconLife_World_Spectrum_and_Evolution_Plan.md.
 
 #include <algorithm>
@@ -107,10 +107,11 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
 }
 
 // Boot a dawn (era 1, founding-seed) world shaped by `arch` (the world-spectrum
-// dial: Bounty + Deathworld-Class hazard) and run it `years` in-game years,
+// dial: Bounty + World-Class hazard) and run it `years` in-game years,
 // capturing one SocietySnapshot per year (plus the t=0 snapshot).
 inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t npc_count,
-                                                      uint32_t years, const WorldArchetype& arch) {
+                                                      uint32_t years, const WorldArchetype& arch,
+                                                      float founding_hardiness = 0.0f) {
     WorldGeneratorConfig config{};
     config.seed = seed;
     config.province_count = 6;
@@ -120,6 +121,7 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     config.goods_directory = find_goods_dir_society();
     config.bounty_scale = arch.bounty;       // Bounty dial -> natural capital
     config.hazard_settings = arch.hazard;    // Hazard settings -> per-module effects
+    config.founding_hardiness = founding_hardiness;  // 0 = native (adapted); >0 = transplant
     // eras/occupations dirs left empty -> builtin catalogs (match the CSVs).
 
     WorldState world = WorldGenerator::generate(config);

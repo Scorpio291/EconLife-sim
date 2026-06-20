@@ -277,6 +277,14 @@ struct RegionCohortStats {
     // is behaviour-neutral when the module is inert (modern, market-fed eras).
     float subsistence_surplus_ratio = 1.0f;
 
+    // Population hardiness: how adapted this people is to its world's hazards
+    // (Earth-normalized, 1.0 = Earth-adapted). A people native to a harsh world has
+    // high hardiness; one bred on a gentle world, low. It DRIFTS over generations
+    // toward the world's hazard level. Mortality from hazards scales with how far
+    // hardiness falls short of what the world demands — so a soft people transplanted
+    // onto a hard world suffer until they adapt, while natives cope.
+    float hardiness = 1.0f;
+
     // Zero all fields. Use after construction or when resetting a province.
     void reset() { *this = RegionCohortStats{}; }
 };

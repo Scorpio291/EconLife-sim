@@ -117,6 +117,29 @@ WorldState make_one_province_world(uint32_t tick) {
 }
 }  // namespace
 
+TEST_CASE("PopulationAging: generational hardiness — soft people on a harsh world",
+          "[population_aging][hardiness][tier11]") {
+    PopulationAgingModule module;
+    auto run = [&](float hardiness) {
+        WorldState w = make_annual_cohort_world(/*surplus=*/1.5f);  // fed: deaths are hazard-driven
+        w.hazard_settings = deathworld_hazard();                   // a harsh world
+        w.provinces[0].cohort_stats->hardiness = hardiness;
+        DeltaBuffer d{};
+        module.execute_province(0, w, d);
+        REQUIRE(d.cohort_stats_deltas.size() == 1);
+        return d.cohort_stats_deltas[0];
+    };
+    const float native = hazard_mortality_from_settings(deathworld_hazard());  // adapted (~1.07)
+    auto soft_d = run(0.2f);       // garden-bred, unadapted
+    auto native_d = run(native);   // native, adapted
+
+    // The unadapted soft people suffer more mortality -> fewer survivors than natives.
+    CHECK(soft_d.total_population < native_d.total_population);
+    // Hardiness drifts toward the world's hazard level (up from 0.2 toward ~1.07).
+    CHECK(soft_d.hardiness > 0.2f);
+    CHECK(soft_d.hardiness < native);  // but only partway in one year (generational)
+}
+
 TEST_CASE("PopulationAging: subsistence surplus drives the Malthusian loop",
           "[population_aging][subsistence][tier11]") {
     PopulationAgingModule module;

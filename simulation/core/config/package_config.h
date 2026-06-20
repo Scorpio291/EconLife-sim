@@ -1254,12 +1254,13 @@ struct PopulationAgingConfig {
     // In commons regimes the effective stability used by births/deaths is floored
     // here so low modern-stability doesn't crush reproduction; surplus does the work.
     float commons_stability_floor = 0.8f;
-    // Neolithic hardiness: how much a people native to their world are adapted to
-    // its hazards at the subsistence level (where survival is physical toughness).
-    // 0 = unadapted (full hazard penalty); 1 = fully adapted (their world's hazards
-    // impose no net Neolithic mortality); >1 = a harsh world's tough natives survive
-    // *better* than a soft world's. Applied in commons regimes only.
-    float neolithic_hardiness = 0.85f;
+    // Generational hardiness: a population's adaptation (cohort_stats.hardiness) drifts
+    // toward the world's hazard level by this fraction per year — slow, generational.
+    // Mortality scales with how far hardiness falls short of the world's demand, never
+    // dividing by less than hardiness_floor (so a wholly-unadapted people still bottoms
+    // out rather than blowing up).
+    float hardiness_drift_rate = 0.05f;
+    float hardiness_floor = 0.10f;
 };
 
 struct LodSystemConfig {

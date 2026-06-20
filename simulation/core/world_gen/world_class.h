@@ -1,6 +1,6 @@
 #pragma once
 
-// Deathworld Class — a single derived rating of how hostile a world is to the
+// World Class — a single derived rating of how hostile a world is to the
 // survival of (baseline) intelligent life, adopting the scale from *The
 // Deathworlders* (Jenkinsverse): Garden (1-3), Typical (4-7), Harsh (8-10),
 // Deathworld (11-13), Extreme (14+), with Earth = Class 12.
@@ -54,8 +54,8 @@ enum class WorldClassBand : uint8_t {
     extreme = 4,     // 14+
 };
 
-// Calculate the Deathworld Class from the chosen settings (floored at 1).
-inline float deathworld_class(const WorldHazardSettings& s, const HazardScoringWeights& w = {}) {
+// Calculate the World Class from the chosen settings (floored at 1).
+inline float world_class(const WorldHazardSettings& s, const HazardScoringWeights& w = {}) {
     const float c = s.gravity_g * w.gravity + s.disease * w.disease + s.predators * w.predators +
                     s.radiation * w.radiation + s.seasonality * w.seasonality +
                     s.geology * w.geology + s.atmosphere * w.atmosphere;
@@ -109,18 +109,18 @@ inline WorldHazardSettings deathworld_hazard() {
 
 // ---------------------------------------------------------------------------
 // WorldArchetype — the two headline dials: Bounty (resource abundance) + the
-// Hazard settings (which compute the Deathworld Class). Consumed by world-gen +
+// Hazard settings (which compute the World Class). Consumed by world-gen +
 // the society harness to slide a world from garden to deathworld.
 // ---------------------------------------------------------------------------
 struct WorldArchetype {
     const char* name = "earthlike";
     float bounty = 1.0f;            // natural-capital multiplier (1.0 = earthlike)
-    WorldHazardSettings hazard{};   // -> Deathworld Class (computed)
+    WorldHazardSettings hazard{};   // -> World Class (computed)
 };
 
-// Mortality multiplier from the (computed) Deathworld Class, anchored so Earth = 1.0.
+// Mortality multiplier from the (computed) World Class, anchored so Earth = 1.0.
 inline float hazard_mortality_multiplier(const WorldHazardSettings& s) {
-    return std::clamp(deathworld_class(s) / 12.0f, 0.15f, 3.0f);
+    return std::clamp(world_class(s) / 12.0f, 0.15f, 3.0f);
 }
 
 inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_hazard()}; }

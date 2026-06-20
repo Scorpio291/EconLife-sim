@@ -187,6 +187,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
         }
         if (pop > 0) {
             std::map<DemographicGroup, PopulationCohort> next = cs.cohorts;
+            float new_hardiness = cs.hardiness;  // preserved unless the annual drift updates it
 
             if (monthly) {
                 for (auto& [g, c] : next) {
@@ -222,19 +223,24 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 if (commons)
                     eff_stability = std::max(eff_stability, cfg_.commons_stability_floor);
 
-                // Per-setting world hazards -> cohort mortality (disease/predators/
-                // radiation/atmosphere/geology/gravity-falls), normalized to Earth = 1.0.
-                float hazard_mortality = hazard_mortality_from_settings(state.hazard_settings);
-                // Neolithic hardiness: a people NATIVE to a harsh world are adapted to
-                // it (dense bones for gravity, disease resistance, endurance), and at
-                // the subsistence level — where survival is raw physical labor —
-                // that toughness offsets their own world's hazards. So harshness is
-                // relative to the adapted native population, not a flat penalty.
-                if (commons)
-                    hazard_mortality = 1.0f + (hazard_mortality - 1.0f) * (1.0f - cfg_.neolithic_hardiness);
+                // The world's hazard pressure (disease/predators/radiation/atmosphere/
+                // geology/gravity-falls), Earth-normalized.
+                const float world_hazard = hazard_mortality_from_settings(state.hazard_settings);
+                // Generational hardiness: mortality scales with how far the population's
+                // adaptation falls short of what the world demands. A people matched to
+                // their world (hardiness == world_hazard) is neutral; a soft people on a
+                // hard world (hardiness << world_hazard) is culled until they adapt; an
+                // over-hardened people survive better. So harshness is relative to the
+                // adapted population.
+                float hazard_mortality = std::clamp(
+                    world_hazard / std::max(cs.hardiness, cfg_.hardiness_floor), 0.15f, 3.0f);
 
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       cs.subsistence_surplus_ratio, hazard_mortality, cfg_);
+
+                // Hardiness drifts toward the world's hazard level over generations
+                // (adaptation under sustained pressure; softening under ease).
+                new_hardiness = cs.hardiness + (world_hazard - cs.hardiness) * cfg_.hardiness_drift_rate;
             }
 
             // Recompute aggregates over the canonical (sorted) group order.
@@ -252,6 +258,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
             cd.total_population = new_total;
             cd.mean_income = compute_mean_income(next);
             cd.gini_coefficient = compute_gini_coefficient(incomes);
+            cd.hardiness = new_hardiness;
             cd.cohorts = std::move(next);
             province_delta.cohort_stats_deltas.push_back(std::move(cd));
         }

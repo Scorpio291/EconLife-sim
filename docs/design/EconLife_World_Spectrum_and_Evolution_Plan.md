@@ -57,7 +57,7 @@ without it being scripted, that is the strongest possible signal the foundation
 works.
 
 ### The headline success criterion (the Deathworlders test)
-We adopt the *Deathworlders* (Jenkinsverse) **Deathworld Class** scale as the world's
+We adopt the *Deathworlders* (Jenkinsverse) **World Class** scale as the world's
 headline rating (§2): Garden (1–3) → Typical (4–7) → Harsh (8–10) → Deathworld
 (11–13) → Extreme (14+), with **Earth = Class 12**. The series' central premise — the
 galaxy assumed advanced intelligence could only arise on gentle **Garden Worlds**,
@@ -80,8 +80,8 @@ calibration with an observable, gateable spectrum.
 
 ---
 
-## 2. Part A — The world dial & the Deathworld Class
-The headline knob/output is a **Deathworld Class**, adopting the scale from *The
+## 2. Part A — The world dial & the World Class
+The headline knob/output is a **World Class**, adopting the scale from *The
 Deathworlders* (Jenkinsverse): a single derived number that aggregates a world's
 hazards, with named bands. You can dial the underlying factors and watch the class
 fall out, or pick a target class/preset and let it distribute.
@@ -186,7 +186,7 @@ Extend the existing emergence harness (`simulation/tests/integration/emergence_h
 
 ## 4. Part C — Calibration as response-plausibility
 Not a single "acceptable" band — assert the **spectrum behaves sensibly across the
-Deathworld Class**:
+World Class**:
 - **Monotonic response**: rising Class (hazard) ⇒ lower survival, lower steady-state
   population, slower/no development; rising Bounty ⇒ more surplus & faster development.
   (Sweep Class × Bounty; assert the ordering holds.)
@@ -259,14 +259,18 @@ Design consequences:
   *transplant* tests in §0 mean something. Likely sits on the trait/demographics
   model (see `EconLife_Trait_System.md`); a later phase, but it is the loop that
   turns "adversity" into "capability" rather than just "death".
-  - **Partially landed:** *Neolithic hardiness* (`PopulationAgingConfig.neolithic_hardiness`)
-    — a people NATIVE to a harsh world are adapted to it, and at the subsistence
-    level (survival = physical toughness) that adaptation offsets their own world's
-    hazard mortality. So a harsh world's natives survive its dangers about as well
-    as a gentle world's people (and, tuned > 1, *better*) — what then limits a
-    society is food (bounty) and climate (seasonality), not the hazards it evolved
-    under. Still TODO: the *generational* loop (hardiness rising/falling over time)
-    and transplant scenarios (a soft people dropped onto a hard world).
+  - **Landed:** *generational hardiness* (`cohort_stats.hardiness`, persisted). A
+    population's adaptation DRIFTS toward its world's hazard level over generations
+    (`PopulationAgingConfig.hardiness_drift_rate`); hazard mortality scales with how
+    far hardiness falls short of what the world demands. Natives start adapted (the
+    founding population's hardiness = the world's hazard level), so they cope from
+    the start; what then limits them is food (bounty) and climate. **Transplant**
+    scenarios work (`WorldGeneratorConfig.founding_hardiness`): a soft garden-bred
+    people (hardiness ~0.2) dropped onto a harsh world are culled early — they decline
+    while natives grow — and recover only as they harden over decades. Demonstrated
+    by the `[.society-transplant]` observe.
+  - Still TODO: hardiness feeding back into labour/output (tougher = better at the
+    physical work of subsistence, not just lower mortality).
 
 ## 6. Part E — Enabling work (threaded throughout)
 - **Test-suite tiering** — the full V1 integration suite is ~20 min in debug; split a

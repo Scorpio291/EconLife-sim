@@ -60,6 +60,10 @@ struct WorldGeneratorConfig {
     // The world's physical hazards (gravity/disease/predators/...). Copied to
     // WorldState.hazard_settings; modules apply per-setting effects. Default = Earth.
     WorldHazardSettings hazard_settings;
+    // Founding population hardiness: 0 = adapted to this world (natives, the default);
+    // >0 = an explicit starting hardiness for transplant scenarios (e.g. a soft
+    // garden-bred people, hardiness ~0.2, dropped onto a harsh world).
+    float founding_hardiness = 0.0f;
     std::string goods_directory;       // path to packages/base_game/goods/
     std::string recipes_directory;     // path to packages/base_game/recipes/
     std::string

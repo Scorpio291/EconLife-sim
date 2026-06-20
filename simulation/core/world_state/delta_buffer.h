@@ -219,6 +219,7 @@ struct CohortStatsDelta {
     uint32_t total_population = 0;                         // sum(cohort.size)
     float mean_income = 0.0f;
     float gini_coefficient = 0.0f;
+    float hardiness = 1.0f;  // replacement; population adaptation (drifts over generations)
 };
 
 struct RegionDelta {

@@ -286,6 +286,17 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // The world's physical hazards — read by modules for per-setting effects.
     world.hazard_settings = config.hazard_settings;
 
+    // Founding population hardiness: natives are adapted to their world (hardiness =
+    // the world's hazard level), so they start hazard-neutral. A transplant scenario
+    // overrides this with config.founding_hardiness (e.g. a soft people on a hard world).
+    {
+        const float native = hazard_mortality_from_settings(world.hazard_settings);
+        const float h = config.founding_hardiness > 0.0f ? config.founding_hardiness : native;
+        for (auto& p : world.provinces)
+            if (p.cohort_stats)
+                p.cohort_stats->hardiness = h;
+    }
+
     // World-spectrum Bounty dial: scale each province's finalized natural capital
     // (food/forage potential) so a world can be dialed from barren to fertile. Runs
     // after all natural-capital stages, before markets/subsistence read it. 1.0 = no

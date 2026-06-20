@@ -458,6 +458,7 @@ static void apply_cohort_stats_deltas(WorldState& world,
         prov.cohort_stats->total_population = d.total_population;
         prov.cohort_stats->mean_income = d.mean_income;
         prov.cohort_stats->gini_coefficient = std::clamp(d.gini_coefficient, 0.0f, 1.0f);
+        prov.cohort_stats->hardiness = std::clamp(d.hardiness, 0.05f, 5.0f);
     }
 }
 
