@@ -315,6 +315,51 @@ TEST_CASE("Load base game technology_nodes.csv", "[technology][catalog][data]") 
     CHECK(semi.size() >= 5);
 }
 
+TEST_CASE("Historical tech tree: nodes per era 1-7 and every prerequisite resolves",
+          "[technology][catalog][data]") {
+    namespace fs = std::filesystem;
+    std::string nodes_path;
+    for (const char* p : {"packages/base_game/technology/technology_nodes.csv",
+                          "../packages/base_game/technology/technology_nodes.csv",
+                          "../../packages/base_game/technology/technology_nodes.csv",
+                          "../../../packages/base_game/technology/technology_nodes.csv"}) {
+        if (fs::exists(p)) {
+            nodes_path = fs::canonical(p).string();
+            break;
+        }
+    }
+    if (nodes_path.empty()) {
+        WARN("technology_nodes.csv not found; skipping");
+        return;
+    }
+    TechnologyCatalog catalog;
+    REQUIRE(catalog.load_nodes_csv(nodes_path));
+
+    // The pre-modern arc: each historical era (1-7) has at least one tech node.
+    for (uint8_t era = 1; era <= 7; ++era) {
+        int count = 0;
+        for (const auto& n : catalog.all())
+            if (n.era_available == era)
+                ++count;
+        INFO("era " << static_cast<int>(era));
+        CHECK(count >= 1);
+    }
+
+    // The tree is well-formed: every prerequisite names a node that exists.
+    for (const auto& n : catalog.all()) {
+        for (const auto& pre : n.prerequisites) {
+            INFO(n.node_key << " requires " << pre);
+            CHECK(catalog.find(pre) != nullptr);
+        }
+    }
+
+    // Spot-check the arc: writing (Bronze) -> iron smelting (Iron) -> steam (Industrial).
+    REQUIRE(catalog.find("writing") != nullptr);
+    CHECK(catalog.find("writing")->era_available == 2);
+    REQUIRE(catalog.find("steam_engine") != nullptr);
+    CHECK(catalog.find("steam_engine")->era_available == 7);
+}
+
 TEST_CASE("Load base game maturation_ceilings.csv", "[technology][catalog][data]") {
     namespace fs = std::filesystem;
     std::string ceilings_path;

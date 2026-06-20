@@ -397,11 +397,11 @@ TEST_CASE("GoodsCatalog loads all tier 0-4 goods from base_game CSVs",
 
     // Verify tier 0 goods (queried at the modern anchor, era 5, where the
     // re-based timeline places today's economy).
-    auto tier0 = catalog.goods_available_at(5, 0);
+    auto tier0 = catalog.goods_available_at(8, 0);
     CHECK(tier0.size() >= 50);
 
     // Verify tier 0+1 goods.
-    auto tier01 = catalog.goods_available_at(5, 1);
+    auto tier01 = catalog.goods_available_at(8, 1);
     CHECK(tier01.size() > tier0.size());
 
     // Spot-check specific goods.
