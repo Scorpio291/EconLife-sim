@@ -563,6 +563,12 @@ struct SubsistenceConfig {
     // letting a society grow AND keep a surplus, instead of equilibrating at bare
     // subsistence. 0 disables the coupling.
     float knowledge_productivity_coupling = 0.02f;
+
+    // Seasonality (climate swing) reduces food reliability — lean seasons cut the
+    // harvest. Applied RELATIVE to Earth's seasonality, so an earthlike world is
+    // neutral; harsher swings penalize food, gentler ones help. (Gravity does NOT
+    // affect food — it acts on falls/structures, not the harvest.)
+    float seasonality_food_penalty = 0.5f;
 };
 
 // Knowledge engine: scholars/scribes turn surplus into accumulated knowledge, which
@@ -1248,10 +1254,6 @@ struct PopulationAgingConfig {
     // In commons regimes the effective stability used by births/deaths is floored
     // here so low modern-stability doesn't crush reproduction; surplus does the work.
     float commons_stability_floor = 0.8f;
-    // World-spectrum Hazard dial: multiplier on cohort mortality from the world's
-    // Deathworld Class (1.0 = earthlike/Class 12). Higher on harsher worlds. NEUTRAL
-    // at 1.0, so it changes nothing unless an archetype dials it.
-    float hazard_mortality_multiplier = 1.0f;
 };
 
 struct LodSystemConfig {

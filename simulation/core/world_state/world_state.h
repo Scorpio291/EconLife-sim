@@ -19,6 +19,7 @@
 // Complete type definitions needed for std::vector/std::map value members and unique_ptr members
 #include "core/world_gen/era_catalog.h"                // EraCatalog (data-driven era timeline)
 #include "core/world_gen/occupation_catalog.h"         // OccupationCatalog (livelihood vocabulary)
+#include "core/world_gen/world_class.h"                 // WorldHazardSettings (the world's hazards)
 #include "core/world_gen/goods_catalog.h"              // GoodsCatalog (unique_ptr member)
 #include "geography.h"                                 // Nation, Province, Region
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
@@ -87,6 +88,12 @@ struct WorldState {
     // Data-driven occupation vocabulary (the livelihood layer that precedes firms).
     // Populated at world-gen; source of truth for what occupations exist.
     OccupationCatalog occupation_catalog;
+
+    // The world's physical hazards (gravity, disease, predators, radiation,
+    // seasonality, geology, atmosphere) — set at world-gen, read by modules that
+    // apply per-setting effects (mortality, food reliability). Drives the Deathworld
+    // Class. Defaults to Earth (~Class 12).
+    WorldHazardSettings hazard_settings;
 
     // --- Economy ---
     std::vector<RegionalMarket> regional_markets;  // one per (good_id x province_id)

@@ -127,4 +127,35 @@ inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_hazard
 inline WorldArchetype archetype_earthlike() { return {"earthlike", 1.0f, earth_hazard()}; }
 inline WorldArchetype archetype_deathworld() { return {"deathworld", 0.4f, deathworld_hazard()}; }
 
+// ---------------------------------------------------------------------------
+// Per-channel effects of the individual settings (each dial does its own thing).
+// ---------------------------------------------------------------------------
+
+// Relative weights of the MORTALITY-causing hazards. Gravity here is fall/accident
+// damage (heavier worlds = harder falls) — NOT a food cost. Seasonality is NOT here
+// (it acts on food, below). Tunable; not baked into the function.
+struct HazardMortalityWeights {
+    float disease = 1.0f;
+    float predators = 0.8f;
+    float radiation = 0.7f;
+    float atmosphere = 0.7f;
+    float geology = 0.6f;        // quakes/storms/disasters
+    float gravity_falls = 0.3f;  // fall/accident lethality from gravity
+};
+
+// Cohort mortality multiplier from the world's hazards, normalized so Earth = 1.0.
+// Each hazard contributes distinctly; a plagued world raises mortality via disease,
+// a heavy world via falls, etc.
+inline float hazard_mortality_from_settings(const WorldHazardSettings& s,
+                                            const HazardMortalityWeights& w = {}) {
+    auto score = [&](const WorldHazardSettings& x) {
+        return x.disease * w.disease + x.predators * w.predators + x.radiation * w.radiation +
+               x.atmosphere * w.atmosphere + x.geology * w.geology + x.gravity_g * w.gravity_falls;
+    };
+    const float earth = score(earth_hazard());
+    if (earth <= 0.0f)
+        return 1.0f;
+    return std::clamp(score(s) / earth, 0.15f, 3.0f);
+}
+
 }  // namespace econlife

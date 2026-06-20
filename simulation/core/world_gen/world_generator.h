@@ -19,6 +19,7 @@
 #include "core/world_gen/goods_catalog.h"
 #include "core/world_gen/recipe_catalog.h"
 #include "core/world_gen/technology_catalog.h"
+#include "core/world_gen/world_class.h"
 #include "core/world_state/geography.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
@@ -56,6 +57,9 @@ struct WorldGeneratorConfig {
     // (agricultural productivity, arable land, forage, fisheries), clamped to [0,1].
     // 1.0 = earthlike; >1 pushes toward a fertile paradise, <1 toward a barren world.
     float bounty_scale = 1.0f;
+    // The world's physical hazards (gravity/disease/predators/...). Copied to
+    // WorldState.hazard_settings; modules apply per-setting effects. Default = Earth.
+    WorldHazardSettings hazard_settings;
     std::string goods_directory;       // path to packages/base_game/goods/
     std::string recipes_directory;     // path to packages/base_game/recipes/
     std::string

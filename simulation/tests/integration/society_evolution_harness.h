@@ -118,17 +118,14 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     config.starting_era = 1;           // the dawn (subsistence regime)
     config.founding_seed_mode = true;  // no hand-seeded economy; it must emerge
     config.goods_directory = find_goods_dir_society();
-    config.bounty_scale = arch.bounty;  // Bounty dial -> natural capital
+    config.bounty_scale = arch.bounty;       // Bounty dial -> natural capital
+    config.hazard_settings = arch.hazard;    // Hazard settings -> per-module effects
     // eras/occupations dirs left empty -> builtin catalogs (match the CSVs).
 
     WorldState world = WorldGenerator::generate(config);
 
-    // Hazard dial -> cohort mortality (from the Deathworld Class).
-    PackageConfig pkg{};
-    pkg.population_aging.hazard_mortality_multiplier = hazard_mortality_multiplier(arch.hazard);
-
     TickOrchestrator orch;
-    register_base_game_modules(orch, pkg);
+    register_base_game_modules(orch);
     orch.finalize_registration();
     ThreadPool pool(1);
 

@@ -1873,6 +1873,15 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
 
     write_global_technology_state(w, state.technology);
 
+    // v22: the world's physical hazard settings (7 floats).
+    w.write_float(state.hazard_settings.gravity_g);
+    w.write_float(state.hazard_settings.disease);
+    w.write_float(state.hazard_settings.predators);
+    w.write_float(state.hazard_settings.radiation);
+    w.write_float(state.hazard_settings.seasonality);
+    w.write_float(state.hazard_settings.geology);
+    w.write_float(state.hazard_settings.atmosphere);
+
     // --- v7: module-private state section ---
     // Each module that overrides serialize_state appends its payload here.
     // Format: u32 count, then per module: string name + u32 payload size +
@@ -2329,6 +2338,17 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         out_state.facilities.push_back(read_facility(r, schema_ver));
 
     read_global_technology_state(r, out_state.technology, schema_ver);
+
+    // v22: the world's physical hazard settings. Older saves default to Earth.
+    if (schema_ver >= 22u) {
+        out_state.hazard_settings.gravity_g = r.read_float();
+        out_state.hazard_settings.disease = r.read_float();
+        out_state.hazard_settings.predators = r.read_float();
+        out_state.hazard_settings.radiation = r.read_float();
+        out_state.hazard_settings.seasonality = r.read_float();
+        out_state.hazard_settings.geology = r.read_float();
+        out_state.hazard_settings.atmosphere = r.read_float();
+    }
 
     // --- v7: module-private state section ---
     // Build a name → module lookup for O(1) dispatch. Modules in the save

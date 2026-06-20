@@ -160,7 +160,8 @@ class PersistenceModule : public ITickModule {
     //      saves load with 0 (none).
     //      v21: GlobalTechnologyState trailing knowledge_level (f32). Older
     //      saves load with 0.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 21;
+    //      v22: WorldState.hazard_settings (7 f32). Older saves default to Earth.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 22;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

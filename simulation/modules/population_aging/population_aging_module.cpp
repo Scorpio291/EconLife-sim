@@ -91,7 +91,7 @@ bool is_retiree_group(DemographicGroup g) {
 // canonical group order.
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
                            float sick_rate, float addiction_rate, float food_surplus,
-                           const PopulationAgingConfig& cfg) {
+                           float hazard_mortality, const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
         (void)g;
@@ -126,7 +126,7 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     // and is multiplied for retiree cohorts.
     float mortality_env = (1.0f + (1.0f - std::clamp(stability, 0.0f, 1.0f))) *
                           (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f)) * famine_mortality_factor *
-                          cfg.hazard_mortality_multiplier;  // world-spectrum hazard (1.0 = earthlike)
+                          hazard_mortality;  // per-setting world hazards (1.0 = earthlike)
     for (auto& [g, c] : cohorts) {
         if (c.size == 0)
             continue;
@@ -219,8 +219,11 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                     if (era->economic_regime == "subsistence" || era->economic_regime == "barter")
                         eff_stability = std::max(eff_stability, cfg_.commons_stability_floor);
                 }
+                // Per-setting world hazards -> cohort mortality (disease/predators/
+                // radiation/atmosphere/geology/gravity-falls), normalized to Earth = 1.0.
+                const float hazard_mortality = hazard_mortality_from_settings(state.hazard_settings);
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
-                                      cs.subsistence_surplus_ratio, cfg_);
+                                      cs.subsistence_surplus_ratio, hazard_mortality, cfg_);
             }
 
             // Recompute aggregates over the canonical (sorted) group order.

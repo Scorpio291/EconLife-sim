@@ -283,6 +283,9 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // Runs after derive_soils_and_biomes() (permafrost reduces ag_productivity further).
     detect_special_features(world, rng, config);
 
+    // The world's physical hazards — read by modules for per-setting effects.
+    world.hazard_settings = config.hazard_settings;
+
     // World-spectrum Bounty dial: scale each province's finalized natural capital
     // (food/forage potential) so a world can be dialed from barren to fertile. Runs
     // after all natural-capital stages, before markets/subsistence read it. 1.0 = no

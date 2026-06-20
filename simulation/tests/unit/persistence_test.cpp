@@ -116,7 +116,8 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // v19: cohort_stats->subsistence_surplus_ratio (commons food economy).
     // v20: per-NPC occupation (livelihood).
     // v21: GlobalTechnologyState knowledge_level (knowledge engine).
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 21);
+    // v22: WorldState.hazard_settings (world spectrum).
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 22);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
