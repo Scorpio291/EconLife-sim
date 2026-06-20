@@ -196,7 +196,8 @@ struct Lod2PriceIndexDelta {
 
 struct TechnologyDelta {
     // Era transition: replacement. Only one per tick (from TechnologyModule).
-    std::optional<uint8_t> new_era;  // 1-based era index (see EraCatalog)
+    std::optional<uint8_t> new_era;       // 1-based era index (see EraCatalog)
+    std::optional<float> knowledge_delta;  // additive; GlobalTechnologyState.knowledge_level
 
     // Domain knowledge decay: additive per domain index.
     std::optional<uint8_t> domain_index;          // index into domain_knowledge[]

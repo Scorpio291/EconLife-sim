@@ -157,6 +157,11 @@ struct GlobalTechnologyState {
 
     // Calendar year tracking (derived from tick: year = 2000 + tick / 365).
     uint32_t base_year = 2000;
+
+    // Accumulated practical knowledge produced by scholars/scribes (the knowledge
+    // module). Raises subsistence productivity (escaping the Malthusian trap) and,
+    // once it crosses an era's data-driven knowledge_to_advance, advances the era.
+    float knowledge_level = 0.0f;
 };
 
 // ---------------------------------------------------------------------------

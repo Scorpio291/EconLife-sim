@@ -556,6 +556,23 @@ struct SubsistenceConfig {
     // can free from food work into Layer-2 specialists (artisan/healer/trader/...).
     // 0 at surplus <= 1 (all hands needed for food), rising with surplus to this cap.
     float max_specialist_fraction = 0.5f;
+
+    // Knowledge -> productivity (the Malthusian escape): the subsistence carrying
+    // ceiling is multiplied by (1 + knowledge_productivity_coupling * knowledge_level).
+    // Accumulated knowledge (from scholars) raises how many a given land can feed —
+    // letting a society grow AND keep a surplus, instead of equilibrating at bare
+    // subsistence. 0 disables the coupling.
+    float knowledge_productivity_coupling = 0.02f;
+};
+
+// Knowledge engine: scholars/scribes turn surplus into accumulated knowledge, which
+// (via subsistence productivity + era thresholds) lets a society escape the
+// Malthusian trap and move forward. All pre-market; modern tech uses the tech module.
+struct KnowledgeConfig {
+    // Economic regimes in which the knowledge engine runs (it is otherwise inert).
+    std::vector<std::string> active_regimes = {"subsistence", "barter", "mercantile", "industrial"};
+    float production_scalar = 1.0f;  // knowledge/year per unit of scholar knowledge_output
+    float decay_per_year = 0.02f;    // annual attrition (knowledge fades if scholars vanish)
 };
 
 struct SeasonalAgricultureConfig {
@@ -1324,6 +1341,7 @@ struct PackageConfig {
     PriceEngineConfig price_engine;
     SeasonalAgricultureConfig seasonal_agriculture;
     SubsistenceConfig subsistence;
+    KnowledgeConfig knowledge;
     RealEstateConfig real_estate;
     FinancialDistributionConfig financial_distribution;
     NpcBehaviorModuleConfig npc_behavior_module;

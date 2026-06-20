@@ -53,6 +53,16 @@ bool parse_bool(const std::string& s) {
     return s == "1" || s == "true" || s == "TRUE";
 }
 
+float parse_f(const std::string& s, float fallback = 0.0f) {
+    if (s.empty())
+        return fallback;
+    try {
+        return std::stof(s);
+    } catch (...) {
+        return fallback;
+    }
+}
+
 }  // namespace
 
 bool EraCatalog::load_from_directory(const std::string& eras_dir) {
@@ -80,7 +90,8 @@ bool EraCatalog::load_csv(const std::string& filepath) {
             continue;
         }
         auto f = split_csv(line);
-        // era_index,era_key,display_name,start_year,economic_regime,is_default_entry,v1_in_scope
+        // era_index,era_key,display_name,start_year,economic_regime,is_default_entry,
+        //   v1_in_scope[,knowledge_to_advance]
         if (f.size() < 7)
             continue;
         EraDefinition e{};
@@ -91,6 +102,7 @@ bool EraCatalog::load_csv(const std::string& filepath) {
         e.economic_regime = f[4];
         e.is_default_entry = parse_bool(f[5]);
         e.v1_in_scope = parse_bool(f[6]);
+        e.knowledge_to_advance = f.size() > 7 ? parse_f(f[7], 0.0f) : 0.0f;  // optional column
         if (e.index == 0 || e.index > MAX_ERA_CAPACITY)
             continue;  // out-of-range index: skip rather than corrupt the timeline
         loaded.push_back(std::move(e));
@@ -114,22 +126,23 @@ void EraCatalog::load_builtin_default() {
         const char* regime;
         bool def;
         bool v1;
+        float knowledge;
     };
     static const Row rows[] = {
-        {1, "subsistence", "Subsistence", -10000, "subsistence", false, true},
-        {2, "agrarian", "Agrarian", -3000, "barter", false, true},
-        {3, "preindustrial", "Pre-Industrial", 1500, "mercantile", false, true},
-        {4, "industrial", "Industrial", 1800, "industrial", false, true},
-        {5, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true},
-        {6, "disruption", "Disruption", 2007, "modern", false, true},
-        {7, "acceleration", "Acceleration", 2013, "modern", false, true},
-        {8, "fracture", "Fracture", 2019, "modern", false, true},
-        {9, "transition", "Transition", 2024, "modern", false, true},
-        {10, "convergence", "Convergence", 2035, "near_future", false, false},
-        {11, "reckoning", "Reckoning", 2050, "near_future", false, false},
-        {12, "synthesis", "Synthesis", 2075, "near_future", false, false},
-        {13, "expansion", "Expansion", 2100, "space_age", false, false},
-        {14, "divergence", "Divergence", 2150, "space_age", false, false},
+        {1, "subsistence", "Subsistence", -10000, "subsistence", false, true, 30.0f},
+        {2, "agrarian", "Agrarian", -3000, "barter", false, true, 90.0f},
+        {3, "preindustrial", "Pre-Industrial", 1500, "mercantile", false, true, 180.0f},
+        {4, "industrial", "Industrial", 1800, "industrial", false, true, 320.0f},
+        {5, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true, 0.0f},
+        {6, "disruption", "Disruption", 2007, "modern", false, true, 0.0f},
+        {7, "acceleration", "Acceleration", 2013, "modern", false, true, 0.0f},
+        {8, "fracture", "Fracture", 2019, "modern", false, true, 0.0f},
+        {9, "transition", "Transition", 2024, "modern", false, true, 0.0f},
+        {10, "convergence", "Convergence", 2035, "near_future", false, false, 0.0f},
+        {11, "reckoning", "Reckoning", 2050, "near_future", false, false, 0.0f},
+        {12, "synthesis", "Synthesis", 2075, "near_future", false, false, 0.0f},
+        {13, "expansion", "Expansion", 2100, "space_age", false, false, 0.0f},
+        {14, "divergence", "Divergence", 2150, "space_age", false, false, 0.0f},
     };
     eras_.clear();
     for (const auto& r : rows) {
@@ -141,6 +154,7 @@ void EraCatalog::load_builtin_default() {
         e.economic_regime = r.regime;
         e.is_default_entry = r.def;
         e.v1_in_scope = r.v1;
+        e.knowledge_to_advance = r.knowledge;
         eras_.push_back(std::move(e));
     }
 }

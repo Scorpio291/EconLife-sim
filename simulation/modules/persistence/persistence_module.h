@@ -158,7 +158,9 @@ class PersistenceModule : public ITickModule {
     //      default (1.0 = "fed").
     //      v20: per-NPC trailing occupation (u32; livelihood index). Older
     //      saves load with 0 (none).
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 20;
+    //      v21: GlobalTechnologyState trailing knowledge_level (f32). Older
+    //      saves load with 0.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 21;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"

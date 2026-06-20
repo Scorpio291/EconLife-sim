@@ -74,7 +74,7 @@ bool OccupationCatalog::load_csv(const std::string& filepath) {
             continue;
         }
         auto f = split_csv(line);
-        // occupation_key,display_name,layer,min_surplus
+        // occupation_key,display_name,layer,min_surplus[,knowledge_output]
         if (f.size() < 4)
             continue;
         OccupationDefinition o{};
@@ -83,6 +83,7 @@ bool OccupationCatalog::load_csv(const std::string& filepath) {
         o.display_name = f[1];
         o.layer = parse_u8(f[2], 1);
         o.min_surplus = parse_f(f[3], 1.0f);
+        o.knowledge_output = f.size() > 4 ? parse_f(f[4], 0.0f) : 0.0f;  // optional column
         loaded.push_back(std::move(o));
     }
     if (loaded.empty())
@@ -97,13 +98,15 @@ void OccupationCatalog::load_builtin_default() {
         const char* name;
         uint8_t layer;
         float min_surplus;
+        float knowledge_output;
     };
     static const Row rows[] = {
-        {"forager", "Forager", 1, 1.0f},          {"hunter", "Hunter", 1, 1.0f},
-        {"fisher", "Fisher", 1, 1.0f},            {"farmer", "Subsistence Farmer", 1, 1.0f},
-        {"herder", "Herder", 1, 1.0f},            {"artisan", "Artisan", 2, 1.10f},
-        {"builder", "Builder", 2, 1.20f},         {"healer", "Healer", 2, 1.20f},
-        {"trader", "Trader", 2, 1.15f},           {"elder", "Elder", 2, 1.10f},
+        {"forager", "Forager", 1, 1.0f, 0.0f},   {"hunter", "Hunter", 1, 1.0f, 0.0f},
+        {"fisher", "Fisher", 1, 1.0f, 0.0f},     {"farmer", "Subsistence Farmer", 1, 1.0f, 0.0f},
+        {"herder", "Herder", 1, 1.0f, 0.0f},     {"artisan", "Artisan", 2, 1.10f, 0.0f},
+        {"builder", "Builder", 2, 1.20f, 0.0f},  {"healer", "Healer", 2, 1.20f, 0.0f},
+        {"trader", "Trader", 2, 1.15f, 0.0f},    {"elder", "Elder", 2, 1.10f, 0.2f},
+        {"scribe", "Scribe", 2, 1.25f, 0.6f},    {"scholar", "Scholar", 2, 1.35f, 1.0f},
     };
     occupations_.clear();
     uint16_t idx = 1;
@@ -114,6 +117,7 @@ void OccupationCatalog::load_builtin_default() {
         o.display_name = r.name;
         o.layer = r.layer;
         o.min_surplus = r.min_surplus;
+        o.knowledge_output = r.knowledge_output;
         occupations_.push_back(std::move(o));
     }
 }

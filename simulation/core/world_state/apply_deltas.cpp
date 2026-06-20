@@ -739,6 +739,11 @@ static void apply_technology_deltas(WorldState& world, const std::vector<Technol
                 world.technology.era_started_tick = world.current_tick;
             }
         }
+        // Knowledge accumulation (additive; floored at 0).
+        if (td.knowledge_delta.has_value()) {
+            world.technology.knowledge_level =
+                std::max(0.0f, world.technology.knowledge_level + *td.knowledge_delta);
+        }
 
         // Domain knowledge decay/adjustment (additive, clamped 0.0–1.0).
         if (td.domain_index.has_value() && td.domain_knowledge_delta.has_value()) {

@@ -28,6 +28,8 @@ struct OccupationDefinition {
     std::string display_name;  // human-readable
     uint8_t layer;             // 1 = subsistence/food livelihood; 2 = surplus-funded specialist
     float min_surplus;         // province food surplus needed to support this livelihood
+    float knowledge_output;    // knowledge produced per worker (scholars/scribes > 0; 0 otherwise)
+                               // — the engine that lets a society escape the Malthusian trap.
 };
 
 class OccupationCatalog {

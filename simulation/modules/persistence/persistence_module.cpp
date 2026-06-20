@@ -883,9 +883,11 @@ void write_global_technology_state(ByteWriter& w, const GlobalTechnologyState& g
     w.write_u32(static_cast<uint32_t>(g.active_maturation_projects.size()));
     for (const auto& p : g.active_maturation_projects)
         write_maturation_project(w, p);
+    // v21: accumulated practical knowledge (knowledge module).
+    w.write_float(g.knowledge_level);
 }
 
-void read_global_technology_state(ByteReader& r, GlobalTechnologyState& g) {
+void read_global_technology_state(ByteReader& r, GlobalTechnologyState& g, uint32_t schema_ver) {
     g.current_era = r.read_u8();
     g.era_started_tick = r.read_u32();
     for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i)
@@ -900,6 +902,9 @@ void read_global_technology_state(ByteReader& r, GlobalTechnologyState& g) {
     g.active_maturation_projects.reserve(mp_count);
     for (uint32_t i = 0; i < mp_count; ++i)
         g.active_maturation_projects.push_back(read_maturation_project(r));
+    // v21: accumulated practical knowledge. Older saves default to 0.
+    if (schema_ver >= 21u)
+        g.knowledge_level = r.read_float();
 }
 
 void write_route_table(
@@ -2323,7 +2328,7 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     for (uint32_t i = 0; i < fac_count; ++i)
         out_state.facilities.push_back(read_facility(r, schema_ver));
 
-    read_global_technology_state(r, out_state.technology);
+    read_global_technology_state(r, out_state.technology, schema_ver);
 
     // --- v7: module-private state section ---
     // Build a name → module lookup for O(1) dispatch. Modules in the save

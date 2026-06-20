@@ -28,20 +28,27 @@ TEST_CASE("OccupationCatalog builtin default defines the livelihood layers", "[o
     OccupationCatalog cat;
     cat.load_builtin_default();
 
-    REQUIRE(cat.size() == 10);
+    REQUIRE(cat.size() == 12);
     CHECK(cat.by_index(kNoOccupation) == nullptr);  // 0 is "none"
 
     const OccupationDefinition* farmer = cat.find("farmer");
     REQUIRE(farmer != nullptr);
-    CHECK(farmer->layer == 1);  // subsistence/food livelihood
+    CHECK(farmer->layer == 1);                 // subsistence/food livelihood
+    CHECK(farmer->knowledge_output == 0.0f);   // food producers make no knowledge
 
     const OccupationDefinition* trader = cat.find("trader");
     REQUIRE(trader != nullptr);
     CHECK(trader->layer == 2);            // surplus-funded specialist
     CHECK(trader->min_surplus > 1.0f);    // needs a surplus to be supported
 
+    // Knowledge-producers: the engine of progress.
+    const OccupationDefinition* scholar = cat.find("scholar");
+    REQUIRE(scholar != nullptr);
+    CHECK(scholar->layer == 2);
+    CHECK(scholar->knowledge_output > 0.0f);
+
     CHECK(cat.in_layer(1).size() == 5);  // forager/hunter/fisher/farmer/herder
-    CHECK(cat.in_layer(2).size() == 5);  // artisan/builder/healer/trader/elder
+    CHECK(cat.in_layer(2).size() == 7);  // artisan/builder/healer/trader/elder/scribe/scholar
 }
 
 TEST_CASE("OccupationCatalog loads the base-game CSV matching the builtin", "[occupation][tier0]") {

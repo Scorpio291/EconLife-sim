@@ -75,7 +75,11 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         cfg_.weight_forest_forage * prov.geography.forest_coverage +
         cfg_.weight_fisheries * prov.fisheries.current_stock;
 
-    const float output = subsistence_output(natural_capital, labor, cfg_);
+    // Knowledge raises the land's carrying capacity (better technique) — the escape
+    // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.
+    const float knowledge_factor =
+        1.0f + cfg_.knowledge_productivity_coupling * state.technology.knowledge_level;
+    const float output = subsistence_output(natural_capital, labor, cfg_) * knowledge_factor;
     const float ratio = surplus_ratio(output, population, cfg_);
 
     RegionDelta rd{};
