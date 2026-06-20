@@ -68,6 +68,35 @@ TEST_CASE("society observe: the world spectrum (garden -> earthlike -> deathworl
         "kill/stall, earthlike to develop.\n");
 }
 
+TEST_CASE("society observe: the historical climb (year each era is reached)",
+          "[.society-history]") {
+    // Long-horizon run: print the first year each era is reached, to read the PACE
+    // of the climb through the historical eras (calibration tool).
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 1200;
+    struct Run {
+        const char* label;
+        WorldArchetype arch;
+    };
+    const Run runs[] = {{"GARDEN", archetype_garden()},
+                        {"EARTHLIKE", archetype_earthlike()},
+                        {"DEATHWORLD", archetype_deathworld()}};
+    for (const auto& r : runs) {
+        auto series = run_society_years(7, kNpcs, kYears, r.arch);
+        std::printf("\n=== %s: era reached / year ===\n", r.label);
+        int prev_era = 0;
+        for (const auto& s : series) {
+            if (s.era > prev_era) {
+                std::printf("  era %2d  @ year %u  (pop %.0f, surplus %.2f, spec %.0f%%)\n", s.era,
+                            s.year, s.total_population, s.mean_surplus, s.specialist_fraction * 100.0);
+                prev_era = s.era;
+            }
+        }
+        std::printf("  final: era %d at year %u  (%s)\n", series.back().era, series.back().year,
+                    trajectory_name(classify_trajectory(series)));
+    }
+}
+
 TEST_CASE("society observe: transplant — soft vs native people on a harsh world",
           "[.society-transplant]") {
     // Same harsh-but-FERTILE world (high hazard, plenty of food, so the difference is

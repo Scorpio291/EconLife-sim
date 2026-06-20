@@ -562,7 +562,7 @@ struct SubsistenceConfig {
     // Accumulated knowledge (from scholars) raises how many a given land can feed —
     // letting a society grow AND keep a surplus, instead of equilibrating at bare
     // subsistence. 0 disables the coupling.
-    float knowledge_productivity_coupling = 0.02f;
+    float knowledge_productivity_coupling = 0.012f;
 
     // Seasonality (climate swing) reduces food reliability — lean seasons cut the
     // harvest. Applied RELATIVE to Earth's seasonality, so an earthlike world is
@@ -577,7 +577,7 @@ struct SubsistenceConfig {
 struct KnowledgeConfig {
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
     std::vector<std::string> active_regimes = {"subsistence", "barter", "mercantile", "industrial"};
-    float production_scalar = 1.0f;  // knowledge/year per unit of scholar knowledge_output
+    float production_scalar = 0.4f;  // knowledge/year per unit of scholar knowledge_output
     float decay_per_year = 0.02f;    // annual attrition (knowledge fades if scholars vanish)
 };
 
