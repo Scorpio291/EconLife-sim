@@ -129,20 +129,23 @@ void EraCatalog::load_builtin_default() {
         float knowledge;
     };
     static const Row rows[] = {
-        {1, "subsistence", "Subsistence", -10000, "subsistence", false, true, 30.0f},
-        {2, "agrarian", "Agrarian", -3000, "barter", false, true, 90.0f},
-        {3, "preindustrial", "Pre-Industrial", 1500, "mercantile", false, true, 180.0f},
-        {4, "industrial", "Industrial", 1800, "industrial", false, true, 320.0f},
-        {5, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true, 0.0f},
-        {6, "disruption", "Disruption", 2007, "modern", false, true, 0.0f},
-        {7, "acceleration", "Acceleration", 2013, "modern", false, true, 0.0f},
-        {8, "fracture", "Fracture", 2019, "modern", false, true, 0.0f},
-        {9, "transition", "Transition", 2024, "modern", false, true, 0.0f},
-        {10, "convergence", "Convergence", 2035, "near_future", false, false, 0.0f},
-        {11, "reckoning", "Reckoning", 2050, "near_future", false, false, 0.0f},
-        {12, "synthesis", "Synthesis", 2075, "near_future", false, false, 0.0f},
-        {13, "expansion", "Expansion", 2100, "space_age", false, false, 0.0f},
-        {14, "divergence", "Divergence", 2150, "space_age", false, false, 0.0f},
+        {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 30.0f},
+        {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 80.0f},
+        {3, "iron_age", "Iron Age", -1200, "barter", false, true, 160.0f},
+        {4, "classical", "Classical", -550, "barter", false, true, 280.0f},
+        {5, "medieval", "Medieval", 500, "barter", false, true, 450.0f},
+        {6, "early_modern", "Early Modern", 1450, "barter", false, true, 700.0f},
+        {7, "industrial", "Industrial", 1750, "barter", false, true, 1100.0f},
+        {8, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true, 0.0f},
+        {9, "disruption", "Disruption", 2007, "modern", false, true, 0.0f},
+        {10, "acceleration", "Acceleration", 2013, "modern", false, true, 0.0f},
+        {11, "fracture", "Fracture", 2019, "modern", false, true, 0.0f},
+        {12, "transition", "Transition", 2024, "modern", false, true, 0.0f},
+        {13, "convergence", "Convergence", 2035, "near_future", false, false, 0.0f},
+        {14, "reckoning", "Reckoning", 2050, "near_future", false, false, 0.0f},
+        {15, "synthesis", "Synthesis", 2075, "near_future", false, false, 0.0f},
+        {16, "expansion", "Expansion", 2100, "space_age", false, false, 0.0f},
+        {17, "divergence", "Divergence", 2150, "space_age", false, false, 0.0f},
     };
     eras_.clear();
     for (const auto& r : rows) {

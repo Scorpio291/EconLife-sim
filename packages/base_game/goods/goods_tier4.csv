@@ -1,19 +1,19 @@
 good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available
-cannabis_raw,Cannabis (Raw),4,tonne,criminal,150.00,true,true,5
-cannabis_processed,Cannabis (Processed),4,unit,criminal,300.00,false,true,5
-methamphetamine,Methamphetamine,4,unit,criminal,800.00,false,true,5
-synthetic_opioid,Synthetic Opioid,4,unit,criminal,1200.00,false,true,5
-designer_drug,Designer Drug,4,unit,criminal,1500.00,false,true,5
-cocaine,Cocaine,4,unit,criminal,2000.00,false,true,5
-heroin,Heroin,4,unit,criminal,1800.00,false,true,5
-counterfeit_currency,Counterfeit Currency,4,unit,criminal,500.00,false,true,5
-stolen_goods,Stolen Goods,4,unit,criminal,100.00,false,true,5
-real_estate_residential,Residential Real Estate,5,unit,financial,250000.00,false,false,5
-real_estate_commercial,Commercial Real Estate,5,unit,financial,500000.00,false,false,5
-company_shares,Company Shares,5,unit,financial,100.00,false,false,5
-government_bond,Government Bond,5,unit,financial,1000.00,false,false,5
-commodity_futures,Commodity Futures,5,unit,financial,500.00,false,false,5
-electricity,Electricity,0,MWh,energy,30.00,false,false,5
-industrial_waste,Industrial Waste,0,tonne,waste,1.00,false,false,5
-hazardous_waste,Hazardous Waste,0,tonne,waste,1.00,false,false,5
-municipal_waste,Municipal Waste,0,tonne,waste,1.00,false,false,5
+cannabis_raw,Cannabis (Raw),4,tonne,criminal,150.00,true,true,8
+cannabis_processed,Cannabis (Processed),4,unit,criminal,300.00,false,true,8
+methamphetamine,Methamphetamine,4,unit,criminal,800.00,false,true,8
+synthetic_opioid,Synthetic Opioid,4,unit,criminal,1200.00,false,true,8
+designer_drug,Designer Drug,4,unit,criminal,1500.00,false,true,8
+cocaine,Cocaine,4,unit,criminal,2000.00,false,true,8
+heroin,Heroin,4,unit,criminal,1800.00,false,true,8
+counterfeit_currency,Counterfeit Currency,4,unit,criminal,500.00,false,true,8
+stolen_goods,Stolen Goods,4,unit,criminal,100.00,false,true,8
+real_estate_residential,Residential Real Estate,5,unit,financial,250000.00,false,false,8
+real_estate_commercial,Commercial Real Estate,5,unit,financial,500000.00,false,false,8
+company_shares,Company Shares,5,unit,financial,100.00,false,false,8
+government_bond,Government Bond,5,unit,financial,1000.00,false,false,8
+commodity_futures,Commodity Futures,5,unit,financial,500.00,false,false,8
+electricity,Electricity,0,MWh,energy,30.00,false,false,8
+industrial_waste,Industrial Waste,0,tonne,waste,1.00,false,false,8
+hazardous_waste,Hazardous Waste,0,tonne,waste,1.00,false,false,8
+municipal_waste,Municipal Waste,0,tonne,waste,1.00,false,false,8

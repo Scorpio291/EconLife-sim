@@ -84,8 +84,8 @@ TEST_CASE("execute_province produces a surplus at the dawn and is inert in the m
         CHECK(*delta.region_deltas[0].subsistence_surplus_replacement > 1.0f);
     }
 
-    SECTION("modern anchor (era 5, market regime) is inert") {
-        WorldState w = make_world(5);
+    SECTION("modern anchor (era 8, market regime) is inert") {
+        WorldState w = make_world(8);
         DeltaBuffer delta{};
         mod.execute_province(0, w, delta);
         CHECK(delta.region_deltas.empty());

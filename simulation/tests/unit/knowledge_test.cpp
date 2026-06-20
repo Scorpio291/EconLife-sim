@@ -49,7 +49,7 @@ TEST_CASE("knowledge: scholars produce knowledge at the dawn, none in market era
     }
 
     SECTION("modern era is inert (no scholars, knowledge module off)") {
-        WorldState w = make_world(/*era=*/5, /*scholars=*/4, /*knowledge=*/0.0f);
+        WorldState w = make_world(/*era=*/8, /*scholars=*/4, /*knowledge=*/0.0f);
         DeltaBuffer d{};
         mod.execute(w, d);
         CHECK(d.technology_deltas.empty());

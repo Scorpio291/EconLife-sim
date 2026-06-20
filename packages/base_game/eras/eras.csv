@@ -1,15 +1,18 @@
 era_index,era_key,display_name,start_year,economic_regime,is_default_entry,v1_in_scope,knowledge_to_advance
-1,subsistence,Subsistence,-10000,subsistence,0,1,30
-2,agrarian,Agrarian,-3000,barter,0,1,90
-3,preindustrial,Pre-Industrial,1500,mercantile,0,1,180
-4,industrial,Industrial,1800,industrial,0,1,320
-5,turn_of_millennium,Turn of the Millennium,2000,modern,1,1,0
-6,disruption,Disruption,2007,modern,0,1,0
-7,acceleration,Acceleration,2013,modern,0,1,0
-8,fracture,Fracture,2019,modern,0,1,0
-9,transition,Transition,2024,modern,0,1,0
-10,convergence,Convergence,2035,near_future,0,0,0
-11,reckoning,Reckoning,2050,near_future,0,0,0
-12,synthesis,Synthesis,2075,near_future,0,0,0
-13,expansion,Expansion,2100,space_age,0,0,0
-14,divergence,Divergence,2150,space_age,0,0,0
+1,neolithic,Neolithic,-10000,subsistence,0,1,30
+2,bronze_age,Bronze Age,-3300,barter,0,1,80
+3,iron_age,Iron Age,-1200,barter,0,1,160
+4,classical,Classical,-550,barter,0,1,280
+5,medieval,Medieval,500,barter,0,1,450
+6,early_modern,Early Modern,1450,barter,0,1,700
+7,industrial,Industrial,1750,barter,0,1,1100
+8,turn_of_millennium,Turn of the Millennium,2000,modern,1,1,0
+9,disruption,Disruption,2007,modern,0,1,0
+10,acceleration,Acceleration,2013,modern,0,1,0
+11,fracture,Fracture,2019,modern,0,1,0
+12,transition,Transition,2024,modern,0,1,0
+13,convergence,Convergence,2035,near_future,0,0,0
+14,reckoning,Reckoning,2050,near_future,0,0,0
+15,synthesis,Synthesis,2075,near_future,0,0,0
+16,expansion,Expansion,2100,space_age,0,0,0
+17,divergence,Divergence,2150,space_age,0,0,0

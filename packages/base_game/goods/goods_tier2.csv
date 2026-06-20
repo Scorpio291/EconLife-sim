@@ -1,56 +1,56 @@
 good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available
-steel_casting,Steel Casting,2,unit,structural,320.00,false,false,5
-aluminum_casting,Aluminum Casting,2,unit,structural,280.00,false,false,5
-structural_steel_section,Structural Steel Section,2,tonne,structural,260.00,false,false,5
-precision_machined_parts,Precision Machined Parts,2,unit,structural,400.00,false,false,5
-bearings,Bearings,2,unit,structural,150.00,false,false,5
-fasteners,Fasteners (Bolts Nuts Screws),2,unit,structural,80.00,false,false,5
-springs,Springs,2,unit,structural,100.00,false,false,5
-hydraulic_components,Hydraulic Components,2,unit,structural,500.00,false,false,5
-gear_set,Gear Set / Transmission Components,2,unit,structural,600.00,false,false,5
-car_body_stamping,Car Body Stamping,2,unit,vehicle,800.00,false,false,5
-car_chassis,Car Chassis,2,unit,vehicle,1200.00,false,false,5
-safety_glass,Safety Glass (Laminated),2,unit,vehicle,150.00,false,false,5
-tires,Tires,2,unit,vehicle,80.00,false,false,5
-wheel_rim,Wheel Rim,2,unit,vehicle,120.00,false,false,5
-engine_block,Engine Block,2,unit,vehicle,1800.00,false,false,5
-engine_assembled,Assembled Engine,2,unit,vehicle,2400.00,false,false,5
-transmission,Transmission,2,unit,vehicle,1500.00,false,false,5
-wiring_harness,Wiring Harness,2,unit,vehicle,300.00,false,false,5
-vehicle_interior,Vehicle Interior Assembly,2,unit,vehicle,900.00,false,false,5
-brake_system,Brake System,2,unit,vehicle,400.00,false,false,5
-exhaust_system,Exhaust System,2,unit,vehicle,350.00,false,false,5
-silicon_wafer,Silicon Wafer,2,unit,electronics,200.00,false,false,5
-pcb_blank,PCB (Blank),2,unit,electronics,50.00,false,false,5
-pcb_populated,PCB (Populated),2,unit,electronics,150.00,false,false,5
-electronic_components,Electronic Components,2,unit,electronics,100.00,false,false,5
-display_panel,Display Panel (LCD/OLED),2,unit,electronics,250.00,false,false,6
-battery_cell,Battery Cell,2,unit,electronics,180.00,false,false,6
-battery_pack,Battery Pack,2,unit,electronics,600.00,false,false,6
-electric_motor,Electric Motor,2,unit,electronics,500.00,false,false,6
-power_supply_unit,Power Supply Unit,2,unit,electronics,80.00,false,false,5
-camera_module,Camera Module,2,unit,electronics,60.00,false,false,5
-semiconductor_chip,Semiconductor Chip,2,unit,electronics,450.00,false,false,5
-concrete,Concrete,2,tonne,construction,40.00,false,false,5
-cement,Cement,2,tonne,construction,30.00,false,false,5
-construction_aggregate,Construction Aggregate,2,tonne,construction,10.00,false,false,5
-glass_panel,Glass Panel,2,unit,construction,100.00,false,false,5
-ceramic_tiles,Ceramic Tiles,2,unit,construction,50.00,false,false,5
-insulation_board,Insulation Board,2,unit,construction,60.00,false,false,5
-solder,Solder,2,unit,construction,40.00,false,false,5
-industrial_valve,Industrial Valve,2,unit,construction,200.00,false,false,5
-pump,Industrial Pump,2,unit,construction,350.00,false,false,5
-yarn,Yarn,2,tonne,textiles,90.00,false,false,5
-woven_fabric,Woven Fabric,2,tonne,textiles,120.00,false,false,5
-leather_goods,Processed Leather,2,tonne,textiles,200.00,false,false,5
-nonwoven_fabric,Non-woven Fabric,2,tonne,textiles,70.00,false,false,5
-active_pharma_ingredient,Active Pharmaceutical Ingredient (API),2,unit,pharmaceutical,500.00,false,false,5
-polymer_compound,Polymer Compound,2,tonne,pharmaceutical,160.00,false,false,5
-adhesive,Industrial Adhesive,2,tonne,pharmaceutical,140.00,false,false,5
-detergent_base,Detergent Base,2,tonne,pharmaceutical,60.00,false,false,5
-cosmetic_base,Cosmetic Base,2,tonne,pharmaceutical,80.00,false,false,5
-refined_vegetable_oil,Refined Vegetable Oil,2,litre,food_processing,75.00,false,false,5
-chocolate,Chocolate,2,tonne,food_processing,200.00,false,false,5
-beer_wort,Beer Wort,2,litre,food_processing,25.00,true,false,5
-distilled_spirits_base,Distilled Spirits (Base),2,litre,food_processing,80.00,false,false,5
-flavor_concentrates,Flavor Concentrates,2,litre,food_processing,100.00,false,false,5
+steel_casting,Steel Casting,2,unit,structural,320.00,false,false,8
+aluminum_casting,Aluminum Casting,2,unit,structural,280.00,false,false,8
+structural_steel_section,Structural Steel Section,2,tonne,structural,260.00,false,false,8
+precision_machined_parts,Precision Machined Parts,2,unit,structural,400.00,false,false,8
+bearings,Bearings,2,unit,structural,150.00,false,false,8
+fasteners,Fasteners (Bolts Nuts Screws),2,unit,structural,80.00,false,false,8
+springs,Springs,2,unit,structural,100.00,false,false,8
+hydraulic_components,Hydraulic Components,2,unit,structural,500.00,false,false,8
+gear_set,Gear Set / Transmission Components,2,unit,structural,600.00,false,false,8
+car_body_stamping,Car Body Stamping,2,unit,vehicle,800.00,false,false,8
+car_chassis,Car Chassis,2,unit,vehicle,1200.00,false,false,8
+safety_glass,Safety Glass (Laminated),2,unit,vehicle,150.00,false,false,8
+tires,Tires,2,unit,vehicle,80.00,false,false,8
+wheel_rim,Wheel Rim,2,unit,vehicle,120.00,false,false,8
+engine_block,Engine Block,2,unit,vehicle,1800.00,false,false,8
+engine_assembled,Assembled Engine,2,unit,vehicle,2400.00,false,false,8
+transmission,Transmission,2,unit,vehicle,1500.00,false,false,8
+wiring_harness,Wiring Harness,2,unit,vehicle,300.00,false,false,8
+vehicle_interior,Vehicle Interior Assembly,2,unit,vehicle,900.00,false,false,8
+brake_system,Brake System,2,unit,vehicle,400.00,false,false,8
+exhaust_system,Exhaust System,2,unit,vehicle,350.00,false,false,8
+silicon_wafer,Silicon Wafer,2,unit,electronics,200.00,false,false,8
+pcb_blank,PCB (Blank),2,unit,electronics,50.00,false,false,8
+pcb_populated,PCB (Populated),2,unit,electronics,150.00,false,false,8
+electronic_components,Electronic Components,2,unit,electronics,100.00,false,false,8
+display_panel,Display Panel (LCD/OLED),2,unit,electronics,250.00,false,false,9
+battery_cell,Battery Cell,2,unit,electronics,180.00,false,false,9
+battery_pack,Battery Pack,2,unit,electronics,600.00,false,false,9
+electric_motor,Electric Motor,2,unit,electronics,500.00,false,false,9
+power_supply_unit,Power Supply Unit,2,unit,electronics,80.00,false,false,8
+camera_module,Camera Module,2,unit,electronics,60.00,false,false,8
+semiconductor_chip,Semiconductor Chip,2,unit,electronics,450.00,false,false,8
+concrete,Concrete,2,tonne,construction,40.00,false,false,8
+cement,Cement,2,tonne,construction,30.00,false,false,8
+construction_aggregate,Construction Aggregate,2,tonne,construction,10.00,false,false,8
+glass_panel,Glass Panel,2,unit,construction,100.00,false,false,8
+ceramic_tiles,Ceramic Tiles,2,unit,construction,50.00,false,false,8
+insulation_board,Insulation Board,2,unit,construction,60.00,false,false,8
+solder,Solder,2,unit,construction,40.00,false,false,8
+industrial_valve,Industrial Valve,2,unit,construction,200.00,false,false,8
+pump,Industrial Pump,2,unit,construction,350.00,false,false,8
+yarn,Yarn,2,tonne,textiles,90.00,false,false,8
+woven_fabric,Woven Fabric,2,tonne,textiles,120.00,false,false,8
+leather_goods,Processed Leather,2,tonne,textiles,200.00,false,false,8
+nonwoven_fabric,Non-woven Fabric,2,tonne,textiles,70.00,false,false,8
+active_pharma_ingredient,Active Pharmaceutical Ingredient (API),2,unit,pharmaceutical,500.00,false,false,8
+polymer_compound,Polymer Compound,2,tonne,pharmaceutical,160.00,false,false,8
+adhesive,Industrial Adhesive,2,tonne,pharmaceutical,140.00,false,false,8
+detergent_base,Detergent Base,2,tonne,pharmaceutical,60.00,false,false,8
+cosmetic_base,Cosmetic Base,2,tonne,pharmaceutical,80.00,false,false,8
+refined_vegetable_oil,Refined Vegetable Oil,2,litre,food_processing,75.00,false,false,8
+chocolate,Chocolate,2,tonne,food_processing,200.00,false,false,8
+beer_wort,Beer Wort,2,litre,food_processing,25.00,true,false,8
+distilled_spirits_base,Distilled Spirits (Base),2,litre,food_processing,80.00,false,false,8
+flavor_concentrates,Flavor Concentrates,2,litre,food_processing,100.00,false,false,8

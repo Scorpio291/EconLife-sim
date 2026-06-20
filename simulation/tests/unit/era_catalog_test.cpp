@@ -29,24 +29,24 @@ TEST_CASE("EraCatalog builtin default defines the re-based timeline", "[era_cata
     EraCatalog cat;
     cat.load_builtin_default();
 
-    REQUIRE(cat.size() == 14);
-    CHECK(cat.max_era() == 14);
-    // V1 spans the dawn through "transition" (the old era 5, now index 9).
-    CHECK(cat.v1_max_era() == 9);
+    REQUIRE(cat.size() == 17);
+    CHECK(cat.max_era() == 17);
+    // V1 spans the dawn (Neolithic) through "transition" (now index 12).
+    CHECK(cat.v1_max_era() == 12);
 
-    // The dawn is era 1, the modern anchor (turn of the millennium) is era 5.
+    // The dawn is era 1 (Neolithic); the modern anchor (turn of the millennium) is era 8.
     const EraDefinition* dawn = cat.by_index(1);
     REQUIRE(dawn != nullptr);
-    CHECK(dawn->key == "subsistence");
+    CHECK(dawn->key == "neolithic");
     CHECK(dawn->economic_regime == "subsistence");
 
     const EraDefinition* modern = cat.find("turn_of_millennium");
     REQUIRE(modern != nullptr);
-    CHECK(modern->index == 5);
+    CHECK(modern->index == 8);
     CHECK(modern->start_year == 2000);
 
-    // The default entry era (until the dawn becomes playable) is the modern anchor.
-    CHECK(cat.default_entry_index() == 5);
+    // The default entry era (until the dawn becomes the default) is the modern anchor.
+    CHECK(cat.default_entry_index() == 8);
 }
 
 TEST_CASE("EraCatalog loads the base-game CSV matching the builtin default",

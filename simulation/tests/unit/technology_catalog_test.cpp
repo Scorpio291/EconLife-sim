@@ -303,7 +303,7 @@ TEST_CASE("Load base game technology_nodes.csv", "[technology][catalog][data]") 
     // Baseline nodes are available from the modern anchor (era 5) under the re-based
     // timeline. (Placing primitive baseline tech at the dawn is later content work.)
     for (const auto* node : baseline) {
-        CHECK(node->era_available == 5);
+        CHECK(node->era_available == 8);
         CHECK(node->is_baseline == true);
     }
 
@@ -340,8 +340,8 @@ TEST_CASE("Load base game maturation_ceilings.csv", "[technology][catalog][data]
 
     // Re-based timeline: EV's old era_1 (-1.0) now sits at era 5; it is not
     // researchable through the modern anchor and opens at era 6 (old era 2).
-    CHECK(catalog.ceiling_for("electric_vehicle", 5) < 0.0f);
-    CHECK(catalog.ceiling_for("electric_vehicle", 6) > 0.0f);
+    CHECK(catalog.ceiling_for("electric_vehicle", 8) < 0.0f);
+    CHECK(catalog.ceiling_for("electric_vehicle", 9) > 0.0f);
 
     // Baseline extraction should have full ceiling in all eras.
     CHECK_THAT(catalog.ceiling_for("basic_extraction", 1),
@@ -355,9 +355,9 @@ TEST_CASE("Load base game maturation_ceilings.csv", "[technology][catalog][data]
 TEST_CASE("Era timeline matches the re-based spec", "[technology][era]") {
     EraCatalog cat;
     cat.load_builtin_default();
-    CHECK(cat.find("turn_of_millennium")->index == 5);  // modern anchor
-    CHECK(cat.find("divergence")->index == 14);          // last era
-    CHECK(cat.max_era() == 14);
-    CHECK(cat.v1_max_era() == 9);  // V1 spans the dawn through "transition"
-    CHECK(cat.by_index(1)->key == "subsistence");  // the dawn
+    CHECK(cat.find("turn_of_millennium")->index == 8);  // modern anchor
+    CHECK(cat.find("divergence")->index == 17);          // last era
+    CHECK(cat.max_era() == 17);
+    CHECK(cat.v1_max_era() == 12);  // V1 spans the dawn through "transition"
+    CHECK(cat.by_index(1)->key == "neolithic");  // the dawn
 }
