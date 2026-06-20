@@ -209,19 +209,30 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                         c.education_level, province.demographics.education_level,
                         cfg_.max_education_drift_per_year);
                 }
+                const EraDefinition* era =
+                    state.era_catalog.by_index(state.technology.current_era);
+                const bool commons =
+                    era && (era->economic_regime == "subsistence" || era->economic_regime == "barter");
+
                 // Pre-market demographics are food-driven: floor the effective
                 // stability in commons regimes so the modern political "stability"
                 // proxy (which a subsistence world tanks for lacking markets) doesn't
                 // crush births — surplus drives the dynamics instead.
                 float eff_stability = province.conditions.stability_score;
-                if (const EraDefinition* era =
-                        state.era_catalog.by_index(state.technology.current_era)) {
-                    if (era->economic_regime == "subsistence" || era->economic_regime == "barter")
-                        eff_stability = std::max(eff_stability, cfg_.commons_stability_floor);
-                }
+                if (commons)
+                    eff_stability = std::max(eff_stability, cfg_.commons_stability_floor);
+
                 // Per-setting world hazards -> cohort mortality (disease/predators/
                 // radiation/atmosphere/geology/gravity-falls), normalized to Earth = 1.0.
-                const float hazard_mortality = hazard_mortality_from_settings(state.hazard_settings);
+                float hazard_mortality = hazard_mortality_from_settings(state.hazard_settings);
+                // Neolithic hardiness: a people NATIVE to a harsh world are adapted to
+                // it (dense bones for gravity, disease resistance, endurance), and at
+                // the subsistence level — where survival is raw physical labor —
+                // that toughness offsets their own world's hazards. So harshness is
+                // relative to the adapted native population, not a flat penalty.
+                if (commons)
+                    hazard_mortality = 1.0f + (hazard_mortality - 1.0f) * (1.0f - cfg_.neolithic_hardiness);
+
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       cs.subsistence_surplus_ratio, hazard_mortality, cfg_);
             }

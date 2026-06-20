@@ -259,6 +259,14 @@ Design consequences:
   *transplant* tests in §0 mean something. Likely sits on the trait/demographics
   model (see `EconLife_Trait_System.md`); a later phase, but it is the loop that
   turns "adversity" into "capability" rather than just "death".
+  - **Partially landed:** *Neolithic hardiness* (`PopulationAgingConfig.neolithic_hardiness`)
+    — a people NATIVE to a harsh world are adapted to it, and at the subsistence
+    level (survival = physical toughness) that adaptation offsets their own world's
+    hazard mortality. So a harsh world's natives survive its dangers about as well
+    as a gentle world's people (and, tuned > 1, *better*) — what then limits a
+    society is food (bounty) and climate (seasonality), not the hazards it evolved
+    under. Still TODO: the *generational* loop (hardiness rising/falling over time)
+    and transplant scenarios (a soft people dropped onto a hard world).
 
 ## 6. Part E — Enabling work (threaded throughout)
 - **Test-suite tiering** — the full V1 integration suite is ~20 min in debug; split a
