@@ -1,13 +1,13 @@
-occupation_key,display_name,layer,min_surplus,knowledge_output
-forager,Forager,1,1.0,0.0
-hunter,Hunter,1,1.0,0.0
-fisher,Fisher,1,1.0,0.0
-farmer,Subsistence Farmer,1,1.0,0.0
-herder,Herder,1,1.0,0.0
-artisan,Artisan,2,1.10,0.0
-builder,Builder,2,1.20,0.0
-healer,Healer,2,1.20,0.0
-trader,Trader,2,1.15,0.0
-elder,Elder,2,1.10,0.2
-scribe,Scribe,2,1.25,0.6
-scholar,Scholar,2,1.35,1.0
+occupation_key,display_name,layer,min_surplus,knowledge_output,min_era
+forager,Forager,1,1.0,0.0,1
+hunter,Hunter,1,1.0,0.0,1
+fisher,Fisher,1,1.0,0.0,1
+farmer,Subsistence Farmer,1,1.0,0.0,1
+herder,Herder,1,1.0,0.0,1
+elder,Elder,2,0.0,0.2,1
+scribe,Scribe,2,0.0,0.6,2
+scholar,Scholar,2,0.0,1.0,4
+artisan,Artisan,2,1.10,0.0,1
+builder,Builder,2,1.20,0.0,1
+healer,Healer,2,1.20,0.0,1
+trader,Trader,2,1.15,0.0,1

@@ -129,13 +129,13 @@ void EraCatalog::load_builtin_default() {
         float knowledge;
     };
     static const Row rows[] = {
-        {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 150.0f},
-        {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 450.0f},
-        {3, "iron_age", "Iron Age", -1200, "barter", false, true, 950.0f},
-        {4, "classical", "Classical", -550, "barter", false, true, 1700.0f},
-        {5, "medieval", "Medieval", 500, "barter", false, true, 2800.0f},
-        {6, "early_modern", "Early Modern", 1450, "barter", false, true, 4500.0f},
-        {7, "industrial", "Industrial", 1750, "barter", false, true, 7000.0f},
+        {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 4600.0f},
+        {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 15000.0f},
+        {3, "iron_age", "Iron Age", -1200, "barter", false, true, 21000.0f},
+        {4, "classical", "Classical", -550, "barter", false, true, 40000.0f},
+        {5, "medieval", "Medieval", 500, "barter", false, true, 60000.0f},
+        {6, "early_modern", "Early Modern", 1450, "barter", false, true, 78000.0f},
+        {7, "industrial", "Industrial", 1750, "barter", false, true, 95000.0f},
         {8, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true, 0.0f},
         {9, "disruption", "Disruption", 2007, "modern", false, true, 0.0f},
         {10, "acceleration", "Acceleration", 2013, "modern", false, true, 0.0f},

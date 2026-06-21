@@ -68,12 +68,31 @@ TEST_CASE("society observe: the world spectrum (garden -> earthlike -> deathworl
         "kill/stall, earthlike to develop.\n");
 }
 
+TEST_CASE("society observe: knowledge/population trace (calibration)",
+          "[.society-knowledge-trace]") {
+    // Periodic sample of the earthlike dawn so we can read the actual demographic
+    // equilibrium (surplus margin), the specialist fraction it sustains, and the
+    // resulting knowledge-accumulation rate — the inputs for setting era thresholds.
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 14000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+    std::printf("\n=== EARTHLIKE knowledge/pop trace ===\n");
+    std::printf("  year |    pop | surplus | spec%% | knowledge | era\n");
+    for (const auto& s : series) {
+        if (s.year % 500 == 0)
+            std::printf("  %5u | %6.0f |  %.3f  | %4.0f%% | %9.0f | %2d\n", s.year,
+                        s.total_population, s.mean_surplus, s.specialist_fraction * 100.0,
+                        s.knowledge, s.era);
+    }
+}
+
 TEST_CASE("society observe: the historical climb (year each era is reached)",
           "[.society-history]") {
     // Long-horizon run: print the first year each era is reached, to read the PACE
     // of the climb through the historical eras (calibration tool).
     constexpr uint32_t kNpcs = 200;
-    constexpr uint32_t kYears = 1200;
+    constexpr uint32_t kYears = 13000;  // the historical climb is millennia-long; fast-forward
     struct Run {
         const char* label;
         WorldArchetype arch;
@@ -89,11 +108,20 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
         std::printf("\n=== %s (Class %.1f, bounty %.2f): era reached / year ===\n", r.label,
                     world_class(r.arch.hazard), r.arch.bounty);
         int prev_era = 0;
+        float prev_k = 0.0f;
+        uint32_t prev_year = 0;
         for (const auto& s : series) {
             if (s.era > prev_era) {
-                std::printf("  era %2d  @ year %u  (pop %.0f, surplus %.2f, spec %.0f%%)\n", s.era,
-                            s.year, s.total_population, s.mean_surplus, s.specialist_fraction * 100.0);
+                const uint32_t dy = s.year - prev_year;
+                const float dk = s.knowledge - prev_k;
+                std::printf(
+                    "  era %2d  @ year %5u  (+%4u yrs, knowledge %.0f, +%.2f/yr, pop %.0f, "
+                    "spec %.0f%%)\n",
+                    s.era, s.year, dy, s.knowledge, dy > 0 ? dk / dy : 0.0f, s.total_population,
+                    s.specialist_fraction * 100.0);
                 prev_era = s.era;
+                prev_k = s.knowledge;
+                prev_year = s.year;
             }
         }
         std::printf("  final: era %d at year %u  (%s)\n", series.back().era, series.back().year,

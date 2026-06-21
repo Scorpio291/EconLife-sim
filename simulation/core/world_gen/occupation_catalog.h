@@ -30,6 +30,9 @@ struct OccupationDefinition {
     float min_surplus;         // province food surplus needed to support this livelihood
     float knowledge_output;    // knowledge produced per worker (scholars/scribes > 0; 0 otherwise)
                                // — the engine that lets a society escape the Malthusian trap.
+    uint8_t min_era = 1;       // earliest era this livelihood can exist (scribes need writing,
+                               // scholars need formal scholarship). Gates the dawn's knowledge
+                               // trickle and gives a believable, accelerating climb.
 };
 
 class OccupationCatalog {
@@ -49,6 +52,12 @@ class OccupationCatalog {
 
     // All occupations of a given layer, in load (index) order.
     std::vector<const OccupationDefinition*> in_layer(uint8_t layer) const;
+
+    // Occupations of a given layer that have unlocked by `era` (min_era <= era), in
+    // load order. Used by the commons to gate knowledge-keepers (elder -> scribe ->
+    // scholar) so the dawn's knowledge output is a trickle that grows as the world
+    // learns to write, then to reason formally.
+    std::vector<const OccupationDefinition*> in_layer_for_era(uint8_t layer, uint8_t era) const;
 
    private:
     std::vector<OccupationDefinition> occupations_;  // sorted by index after load

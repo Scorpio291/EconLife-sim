@@ -238,8 +238,15 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 hazard_mortality *=
                     state.tech_effects_for_era(state.technology.current_era).mortality_mult;
 
+                // Commons comfort margin: the demographics chase a surplus offset down
+                // by the margin, so the population settles at ~1 + margin (a permanent
+                // surplus that funds the knowledge-elite) instead of bare subsistence.
+                // Inert in market eras (surplus is 1.0 there).
+                float demo_surplus = cs.subsistence_surplus_ratio;
+                if (commons)
+                    demo_surplus = std::max(0.0f, demo_surplus - cfg_.commons_surplus_margin);
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
-                                      cs.subsistence_surplus_ratio, hazard_mortality, cfg_);
+                                      demo_surplus, hazard_mortality, cfg_);
 
                 // Hardiness drifts toward the world's hazard level over generations
                 // (adaptation under sustained pressure; softening under ease).

@@ -49,6 +49,17 @@ TEST_CASE("OccupationCatalog builtin default defines the livelihood layers", "[o
 
     CHECK(cat.in_layer(1).size() == 5);  // forager/hunter/fisher/farmer/herder
     CHECK(cat.in_layer(2).size() == 7);  // artisan/builder/healer/trader/elder/scribe/scholar
+
+    // Knowledge-keepers unlock over time: elder at the dawn, scribe with writing
+    // (era 2), scholar with formal scholarship (era 4).
+    CHECK(cat.find("elder")->min_era == 1);
+    CHECK(cat.find("scribe")->min_era == 2);
+    CHECK(cat.find("scholar")->min_era == 4);
+    // The available layer-2 pool grows as those eras are reached.
+    CHECK(cat.in_layer_for_era(2, 1).size() == 5);  // no scribe, no scholar yet
+    CHECK(cat.in_layer_for_era(2, 2).size() == 6);  // +scribe
+    CHECK(cat.in_layer_for_era(2, 3).size() == 6);  // still no scholar
+    CHECK(cat.in_layer_for_era(2, 4).size() == 7);  // +scholar
 }
 
 TEST_CASE("OccupationCatalog loads the base-game CSV matching the builtin", "[occupation][tier0]") {
@@ -70,5 +81,6 @@ TEST_CASE("OccupationCatalog loads the base-game CSV matching the builtin", "[oc
         REQUIRE(b != nullptr);
         CHECK(a->key == b->key);
         CHECK(a->layer == b->layer);
+        CHECK(a->min_era == b->min_era);
     }
 }

@@ -556,13 +556,28 @@ struct SubsistenceConfig {
     // can free from food work into Layer-2 specialists (artisan/healer/trader/...).
     // 0 at surplus <= 1 (all hands needed for food), rising with surplus to this cap.
     float max_specialist_fraction = 0.5f;
+    // Persistent elite floor: a province keeps at least this many Layer-2 specialists
+    // even when surplus is thin or negative — the sticky literate/ruling core (temples,
+    // elder councils, scholars) a society maintains through lean years before it would
+    // ever dissolve them. Because knowledge-keepers lead the Layer-2 list, this floor
+    // keeps the knowledge engine alive through famines/overshoot-crashes, so a stalled
+    // society keeps creeping forward and can lift its carrying ceiling back out of the
+    // trap rather than dying there. Commons path only (Layer-2 is inert in market eras).
+    uint32_t commons_min_specialists_per_province = 2;
 
-    // Knowledge -> productivity (the Malthusian escape): the subsistence carrying
-    // ceiling is multiplied by (1 + knowledge_productivity_coupling * knowledge_level).
-    // Accumulated knowledge (from scholars) raises how many a given land can feed —
-    // letting a society grow AND keep a surplus, instead of equilibrating at bare
-    // subsistence. 0 disables the coupling.
-    float knowledge_productivity_coupling = 0.012f;
+    // Knowledge -> productivity (the Malthusian escape): accumulated knowledge (from
+    // scholars) raises how many people a given land can feed, letting a society grow
+    // AND keep a surplus instead of equilibrating at bare subsistence. The boost
+    // SATURATES with diminishing returns —
+    //   ceiling *= 1 + knowledge_productivity_max * K / (K + knowledge_productivity_halfsat)
+    // — so it tends toward a realistic ceiling (modern farming feeds ~20-30x the
+    // neolithic per unit land, not 1000x). A linear coupling instead explodes the
+    // ceiling at high knowledge, blowing population past any demographic brake and
+    // collapsing the surplus (and with it the specialist class) in the upper eras.
+    // max = total multiplier headroom; halfsat = knowledge at half the boost. 0 max
+    // disables the coupling.
+    float knowledge_productivity_max = 26.0f;
+    float knowledge_productivity_halfsat = 35000.0f;
 
     // Seasonality (climate swing) reduces food reliability — lean seasons cut the
     // harvest. Applied RELATIVE to Earth's seasonality, so an earthlike world is
@@ -578,7 +593,13 @@ struct KnowledgeConfig {
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
     std::vector<std::string> active_regimes = {"subsistence", "barter", "mercantile", "industrial"};
     float production_scalar = 0.4f;  // knowledge/year per unit of scholar knowledge_output
-    float decay_per_year = 0.02f;    // annual attrition (knowledge fades if scholars vanish)
+    // Annual attrition. Civilizational knowledge is CUMULATIVE — it is essentially
+    // never lost on historical timescales (dark-age regression is a rare exception, not
+    // the rule, and is out of V1 scope). Proportional decay imposes an equilibrium
+    // ceiling (level -> production/decay); kept this tiny so even the dawn's thin
+    // knowledge trickle accumulates far past every era threshold, i.e. the era
+    // THRESHOLDS — not a decay ceiling — govern the pace of the climb.
+    float decay_per_year = 0.00001f;
 };
 
 struct SeasonalAgricultureConfig {
@@ -1254,6 +1275,17 @@ struct PopulationAgingConfig {
     // In commons regimes the effective stability used by births/deaths is floored
     // here so low modern-stability doesn't crush reproduction; surplus does the work.
     float commons_stability_floor = 0.8f;
+    // Commons comfort margin. The food coupling is NEUTRAL at surplus == 1.0, so the
+    // dawn population's births/deaths balance right at the bare carrying capacity —
+    // leaving NO surplus headroom, so no labour is ever freed for specialists and the
+    // society is locked in the Malthusian trap. In commons regimes the demographics
+    // instead chase a surplus offset DOWN by this margin (they treat surplus below
+    // 1 + margin as lean and stop growing), so the population settles at a modest
+    // permanent surplus (~1 + margin). That margin funds a thin knowledge-elite
+    // (elders/scribes/scholars) — the slow engine that, over millennia, lifts the
+    // carrying ceiling and escapes the trap. Commons-only (inert in market eras, where
+    // surplus is 1.0 and the offset would otherwise misfire — so it is gated off).
+    float commons_surplus_margin = 0.30f;
     // Generational hardiness: a population's adaptation (cohort_stats.hardiness) drifts
     // toward the world's hazard level by this fraction per year — slow, generational.
     // Mortality scales with how far hardiness falls short of the world's demand, never

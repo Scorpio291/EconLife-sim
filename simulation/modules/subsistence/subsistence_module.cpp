@@ -77,8 +77,12 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
 
     // Knowledge raises the land's carrying capacity (better technique) — the escape
     // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.
+    // Saturating (diminishing returns) so the ceiling tends toward a realistic limit
+    // rather than exploding at high knowledge (which would crash the surplus).
+    const float K = state.technology.knowledge_level;
     const float knowledge_factor =
-        1.0f + cfg_.knowledge_productivity_coupling * state.technology.knowledge_level;
+        1.0f + cfg_.knowledge_productivity_max * K /
+                   (K + std::max(1.0f, cfg_.knowledge_productivity_halfsat));
     // Food techs (plough/irrigation/heavy-plough/watermill) raise the carrying ceiling.
     const float tech_food_factor =
         state.tech_effects_for_era(state.technology.current_era).food_mult;
@@ -108,9 +112,16 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // (artisan/healer/trader/...). These are self-employed livelihoods, NOT firms —
     // a business only crystallizes later when a livelihood employs others.
     const auto layer1 = state.occupation_catalog.in_layer(1);
-    const auto layer2 = state.occupation_catalog.in_layer(2);
-    const uint32_t specialists =
-        specialist_count(static_cast<uint32_t>(residents.size()), ratio, cfg_);
+    // Layer-2 specialists available at this era: knowledge-keepers unlock over time
+    // (elder at the dawn -> scribe once writing exists -> scholar with formal
+    // scholarship), so the knowledge trickle starts tiny and accelerates.
+    const auto layer2 = state.occupation_catalog.in_layer_for_era(2, state.technology.current_era);
+    // Surplus frees specialists, but a persistent elite floor survives even thin/negative
+    // surplus (keeping the knowledge engine — first in the Layer-2 list — alive through
+    // famines so a stalled society can still climb back out). Capped at the resident count.
+    uint32_t specialists = specialist_count(static_cast<uint32_t>(residents.size()), ratio, cfg_);
+    specialists = std::max(specialists, cfg_.commons_min_specialists_per_province);
+    specialists = std::min(specialists, static_cast<uint32_t>(residents.size()));
 
     // Proto-capital: food beyond need is stored (grain/herds/tools), controlled by
     // the resident heads/founders — the origin of capital. Split evenly; it is the

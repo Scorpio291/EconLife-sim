@@ -49,6 +49,7 @@ struct SocietySnapshot {
     double capital_gini = 0.0;         // inequality of that capital [0,1]
     uint32_t businesses = 0;           // emergent firms
     int era = 0;
+    float knowledge = 0.0f;            // accumulated knowledge_level
     bool extinct = false;              // population collapsed to ~0
 };
 
@@ -72,6 +73,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     SocietySnapshot s;
     s.year = year;
     s.era = static_cast<int>(w.technology.current_era);
+    s.knowledge = w.technology.knowledge_level;
 
     double surplus_sum = 0.0;
     int prov_with_cohorts = 0;
@@ -131,6 +133,15 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     orch.finalize_registration();
     ThreadPool pool(1);
 
+    // The commons climb is "done" once the world leaves the pre-market (subsistence/
+    // barter) regimes for a market era — that is the natural terminus of dawn history-
+    // gen (the modern economy modules take over from there and are not meant to run in
+    // this fast-forward dawn lab). Stop there.
+    auto is_commons_era = [&](uint8_t era) {
+        const EraDefinition* e = world.era_catalog.by_index(era);
+        return e && (e->economic_regime == "subsistence" || e->economic_regime == "barter");
+    };
+
     std::vector<SocietySnapshot> series;
     series.reserve(years + 1);
     series.push_back(capture_society(world, 0));
@@ -147,6 +158,8 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
                 orch.execute_tick(world, pool);
         }
         series.push_back(capture_society(world, y + 1));
+        if (!is_commons_era(world.technology.current_era))
+            break;  // reached a market era — the dawn climb is complete
     }
     return series;
 }

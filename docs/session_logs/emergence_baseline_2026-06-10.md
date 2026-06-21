@@ -801,3 +801,49 @@ crisis response (downstream of grievance).
 Each fix is validated by a ratchet flipping from "failed as expected" to
 "passed" — which is exactly the human-light validation loop the 99% experiment
 is built around.
+
+---
+
+## 2026-06-21 — Dawn-climb pace + completion (history-gen)
+
+Context: the dawn→present knowledge climb was wildly too fast (era 6 reached in
+~180 in-game years) and not believable. Recalibrated the whole commons knowledge
+engine so a society climbs from the Neolithic to the modern era on an
+accelerating, real-history-like timescale, and added the fast-forward stride so
+those millennia simulate in seconds.
+
+What changed (all data-driven / config, no new magic numbers in code):
+- **Knowledge-keepers gate by era** (occupations.csv `min_era`): elder at the
+  dawn, scribe with writing (era 2), scholar with formal scholarship (era 4) —
+  and they LEAD the Layer-2 list so a thin surplus still funds one. The dawn
+  knowledge output is now a trickle that accelerates as better keepers unlock.
+- **Knowledge is cumulative**: `decay_per_year` 0.02 → 0.00001 (the old value
+  imposed a ~50-yr decay-relaxation equilibrium that, not the thresholds, set the
+  pace). Thresholds now govern the climb.
+- **Comfort margin** (`commons_surplus_margin`): commons demographics chase a
+  surplus offset down by the margin, so the population settles at a modest
+  permanent surplus (~1.1–1.2) instead of the bare carrying capacity — leaving
+  headroom that funds the specialist/knowledge class. Without it the Malthusian
+  equilibrium sits at surplus 1.0 with zero specialists (the trap).
+- **Saturating knowledge→food coupling** (`knowledge_productivity_max/_halfsat`
+  replacing the linear `_coupling`): the carrying ceiling tends toward a realistic
+  ~26× limit instead of exploding ~1000× and crashing the surplus in the upper
+  eras.
+- **Persistent elite floor** (`commons_min_specialists_per_province`): a few
+  knowledge-keepers survive even famine/overshoot, so a stalled society keeps
+  creeping and climbs back out instead of dying in a Malthusian crash.
+- **Era thresholds** (eras.csv `knowledge_to_advance`) recalibrated to the new
+  dynamics.
+
+Result (fast-forward, [.society-history]): from the dawn, earthlike reaches the
+modern era (era 8) at year ~12,960 — vs ~12,000 of real history — with an
+accelerating arc (Neolithic ~5,900 yr; Bronze ~2,200; Iron ~770; Classical/
+Medieval/Early-Modern ~800–900 each; Industrial ~1,200). Garden, earthlike,
+barren-deathworld and fertile-deathworld ALL complete the climb and classify
+Thriving — i.e. a high World-Class world is not doomed (Earth is Class-12).
+
+Known rough edge (follow-up): the upper eras (6→8) run a thin/negative surplus —
+the population overshoots the saturating ceiling and the climb completes through
+demographic stress rather than comfortable development. Industrial (era 7) is
+~1,200 yr vs real ~300 because the rate decelerates there. A firmer demographic
+brake (target-seeking, not a fixed offset) would smooth this.

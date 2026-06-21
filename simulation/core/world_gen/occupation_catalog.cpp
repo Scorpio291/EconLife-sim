@@ -74,7 +74,7 @@ bool OccupationCatalog::load_csv(const std::string& filepath) {
             continue;
         }
         auto f = split_csv(line);
-        // occupation_key,display_name,layer,min_surplus[,knowledge_output]
+        // occupation_key,display_name,layer,min_surplus[,knowledge_output][,min_era]
         if (f.size() < 4)
             continue;
         OccupationDefinition o{};
@@ -84,6 +84,9 @@ bool OccupationCatalog::load_csv(const std::string& filepath) {
         o.layer = parse_u8(f[2], 1);
         o.min_surplus = parse_f(f[3], 1.0f);
         o.knowledge_output = f.size() > 4 ? parse_f(f[4], 0.0f) : 0.0f;  // optional column
+        o.min_era = f.size() > 5 ? parse_u8(f[5], 1) : 1;               // optional column
+        if (o.min_era == 0)
+            o.min_era = 1;
         loaded.push_back(std::move(o));
     }
     if (loaded.empty())
@@ -99,14 +102,28 @@ void OccupationCatalog::load_builtin_default() {
         uint8_t layer;
         float min_surplus;
         float knowledge_output;
+        uint8_t min_era;
     };
     static const Row rows[] = {
-        {"forager", "Forager", 1, 1.0f, 0.0f},   {"hunter", "Hunter", 1, 1.0f, 0.0f},
-        {"fisher", "Fisher", 1, 1.0f, 0.0f},     {"farmer", "Subsistence Farmer", 1, 1.0f, 0.0f},
-        {"herder", "Herder", 1, 1.0f, 0.0f},     {"artisan", "Artisan", 2, 1.10f, 0.0f},
-        {"builder", "Builder", 2, 1.20f, 0.0f},  {"healer", "Healer", 2, 1.20f, 0.0f},
-        {"trader", "Trader", 2, 1.15f, 0.0f},    {"elder", "Elder", 2, 1.10f, 0.2f},
-        {"scribe", "Scribe", 2, 1.25f, 0.6f},    {"scholar", "Scholar", 2, 1.35f, 1.0f},
+        {"forager", "Forager", 1, 1.0f, 0.0f, 1},
+        {"hunter", "Hunter", 1, 1.0f, 0.0f, 1},
+        {"fisher", "Fisher", 1, 1.0f, 0.0f, 1},
+        {"farmer", "Subsistence Farmer", 1, 1.0f, 0.0f, 1},
+        {"herder", "Herder", 1, 1.0f, 0.0f, 1},
+        // Knowledge-keepers lead the layer-2 list so the FIRST surplus-funded
+        // specialists are always them — otherwise a thin surplus margin (few
+        // specialists per province) never reaches them and the knowledge engine
+        // stalls. Their min_surplus sits below the commons equilibrium so they stay
+        // funded; era-gating (not surplus) is what staggers their arrival: elder
+        // (oral tradition) at the dawn, scribe with writing (Bronze Age), scholar with
+        // formal scholarship (Classical) — each a stronger knowledge source.
+        {"elder", "Elder", 2, 0.0f, 0.2f, 1},
+        {"scribe", "Scribe", 2, 0.0f, 0.6f, 2},
+        {"scholar", "Scholar", 2, 0.0f, 1.0f, 4},
+        {"artisan", "Artisan", 2, 1.10f, 0.0f, 1},
+        {"builder", "Builder", 2, 1.20f, 0.0f, 1},
+        {"healer", "Healer", 2, 1.20f, 0.0f, 1},
+        {"trader", "Trader", 2, 1.15f, 0.0f, 1},
     };
     occupations_.clear();
     uint16_t idx = 1;
@@ -118,6 +135,7 @@ void OccupationCatalog::load_builtin_default() {
         o.layer = r.layer;
         o.min_surplus = r.min_surplus;
         o.knowledge_output = r.knowledge_output;
+        o.min_era = r.min_era;
         occupations_.push_back(std::move(o));
     }
 }
@@ -140,6 +158,15 @@ std::vector<const OccupationDefinition*> OccupationCatalog::in_layer(uint8_t lay
     std::vector<const OccupationDefinition*> out;
     for (const auto& o : occupations_)
         if (o.layer == layer)
+            out.push_back(&o);
+    return out;
+}
+
+std::vector<const OccupationDefinition*> OccupationCatalog::in_layer_for_era(uint8_t layer,
+                                                                            uint8_t era) const {
+    std::vector<const OccupationDefinition*> out;
+    for (const auto& o : occupations_)
+        if (o.layer == layer && o.min_era <= era)
             out.push_back(&o);
     return out;
 }
