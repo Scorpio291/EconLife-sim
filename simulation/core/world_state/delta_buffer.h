@@ -257,6 +257,9 @@ struct RegionDelta {
     std::optional<float>
         subsistence_surplus_replacement;  // replacement; cohort_stats->subsistence_surplus_ratio
                                           // (commons food production / need this tick)
+    std::optional<float>
+        food_store_replacement;  // replacement; cohort_stats->food_store (granary stock,
+                                 // recomputed by the subsistence module from the year's net)
 };
 
 // NationDelta — national-level governance state (one per nation per tick at most).

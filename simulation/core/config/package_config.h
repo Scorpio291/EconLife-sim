@@ -552,18 +552,33 @@ struct SubsistenceConfig {
     // disables it. Active only in the commons regimes (same gate as production).
     float proto_capital_rate = 0.02f;
 
-    // Specialization: the share of a province's resident livelihoods that surplus
-    // can free from food work into Layer-2 specialists (artisan/healer/trader/...).
-    // 0 at surplus <= 1 (all hands needed for food), rising with surplus to this cap.
+    // Specialization ceiling: a society can't free MORE than this share of its people
+    // from food work, however productive it gets (not everyone can be a non-farmer).
+    // The actual specialist share is GROUNDED in the food balance below, not this cap.
     float max_specialist_fraction = 0.5f;
-    // Persistent elite floor: a province keeps at least this many Layer-2 specialists
-    // even when surplus is thin or negative — the sticky literate/ruling core (temples,
-    // elder councils, scholars) a society maintains through lean years before it would
-    // ever dissolve them. Because knowledge-keepers lead the Layer-2 list, this floor
-    // keeps the knowledge engine alive through famines/overshoot-crashes, so a stalled
-    // society keeps creeping forward and can lift its carrying ceiling back out of the
-    // trap rather than dying there. Commons path only (Layer-2 is inert in market eras).
-    uint32_t commons_min_specialists_per_province = 2;
+
+    // --- Granary food economy (grounded specialization + reserves) ---
+    // Specialists (incl. knowledge-keepers) are NOT funded by a heuristic surplus or a
+    // hand-placed floor: they are simply the people the farmers don't need. Each year
+    // the farmers produce enough to feed everyone (and, while reserves are low, a little
+    // extra to bank); whoever is left over is free to specialize. As knowledge raises
+    // yield, fewer farmers are needed to feed the population, so more people are freed —
+    // the grounded engine of rising specialization.
+    //
+    // The granary (cohort_stats.food_store, a conserved per-province stock) banks the
+    // production surplus up to `granary_reserve_years` of consumption and is drawn down
+    // in deficit years, so a bad harvest doesn't immediately starve the population or
+    // its elite. When farming below the reserve target, the society produces an extra
+    // `granary_topup_fraction` of need to refill the store.
+    float granary_reserve_years = 3.0f;    // granary capacity, in years of consumption
+    float granary_spoilage_rate = 0.05f;   // fraction of stored food lost per year (rot/pests).
+                                           // Maintaining reserves therefore demands a permanent
+                                           // production surplus (≈ spoilage × reserve), which is
+                                           // what frees a standing specialist class — grounded,
+                                           // not a margin.
+    float granary_build_rate = 0.10f;      // fraction of the reserve gap a society aims to close
+                                           // per year while under-stocked (extra farming).
+    uint32_t ticks_per_year = 365;         // for converting per-tick rates to annual stocks
 
     // Knowledge -> productivity (the Malthusian escape): accumulated knowledge (from
     // scholars) raises how many people a given land can feed, letting a society grow
@@ -593,13 +608,13 @@ struct KnowledgeConfig {
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
     std::vector<std::string> active_regimes = {"subsistence", "barter", "mercantile", "industrial"};
     float production_scalar = 0.4f;  // knowledge/year per unit of scholar knowledge_output
-    // Annual attrition. Civilizational knowledge is CUMULATIVE — it is essentially
-    // never lost on historical timescales (dark-age regression is a rare exception, not
-    // the rule, and is out of V1 scope). Proportional decay imposes an equilibrium
-    // ceiling (level -> production/decay); kept this tiny so even the dawn's thin
-    // knowledge trickle accumulates far past every era threshold, i.e. the era
-    // THRESHOLDS — not a decay ceiling — govern the pace of the climb.
-    float decay_per_year = 0.00001f;
+    // Annual attrition. Civilizational knowledge is CUMULATIVE — embodied in surviving
+    // people, practices and (later) writing, it is essentially never lost on historical
+    // timescales (dark-age regression is a rare exception, out of V1 scope). Zero here:
+    // a transient population dip must NOT erase accumulated knowledge, or a society that
+    // overshoots its food supply would lose its technique and lock into the Malthusian
+    // trap instead of recovering and climbing on. The era thresholds govern the pace.
+    float decay_per_year = 0.0f;
 };
 
 struct SeasonalAgricultureConfig {
@@ -1260,32 +1275,34 @@ struct PopulationAgingConfig {
     // market eras, where the commons module is inert), so this changes nothing
     // outside the pre-market regime. Pre-market: surplus > 1 grows the population
     // toward carrying capacity; surplus < 1 (famine) culls it back.
-    float food_surplus_birth_cap = 2.5f;          // max birth multiplier from surplus
-    float food_deficit_mortality_strength = 1.5f;  // extra mortality per unit of deficit
+    float food_surplus_birth_cap = 2.0f;          // max birth multiplier from surplus. A fed
+                                                  // population grows and consumes productivity gains
+                                                  // (the Malthusian reality), keeping the surplus
+                                                  // modest and the population tracking the carrying
+                                                  // ceiling rather than ballooning a huge surplus.
+    float food_deficit_mortality_strength = 4.0f;  // extra mortality per unit of deficit; a real
+                                                   // famine culls hard, so an overshot population
+                                                   // self-corrects back to its food supply
+                                                   // quickly rather than sticking in deficit
     // A surplus also RELIEVES mortality (well-fed people survive better), neutral at
     // surplus == 1.0. This lets a fed pre-market population hold/grow despite the
     // dawn's low stability inflating base mortality — and it stabilises the
     // population below carrying capacity under pressure, leaving a permanent surplus
     // margin (the headroom that funds specialists/scholars).
-    float food_surplus_mortality_relief = 0.6f;  // mortality cut per unit of surplus
-    float food_mortality_floor = 0.5f;           // mortality never falls below this fraction
-    // Pre-market (commons) demographics are FOOD-driven, not politics-driven: a
-    // subsistence band's births/deaths track the harvest, not the modern political
-    // "stability" proxy (which a dawn world tanks for simply lacking income/markets).
-    // In commons regimes the effective stability used by births/deaths is floored
-    // here so low modern-stability doesn't crush reproduction; surplus does the work.
-    float commons_stability_floor = 0.8f;
-    // Commons comfort margin. The food coupling is NEUTRAL at surplus == 1.0, so the
-    // dawn population's births/deaths balance right at the bare carrying capacity —
-    // leaving NO surplus headroom, so no labour is ever freed for specialists and the
-    // society is locked in the Malthusian trap. In commons regimes the demographics
-    // instead chase a surplus offset DOWN by this margin (they treat surplus below
-    // 1 + margin as lean and stop growing), so the population settles at a modest
-    // permanent surplus (~1 + margin). That margin funds a thin knowledge-elite
-    // (elders/scribes/scholars) — the slow engine that, over millennia, lifts the
-    // carrying ceiling and escapes the trap. Commons-only (inert in market eras, where
-    // surplus is 1.0 and the offset would otherwise misfire — so it is gated off).
-    float commons_surplus_margin = 0.30f;
+    float food_surplus_mortality_relief = 0.15f;  // mortality cut per unit of surplus (small: a
+                                                  // surplus eases survival only a little — disease
+                                                  // and the world's hazards, not food, dominate
+                                                  // pre-modern mortality)
+    float food_mortality_floor = 0.5f;            // mortality never falls below this fraction
+    // Pre-market (commons) demographic balance point — the Malthusian PREVENTIVE CHECK.
+    // A dawn society's births/deaths track the harvest, not the modern political
+    // "stability" proxy; commons demographics use this fixed value as the birth/death
+    // balance instead. It is set a little below the carrying ceiling so a fed population
+    // stabilises JUST below the maximum the land can feed (historically, preventive
+    // checks held populations short of absolute starvation) — that gap is the real,
+    // grounded surplus that frees a standing specialist class. Higher => population
+    // pushes closer to the ceiling (less surplus); lower => more headroom.
+    float commons_stability_floor = 0.78f;
     // Generational hardiness: a population's adaptation (cohort_stats.hardiness) drifts
     // toward the world's hazard level by this fraction per year — slow, generational.
     // Mortality scales with how far hardiness falls short of the world's demand, never

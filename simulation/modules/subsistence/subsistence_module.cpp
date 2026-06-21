@@ -64,9 +64,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     if (population == 0)
         return;
 
-    // Labour = working-age heads (the founding population works the land).
+    // Working-age fraction of the population is available to labour on the land.
     const float working_fraction = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
-    const float labor = static_cast<float>(population) * working_fraction;
 
     // Natural capital the population can draw food from this tick.
     const float natural_capital =
@@ -92,13 +91,73 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         1.0f - cfg_.seasonality_food_penalty *
                    (state.hazard_settings.seasonality - earth_hazard().seasonality),
         0.3f, 1.3f);
-    const float output = subsistence_output(natural_capital, labor, cfg_) * knowledge_factor *
-                         seasonality_factor * tech_food_factor;
-    const float ratio = surplus_ratio(output, population, cfg_);
+    // Carrying ceiling: the maximum food this land can yield given technique. Output
+    // saturates toward it with labour (diminishing returns). Specialists do not farm,
+    // so only the food-producers' labour counts toward output.
+    const float base_ceiling = cfg_.ceiling_per_capital_unit * natural_capital * knowledge_factor *
+                               seasonality_factor * tech_food_factor;
+    const float half = cfg_.labor_half_saturation > 0.0f ? cfg_.labor_half_saturation : 1.0f;
+    const float need = static_cast<float>(population) * cfg_.per_capita_food_per_tick;  // per tick
+    const float ticks_per_year =
+        cfg_.ticks_per_year > 0 ? static_cast<float>(cfg_.ticks_per_year) : 365.0f;
+
+    // The granary demands a permanent production surplus: stored grain spoils, so a
+    // society must keep producing extra just to hold its reserves, and more still while
+    // building them up. That standing demand (NOT a margin) is what frees a standing
+    // specialist class. Work per tick.
+    const float target_store = cfg_.granary_reserve_years * need * ticks_per_year;
+    const float spoilage = cfg_.granary_spoilage_rate * cs.food_store / ticks_per_year;  // /tick
+    const float build = cs.food_store < target_store
+                            ? cfg_.granary_build_rate * (target_store - cs.food_store) / ticks_per_year
+                            : 0.0f;
+    const float granary_demand = spoilage + build;  // extra food/tick the reserves require
+
+    // GROUNDED specialization: how many people must farm to feed everyone AND keep the
+    // granary whole. Whoever is left is free to specialize. As knowledge raises the
+    // ceiling, fewer farmers are needed, so more are freed — specialization rises with
+    // technique, with no heuristic cap doing the work.
+    const float desired_output = need + granary_demand;
+    const float total_labor = static_cast<float>(population) * working_fraction;
+    float labor_needed;
+    if (base_ceiling <= 0.0f || desired_output >= base_ceiling) {
+        labor_needed = total_labor;  // can't reach the target even with everyone farming
+    } else {
+        labor_needed = -half * std::log(1.0f - desired_output / base_ceiling);
+    }
+    const float farmers_needed = labor_needed / std::max(working_fraction, 0.01f);
+    float specialists_people = static_cast<float>(population) - farmers_needed;
+    specialists_people = std::clamp(specialists_people, 0.0f,
+                                    static_cast<float>(population) * cfg_.max_specialist_fraction);
+    const float specialist_fraction =
+        population > 0 ? specialists_people / static_cast<float>(population) : 0.0f;
+
+    // Actual harvest from the farmers who remain on the land.
+    const float farm_labor = (static_cast<float>(population) - specialists_people) * working_fraction;
+    const float output = base_ceiling * (1.0f - std::exp(-std::max(0.0f, farm_labor) / half));
+
+    // Granary: bank the year's net food (after feeding everyone and losing spoilage),
+    // or draw it down, once per year. A conserved, capped per-province stock.
+    const float net_per_tick = output - need - spoilage;
+    float new_store = cs.food_store;
+    const bool annual = state.current_tick > 0 && state.current_tick % cfg_.ticks_per_year == 0;
+    if (annual)
+        new_store = std::clamp(cs.food_store + net_per_tick * ticks_per_year, 0.0f, target_store);
+
+    // The long-run food signal that paces population growth: output relative to what a
+    // sustainable society must produce — feed everyone AND replace the grain that spoils
+    // out of a full reserve. At output == need + full upkeep this reads 1.0, so the
+    // population settles at its sustainable ceiling, LEAVING the upkeep as a permanent
+    // surplus that frees the specialist class. Above it the population can grow; below,
+    // it eases off. (Starvation is handled separately, gated on the granary running dry.)
+    const float full_upkeep =
+        cfg_.granary_spoilage_rate * cfg_.granary_reserve_years * need;  // per tick, at full store
+    const float growth_surplus =
+        need > 0.0f ? output / (need + full_upkeep) : 1.0f;
 
     RegionDelta rd{};
     rd.region_id = prov.region_id;
-    rd.subsistence_surplus_replacement = ratio;
+    rd.subsistence_surplus_replacement = growth_surplus;
+    rd.food_store_replacement = new_store;
     province_delta.region_deltas.push_back(rd);
 
     if (province_idx >= state.npc_indices_by_home_province.size())
@@ -108,27 +167,23 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         return;
 
     // Livelihoods: assign each resident an occupation. Everyone is a food producer
-    // (Layer 1) by default; a surplus frees a share into Layer-2 specialists
-    // (artisan/healer/trader/...). These are self-employed livelihoods, NOT firms —
-    // a business only crystallizes later when a livelihood employs others.
+    // (Layer 1) by default; the food-balance share above is freed into Layer-2
+    // specialists (knowledge-keepers first). Self-employed livelihoods, NOT firms.
     const auto layer1 = state.occupation_catalog.in_layer(1);
     // Layer-2 specialists available at this era: knowledge-keepers unlock over time
     // (elder at the dawn -> scribe once writing exists -> scholar with formal
     // scholarship), so the knowledge trickle starts tiny and accelerates.
     const auto layer2 = state.occupation_catalog.in_layer_for_era(2, state.technology.current_era);
-    // Surplus frees specialists, but a persistent elite floor survives even thin/negative
-    // surplus (keeping the knowledge engine — first in the Layer-2 list — alive through
-    // famines so a stalled society can still climb back out). Capped at the resident count.
-    uint32_t specialists = specialist_count(static_cast<uint32_t>(residents.size()), ratio, cfg_);
-    specialists = std::max(specialists, cfg_.commons_min_specialists_per_province);
-    specialists = std::min(specialists, static_cast<uint32_t>(residents.size()));
+    const uint32_t specialists = std::min(
+        static_cast<uint32_t>(static_cast<float>(residents.size()) * specialist_fraction),
+        static_cast<uint32_t>(residents.size()));
 
     // Proto-capital: food beyond need is stored (grain/herds/tools), controlled by
     // the resident heads/founders — the origin of capital. Split evenly; it is the
     // wealth that later funds the first firms (genesis is founder-capital-gated).
-    const float surplus_food = output - static_cast<float>(population) * cfg_.per_capita_food_per_tick;
+    const float surplus_food = output - need;
     const float proto_share =
-        (cfg_.proto_capital_rate > 0.0f && ratio > 1.0f && surplus_food > 0.0f)
+        (cfg_.proto_capital_rate > 0.0f && surplus_food > 0.0f)
             ? (cfg_.proto_capital_rate * surplus_food) / static_cast<float>(residents.size())
             : 0.0f;
 
@@ -138,14 +193,13 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
             continue;
         const NPC& npc = state.significant_npcs[idx];
 
-        // Choose this resident's livelihood.
+        // Choose this resident's livelihood. The food balance already decided HOW MANY
+        // can be freed from farming; here we just spread them across the era's available
+        // Layer-2 roles, knowledge-keepers first. Everyone else farms (Layer 1).
         uint16_t occ = npc.occupation;
         const OccupationDefinition* chosen = nullptr;
-        if (i < specialists && !layer2.empty()) {
-            const OccupationDefinition* cand = layer2[i % layer2.size()];
-            if (ratio >= cand->min_surplus)
-                chosen = cand;
-        }
+        if (i < specialists && !layer2.empty())
+            chosen = layer2[i % layer2.size()];
         if (chosen == nullptr && !layer1.empty())
             chosen = layer1[i % layer1.size()];
         if (chosen != nullptr)

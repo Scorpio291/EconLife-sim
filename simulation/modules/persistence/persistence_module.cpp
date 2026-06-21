@@ -417,6 +417,8 @@ void write_province(ByteWriter& w, const Province& p) {
         w.write_float(p.cohort_stats->subsistence_surplus_ratio);
         // v23: generational population hardiness.
         w.write_float(p.cohort_stats->hardiness);
+        // v24: granary food store (commons food economy).
+        w.write_float(p.cohort_stats->food_store);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1265,6 +1267,10 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
         // v23: generational population hardiness. Older saves default to 1.0.
         if (schema_ver >= 23u) {
             p.cohort_stats->hardiness = r.read_float();
+        }
+        // v24: granary food store. Older saves default to 0 (no reserves).
+        if (schema_ver >= 24u) {
+            p.cohort_stats->food_store = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but

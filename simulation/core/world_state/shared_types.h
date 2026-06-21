@@ -277,6 +277,15 @@ struct RegionCohortStats {
     // is behaviour-neutral when the module is inert (modern, market-fed eras).
     float subsistence_surplus_ratio = 1.0f;
 
+    // Granary: the province's stored food (a conserved, located resource). The
+    // commons food economy banks each year's production surplus here, up to a finite
+    // capacity, and draws it down in deficit years — so a bad harvest doesn't
+    // immediately starve the population (or its non-farming specialists). It is the
+    // grounded buffer that lets a knowledge-elite survive lean years instead of a
+    // hand-placed floor. Units: food (same as one tick's production/consumption);
+    // empty (0) means no reserves. Behaviour-neutral in market eras (not updated).
+    float food_store = 0.0f;
+
     // Population hardiness: how adapted this people is to its world's hazards
     // (Earth-normalized, 1.0 = Earth-adapted). A people native to a harsh world has
     // high hardiness; one bred on a gentle world, low. It DRIFTS over generations

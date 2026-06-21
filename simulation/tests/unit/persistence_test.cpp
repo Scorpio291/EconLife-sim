@@ -118,7 +118,8 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // v21: GlobalTechnologyState knowledge_level (knowledge engine).
     // v22: WorldState.hazard_settings (world spectrum).
     // v23: cohort_stats.hardiness (generational adaptation).
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 23);
+    // v24: cohort_stats.food_store (granary / commons food economy).
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 24);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

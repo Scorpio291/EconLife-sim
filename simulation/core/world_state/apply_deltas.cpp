@@ -604,6 +604,12 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         v = 10.0f;
                     cs.subsistence_surplus_ratio = v;
                 }
+                if (d.food_store_replacement.has_value()) {
+                    // Replacement; the subsistence module folds the year's net food
+                    // into the granary and writes the new (clamped) stock here.
+                    float v = *d.food_store_replacement;
+                    cs.food_store = (v >= 0.0f) ? v : 0.0f;
+                }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =
                         clamp01(safe_add(prov.community.cohesion, *d.cohesion_delta));

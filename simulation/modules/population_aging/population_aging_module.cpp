@@ -89,9 +89,15 @@ bool is_retiree_group(DemographicGroup g) {
 // Annual births (added to youth cohorts) and per-cohort deaths, applied in
 // place to a working copy of the cohort map. Deterministic: integer rounding,
 // canonical group order.
+// birth_surplus drives fertility (long-run food security: can the land sustainably
+// support more people, reserves included?). famine_surplus drives starvation mortality
+// (immediate availability, buffered by the granary). They differ in the commons: a
+// society at its sustainable ceiling has birth_surplus ~1 (stops growing) but, with full
+// granaries, famine_surplus ~1 (nobody starves). Both are 1.0 in market eras (neutral).
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
-                           float sick_rate, float addiction_rate, float food_surplus,
-                           float hazard_mortality, const PopulationAgingConfig& cfg) {
+                           float sick_rate, float addiction_rate, float birth_surplus,
+                           float famine_surplus, float hazard_mortality,
+                           const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
         (void)g;
@@ -102,14 +108,15 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     // so market eras (where surplus is always 1.0) are unchanged. A surplus lifts
     // births toward a cap AND relieves mortality (well-fed survival); a deficit
     // (surplus < 1) raises mortality.
-    const float surplus = std::clamp(food_surplus, 0.0f, 10.0f);
-    const float birth_food_factor = std::clamp(surplus, 0.0f, cfg.food_surplus_birth_cap);
+    const float b_surplus = std::clamp(birth_surplus, 0.0f, 10.0f);
+    const float birth_food_factor = std::clamp(b_surplus, 0.0f, cfg.food_surplus_birth_cap);
+    const float f_surplus = std::clamp(famine_surplus, 0.0f, 10.0f);
     float famine_mortality_factor;
-    if (surplus < 1.0f) {
-        famine_mortality_factor = 1.0f + cfg.food_deficit_mortality_strength * (1.0f - surplus);
+    if (f_surplus < 1.0f) {
+        famine_mortality_factor = 1.0f + cfg.food_deficit_mortality_strength * (1.0f - f_surplus);
     } else {
         famine_mortality_factor = std::max(
-            cfg.food_mortality_floor, 1.0f - cfg.food_surplus_mortality_relief * (surplus - 1.0f));
+            cfg.food_mortality_floor, 1.0f - cfg.food_surplus_mortality_relief * (f_surplus - 1.0f));
     }
 
     // Births: survival scales with stability and healthcare (proxied by the
@@ -215,13 +222,17 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 const bool commons =
                     era && (era->economic_regime == "subsistence" || era->economic_regime == "barter");
 
-                // Pre-market demographics are food-driven: floor the effective
-                // stability in commons regimes so the modern political "stability"
-                // proxy (which a subsistence world tanks for lacking markets) doesn't
-                // crush births — surplus drives the dynamics instead.
+                // Pre-market demographics are FOOD-driven, not politics-driven. A dawn
+                // society has no modern institutions, and its intrinsic growth was ~zero
+                // (Malthusian stagnation: high fertility balanced by high mortality) —
+                // population moved only with the harvest. So commons demographics use a
+                // FIXED baseline (the birth==death point), letting the food/reserve
+                // signal alone govern growth; otherwise the modern stability proxy leaks
+                // a permanent intrinsic growth that overshoots the food ceiling and traps
+                // the society at bare subsistence.
                 float eff_stability = province.conditions.stability_score;
                 if (commons)
-                    eff_stability = std::max(eff_stability, cfg_.commons_stability_floor);
+                    eff_stability = cfg_.commons_stability_floor;
 
                 // The world's hazard pressure (disease/predators/radiation/atmosphere/
                 // geology/gravity-falls), Earth-normalized.
@@ -238,15 +249,18 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 hazard_mortality *=
                     state.tech_effects_for_era(state.technology.current_era).mortality_mult;
 
-                // Commons comfort margin: the demographics chase a surplus offset down
-                // by the margin, so the population settles at ~1 + margin (a permanent
-                // surplus that funds the knowledge-elite) instead of bare subsistence.
-                // Inert in market eras (surplus is 1.0 there).
-                float demo_surplus = cs.subsistence_surplus_ratio;
-                if (commons)
-                    demo_surplus = std::max(0.0f, demo_surplus - cfg_.commons_surplus_margin);
+                // Fertility tracks the long-run food signal the subsistence module writes
+                // (output vs need + reserve upkeep): population grows only when the land
+                // can sustainably support more, and stops at the ceiling — leaving the
+                // upkeep surplus that funds specialists. Starvation, separately, fires
+                // only once the granary itself is exhausted (a real reserve buffer), so a
+                // population at its ceiling holds steady instead of either starving or
+                // breeding into collapse.
+                const float birth_surplus = cs.subsistence_surplus_ratio;
+                const float famine_surplus =
+                    (commons && cs.food_store <= 0.0f) ? cs.subsistence_surplus_ratio : 1.0f;
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
-                                      demo_surplus, hazard_mortality, cfg_);
+                                      birth_surplus, famine_surplus, hazard_mortality, cfg_);
 
                 // Hardiness drifts toward the world's hazard level over generations
                 // (adaptation under sustained pressure; softening under ease).
