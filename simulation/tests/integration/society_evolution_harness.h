@@ -109,7 +109,8 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
 // capturing one SocietySnapshot per year (plus the t=0 snapshot).
 inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t npc_count,
                                                       uint32_t years, const WorldArchetype& arch,
-                                                      float founding_hardiness = 0.0f) {
+                                                      float founding_hardiness = 0.0f,
+                                                      bool fast_forward = false) {
     WorldGeneratorConfig config{};
     config.seed = seed;
     config.province_count = 6;
@@ -134,8 +135,17 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     series.reserve(years + 1);
     series.push_back(capture_society(world, 0));
     for (uint32_t y = 0; y < years; ++y) {
-        for (uint32_t t = 0; t < 365; ++t)
+        if (fast_forward) {
+            // Coarse history stride: one orchestrator step per year, landed on a
+            // year-aligned tick so the annual dynamics (knowledge, births/deaths,
+            // era advance) fire. ~365x fewer ticks. Per-day effects under-count —
+            // fine for pre-market history-gen (no deferred work at the dawn).
+            world.current_tick = (y + 1) * 365u;
             orch.execute_tick(world, pool);
+        } else {
+            for (uint32_t t = 0; t < 365; ++t)
+                orch.execute_tick(world, pool);
+        }
         series.push_back(capture_society(world, y + 1));
     }
     return series;

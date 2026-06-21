@@ -125,7 +125,18 @@ inline float hazard_mortality_multiplier(const WorldHazardSettings& s) {
 
 inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_hazard()}; }
 inline WorldArchetype archetype_earthlike() { return {"earthlike", 1.0f, earth_hazard()}; }
+
+// A BARREN deathworld: high hazard AND scarce resources. This is the one that
+// genuinely struggles — and it struggles because of the low Bounty, not the Class.
 inline WorldArchetype archetype_deathworld() { return {"deathworld", 0.4f, deathworld_hazard()}; }
+
+// A FERTILE deathworld: high hazard (deathworld band, ~Class 13) but resource-rich
+// (earthlike+ Bounty). Earth itself is a Class-12 fertile deathworld that thrived —
+// a hostile world need not stall if it is also bountiful, because the population's
+// generational hardiness adapts to the hazard while the Bounty feeds development.
+inline WorldArchetype archetype_fertile_deathworld() {
+    return {"fertile_deathworld", 1.2f, deathworld_hazard()};
+}
 
 // ---------------------------------------------------------------------------
 // Per-channel effects of the individual settings (each dial does its own thing).

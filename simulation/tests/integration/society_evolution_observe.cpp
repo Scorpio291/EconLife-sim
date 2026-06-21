@@ -80,10 +80,14 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
     };
     const Run runs[] = {{"GARDEN", archetype_garden()},
                         {"EARTHLIKE", archetype_earthlike()},
-                        {"DEATHWORLD", archetype_deathworld()}};
+                        {"DEATHWORLD (barren)", archetype_deathworld()},
+                        {"FERTILE DEATHWORLD (Earth-like)", archetype_fertile_deathworld()}};
     for (const auto& r : runs) {
-        auto series = run_society_years(7, kNpcs, kYears, r.arch);
-        std::printf("\n=== %s: era reached / year ===\n", r.label);
+        // fast_forward: coarse yearly stride so 1200 years of history runs in seconds.
+        auto series = run_society_years(7, kNpcs, kYears, r.arch, /*founding_hardiness=*/0.0f,
+                                        /*fast_forward=*/true);
+        std::printf("\n=== %s (Class %.1f, bounty %.2f): era reached / year ===\n", r.label,
+                    world_class(r.arch.hazard), r.arch.bounty);
         int prev_era = 0;
         for (const auto& s : series) {
             if (s.era > prev_era) {
