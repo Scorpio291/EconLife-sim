@@ -175,6 +175,8 @@ enum class Trajectory {
     Extinct,          // population collapsed to ~0
     OvershootCrash,   // grew then crashed hard (Malthusian overshoot)
     BareSubsistence,  // survived, but flat: no surplus to spend, no specialization
+    Stalled,          // developed (climbed eras) then plateaued at the Malthusian wall —
+                      // population at carrying capacity, surplus gone, advancement frozen
     Developing,       // sustained surplus + emerging specialization/capital
     Thriving,         // growing population AND real specialization/wealth/advancement
 };
@@ -187,6 +189,8 @@ inline const char* trajectory_name(Trajectory t) {
             return "OvershootCrash";
         case Trajectory::BareSubsistence:
             return "BareSubsistence";
+        case Trajectory::Stalled:
+            return "Stalled";
         case Trajectory::Developing:
             return "Developing";
         case Trajectory::Thriving:
@@ -223,6 +227,10 @@ inline Trajectory classify_trajectory(const std::vector<SocietySnapshot>& s) {
         return Trajectory::Thriving;
     if (last.mean_surplus > 1.0 && (specialized || wealth))
         return Trajectory::Developing;
+    // Climbed real eras but ended flat (specialists gone, no surplus) — developed, then
+    // hit the Malthusian wall and plateaued, rather than never developing at all.
+    if (advanced && !specialized && last.mean_surplus <= 1.0)
+        return Trajectory::Stalled;
     return Trajectory::BareSubsistence;
 }
 

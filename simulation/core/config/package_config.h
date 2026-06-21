@@ -553,9 +553,12 @@ struct SubsistenceConfig {
     float proto_capital_rate = 0.02f;
 
     // Specialization ceiling: a society can't free MORE than this share of its people
-    // from food work, however productive it gets (not everyone can be a non-farmer).
-    // The actual specialist share is GROUNDED in the food balance below, not this cap.
-    float max_specialist_fraction = 0.5f;
+    // from food work. Pre-industrial economies ran ~80-90% farmers, so a non-farming
+    // share above ~10-15% is not physically sustainable on commons agriculture. The
+    // actual specialist share is GROUNDED in the food balance below; this is the hard
+    // upper bound that keeps the knowledge climb at a believable pace and the population
+    // tracking the carrying ceiling (most hands stay on the land).
+    float max_specialist_fraction = 0.15f;
 
     // --- Granary food economy (grounded specialization + reserves) ---
     // Specialists (incl. knowledge-keepers) are NOT funded by a heuristic surplus or a
@@ -1302,7 +1305,7 @@ struct PopulationAgingConfig {
     // checks held populations short of absolute starvation) — that gap is the real,
     // grounded surplus that frees a standing specialist class. Higher => population
     // pushes closer to the ceiling (less surplus); lower => more headroom.
-    float commons_stability_floor = 0.78f;
+    float commons_stability_floor = 0.76f;
     // Generational hardiness: a population's adaptation (cohort_stats.hardiness) drifts
     // toward the world's hazard level by this fraction per year — slow, generational.
     // Mortality scales with how far hardiness falls short of the world's demand, never

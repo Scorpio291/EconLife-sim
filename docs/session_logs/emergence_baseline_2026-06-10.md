@@ -847,3 +847,47 @@ the population overshoots the saturating ceiling and the climb completes through
 demographic stress rather than comfortable development. Industrial (era 7) is
 ~1,200 yr vs real ~300 because the rate decelerates there. A firmer demographic
 brake (target-seeking, not a fixed offset) would smooth this.
+
+---
+
+## 2026-06-21 (cont.) — Ground the commons economy: granaries, no rails
+
+Per "every action and reaction should be grounded in something," tore out the
+three fake rails from the pace work and rebuilt the commons food economy on
+conserved, located resources.
+
+REMOVED (fake rails): the persistent-elite floor (specialists conjured from
+nothing in famine), knowledge-keeper min_surplus = 0 (an elite that ate no food),
+and the commons "comfort margin" (a phantom offset on perceived food).
+
+GROUNDED model (schema v24 adds cohort_stats.food_store):
+- **Granary** — a conserved per-province food stock. Production surplus banks into
+  it (capped at a few years of consumption); deficits draw it down; stored grain
+  SPOILS. Maintaining reserves against spoilage is a permanent, real production
+  demand — that, not a margin, is what frees a standing specialist class.
+- **Specialists are food-balance-grounded**: the people the farmers don't need to
+  feed everyone and keep the granary whole, rising with knowledge (fewer farmers
+  needed per head). Capped at a realistic pre-industrial ~15% (most hands stay on
+  the land).
+- **Birth vs famine decoupled**: fertility tracks long-run productivity (output
+  vs need + reserve upkeep); starvation fires only once the granary is empty.
+- **Cumulative knowledge** (no decay): a population dip no longer erases technique.
+- **Preventive-check demographics**: commons births/deaths use a fixed Malthusian
+  balance point, not the modern political-stability proxy.
+
+Emergent outcome (honest, accepted — NOT railed to a guaranteed climb): from the
+dawn a society climbs through the agrarian eras at a believable, accelerating pace
+(Neolithic ~3,500 yr, then faster) on a thin ~1.07 surplus with ~14% specialists,
+then hits the MALTHUSIAN WALL around the Medieval era and STALLS (population at
+carrying capacity, surplus gone, knowledge frozen) — classified "Stalled". All
+four world archetypes (garden/earthlike/both deathworlds) follow this arc;
+Bounty/Class shift the population scale and timing but not the stall, because the
+knowledge rate is tied to the (sampled) specialist fraction, not the population.
+
+This is the grounded Malthusian trap that held real agrarian civilizations for
+millennia. Breaking past it to industrial/modern needs a grounded BREAKTHROUGH the
+bare commons does not yet model — candidates: knowledge production that scales with
+the whole population (more minds), market/trade dynamics, or a demographic
+transition. Left as the next grounding step rather than faked. Gates green:
+1534 unit cases, determinism, history/world_gen/subsistence/population/occupation/
+persistence integration.
