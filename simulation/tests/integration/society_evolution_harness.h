@@ -18,6 +18,7 @@
 
 #include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
+#include "core/world_gen/era_catalog.h"
 #include "core/tick/tick_orchestrator.h"
 #include "core/world_gen/world_class.h"
 #include "core/world_gen/world_generator.h"
@@ -50,6 +51,7 @@ struct SocietySnapshot {
     uint32_t businesses = 0;           // emergent firms
     int era = 0;
     float knowledge = 0.0f;            // accumulated knowledge_level
+    bool reached_market = false;       // left the commons for a market era (climb complete)
     bool extinct = false;              // population collapsed to ~0
 };
 
@@ -74,6 +76,9 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     s.year = year;
     s.era = static_cast<int>(w.technology.current_era);
     s.knowledge = w.technology.knowledge_level;
+    const EraDefinition* edef = w.era_catalog.by_index(w.technology.current_era);
+    s.reached_market =
+        edef && edef->economic_regime != "subsistence" && edef->economic_regime != "barter";
 
     double surplus_sum = 0.0;
     int prov_with_cohorts = 0;
@@ -210,6 +215,11 @@ inline Trajectory classify_trajectory(const std::vector<SocietySnapshot>& s) {
     if (last.extinct || last.total_population <= 0.0)
         return Trajectory::Extinct;
 
+    // Left the commons for a market era: the dawn climb completed all the way to a
+    // money economy — the success terminus (the modern game takes over from here).
+    if (last.reached_market)
+        return Trajectory::Thriving;
+
     double peak = 0.0;
     for (const auto& snap : s)
         peak = std::max(peak, snap.total_population);
@@ -222,9 +232,10 @@ inline Trajectory classify_trajectory(const std::vector<SocietySnapshot>& s) {
     const bool wealth = last.total_capital > 0.0;
     const bool advanced = last.era > first.era || last.businesses > 0;
 
-    if (grew && specialized && (wealth || advanced) &&
-        (last.specialist_fraction >= 0.2 || advanced))
-        return Trajectory::Thriving;
+    // Still in the commons but genuinely developing (climbing eras, specialists, a
+    // surplus) — on its way, but it has not completed the climb to a market economy.
+    if (advanced && specialized && (wealth || last.mean_surplus > 1.0))
+        return Trajectory::Developing;
     if (last.mean_surplus > 1.0 && (specialized || wealth))
         return Trajectory::Developing;
     // Climbed real eras but ended flat (specialists gone, no surplus) — developed, then

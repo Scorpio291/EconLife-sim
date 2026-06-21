@@ -891,3 +891,45 @@ the whole population (more minds), market/trade dynamics, or a demographic
 transition. Left as the next grounding step rather than faked. Gates green:
 1534 unit cases, determinism, history/world_gen/subsistence/population/occupation/
 persistence integration.
+
+---
+
+## 2026-06-21 (cont.) — Adversity drives invention (Boserup + Deathworlders)
+
+Per "a harsher world promotes adaptation, like the tech leaps from WW2": knowledge
+is no longer produced only by a thin sampled elite. Added a grounded PRESSURE term
+to the knowledge engine (KnowledgeConfig.population_innovation_rate + adversity_*):
+
+  production = (dedicated_specialists + population_innovation) * pressure * tech_mult
+  pressure   = base + hazard_weight*(world_hazard - gentle) + scarcity_weight*scarcity
+
+- Boserup: a population pressing on its food supply (scarcity) intensifies —
+  necessity is the mother of invention. This gives a GROUNDED escape from the
+  Malthusian wall (the scarcity at the wall spurs the innovation that lifts the
+  ceiling) instead of a hand-placed floor.
+- Deathworlders: a hard world (high World-Class hazard) forges capability — higher
+  baseline drive.
+- Scales with the WHOLE population (more minds), not the 200-NPC sample — so the
+  World-Class/Bounty spectrum finally MATTERS.
+
+Era thresholds rescaled (~1.8x) to anchor Class-12 earthlike (real Earth) near the
+real ~12,000-yr dawn->modern span. New classification: reaching a market era =
+Thriving (climb complete); commons progress = Developing; climbed-then-flat =
+Stalled.
+
+Emergent spectrum ([.society-history], fast-forward), and it now reads like the
+premise intended:
+- GARDEN (Class 2.5, comfortable): slowest — only Bronze Age after 13,000 yr.
+  Low pressure -> complacency -> creeps. (Developing)
+- EARTHLIKE (Class 12): reaches the modern era ~year 11,000 — ~ real Earth.
+  (Thriving)
+- FERTILE DEATHWORLD (Class 13 + rich): FASTEST to modern (~9,950) — adversity
+  AND resources. (Thriving)
+- BARREN DEATHWORLD (Class 13 + poor): driven hard but too few minds — develops
+  then honestly STALLS at the Medieval wall. (Stalled)
+
+So: comfortable worlds stagnate, hard worlds are driven, and a hard world still
+needs the population/resources to carry the breakthrough — Earth (a Class-12
+deathworld) thrives. Honest stalls remain for marginal worlds; nothing is railed.
+Gates green: 1534 unit, determinism, history/world_gen/subsistence/population/
+knowledge/occupation/persistence integration.

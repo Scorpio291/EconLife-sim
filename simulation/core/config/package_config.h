@@ -618,6 +618,22 @@ struct KnowledgeConfig {
     // overshoots its food supply would lose its technique and lock into the Malthusian
     // trap instead of recovering and climbing on. The era thresholds govern the pace.
     float decay_per_year = 0.0f;
+
+    // --- Adversity drives invention (Boserup intensification + the Deathworlders
+    // premise) ---
+    // Knowledge is not produced only by a thin dedicated elite. Under PRESSURE — a hard
+    // world, or a population pressing on its food supply — the whole population
+    // innovates: necessity is the mother of invention (Boserup's answer to Malthus;
+    // the WW2/space-race leaps). This term scales with the WHOLE population (more minds)
+    // and with adversity, so (a) it gives a grounded escape from the Malthusian wall
+    // (scarcity itself spurs the intensification that lifts the ceiling), and (b) harsh
+    // worlds out-innovate comfortable gardens, making the World-Class spectrum matter.
+    float population_innovation_rate = 1.5e-6f;  // knowledge/yr per person at unit pressure
+    float adversity_base = 0.35f;               // drive with no special pressure (idle curiosity)
+    float adversity_hazard_weight = 0.6f;       // drive from the world's hazard above a gentle one
+    float adversity_scarcity_weight = 1.4f;     // drive from food scarcity (Malthusian pressure)
+    float adversity_garden_hazard = 0.45f;      // hazard level below which a world is "comfortable"
+    float adversity_pressure_cap = 3.0f;        // ceiling on the pressure multiplier
 };
 
 struct SeasonalAgricultureConfig {
