@@ -43,6 +43,12 @@ class DesignerDrugModule : public ITickModule {
     static float accumulate_evidence_weight(float current, float new_weight);
 
    private:
+    // Emit this compound's market supply for the tick, grounded in the creator's
+    // criminal operation and bottlenecked on real precursor stock (which it
+    // consumes). No operation or no precursors -> no supply.
+    void emit_grounded_supply(const WorldState& state, const DesignerDrugCompound& compound,
+                              DeltaBuffer& delta) const;
+
     DesignerDrugConfig cfg_;
     std::vector<DesignerDrugCompound> compounds_;
 };

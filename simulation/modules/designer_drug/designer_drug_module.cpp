@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstring>
 
+#include "core/world_state/apply_deltas.h"  // lookup_good_id
+#include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 
@@ -52,13 +54,7 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // informal market via a successor product line; with no successor,
             // supply drops to zero (INTERFACE).
             if (compound.has_successor) {
-                constexpr float BASE_SUPPLY_PER_TICK = 10.0f;
-                MarketDelta supply_entry;
-                supply_entry.good_id = compound.compound_id;
-                supply_entry.region_id = compound.province_id;
-                supply_entry.supply_delta =
-                    BASE_SUPPLY_PER_TICK * compound.market_margin_multiplier;
-                delta.market_deltas.push_back(supply_entry);
+                emit_grounded_supply(state, compound, delta);
             }
             compound.market_margin_multiplier =
                 compute_market_margin(compound.stage, compound.has_successor);
@@ -145,17 +141,74 @@ void DesignerDrugModule::execute(const WorldState& state, DeltaBuffer& delta) {
         // tick (scheduled compounds are handled at the top of the loop).
         if (compound.stage == SchedulingStage::unscheduled ||
             compound.stage == SchedulingStage::review_initiated) {
-            // Use compound_id as the goods key proxy (maps to "designer_drug_{id}" in goods.csv)
-            constexpr float BASE_SUPPLY_PER_TICK = 10.0f;  // units per tick at baseline
-            MarketDelta supply_entry;
-            supply_entry.good_id = compound.compound_id;
-            supply_entry.region_id = compound.province_id;
-            supply_entry.supply_delta = BASE_SUPPLY_PER_TICK * compound.market_margin_multiplier;
-            delta.market_deltas.push_back(supply_entry);
+            emit_grounded_supply(state, compound, delta);
         }
 
         compound.market_margin_multiplier =
             compute_market_margin(compound.stage, compound.has_successor);
+    }
+}
+
+void DesignerDrugModule::emit_grounded_supply(const WorldState& state,
+                                              const DesignerDrugCompound& compound,
+                                              DeltaBuffer& delta) const {
+    // Production requires a real operation: the creator's criminal business in the
+    // compound's province. No operation -> no supply (a compound cannot make itself).
+    const NPCBusiness* creator = nullptr;
+    for (const auto& biz : state.npc_businesses) {
+        if (biz.owner_id == compound.creator_actor_id &&
+            biz.province_id == compound.province_id && biz.criminal_sector) {
+            creator = &biz;
+            break;
+        }
+    }
+    if (creator == nullptr)
+        return;
+
+    // Per-tick capacity, scaled by the market margin (legal status makes the line
+    // more or less worth running). Bottlenecked on REAL precursor stock located in
+    // the province; the precursors are physically consumed (conservation) — you
+    // cannot synthesise a compound from precursors you do not have.
+    float capacity = cfg_.base_output_per_tick * compound.market_margin_multiplier;
+    if (capacity <= 0.0f)
+        return;
+
+    float production = capacity;
+    float precursor_consumed = 0.0f;
+    uint32_t precursor_gid = 0;
+    if (!cfg_.precursor_good.empty() && cfg_.precursor_ratio > 0.0f) {
+        precursor_gid = lookup_good_id(state, cfg_.precursor_good);
+        float available = 0.0f;
+        if (precursor_gid != 0) {
+            const uint64_t pkey = (static_cast<uint64_t>(precursor_gid) << 32) |
+                                  static_cast<uint64_t>(compound.province_id);
+            auto it = state.market_index_by_good_province.find(pkey);
+            if (it != state.market_index_by_good_province.end() &&
+                it->second < state.regional_markets.size()) {
+                available = std::max(0.0f, state.regional_markets[it->second].supply);
+            }
+        }
+        production = std::min(capacity, available / cfg_.precursor_ratio);
+        precursor_consumed = production * cfg_.precursor_ratio;
+    }
+    if (production <= 0.0f)
+        return;
+
+    MarketDelta supply_entry;
+    supply_entry.good_id = compound.compound_id;
+    supply_entry.region_id = compound.province_id;
+    supply_entry.supply_delta = production;
+    delta.market_deltas.push_back(supply_entry);
+
+    // Conservation: the precursors physically consumed leave the located stock, with
+    // a matching demand signal for price formation.
+    if (precursor_gid != 0 && precursor_consumed > 0.0f) {
+        MarketDelta precursor_md;
+        precursor_md.good_id = precursor_gid;
+        precursor_md.region_id = compound.province_id;
+        precursor_md.supply_delta = -precursor_consumed;
+        precursor_md.demand_buffer_delta = precursor_consumed;
+        delta.market_deltas.push_back(precursor_md);
     }
 }
 

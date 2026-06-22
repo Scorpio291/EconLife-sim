@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/good_id_hash.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/designer_drug/designer_drug_module.h"
@@ -98,6 +99,24 @@ TEST_CASE("DesignerDrug: scheduled-with-successor keeps supplying; without-succe
     WorldState state{};
     state.current_tick = 5;  // not a monthly tick -> no detection churn
     state.world_seed = 1;
+
+    // Grounded supply requires a real criminal operation (the creator's business)
+    // and located precursor stock that production consumes.
+    NPCBusiness biz{};
+    biz.id = 7;
+    biz.owner_id = 1;  // matches make_scheduled_compound's creator_actor_id
+    biz.province_id = 0;
+    biz.criminal_sector = true;
+    biz.revenue_per_tick = 1000.0f;
+    state.npc_businesses.push_back(biz);
+
+    RegionalMarket pre{};
+    pre.good_id = good_id_hash("drug_precursors");
+    pre.province_id = 0;
+    pre.supply = 1000.0f;
+    state.regional_markets.push_back(pre);
+    state.market_index_by_good_province[(static_cast<uint64_t>(pre.good_id) << 32) | 0ull] =
+        state.regional_markets.size() - 1;
 
     DesignerDrugModule with_succ;
     with_succ.compounds_mut().push_back(make_scheduled_compound(10, /*has_successor=*/true));

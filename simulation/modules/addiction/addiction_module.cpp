@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"  // lookup_good_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -87,18 +88,19 @@ float AddictionModule::compute_withdrawal_damage(AddictionStage stage, uint32_t 
     return cfg.withdrawal_health_hit;
 }
 
-float AddictionModule::substance_spend_for_stage(AddictionStage stage) {
+float AddictionModule::consumption_units_for_stage(AddictionStage stage,
+                                                   const AddictionConfig& cfg) {
     switch (stage) {
         case AddictionStage::casual:
-            return 5.0f;
+            return cfg.casual_consumption_units;
         case AddictionStage::regular:
-            return 15.0f;
+            return cfg.regular_consumption_units;
         case AddictionStage::dependent:
-            return 30.0f;
+            return cfg.dependent_consumption_units;
         case AddictionStage::active:
-            return 50.0f;
+            return cfg.active_consumption_units;
         case AddictionStage::terminal:
-            return 20.0f;  // reduced capacity to obtain
+            return cfg.terminal_consumption_units;  // reduced capacity to obtain
         default:
             return 0.0f;
     }
@@ -191,14 +193,36 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         };
 
         // --- Supply / affordability ---------------------------------------
-        // A using-stage NPC tries to buy substance this tick; the cost scales
-        // with severity. NPC.capital is the existing affordability signal —
-        // enough cash means supplied (and charged), too little means a supply
-        // gap (no charge), which drives withdrawal for dependent+ NPCs. This
-        // replaces the earlier "supply always available" placeholder.
-        const float spend = substance_spend_for_stage(current.stage);
+        // A using-stage NPC tries to buy the substance this tick. The cost is
+        // GROUNDED as quantity x price: the units consumed at this stage times the
+        // substance's market unit price in this NPC's province (falling back to a
+        // baseline where the substance has no market yet). So when the drug gets
+        // scarce/expensive the spend rises; an NPC short of cash, OR in a province
+        // where the substance is out of stock, gets a supply gap (no charge) which
+        // drives withdrawal for dependent+ NPCs.
+        float unit_price = cfg_.baseline_substance_price;
+        bool market_exists = false;
+        bool in_stock = true;
+        if (!current.substance_key.empty()) {
+            const uint32_t sub_gid = lookup_good_id(state, current.substance_key);
+            if (sub_gid != 0) {
+                const uint64_t key = (static_cast<uint64_t>(sub_gid) << 32) |
+                                     static_cast<uint64_t>(npc->current_province_id);
+                auto it = state.market_index_by_good_province.find(key);
+                if (it != state.market_index_by_good_province.end() &&
+                    it->second < state.regional_markets.size()) {
+                    market_exists = true;
+                    const RegionalMarket& m = state.regional_markets[it->second];
+                    if (m.spot_price > 0.0f)
+                        unit_price = m.spot_price;
+                    in_stock = m.supply > 0.0f;
+                }
+            }
+        }
+        const float spend = consumption_units_for_stage(current.stage, cfg_) * unit_price;
         bool supplied = false;
-        if (is_using_stage(current.stage) && npc->capital >= spend) {
+        if (is_using_stage(current.stage) && npc->capital >= spend &&
+            (!market_exists || in_stock)) {
             supplied = true;
         }
 

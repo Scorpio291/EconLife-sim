@@ -1117,6 +1117,19 @@ struct AddictionConfig {
     float active_craving_inc = 0.05f;
     float casual_to_regular_craving = 0.30f;
     float regular_to_dependent_craving = 0.70f;
+    // Substance purchase grounded as quantity x price. consumption_units is the
+    // physical amount a using NPC consumes per tick at each stage; the unit price
+    // comes from the substance's RegionalMarket spot price in the NPC's province,
+    // falling back to baseline_substance_price where no market exists for it yet.
+    // So addict spending rises when the drug gets scarce/expensive, and an NPC
+    // cannot buy a substance that is out of stock. (At baseline price these units
+    // reproduce the previously hardcoded 5/15/30/50/20 per-stage spend.)
+    float baseline_substance_price = 10.0f;
+    float casual_consumption_units = 0.5f;
+    float regular_consumption_units = 1.5f;
+    float dependent_consumption_units = 3.0f;
+    float active_consumption_units = 5.0f;
+    float terminal_consumption_units = 2.0f;
 };
 
 struct AlternativeIdentityConfig {
@@ -1177,6 +1190,14 @@ struct DesignerDrugConfig {
     float scheduled_margin = 1.0f;
     float no_successor_margin = 0.80f;
     uint32_t monthly_interval = 30;
+    // Production grounding (conservation): a compound is synthesised by the creator's
+    // criminal operation from real, located precursor stock that is physically
+    // consumed — it does not appear from nothing. base_output_per_tick is the
+    // operation's per-tick capacity (scaled by the market margin); output is
+    // bottlenecked on available precursors, matching the drug_economy chain.
+    float base_output_per_tick = 10.0f;
+    std::string precursor_good = "drug_precursors";
+    float precursor_ratio = 1.0f;
 };
 
 struct DrugEconomyConfig {
