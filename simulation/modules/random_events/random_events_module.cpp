@@ -236,14 +236,30 @@ void RandomEventsModule::apply_natural_per_tick(const WorldState& /*state*/,
                                                 const Province& province,
                                                 const ActiveRandomEvent& event,
                                                 DeltaBuffer& province_delta) {
-    float agri_impact =
-        cfg_.natural_agri_mod_min +
-        (cfg_.natural_agri_mod_max - cfg_.natural_agri_mod_min) * (1.0f - event.severity);
-    (void)agri_impact;
-
     RegionDelta rd{};
     rd.region_id = province.region_id;
     rd.stability_delta = -0.01f * event.severity;
+
+    // A drought/flood suppresses the harvest while it lasts: drive the relevant
+    // agricultural modifier DOWN toward a severity-set floor (1 - severity) at a
+    // rate that outpaces regional_conditions' recovery, so the modifier sits low
+    // for the event's duration and heals (recovers toward 1.0) only once it ends.
+    // This closes the loop the previously-discarded agri_impact left open.
+    const bool is_flood = event.template_id == "flood";
+    const bool is_drought =
+        event.template_id == "drought_mild" || event.template_id == "drought_severe";
+    if (is_flood || is_drought) {
+        const float floor = std::clamp(1.0f - event.severity, 0.0f, 1.0f);
+        const float current =
+            is_flood ? province.conditions.flood_modifier : province.conditions.drought_modifier;
+        const float move = cfg_.natural_agri_depress_rate * (floor - current);
+        if (move < 0.0f) {
+            if (is_flood)
+                rd.flood_modifier_delta = move;
+            else
+                rd.drought_modifier_delta = move;
+        }
+    }
     province_delta.region_deltas.push_back(rd);
 }
 

@@ -22,13 +22,29 @@ bool is_addicted_stage(AddictionStage s) {
 }
 }  // namespace
 
-float RegionalConditionsModule::compute_stability_recovery(float current_stability,
-                                                           uint32_t instability_events) {
-    constexpr RegionalConditionsConfig kDefaults{};
-    float recovery = kDefaults.stability_recovery_rate * (1.0f - current_stability);
-    float degradation = static_cast<float>(instability_events) * kDefaults.event_stability_impact;
-    float result = current_stability + recovery - degradation;
-    return std::clamp(result, 0.0f, 1.0f);
+float RegionalConditionsModule::compute_stability_target(float employment, float infrastructure,
+                                                         float trust, float crime,
+                                                         float criminal_dominance, float inequality,
+                                                         float grievance,
+                                                         const RegionalConditionsConfig& cfg) {
+    auto unit = [](float v) { return std::clamp(v, 0.0f, 1.0f); };
+    float target = cfg.stability_target_base + cfg.stability_w_employment * unit(employment) +
+                   cfg.stability_w_infrastructure * unit(infrastructure) +
+                   cfg.stability_w_trust * unit(trust) - cfg.stability_w_crime * unit(crime) -
+                   cfg.stability_w_criminal_dominance * unit(criminal_dominance) -
+                   cfg.stability_w_inequality * unit(inequality) -
+                   cfg.stability_w_grievance * unit(grievance);
+    return std::clamp(target, 0.0f, 1.0f);
+}
+
+float RegionalConditionsModule::compute_stability_step(float current_stability, float target,
+                                                       uint32_t instability_events,
+                                                       const RegionalConditionsConfig& cfg) {
+    // Move toward the grounded target (can be downward when conditions are poor),
+    // then subtract the hit from active unrest. Not a blind climb to 1.0.
+    float recovery = cfg.stability_recovery_rate * (target - current_stability);
+    float degradation = static_cast<float>(instability_events) * cfg.event_stability_impact;
+    return std::clamp(current_stability + recovery - degradation, 0.0f, 1.0f);
 }
 
 float RegionalConditionsModule::compute_criminal_dominance(float criminal_revenue,
@@ -114,16 +130,25 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     RegionDelta rdelta;
     rdelta.region_id = province_idx;
 
-    // --- Stability ---
-    // Degraded by community response stage; recovers passively toward 1.0.
+    // --- Stability (grounded restoring force) ---
+    // Stability gravitates toward the level the province's conditions actually
+    // SUPPORT — employment, infrastructure and institutional trust raise it; crime,
+    // criminal capture, inequality and popular grievance lower it — rather than
+    // drifting blindly toward 1.0. Active community-response unrest degrades it on
+    // top. Signals are the province's authoritative current values (one-tick lag).
     uint32_t instability_events = 0;
     if (community.response_stage >= 3)
         instability_events++;
     if (community.response_stage >= 5)
         instability_events++;
 
-    float new_stability =
-        compute_stability_recovery(conditions.stability_score, instability_events);
+    const float stability_target = compute_stability_target(
+        cohort_stats->formal_employment_rate, province.infrastructure_rating,
+        community.institutional_trust, cohort_stats->crime_rate,
+        cohort_stats->criminal_dominance_index, conditions.inequality_index,
+        community.grievance_level, cfg_);
+    float new_stability = compute_stability_step(conditions.stability_score, stability_target,
+                                                 instability_events, cfg_);
     rdelta.stability_delta = new_stability - conditions.stability_score;
 
     // --- Aggregation pass 1: NPCs physically in this province ---

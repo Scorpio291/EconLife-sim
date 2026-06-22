@@ -28,7 +28,18 @@ class RegionalConditionsModule : public ITickModule {
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
     // --- Static utilities for testing ---
-    static float compute_stability_recovery(float current_stability, uint32_t instability_events);
+    // The stability level the province's conditions support (grounded target in
+    // [0,1]): employment/infrastructure/trust raise it, crime/criminal dominance/
+    // inequality/grievance lower it. Each input is treated as a [0,1] signal.
+    static float compute_stability_target(float employment, float infrastructure, float trust,
+                                          float crime, float criminal_dominance, float inequality,
+                                          float grievance, const RegionalConditionsConfig& cfg = {});
+    // One tick of stability movement toward `target` at the recovery rate, minus
+    // the degradation from active community-response unrest. Replaces the former
+    // blind recovery toward 1.0.
+    static float compute_stability_step(float current_stability, float target,
+                                        uint32_t instability_events,
+                                        const RegionalConditionsConfig& cfg = {});
     static float compute_criminal_dominance(float criminal_revenue, float total_revenue);
     static float compute_drought_recovery(float current_modifier, float recovery_rate);
     static float compute_inequality_from_gini(float gini_coefficient);

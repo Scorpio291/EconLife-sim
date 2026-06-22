@@ -381,6 +381,40 @@ TEST_CASE("test_no_evidence_below_threshold", "[random_events][tier1]") {
 // Test: Event expires at end_tick
 // =============================================================================
 
+TEST_CASE("test_active_drought_depresses_agri_modifier", "[random_events][tier1]") {
+    // A live drought must drive the province drought_modifier DOWN (toward its
+    // severity floor), closing the loop the discarded agri_impact left open.
+    RandomEventsModule module;
+    module.set_base_rate(0.0f);  // no new events; isolate the active-event effect
+
+    ActiveRandomEvent event{};
+    event.id = module.allocate_event_id();
+    event.template_id = "drought_severe";
+    event.template_key = "drought_severe";
+    event.province_id = 0;
+    event.category = EventCategory::natural;
+    event.severity = 0.7f;  // floor = 1 - 0.7 = 0.3
+    event.started_tick = 10;
+    event.end_tick = 40;  // still active at tick 11
+    module.add_active_event(event);
+
+    WorldState ws = make_test_world_state(42, 11);
+    ws.provinces.push_back(make_test_province(0));  // drought_modifier starts at 1.0
+
+    DeltaBuffer db{};
+    module.execute_province(0, ws, db);
+
+    bool depressed = false;
+    for (const auto& rd : db.region_deltas) {
+        if (rd.drought_modifier_delta.has_value() && *rd.drought_modifier_delta < 0.0f) {
+            depressed = true;
+        }
+        // A drought must NOT touch the flood modifier.
+        REQUIRE_FALSE(rd.flood_modifier_delta.has_value());
+    }
+    REQUIRE(depressed);
+}
+
 TEST_CASE("test_event_expires_at_end_tick", "[random_events][tier1]") {
     RandomEventsModule module;
     module.set_base_rate(0.0f);  // No new events.

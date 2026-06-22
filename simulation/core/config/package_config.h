@@ -208,6 +208,11 @@ struct RandomEventsConfig {
     float weight_human = 0.25f;
     float natural_agri_mod_min = -0.40f;
     float natural_agri_mod_max = -0.05f;
+    // While a drought/flood is active, its agricultural modifier is driven DOWN
+    // toward a severity-set floor (1 - severity) at this per-tick rate, chosen to
+    // outpace regional_conditions' recovery so the harvest stays suppressed for the
+    // event's duration and only heals once it ends.
+    float natural_agri_depress_rate = 0.05f;
     float natural_infra_dmg_min = 0.01f;
     float natural_infra_dmg_max = 0.15f;
     float accident_output_rate_min = -1.0f;
@@ -1245,6 +1250,22 @@ struct RegionalConditionsConfig {
     float infrastructure_decay_rate = 0.0002f;
     float drought_recovery_rate = 0.005f;
     float flood_recovery_rate = 0.01f;
+    // --- Stability target (grounded restoring force) ---
+    // Province stability gravitates toward the level its conditions actually
+    // SUPPORT, not blindly toward 1.0. The target is built from already-tracked
+    // province signals (each in [0,1]); stability then moves toward it at
+    // stability_recovery_rate, minus the degradation from active community-response
+    // unrest. Employment, infrastructure and institutional trust raise the
+    // supportable level; crime, criminal capture, inequality and popular grievance
+    // lower it. base 0.5 = a neutral province with no strong signal either way.
+    float stability_target_base = 0.50f;
+    float stability_w_employment = 0.25f;
+    float stability_w_infrastructure = 0.15f;
+    float stability_w_trust = 0.10f;
+    float stability_w_crime = 0.30f;
+    float stability_w_criminal_dominance = 0.20f;
+    float stability_w_inequality = 0.15f;
+    float stability_w_grievance = 0.20f;
     // Weight on the significant-NPC wealth-concentration signal when it exceeds the
     // cohort income gini as the province inequality target. < 1.0 so that a single
     // dominant owner cannot alone peg inequality; broad concentration is needed to

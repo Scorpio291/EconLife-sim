@@ -9,27 +9,49 @@
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
 
-TEST_CASE("RegionalConditions: stability recovery toward one", "[regional_conditions][tier11]") {
+TEST_CASE("RegionalConditions: stability steps toward target", "[regional_conditions][tier11]") {
     // 0.80 + 0.001 * (1.0 - 0.80) - 0 = 0.80 + 0.0002 = 0.8002
-    float result = RegionalConditionsModule::compute_stability_recovery(0.80f, 0);
+    float result = RegionalConditionsModule::compute_stability_step(0.80f, 1.0f, 0);
     REQUIRE_THAT(result, WithinAbs(0.8002f, 0.001f));
 }
 
+TEST_CASE("RegionalConditions: stability falls toward a low target", "[regional_conditions][tier11]") {
+    // Target below current -> stability declines (no blind climb to 1.0).
+    // 0.80 + 0.001 * (0.20 - 0.80) = 0.80 - 0.0006 = 0.7994
+    float result = RegionalConditionsModule::compute_stability_step(0.80f, 0.20f, 0);
+    REQUIRE_THAT(result, WithinAbs(0.7994f, 0.001f));
+}
+
 TEST_CASE("RegionalConditions: stability degraded by events", "[regional_conditions][tier11]") {
-    float result = RegionalConditionsModule::compute_stability_recovery(0.80f, 1);
+    float result = RegionalConditionsModule::compute_stability_step(0.80f, 1.0f, 1);
     // 0.80 + 0.0002 - 0.05 = 0.7502
     REQUIRE_THAT(result, WithinAbs(0.7502f, 0.001f));
 }
 
 TEST_CASE("RegionalConditions: stability clamped to zero", "[regional_conditions][tier11]") {
-    float result = RegionalConditionsModule::compute_stability_recovery(0.05f, 3);
+    float result = RegionalConditionsModule::compute_stability_step(0.05f, 1.0f, 3);
     // 0.05 + 0.001*0.95 - 0.15 = 0.05 + 0.00095 - 0.15 < 0 -> clamped to 0
     REQUIRE(result >= 0.0f);
 }
 
 TEST_CASE("RegionalConditions: stability clamped to one", "[regional_conditions][tier11]") {
-    float result = RegionalConditionsModule::compute_stability_recovery(1.0f, 0);
+    float result = RegionalConditionsModule::compute_stability_step(1.0f, 1.0f, 0);
     REQUIRE(result <= 1.0f);
+}
+
+TEST_CASE("RegionalConditions: stability target reflects conditions",
+          "[regional_conditions][tier11]") {
+    // Thriving province (full employment/infra/trust, no crime/inequality) -> high.
+    float good = RegionalConditionsModule::compute_stability_target(
+        /*employment=*/1.0f, /*infrastructure=*/1.0f, /*trust=*/1.0f, /*crime=*/0.0f,
+        /*criminal_dominance=*/0.0f, /*inequality=*/0.0f, /*grievance=*/0.0f);
+    // Failed province (no employment/infra/trust, high crime/capture/grievance) -> low.
+    float bad = RegionalConditionsModule::compute_stability_target(
+        0.0f, 0.0f, 0.0f, /*crime=*/1.0f, /*criminal_dominance=*/1.0f, /*inequality=*/1.0f,
+        /*grievance=*/1.0f);
+    REQUIRE(good > 0.9f);
+    REQUIRE(bad < 0.1f);
+    REQUIRE(good > bad);
 }
 
 TEST_CASE("RegionalConditions: criminal dominance ratio", "[regional_conditions][tier11]") {
@@ -98,10 +120,12 @@ TEST_CASE("RegionalConditions: execute_province emits a RegionDelta",
     REQUIRE(delta.region_deltas.size() == 1);
     const RegionDelta& rd = delta.region_deltas[0];
     REQUIRE(rd.region_id == 0);
-    // Stability at 0.80 with no instability events recovers toward 1.0:
-    // compute_stability_recovery(0.80, 0) - 0.80 = +0.0002.
+    // Stability at 0.80 now steps toward a GROUNDED target, not 1.0. With crime 0.10,
+    // criminal dominance 0.10, inequality 0.30 and no employment/infra/trust, the
+    // target = 0.50 - 0.30*0.10 - 0.20*0.10 - 0.15*0.30 = 0.405, so it falls slightly:
+    // 0.80 + 0.001*(0.405 - 0.80) = -0.000395.
     REQUIRE(rd.stability_delta.has_value());
-    REQUIRE_THAT(*rd.stability_delta, WithinAbs(0.0002f, 1e-5f));
+    REQUIRE_THAT(*rd.stability_delta, WithinAbs(-0.000395f, 1e-5f));
     // Crime signal is populated from cohort_stats. Grievance is no longer
     // written here — it has a single owner (community_response); this module
     // previously also wrote grievance (inequality + crime + a stage feedback
