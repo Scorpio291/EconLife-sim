@@ -218,11 +218,12 @@ TEST_CASE("DrugEconomy: seeds NPCs when drug business present", "[drug_economy][
     module.execute_province(0, state, delta);
 
     REQUIRE(count_seeded(delta) == 50);
-    // Verify substance_key and stage set correctly.
+    // Verify substance_key and stage set correctly. The key is the REAL drug good
+    // (cannabis_processed) so the addiction module can price it from its market.
     for (const auto& d : delta.npc_deltas) {
         if (d.set_addiction_state.has_value()) {
             REQUIRE(d.set_addiction_state->stage == AddictionStage::casual);
-            REQUIRE(d.set_addiction_state->substance_key == "cannabis");
+            REQUIRE(d.set_addiction_state->substance_key == "cannabis_processed");
         }
     }
 }

@@ -336,12 +336,12 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
     if ((has_supply || addiction_rate > 0.0f) &&
         addiction_rate < cfg_.addiction_seeding_saturation_cap &&
         province_idx < state.npc_indices_by_province.size()) {
-        // Pick a substance key based on which drug type is being produced
-        // locally. Default to cannabis: it's the V1 baseline and is the only
-        // type emitted by the simplified production loop above. If multiple
-        // drug types are produced, future work can weight selection by
-        // per-type supply; for V1 cannabis is sufficient.
-        const std::string substance_key = "cannabis";
+        // Substance key is the REAL drug good consumed locally, so the addiction
+        // module can read its market price for purchase cost. cannabis_processed is
+        // the V1 baseline (it is what the simplified production loop emits and what
+        // the addiction-demand delta above is keyed to). Per-type selection weighted
+        // by supply is future work.
+        const std::string substance_key = "cannabis_processed";
 
         // Fork the RNG deterministically per (tick, province) so seeding is
         // reproducible. The seed mixes world_seed, current_tick, province.id,

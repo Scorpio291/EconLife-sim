@@ -194,13 +194,13 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
 
         // --- Supply / affordability ---------------------------------------
         // A using-stage NPC tries to buy the substance this tick. The cost is
-        // GROUNDED as quantity x price: the units consumed at this stage times the
-        // substance's market unit price in this NPC's province (falling back to a
-        // baseline where the substance has no market yet). So when the drug gets
-        // scarce/expensive the spend rises; an NPC short of cash, OR in a province
-        // where the substance is out of stock, gets a supply gap (no charge) which
-        // drives withdrawal for dependent+ NPCs.
-        float unit_price = cfg_.baseline_substance_price;
+        // GROUNDED: the base spend at this stage (units x baseline price) scaled by a
+        // scarcity premium = the substance's market spot price relative to its OWN
+        // equilibrium in this NPC's province. Using the ratio keeps the calibration
+        // independent of the absolute drug-price scale. An NPC short of cash, OR in a
+        // province where the substance is out of stock, gets a supply gap (no charge)
+        // which drives withdrawal for dependent+ NPCs.
+        float price_factor = 1.0f;
         bool market_exists = false;
         bool in_stock = true;
         if (!current.substance_key.empty()) {
@@ -213,13 +213,17 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
                     it->second < state.regional_markets.size()) {
                     market_exists = true;
                     const RegionalMarket& m = state.regional_markets[it->second];
-                    if (m.spot_price > 0.0f)
-                        unit_price = m.spot_price;
                     in_stock = m.supply > 0.0f;
+                    if (m.spot_price > 0.0f && m.equilibrium_price > 0.0f) {
+                        price_factor = std::clamp(m.spot_price / m.equilibrium_price,
+                                                  cfg_.min_substance_price_factor,
+                                                  cfg_.max_substance_price_factor);
+                    }
                 }
             }
         }
-        const float spend = consumption_units_for_stage(current.stage, cfg_) * unit_price;
+        const float spend = consumption_units_for_stage(current.stage, cfg_) *
+                            cfg_.baseline_substance_price * price_factor;
         bool supplied = false;
         if (is_using_stage(current.stage) && npc->capital >= spend &&
             (!market_exists || in_stock)) {

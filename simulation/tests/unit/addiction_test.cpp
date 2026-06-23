@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/good_id_hash.h"
 #include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -203,6 +204,45 @@ TEST_CASE("Addiction: seeded state persists craving accumulation across ticks",
     const AddictionState& after = world.significant_npcs[0].addiction_state;
     REQUIRE(after.craving > seed.craving);
     REQUIRE(after.tolerance > seed.tolerance);
+}
+
+TEST_CASE("Addiction: spend scales with substance market scarcity premium",
+          "[addiction][tier10][market]") {
+    // Charge a using NPC and read back the capital deducted for a given drug-market
+    // (spot, equilibrium, supply). Spend = base (units x baseline) x scarcity premium
+    // (spot/equilibrium), and an out-of-stock market means no purchase.
+    auto charged = [](float spot, float equilibrium, float supply) -> float {
+        auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+        AddictionState seed{};
+        seed.stage = AddictionStage::regular;  // a using stage
+        seed.substance_key = "cannabis_processed";
+        world.significant_npcs[0].addiction_state = seed;
+
+        RegionalMarket m{};
+        m.good_id = good_id_hash("cannabis_processed");
+        m.province_id = 0;
+        m.spot_price = spot;
+        m.equilibrium_price = equilibrium;
+        m.supply = supply;
+        world.regional_markets.push_back(m);
+        world.market_index_by_good_province[(static_cast<uint64_t>(m.good_id) << 32) | 0ull] =
+            world.regional_markets.size() - 1;
+
+        AddictionModule module;
+        DeltaBuffer delta{};
+        module.execute_province(0, world, delta);
+        for (const auto& d : delta.npc_deltas)
+            if (d.npc_id == 100 && d.capital_delta.has_value())
+                return *d.capital_delta;
+        return 0.0f;  // no charge (e.g. supply gap)
+    };
+
+    // Regular stage base spend = 1.5 units * 10 baseline = 15 at normal price.
+    REQUIRE_THAT(charged(100.0f, 100.0f, 50.0f), WithinAbs(-15.0f, 0.01f));
+    // A 2x scarcity premium (spot double its equilibrium) doubles the spend.
+    REQUIRE_THAT(charged(200.0f, 100.0f, 50.0f), WithinAbs(-30.0f, 0.01f));
+    // Out of stock -> cannot buy -> no charge (drives a supply gap instead).
+    REQUIRE_THAT(charged(100.0f, 100.0f, 0.0f), WithinAbs(0.0f, 0.001f));
 }
 
 TEST_CASE("Addiction: stage progresses casual -> regular over enough ticks",

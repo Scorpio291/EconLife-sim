@@ -1122,19 +1122,22 @@ struct AddictionConfig {
     float active_craving_inc = 0.05f;
     float casual_to_regular_craving = 0.30f;
     float regular_to_dependent_craving = 0.70f;
-    // Substance purchase grounded as quantity x price. consumption_units is the
-    // physical amount a using NPC consumes per tick at each stage; the unit price
-    // comes from the substance's RegionalMarket spot price in the NPC's province,
-    // falling back to baseline_substance_price where no market exists for it yet.
-    // So addict spending rises when the drug gets scarce/expensive, and an NPC
-    // cannot buy a substance that is out of stock. (At baseline price these units
-    // reproduce the previously hardcoded 5/15/30/50/20 per-stage spend.)
+    // Substance purchase grounded as quantity x price RESPONSE. The base spend at a
+    // stage is consumption_units x baseline_substance_price (the calibrated cost at
+    // the drug's NORMAL price); it then scales by how far the substance's market
+    // spot price sits above/below its OWN equilibrium in the NPC's province (a
+    // scarcity premium), so spending rises when the drug gets dear and an NPC cannot
+    // buy a substance that is out of stock. Using the price RATIO (not the raw spot
+    // price) keeps the calibration independent of the absolute drug-price scale. At
+    // normal price these units reproduce the former 5/15/30/50/20 per-stage spend.
     float baseline_substance_price = 10.0f;
     float casual_consumption_units = 0.5f;
     float regular_consumption_units = 1.5f;
     float dependent_consumption_units = 3.0f;
     float active_consumption_units = 5.0f;
     float terminal_consumption_units = 2.0f;
+    float min_substance_price_factor = 0.25f;  // floor on the scarcity premium
+    float max_substance_price_factor = 4.0f;   // cap on the scarcity premium
 };
 
 struct AlternativeIdentityConfig {
