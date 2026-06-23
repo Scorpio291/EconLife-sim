@@ -140,6 +140,28 @@ TEST_CASE("PopulationAging: generational hardiness — soft people on a harsh wo
     CHECK(soft_d.hardiness < native);  // but only partway in one year (generational)
 }
 
+TEST_CASE("PopulationAging: hazard-mortality bounds are physical (not a rail)",
+          "[population_aging][hardiness][tier11]") {
+    // The clamp on world_hazard/hardiness is a safety bound, not an outcome rail:
+    // adapted people sit well inside it, and even a wildly-unadapted people on a
+    // brutal world is bounded (culled, never annihilated in a single year).
+    constexpr PopulationAgingConfig cfg{};
+    CHECK(cfg.hazard_mortality_min == 0.15f);
+    CHECK(cfg.hazard_mortality_max == 3.0f);
+
+    PopulationAgingModule module;
+    WorldState w = make_annual_cohort_world(/*surplus=*/1.5f);  // fed: deaths are hazard-driven
+    w.hazard_settings = deathworld_hazard();
+    w.provinces[0].cohort_stats->hardiness = 0.01f;  // pathologically unadapted
+    const uint32_t before = w.provinces[0].cohort_stats->total_population;
+    DeltaBuffer d{};
+    module.execute_province(0, w, d);
+    REQUIRE(d.cohort_stats_deltas.size() == 1);
+    // Bounded by the 3x cap: a year of hazard culls the unadapted but does not wipe
+    // them out (survivors remain a clear majority), and population never goes negative.
+    CHECK(d.cohort_stats_deltas[0].total_population > before / 2);
+}
+
 TEST_CASE("PopulationAging: subsistence surplus drives the Malthusian loop",
           "[population_aging][subsistence][tier11]") {
     PopulationAgingModule module;

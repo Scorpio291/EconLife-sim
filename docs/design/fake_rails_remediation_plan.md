@@ -315,3 +315,24 @@ unlock many groundings at once:
   (b) **producer-attributed market flows** (per-business per-good output + producer
       cost), which unblock antitrust, price base-cost, and clean wage/tax flows.
 Recommend scoping those two as features before resuming proxy-by-proxy work.
+
+## Phase 5 — adaptation clamps (CLOSED, classified as physical bounds)
+
+Verdict: the two clamps audited as possible rails are NOT rails.
+- `hardiness` clamp `[0.05, 5.0]` (apply_deltas) is the documented WorldState
+  convention ("additive fields are clamped to domain ranges"). Hardiness adapts
+  toward `world_hazard` and settles there, inside the band for any realistic world;
+  the clamp only catches pathological inputs.
+- `hazard_mortality` clamp `world_hazard/hardiness` ∈ `[0.15, 3.0]` bounds only the
+  maladaptation transient (adapted people sit at ~1.0). Moved the inline literals to
+  `PopulationAgingConfig::hazard_mortality_{min,max}` with justification; added a test
+  proving an extremely unadapted people on a deathworld is culled but not annihilated
+  (the bound is physical, the dynamics grounded).
+
+## Remediation pass: COMPLETE
+Every audited rail is now either fixed (Phases 0-4 + follow-ups) or explicitly
+classified as a non-rail (physical bound / domain convention / acceptable sampling
+approximation), with the remaining ungrounded proxies recorded above as scoped
+FEATURE work. The two highest-leverage features (an NPC skill model; producer-
+attributed market flows) would unblock most of what remains and are the recommended
+next focus.

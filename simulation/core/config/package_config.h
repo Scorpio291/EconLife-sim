@@ -1374,6 +1374,12 @@ struct PopulationAgingConfig {
     // out rather than blowing up).
     float hardiness_drift_rate = 0.05f;
     float hardiness_floor = 0.10f;
+    // Physical bounds on the hazard-mortality multiplier (world_hazard / hardiness).
+    // These are NOT a rail: at equilibrium an adapted people sits at ~1.0, well inside
+    // the band. The bounds only catch the maladaptation transient — a people cannot be
+    // wiped out instantly (max), nor can adaptation + medicine make them immortal (min).
+    float hazard_mortality_min = 0.15f;
+    float hazard_mortality_max = 3.0f;
 };
 
 struct LodSystemConfig {

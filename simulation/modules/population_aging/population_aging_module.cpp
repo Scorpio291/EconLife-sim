@@ -243,8 +243,9 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // hard world (hardiness << world_hazard) is culled until they adapt; an
                 // over-hardened people survive better. So harshness is relative to the
                 // adapted population.
-                float hazard_mortality = std::clamp(
-                    world_hazard / std::max(cs.hardiness, cfg_.hardiness_floor), 0.15f, 3.0f);
+                float hazard_mortality =
+                    std::clamp(world_hazard / std::max(cs.hardiness, cfg_.hardiness_floor),
+                               cfg_.hazard_mortality_min, cfg_.hazard_mortality_max);
                 // Medicine (germ theory, …) from the tech tree cuts mortality.
                 hazard_mortality *=
                     state.tech_effects_for_era(state.technology.current_era).mortality_mult;
