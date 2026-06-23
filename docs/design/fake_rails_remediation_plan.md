@@ -222,3 +222,96 @@ grounded field, then have the consumer read it. Update the relevant INTERFACE.md
 5. **Phase 5** (clamps) — review last.
 
 Each phase is independently shippable behind the test gates.
+
+---
+
+# Execution log & later-session focus (updated 2026-06-23)
+
+Phases 0-3 plus two follow-ups are committed. This section records what shipped and,
+crucially, **every place that needs deeper focus in a later session** — most of the
+Phase 4 long-tail turned out to be *feature-scope* (the grounded signal does not yet
+exist or is not exposed), not *rail-scope* (swap a proxy for an existing signal).
+
+## Shipped (rail-scope, grounded + tested)
+- Phase 0.1 production quality (spec-honoring), 1.1 designer_drug supply (precursor
+  conservation), 1.2 addiction spend (market price).
+- Phase 2.1 regional stability target, 2.2 drought/flood depression loop.
+- Follow-ups: natural-disaster infrastructure damage; live addiction pricing.
+- Phase 3 R&D maturation formula (facility tier, cash-funded, researcher config).
+- Phase 4: criminal_operations LE-heat now reads the real investigation pressure
+  (peak investigator_meter across the org's members/leadership) instead of local
+  police social_capital. (criminal_operations_module.cpp compute_le_heat.)
+
+## NEEDS LATER FOCUS — feature-scope (signal missing or unexposed)
+
+Each item lists the proxy, why it can't be grounded by a swap today, and what must
+be built first.
+
+1. **R&D advancement pipeline is unwired** (Phase 3 finding). Nothing creates
+   `MaturationProject`s (`active_maturation_projects` is read-only; deferred
+   `handle_maturation_advance` is an empty stub). The maturation formula is grounded
+   but inert until project creation + researcher assignment + R&D budgeting are
+   built. FEATURE.
+
+2. **price_engine base_price self-reference** (`price_engine_module.cpp:~93`). No
+   per-good cost basis exists on `RegionalMarket`. Need a production->market cost
+   aggregation: a `weighted_producer_cost_per_unit` field + a Tier-1 step that
+   publishes volume-weighted producer cost per good/province, merged before
+   price_engine (Tier 3) runs. FEATURE.
+
+3. **government_budget income tax from mean_income** (`government_budget_module.cpp:~118`).
+   No per-province wage FLOW exists (only the `mean_income` stock). Need
+   financial_distribution (Tier 4) to emit a per-province "wages paid this period"
+   total that government_budget (Tier 5) consumes. FEATURE.
+
+4. **financial_distribution wages = % of revenue** (`financial_distribution_module.cpp:~67`).
+   The labor-market wage rate (`RegionalWageMap`) is PRIVATE module state on
+   LaborMarketModule, not on WorldState, so financial_distribution can't read it.
+   Worse: there are **two overlapping wage systems** — labor_market
+   `process_wage_payments` AND financial_distribution salaries, both revenue-derived.
+   Needs: expose the wage map on WorldState, add a per-business worker count (sum of
+   facility worker_count) + a business skill domain, and RECONCILE the dual wage
+   payers. Design needed. FEATURE (and an architecture cleanup).
+
+5. **antitrust market share from revenue** (`antitrust_module.cpp:~112`). No
+   per-business per-good output attribution flows through the delta system
+   (`MarketDelta.supply` is anonymous/aggregated). Need producer-tagged supply (a
+   `source_business_id` on the supply delta, or a per-business output field) so
+   antitrust can compute true per-good shares. FEATURE.
+
+6. **weapons_trafficking conflict stage from dominance** (`weapons_trafficking_module.cpp:~69`).
+   The real signal (`CriminalOrganization.conflict_state`) EXISTS and is wired by
+   criminal_operations, but the org list is not exposed on WorldState, so
+   weapons_trafficking can't read it. Smallest feature here: expose criminal orgs
+   (or a per-province conflict signal) on WorldState. FEATURE (small).
+
+7. **weapons_trafficking weapon output = revenue*0.01** (`:~100`). No weapon
+   production recipe exists. Ground via a real recipe/facility output (like other
+   goods) or a `weapon_output_per_tick` field from production. FEATURE.
+
+8. **weapons_trafficking diversion = regulatory_violation_severity*0.5** (`:~104`).
+   Semantic mismatch (compliance != trafficking intent). Need an explicit
+   `trafficking_diversion_fraction` field seeded by criminal_operations. FEATURE.
+
+9. **money_laundering LE skill proxy** (`money_laundering_module.cpp:~242`). NPC
+   skills are not modelled at all. Need a SkillDomain/skill-level model on NPCs,
+   populated for law-enforcement, then read here (and reusable elsewhere). FEATURE
+   (broad — unlocks several other groundings).
+
+## NEEDS LATER FOCUS — acceptable-for-now (documented, low priority)
+- **evidence credibility from social_capital** (`evidence_module.cpp:~79`).
+  social_capital is the only reputation signal today; it is a defensible grounding.
+  A track-record/conviction-history credibility field is the real upgrade. LOW.
+- **healthcare working-age denominator** (`healthcare_module.cpp:~196`). The sick
+  rate is a sample estimate (sick sample / processed sample) that converges — an
+  acceptable approximation, not a conjured value. A cohort-grounded working-age
+  denominator is a refinement. LOW.
+
+## Cross-cutting theme for planning
+The remaining work is dominated by **two missing capabilities** that, once built,
+unlock many groundings at once:
+  (a) an **NPC skill model** (unblocks money_laundering LE skill, R&D researcher
+      quality, and more), and
+  (b) **producer-attributed market flows** (per-business per-good output + producer
+      cost), which unblock antitrust, price base-cost, and clean wage/tax flows.
+Recommend scoping those two as features before resuming proxy-by-proxy work.

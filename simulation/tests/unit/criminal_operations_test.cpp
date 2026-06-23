@@ -62,6 +62,34 @@ TEST_CASE("Decision: reduce activity on high heat", "[criminal_operations][tier7
     CHECK(decision == CriminalStrategicDecision::reduce_activity);
 }
 
+TEST_CASE("LE heat reflects investigation pressure on org members, not local police",
+          "[criminal_operations][tier7]") {
+    CriminalOrganization org{};
+    org.id = 1;
+    org.leadership_npc_id = 100;
+    org.member_npc_ids = {101, 102};
+    org.dominance_by_province[0] = 0.5f;
+
+    std::vector<NPC> npcs(4);
+    npcs[0].id = 100;  // leader, light investigation
+    npcs[0].status = NPCStatus::active;
+    npcs[0].investigator_meter.current_level = 0.30f;
+    npcs[1].id = 101;  // member under heavy investigation -> drives heat
+    npcs[1].status = NPCStatus::active;
+    npcs[1].investigator_meter.current_level = 0.80f;
+    npcs[2].id = 102;
+    npcs[2].status = NPCStatus::active;
+    npcs[2].investigator_meter.current_level = 0.10f;
+    npcs[3].id = 999;  // a non-member (e.g. police) with high social capital -> ignored
+    npcs[3].status = NPCStatus::active;
+    npcs[3].social_capital = 100.0f;
+    npcs[3].investigator_meter.current_level = 0.0f;
+
+    // Heat = peak investigation pressure across the org's people (0.80), NOT the
+    // old local-police social_capital proxy (which would have read npc 999).
+    CHECK_THAT(CriminalOperationsModule::compute_le_heat(org, npcs), WithinAbs(0.80f, 0.001f));
+}
+
 TEST_CASE("Decision: initiate conflict on high pressure with cash",
           "[criminal_operations][tier7]") {
     auto decision =

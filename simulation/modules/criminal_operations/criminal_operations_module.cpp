@@ -44,20 +44,25 @@ float CriminalOperationsModule::compute_cash_level(float cash, float monthly_cos
 
 float CriminalOperationsModule::compute_le_heat(const CriminalOrganization& org,
                                                 const std::vector<NPC>& npcs) {
-    float max_heat = 0.0f;
+    // Heat = the actual law-enforcement pressure bearing on the ORGANISATION: the
+    // peak investigator-meter level across its members and leadership. That meter is
+    // the real, accumulated investigation pressure on each person (filled by
+    // evidence, informants and embargo escalation, staged surveillance -> raid).
+    // This replaces the former proxy (local police social_capital / 100), which
+    // measured neither the org nor any actual investigation.
+    std::set<uint32_t> members(org.member_npc_ids.begin(), org.member_npc_ids.end());
+    if (org.leadership_npc_id != 0)
+        members.insert(org.leadership_npc_id);
+    if (members.empty())
+        return 0.0f;
 
-    for (const auto& [prov_id, dom] : org.dominance_by_province) {
-        for (const auto& npc : npcs) {
-            if (npc.role == NPCRole::law_enforcement && npc.current_province_id == prov_id &&
-                npc.status == NPCStatus::active) {
-                float heat_proxy = npc.social_capital / 100.0f;
-                heat_proxy = std::clamp(heat_proxy, 0.0f, 1.0f);
-                max_heat = std::max(max_heat, heat_proxy);
-            }
+    float max_heat = 0.0f;
+    for (const auto& npc : npcs) {
+        if (npc.status == NPCStatus::active && members.count(npc.id)) {
+            max_heat = std::max(max_heat, npc.investigator_meter.current_level);
         }
     }
-
-    return max_heat;
+    return std::clamp(max_heat, 0.0f, 1.0f);
 }
 
 CriminalStrategicDecision CriminalOperationsModule::evaluate_decision(
