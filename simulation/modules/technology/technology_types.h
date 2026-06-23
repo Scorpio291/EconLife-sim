@@ -212,6 +212,23 @@ struct TechnologyConfig {
     // Researcher quality
     float max_researcher_skill = 20.0f;
 
+    // --- R&D maturation input grounding (replaces the former flat 0.7/1.0/1.0
+    // stubs in advance_maturation) ---
+    // Facility quality scales with the actor's best lab tier (effective_tech_tier,
+    // which tracks the era): a more advanced lab matures technology faster.
+    float facility_quality_base = 0.5f;
+    float facility_quality_per_tier = 0.10f;
+    float facility_quality_min = 0.10f;
+    float facility_quality_max = 2.0f;
+    // Researcher quality: a documented baseline competence. A per-actor researcher
+    // skill model (a researcher occupation + skill field) is future work; until then
+    // this is a config constant rather than an inline literal.
+    float researcher_quality_default = 0.7f;
+    // R&D is funded from the actor's cash at this cost per assigned researcher per
+    // tick. A cash-poor actor funds only what it can afford and matures
+    // proportionally slower (funding_adequacy < 1); the cash spent is deducted.
+    float rd_funding_per_researcher = 100.0f;
+
     // Secrecy penalty
     float secrecy_penalty = 0.10f;
 

@@ -8,7 +8,11 @@
 #include <filesystem>
 #include <fstream>
 
+#include "core/world_state/delta_buffer.h"
 #include "core/world_state/shared_types.h"
+#include "core/world_state/world_state.h"
+#include "modules/economy/economy_types.h"
+#include "modules/technology/technology_module.h"
 #include "modules/technology/technology_types.h"
 
 using namespace econlife;
@@ -439,4 +443,75 @@ TEST_CASE("Era timeline matches the re-based spec", "[technology][era]") {
     CHECK(cat.max_era() == 17);
     CHECK(cat.v1_max_era() == 12);  // V1 spans the dawn through "transition"
     CHECK(cat.by_index(1)->key == "neolithic");  // the dawn
+}
+
+// ---------------------------------------------------------------------------
+// R&D maturation grounding (Phase 3): facility quality from the actor's lab
+// tier, funding paid from cash, researcher quality a documented baseline.
+// ---------------------------------------------------------------------------
+namespace {
+struct MaturationOutcome {
+    float maturation_delta = 0.0f;  // increase in the node's maturation_level
+    float cash_delta = 0.0f;        // R&D cost charged to the business (<= 0)
+};
+
+MaturationOutcome run_maturation(float effective_tier, float cash) {
+    WorldState state{};
+    state.current_tick = 1;
+
+    NPCBusiness biz{};
+    biz.id = 9;
+    biz.cash = cash;
+    biz.actor_tech_state.effective_tech_tier = effective_tier;
+    TechHolding holding{};
+    holding.node_key = "ai_optimization";
+    holding.maturation_level = 0.20f;
+    holding.maturation_ceiling = 1.0f;  // headroom to grow
+    biz.actor_tech_state.holdings["ai_optimization"] = holding;
+    state.npc_businesses.push_back(biz);
+
+    MaturationProject mp{};
+    mp.node_key = "ai_optimization";
+    mp.business_id = 9;
+    mp.researchers_assigned = 2;
+    state.technology.active_maturation_projects.push_back(mp);
+
+    TechnologyModule module;
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    MaturationOutcome out{};
+    for (const auto& td : delta.technology_deltas) {
+        if (td.business_id == 9 && td.maturation_level_update.has_value())
+            out.maturation_delta = *td.maturation_level_update - 0.20f;
+    }
+    for (const auto& bd : delta.business_deltas) {
+        if (bd.business_id == 9 && bd.cash_delta.has_value())
+            out.cash_delta = *bd.cash_delta;
+    }
+    return out;
+}
+}  // namespace
+
+TEST_CASE("Technology: maturation is funded from cash and costs money",
+          "[technology][rnd]") {
+    // A well-funded actor matures the node AND is charged for the R&D.
+    MaturationOutcome funded = run_maturation(/*effective_tier=*/5.0f, /*cash=*/100000.0f);
+    CHECK(funded.maturation_delta > 0.0f);
+    CHECK(funded.cash_delta < 0.0f);  // conservation: R&D is not free
+}
+
+TEST_CASE("Technology: a cash-starved actor cannot advance R&D", "[technology][rnd]") {
+    // No cash -> funding_adequacy 0 -> no progress and no charge.
+    MaturationOutcome broke = run_maturation(/*effective_tier=*/5.0f, /*cash=*/0.0f);
+    CHECK(broke.maturation_delta == 0.0f);
+    CHECK(broke.cash_delta == 0.0f);
+}
+
+TEST_CASE("Technology: a higher-tier lab matures technology faster", "[technology][rnd]") {
+    // Same funding; the better-equipped lab (higher effective_tech_tier) makes more
+    // progress per tick (facility quality is grounded, not a flat 1.0).
+    MaturationOutcome low = run_maturation(/*effective_tier=*/2.0f, /*cash=*/100000.0f);
+    MaturationOutcome high = run_maturation(/*effective_tier=*/9.0f, /*cash=*/100000.0f);
+    CHECK(high.maturation_delta > low.maturation_delta);
 }

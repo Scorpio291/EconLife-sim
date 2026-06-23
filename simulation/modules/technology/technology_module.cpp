@@ -242,13 +242,17 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
         if (holding.maturation_level >= holding.maturation_ceiling)
             continue;
 
-        // Compute researcher quality average.
-        // V1 simplification: use a flat researcher quality of 0.7 (competent).
-        float researcher_quality_avg = 0.7f;
+        // Researcher quality: documented baseline competence (a per-actor researcher
+        // skill model is future work, see TechnologyConfig).
+        float researcher_quality_avg = config_.researcher_quality_default;
 
-        // Facility quality modifier.
-        // V1 simplification: use 1.0 (standard facility).
-        float facility_quality_modifier = 1.0f;
+        // Facility quality: scales with the actor's best lab tier
+        // (effective_tech_tier, which tracks the era) — a more advanced lab matures
+        // technology faster.
+        float facility_quality_modifier = std::clamp(
+            config_.facility_quality_base +
+                config_.facility_quality_per_tier * biz->actor_tech_state.effective_tech_tier,
+            config_.facility_quality_min, config_.facility_quality_max);
 
         // Domain knowledge bonus.
         float domain_knowledge_bonus = 1.0f;
@@ -273,12 +277,18 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
             }
         }
 
-        // Funding adequacy.
-        // V1 simplification: assume adequate funding (1.0).
+        // Funding adequacy: R&D is paid from the actor's cash. The ideal spend scales
+        // with the assigned research effort; a cash-poor actor funds only what it can
+        // afford and matures proportionally slower. The cash spent (rd_spend) is
+        // deducted below once progress is confirmed — no free R&D.
         float funding_adequacy = 1.0f;
-        if (project.funding_per_tick > 0.0f) {
-            // Could compare to required funding; for now, assume 1.0.
-            funding_adequacy = 1.0f;
+        float rd_spend = 0.0f;
+        const float ideal_funding =
+            config_.rd_funding_per_researcher * static_cast<float>(project.researchers_assigned);
+        if (ideal_funding > 0.0f) {
+            const float affordable = std::clamp(std::min(ideal_funding, biz->cash), 0.0f, ideal_funding);
+            funding_adequacy = affordable / ideal_funding;
+            rd_spend = affordable;
         }
 
         // Compute maturation progress.
@@ -300,6 +310,15 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
             td.node_key = project.node_key;
             td.maturation_level_update = new_level;
             delta.technology_deltas.push_back(td);
+
+            // Conservation: charge the R&D spend to the funding business. Progress
+            // implies funding_adequacy > 0, i.e. the actor could afford rd_spend.
+            if (rd_spend > 0.0f) {
+                BusinessDelta bd{};
+                bd.business_id = project.business_id;
+                bd.cash_delta = -rd_spend;
+                delta.business_deltas.push_back(bd);
+            }
         }
     }
 }
