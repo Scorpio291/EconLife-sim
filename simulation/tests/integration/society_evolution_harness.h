@@ -77,8 +77,11 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     s.era = static_cast<int>(w.technology.current_era);
     s.knowledge = w.technology.knowledge_level;
     const EraDefinition* edef = w.era_catalog.by_index(w.technology.current_era);
-    s.reached_market =
-        edef && edef->economic_regime != "subsistence" && edef->economic_regime != "barter";
+    // The dawn (commons) arc spans subsistence -> barter -> coinage -> money; the
+    // climb is "complete" only when it reaches a true market economy beyond those.
+    const std::string regime = edef ? edef->economic_regime : std::string();
+    s.reached_market = edef && regime != "subsistence" && regime != "barter" &&
+                       regime != "coinage" && regime != "money";
 
     double surplus_sum = 0.0;
     int prov_with_cohorts = 0;
@@ -138,13 +141,17 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     orch.finalize_registration();
     ThreadPool pool(1);
 
-    // The commons climb is "done" once the world leaves the pre-market (subsistence/
-    // barter) regimes for a market era — that is the natural terminus of dawn history-
-    // gen (the modern economy modules take over from there and are not meant to run in
-    // this fast-forward dawn lab). Stop there.
+    // The commons climb is "done" once the world leaves the pre-market regimes for a
+    // true market era — that is the natural terminus of dawn history-gen (the modern
+    // economy modules take over from there and are not meant to run in this
+    // fast-forward dawn lab). The dawn arc spans subsistence -> barter -> coinage ->
+    // money; stop only beyond those.
     auto is_commons_era = [&](uint8_t era) {
         const EraDefinition* e = world.era_catalog.by_index(era);
-        return e && (e->economic_regime == "subsistence" || e->economic_regime == "barter");
+        if (!e)
+            return false;
+        const std::string& r = e->economic_regime;
+        return r == "subsistence" || r == "barter" || r == "coinage" || r == "money";
     };
 
     std::vector<SocietySnapshot> series;

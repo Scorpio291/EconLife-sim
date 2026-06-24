@@ -530,7 +530,7 @@ struct PriceEngineConfig {
 struct SubsistenceConfig {
     // Economic regimes (era_catalog economic_regime) in which the commons food path
     // is active. In any other regime the module is inert (markets feed the population).
-    std::vector<std::string> active_regimes = {"subsistence", "barter"};
+    std::vector<std::string> active_regimes = {"subsistence", "barter", "coinage", "money"};
 
     // Per-head food need per tick (same unit as the food output below).
     float per_capita_food_per_tick = 1.0f;
@@ -564,6 +564,17 @@ struct SubsistenceConfig {
     // upper bound that keeps the knowledge climb at a believable pace and the population
     // tracking the carrying ceiling (most hands stay on the land).
     float max_specialist_fraction = 0.15f;
+
+    // Specialist ceiling rises as the economy MONETIZES. Money and markets move
+    // surplus to where it is needed (trade beyond barter's double-coincidence limit),
+    // so a larger non-farming (specialist/urban) share becomes sustainable as a
+    // society passes from pure commons -> barter -> coinage -> money. Selected by the
+    // era's economic_regime; an unlisted regime falls back to max_specialist_fraction.
+    // (Agrarian + money band; later bands extend mercantile/industrial above this.)
+    float specialist_ceiling_subsistence = 0.15f;
+    float specialist_ceiling_barter = 0.15f;
+    float specialist_ceiling_coinage = 0.18f;
+    float specialist_ceiling_money = 0.22f;
 
     // --- Granary food economy (grounded specialization + reserves) ---
     // Specialists (incl. knowledge-keepers) are NOT funded by a heuristic surplus or a
@@ -614,7 +625,8 @@ struct SubsistenceConfig {
 // Malthusian trap and move forward. All pre-market; modern tech uses the tech module.
 struct KnowledgeConfig {
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
-    std::vector<std::string> active_regimes = {"subsistence", "barter", "mercantile", "industrial"};
+    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",
+                                               "money",       "mercantile", "industrial"};
     float production_scalar = 0.4f;  // knowledge/year per unit of scholar knowledge_output
     // Annual attrition. Civilizational knowledge is CUMULATIVE — embodied in surviving
     // people, practices and (later) writing, it is essentially never lost on historical

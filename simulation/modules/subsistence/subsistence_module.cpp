@@ -45,6 +45,19 @@ bool SubsistenceModule::regime_active(std::string_view regime) const {
     return false;
 }
 
+float SubsistenceModule::specialist_ceiling(std::string_view regime) const {
+    // The non-farming share a regime can sustain rises as the economy monetizes.
+    if (regime == "subsistence")
+        return cfg_.specialist_ceiling_subsistence;
+    if (regime == "barter")
+        return cfg_.specialist_ceiling_barter;
+    if (regime == "coinage")
+        return cfg_.specialist_ceiling_coinage;
+    if (regime == "money")
+        return cfg_.specialist_ceiling_money;
+    return cfg_.max_specialist_fraction;  // fallback for any other active regime
+}
+
 void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
     if (province_idx >= state.provinces.size())
@@ -126,8 +139,11 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     }
     const float farmers_needed = labor_needed / std::max(working_fraction, 0.01f);
     float specialists_people = static_cast<float>(population) - farmers_needed;
+    // Ceiling rises as the economy monetizes (commons -> barter -> coinage -> money):
+    // money/markets let a larger non-farming share be sustained via trade.
+    const float specialist_ceiling_frac = specialist_ceiling(era->economic_regime);
     specialists_people = std::clamp(specialists_people, 0.0f,
-                                    static_cast<float>(population) * cfg_.max_specialist_fraction);
+                                    static_cast<float>(population) * specialist_ceiling_frac);
     const float specialist_fraction =
         population > 0 ? specialists_people / static_cast<float>(population) : 0.0f;
 

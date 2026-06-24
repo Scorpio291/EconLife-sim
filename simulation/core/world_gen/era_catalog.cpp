@@ -131,8 +131,8 @@ void EraCatalog::load_builtin_default() {
     static const Row rows[] = {
         {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 4000.0f},
         {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 10000.0f},
-        {3, "iron_age", "Iron Age", -1200, "barter", false, true, 17000.0f},
-        {4, "classical", "Classical", -550, "barter", false, true, 27000.0f},
+        {3, "iron_age", "Iron Age", -1200, "coinage", false, true, 17000.0f},
+        {4, "classical", "Classical", -550, "money", false, true, 27000.0f},
         {5, "medieval", "Medieval", 500, "barter", false, true, 40000.0f},
         {6, "early_modern", "Early Modern", 1450, "barter", false, true, 56000.0f},
         {7, "industrial", "Industrial", 1750, "barter", false, true, 80000.0f},

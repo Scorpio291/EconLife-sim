@@ -59,6 +59,10 @@ class SubsistenceModule : public ITickModule {
     // Is the commons food path active in `regime`? (regime ∈ cfg.active_regimes)
     bool regime_active(std::string_view regime) const;
 
+    // Non-farming share the regime can sustain (rises as the economy monetizes:
+    // subsistence < barter < coinage < money; other regimes -> max_specialist_fraction).
+    float specialist_ceiling(std::string_view regime) const;
+
     // How many of `residents` a surplus can free into Layer-2 specialists.
     // 0 when surplus <= 1; rises with surplus toward max_specialist_fraction.
     static uint32_t specialist_count(uint32_t residents, float surplus,

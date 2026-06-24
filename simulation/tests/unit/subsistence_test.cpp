@@ -54,12 +54,31 @@ TEST_CASE("surplus_ratio: produced over needed; trivially fed with no population
     CHECK(SubsistenceModule::surplus_ratio(0.0f, 0, cfg) == 1.0f);  // no mouths
 }
 
-TEST_CASE("regime gate: active in subsistence/barter, inert otherwise", "[subsistence][tier1]") {
+TEST_CASE("regime gate: active across the dawn commons arc, inert in market eras",
+          "[subsistence][tier1]") {
     SubsistenceModule mod;
+    // The commons food path spans the whole pre-market arc (subsistence -> money).
     CHECK(mod.regime_active("subsistence"));
     CHECK(mod.regime_active("barter"));
+    CHECK(mod.regime_active("coinage"));
+    CHECK(mod.regime_active("money"));
     CHECK_FALSE(mod.regime_active("modern"));
-    CHECK_FALSE(mod.regime_active("industrial"));
+}
+
+TEST_CASE("specialist ceiling rises as the economy monetizes", "[subsistence][tier1]") {
+    SubsistenceModule mod;
+    const float sub = mod.specialist_ceiling("subsistence");
+    const float bar = mod.specialist_ceiling("barter");
+    const float coin = mod.specialist_ceiling("coinage");
+    const float money = mod.specialist_ceiling("money");
+    // Money/markets let a larger non-farming share be sustained via trade.
+    CHECK(sub <= bar);
+    CHECK(bar < coin);
+    CHECK(coin < money);
+    // An unlisted regime falls back to the generic cap (no crash, sane default).
+    SubsistenceConfig cfg{};
+    CHECK_THAT(mod.specialist_ceiling("unknown_regime"),
+               WithinAbs(cfg.max_specialist_fraction, 0.0001f));
 }
 
 TEST_CASE("execute_province produces a surplus at the dawn and is inert in the modern era",
