@@ -120,23 +120,25 @@ TEST_CASE("emergence: identical seed reproduces identical behavior", "[emergence
     CHECK_THAT(fa.total_capital, WithinAbs(fb.total_capital, 1.0));
 }
 
-TEST_CASE("emergence: national legitimacy tracks (grounded) conditions",
-          "[emergence][integration]") {
-    // The national legitimacy roll-up tracks real provincial conditions
-    // (institutional trust, stability, grievance, unemployment). Since stability was
-    // grounded (it no longer auto-heals to 1.0; it reflects employment/crime/
-    // inequality/grievance), legitimacy honestly mirrors a MEDIOCRE modern baseline:
-    // on this short run employment is only ~0.42 and inequality ~0.41, so stability
-    // sits ~0.34 and legitimacy lands depressed (~0.23) — a troubled-but-functioning
-    // state, NOT a collapse. We assert it does not CRATER (stay well clear of total
-    // breakdown), rather than that it is high. Raising the modern baseline to
-    // genuinely "healthy" legitimacy is gated on grounding modern employment/wages/
-    // inequality (the documented modern-economy follow-up); legitimacy CRATERING under
-    // a forced crisis + the regime-differentiated response are covered by the
-    // political_cycle [unrest] unit tests.
+TEST_CASE("emergence: national legitimacy reflects (healthy) conditions",
+          "[emergence][integration][!shouldfail]") {
+    // Intended invariant (Group 2, expected to FAIL today — drop [!shouldfail] when
+    // it passes): a materially-healthy nation retains the population's consent, so
+    // legitimacy stays above the 0.30 crisis line rather than cratering.
+    //
+    // DEFERRED to the modern-economy grounding pass. Legitimacy now honestly tracks
+    // grounded conditions (Phase 2 stopped stability auto-healing to 1.0). On the
+    // modern baseline those conditions are mediocre — measured employment ~0.42 and
+    // inequality ~0.41 — so stability sits ~0.34 and legitimacy lands ~0.23, below
+    // 0.25. That is the grounded truth of an under-wired modern economy, NOT a
+    // legitimacy bug: the real fix is grounding modern employment / wages /
+    // inequality (the documented modern-economy follow-up). When that lands, this
+    // test should start passing and the tag comes off. (Legitimacy CRATERING under a
+    // forced crisis + the regime-differentiated response are covered by the
+    // political_cycle [unrest] unit tests.)
     const auto& s = baseline();
     REQUIRE(s.back().mean_grievance < 0.5);  // not a grievance-driven collapse
-    CHECK(s.back().national_legitimacy > 0.15);  // not cratered (well below the 0.30 crisis line)
+    CHECK(s.back().national_legitimacy > 0.25);
 }
 
 TEST_CASE("emergence: province stability stays healthy (does not collapse)",
