@@ -57,24 +57,35 @@ TEST_CASE("surplus_ratio: produced over needed; trivially fed with no population
 TEST_CASE("regime gate: active across the dawn commons arc, inert in market eras",
           "[subsistence][tier1]") {
     SubsistenceModule mod;
-    // The commons food path spans the whole pre-market arc (subsistence -> money).
+    // The commons food path spans the whole pre-market arc (subsistence -> industrial).
     CHECK(mod.regime_active("subsistence"));
     CHECK(mod.regime_active("barter"));
     CHECK(mod.regime_active("coinage"));
     CHECK(mod.regime_active("money"));
+    CHECK(mod.regime_active("feudal"));
+    CHECK(mod.regime_active("mercantile"));
+    CHECK(mod.regime_active("industrial"));
     CHECK_FALSE(mod.regime_active("modern"));
 }
 
-TEST_CASE("specialist ceiling rises as the economy monetizes", "[subsistence][tier1]") {
+TEST_CASE("specialist ceiling rises across the pre-market arc", "[subsistence][tier1]") {
     SubsistenceModule mod;
     const float sub = mod.specialist_ceiling("subsistence");
     const float bar = mod.specialist_ceiling("barter");
     const float coin = mod.specialist_ceiling("coinage");
     const float money = mod.specialist_ceiling("money");
-    // Money/markets let a larger non-farming share be sustained via trade.
+    const float feudal = mod.specialist_ceiling("feudal");
+    const float mercantile = mod.specialist_ceiling("mercantile");
+    const float industrial = mod.specialist_ceiling("industrial");
+    // Money/markets, then guilds/trade/finance and the factory system, each sustain a
+    // larger non-farming share: commons <= barter < coinage < money < feudal <
+    // mercantile < industrial.
     CHECK(sub <= bar);
     CHECK(bar < coin);
     CHECK(coin < money);
+    CHECK(money < feudal);
+    CHECK(feudal < mercantile);
+    CHECK(mercantile < industrial);
     // An unlisted regime falls back to the generic cap (no crash, sane default).
     SubsistenceConfig cfg{};
     CHECK_THAT(mod.specialist_ceiling("unknown_regime"),

@@ -77,11 +77,13 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     s.era = static_cast<int>(w.technology.current_era);
     s.knowledge = w.technology.knowledge_level;
     const EraDefinition* edef = w.era_catalog.by_index(w.technology.current_era);
-    // The dawn (commons) arc spans subsistence -> barter -> coinage -> money; the
-    // climb is "complete" only when it reaches a true market economy beyond those.
+    // The dawn (commons) arc spans subsistence -> barter -> coinage -> money -> feudal
+    // -> mercantile -> industrial; the climb is "complete" only when it reaches a true
+    // market economy (modern) beyond those.
     const std::string regime = edef ? edef->economic_regime : std::string();
     s.reached_market = edef && regime != "subsistence" && regime != "barter" &&
-                       regime != "coinage" && regime != "money";
+                       regime != "coinage" && regime != "money" && regime != "feudal" &&
+                       regime != "mercantile" && regime != "industrial";
 
     double surplus_sum = 0.0;
     int prov_with_cohorts = 0;
@@ -145,13 +147,14 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     // true market era — that is the natural terminus of dawn history-gen (the modern
     // economy modules take over from there and are not meant to run in this
     // fast-forward dawn lab). The dawn arc spans subsistence -> barter -> coinage ->
-    // money; stop only beyond those.
+    // money -> feudal -> mercantile -> industrial; stop only beyond those (modern).
     auto is_commons_era = [&](uint8_t era) {
         const EraDefinition* e = world.era_catalog.by_index(era);
         if (!e)
             return false;
         const std::string& r = e->economic_regime;
-        return r == "subsistence" || r == "barter" || r == "coinage" || r == "money";
+        return r == "subsistence" || r == "barter" || r == "coinage" || r == "money" ||
+               r == "feudal" || r == "mercantile" || r == "industrial";
     };
 
     std::vector<SocietySnapshot> series;

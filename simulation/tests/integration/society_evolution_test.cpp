@@ -46,10 +46,20 @@ TEST_CASE("society: trajectory classifier labels the archetypal runs",
                                           snap(1, 1100, 1.3, 0.08, 500, 0, 1)};
         CHECK(classify_trajectory(s) == Trajectory::Developing);
     }
-    SECTION("thriving — growth + specialization + advancement") {
+    SECTION("thriving — the dawn climb completes into a market economy") {
+        // Thriving is the success terminus: the society grew, specialized, accumulated
+        // capital AND left the commons for a market era (reached_market). A strong run
+        // still inside the commons is Developing, not Thriving (see that section below).
+        SocietySnapshot a = snap(0, 1000, 1.0, 0.0, 0, 0, 1);
+        SocietySnapshot b = snap(1, 1400, 1.6, 0.3, 5000, 3, /*era=*/8);
+        b.reached_market = true;
+        std::vector<SocietySnapshot> s = {a, b};
+        CHECK(classify_trajectory(s) == Trajectory::Thriving);
+    }
+    SECTION("developing — strong, but still inside the commons") {
         std::vector<SocietySnapshot> s = {snap(0, 1000, 1.0, 0.0, 0, 0, 1),
                                           snap(1, 1400, 1.6, 0.3, 5000, 3, 2)};
-        CHECK(classify_trajectory(s) == Trajectory::Thriving);
+        CHECK(classify_trajectory(s) == Trajectory::Developing);
     }
     SECTION("overshoot then crash") {
         std::vector<SocietySnapshot> s = {snap(0, 1000, 1.2, 0, 0, 0, 1),

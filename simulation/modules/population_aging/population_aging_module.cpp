@@ -219,12 +219,15 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 }
                 const EraDefinition* era =
                     state.era_catalog.by_index(state.technology.current_era);
-                // Pre-market (commons) demographics span the whole agrarian arc, through
-                // the money/coinage eras, until the modern market economy takes over.
+                // Pre-market (commons) demographics span the whole agrarian arc — through
+                // the money/coinage eras and the feudal/mercantile/industrial regimes —
+                // until the modern market economy takes over.
                 const bool commons =
                     era && (era->economic_regime == "subsistence" ||
                             era->economic_regime == "barter" || era->economic_regime == "coinage" ||
-                            era->economic_regime == "money");
+                            era->economic_regime == "money" || era->economic_regime == "feudal" ||
+                            era->economic_regime == "mercantile" ||
+                            era->economic_regime == "industrial");
 
                 // Pre-market demographics are FOOD-driven, not politics-driven. A dawn
                 // society has no modern institutions, and its intrinsic growth was ~zero

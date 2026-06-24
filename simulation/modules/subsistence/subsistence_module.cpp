@@ -46,7 +46,9 @@ bool SubsistenceModule::regime_active(std::string_view regime) const {
 }
 
 float SubsistenceModule::specialist_ceiling(std::string_view regime) const {
-    // The non-farming share a regime can sustain rises as the economy monetizes.
+    // The non-farming share a regime can sustain rises as the economy monetizes
+    // (coinage/money) and then institutionalizes production (feudal guilds/towns ->
+    // mercantile trade & finance -> industrial factory/wage labour).
     if (regime == "subsistence")
         return cfg_.specialist_ceiling_subsistence;
     if (regime == "barter")
@@ -55,6 +57,12 @@ float SubsistenceModule::specialist_ceiling(std::string_view regime) const {
         return cfg_.specialist_ceiling_coinage;
     if (regime == "money")
         return cfg_.specialist_ceiling_money;
+    if (regime == "feudal")
+        return cfg_.specialist_ceiling_feudal;
+    if (regime == "mercantile")
+        return cfg_.specialist_ceiling_mercantile;
+    if (regime == "industrial")
+        return cfg_.specialist_ceiling_industrial;
     return cfg_.max_specialist_fraction;  // fallback for any other active regime
 }
 
@@ -139,8 +147,9 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     }
     const float farmers_needed = labor_needed / std::max(working_fraction, 0.01f);
     float specialists_people = static_cast<float>(population) - farmers_needed;
-    // Ceiling rises as the economy monetizes (commons -> barter -> coinage -> money):
-    // money/markets let a larger non-farming share be sustained via trade.
+    // Ceiling rises along the pre-market arc (commons -> barter -> coinage -> money ->
+    // feudal -> mercantile -> industrial): money/markets, then guilds/trade/finance and
+    // the factory system, let a larger non-farming share be sustained.
     const float specialist_ceiling_frac = specialist_ceiling(era->economic_regime);
     specialists_people = std::clamp(specialists_people, 0.0f,
                                     static_cast<float>(population) * specialist_ceiling_frac);

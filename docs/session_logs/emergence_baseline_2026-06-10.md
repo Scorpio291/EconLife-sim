@@ -933,3 +933,44 @@ needs the population/resources to carry the breakthrough — Earth (a Class-12
 deathworld) thrives. Honest stalls remain for marginal worlds; nothing is railed.
 Gates green: 1534 unit, determinism, history/world_gen/subsistence/population/
 knowledge/occupation/persistence integration.
+
+---
+
+## 2026-06-24 — Pre-industrial era band (feudal / mercantile / industrial)
+
+Continued the era build forward from the agrarian+money band. Eras 5–7, which were
+placeholder `barter`, now carry their canonical economic regimes per
+docs/design/EconLife_Historical_Eras_and_Tech_Arc.md:
+- 5 Medieval    -> `feudal`     (guild / manor / town)
+- 6 Early Modern -> `mercantile` (workshops, shipping, early finance)
+- 7 Industrial   -> `industrial` (factory system, wage labour)
+
+eras.csv + era_catalog builtin; the dawn-climb modules (subsistence, knowledge,
+population_aging) and the society-evolution harness now span these regimes by NAME
+(they spanned them as "barter" before — the rename makes the placeholder removable
+without switching the climb off mid-arc). Specialist (non-farming) ceiling extended:
+money 0.22 -> feudal 0.27 -> mercantile 0.35 -> industrial 0.45. Unit suite green
+(1544); society suite green; emergence gate green (1 failed-as-expected = the
+deferred national_legitimacy invariant).
+
+### Finding: the late-dawn Malthusian wall pins specialists at ~0 (next lever)
+A/B verified the new ceilings are BEHAVIOR-NEUTRAL in the current calibration —
+[.society-history] is byte-for-byte identical before/after the rename, with spec
+reading **0% across eras 5–8** on every archetype. The ceiling is not the binding
+constraint there: by era ~3 the cumulative `food_mult` hits its **6.0 cap**
+(technology_catalog.cpp aggregate_effects) and `knowledge_factor` has saturated, so
+the carrying ceiling plateaus while population keeps growing into it. At that
+Malthusian wall `farmers_needed ≈ population`, so the food balance frees ~0
+specialists regardless of the regime ceiling. The era-5 agricultural revolution
+(heavy plough, three-field, watermill) and era-7 mechanized agriculture are
+authored but **inert** — capped out.
+
+Experiment (cap 6 -> 12, reverted): specialists DO reappear (earthlike era 6 -> 26%)
+but only in TRANSIENT bursts right after each agricultural advance, absorbed by
+population catch-up within one era; and it is a spectrum-wide rebalance — earthlike
+reaches modern at 9727 (was 10917), populations ~2x, and the fertile GARDEN world
+regresses into a population trap (stalls at era 3: abundant food -> max population
+-> no specialists -> no knowledge). So making late-dawn specialization emergent is
+a dedicated calibration milestone (raise/retune the food ceiling AND damp the
+population catch-up so a standing specialist class survives the wall), not a safe
+rider on the regime rename. Tracked here; the ceilings are staged for when it lands.

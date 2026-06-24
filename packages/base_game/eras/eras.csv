@@ -3,9 +3,9 @@ era_index,era_key,display_name,start_year,economic_regime,is_default_entry,v1_in
 2,bronze_age,Bronze Age,-3300,barter,0,1,10000
 3,iron_age,Iron Age,-1200,coinage,0,1,17000
 4,classical,Classical,-550,money,0,1,27000
-5,medieval,Medieval,500,barter,0,1,40000
-6,early_modern,Early Modern,1450,barter,0,1,56000
-7,industrial,Industrial,1750,barter,0,1,80000
+5,medieval,Medieval,500,feudal,0,1,40000
+6,early_modern,Early Modern,1450,mercantile,0,1,56000
+7,industrial,Industrial,1750,industrial,0,1,80000
 8,turn_of_millennium,Turn of the Millennium,2000,modern,1,1,0
 9,disruption,Disruption,2007,modern,0,1,0
 10,acceleration,Acceleration,2013,modern,0,1,0

@@ -530,7 +530,8 @@ struct PriceEngineConfig {
 struct SubsistenceConfig {
     // Economic regimes (era_catalog economic_regime) in which the commons food path
     // is active. In any other regime the module is inert (markets feed the population).
-    std::vector<std::string> active_regimes = {"subsistence", "barter", "coinage", "money"};
+    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
+                                               "feudal",      "mercantile", "industrial"};
 
     // Per-head food need per tick (same unit as the food output below).
     float per_capita_food_per_tick = 1.0f;
@@ -565,16 +566,23 @@ struct SubsistenceConfig {
     // tracking the carrying ceiling (most hands stay on the land).
     float max_specialist_fraction = 0.15f;
 
-    // Specialist ceiling rises as the economy MONETIZES. Money and markets move
-    // surplus to where it is needed (trade beyond barter's double-coincidence limit),
-    // so a larger non-farming (specialist/urban) share becomes sustainable as a
-    // society passes from pure commons -> barter -> coinage -> money. Selected by the
-    // era's economic_regime; an unlisted regime falls back to max_specialist_fraction.
-    // (Agrarian + money band; later bands extend mercantile/industrial above this.)
+    // Specialist ceiling rises as the economy MONETIZES, then as production
+    // INSTITUTIONALIZES. Money and markets move surplus past barter's double-
+    // coincidence limit; guilds/towns, long-distance trade and finance, and finally
+    // the factory system each sustain a larger non-farming (specialist/urban) share.
+    // A society climbs commons -> barter -> coinage -> money -> feudal (guild/manor)
+    // -> mercantile (proto-capitalist) -> industrial (factory/wage labour). Selected
+    // by the era's economic_regime; an unlisted regime falls back to
+    // max_specialist_fraction. (The actual share is GROUNDED in the food balance
+    // below — this is only the upper bound; the carrying ceiling must rise via
+    // knowledge/tech to actually free this many hands.)
     float specialist_ceiling_subsistence = 0.15f;
     float specialist_ceiling_barter = 0.15f;
     float specialist_ceiling_coinage = 0.18f;
     float specialist_ceiling_money = 0.22f;
+    float specialist_ceiling_feudal = 0.27f;      // medieval towns, guilds, clergy/nobility
+    float specialist_ceiling_mercantile = 0.35f;  // workshops, shipping, early finance
+    float specialist_ceiling_industrial = 0.45f;  // factory system, wage labour, urbanization
 
     // --- Granary food economy (grounded specialization + reserves) ---
     // Specialists (incl. knowledge-keepers) are NOT funded by a heuristic surplus or a
@@ -625,8 +633,8 @@ struct SubsistenceConfig {
 // Malthusian trap and move forward. All pre-market; modern tech uses the tech module.
 struct KnowledgeConfig {
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
-    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",
-                                               "money",       "mercantile", "industrial"};
+    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
+                                               "feudal",      "mercantile", "industrial"};
     float production_scalar = 0.4f;  // knowledge/year per unit of scholar knowledge_output
     // Annual attrition. Civilizational knowledge is CUMULATIVE — embodied in surviving
     // people, practices and (later) writing, it is essentially never lost on historical
