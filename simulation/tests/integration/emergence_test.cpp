@@ -120,17 +120,23 @@ TEST_CASE("emergence: identical seed reproduces identical behavior", "[emergence
     CHECK_THAT(fa.total_capital, WithinAbs(fb.total_capital, 1.0));
 }
 
-TEST_CASE("emergence: national legitimacy reflects (healthy) conditions",
+TEST_CASE("emergence: national legitimacy tracks (grounded) conditions",
           "[emergence][integration]") {
-    // The national legitimacy roll-up tracks provincial conditions. With the
-    // economy functioning (grievance grounded in material conditions, ~0.15;
-    // unemployment ~0; stability recovered), legitimacy must NOT crater — a
-    // materially-healthy nation retains the population's consent. (Legitimacy
-    // CRATERING under a forced crisis, and the regime-differentiated response to
-    // it, are covered by the political_cycle [unrest] unit tests.)
+    // The national legitimacy roll-up tracks real provincial conditions
+    // (institutional trust, stability, grievance, unemployment). Since stability was
+    // grounded (it no longer auto-heals to 1.0; it reflects employment/crime/
+    // inequality/grievance), legitimacy honestly mirrors a MEDIOCRE modern baseline:
+    // on this short run employment is only ~0.42 and inequality ~0.41, so stability
+    // sits ~0.34 and legitimacy lands depressed (~0.23) — a troubled-but-functioning
+    // state, NOT a collapse. We assert it does not CRATER (stay well clear of total
+    // breakdown), rather than that it is high. Raising the modern baseline to
+    // genuinely "healthy" legitimacy is gated on grounding modern employment/wages/
+    // inequality (the documented modern-economy follow-up); legitimacy CRATERING under
+    // a forced crisis + the regime-differentiated response are covered by the
+    // political_cycle [unrest] unit tests.
     const auto& s = baseline();
-    REQUIRE(s.back().mean_grievance < 0.5);  // economy is healthy on this baseline
-    CHECK(s.back().national_legitimacy > 0.25);
+    REQUIRE(s.back().mean_grievance < 0.5);  // not a grievance-driven collapse
+    CHECK(s.back().national_legitimacy > 0.15);  // not cratered (well below the 0.30 crisis line)
 }
 
 TEST_CASE("emergence: province stability stays healthy (does not collapse)",
