@@ -974,3 +974,58 @@ regresses into a population trap (stalls at era 3: abundant food -> max populati
 a dedicated calibration milestone (raise/retune the food ceiling AND damp the
 population catch-up so a standing specialist class survives the wall), not a safe
 rider on the regime rename. Tracked here; the ceilings are staged for when it lands.
+
+---
+
+## 2026-06-25 — Grounding the historical climb in real era timing + research acceleration
+
+Goal: make the dawn->modern climb and the research curve track real history, not just
+end near the right total span. Two grounded changes, validated against the real
+per-era calendar (eras.csv start_year is the historical anchor).
+
+### 1. The "great acceleration" was capped away (research progress)
+`aggregate_effects` capped `knowledge_mult` at 8.0, and the cumulative tech-tree
+product hit that cap by the MEDIEVAL era. So the two most consequential meta-
+inventions in history — the **printing press (2.0x)** and the **scientific method
+(2.0x)** at era 6, plus calculus/newspaper — had ZERO effect. The model could not
+reproduce the post-1450 explosion of knowledge. Raised the cap to 200 so the
+"learning to learn" stack (writing -> alphabet -> university -> printing ->
+scientific method) fully compounds. Safe by construction: the subsistence
+`knowledge_factor` (food carrying ceiling) is already saturated in the late dawn, so
+uncapping only accelerates ERA ADVANCEMENT, not food/population.
+
+### 2. Era thresholds recalibrated to the real calendar (the climb)
+`knowledge_to_advance` retuned (4-iteration empirical fit via [.society-knowledge-
+trace] / [.society-history]) so the Class-12 EARTHLIKE anchor (real Earth) reaches
+each era within ~150 yr of its true year-since-founding. New thresholds:
+  neolithic 4200, bronze 13000, iron 20000, classical 39000, medieval 90000,
+  early_modern 240000, industrial 445000.
+
+EARTHLIKE climb vs real history (year since founding / era duration):
+| Era         | real start | sim year | real dur | sim dur |
+|-------------|-----------:|---------:|---------:|--------:|
+| Bronze      | 6700       | 6851     | 6700     | 6851    |
+| Iron        | 8800       | 8811     | 2100     | 1960    |
+| Classical   | 9450       | 9534     | 650      | 723     |
+| Medieval    | 10500      | 10576    | 1050     | 1042    |
+| Early Modern| 11450      | 11481    | 950      | 905     |
+| Industrial  | 11750      | 11757    | 300      | 276     |
+| Modern      | 12000      | 11999    | 250      | 242     |
+
+Modern reached at year 11,999 (real ~12,000). Every era duration within ~140 yr of
+its historical value, and the SHAPE is now faithful: millennia-long ancient eras,
+then the sharp scientific/industrial acceleration (era 7 knowledge rate 545/yr,
+era 8 850/yr) the uncapped meta-inventions produce — instead of the old flat
+~530 yr/era.
+
+Spectrum preserved/sharpened (13,000-yr window): GARDEN (comfortable) crawls to
+Bronze (Developing); EARTHLIKE reaches Modern ~12,000 (Thriving); FERTILE DEATHWORLD
+(adversity+resources) is fastest to Modern ~10,840 (Thriving); BARREN DEATHWORLD
+(too few minds/resources) honestly Stalls at Classical. Comfortable worlds stagnate,
+hard worlds are driven, breakthroughs still need the population/resources to carry
+them — nothing railed.
+
+Gates: 1544 unit, society suite, emergence (1 failed-as-expected = deferred
+national_legitimacy). The Malthusian-wall finding from the prior band still stands
+(spec ~0% in the late dawn — population grows into the fixed food ceiling); grounding
+late-dawn URBANIZATION remains the separate food/population calibration milestone.
