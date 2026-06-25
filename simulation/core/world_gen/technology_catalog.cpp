@@ -225,13 +225,16 @@ EraTechEffects TechnologyCatalog::aggregate_effects(uint8_t era) const {
         }
     }
     // Sanity bounds: cap the boosts and floor the mortality relief to keep the
-    // aggregate sane (no runaway, no near-zero deaths). The knowledge cap is high
-    // enough that the historical meta-inventions (writing -> printing press ->
-    // scientific method) fully compound — that "learning to learn" stack is the
-    // grounded driver of the late-dawn research acceleration; era thresholds set the
-    // absolute pace.
+    // aggregate sane (no runaway, no near-zero deaths). Both production caps are set
+    // high enough that the data-driven tech tree is FULLY EXPRESSIVE across the V1
+    // eras — the "learning to learn" knowledge stack (writing -> printing ->
+    // scientific method) and the agricultural stack (plough -> heavy plough /
+    // three-field / watermill -> mechanized agriculture) each drive their curve.
+    // Era thresholds, not these caps, set the pace. (A bare 6.0 food cap previously
+    // bit at era 2, flattening the entire agricultural arc — incl. the medieval
+    // revolution — so technique could not raise the carrying ceiling.)
     e.knowledge_mult = std::min(e.knowledge_mult, 200.0f);
-    e.food_mult = std::min(e.food_mult, 6.0f);
+    e.food_mult = std::min(e.food_mult, 40.0f);
     e.mortality_mult = std::max(e.mortality_mult, 0.35f);
     return e;
 }

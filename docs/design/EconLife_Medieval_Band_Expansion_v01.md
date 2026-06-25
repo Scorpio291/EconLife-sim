@@ -358,11 +358,12 @@ honest verb set is small, by design.
 
 ## 10. Phasing (shippable milestones, each gated)
 
-1. **M1 — Earned surplus (engine, D1).** Let the agricultural-productivity stack
-   raise the carrying ceiling (food-tech cap revisit + optional land-improvement
-   stock). Re-validate the dawn spectrum; ratify the garden trap as intended.
-   *Deliverable:* a productive society shows freed-specialist pulses after era-5
-   ag advances; a marginal one does not. **No wall infringement.**
+1. **M1 — Earned surplus (engine, D1). ✅ SHIPPED 2026-06-25.** food_mult cap 6→40
+   (agricultural tech tree fully expressive); era thresholds re-calibrated. A
+   productive society (earthlike) shows freed-specialist pulses after the era-5/era-7
+   ag revolutions (medieval 26%, industrial 44%); marginal worlds stall before
+   medieval and earn nothing. Spectrum preserved; modern ~yr 11,970. **No wall
+   infringement** (only the ceiling moved). Gates green.
 2. **M2 — Grain logistics (engine, §3.5, D6).** The `grain_logistics` step: net
    feedable surplus per province from earned surplus hauled across `ProvinceLink`s
    under the ox-cart limit (conserved). *Deliverable:* inland surplus is
@@ -388,8 +389,13 @@ core — which it does *by raising the ceiling, never by softening the wall.*
 
 ## 11. Open decisions (need ratification before build)
 
-- **D1 (blocking):** food-productivity cap/curve so era food techs bite — adopt
-  the spectrum shift (incl. the garden population trap) as intended? (§3, §10/M1)
+- ~~**D1 (blocking):** food-productivity cap/curve so era food techs bite~~ —
+  **RESOLVED & SHIPPED (2026-06-25, M1).** food_mult cap 6→40 (tech tree fully
+  expressive); era thresholds re-calibrated. EARTHLIKE earns a 26% medieval urban
+  class (surplus pulse from the heavy-plough/three-field revolution) and reaches
+  Modern ~yr 11,970; marginal worlds stall before medieval and earn no urban
+  economy. Wall intact (only the ceiling moved). See the session log
+  (emergence_baseline_2026-06-10.md, 2026-06-25 M1 entry).
 - **D2:** is `agricultural_capital` (land improvement as a located stock) in scope
   for M1, or is knowledge+food-tech enough to drive the first surplus pulses?
 - **D3:** manorial ownership model — reuse `NPCBusiness` (manor as a firm with a

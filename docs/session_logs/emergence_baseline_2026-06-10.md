@@ -1029,3 +1029,55 @@ Gates: 1544 unit, society suite, emergence (1 failed-as-expected = deferred
 national_legitimacy). The Malthusian-wall finding from the prior band still stands
 (spec ~0% in the late dawn — population grows into the fixed food ceiling); grounding
 late-dawn URBANIZATION remains the separate food/population calibration milestone.
+
+---
+
+## 2026-06-25 — M1: earned medieval urbanization (food tech tree expressive; wall intact)
+
+First build milestone of the Medieval Band (see EconLife_Medieval_Band_Expansion_v01.md).
+Goal: let a productive society *earn* a medieval urban/specialist class from real
+agricultural surplus — WITHOUT infringing the Malthusian wall (no population damping,
+no reserved non-farm fraction, no restoring force). Resolves design decision **D1**.
+
+### The bug it fixes
+`aggregate_effects` capped cumulative `food_mult` at 6.0 — which bit at era ~2, so the
+ENTIRE agricultural arc (incl. the medieval revolution: heavy plough, three-field,
+horse collar, watermill) was flat and invisible. Technique could not raise the
+carrying ceiling, so no society could ever break the wall upward → spec pinned ~0 in
+the late dawn (the long-standing finding). Raised the cap to 40 so the food tech tree
+is fully expressive across V1 eras — mirroring the knowledge_mult=200 decision (tech
+tree drives the curve; thresholds set the pace). food_mult is dawn-only (subsistence
+module), so the modern economy / emergence gate are unaffected (verified).
+
+### The mechanism (wall-respecting)
+Each era's food techs raise that era's carrying ceiling; population then grows into it
+and the wall reasserts. Specialists are the TRANSIENT surplus pulse between an
+agricultural advance and its reabsorption — exactly the historical pattern. Verified
+on EARTHLIKE (fine trace):
+  - classical end (~yr 10000): surplus 0.91, spec 0%  (Malthusian deficit at the wall)
+  - MEDIEVAL (~yr 10500): surplus 1.21, **spec 26%**  (heavy-plough revolution frees a
+    quarter of the population into specialists — the earned urban class)
+  - industrial (~yr 11000): **spec 44%** (mechanized-agriculture pulse)
+The pulses land on the real agricultural revolutions (era 5, era 7); era 6
+(early-modern) has no ag tech and no ag pulse — historically right (its urbanization
+is trade-driven, the mercantile band's job).
+
+### Re-calibration (the food curve shifted population -> knowledge -> pace)
+Higher ceiling -> larger population -> larger knowledge population_term -> faster
+climb, so era thresholds were re-tuned (3 iterations) to restore the grounded timing.
+New `knowledge_to_advance`: 4200 / 13000 / 20000 / 52000 / 280000 / 950000 / 1900000.
+EARTHLIKE durations vs real: Neolithic 6851/6700, Bronze 1944/2100, Iron 612/650,
+Classical 1098/1050, **Medieval 956/950**, Early-modern 293/300, Industrial 216/250;
+Modern reached **year 11,970** (real ~12,000). Calibration feasible because population
+is bounded per-era by that era's food ceiling, so within-era rate stabilizes.
+
+### Spectrum — the wall gates who urbanizes (intended, per "not all societies survive")
+GARDEN (comfortable, bounty 1.8): stalls at Bronze (Developing) — abundance breeds
+stagnation. EARTHLIKE: Modern ~11,970 (Thriving) with the 26% medieval class. BARREN
+DEATHWORLD: Stalled at Classical — never reaches medieval, EARNS NO urban economy.
+FERTILE DEATHWORLD: fastest to Modern ~10,818 (Thriving). Marginal worlds simply don't
+reach medieval, so they get no medieval economy — not granted, not forced.
+
+Gates: 1547 unit, society suite, emergence (1 failed-as-expected = deferred
+national_legitimacy). Next: M2 grain logistics (the tyranny of the ox), then M3
+pre-market genesis gated on the catchment's freed specialists + proto-capital.
