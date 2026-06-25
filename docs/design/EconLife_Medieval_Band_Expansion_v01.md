@@ -90,6 +90,12 @@ them *and* proto-capital exists to found them. No surplus → neither exists →
 medieval economy. **The wall gates the entire layer automatically, with no extra
 restraining force.** Every mechanic below hangs off this chain.
 
+A second, *spatial* gate compounds it (§3.5): even earned surplus is useless to a
+settlement it cannot reach before the draft animals eat it in transit. So the
+sizing input is ultimately the **net feedable surplus** of a settlement's
+catchment, not just its own province's surplus. Two gates — surplus in **time**
+(the wall), surplus in **space** (the ox) — both inviolable.
+
 ---
 
 ## 3. The urbanization mechanism (wall-respecting)
@@ -125,23 +131,108 @@ stands; only the ceiling moves, and only by earned technique.
 
 ---
 
+## 3.5 The tyranny of the ox — grain logistics as the feudal generator
+
+Premise (design insight, 2026-06-25): castles, lords, and manors are not
+decoration — they are the **emergent solution to a logistics problem**, and the
+problem reduces to one conserved fact: *a draft team eats the grain it hauls.*
+Over distance the oxen consume the cargo, so grain has a hard economic haulage
+radius; beyond it the load is entirely eaten in transit and delivers nothing.
+This single matter-conservation limit *generates* feudalism. We make it a
+first-class mechanic, not flavour. It is the **spatial** partner to §3's temporal
+wall, and equally inviolable.
+
+### The primitive (conserved)
+For a load `L` hauled distance `d` over a link, the team consumes grain at rate
+`k_eff` per unit distance:
+
+```
+delivered(d) = max(0, L − k_eff · d · trip_factor)
+```
+
+- `trip_factor` accounts for the empty return leg (the ox still eats going home).
+- `k_eff = k_base · terrain(transit_terrain_cost) · road(1 − infrastructure_bonus)
+  · mode(LinkType)`.
+- The grain the team eats is **conserved** — deducted from the load and credited
+  as draft sustenance, never vanished.
+- Physical limit `r_max = L / (k_eff · trip_factor)`: beyond it, delivered = 0.
+- Economic radius `r_econ < r_max`: where delivered falls below the surplus needed
+  to justify the haul.
+
+### Land vs water is the whole story
+`mode(LinkType)` makes water an order of magnitude cheaper — a barge or coaster is
+not eaten by its cargo the way an ox-team is:
+
+- Land ≈ 1.0 (the tyranny); River ≈ 0.1; Maritime ≈ 0.05 (illustrative).
+
+The engine already carries `LinkType {Land, River, Maritime}`,
+`transit_terrain_cost`, and `infrastructure_bonus` on every `ProvinceLink` — so
+`r_econ` is computable from existing structure. Roads (`infrastructure_bonus`)
+extend the land radius: the grounded reason a society sinks surplus into roads.
+
+### The emergent chain (why castles and lords exist)
+1. **Catchment.** A settlement is fed only by the surplus within its `r_econ`, net
+   of what the oxen eat bringing it in — a **spatial cap** on non-farm population,
+   the complement to the temporal wall.
+2. **Localism → decentralization.** Land grain cannot be centralized, so a large
+   central court/army cannot be fed from a distant breadbasket. The solution that
+   emerges: site a fortified surplus-store + a lord + a garrison **at each local
+   surplus locus**, fed from that locus. Power fragments to the granularity of the
+   haulage radius — that fragmentation *is* feudalism, emergent, not scripted.
+3. **Protect the grain → the garrison loop.** A concentrated grain store is a
+   target (raiders, rivals, bandits). The garrison defends it and is fed from the
+   same local surplus. The lord's tithe is the conserved transfer that converts
+   surplus → protection; the protectable surplus sets the garrison size, which sets
+   local military power. Loop: surplus → garrison → protection of surplus.
+4. **Water makes cities.** River/coastal provinces have a large `r_econ` → they
+   aggregate distant surplus → support towns, markets, a merchant class; landlocked
+   provinces stay manorial/castle-bound. The riverine-city / inland-manor spectrum
+   falls straight out of geography × haulage.
+
+### Architecture mapping
+- New Tier-1/2 step **`grain_logistics`**: from each province's *earned* surplus
+  (§2, subsistence), compute deliverable grain to neighbours across `ProvinceLink`s
+  (`k_eff` per link), conserving ox-consumed grain. Output per province: **net
+  feedable surplus** = local surplus + Σ(delivered-from-within-radius).
+- Net feedable surplus **replaces** local surplus as the input to the freed-
+  specialist / genesis gate (§2, §4): a town/castle's size is its catchment's
+  earned, *deliverable* surplus.
+- Castle/manor genesis (§4) sites a fortified node at a surplus locus; garrison =
+  surplus-fed soldiers; tithe (§5) funds it; a province **security** value (rising
+  with garrison, falling with predation) governs how much stored surplus survives.
+
+### Respects the wall, doubly
+The hauled grain is still the *earned* surplus of §2–§3 — no surplus, nothing to
+haul, no castle. The ox-cart limit only *adds* a spatial constraint; it never
+softens the temporal wall. A subsistence-locked or stranded-inland province
+supports no garrison and no lord — correctly. **Two inviolable gates now bound the
+medieval economy: can the society produce surplus (time), and can that surplus
+reach here before the oxen eat it (space)?**
+
+---
+
 ## 4. Entity genesis for the band
 
 Extend `business_lifecycle` genesis (today: flat `residents / denominator`,
 founder-funded, modern-only) with a **pre-market genesis path** for the
 `feudal`/`mercantile`/`industrial` regimes:
 
-- **Target is freed specialists, not headcount.** Supportable workshops in a
-  province = `freed_specialists / workshop_labor_denominator`. Subsistence-locked
-  province → 0 freed specialists → 0 workshops. (Wall-gated by construction.)
+- **Target is freed specialists from the catchment, not headcount.** Supportable
+  workshops in a province = `freed_specialists / workshop_labor_denominator`, where
+  `freed_specialists` derives from the province's **net feedable surplus** (§3.5) —
+  local surplus plus what neighbours can deliver before the oxen eat it.
+  Subsistence-locked *or* surplus-stranded-inland province → 0 freed specialists →
+  0 workshops. (Doubly wall-gated, time and space, by construction.)
 - **Founder-funded from proto-capital.** A founding specialist commits their
   accumulated proto-capital as the workshop's seed cash (no money minted — the
   existing genesis invariant). Insufficient proto-capital → no formation.
 - **Era-appropriate firm types.** Not corporations: **workshop** (artisan
   household producing a craft good), **guild-shop** (workshop admitted to a
   guild — quality/price privileges, entry cost), **manor** (agricultural estate;
-  the feudal production unit binding land + peasant labor + lord). Firm "profile"
-  set from the era, reusing the existing `NPCBusiness` record.
+  the feudal production unit binding land + peasant labor + lord), and **castle**
+  (a fortified surplus-store + lord + garrison sited at a surplus locus per §3.5;
+  garrison size bounded by the locally feedable surplus). Firm "profile" set from
+  the era, reusing the existing `NPCBusiness` record where it fits.
 - **Self-limiting** at the surplus-set target (the existing saturation deadband),
   so a society at its ceiling stops forming firms — the wall again.
 
@@ -157,11 +248,15 @@ Today `feudal` is behaviorally identical to the commons (only the specialist
 ceiling differs). The band adds the regime's defining mechanics, each tied to a
 real signal and conserved:
 
-- **Manorialism.** Manors bind peasant labor to land; output is the subsistence
-  harvest, but a **tithe/rent** fraction flows from peasant producers to the
-  lord (a conserved transfer, not minted), seeding the first concentrated capital
-  and the inequality that medieval politics runs on. Grounded in existing
-  surplus + a new ownership link.
+- **Manorialism & the garrison loop.** Manors bind peasant labor to land; output
+  is the subsistence harvest, but a **tithe/rent** fraction flows from peasant
+  producers to the lord (a conserved transfer, not minted). The lord spends that
+  surplus feeding a **garrison** that protects the local grain store (§3.5's
+  "protect the grain"): surplus → garrison → security → less surplus lost to
+  predation → more surplus. The tithe is thus not arbitrary extraction — it is the
+  price of protection the haulage limit makes unavoidable, and the seed of the
+  concentrated capital and inequality medieval politics runs on. Grounded in
+  existing surplus + an ownership link + a province `security` value.
 - **Guilds.** A guild per craft per town controls **entry** (cap on guild-shops,
   an admission cost paid from proto-capital), **quality** (guild-shops gain a
   quality floor via the existing tech-tier/maturation machinery), and **price**
@@ -184,9 +279,11 @@ Data-driven via existing catalogs (`era_available` already supported); the bulk
 of the work, lowest engine risk. A minimal but coherent medieval set:
 
 - **Goods (`era_available ≤ 5`):** grain, flour, bread, ale, wool, cloth,
-  timber, charcoal, iron ore, iron, tools, leather, pottery, salt. Plus
-  **backfill** the handful of basics that logically predate modernity (grain,
-  timber, ore) to earlier eras so the agrarian arc isn't empty.
+  timber, charcoal, iron ore, iron, tools, leather, pottery, salt, and **draft
+  animals / fodder** (the ox of §3.5 — an economic actor whose grain/fodder
+  consumption *is* the haulage cost). Plus **backfill** the handful of basics that
+  logically predate modernity (grain, timber, ore) to earlier eras so the agrarian
+  arc isn't empty.
 - **Recipes (`era_available ≤ 5`):** milling (grain→flour), baking
   (flour→bread), brewing (grain→ale), weaving (wool→cloth), smithing
   (iron→tools), smelting (ore→iron), tanning (hide→leather), charcoal burning.
@@ -266,14 +363,21 @@ honest verb set is small, by design.
    stock). Re-validate the dawn spectrum; ratify the garden trap as intended.
    *Deliverable:* a productive society shows freed-specialist pulses after era-5
    ag advances; a marginal one does not. **No wall infringement.**
-2. **M2 — Pre-market genesis.** Feudal genesis gated on freed specialists +
-   proto-capital; workshop/guild-shop/manor firm types. *Deliverable:* workshops
-   appear only where M1 produced surplus, founder-funded.
-3. **M3 — Medieval content.** Author the §6 goods/recipes/facilities + backfill.
+2. **M2 — Grain logistics (engine, §3.5, D6).** The `grain_logistics` step: net
+   feedable surplus per province from earned surplus hauled across `ProvinceLink`s
+   under the ox-cart limit (conserved). *Deliverable:* inland surplus is
+   spatially bounded; river/coastal catchments aggregate far, landlocked ones
+   don't — visible as a feedable-surplus map that water transforms.
+3. **M3 — Pre-market genesis.** Feudal genesis gated on the catchment's freed
+   specialists + proto-capital; workshop/guild-shop/manor/**castle** firm types.
+   *Deliverable:* workshops/castles appear only where M1 produced surplus AND M2
+   can deliver it, founder-funded.
+4. **M4 — Medieval content.** Author the §6 goods/recipes/facilities + backfill.
    *Deliverable:* non-empty local markets in era-5 goods; real production chains.
-4. **M4 — Feudal layer.** Manorial tithe, guild entry/quality/price, towns &
-   fairs. *Deliverable:* the regime behaves distinctly from the commons.
-5. **M5 — Entry & verbs.** Era selection surfaces the world's earned state;
+5. **M5 — Feudal layer.** Manorial tithe + garrison/security loop, guild
+   entry/quality/price, towns & fairs. *Deliverable:* the regime behaves distinctly
+   from the commons; protection is grounded in the haulage limit.
+6. **M6 — Entry & verbs.** Era selection surfaces the world's earned state;
    medieval player verbs. *Deliverable:* a playable medieval start.
 
 M1 is the linchpin and the riskiest (spectrum rebalance); everything downstream
@@ -295,6 +399,15 @@ core — which it does *by raising the ceiling, never by softening the wall.*
 - **D5:** does the mercantile band (era 6) reuse this genesis path wholesale
   (workshops→firms, guilds→early companies), confirming the design generalizes
   before we commit to it?
+- **D6 (§3.5):** grain-logistics calibration — `k_base`, `trip_factor`, and the
+  `mode`/`terrain`/`road` factors (land vs river vs maritime). Does haulage distance
+  use `ProvinceLink.shared_border_km` (a border length, not a travel distance — a
+  poor proxy) or a province-centroid distance that world-gen must expose? Centroid
+  distance likely required.
+- **D7 (§3.5/§5):** the "protect the grain" predation model — reuse `random_events`
+  raiding plus a province `security` value fed by garrison size, or a dedicated
+  raiding/banditry loop? Either way, lost grain must be conserved (it goes to the
+  raider, not to nothing).
 
 ---
 
@@ -302,11 +415,17 @@ core — which it does *by raising the ceiling, never by softening the wall.*
 
 Medieval is thin because only the abstract commons loop runs there and 100% of the
 goods/recipe/firm content is modern-anchored. The fix is to make the medieval
-economy a *grounded, conditional* function of the surplus a society actually earns:
-the commons module already computes freed specialists and proto-capital, both zero
-without real productivity gains, so gating workshop/guild/manor genesis on them
-makes the **Malthusian wall the gate for the entire medieval layer** — no reserved
-fractions, no population damping, no restoring force. Societies that break the wall
-*upward* through technique get towns and guilds; societies that don't stay
-subsistence-locked or stagnate — and a player entering in 500 CE meets whichever
-world this one became.
+economy a *grounded, conditional* function of the surplus a society actually earns —
+bounded by **two inviolable gates**. In **time**, the Malthusian wall: the commons
+module already computes freed specialists and proto-capital, both zero without real
+productivity gains, so gating workshop/guild/manor/castle genesis on them makes the
+wall the gate for the entire medieval layer (no reserved fractions, no population
+damping, no restoring force). In **space**, the tyranny of the ox: a draft team eats
+the grain it hauls, so surplus has a hard economic radius — grain can't be
+centralized over land, which is precisely why castles, lords, and garrisons emerge
+to concentrate and protect surplus *locally* and feed the protectors from it. Water
+(rivers/coast) breaks the radius and makes cities; landlocked surplus stays
+manorial. Societies that break the wall upward through technique *and* can deliver
+their grain get towns, guilds, and cities; those that can't stay subsistence-locked,
+stranded, or stagnant — and a player entering in 500 CE meets whichever world this
+one became.
