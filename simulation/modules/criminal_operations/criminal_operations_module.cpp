@@ -260,6 +260,8 @@ void CriminalOperationsModule::execute(const WorldState& state, DeltaBuffer& del
     }
 
     process_conflict_states(state, delta);
+
+    publish_territorial_conflict(state, delta);
 }
 
 void CriminalOperationsModule::process_strategic_decision(CriminalOrganization& org,
@@ -408,6 +410,51 @@ void CriminalOperationsModule::process_conflict_states(const WorldState& state,
             ev_delta.new_token = token;
             delta.evidence_deltas.push_back(ev_delta);
         }
+    }
+}
+
+void CriminalOperationsModule::publish_territorial_conflict(const WorldState& state,
+                                                            DeltaBuffer& delta) const {
+    // Demand-relevant intensity of an org's conflict: the escalation stages
+    // economic(1)..open_warfare(5) drive weapons demand; none(0) and the transient
+    // resolution(6) post-conflict state do not. (Numeric max over raw stage values
+    // would wrongly rank resolution above open_warfare — map it to 0 first.)
+    auto intensity_of = [](TerritorialConflictStage s) -> uint8_t {
+        const auto v = static_cast<uint8_t>(s);
+        return (v >= static_cast<uint8_t>(TerritorialConflictStage::economic) &&
+                v <= static_cast<uint8_t>(TerritorialConflictStage::open_warfare))
+                   ? v
+                   : static_cast<uint8_t>(0);
+    };
+
+    // Seed every region present this tick to 0 so that when a conflict resolves the
+    // published stage decays back to none (a replacement is only applied where a
+    // delta is emitted). std::map keeps the emit order deterministic (region asc).
+    std::map<uint32_t, uint8_t> region_intensity;
+    for (const auto& prov : state.provinces)
+        region_intensity[prov.region_id] = 0;
+
+    // organizations_ is sorted by id in execute() before this runs; dominance_by_province
+    // is a std::map (province-index keyed). Take the max intensity over every org
+    // operating (dominance > 0) in each province's region.
+    for (const auto& org : organizations_) {
+        const uint8_t intensity = intensity_of(org.conflict_state);
+        if (intensity == 0)
+            continue;
+        for (const auto& [prov_idx, dom] : org.dominance_by_province) {
+            if (dom <= 0.0f || prov_idx >= state.provinces.size())
+                continue;
+            const uint32_t region_id = state.provinces[prov_idx].region_id;
+            uint8_t& cur = region_intensity[region_id];
+            cur = std::max(cur, intensity);
+        }
+    }
+
+    for (const auto& [region_id, intensity] : region_intensity) {
+        RegionDelta rd{};
+        rd.region_id = region_id;
+        rd.territorial_conflict_stage_replacement = intensity;
+        delta.region_deltas.push_back(rd);
     }
 }
 

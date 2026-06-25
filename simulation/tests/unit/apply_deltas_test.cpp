@@ -259,6 +259,26 @@ TEST_CASE("apply_deltas: region stability additive and clamped", "[apply_deltas]
     REQUIRE(w.provinces[0].conditions.stability_score == 0.0f);
 }
 
+TEST_CASE("apply_deltas: territorial conflict stage replacement (clamped to 6)",
+          "[apply_deltas][core]") {
+    auto w = make_minimal_world();
+    DeltaBuffer delta{};
+    RegionDelta rd{};
+    rd.region_id = 0;
+    rd.territorial_conflict_stage_replacement = 4;  // personnel_violence
+    delta.region_deltas.push_back(rd);
+    apply_deltas(w, delta);
+    REQUIRE(w.provinces[0].cohort_stats->territorial_conflict_stage == 4);
+
+    DeltaBuffer over{};
+    RegionDelta rd2{};
+    rd2.region_id = 0;
+    rd2.territorial_conflict_stage_replacement = 200;  // out-of-range -> clamp to 6
+    over.region_deltas.push_back(rd2);
+    apply_deltas(w, over);
+    REQUIRE(w.provinces[0].cohort_stats->territorial_conflict_stage == 6);
+}
+
 TEST_CASE("apply_deltas: evidence token append with auto-id", "[apply_deltas][core]") {
     auto w = make_minimal_world();
     DeltaBuffer delta{};

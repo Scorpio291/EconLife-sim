@@ -241,6 +241,15 @@ exist or is not exposed), not *rail-scope* (swap a proxy for an existing signal)
 - Phase 4: criminal_operations LE-heat now reads the real investigation pressure
   (peak investigator_meter across the org's members/leadership) instead of local
   police social_capital. (criminal_operations_module.cpp compute_le_heat.)
+- Phase 4 #6 (2026-06-25): weapons_trafficking territorial conflict demand now reads
+  a GROUNDED per-province `territorial_conflict_stage` (RegionCohortStats) instead of
+  the `criminal_dominance_index` proxy (mere criminal presence). criminal_operations
+  publishes it each tick as the demand-relevant max over org `conflict_state` for orgs
+  operating in the province (resolution maps to 0 — post-conflict, no demand); routed
+  via a new `RegionDelta.territorial_conflict_stage_replacement`. Weapons demand now
+  tracks ACTUAL territorial conflict, not dominance. Transient (recomputed each tick;
+  not persisted). Tests: apply-deltas clamp; criminal_operations publish (post-advance
+  stage + resolution->0); weapons execute_province now driven by the real signal.
 
 ## NEEDS LATER FOCUS — feature-scope (signal missing or unexposed)
 
@@ -279,11 +288,11 @@ be built first.
    `source_business_id` on the supply delta, or a per-business output field) so
    antitrust can compute true per-good shares. FEATURE.
 
-6. **weapons_trafficking conflict stage from dominance** (`weapons_trafficking_module.cpp:~69`).
-   The real signal (`CriminalOrganization.conflict_state`) EXISTS and is wired by
-   criminal_operations, but the org list is not exposed on WorldState, so
-   weapons_trafficking can't read it. Smallest feature here: expose criminal orgs
-   (or a per-province conflict signal) on WorldState. FEATURE (small).
+6. ~~**weapons_trafficking conflict stage from dominance**~~ **DONE (2026-06-25).**
+   Exposed a per-province `territorial_conflict_stage` on RegionCohortStats, published
+   each tick by criminal_operations from the real `CriminalOrganization.conflict_state`
+   (demand-relevant max over orgs present; resolution->0). weapons_trafficking reads it
+   instead of the dominance proxy. See the Shipped section above.
 
 7. **weapons_trafficking weapon output = revenue*0.01** (`:~100`). No weapon
    production recipe exists. Ground via a real recipe/facility output (like other

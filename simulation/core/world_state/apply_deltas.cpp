@@ -610,6 +610,12 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.food_store_replacement;
                     cs.food_store = (v >= 0.0f) ? v : 0.0f;
                 }
+                if (d.territorial_conflict_stage_replacement.has_value()) {
+                    // Replacement; criminal_operations recomputes the per-province
+                    // conflict intensity each tick from org conflict_state.
+                    cs.territorial_conflict_stage =
+                        std::min(*d.territorial_conflict_stage_replacement, static_cast<uint8_t>(6));
+                }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =
                         clamp01(safe_add(prov.community.cohesion, *d.cohesion_delta));

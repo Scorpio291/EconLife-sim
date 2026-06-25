@@ -132,7 +132,7 @@ TEST_CASE("WeaponsTrafficking: execute_province diverts weapons to informal supp
     Province p{};
     p.id = 0;
     p.cohort_stats = std::make_unique<RegionCohortStats>();
-    p.cohort_stats->criminal_dominance_index = 0.85f;  // open-warfare demand
+    p.cohort_stats->territorial_conflict_stage = 5;  // open_warfare -> high informal demand
     w.provinces.push_back(std::move(p));
 
     NPCBusiness biz{};
@@ -162,7 +162,7 @@ TEST_CASE("WeaponsTrafficking: compliant manufacturer diverts nothing",
     Province p{};
     p.id = 0;
     p.cohort_stats = std::make_unique<RegionCohortStats>();
-    p.cohort_stats->criminal_dominance_index = 0.85f;
+    p.cohort_stats->territorial_conflict_stage = 5;  // open_warfare demand
     w.provinces.push_back(std::move(p));
 
     NPCBusiness biz{};

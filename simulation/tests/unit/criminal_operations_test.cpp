@@ -2,6 +2,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/config/package_config.h"
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/criminal_operations/criminal_operations_module.h"
@@ -226,6 +227,110 @@ TEST_CASE("Personnel violence generates evidence", "[criminal_operations][tier7]
         CHECK(delta.evidence_deltas[0].new_token.has_value());
         CHECK(delta.evidence_deltas[0].new_token->type == EvidenceType::physical);
     }
+}
+
+TEST_CASE("publish_territorial_conflict: per-province max intensity from real conflict_state",
+          "[criminal_operations][tier7]") {
+    WorldState state{};
+    state.current_tick = 100;
+
+    // Two provinces in distinct regions (cohort signals apply per-region).
+    Province prov0{};
+    prov0.id = 0;
+    prov0.region_id = 10;
+    prov0.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov0));
+    Province prov1{};
+    prov1.id = 1;
+    prov1.region_id = 20;
+    prov1.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov1));
+
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    CriminalOperationsModule module;
+
+    // Org 1: active conflict (property_violence) with a live rival, operating in
+    // province 0 (region 10). process_conflict_states advances it one step to
+    // personnel_violence(4) this tick, so the published intensity should be 4.
+    CriminalOrganization org{};
+    org.id = 1;
+    org.leadership_npc_id = 10;
+    org.member_npc_ids = {10, 11};
+    org.dominance_by_province[0] = 0.30f;
+    org.conflict_state = TerritorialConflictStage::property_violence;
+    org.conflict_rival_org_id = 2;
+    org.strategic_decision_tick = 200;  // no strategic decision this tick
+    module.organizations().push_back(org);
+
+    // Org 2: the live rival, operating in province 1 (region 20), NOT itself in
+    // conflict — contributes 0 intensity to its region.
+    CriminalOrganization rival{};
+    rival.id = 2;
+    rival.leadership_npc_id = 20;
+    rival.member_npc_ids = {20, 21};
+    rival.dominance_by_province[1] = 0.20f;
+    rival.conflict_state = TerritorialConflictStage::none;
+    rival.conflict_rival_org_id = 0;
+    rival.strategic_decision_tick = 200;
+    module.organizations().push_back(rival);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+    apply_deltas(state, delta);
+
+    // Region 10 (province 0): the warring org's post-advance stage (4).
+    CHECK(state.provinces[0].cohort_stats->territorial_conflict_stage == 4);
+    // Region 20 (province 1): no active conflict here -> 0.
+    CHECK(state.provinces[1].cohort_stats->territorial_conflict_stage == 0);
+}
+
+TEST_CASE("publish_territorial_conflict: resolution maps to zero demand, not stage 6",
+          "[criminal_operations][tier7]") {
+    WorldState state{};
+    state.current_tick = 100;
+    Province prov{};
+    prov.id = 0;
+    prov.region_id = 10;
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(prov));
+    PlayerCharacter player{};
+    player.id = 999;
+    state.player = std::make_unique<PlayerCharacter>(player);
+
+    CriminalOperationsModule module;
+
+    // open_warfare(5) with a live rival advances to resolution(6) in
+    // process_conflict_states — a post-conflict state that must publish as 0
+    // (no weapons demand), NOT a numeric 6 that would outrank open_warfare.
+    CriminalOrganization org{};
+    org.id = 1;
+    org.leadership_npc_id = 10;
+    org.member_npc_ids = {10, 11};
+    org.dominance_by_province[0] = 0.50f;
+    org.conflict_state = TerritorialConflictStage::open_warfare;
+    org.conflict_rival_org_id = 2;
+    org.strategic_decision_tick = 200;
+    module.organizations().push_back(org);
+
+    CriminalOrganization rival{};
+    rival.id = 2;
+    rival.leadership_npc_id = 20;
+    rival.member_npc_ids = {20, 21};
+    rival.dominance_by_province[0] = 0.40f;
+    rival.conflict_state = TerritorialConflictStage::none;
+    rival.conflict_rival_org_id = 0;
+    rival.strategic_decision_tick = 200;
+    module.organizations().push_back(rival);
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+    apply_deltas(state, delta);
+
+    REQUIRE(module.organizations()[0].conflict_state == TerritorialConflictStage::resolution);
+    CHECK(state.provinces[0].cohort_stats->territorial_conflict_stage == 0);
 }
 
 // =============================================================================

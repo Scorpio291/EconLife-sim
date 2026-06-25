@@ -25,6 +25,7 @@ In V1, NPC criminal organizations operate in the drug supply chain and protectio
 - Consequence entries -- `territory_established` (fires on expansion team arrival), `conflict_resolution` (fires on conflict de-escalation)
 - DeferredWorkQueue entries -- expansion team arrival consequences, conflict stage transition schedules
 - Evidence tokens -- territorial conflict at property_violence stage and above generates evidence; surveillance of departing personnel creates tokens
+- `RegionDelta.territorial_conflict_stage_replacement` -- per-province (per-region) territorial-conflict intensity (0-5), published every tick as the demand-relevant max `conflict_state` over orgs operating in the province (`resolution` maps to 0). Lands on `RegionCohortStats.territorial_conflict_stage`; consumed by weapons_trafficking as the grounded conflict-demand driver. Transient (recomputed each tick; not persisted).
 
 ## Preconditions
 - Evidence module has completed for this tick; evidence tokens from facility signals and other sources are available.

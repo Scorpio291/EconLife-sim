@@ -114,6 +114,12 @@ class CriminalOperationsModule : public ITickModule {
 
     // Process dormant orgs (zero active members).
     void process_dormant_orgs(const WorldState& state);
+
+    // Publish each province's territorial-conflict intensity (the demand-relevant
+    // max conflict_state over orgs operating there) to cohort_stats via RegionDelta,
+    // so weapons_trafficking (and others) read the real conflict signal rather than
+    // a dominance proxy.
+    void publish_territorial_conflict(const WorldState& state, DeltaBuffer& delta) const;
 };
 
 }  // namespace econlife

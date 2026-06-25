@@ -65,19 +65,14 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
         return;
     const auto& province = state.provinces[province_idx];
 
-    // Determine territorial conflict stage for demand modifier
-    // Read from province conditions (criminal_dominance_index as proxy)
-    // In full impl, reads from CriminalOrganization conflict_state
-    uint8_t conflict_stage = 0;
-    if (province.cohort_stats->criminal_dominance_index > 0.8f) {
-        conflict_stage = 5;  // open_warfare
-    } else if (province.cohort_stats->criminal_dominance_index > 0.6f) {
-        conflict_stage = 4;  // personnel_violence
-    } else if (province.cohort_stats->criminal_dominance_index > 0.4f) {
-        conflict_stage = 3;  // property_violence
-    } else if (province.cohort_stats->criminal_dominance_index > 0.2f) {
-        conflict_stage = 1;  // economic
-    }
+    // Territorial conflict stage for the demand modifier: the GROUNDED per-province
+    // intensity (max over the criminal organizations actually in conflict here),
+    // published to cohort_stats by criminal_operations from real org conflict_state.
+    // (Previously a criminal_dominance_index proxy — mere criminal presence, not
+    // active territorial conflict. One-tick lag: criminal_operations writes this
+    // tick's value via RegionDelta, read here next tick, like all cohort signals.)
+    const uint8_t conflict_stage =
+        province.cohort_stats ? province.cohort_stats->territorial_conflict_stage : 0;
 
     float demand_modifier = get_conflict_demand_modifier(conflict_stage);
 

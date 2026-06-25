@@ -270,6 +270,16 @@ struct RegionCohortStats {
                                      // `formal_employment_rate` (which
                                      // excludes the informal economy).
 
+    // Per-province territorial-conflict intensity (0-5), the demand-relevant
+    // maximum of TerritorialConflictStage across the criminal organizations
+    // operating in this province. Published each tick by criminal_operations
+    // from the real org conflict_state (resolution maps to 0 — post-conflict, no
+    // demand). Read by weapons_trafficking as the grounded conflict-demand driver
+    // (replaces the criminal_dominance_index proxy). Transient: recomputed every
+    // tick from the persisted orgs, so it is NOT serialized (defaults to 0 = none
+    // on a fresh load, repopulated on the first tick).
+    uint8_t territorial_conflict_stage = 0;
+
     // Subsistence food surplus: produced / needed for the whole province
     // population this tick, written by the subsistence (commons) module in
     // pre-market eras. 1.0 = exactly fed; >1.0 = a surplus that frees labor for

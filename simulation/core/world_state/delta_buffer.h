@@ -260,6 +260,10 @@ struct RegionDelta {
     std::optional<float>
         food_store_replacement;  // replacement; cohort_stats->food_store (granary stock,
                                  // recomputed by the subsistence module from the year's net)
+    std::optional<uint8_t>
+        territorial_conflict_stage_replacement;  // replacement; cohort_stats->
+                                                 // territorial_conflict_stage (0-5), published by
+                                                 // criminal_operations from org conflict_state
 };
 
 // NationDelta — national-level governance state (one per nation per tick at most).
