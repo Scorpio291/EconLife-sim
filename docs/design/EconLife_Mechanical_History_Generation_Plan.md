@@ -214,6 +214,14 @@ validated milestone: Band 4 (industrial — closest to the current resource econ
 Band 1–3 backward toward the founding, and Band 6–7 forward (mostly content-completion).
 Each band ships playable on its own (the player can start in any completed band).
 
+> **Band 3 (Medieval entry) detailed design:** see
+> `EconLife_Medieval_Band_Expansion_v01.md` — specifies how era 5 (`feudal`)
+> becomes a playable start under a hard constraint: the Malthusian wall is
+> inviolable, so the urban/specialist economy is *earned* from real agricultural
+> surplus (freed specialists + proto-capital gate genesis), never granted.
+> Societies that don't break the wall through technique stay subsistence-locked —
+> by design.
+
 ## 6. Risks & open decisions
 
 - **Performance is the make-or-break** (P3). Without effective LOD, century-scale history
