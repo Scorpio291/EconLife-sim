@@ -183,6 +183,9 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     rd.region_id = prov.region_id;
     rd.subsistence_surplus_replacement = growth_surplus;
     rd.food_store_replacement = new_store;
+    // Absolute haulable grain surplus (output beyond bare need) — the grain available
+    // to move/feed non-farmers, consumed by grain_logistics (the ox-cart, §3.5).
+    rd.grain_surplus_replacement = std::max(0.0f, output - need);
     province_delta.region_deltas.push_back(rd);
 
     if (province_idx >= state.npc_indices_by_home_province.size())

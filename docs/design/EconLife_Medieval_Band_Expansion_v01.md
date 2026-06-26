@@ -466,11 +466,17 @@ honest verb set is small, by design.
    ag revolutions (medieval 26%, industrial 44%); marginal worlds stall before
    medieval and earn nothing. Spectrum preserved; modern ~yr 11,970. **No wall
    infringement** (only the ceiling moved). Gates green.
-2. **M2 — Grain logistics (engine, §3.5, D6).** The `grain_logistics` step: net
-   feedable surplus per province from earned surplus hauled across `ProvinceLink`s
-   under the ox-cart limit (conserved). *Deliverable:* inland surplus is
-   spatially bounded; river/coastal catchments aggregate far, landlocked ones
-   don't — visible as a feedable-surplus map that water transforms.
+2. **M2 — Grain logistics (engine, §3.5, D6). ✅ SHIPPED 2026-06-25.** New
+   `grain_logistics` module: subsistence publishes absolute `grain_surplus`; the
+   module computes per-province `net_feedable_surplus` via a conserved one-pass
+   allocation (each province distributes its surplus across self + neighbours weighted
+   by the ox-cart delivered-fraction; the team eats `(1−df)` of each haul;
+   `delivered + eaten == exported`). Water (river/maritime) out-delivers land ~10–20×;
+   mountains and heavy gravity (§5.5 coupling) shrink the radius toward 0; roads widen
+   it. Dawn-gated; **publish-only** (consumed by genesis in M3), so the M1 climb is
+   unchanged. Distance is single-hop (multi-hop + centroid distance are the D6
+   refinement). Unit-proven (water>land, conservation, stranded-keeps-local);
+   society/emergence gates green.
 3. **M3 — Pre-market genesis.** Feudal genesis gated on the catchment's freed
    specialists + proto-capital; workshop/guild-shop/manor/**castle** firm types.
    *Deliverable:* workshops/castles appear only where M1 produced surplus AND M2

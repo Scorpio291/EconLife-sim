@@ -661,6 +661,32 @@ struct KnowledgeConfig {
     float adversity_pressure_cap = 3.0f;        // ceiling on the pressure multiplier
 };
 
+// Grain logistics — the "tyranny of the ox" (medieval band §3.5). A draft team eats
+// the grain it hauls, so surplus has a hard economic radius; water transport is an
+// order of magnitude cheaper than land. Computes per-province NET FEEDABLE SURPLUS
+// (own surplus + what neighbours can deliver before the oxen eat it). Conserved: the
+// grain consumed in transit is accounted as draft sustenance, not vanished. Built as
+// the general "link -> deliverable fraction" case so the space age (lightspeed) can
+// extend it (see EconLife_Logistics_and_Political_Scale_v01.md).
+struct GrainLogisticsConfig {
+    // Active only in the pre-market (commons) regimes — same arc as subsistence. In
+    // market eras there is no commons grain surplus to haul, so the module is inert.
+    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
+                                               "feudal",      "mercantile", "industrial"};
+    // Per-hop haulage cost of a baseline LAND link (fraction of the load eaten by the
+    // team reaching an adjacent province). Mode/terrain/road/gravity scale it. Single
+    // hop for now; multi-hop reach and a real centroid distance are the D6 refinement.
+    float k_base = 0.5f;
+    // Mode multipliers on the cost — the heart of "water makes cities". Land is the
+    // tyranny; rivers and coasts are far cheaper (the cargo isn't eaten the same way).
+    float land_mode = 1.0f;
+    float river_mode = 0.10f;
+    float maritime_mode = 0.05f;
+    float terrain_weight = 1.0f;  // transit_terrain_cost raises cost (mountains/swamp block hauling)
+    float infra_relief = 0.8f;    // infrastructure_bonus (roads) lowers cost
+    float gravity_weight = 0.5f;  // gravity above 1g raises cost (heavier world -> smaller radius)
+};
+
 struct SeasonalAgricultureConfig {
     uint32_t ticks_per_year = 365;
     uint32_t planting_duration_ticks = 7;
@@ -1490,6 +1516,7 @@ struct PackageConfig {
     SeasonalAgricultureConfig seasonal_agriculture;
     SubsistenceConfig subsistence;
     KnowledgeConfig knowledge;
+    GrainLogisticsConfig grain_logistics;
     RealEstateConfig real_estate;
     FinancialDistributionConfig financial_distribution;
     NpcBehaviorModuleConfig npc_behavior_module;

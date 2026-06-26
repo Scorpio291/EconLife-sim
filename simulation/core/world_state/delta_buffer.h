@@ -264,6 +264,12 @@ struct RegionDelta {
         territorial_conflict_stage_replacement;  // replacement; cohort_stats->
                                                  // territorial_conflict_stage (0-5), published by
                                                  // criminal_operations from org conflict_state
+    std::optional<float>
+        grain_surplus_replacement;  // replacement; cohort_stats->grain_surplus (haulable
+                                    // surplus this tick), published by subsistence
+    std::optional<float>
+        net_feedable_surplus_replacement;  // replacement; cohort_stats->net_feedable_surplus,
+                                           // published by grain_logistics (ox-cart catchment)
 };
 
 // NationDelta — national-level governance state (one per nation per tick at most).

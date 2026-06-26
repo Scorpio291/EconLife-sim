@@ -1081,3 +1081,34 @@ reach medieval, so they get no medieval economy — not granted, not forced.
 Gates: 1547 unit, society suite, emergence (1 failed-as-expected = deferred
 national_legitimacy). Next: M2 grain logistics (the tyranny of the ox), then M3
 pre-market genesis gated on the catchment's freed specialists + proto-capital.
+
+---
+
+## 2026-06-25 — M2: grain logistics (the tyranny of the ox)
+
+Second build milestone of the Medieval Band. New `grain_logistics` module grounds the
+spatial limit on surplus: a draft team eats the grain it hauls, so surplus has a hard
+economic radius and water transport is far cheaper than land.
+
+- subsistence now publishes absolute `grain_surplus` (output − need) per province.
+- `grain_logistics` (global, dawn-gated, runs_after subsistence) computes per-province
+  `net_feedable_surplus`: each province allocates its surplus across {self + neighbours}
+  weighted by the ox-cart delivered-fraction; the team eats (1−df) of each haul.
+  CONSERVED: delivered + eaten == exported (a source allocates its surplus exactly
+  once). delivered_fraction is pure: water (river ~0.95 / maritime ~0.975) vs land
+  (~0.5); mountains → 0 (impassable); roads raise it; heavier gravity lowers it (the
+  §5.5 gravity→haulage coupling, brought in here). Single-hop neighbours for now
+  (multi-hop + real centroid distance = the D6 refinement).
+- New cohort_stats fields grain_surplus / net_feedable_surplus (transient, not
+  persisted) + RegionDelta replacement fields + apply routing.
+- Publish-only: nothing consumes net_feedable_surplus yet (M3 genesis), so the M1
+  climb/spectrum is unchanged — verified (society + emergence gates green, in-suite
+  determinism holds).
+
+Built as the general "link → deliverable fraction" case so the space age (lightspeed,
+EconLife_Logistics_and_Political_Scale_v01.md) extends it with latency rather than
+duplicating it.
+
+Gates: 1553 unit (+6 grain_logistics), society suite, emergence (1 failed-as-expected
+= deferred national_legitimacy). Next: M3 — pre-market genesis gated on the catchment's
+net_feedable_surplus + proto-capital (workshop/guild-shop/manor/castle).

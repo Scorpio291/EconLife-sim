@@ -287,6 +287,17 @@ struct RegionCohortStats {
     // is behaviour-neutral when the module is inert (modern, market-fed eras).
     float subsistence_surplus_ratio = 1.0f;
 
+    // --- Grain logistics (the tyranny of the ox; medieval band §3.5) ---
+    // Absolute haulable grain surplus this tick (output - need), published by the
+    // subsistence module — the grain available to move / feed non-farmers. Zero
+    // without real surplus. Transient (recomputed each tick; not persisted).
+    float grain_surplus = 0.0f;
+    // Per-province NET FEEDABLE SURPLUS: own grain_surplus plus what neighbours can
+    // deliver across ProvinceLinks before the draft teams eat it (water >> land).
+    // Published by grain_logistics; the catchment surplus a town/castle can draw on
+    // (consumed by genesis in M3). Transient (recomputed each tick; not persisted).
+    float net_feedable_surplus = 0.0f;
+
     // Granary: the province's stored food (a conserved, located resource). The
     // commons food economy banks each year's production surplus here, up to a finite
     // capacity, and draws it down in deficit years — so a bad harvest doesn't

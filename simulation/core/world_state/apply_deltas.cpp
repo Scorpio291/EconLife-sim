@@ -616,6 +616,16 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     cs.territorial_conflict_stage =
                         std::min(*d.territorial_conflict_stage_replacement, static_cast<uint8_t>(6));
                 }
+                if (d.grain_surplus_replacement.has_value()) {
+                    // Replacement; subsistence recomputes the haulable surplus each tick.
+                    float v = *d.grain_surplus_replacement;
+                    cs.grain_surplus = (v >= 0.0f) ? v : 0.0f;
+                }
+                if (d.net_feedable_surplus_replacement.has_value()) {
+                    // Replacement; grain_logistics recomputes the catchment surplus each tick.
+                    float v = *d.net_feedable_surplus_replacement;
+                    cs.net_feedable_surplus = (v >= 0.0f) ? v : 0.0f;
+                }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =
                         clamp01(safe_add(prov.community.cohesion, *d.cohesion_delta));

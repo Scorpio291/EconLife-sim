@@ -1,0 +1,7 @@
+add_library(econlife_grain_logistics STATIC
+    grain_logistics_module.cpp
+)
+target_link_libraries(econlife_grain_logistics PUBLIC econlife_core)
+
+econlife_set_warnings(econlife_grain_logistics)
+econlife_maybe_werror(econlife_grain_logistics)

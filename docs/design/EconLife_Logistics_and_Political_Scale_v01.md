@@ -119,8 +119,14 @@ it removes it past the limit.
   central authority interstellar. The general link model should carry both a
   throughput cost and a latency, so feudal fragmentation (mass-bound) and interstellar
   fragmentation (latency-bound) are two settings of one mechanic.
-
----
+- **The ceiling is "permanent under *known* physics" — an explicit sci-fi extension
+  point.** `c` is the hard limit *today*; speculative tech (FTL, wormholes/jump gates,
+  relativistic or entangled comms, generation-ship logistics) is intended later and
+  would *relax* the latency/throughput cost on specific links — i.e., a high-tech link
+  buys back radius, re-enabling consolidation across stars. So the limit is modelled as
+  a **configurable frontier per link**, not a global constant: baseline links obey the
+  photon, sci-fi links lower its bite. The mechanic (radius → political scale) is
+  unchanged; sci-fi science just edits the cost, exactly as roads once edited the ox's.
 
 ## 5. Open decisions
 
