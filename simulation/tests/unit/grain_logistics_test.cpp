@@ -131,6 +131,52 @@ TEST_CASE("grain_logistics: conserved haulage — water neighbour out-feeds a la
     CHECK(total > 850.0f);   // but water keeps most of it in the system
 }
 
+TEST_CASE("grain_logistics: catchment surplus becomes urban population (M3), capped at pop",
+          "[grain_logistics][tier1]") {
+    // A province whose deliverable surplus exceeds its population becomes a near-pure
+    // town (urban capped at population); one with modest surplus has a small town.
+    WorldState w = dawn_world();
+    add_province(w, 100, 0, 1000.0f);  // surplus 1000
+    add_province(w, 200, 1, 1000.0f);  // surplus 1000
+    w.provinces[0].cohort_stats->total_population = 600;    // surplus > pop -> capped
+    w.provinces[1].cohort_stats->total_population = 100000;  // surplus << pop -> not capped
+
+    GrainLogisticsModule mod;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+
+    // per_capita = 1.0, no links -> net_feedable == surplus.
+    CHECK_THAT(w.provinces[0].cohort_stats->urban_population, WithinAbs(600.0f, 0.5f));   // capped
+    CHECK_THAT(w.provinces[1].cohort_stats->urban_population, WithinAbs(1000.0f, 0.5f));  // surplus/per_capita
+}
+
+TEST_CASE("grain_logistics: a river hub grows a bigger town than a stranded province (M3)",
+          "[grain_logistics][tier1]") {
+    // Two surplus provinces feed a central hub: when both feed-links are RIVER the hub
+    // aggregates a far bigger town than when they are LAND.
+    auto build = [](LinkType feeder_type) {
+        WorldState w = dawn_world();
+        add_province(w, 100, 0, 0.0f);     // HUB (no local surplus of its own)
+        add_province(w, 200, 1, 1000.0f);  // feeder A
+        add_province(w, 300, 2, 1000.0f);  // feeder B
+        for (auto& p : w.provinces)
+            p.cohort_stats->total_population = 100000;  // never the binding cap
+        // Feeders haul their surplus to the hub.
+        w.provinces[1].links.push_back(link_to(100, feeder_type));
+        w.provinces[2].links.push_back(link_to(100, feeder_type));
+        GrainLogisticsModule mod;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+        return w.provinces[0].cohort_stats->urban_population;  // the hub's town
+    };
+    const float river_hub = build(LinkType::River);
+    const float land_hub = build(LinkType::Land);
+    CHECK(river_hub > land_hub);  // water makes cities
+    CHECK(river_hub > 0.0f);
+}
+
 TEST_CASE("grain_logistics: inert in market eras (no commons surplus to haul)",
           "[grain_logistics][tier1]") {
     WorldState w = dawn_world();

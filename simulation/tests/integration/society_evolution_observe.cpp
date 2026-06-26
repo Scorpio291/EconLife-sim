@@ -78,12 +78,15 @@ TEST_CASE("society observe: knowledge/population trace (calibration)",
     auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
                                     /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
     std::printf("\n=== EARTHLIKE knowledge/pop trace ===\n");
-    std::printf("  year |    pop | surplus | spec%% | knowledge | era\n");
+    std::printf("  year |    pop | surplus | spec%% | urban%% | knowledge | era\n");
     for (const auto& s : series) {
-        if (s.year % 500 == 0)
-            std::printf("  %5u | %6.0f |  %.3f  | %4.0f%% | %9.0f | %2d\n", s.year,
-                        s.total_population, s.mean_surplus, s.specialist_fraction * 100.0,
+        if (s.year % 500 == 0) {
+            const double urban_pct =
+                s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
+            std::printf("  %5u | %6.0f |  %.3f  | %4.0f%% | %4.0f%% | %9.0f | %2d\n", s.year,
+                        s.total_population, s.mean_surplus, s.specialist_fraction * 100.0, urban_pct,
                         s.knowledge, s.era);
+        }
     }
 }
 
@@ -114,11 +117,13 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
             if (s.era > prev_era) {
                 const uint32_t dy = s.year - prev_year;
                 const float dk = s.knowledge - prev_k;
+                const double urban_pct =
+                    s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
                 std::printf(
                     "  era %2d  @ year %5u  (+%4u yrs, knowledge %.0f, +%.2f/yr, pop %.0f, "
-                    "spec %.0f%%)\n",
+                    "spec %.0f%%, urban %.0f%%)\n",
                     s.era, s.year, dy, s.knowledge, dy > 0 ? dk / dy : 0.0f, s.total_population,
-                    s.specialist_fraction * 100.0);
+                    s.specialist_fraction * 100.0, urban_pct);
                 prev_era = s.era;
                 prev_k = s.knowledge;
                 prev_year = s.year;

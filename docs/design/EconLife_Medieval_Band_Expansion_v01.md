@@ -225,9 +225,18 @@ reach here before the oxen eat it (space)?**
 
 ## 4. Entity genesis for the band
 
+> **Scale note (decided at M3):** history-gen runs at COHORT scale (~30M pop over a
+> 12,000-yr climb), so the *aggregate* town economy is carried by
+> `cohort_stats.urban_population` (M3, shipped) — NOT by per-firm entities. The
+> individual workshop/guild-shop/manor/castle records below are the **player-entry
+> (M7)** materialization: when a region is promoted to full LOD, its entities are spun
+> up from the cohort aggregates (urban_population, net_feedable_surplus, proto-capital).
+> The genesis *gating logic* below is what entry uses; it does not run per-firm during
+> the climb.
+
 Extend `business_lifecycle` genesis (today: flat `residents / denominator`,
 founder-funded, modern-only) with a **pre-market genesis path** for the
-`feudal`/`mercantile`/`industrial` regimes:
+`feudal`/`mercantile`/`industrial` regimes (at entry / full-LOD):
 
 - **Target is freed specialists from the catchment, not headcount.** Supportable
   workshops in a province = `freed_specialists / workshop_labor_denominator`, where
@@ -477,10 +486,19 @@ honest verb set is small, by design.
    unchanged. Distance is single-hop (multi-hop + centroid distance are the D6
    refinement). Unit-proven (water>land, conservation, stranded-keeps-local);
    society/emergence gates green.
-3. **M3 — Pre-market genesis.** Feudal genesis gated on the catchment's freed
-   specialists + proto-capital; workshop/guild-shop/manor/**castle** firm types.
-   *Deliverable:* workshops/castles appear only where M1 produced surplus AND M2
-   can deliver it, founder-funded.
+3. **M3 — Catchment urban population (aggregate town economy). ✅ SHIPPED 2026-06-25.**
+   Architectural correction: history-gen runs at COHORT scale (~30M pop), so spawning
+   per-firm entities here is wrong — individual workshop/guild-shop/manor/castle
+   entities materialize at **player entry (M7)** per the history-gen plan. M3 instead
+   consumes `net_feedable_surplus` (M2) into a per-province `urban_population` (= the
+   catchment surplus / per-capita food, capped at population) — the aggregate medieval
+   town economy. River/coastal hubs grow towns, stranded inland stays rural
+   (unit-proven). Conserved, dawn-gated, **publish+observe** (M1 climb unchanged).
+   *Finding:* in the current food-uncapped calibration urbanization PULSES with
+   surplus and peaks in the growth eras (classical ~17–23%), sitting Malthusian-pinned
+   (~4%) at equilibrium — consistent with the inviolable wall (towns need real
+   surplus). Tuning the medieval urban *level* (a bigger/longer ag-revolution pulse)
+   is a wall-respecting calibration follow-up. Gates green.
 4. **M4 — Medieval content.** Author the §6 goods/recipes/facilities + backfill.
    *Deliverable:* non-empty local markets in era-5 goods; real production chains.
 5. **M5 — Feudal layer.** Manorial tithe + garrison/security loop, guild

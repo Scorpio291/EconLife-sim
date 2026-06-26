@@ -294,9 +294,14 @@ struct RegionCohortStats {
     float grain_surplus = 0.0f;
     // Per-province NET FEEDABLE SURPLUS: own grain_surplus plus what neighbours can
     // deliver across ProvinceLinks before the draft teams eat it (water >> land).
-    // Published by grain_logistics; the catchment surplus a town/castle can draw on
-    // (consumed by genesis in M3). Transient (recomputed each tick; not persisted).
+    // Published by grain_logistics; the catchment surplus a town/castle can draw on.
+    // Transient (recomputed each tick; not persisted).
     float net_feedable_surplus = 0.0f;
+    // URBAN (non-farm) POPULATION the catchment sustains (= net_feedable_surplus /
+    // per-capita food, capped at total_population), published by grain_logistics —
+    // the aggregate medieval town economy (river hubs grow towns; stranded inland
+    // stays rural). Transient (recomputed each tick; not persisted).
+    float urban_population = 0.0f;
 
     // Granary: the province's stored food (a conserved, located resource). The
     // commons food economy banks each year's production surplus here, up to a finite

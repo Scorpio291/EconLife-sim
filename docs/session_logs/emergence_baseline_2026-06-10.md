@@ -1112,3 +1112,36 @@ duplicating it.
 Gates: 1553 unit (+6 grain_logistics), society suite, emergence (1 failed-as-expected
 = deferred national_legitimacy). Next: M3 — pre-market genesis gated on the catchment's
 net_feedable_surplus + proto-capital (workshop/guild-shop/manor/castle).
+
+---
+
+## 2026-06-25 — M3: catchment urban population (aggregate medieval town economy)
+
+Third build milestone. Consumes M2's net_feedable_surplus into a per-province
+`urban_population` (cohort_stats) = catchment surplus / per-capita food, capped at
+population — the aggregate medieval town economy. River/coastal hubs grow towns,
+stranded inland stays rural (unit-proven: a river-fed hub out-towns a land-fed one).
+
+Architectural decision: history-gen is COHORT scale (~30M pop), so the town economy is
+an AGGREGATE (urban_population), not per-firm entities. Individual workshop/guild-shop/
+manor/castle entities materialize at PLAYER ENTRY (M7) from the cohort aggregates, per
+the history-gen plan. Design doc §4 reframed accordingly.
+
+Conserved, dawn-gated, publish+observe (M1 climb unchanged — verified, society +
+emergence gates green). grain_logistics publishes urban_population; the society
+harness/observe capture it (new urban% column in [.society-history] and
+[.society-knowledge-trace]).
+
+Honest calibration finding (surfaced by the new observability): in the current
+food-uncapped calibration urbanization PULSES with surplus and peaks in the GROWTH
+eras (classical ~17-23% urban), then sits Malthusian-pinned (~4%) through the late
+dawn — population grows fast enough to eat each ceiling-rise before a town can sustain.
+This is consistent with the inviolable wall (towns need real surplus; at equilibrium
+there is little), but it means the medieval urban LEVEL is currently modest. Tuning it
+up (a bigger/longer medieval ag-revolution pulse, or slower late-dawn population
+catch-up WITHOUT damping the wall) is a wall-respecting calibration follow-up — NOT a
+mechanic change. The catchment->urban mechanic itself is correct and conserved.
+
+Gates: 1555 unit (+8 grain_logistics), society suite, emergence (1 failed-as-expected
+= deferred national_legitimacy). Next: M4 medieval content (goods/recipes/facilities),
+then M5 feudal layer, M6 hazards+war, M7 entry (entity materialization).

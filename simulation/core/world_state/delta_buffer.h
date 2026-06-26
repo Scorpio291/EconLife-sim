@@ -270,6 +270,9 @@ struct RegionDelta {
     std::optional<float>
         net_feedable_surplus_replacement;  // replacement; cohort_stats->net_feedable_surplus,
                                            // published by grain_logistics (ox-cart catchment)
+    std::optional<float>
+        urban_population_replacement;  // replacement; cohort_stats->urban_population,
+                                       // published by grain_logistics (catchment town economy)
 };
 
 // NationDelta — national-level governance state (one per nation per tick at most).

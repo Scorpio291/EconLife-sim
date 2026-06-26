@@ -685,6 +685,15 @@ struct GrainLogisticsConfig {
     float terrain_weight = 1.0f;  // transit_terrain_cost raises cost (mountains/swamp block hauling)
     float infra_relief = 0.8f;    // infrastructure_bonus (roads) lowers cost
     float gravity_weight = 0.5f;  // gravity above 1g raises cost (heavier world -> smaller radius)
+
+    // --- Urbanization (M3): the catchment surplus becomes town population ---
+    // The non-farm (urban) populace a province can sustain = its net feedable surplus
+    // divided by what one mouth eats (same unit as subsistence per-capita food),
+    // capped at the province population. This is the aggregate medieval town economy
+    // for history-gen; individual workshop/manor/castle entities materialize at player
+    // entry. River/coastal hubs (large catchment) grow towns; stranded inland stays
+    // rural — urbanization spatially driven by the ox-cart limit.
+    float urban_per_capita_food = 1.0f;
 };
 
 struct SeasonalAgricultureConfig {

@@ -103,11 +103,22 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
         }
     }
 
-    // Publish per province (keyed by region_id, 1:1 with province in world-gen).
+    // Publish per province (keyed by region_id, 1:1 with province in world-gen):
+    // the catchment surplus, and the urban (non-farm) population it can feed —
+    // net_feedable / per-capita food, capped at the province population (a town can't
+    // hold more townsfolk than there are people; a pure import-fed city approaches it).
+    const float per_capita = cfg_.urban_per_capita_food > 0.0f ? cfg_.urban_per_capita_food : 1.0f;
     for (uint32_t i = 0; i < n; ++i) {
         RegionDelta rd{};
         rd.region_id = state.provinces[i].region_id;
         rd.net_feedable_surplus_replacement = static_cast<float>(net_feedable[i]);
+        float urban = static_cast<float>(net_feedable[i] / per_capita);
+        if (state.provinces[i].cohort_stats) {
+            const float pop = static_cast<float>(state.provinces[i].cohort_stats->total_population);
+            if (urban > pop)
+                urban = pop;
+        }
+        rd.urban_population_replacement = urban;
         delta.region_deltas.push_back(rd);
     }
 }

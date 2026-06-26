@@ -626,6 +626,11 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.net_feedable_surplus_replacement;
                     cs.net_feedable_surplus = (v >= 0.0f) ? v : 0.0f;
                 }
+                if (d.urban_population_replacement.has_value()) {
+                    // Replacement; grain_logistics recomputes the catchment town economy.
+                    float v = *d.urban_population_replacement;
+                    cs.urban_population = (v >= 0.0f) ? v : 0.0f;
+                }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =
                         clamp01(safe_add(prov.community.cohesion, *d.cohesion_delta));

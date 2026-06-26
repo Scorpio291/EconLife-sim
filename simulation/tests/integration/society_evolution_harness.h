@@ -44,6 +44,7 @@ inline std::string find_goods_dir_society() { return find_base_game_subdir("good
 struct SocietySnapshot {
     uint32_t year = 0;
     double total_population = 0.0;     // sum of cohort populations
+    double urban_population = 0.0;     // sum of cohort urban_population (catchment town economy, M3)
     double mean_surplus = 0.0;         // mean subsistence_surplus_ratio over provinces
     double specialist_fraction = 0.0;  // Layer-2 livelihoods / livelihoods assigned
     double total_capital = 0.0;        // sum of significant-NPC capital (proto-capital)
@@ -91,6 +92,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         if (!p.cohort_stats)
             continue;
         s.total_population += static_cast<double>(p.cohort_stats->total_population);
+        s.urban_population += static_cast<double>(p.cohort_stats->urban_population);
         surplus_sum += p.cohort_stats->subsistence_surplus_ratio;
         ++prov_with_cohorts;
     }
