@@ -191,6 +191,13 @@ dictate.
 | 6 | Near-future | automation, fusion, information capital | eras 2–7 forward arc | exists |
 | 7 | Space age & beyond | post-scarcity, space colonialism, bifurcation | eras 8–10 | exists (partial) |
 
+> **Space-age generator (Band 7) — the lightspeed limit:** the `divergence` era is
+> the medieval mirror. Interstellar comms/supply latency (distance / `c`) makes
+> central authority physically impossible past one star system, so colonies become
+> sovereign and diverge — the same logistics-radius mechanic as feudal fragmentation,
+> at the cosmic ceiling. See `EconLife_Logistics_and_Political_Scale_v01.md` (the
+> ox-cart floor and the photon ceiling of one cross-era law).
+
 **Per-band deliverable (the repeating unit of work):**
 1. **Era definition** — add the era(s) to the (re-based) era enum + progression triggers
    (what advances out of the band: surplus/population/tech thresholds).

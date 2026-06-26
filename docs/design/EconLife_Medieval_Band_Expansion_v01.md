@@ -213,6 +213,14 @@ supports no garrison and no lord — correctly. **Two inviolable gates now bound
 medieval economy: can the society produce surplus (time), and can that surplus
 reach here before the oxen eat it (space)?**
 
+> The ox-cart is the **floor** of a cross-era law: the logistics/communication
+> radius sets the maximum scale of centralized authority. The same mechanic, with a
+> wider radius, gives kingdoms, then empires, then the global order — until it hits
+> its permanent **ceiling**, the speed of light, and re-fragments humanity into
+> sovereign, diverging star systems (era 17). Build `grain_logistics` (M2) as the
+> general "link → deliverable fraction + latency" case so the space age extends it
+> rather than duplicating it. See `EconLife_Logistics_and_Political_Scale_v01.md`.
+
 ---
 
 ## 4. Entity genesis for the band
