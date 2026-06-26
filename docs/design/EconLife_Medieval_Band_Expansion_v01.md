@@ -154,7 +154,9 @@ delivered(d) = max(0, L − k_eff · d · trip_factor)
 
 - `trip_factor` accounts for the empty return leg (the ox still eats going home).
 - `k_eff = k_base · terrain(transit_terrain_cost) · road(1 − infrastructure_bonus)
-  · mode(LinkType)`.
+  · mode(LinkType) · gravity(g)` — the world's gravity dial scales it too (§5.5):
+  heavier g, the oxen carry less and tire faster, so the radius shrinks and the world
+  fragments harder.
 - The grain the team eats is **conserved** — deducted from the load and credited
   as draft sustenance, never vanished.
 - Physical limit `r_max = L / (k_eff · trip_factor)`: beyond it, delivered = 0.
@@ -275,62 +277,90 @@ project's anti-"fake-rail" stance.
 
 ---
 
-## 5.5 Population checks — disease and war (the non-food limiters)
+## 5.5 Limiting factors — food, the world-classification hazards, and war
 
 Premise (analysis, 2026-06-25): real population history is *two steps forward, one
 step back* — the Black Death erased ~40% of Europe and the curve plateaued
-1300–1500; wars and famines carved repeated dips. The current model grows
-**monotonically** to the food ceiling: the **food** check (Malthusian births/deaths
-+ drought/flood harvest hits) is well grounded, but **disease** and **war** — the
-other two classical checks — are absent (`random_events` has only
-`drought/flood`; dawn mortality has a constant background hazard, no episodic
-die-offs). So today a society can only fail by starvation, never by plague or war —
-a missing failure mode, and exactly the variance §0 ("not all societies survive")
-wants. Add both as **conserved, episodic** checks, each wired into the feudal
-mechanics rather than bolted on.
+1300–1500; wars, quakes, and lean years carved repeated dips. The current model
+grows **monotonically** to the food ceiling: the **food** check (Malthusian
+births/deaths + drought/flood harvest hits) is well grounded, but every other
+limiter is flat or absent. Bring in the full limiting-factor set so the curve gets
+its real shape and a society can fail in more than one way (§0, "not all societies
+survive").
 
-### Disease — density-dependent epidemics
-- **Grounded driver:** crowding. Epidemic hazard rises with **population
-  concentration** — the freed-specialist/town density of §3.5–§5, and trade
-  contact along the haulage network (rivers/ports are vectors). A dispersed
-  subsistence countryside is relatively safe; a packed town or a river-trade hub is
-  not. This makes disease a **natural brake on urbanization** that emerges from the
-  same concentration the ox-cart mechanic produces — not an external die.
-- **Conserved:** an outbreak removes people from the affected cohorts (a real
-  mortality pulse drawn from `RegionCohortStats`), decays, and can propagate to
-  linked provinces along trade routes (one-tick cross-province, like other signals).
-- **Effect on the curve:** towns periodically cull back toward the countryside
-  level → the plateaus/dips the smooth curve lacks; urbanization advances in waves,
-  not a ramp.
+### The seven world-classification hazards (bring each in distinctly)
+The world classification (`world_class.h`, see
+`EconLife_World_Spectrum_and_Evolution_Plan.md`) already defines seven hazard dials
+that compute a world's Class (Earth ≈ 12). **Today all seven collapse into ONE
+constant** cohort-mortality multiplier (`hazard_mortality_from_settings`), plus
+seasonality acting on food — a flat background, the same every tick. Give each its
+own grounded, often episodic, expression:
+
+| Hazard | Today | Grounded expression to bring in | Kind | Conquerable? |
+|---|---|---|---|---|
+| **disease** | flat scalar | density-dependent **epidemics** (see below) | episodic shock | yes (medicine) |
+| **geology** | flat scalar (+ drought/flood) | **disasters**: quakes/storms/wildfires/floods scaled by the dial — population + infrastructure + grain-store hits | episodic shock | partly (engineering) |
+| **seasonality** | food penalty | keep the chronic food penalty **+ episodic harvest failures** (bad years → famine risk) | episodic shock | yes (storage/irrigation) |
+| **gravity** | falls in the scalar | falls/accidents **+ haulage cost**: heavier g → oxen carry less, tire faster → larger `k_eff` → **smaller grain radius → more feudal fragmentation** (§3.5); higher construction cost | chronic + coupling | **no** (planetary) |
+| **predators** | flat scalar | a check on **dispersed populations and livestock/herds — including the draft oxen** (predation = food + haulage cost); strongest early, **wanes** as density/tech clears them | chronic, waning + coupling | yes (clearance) |
+| **radiation** | flat scalar | chronic mortality **+ fertility depression** (lowers `birth_surplus` → a permanent drag on the carrying ceiling) | chronic | **no** (planetary) |
+| **atmosphere** | flat scalar | chronic habitability drag: ongoing mortality/health + a **cap on carrying capacity** (a toxic world supports fewer people / needs more tech) | chronic | **no** (planetary) |
+
+Three structural groupings fall out:
+- **Episodic shocks** (disease, geology, seasonality) — the population-curve *dips*,
+  almost entirely missing today. This is what makes the curve stepped, not a ramp.
+- **Feudal couplings** (gravity→haulage, predators→herds/oxen) — hazards that bind to
+  the *economy* (the §3.5 ox-cart radius, the livestock that pull the carts), not just
+  to a death rate. The novel, on-theme ones: a heavy/predator-ridden world is more
+  fragmented and harder to provision.
+- **Chronic drags** (radiation, atmosphere, gravity-falls) — the persistent ceiling
+  on a world's population/health (roughly today's scalar, but split so each is legible
+  and can interact).
+
+And a key axis for the development story: **conquerable vs. persistent.** Disease,
+predators, seasonality, and (partly) geology *wane with technique* — predator
+clearance, storage/irrigation, medicine, engineering — so overcoming them is the arc
+of a thriving world (and feeds the modern release, below). Gravity, radiation, and
+atmosphere are *planetary* — you cannot tech them away, so they permanently shape a
+world's ceiling and character. A Class-12 world earns its progress against the
+conquerable hazards while living forever with the planetary ones.
+
+### Disease — density-dependent epidemics (the disease dial × crowding)
+- **Driver:** the world's `disease` dial sets baseline epidemic propensity; outbreak
+  hazard then rises with **population concentration** — the freed-specialist/town
+  density of §3.5–§5 and trade contact along the haulage network (rivers/ports are
+  vectors). A dispersed countryside is relatively safe; a packed town or river hub is
+  not. Disease becomes a **natural brake on urbanization**, emergent from the same
+  concentration the ox-cart produces.
+- **Conserved:** an outbreak removes people from affected cohorts, decays, and
+  propagates to linked provinces (one-tick cross-province). Towns periodically cull
+  back toward the countryside → urbanization advances in *waves*, not a ramp.
 
 ### War — conflict over the grain (the §3.5 loop, made lethal)
-- **Grounded driver:** the protect-the-grain garrison loop. A concentrated grain
-  store is a prize; raiders/rival lords contest it. Where a polity's **security**
-  (garrison fed from surplus, §5) is low relative to a neighbour's military power,
-  raiding/conflict transfers grain (conserved — to the raider, not to nothing) and
-  kills people (a mortality pulse on the contested provinces). The criminal
-  territorial-conflict engine (just grounded for weapons demand) is the natural
-  substrate to generalize — conflict_state → casualties + grain seizure.
-- **Conserved:** seized grain moves to the victor; war deaths are drawn from cohorts
-  (combatants first). No matter or people minted/vanished.
-- **Effect:** a society that out-produces but can't *protect* its surplus is set
-  back or overrun — military capacity (surplus → garrison) becomes a survival trait,
-  not just flavour. On-theme: prosperity without protection is not safe.
+War is *endogenous* (not a world dial): the protect-the-grain garrison loop made
+lethal. Where a polity's **security** (garrison fed from surplus, §5) is low vs a
+neighbour's military power, conflict **seizes grain** (conserved — to the victor) and
+kills (cohort casualties, combatants first). Generalizes the just-grounded criminal
+territorial-conflict engine. A society that out-produces but can't *protect* its
+surplus is set back or overrun: military capacity becomes a survival trait, not
+flavour.
 
 ### The modern release (why the hockey stick)
-These checks are the grounded *cause* of the post-industrial population explosion:
-medicine/sanitation collapse disease-as-limiter, the Green Revolution lifts the food
-ceiling, and relative great-power peace cuts war mortality — so the modern curve
-rockets (real: 1B→7B, 1800→2010) because the brakes come off, not because a growth
-constant was hand-raised. The dawn lab stops at the modern era, so this release is
-verified in the modern population module (a separate check the analysis flagged: the
-sim's industrial→modern rate is ~10× below real modern peak).
+The *conquerable* limiters are the grounded cause of the post-industrial explosion:
+medicine/sanitation collapse disease, the Green Revolution lifts food and tames
+seasonality, engineering blunts geology, and relative great-power peace cuts war — so
+the modern curve rockets (real 1B→7B, 1800→2010) because the brakes come off, not
+because a growth constant was raised. (The persistent planetary hazards remain — an
+off-Earth colony never escapes its gravity/atmosphere.) The dawn lab stops at the
+modern era, so this release is verified in the modern population module — the analysis
+flagged the sim's industrial→modern rate at ~10× below real modern peak.
 
 ### Invariants
-Conserved (deaths from cohorts; seized grain transferred); deterministic (epidemic
-and raid rolls via `DeterministicRNG`, canonical order); wall-respecting (these are
-*additional* checks — they only ever *reduce* population or surplus, never reserve or
-prop up a class). Gated by the behavioral suite (they move demographics).
+Conserved (deaths from cohorts; seized grain transferred); deterministic (all shock
+rolls via `DeterministicRNG`, canonical order); **wall-respecting** — these are
+*reduce-only* (they cut population/surplus, never reserve or prop up a class), and the
+chronic drags only lower the ceiling, never raise it. Gated by the behavioral suite
+(they move demographics) and re-validated against the World-Class/Bounty spectrum.
 
 ---
 
@@ -442,14 +472,18 @@ honest verb set is small, by design.
 5. **M5 — Feudal layer.** Manorial tithe + garrison/security loop, guild
    entry/quality/price, towns & fairs. *Deliverable:* the regime behaves distinctly
    from the commons; protection is grounded in the haulage limit.
-6. **M6 — Population checks: disease + war (§5.5, D8/D9).** Density-dependent
-   epidemics (cull towns, propagate along trade links) and grain-conflict war
-   mortality (generalize the territorial-conflict engine to casualties + grain
-   seizure). Both conserved, both reduce-only (wall-respecting). Sequenced here
-   because disease needs the towns of M3 and war needs the garrison/security loop of
-   M5. *Deliverable:* the population curve gains realistic dips/plateaus; plague and
-   war become spectrum failure modes (a society can be set back or overrun, not only
-   starved). Behavioral gate re-validated.
+6. **M6 — Limiting factors: hazards + war (§5.5, D8/D9).** Bring the seven
+   world-classification hazards in distinctly (split the flat scalar): the episodic
+   shocks — disease epidemics (density × the disease dial), geology disasters,
+   seasonality harvest failures; the feudal couplings — gravity→haulage radius,
+   predators→herds/oxen; the chronic drags — radiation→fertility, atmosphere→ceiling.
+   Plus endogenous **war** (generalize the territorial-conflict engine to casualties
+   + grain seizure). All conserved, reduce-only (wall-respecting). Sequenced here
+   because the couplings need M2/M3 (haulage, towns) and war needs the M5 garrison.
+   May split into M6a (episodic shocks + chronic split) and M6b (couplings + war).
+   *Deliverable:* the curve gains realistic dips/plateaus; plague/quake/famine/war
+   become spectrum failure modes; the World-Class spectrum bites harder. Behavioral
+   gate re-validated.
 7. **M7 — Entry & verbs.** Era selection surfaces the world's earned state;
    medieval player verbs. *Deliverable:* a playable medieval start.
 
@@ -477,24 +511,34 @@ core — which it does *by raising the ceiling, never by softening the wall.*
 - **D5:** does the mercantile band (era 6) reuse this genesis path wholesale
   (workshops→firms, guilds→early companies), confirming the design generalizes
   before we commit to it?
-- **D6 (§3.5):** grain-logistics calibration — `k_base`, `trip_factor`, and the
-  `mode`/`terrain`/`road` factors (land vs river vs maritime). Does haulage distance
-  use `ProvinceLink.shared_border_km` (a border length, not a travel distance — a
-  poor proxy) or a province-centroid distance that world-gen must expose? Centroid
-  distance likely required.
+- **D6 (§3.5):** grain-logistics calibration — `k_base`, `trip_factor`, the
+  `mode`/`terrain`/`road` factors (land vs river vs maritime), **and the gravity
+  coupling** (heavier g → larger `k_eff` → smaller haulage radius, §5.5). Does
+  haulage distance use `ProvinceLink.shared_border_km` (a border length, not a travel
+  distance — a poor proxy) or a province-centroid distance that world-gen must
+  expose? Centroid distance likely required.
 - **D7 (§3.5/§5):** the "protect the grain" predation model — reuse `random_events`
   raiding plus a province `security` value fed by garrison size, or a dedicated
   raiding/banditry loop? Either way, lost grain must be conserved (it goes to the
   raider, not to nothing).
 - **D8 (§5.5):** epidemic model — outbreak hazard as a function of which density
-  signal (town/freed-specialist concentration, trade-link contact, both)? Add an
-  `epidemic` template to `random_events` (era-gated to the dawn) or a dedicated
-  disease module? Propagation along `ProvinceLink`s (rivers/ports as vectors) —
-  in-scope for v1 or single-province first?
+  signal (town/freed-specialist concentration, trade-link contact, both) × the
+  `disease` dial? Add an `epidemic` template to `random_events` (era-gated) or a
+  dedicated disease module? Propagation along `ProvinceLink`s (rivers/ports as
+  vectors) — in-scope for v1 or single-province first?
 - **D9 (§5.5):** war-mortality model — generalize the criminal territorial-conflict
   engine (now exposed per-province) to inter-polity grain-conflict casualties + grain
   seizure, or a separate agrarian-warfare loop? Casualty draw order (combatants
   first) and the security/military-power comparison that triggers it.
+- **D10 (§5.5):** splitting the flat hazard scalar into the seven distinct dials —
+  scope and ordering. Episodic shocks: geology→disasters (scale `random_events`
+  frequency/severity by the `geology` dial) and seasonality→episodic harvest failure
+  (on top of the existing chronic food penalty). Chronic split: radiation→`birth_surplus`
+  (fertility) and atmosphere→carrying-capacity cap, peeled out of the single
+  `hazard_mortality_from_settings` multiplier. Coupling: predators→herd/livestock
+  (incl. the draft oxen) loss, waning with density/tech. Which land in M6a vs M6b, and
+  re-validate the World-Class spectrum after each (this directly reshapes it). Keep
+  reduce-only/wall-respecting.
 
 ---
 
@@ -514,5 +558,10 @@ to concentrate and protect surplus *locally* and feed the protectors from it. Wa
 (rivers/coast) breaks the radius and makes cities; landlocked surplus stays
 manorial. Societies that break the wall upward through technique *and* can deliver
 their grain get towns, guilds, and cities; those that can't stay subsistence-locked,
-stranded, or stagnant — and a player entering in 500 CE meets whichever world this
-one became.
+stranded, or stagnant. On top of the two gates sit the limiting factors that carve
+the curve's real shape (§5.5): the seven world-classification hazards brought in
+distinctly — episodic shocks (plague, quake, lean year) that dip the curve,
+planetary drags (gravity, radiation, atmosphere) that cap it, and couplings
+(gravity→haulage, predators→herds) that bind the world's nature to its economy — plus
+endogenous war over the grain. A player entering in 500 CE meets whichever world this
+one became: rich or stranded, thriving or plague-scarred, free or overrun.
