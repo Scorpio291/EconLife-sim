@@ -61,6 +61,8 @@ Verified 2026-06-25 against the live catalogs and module gates:
 | Functioning facilities | **0** (created only from recipes → none pre-modern) |
 | Firm/business genesis | **off** (`genesis_active_regimes = {modern, near_future, space_age}`) |
 | Markets, production, labor wages, finance, R&D, criminal economy | **inert** (operate on entities that don't exist pre-modern) |
+| Population checks: **food** (Malthus + drought/flood) | **active** (well grounded) |
+| Population checks: **disease** (epidemics) and **war** (conflict mortality) | **missing** (curve grows monotonically; no plague/war dips — see §5.5) |
 
 So a medieval start today is the *neolithic loop reached later*: watch food,
 population, and a knowledge counter climb; NPCs carry occupation labels but there
@@ -273,6 +275,65 @@ project's anti-"fake-rail" stance.
 
 ---
 
+## 5.5 Population checks — disease and war (the non-food limiters)
+
+Premise (analysis, 2026-06-25): real population history is *two steps forward, one
+step back* — the Black Death erased ~40% of Europe and the curve plateaued
+1300–1500; wars and famines carved repeated dips. The current model grows
+**monotonically** to the food ceiling: the **food** check (Malthusian births/deaths
++ drought/flood harvest hits) is well grounded, but **disease** and **war** — the
+other two classical checks — are absent (`random_events` has only
+`drought/flood`; dawn mortality has a constant background hazard, no episodic
+die-offs). So today a society can only fail by starvation, never by plague or war —
+a missing failure mode, and exactly the variance §0 ("not all societies survive")
+wants. Add both as **conserved, episodic** checks, each wired into the feudal
+mechanics rather than bolted on.
+
+### Disease — density-dependent epidemics
+- **Grounded driver:** crowding. Epidemic hazard rises with **population
+  concentration** — the freed-specialist/town density of §3.5–§5, and trade
+  contact along the haulage network (rivers/ports are vectors). A dispersed
+  subsistence countryside is relatively safe; a packed town or a river-trade hub is
+  not. This makes disease a **natural brake on urbanization** that emerges from the
+  same concentration the ox-cart mechanic produces — not an external die.
+- **Conserved:** an outbreak removes people from the affected cohorts (a real
+  mortality pulse drawn from `RegionCohortStats`), decays, and can propagate to
+  linked provinces along trade routes (one-tick cross-province, like other signals).
+- **Effect on the curve:** towns periodically cull back toward the countryside
+  level → the plateaus/dips the smooth curve lacks; urbanization advances in waves,
+  not a ramp.
+
+### War — conflict over the grain (the §3.5 loop, made lethal)
+- **Grounded driver:** the protect-the-grain garrison loop. A concentrated grain
+  store is a prize; raiders/rival lords contest it. Where a polity's **security**
+  (garrison fed from surplus, §5) is low relative to a neighbour's military power,
+  raiding/conflict transfers grain (conserved — to the raider, not to nothing) and
+  kills people (a mortality pulse on the contested provinces). The criminal
+  territorial-conflict engine (just grounded for weapons demand) is the natural
+  substrate to generalize — conflict_state → casualties + grain seizure.
+- **Conserved:** seized grain moves to the victor; war deaths are drawn from cohorts
+  (combatants first). No matter or people minted/vanished.
+- **Effect:** a society that out-produces but can't *protect* its surplus is set
+  back or overrun — military capacity (surplus → garrison) becomes a survival trait,
+  not just flavour. On-theme: prosperity without protection is not safe.
+
+### The modern release (why the hockey stick)
+These checks are the grounded *cause* of the post-industrial population explosion:
+medicine/sanitation collapse disease-as-limiter, the Green Revolution lifts the food
+ceiling, and relative great-power peace cuts war mortality — so the modern curve
+rockets (real: 1B→7B, 1800→2010) because the brakes come off, not because a growth
+constant was hand-raised. The dawn lab stops at the modern era, so this release is
+verified in the modern population module (a separate check the analysis flagged: the
+sim's industrial→modern rate is ~10× below real modern peak).
+
+### Invariants
+Conserved (deaths from cohorts; seized grain transferred); deterministic (epidemic
+and raid rolls via `DeterministicRNG`, canonical order); wall-respecting (these are
+*additional* checks — they only ever *reduce* population or surplus, never reserve or
+prop up a class). Gated by the behavioral suite (they move demographics).
+
+---
+
 ## 6. Content to author (the data gap)
 
 Data-driven via existing catalogs (`era_available` already supported); the bulk
@@ -315,6 +376,9 @@ A player choosing a medieval start should meet a world whose feudal economy was
   modernized. Intended.
 - **Collapsed/extinct**: a world that overshot and crashed; not offered as a
   start (or offered as ruins). Intended.
+- **Plague-scarred / war-torn** (§5.5): a world that climbed but was culled by an
+  epidemic or overrun for its grain — depressed population, a setback or ruin amid
+  the remains of a richer past. The non-food failure modes; legible at entry.
 
 The selection screen should surface this (e.g., a one-line world-state read at
 entry) so "start in 500 CE" honestly means "start in *this* society's 500 CE."
@@ -378,7 +442,15 @@ honest verb set is small, by design.
 5. **M5 — Feudal layer.** Manorial tithe + garrison/security loop, guild
    entry/quality/price, towns & fairs. *Deliverable:* the regime behaves distinctly
    from the commons; protection is grounded in the haulage limit.
-6. **M6 — Entry & verbs.** Era selection surfaces the world's earned state;
+6. **M6 — Population checks: disease + war (§5.5, D8/D9).** Density-dependent
+   epidemics (cull towns, propagate along trade links) and grain-conflict war
+   mortality (generalize the territorial-conflict engine to casualties + grain
+   seizure). Both conserved, both reduce-only (wall-respecting). Sequenced here
+   because disease needs the towns of M3 and war needs the garrison/security loop of
+   M5. *Deliverable:* the population curve gains realistic dips/plateaus; plague and
+   war become spectrum failure modes (a society can be set back or overrun, not only
+   starved). Behavioral gate re-validated.
+7. **M7 — Entry & verbs.** Era selection surfaces the world's earned state;
    medieval player verbs. *Deliverable:* a playable medieval start.
 
 M1 is the linchpin and the riskiest (spectrum rebalance); everything downstream
@@ -414,6 +486,15 @@ core — which it does *by raising the ceiling, never by softening the wall.*
   raiding plus a province `security` value fed by garrison size, or a dedicated
   raiding/banditry loop? Either way, lost grain must be conserved (it goes to the
   raider, not to nothing).
+- **D8 (§5.5):** epidemic model — outbreak hazard as a function of which density
+  signal (town/freed-specialist concentration, trade-link contact, both)? Add an
+  `epidemic` template to `random_events` (era-gated to the dawn) or a dedicated
+  disease module? Propagation along `ProvinceLink`s (rivers/ports as vectors) —
+  in-scope for v1 or single-province first?
+- **D9 (§5.5):** war-mortality model — generalize the criminal territorial-conflict
+  engine (now exposed per-province) to inter-polity grain-conflict casualties + grain
+  seizure, or a separate agrarian-warfare loop? Casualty draw order (combatants
+  first) and the security/military-power comparison that triggers it.
 
 ---
 
