@@ -54,3 +54,6 @@ chocolate,Chocolate,2,tonne,food_processing,200.00,false,false,8
 beer_wort,Beer Wort,2,litre,food_processing,25.00,true,false,8
 distilled_spirits_base,Distilled Spirits (Base),2,litre,food_processing,80.00,false,false,8
 flavor_concentrates,Flavor Concentrates,2,litre,food_processing,100.00,false,false,8
+bread,Bread,2,tonne,food_beverage,400.00,true,false,2
+wool_cloth,Wool Cloth,2,tonne,textiles,800.00,false,false,4
+iron_tools,Iron Tools,2,unit,metals,600.00,false,false,3

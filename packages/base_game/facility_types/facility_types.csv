@@ -16,3 +16,12 @@ electronics_factory,Electronics Factory,manufacturing,500000,3500,50,0.3,0.5,0.4
 vehicle_plant,Vehicle Plant,manufacturing,700000,5000,100,0.8,0.5,0.6,0.5,0.3
 machinery_factory,Machinery Factory,manufacturing,450000,3000,60,0.7,0.4,0.4,0.4,0.2
 workshop,Workshop,manufacturing,100000,800,15,0.4,0.3,0.3,0.2,0.2
+watermill,Watermill,processing,40000,200,8,0.3,0.2,0.2,0.1,0.1
+bakery,Bakery,processing,15000,150,6,0.2,0.2,0.3,0.1,0.4
+brewery,Brewery,processing,20000,180,8,0.2,0.3,0.2,0.1,0.5
+weaver,Weaver's Workshop,manufacturing,12000,120,10,0.2,0.2,0.2,0.1,0.1
+tannery,Tannery,processing,18000,160,8,0.3,0.6,0.2,0.3,0.8
+charcoal_kiln,Charcoal Kiln,processing,10000,100,5,0.2,0.4,0.2,0.5,0.5
+bloomery,Bloomery,manufacturing,25000,220,10,0.5,0.4,0.3,0.4,0.3
+smithy,Smithy,manufacturing,15000,150,6,0.5,0.3,0.2,0.3,0.2
+manor_farm,Manor Farm,agriculture,30000,200,40,0.2,0.3,0.2,0.1,0.3

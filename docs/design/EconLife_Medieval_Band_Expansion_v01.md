@@ -499,8 +499,16 @@ honest verb set is small, by design.
    (~4%) at equilibrium — consistent with the inviolable wall (towns need real
    surplus). Tuning the medieval urban *level* (a bigger/longer ag-revolution pulse)
    is a wall-respecting calibration follow-up. Gates green.
-4. **M4 — Medieval content.** Author the §6 goods/recipes/facilities + backfill.
-   *Deliverable:* non-empty local markets in era-5 goods; real production chains.
+4. **M4 — Medieval content. ✅ SHIPPED 2026-06-25.** Authored the era-≤5 content:
+   6 backfilled basics (wheat/flour/lumber/iron_ore/salt/beer) + 10 new goods
+   (bread, wool, wool_cloth, charcoal, wrought_iron, iron_tools, raw_hide, leather,
+   draft_oxen, fodder); 8 recipes forming real chains (grain→flour→bread, grain→ale,
+   wool→cloth, hide→leather, wood→charcoal, ore+charcoal→wrought_iron→tools); 9
+   facility types (watermill/bakery/brewery/weaver/tannery/charcoal_kiln/bloomery/
+   smithy/manor_farm). All labor-only (no anachronistic engine power). recipe↔goods
+   cross-validation clean; regression test asserts the set is available at an era-5
+   start and modern-only goods (steel) are not. The production economy that consumes
+   this content is instantiated at player entry (M7); gates green.
 5. **M5 — Feudal layer.** Manorial tithe + garrison/security loop, guild
    entry/quality/price, towns & fairs. *Deliverable:* the regime behaves distinctly
    from the commons; protection is grounded in the haulage limit.

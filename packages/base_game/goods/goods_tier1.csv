@@ -51,7 +51,7 @@ fiberglass,Fiberglass,1,tonne,chemicals,120.00,false,false,8
 paint_pigments,Paint & Coatings,1,tonne,chemicals,160.00,false,false,8
 industrial_gas,Industrial Gases (O2/N2/Ar),1,tonne,chemicals,25.00,false,false,8
 soap_base,Soap Base,1,tonne,chemicals,40.00,false,false,8
-flour,Flour,1,tonne,agricultural,45.00,true,false,8
+flour,Flour,1,tonne,agricultural,45.00,true,false,2
 corn_starch,Corn Starch,1,tonne,agricultural,35.00,false,false,8
 corn_syrup,Corn Syrup,1,litre,agricultural,30.00,false,false,8
 soy_oil_crude,Soy Oil (Crude),1,litre,agricultural,55.00,false,false,8
@@ -75,10 +75,15 @@ seafood_processed,Processed Seafood,1,tonne,agricultural,120.00,true,false,8
 fishmeal,Fishmeal,1,tonne,agricultural,50.00,false,false,8
 dairy_products,Dairy Products,1,tonne,agricultural,90.00,true,false,8
 malt,Malt,1,tonne,agricultural,35.00,false,false,8
-lumber,Lumber,1,tonne,timber,80.00,false,false,8
+lumber,Lumber,1,tonne,timber,80.00,false,false,1
 paper_pulp,Paper Pulp,1,tonne,timber,40.00,false,false,8
 engineered_wood,Engineered Wood (LVL/Plywood),1,tonne,timber,120.00,false,false,8
 paper,Paper,1,tonne,timber,50.00,false,false,8
 cardboard,Cardboard,1,tonne,timber,35.00,false,false,8
 wood_chips,Wood Chips,1,tonne,timber,15.00,false,false,8
 tannin_extract,Tannin Extract,1,tonne,timber,30.00,false,false,8
+wool,Wool,1,tonne,textiles,200.00,false,false,1
+charcoal,Charcoal,1,tonne,energy,90.00,false,false,2
+wrought_iron,Wrought Iron,1,tonne,metals,250.00,false,false,3
+leather,Leather,1,tonne,apparel,300.00,false,false,2
+draft_oxen,Draft Oxen,1,head,agricultural,500.00,false,false,1

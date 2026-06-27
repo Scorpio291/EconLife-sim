@@ -32,3 +32,9 @@ dairy_processing,food_processing_plant,Dairy Processing,milk_raw,5,,,,,,,dairy_p
 vegetable_oil_refining,food_processing_plant,Vegetable Oil Refining,soybeans,5,,,,,,,soy_oil_crude,1.5,0,soy_meal,3,1,15,0,0.8,0,1,,8
 cotton_spinning,textile_mill,Cotton Spinning,cotton,3,,,,,,,cotton_fiber,2,0,yarn,1,1,20,0,0.5,0,1,,8
 fabric_weaving,textile_mill,Fabric Weaving,yarn,2,,,,,,,woven_fabric,1.5,0,,,0,25,0,0.8,0,1,,8
+grain_milling,watermill,Grain Milling,wheat,4,,,,,,,flour,3,0,,,0,10,0,0,0,1,,2
+bread_baking,bakery,Bread Baking,flour,3,,,,,,,bread,3,0,,,0,12,0,0,0,1,,2
+ale_brewing,brewery,Ale Brewing,wheat,3,,,,,,,beer,4,0,,,0,12,0,0,0,1,,2
+hide_tanning,tannery,Hide Tanning,raw_hide,3,,,,,,,leather,2,0,,,0,12,0,0,0,1,,2
+charcoal_burning,charcoal_kiln,Charcoal Burning,lumber,4,,,,,,,charcoal,3,0,,,0,8,0,0,0,1,,2
+iron_bloomery,bloomery,Iron Bloomery,iron_ore,4,charcoal,2,,,,,wrought_iron,2,0,,,0,18,0,0,0,2,,3

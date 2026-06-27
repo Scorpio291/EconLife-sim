@@ -410,6 +410,37 @@ TEST_CASE("GoodsCatalog loads all tier 0-4 goods from base_game CSVs",
     CHECK(catalog.find("steel") != nullptr);
 }
 
+TEST_CASE("Medieval content (M4): era-5 goods are available at a medieval start",
+          "[integration][world_gen][csv][medieval]") {
+    std::string goods_dir = find_goods_dir();
+    REQUIRE_FALSE(goods_dir.empty());
+    GoodsCatalog catalog;
+    REQUIRE(catalog.load_from_directory(goods_dir));
+
+    // Goods available at the medieval era (5), all tiers.
+    auto med = catalog.goods_available_at(5, 4);
+    std::set<std::string> med_ids;
+    for (const auto* g : med)
+        med_ids.insert(g->good_id);
+
+    // The authored medieval set (new goods + backfilled basics) must be present.
+    for (const char* id : {"wheat", "flour", "bread", "beer", "wool", "wool_cloth", "charcoal",
+                           "wrought_iron", "iron_tools", "raw_hide", "leather", "draft_oxen",
+                           "fodder", "iron_ore", "salt", "lumber"}) {
+        INFO("medieval good missing at era 5: " << id);
+        CHECK(med_ids.count(id) == 1);
+    }
+
+    // Modern-only goods must NOT leak into the medieval start.
+    CHECK(med_ids.count("steel") == 0);  // era 8
+
+    // A medieval start has far fewer goods than the modern anchor (content is still
+    // modern-weighted), but it is no longer empty — the band has a real economy.
+    auto modern = catalog.goods_available_at(8, 4);
+    CHECK(!med.empty());
+    CHECK(med.size() < modern.size());
+}
+
 // ===========================================================================
 // H3 grid properties survive full tick run
 // ===========================================================================

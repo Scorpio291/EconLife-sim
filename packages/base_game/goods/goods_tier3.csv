@@ -18,7 +18,7 @@ medical_device,Medical Device,3,unit,pharmaceutical,2000.00,false,false,8
 personal_care_product,Personal Care Product,3,unit,pharmaceutical,15.00,false,false,8
 packaged_food,Packaged Food,3,unit,food_beverage,10.00,true,false,8
 dairy_consumer,Consumer Dairy Products,3,unit,food_beverage,8.00,true,false,8
-beer,Beer,3,litre,food_beverage,5.00,false,false,8
+beer,Beer,3,litre,food_beverage,5.00,false,false,2
 spirits,Spirits / Liquor,3,litre,food_beverage,25.00,false,false,8
 cigarettes,Cigarettes,3,unit,food_beverage,12.00,false,false,8
 coffee_consumer,Consumer Coffee,3,unit,food_beverage,15.00,false,false,8

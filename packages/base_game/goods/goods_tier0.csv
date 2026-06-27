@@ -1,5 +1,5 @@
 good_id,display_name,tier,unit,category,base_price,perishable,illegal,era_available
-iron_ore,Iron Ore,0,tonne,geological,12.00,false,false,8
+iron_ore,Iron Ore,0,tonne,geological,12.00,false,false,3
 copper_ore,Copper Ore,0,tonne,geological,55.00,false,false,8
 bauxite,Bauxite,0,tonne,geological,30.00,false,false,8
 tin_ore,Tin Ore,0,tonne,geological,70.00,false,false,8
@@ -27,9 +27,9 @@ potash,Potash,0,tonne,geological,22.00,false,false,8
 phosphate_rock,Phosphate Rock,0,tonne,geological,18.00,false,false,8
 sulfur,Sulfur,0,tonne,geological,10.00,false,false,8
 graphite_ore,Graphite Ore,0,tonne,geological,65.00,false,false,8
-salt,Salt,0,tonne,geological,4.00,false,false,8
+salt,Salt,0,tonne,geological,4.00,false,false,1
 kaolin,Kaolin (Clay),0,tonne,geological,12.00,false,false,8
-wheat,Wheat,0,tonne,biological,28.00,true,false,8
+wheat,Wheat,0,tonne,biological,28.00,true,false,1
 corn,Corn (Maize),0,tonne,biological,22.00,true,false,8
 soybeans,Soybeans,0,tonne,biological,35.00,true,false,8
 cotton,Cotton (Raw),0,tonne,biological,50.00,false,false,8
@@ -56,3 +56,5 @@ hemp,Hemp,0,tonne,biological,25.00,false,false,8
 coca_leaf,Coca Leaf,0,tonne,biological,100.00,true,true,8
 poppy,Poppy,0,tonne,biological,80.00,true,true,8
 milk_raw,Raw Milk,0,litre,biological,12.00,true,false,8
+raw_hide,Raw Hide,0,tonne,agricultural,80.00,true,false,1
+fodder,Fodder,0,tonne,agricultural,30.00,false,false,1

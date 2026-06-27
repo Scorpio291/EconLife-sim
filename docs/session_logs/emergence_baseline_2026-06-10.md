@@ -1145,3 +1145,34 @@ mechanic change. The catchment->urban mechanic itself is correct and conserved.
 Gates: 1555 unit (+8 grain_logistics), society suite, emergence (1 failed-as-expected
 = deferred national_legitimacy). Next: M4 medieval content (goods/recipes/facilities),
 then M5 feudal layer, M6 hazards+war, M7 entry (entity materialization).
+
+---
+
+## 2026-06-25 — M4: medieval content (goods / recipes / facilities)
+
+Fourth build milestone — pure data (CSV), the era flesh for the medieval band. The
+catalogs were 100% modern-anchored (0 goods/recipes before era 8); now era-≤5 content
+exists so a medieval economy has something to make and trade.
+
+- Goods: backfilled era_available on 6 basics (wheat→1, flour→2, lumber→1, iron_ore→3,
+  salt→1, beer→2) + 10 new (bread, wool, wool_cloth, charcoal, wrought_iron,
+  iron_tools, raw_hide, leather, draft_oxen, fodder — the ox of §3.5 + its fodder).
+- Recipes (8): grain_milling, bread_baking, ale_brewing, hide_tanning, charcoal_burning,
+  iron_bloomery (ore+charcoal→wrought_iron), wool_weaving, tool_smithing. Real chains:
+  grain→flour→bread, grain→ale, wool→cloth, hide→leather, wood→charcoal,
+  ore+charcoal→iron→tools. Labor-only (energy/mechanical/fuel = 0; no anachronistic
+  engine power — water/muscle abstracted into labor; charcoal/ore are input GOODS).
+- Facilities (9): watermill, bakery, brewery, weaver, tannery, charcoal_kiln, bloomery,
+  smithy, manor_farm.
+
+recipe↔goods cross-validation clean (no unknown-good errors at world-gen). New
+regression test ([medieval]) asserts the full set is available at an era-5 start and a
+modern-only good (steel, era 8) is not. The era-≤5 goods are also available in the
+modern era (era_available <= 8) — they belong there too (modern bakeries make bread) —
+and the emergence baseline still passes (modern economy absorbs them; determinism
+holds). The production economy that consumes this content is instantiated at player
+ENTRY (M7); during history-gen the commons food economy still runs.
+
+Gates: 1555 unit, world_gen integration (12 cases) + new [medieval] test, society
+suite, emergence (1 failed-as-expected = deferred national_legitimacy). Next: M5 feudal
+layer (manorial tithe + garrison/security loop, guilds, towns & fairs).

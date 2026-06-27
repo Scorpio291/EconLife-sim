@@ -33,3 +33,5 @@ cannabis_processing,workshop,Cannabis Processing,cannabis_raw,3,,,,,,,cannabis_p
 counterfeit_production,workshop,Counterfeit Production,paper,2,paint_pigments,0.5,,,,,counterfeit_currency,1,0,,,0,8,0,0.5,0,2,,8
 cigarette_manufacturing,food_processing_plant,Cigarette Manufacturing,cured_tobacco,2,paper,0.5,,,,,cigarettes,4,0,,,0,15,0,0.3,0,1,,8
 tobacco_curing,food_processing_plant,Tobacco Curing,tobacco_leaf,3,,,,,,,cured_tobacco,2.5,0,,,0,10,0,0,0.5,1,,8
+wool_weaving,weaver,Wool Weaving,wool,3,,,,,,,wool_cloth,2,0,,,0,15,0,0,0,1,,4
+tool_smithing,smithy,Tool Smithing,wrought_iron,2,,,,,,,iron_tools,3,0,,,0,15,0,0,0,2,,3
