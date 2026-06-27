@@ -69,6 +69,17 @@ class SubsistenceModule : public ITickModule {
     static uint32_t specialist_count(uint32_t residents, float surplus,
                                      const SubsistenceConfig& cfg);
 
+    // Is `regime` a stratified (manorial) regime? (regime ∈ cfg.manorial_regimes)
+    bool regime_manorial(std::string_view regime) const;
+
+    // Per-resident proto-capital share of `total_proto`. In the egalitarian commons
+    // (manorial=false) this is the even split. Under manorialism the lords (the first
+    // `manorial_lord_fraction` of residents by index) take the tithe on top of the
+    // even peasant base — conserved (summed over all residents == total_proto), and
+    // it concentrates wealth -> capital inequality. Pure/static for unit testing.
+    static float proto_share_for(uint32_t resident_index, uint32_t residents_count,
+                                 float total_proto, bool manorial, const SubsistenceConfig& cfg);
+
    private:
     SubsistenceConfig cfg_;
 };

@@ -1176,3 +1176,30 @@ ENTRY (M7); during history-gen the commons food economy still runs.
 Gates: 1555 unit, world_gen integration (12 cases) + new [medieval] test, society
 suite, emergence (1 failed-as-expected = deferred national_legitimacy). Next: M5 feudal
 layer (manorial tithe + garrison/security loop, guilds, towns & fairs).
+
+---
+
+## 2026-06-25 — M5: feudal layer (manorialism — tithe -> inequality)
+
+Fifth build milestone. The defining feudal mechanic that makes the regime behave
+DISTINCTLY from the egalitarian commons: manorialism. In the stratified regimes
+(feudal/mercantile/industrial) a tithe concentrates the new proto-capital toward a
+lord stratum (the first manorial_lord_fraction of residents by index) instead of the
+commons' even split. Conserved (the SAME proto-capital, skewed — summed over residents
+== total; unit-proven), climb-preserving (only wealth distribution changes, not
+knowledge/population). SubsistenceModule::proto_share_for (pure/static) +
+manorial_regimes / manorial_tithe_rate / manorial_lord_fraction config.
+
+Emergent narrative observed (earthlike capital gini at era reaches): founding 0.42 ->
+the commons FLATTENS inequality to ~0.26 (everyone farms, even split) -> feudal/
+mercantile RE-STRATIFY to ~0.37-0.39 (lords). The lord/peasant divide, earned and
+conserved, and the concentrated capital is the founder war-chest for entry-time firm
+genesis. Gini now surfaced in [.society-history].
+
+Scope: the garrison/security loop folds into M6 (war/predation consume security);
+guild entry/quality/price + towns/fairs are M7 entry materialization (the firm/market
+layer). M5 ships the class-structure core.
+
+Gates: 1557 unit (+2 manorialism), society suite, emergence (1 failed-as-expected =
+deferred national_legitimacy). Next: M6 — hazards + war (the seven world-class hazards
+brought in distinctly; war via the grain-protection garrison loop).

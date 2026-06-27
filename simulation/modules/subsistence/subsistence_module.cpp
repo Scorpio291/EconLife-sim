@@ -45,6 +45,35 @@ bool SubsistenceModule::regime_active(std::string_view regime) const {
     return false;
 }
 
+bool SubsistenceModule::regime_manorial(std::string_view regime) const {
+    for (const auto& r : cfg_.manorial_regimes) {
+        if (r == regime)
+            return true;
+    }
+    return false;
+}
+
+float SubsistenceModule::proto_share_for(uint32_t resident_index, uint32_t residents_count,
+                                         float total_proto, bool manorial,
+                                         const SubsistenceConfig& cfg) {
+    if (residents_count == 0 || total_proto <= 0.0f)
+        return 0.0f;
+    const float n = static_cast<float>(residents_count);
+    const float even = total_proto / n;
+    if (!manorial)
+        return even;
+    // Lords: the first `lord_fraction` of residents (deterministic by index; >= 1).
+    const float tithe = std::clamp(cfg.manorial_tithe_rate, 0.0f, 1.0f);
+    uint32_t lords = static_cast<uint32_t>(std::lround(cfg.manorial_lord_fraction * n));
+    if (lords < 1)
+        lords = 1;
+    if (lords > residents_count)
+        lords = residents_count;
+    const float peasant_base = total_proto * (1.0f - tithe) / n;
+    const float lord_bonus = (total_proto * tithe) / static_cast<float>(lords);
+    return (resident_index < lords) ? peasant_base + lord_bonus : peasant_base;
+}
+
 float SubsistenceModule::specialist_ceiling(std::string_view regime) const {
     // The non-farming share a regime can sustain rises as the economy monetizes
     // (coinage/money) and then institutionalizes production (feudal guilds/towns ->
@@ -207,13 +236,15 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         static_cast<uint32_t>(residents.size()));
 
     // Proto-capital: food beyond need is stored (grain/herds/tools), controlled by
-    // the resident heads/founders — the origin of capital. Split evenly; it is the
-    // wealth that later funds the first firms (genesis is founder-capital-gated).
+    // the resident heads/founders — the origin of capital. In the egalitarian commons
+    // it splits evenly; under MANORIALISM (feudal+ regimes) a tithe concentrates it
+    // toward a lord stratum (the lord/peasant divide). It is the wealth that later
+    // funds the first firms (genesis is founder-capital-gated).
     const float surplus_food = output - need;
-    const float proto_share =
-        (cfg_.proto_capital_rate > 0.0f && surplus_food > 0.0f)
-            ? (cfg_.proto_capital_rate * surplus_food) / static_cast<float>(residents.size())
-            : 0.0f;
+    const float total_proto = (cfg_.proto_capital_rate > 0.0f && surplus_food > 0.0f)
+                                  ? cfg_.proto_capital_rate * surplus_food
+                                  : 0.0f;
+    const bool manorial = regime_manorial(era->economic_regime);
 
     for (uint32_t i = 0; i < residents.size(); ++i) {
         const uint32_t idx = residents[i];
@@ -234,6 +265,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
             occ = chosen->index;
 
         const bool occupation_changed = (occ != npc.occupation);
+        const float proto_share = proto_share_for(i, static_cast<uint32_t>(residents.size()),
+                                                  total_proto, manorial, cfg_);
         if (!occupation_changed && proto_share <= 0.0f)
             continue;  // nothing to write for this resident
 

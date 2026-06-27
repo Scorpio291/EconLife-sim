@@ -218,3 +218,41 @@ TEST_CASE("subsistence: a food surplus accrues proto-capital to resident founder
             CHECK_FALSE(nd.capital_delta.has_value());
     }
 }
+
+TEST_CASE("manorialism: stratified regimes only", "[subsistence][tier1]") {
+    SubsistenceModule mod;
+    // The egalitarian commons stays even; the stratified regimes concentrate.
+    CHECK_FALSE(mod.regime_manorial("subsistence"));
+    CHECK_FALSE(mod.regime_manorial("barter"));
+    CHECK_FALSE(mod.regime_manorial("coinage"));
+    CHECK_FALSE(mod.regime_manorial("money"));
+    CHECK(mod.regime_manorial("feudal"));
+    CHECK(mod.regime_manorial("mercantile"));
+    CHECK(mod.regime_manorial("industrial"));
+}
+
+TEST_CASE("manorialism: tithe concentrates proto-capital to lords, conserved",
+          "[subsistence][tier1]") {
+    SubsistenceConfig cfg{};  // tithe 0.5, lord_fraction 0.1
+    const uint32_t n = 10;
+    const float total = 100.0f;
+
+    // Commons (manorial=false): perfectly even.
+    for (uint32_t i = 0; i < n; ++i)
+        CHECK_THAT(SubsistenceModule::proto_share_for(i, n, total, false, cfg),
+                   WithinAbs(10.0f, 1e-4f));
+
+    // Manorial: 1 lord (round(0.1*10)) takes the tithe; peasants share the rest.
+    const float lord = SubsistenceModule::proto_share_for(0, n, total, true, cfg);
+    const float peasant = SubsistenceModule::proto_share_for(5, n, total, true, cfg);
+    CHECK(lord > peasant);             // the lord/peasant divide
+    CHECK(peasant < 10.0f);            // peasants get less than the even commons share
+    CHECK_THAT(lord, WithinAbs(55.0f, 0.5f));   // 5 base + 50 tithe
+    CHECK_THAT(peasant, WithinAbs(5.0f, 0.5f));
+
+    // CONSERVED: the skewed distribution sums to the same total proto-capital.
+    float sum = 0.0f;
+    for (uint32_t i = 0; i < n; ++i)
+        sum += SubsistenceModule::proto_share_for(i, n, total, true, cfg);
+    CHECK_THAT(sum, WithinAbs(total, 1e-3f));
+}

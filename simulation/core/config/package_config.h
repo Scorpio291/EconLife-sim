@@ -558,6 +558,18 @@ struct SubsistenceConfig {
     // disables it. Active only in the commons regimes (same gate as production).
     float proto_capital_rate = 0.02f;
 
+    // --- Manorialism (M5): the feudal class structure ---
+    // In the stratified pre-market regimes (feudal/mercantile/industrial) a tithe
+    // concentrates the new proto-capital toward a small lord/elite stratum instead of
+    // the egalitarian even split of the commons — the origin of the lord/peasant
+    // divide and the inequality medieval politics runs on. Conserved (a skewed
+    // distribution of the SAME proto-capital each tick, not minting); it raises
+    // capital inequality, and the concentrated capital is the founder war-chest for
+    // entry-time firm genesis. The earlier commons regimes stay egalitarian.
+    std::vector<std::string> manorial_regimes = {"feudal", "mercantile", "industrial"};
+    float manorial_tithe_rate = 0.5f;     // share of new proto-capital that tithes to lords
+    float manorial_lord_fraction = 0.1f;  // fraction of residents who are lords (>=1 lord)
+
     // Specialization ceiling: a society can't free MORE than this share of its people
     // from food work. Pre-industrial economies ran ~80-90% farmers, so a non-farming
     // share above ~10-15% is not physically sustainable on commons agriculture. The

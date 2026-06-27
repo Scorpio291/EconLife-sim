@@ -509,9 +509,17 @@ honest verb set is small, by design.
    cross-validation clean; regression test asserts the set is available at an era-5
    start and modern-only goods (steel) are not. The production economy that consumes
    this content is instantiated at player entry (M7); gates green.
-5. **M5 — Feudal layer.** Manorial tithe + garrison/security loop, guild
-   entry/quality/price, towns & fairs. *Deliverable:* the regime behaves distinctly
-   from the commons; protection is grounded in the haulage limit.
+5. **M5 — Feudal layer: manorialism. ✅ SHIPPED 2026-06-25.** The defining
+   "behaves distinctly from the commons" mechanic: in the stratified regimes
+   (feudal/mercantile/industrial) a tithe concentrates the new proto-capital toward a
+   lord stratum instead of the commons' egalitarian even split — conserved (a skewed
+   distribution of the SAME proto-capital), climb-preserving (only wealth distribution
+   shifts). Emergent arc observed (capital gini): founding 0.42 → the commons flattens
+   to ~0.26 → feudal/mercantile re-stratify to ~0.37–0.39. The lord's concentrated
+   capital is the founder war-chest for entry genesis. Gini surfaced in the history
+   observe. *Deferred:* the garrison/security loop folds into **M6** (where war/
+   predation consume security); guild entry/quality/price and towns/fairs are the
+   **M7** entry-materialization (firm/market layer). Gates green.
 6. **M6 — Limiting factors: hazards + war (§5.5, D8/D9).** Bring the seven
    world-classification hazards in distinctly (split the flat scalar): the episodic
    shocks — disease epidemics (density × the disease dial), geology disasters,

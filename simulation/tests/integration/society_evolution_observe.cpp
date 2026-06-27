@@ -121,9 +121,9 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
                     s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
                 std::printf(
                     "  era %2d  @ year %5u  (+%4u yrs, knowledge %.0f, +%.2f/yr, pop %.0f, "
-                    "spec %.0f%%, urban %.0f%%)\n",
+                    "spec %.0f%%, urban %.0f%%, gini %.2f)\n",
                     s.era, s.year, dy, s.knowledge, dy > 0 ? dk / dy : 0.0f, s.total_population,
-                    s.specialist_fraction * 100.0, urban_pct);
+                    s.specialist_fraction * 100.0, urban_pct, s.capital_gini);
                 prev_era = s.era;
                 prev_k = s.knowledge;
                 prev_year = s.year;
