@@ -58,6 +58,24 @@ bool PopulationAgingModule::is_annual_tick(uint32_t current_tick) {
     return (current_tick % TICKS_PER_YEAR) == 0;
 }
 
+float PopulationAgingModule::epidemic_mortality_factor(float disease_dial, float urban_fraction,
+                                                       DeterministicRNG& rng,
+                                                       const PopulationAgingConfig& cfg) {
+    const float d = std::clamp(disease_dial, 0.0f, 1.0f);
+    if (d <= 0.0f)
+        return 1.0f;
+    const float density = std::clamp(urban_fraction, 0.0f, 1.0f);
+    // Outbreak probability rises with the world's disease load AND crowding (towns
+    // are disease vectors — so disease brakes urbanization).
+    const float p = std::clamp(
+        cfg.epidemic_base_rate * d * (1.0f + cfg.epidemic_density_weight * density), 0.0f,
+        cfg.epidemic_max_prob);
+    if (rng.next_float() >= p)
+        return 1.0f;  // no outbreak this year
+    // Outbreak: a mortality spike scaled by the disease load and the crowding.
+    return 1.0f + cfg.epidemic_severity * d * (1.0f + density);
+}
+
 float PopulationAgingModule::compute_natural_death_probability(float age, float lifespan,
                                                                float base_prob) {
     if (age < lifespan)
@@ -256,6 +274,24 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // Medicine (germ theory, …) from the tech tree cuts mortality.
                 hazard_mortality *=
                     state.tech_effects_for_era(state.technology.current_era).mortality_mult;
+
+                // Disease epidemics (M6a): an episodic mortality spike in the pre-market
+                // (commons) arc, scaled by the world's disease dial and urban crowding —
+                // the plague dips real population history shows. Medicine releases
+                // disease-as-population-check in the modern era (commons == false there).
+                if (commons && annual) {
+                    const float urban_frac =
+                        cs.total_population > 0
+                            ? cs.urban_population / static_cast<float>(cs.total_population)
+                            : 0.0f;
+                    DeterministicRNG epi_rng(state.world_seed ^
+                                             (static_cast<uint64_t>(state.current_tick) *
+                                              0x9E3779B97F4A7C15ull) ^
+                                             (static_cast<uint64_t>(province.id) << 17) ^
+                                             0xED1DEC1Cull);
+                    hazard_mortality *= epidemic_mortality_factor(state.hazard_settings.disease,
+                                                                  urban_frac, epi_rng, cfg_);
+                }
 
                 // Fertility tracks the long-run food signal the subsistence module writes
                 // (output vs need + reserve upkeep): population grows only when the land

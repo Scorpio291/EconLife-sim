@@ -10,6 +10,7 @@ namespace econlife {
 
 struct WorldState;
 struct DeltaBuffer;
+class DeterministicRNG;
 
 class PopulationAgingModule : public ITickModule {
    public:
@@ -38,6 +39,14 @@ class PopulationAgingModule : public ITickModule {
     // past it, base_prob scaled up with years over lifespan. (NPC health is not
     // a WorldState field, so age is the sole driver.)
     static float compute_natural_death_probability(float age, float lifespan, float base_prob);
+
+    // Episodic disease mortality multiplier (>= 1.0) for one province-year (M6a, the
+    // first world-classification hazard brought in distinctly). With probability
+    // rising in the world's `disease` dial and urban crowding, an outbreak strikes a
+    // mortality spike; otherwise 1.0. Pure given the RNG. (Disease is a pre-market
+    // population check; medicine releases it in the modern era.)
+    static float epidemic_mortality_factor(float disease_dial, float urban_fraction,
+                                           DeterministicRNG& rng, const PopulationAgingConfig& cfg);
 
     // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;

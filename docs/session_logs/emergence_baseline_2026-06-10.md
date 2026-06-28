@@ -1203,3 +1203,32 @@ layer). M5 ships the class-structure core.
 Gates: 1557 unit (+2 manorialism), society suite, emergence (1 failed-as-expected =
 deferred national_legitimacy). Next: M6 — hazards + war (the seven world-class hazards
 brought in distinctly; war via the grain-protection garrison loop).
+
+---
+
+## 2026-06-25 — M6a (disease): the first world-classification hazard, brought in distinctly
+
+Sixth-band milestone, first hazard. The seven world-class hazards previously collapsed
+into one flat mortality scalar; disease is now an EPISODIC shock — the plague check.
+
+- population_aging::epidemic_mortality_factor (pure/static): each pre-market year a
+  province may suffer an outbreak — a mortality spike of 1 + severity*disease*(1+density).
+  Outbreak probability = base * disease_dial * (1 + density_weight * urban_fraction),
+  capped. So plaguier worlds (high disease dial) AND crowded provinces (M3
+  urban_population fraction — towns are vectors) outbreak more → disease is a natural
+  BRAKE on urbanization. Conserved (deaths via the existing cohort mortality path);
+  deterministic (per-province/tick RNG). Folded into hazard_mortality; gated to the
+  commons arc so medicine RELEASES disease-as-population-check in the modern era (a
+  grounded hockey-stick cause).
+- Config: PopulationAgingConfig epidemic_base_rate/density_weight/max_prob/severity.
+
+Effect: bites in the urban growth eras (2-4, ~21-25% urban) where towns exist, barely
+in the rural late dawn — the intended density brake. Calibration-safe: earthlike modern
+11,970 -> 12,044 (+74yr, ~0.6%); every era duration still tracks history (medieval
+967 vs 950). The plague dips are yearly (smoothed at 500-yr sampling); dramatic
+Black-Death plateaus need the multi-year + spread + pandemic refinement (deferred).
+
+Gates: 1558 unit (+1 epidemic), society suite, emergence (1 failed-as-expected =
+deferred national_legitimacy). Next M6: geology disasters + seasonality harvest
+failures (episodic), the chronic radiation/atmosphere split, the feudal couplings
+(gravity->haulage, predators->herds), then M6c war & diplomacy.

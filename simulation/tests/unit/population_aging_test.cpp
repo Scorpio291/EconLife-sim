@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -380,4 +381,47 @@ TEST_CASE("PopulationAging: NPC aging only fires on annual ticks", "[population_
     // Tick 30 is monthly but not annual: no NPC age delta.
     for (const auto& nd : delta.npc_deltas)
         REQUIRE(nd.npc_id != 1);
+}
+
+TEST_CASE("PopulationAging: disease epidemics — episodic, scaled by disease dial and crowding",
+          "[population_aging][tier11]") {
+    PopulationAgingConfig cfg{};
+
+    // A disease-free world (dial 0) never has outbreaks.
+    for (uint32_t s = 0; s < 200; ++s) {
+        DeterministicRNG rng(s);
+        CHECK(PopulationAgingModule::epidemic_mortality_factor(0.0f, 0.5f, rng, cfg) == 1.0f);
+    }
+
+    // Outbreak probability rises with the disease dial AND with urban crowding.
+    auto outbreak_rate = [&](float disease, float density) {
+        int hits = 0;
+        const int N = 4000;
+        for (int s = 0; s < N; ++s) {
+            DeterministicRNG rng(static_cast<uint64_t>(s) * 2654435761ull + 1u);
+            if (PopulationAgingModule::epidemic_mortality_factor(disease, density, rng, cfg) > 1.0f)
+                ++hits;
+        }
+        return static_cast<double>(hits) / N;
+    };
+    const double low = outbreak_rate(0.3f, 0.0f);
+    const double high_disease = outbreak_rate(1.0f, 0.0f);
+    const double high_density = outbreak_rate(1.0f, 1.0f);
+    CHECK(low > 0.0);
+    CHECK(high_disease > low);           // a plaguier world outbreaks more
+    CHECK(high_density > high_disease);  // crowded towns are disease vectors
+
+    // When an outbreak strikes, the mortality spike is the deterministic formula
+    // 1 + severity * disease * (1 + density).
+    const float expected = 1.0f + cfg.epidemic_severity * 1.0f * (1.0f + 1.0f);  // disease=1, density=1
+    bool saw_outbreak = false;
+    for (uint32_t s = 0; s < 500 && !saw_outbreak; ++s) {
+        DeterministicRNG rng(s);
+        const float f = PopulationAgingModule::epidemic_mortality_factor(1.0f, 1.0f, rng, cfg);
+        if (f > 1.0f) {
+            CHECK_THAT(f, WithinAbs(expected, 1e-4f));
+            saw_outbreak = true;
+        }
+    }
+    CHECK(saw_outbreak);
 }

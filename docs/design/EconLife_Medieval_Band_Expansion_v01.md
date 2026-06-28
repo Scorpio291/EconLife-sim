@@ -540,6 +540,13 @@ honest verb set is small, by design.
    and war needs the M5 garrison/tithe. Split: **M6a** episodic shocks + chronic
    hazard split; **M6b** feudal couplings; **M6c** war & diplomacy (the largest — a
    polity-level diplomacy engine generalising the criminal conflict engine).
+   **✅ M6a-disease SHIPPED 2026-06-25:** disease epidemics — an episodic mortality
+   spike in population_aging, probability rising with the world's `disease` dial AND
+   urban crowding (towns are vectors → disease brakes urbanization), conserved (deaths
+   via the cohort path), gated to the pre-market arc (medicine releases it in modern).
+   Calibration-safe (modern 11,970→12,044, +74yr). Memoryless single-year spikes;
+   multi-year outbreaks + spread along links + the geology/seasonality shocks and the
+   chronic radiation/atmosphere split are the remaining M6a/M6b work.
    *Deliverable:* the curve gains realistic dips/plateaus; plague/quake/famine/war
    become spectrum failure modes; shifting alliances and the rise/balancing of powers
    read as real history; the World-Class spectrum bites harder. Behavioral gate

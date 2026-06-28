@@ -1447,6 +1447,20 @@ struct PopulationAgingConfig {
     // wiped out instantly (max), nor can adaptation + medicine make them immortal (min).
     float hazard_mortality_min = 0.15f;
     float hazard_mortality_max = 3.0f;
+
+    // --- Disease epidemics (M6a): the first world-classification hazard brought in
+    // distinctly as an EPISODIC shock (the plague dips real population history shows).
+    // Each year a province may suffer an outbreak — a mortality spike scaled by the
+    // world's `disease` hazard dial AND crowding (urban_population fraction; towns are
+    // disease vectors, so disease brakes urbanization). Conserved (people die via the
+    // normal cohort mortality path). Active only in the pre-market (commons) arc:
+    // medicine releases disease-as-population-check in the modern era (the hockey-stick
+    // cause). Memoryless single-year spikes for now; multi-year outbreaks + spread
+    // along trade links are the follow-up (design §5.5, D8).
+    float epidemic_base_rate = 0.02f;       // annual outbreak prob at disease=1, rural
+    float epidemic_density_weight = 2.0f;   // urban crowding multiplies the outbreak prob
+    float epidemic_max_prob = 0.15f;        // cap on annual outbreak probability
+    float epidemic_severity = 1.2f;         // mortality-multiplier bump at disease=1, rural
 };
 
 struct LodSystemConfig {
