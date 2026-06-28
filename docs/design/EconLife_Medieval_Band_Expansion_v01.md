@@ -353,14 +353,20 @@ conquerable hazards while living forever with the planetary ones.
   propagates to linked provinces (one-tick cross-province). Towns periodically cull
   back toward the countryside → urbanization advances in *waves*, not a ramp.
 
-### War — conflict over the grain (the §3.5 loop, made lethal)
+### War — rational polities, not scripted raids (the §3.5 loop, made political)
 War is *endogenous* (not a world dial): the protect-the-grain garrison loop made
-lethal. Where a polity's **security** (garrison fed from surplus, §5) is low vs a
-neighbour's military power, conflict **seizes grain** (conserved — to the victor) and
-kills (cohort casualties, combatants first). Generalizes the just-grounded criminal
-territorial-conflict engine. A society that out-produces but can't *protect* its
-surplus is set back or overrun: military capacity becomes a survival trait, not
-flavour.
+lethal, and made **political**. It is not random raiding — it is rational polities
+competing for conserved grain under physical reach (the ox-cart) and the balance of
+power, with **reputation** pricing every broken promise. A polity attacks when the
+expected value of seizing a weak/rich/**reachable** neighbour beats peace; allies when
+a hegemon threatens (a self-correcting balance of power); signs **treaties** that hold
+while peace pays; and **backstabs** when the off-guard prize exceeds the relationship
+plus the reputation hit — becoming a shunned pariah if it does so too often. Grain,
+people, and territory only move or are consumed (casualties from cohorts, combatants
+first; seized grain to the victor). Generalises the just-grounded criminal
+territorial-conflict engine to the polity level. **Full model:
+`EconLife_War_and_Diplomacy_v01.md`** (treaties, alliances, politics, backstabbing —
+all emergent from EV decisions, none scripted).
 
 ### The modern release (why the hockey stick)
 The *conquerable* limiters are the grounded cause of the post-industrial explosion:
@@ -525,13 +531,19 @@ honest verb set is small, by design.
    shocks — disease epidemics (density × the disease dial), geology disasters,
    seasonality harvest failures; the feudal couplings — gravity→haulage radius,
    predators→herds/oxen; the chronic drags — radiation→fertility, atmosphere→ceiling.
-   Plus endogenous **war** (generalize the territorial-conflict engine to casualties
-   + grain seizure). All conserved, reduce-only (wall-respecting). Sequenced here
-   because the couplings need M2/M3 (haulage, towns) and war needs the M5 garrison.
-   May split into M6a (episodic shocks + chronic split) and M6b (couplings + war).
+   Plus endogenous **war & diplomacy** — NOT scripted raids but rational polities
+   competing for conserved grain under reach (ox-cart) and the balance of power, with
+   reputation pricing broken faith; treaties, alliances, politics, and backstabbing
+   all emerge from EV decisions (full model:
+   `EconLife_War_and_Diplomacy_v01.md`, decisions W1–W5). All conserved, reduce-only
+   (wall-respecting). Sequenced here because the couplings need M2/M3 (haulage, towns)
+   and war needs the M5 garrison/tithe. Split: **M6a** episodic shocks + chronic
+   hazard split; **M6b** feudal couplings; **M6c** war & diplomacy (the largest — a
+   polity-level diplomacy engine generalising the criminal conflict engine).
    *Deliverable:* the curve gains realistic dips/plateaus; plague/quake/famine/war
-   become spectrum failure modes; the World-Class spectrum bites harder. Behavioral
-   gate re-validated.
+   become spectrum failure modes; shifting alliances and the rise/balancing of powers
+   read as real history; the World-Class spectrum bites harder. Behavioral gate
+   re-validated.
 7. **M7 — Entry & verbs.** Era selection surfaces the world's earned state;
    medieval player verbs. *Deliverable:* a playable medieval start.
 
