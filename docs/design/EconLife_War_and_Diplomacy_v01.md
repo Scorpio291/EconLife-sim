@@ -27,11 +27,20 @@ Reality balance falls out of three forces, not a difficulty knob:
   → sprawling conquest needs water/roads, exactly as §3.5 says → most wars are
   border wars.
 - **The balance of power self-corrects** (a rising hegemon is ganged up on) →
-  conquest is bounded, not runaway.
+  conquest is bounded **by default**.
+
+…but the rule has its famous exceptions — **Alexander, Genghis Khan, Rome** — and the
+model must produce them, not flatten history into permanent stalemate. Each broke the
+local-war equilibrium a *different* way (military quality, mobility, infrastructure +
+institutions), and each empire's RISE *and* FALL is grounded in the same logistics law
+(§5.5 below). Empires are the exceptions that prove the rule: they exist only by
+overcoming reach and the hold problem, and they fragment when that advantage lapses.
 
 Result: long peace punctuated by wars of opportunity, shifting alliances, occasional
-dramatic betrayal, and the rise/fall/balancing of powers — and it feeds the
-population curve (war dips, §5.5) and the spectrum (war-torn worlds).
+dramatic betrayal, the rise/balancing of powers — **and the rare world-conqueror who
+breaks through, then whose empire holds or shatters on whether institutions caught up
+with the conquest** — feeding the population curve (war dips, §5.5) and the spectrum
+(war-torn worlds, fallen empires, successor-state mosaics).
 
 ---
 
@@ -119,6 +128,58 @@ No "treachery die". Betrayal is the EV calculation with reputation priced in.
 
 ---
 
+## 5.5 Empire — the exceptions that prove the rule (Alexander, Genghis, Rome)
+
+The default (§0) is bounded, local war: the ox-cart caps reach, the balance of power
+caps conquest. But history's great empires *broke* that, and a model that can't
+produce a Rome or a Mongol Empire is wrong. Conquest has TWO gates — **reach** (can
+you get an army there and win?) and **hold** (can you keep what you took?) — and the
+three archetypes each beat them differently:
+
+- **Alexander — military quality / leadership.** A rare leadership × army-quality
+  multiplier on power lets a *small* economic base out-fight much larger neighbours,
+  and faster than a balancing coalition can form (the EV of resisting is hopeless;
+  neighbours submit or are crushed). Conquest outruns the balance of power. **But the
+  hold gate is unmet** — no institutions to administer it — so on the conqueror's
+  death the empire FRAGMENTS into successor states (the Diadochi): the balance of
+  power and the ox-cart reassert the moment the exceptional leader is gone.
+- **Genghis — mobility beyond the grain radius.** Steppe cavalry lives off its herds,
+  not a grain supply line, so its **reach exceeds the ox-cart haulage limit** by an
+  order of magnitude — it campaigns where settled armies cannot. The largest
+  contiguous land empire, built by escaping the locality constraint. **But the hold
+  gate is again weak** — mobility conquers, it does not administer — so it fragments
+  into khanates over generations as the mobility edge can't substitute for
+  institutions on settled land.
+- **Rome — infrastructure + institutions.** Roads (`infrastructure_bonus`, §3.5)
+  *structurally extend* the reach radius — the same lever the lightspeed law names —
+  and citizenship/assimilation/administration solve the **hold** gate: conquered
+  provinces are integrated, not just occupied. So the empire is DURABLE — centuries,
+  not one lifetime — until the infrastructure and institutional cohesion **decay**
+  (and overreach: even roads have a radius), at which point reach and hold fail
+  together and it fragments (the Western collapse). Rome doesn't break the logistics
+  law; it raises the ceiling, then falls when it can't pay to hold it.
+
+### The hold problem (durability), grounded
+Conquered territory is retained only while **reach** (can supply/defend it) AND a
+per-empire **institutional cohesion** (assimilation/administration) exceed what it
+costs to hold — else dominance bleeds back (it secedes). So:
+- **Ephemeral empire** (conquest ≫ institutions): a leadership/mobility surge seizes
+  vastly, then shatters when the surge lapses — the limit reasserts (a *terrestrial*
+  echo of the lightspeed re-fragmentation). Most conquerors.
+- **Durable empire** (institutions + roads keep pace): holds for generations, then
+  declines as cohesion/infrastructure decay or it overreaches its (raised) radius.
+- The fall is as grounded as the rise — both are the logistics/hold ledger going
+  positive then negative. Empires don't "collapse randomly"; they stop being able to
+  pay for their reach.
+
+This makes the World-Class/Bounty spectrum richer: a world may throw up a rare
+conqueror (a high-leadership lord, a mobile steppe polity, a road-building
+institutional state) whose empire blankets the map — and then a successor-state mosaic
+when it shatters, or a long imperial peace when it holds. Player entry into such a
+world is dramatically different from entry into a balanced patchwork.
+
+---
+
 ## 6. Conserved outcomes (the link to M6 war mortality)
 
 When war resolves (ties to §5.5):
@@ -168,8 +229,22 @@ Nothing minted or vanished — people, grain, and territory only move or are con
   loss, or gradual dominance shift (like the criminal `dominance_by_province`)? Lean:
   gradual dominance, with absorption at a threshold.
 - **W5:** calibration target — what peace:war ratio and conquest bound read as
-  "realistic" on the spectrum (mostly-peace with periodic local wars; rare
-  hegemonic surges that get balanced)?
+  "realistic" on the spectrum (mostly-peace with periodic local wars; **rare empires**
+  that blanket the map and then hold or shatter)?
+- **W6 (§5.5, Alexander):** the leadership × army-quality power multiplier — where does
+  the rare exceptional commander/army come from (a low-probability draw per
+  polity/era? scaling with tech/institutions?), and how big can it get before it
+  out-paces any coalition? Tie its loss (leader death) to the empire's hold check.
+- **W7 (§5.5, Genghis):** military-type reach — some systems (steppe cavalry, later
+  naval/rail/mechanized) project force far beyond the grain-haulage radius. Model as a
+  per-military-type reach multiplier on the `grain_logistics`/force-projection cost
+  (cavalry cheap and far; siege-heavy infantry short)?
+- **W8 (§5.5, Rome — the hold problem):** a per-empire **institutional cohesion** that
+  (with infrastructure/roads, §3.5) gates territory RETENTION; conquered dominance
+  bleeds back unless cohesion + reach exceed the hold cost; cohesion grows slowly
+  (assimilation/administration) and decays (overreach/neglect) → durable vs ephemeral
+  empires, and grounded imperial decline. This is the single most important
+  empire mechanic.
 
 ---
 
@@ -181,8 +256,14 @@ Attack when the expected value of seizing a weak, rich, reachable neighbour beat
 peace; ally when a hegemon threatens (the balance of power, self-correcting); sign
 treaties that hold while peace pays; betray when the prize off-guard exceeds the
 relationship plus the reputation hit — and become a pariah if you do it too often.
-Grain, people, and territory only ever move or are consumed. The outcome is a
-realistic history — long peace, local wars of opportunity, shifting coalitions, the
-occasional dramatic betrayal, powers rising and being balanced — that carves the
-population curve and sorts the world spectrum into the peaceful, the war-torn, and the
-faithless, none of it scripted.
+Grain, people, and territory only ever move or are consumed. Bounded conquest is the
+*default* — but the rule has its exceptions: a rare conqueror breaks it through
+military quality (Alexander), mobility past the grain radius (Genghis), or roads +
+institutions (Rome) — and the empire then *holds or shatters* on whether institutional
+cohesion caught up with the conquest (ephemeral surge → successor-state mosaic;
+durable empire → imperial peace, then decline as reach and hold can no longer be
+paid for). The outcome is a realistic history — long peace, local wars of opportunity,
+shifting coalitions, dramatic betrayals, powers rising and being balanced, and the
+occasional world-empire blazing across the map and then fragmenting — all of it
+carving the population curve and sorting the spectrum (peaceful, war-torn, faithless,
+imperial, post-imperial), none of it scripted.
