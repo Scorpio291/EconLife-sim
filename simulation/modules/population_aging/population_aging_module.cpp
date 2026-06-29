@@ -87,6 +87,12 @@ float PopulationAgingModule::disaster_mortality_factor(float geology_dial, Deter
     return 1.0f + cfg.geology_disaster_severity * g;  // quake/storm/wildfire mortality spike
 }
 
+float PopulationAgingModule::radiation_fertility_factor(float radiation_dial,
+                                                        const PopulationAgingConfig& cfg) {
+    const float r = std::clamp(radiation_dial, 0.0f, 1.0f);
+    return std::max(0.0f, 1.0f - cfg.radiation_fertility_penalty * r);
+}
+
 float PopulationAgingModule::compute_natural_death_probability(float age, float lifespan,
                                                                float base_prob) {
     if (age < lifespan)
@@ -125,7 +131,7 @@ bool is_retiree_group(DemographicGroup g) {
 // granaries, famine_surplus ~1 (nobody starves). Both are 1.0 in market eras (neutral).
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
                            float sick_rate, float addiction_rate, float birth_surplus,
-                           float famine_surplus, float hazard_mortality,
+                           float famine_surplus, float hazard_mortality, float fertility_mult,
                            const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
@@ -152,7 +158,8 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     // inverse of sick_rate, since HealthcareProfile is not on WorldState).
     float healthcare_proxy = std::clamp(1.0f - sick_rate, 0.0f, 1.0f);
     float birth_rate = cfg.base_annual_birth_rate * std::clamp(stability, 0.0f, 1.0f) *
-                       healthcare_proxy * birth_food_factor;
+                       healthcare_proxy * birth_food_factor *
+                       std::clamp(fertility_mult, 0.0f, 1.0f);  // radiation depresses fertility (M6a)
     auto births = static_cast<uint32_t>(
         std::llround(static_cast<double>(total) * static_cast<double>(birth_rate)));
     cohorts[DemographicGroup::youth_urban].size += births / 2u;
@@ -323,8 +330,13 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 const float birth_surplus = cs.subsistence_surplus_ratio;
                 const float famine_surplus =
                     (commons && cs.food_store <= 0.0f) ? cs.subsistence_surplus_ratio : 1.0f;
+                // Radiation chronically depresses fertility (planetary — applies in all
+                // eras, never released, unlike the conquerable disease/geology shocks).
+                const float fertility_mult =
+                    radiation_fertility_factor(state.hazard_settings.radiation, cfg_);
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
-                                      birth_surplus, famine_surplus, hazard_mortality, cfg_);
+                                      birth_surplus, famine_surplus, hazard_mortality,
+                                      fertility_mult, cfg_);
 
                 // Hardiness drifts toward the world's hazard level over generations
                 // (adaptation under sustained pressure; softening under ease).

@@ -66,6 +66,16 @@ class SubsistenceModule : public ITickModule {
     static float harvest_failure_factor(float seasonality_dial, DeterministicRNG& rng,
                                         const SubsistenceConfig& cfg);
 
+    // Chronic food multiplier (<= 1.0) from predators preying on herds/draft animals
+    // (M6a coupling): scaled by the `predators` dial, strongest early and WANING as
+    // accumulated knowledge clears them. 1.0 once cleared / on a predator-free world.
+    static float predator_food_factor(float predators_dial, float knowledge_level,
+                                      const SubsistenceConfig& cfg);
+
+    // Chronic carrying-ceiling multiplier (<= 1.0) from a hostile/toxic atmosphere
+    // (M6a chronic): scaled by the `atmosphere` dial. Planetary — never wanes.
+    static float atmosphere_ceiling_factor(float atmosphere_dial, const SubsistenceConfig& cfg);
+
     // Non-farming share the regime can sustain (rises along the pre-market arc:
     // subsistence <= barter < coinage < money < feudal < mercantile < industrial;
     // other regimes -> max_specialist_fraction).

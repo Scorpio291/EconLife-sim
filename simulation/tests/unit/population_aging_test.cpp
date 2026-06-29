@@ -463,3 +463,15 @@ TEST_CASE("PopulationAging: geology disasters — episodic, scaled by the geolog
     }
     CHECK(saw);
 }
+
+TEST_CASE("PopulationAging: radiation chronically depresses fertility (planetary)",
+          "[population_aging][tier11]") {
+    PopulationAgingConfig cfg{};
+    CHECK(PopulationAgingModule::radiation_fertility_factor(0.0f, cfg) == 1.0f);
+    const float earth = PopulationAgingModule::radiation_fertility_factor(0.2f, cfg);
+    const float hot = PopulationAgingModule::radiation_fertility_factor(1.0f, cfg);
+    CHECK(earth < 1.0f);
+    CHECK(hot < earth);  // a more irradiated world is less fertile
+    CHECK(hot >= 0.0f);
+    CHECK_THAT(hot, WithinAbs(1.0f - cfg.radiation_fertility_penalty, 1e-4f));
+}

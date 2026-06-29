@@ -54,6 +54,12 @@ class PopulationAgingModule : public ITickModule {
     static float disaster_mortality_factor(float geology_dial, DeterministicRNG& rng,
                                            const PopulationAgingConfig& cfg);
 
+    // Chronic fertility multiplier (<= 1.0) from ambient radiation (M6a chronic split):
+    // a distinct channel from the background mortality scalar — radiation kills AND
+    // suppresses births. Planetary; never wanes. Scaled by the `radiation` dial.
+    static float radiation_fertility_factor(float radiation_dial,
+                                            const PopulationAgingConfig& cfg);
+
     // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;
     static constexpr uint32_t TICKS_PER_YEAR = 365;

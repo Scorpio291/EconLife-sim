@@ -1266,3 +1266,37 @@ Gates: 1560 unit (+2: geology, seasonality), society suite, emergence (1
 failed-as-expected = deferred national_legitimacy). Remaining M6: chronic radiation/
 atmosphere split, feudal couplings (gravity->haulage, predators->herds), multi-year/
 spread; then M6c war & diplomacy.
+
+---
+
+## 2026-06-25 — M6a complete: chronic hazard channels (radiation, atmosphere) + predator coupling
+
+Added the remaining distinct hazard channels, completing M6a (all seven world-class
+hazards now act through their signature channel, additive to the background mortality
+scalar — a hazard kills via the scalar AND has its specific effect):
+- PREDATORS -> herd/food penalty (subsistence), strongest early and WANING as
+  accumulated knowledge clears them (predator_food_factor; the §5.5 coupling).
+- ATMOSPHERE -> carrying-ceiling cap (subsistence), planetary, never wanes
+  (atmosphere_ceiling_factor).
+- RADIATION -> fertility depression (population_aging), planetary, applies in ALL eras
+  (radiation_fertility_factor; new fertility_mult param on process_births_deaths).
+- GRAVITY -> haulage was already in M2 (grain_logistics::delivered_fraction).
+
+All pure/static + unit-tested. Earth-level penalties kept SMALL (they compound over
+the 12,000-yr climb): predator 0.10, atmosphere 0.12, radiation 0.18 (reduced from
+0.25/0.30/0.40 after the initial values over-slowed earthlike past the 13,000 window).
+
+Calibration: cumulative M6a drift earthlike modern 11,970 -> 12,822 (+7%). Anchor
+holds (Thriving). Spectrum intact and correctly ordered: GARDEN stagnates at Bronze;
+EARTHLIKE -> Modern ~12,822; FERTILE DEATHWORLD fastest ~11,617; BARREN DEATHWORLD
+Stalls at Classical (survives — not extinct). The conquerable/planetary split is live:
+predators (and disease/geology/seasonality) wane or release; gravity/radiation/
+atmosphere are permanent.
+
+A single threshold re-calibration to restore modern ~12,000 is DEFERRED until after
+M6c war (must follow war, else earthlike could stall under the combined load).
+
+Gates: 1562 unit (+2: predator/atmosphere, radiation), society suite, emergence (1
+failed-as-expected). M6a DONE (bar optional multi-year/spread epidemics). Next: M6c war
+& diplomacy (the polity-level engine — rational war, treaties, alliances, backstabbing,
+empires).

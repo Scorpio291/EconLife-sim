@@ -578,6 +578,15 @@ struct SubsistenceConfig {
     float seasonality_failure_base_rate = 0.06f;  // annual bad-harvest prob at seasonality=1
     float seasonality_failure_severity = 0.4f;    // max output cut in a bad year at seasonality=1
 
+    // --- Chronic world-hazard channels on food (M6a; distinct from the background
+    // mortality scalar — each hazard also acts through its signature channel) ---
+    // Predators prey on herds/draft animals -> a chronic food penalty, strongest early
+    // and WANING as accumulated knowledge/technique clears them (the §5.5 coupling).
+    float predator_food_penalty = 0.10f;         // food loss at predators=1, uncleared
+    float predator_clearance_halfsat = 5000.0f;  // knowledge at which predator pressure halves
+    // A hostile/toxic atmosphere caps the carrying ceiling (planetary; never wanes).
+    float atmosphere_cap_penalty = 0.12f;        // ceiling loss at atmosphere=1
+
     // Specialization ceiling: a society can't free MORE than this share of its people
     // from food work. Pre-industrial economies ran ~80-90% farmers, so a non-farming
     // share above ~10-15% is not physically sustainable on commons agriculture. The
@@ -1478,6 +1487,10 @@ struct PopulationAgingConfig {
     float geology_disaster_base_rate = 0.015f;  // annual disaster prob at geology=1
     float geology_disaster_max_prob = 0.12f;    // cap on annual disaster probability
     float geology_disaster_severity = 1.0f;     // mortality-multiplier bump at geology=1
+
+    // Radiation chronically depresses FERTILITY (a distinct channel from the
+    // background mortality scalar; planetary, never wanes). M6a chronic split.
+    float radiation_fertility_penalty = 0.18f;   // birth-rate loss at radiation=1
 };
 
 struct LodSystemConfig {

@@ -555,9 +555,18 @@ honest verb set is small, by design.
    shape intact (medieval 978 vs 950) — the hazards realistically slow the climb. A
    single threshold re-calibration to restore modern ~12,000 is **deferred until the
    full hazard suite + war land** (chasing it mid-suite is a moving target).
-   REMAINING M6: the chronic split (radiation→fertility, atmosphere→carrying-cap), the
-   feudal couplings (gravity→haulage, predators→herds), multi-year/spread for the
-   episodic shocks; then M6c war.
+   **✅ M6a CHRONIC + COUPLINGS SHIPPED 2026-06-25:** predators→herd/food penalty
+   (waning as knowledge clears them), atmosphere→carrying-cap (planetary),
+   radiation→fertility (planetary, applies in all eras). gravity→haulage was already
+   in M2's `delivered_fraction`. So all seven world-class hazards now act through their
+   signature channels (additive to the background mortality scalar — radiation kills
+   AND suppresses births, etc.). Earth-level penalties kept small (they compound over
+   the 12,000-yr climb): earthlike modern 11,970→12,822 (+7% cumulative M6a drift),
+   anchor holds (Thriving), spectrum intact (garden stagnates, fertile-deathworld
+   fastest, barren-deathworld stalls, none extinct). **A single threshold
+   re-calibration to restore modern ~12,000 is deferred until after M6c war** (and
+   must follow war so earthlike doesn't stall under the combined load). M6a DONE
+   except multi-year/spread epidemics (optional refinement). Next: M6c war.
    *Deliverable:* the curve gains realistic dips/plateaus; plague/quake/famine/war
    become spectrum failure modes; shifting alliances and the rise/balancing of powers
    read as real history; the World-Class spectrum bites harder. Behavioral gate

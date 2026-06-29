@@ -299,3 +299,28 @@ TEST_CASE("harvest failures: episodic, scaled by the seasonality dial", "[subsis
     }
     CHECK(saw);
 }
+
+TEST_CASE("chronic hazards: predators (waning) and atmosphere (planetary) cut food",
+          "[subsistence][tier1]") {
+    SubsistenceConfig cfg{};
+    // A predator-free / atmosphere-pristine world has no penalty.
+    CHECK(SubsistenceModule::predator_food_factor(0.0f, 0.0f, cfg) == 1.0f);
+    CHECK(SubsistenceModule::atmosphere_ceiling_factor(0.0f, cfg) == 1.0f);
+
+    // Predators cut food, and the cut WANES as accumulated knowledge clears them.
+    const float dawn = SubsistenceModule::predator_food_factor(1.0f, 0.0f, cfg);      // no knowledge
+    const float advanced = SubsistenceModule::predator_food_factor(1.0f, 1e6f, cfg);  // high knowledge
+    CHECK(dawn < 1.0f);
+    CHECK(advanced > dawn);    // technique clears predators
+    CHECK(advanced > 0.99f);   // ~fully cleared
+    // At the half-saturation knowledge, predator pressure is ~half.
+    const float half =
+        SubsistenceModule::predator_food_factor(1.0f, cfg.predator_clearance_halfsat, cfg);
+    CHECK_THAT(half, WithinAbs(1.0f - cfg.predator_food_penalty * 0.5f, 1e-3f));
+
+    // A hostile atmosphere caps the ceiling (planetary; no knowledge term).
+    CHECK_THAT(SubsistenceModule::atmosphere_ceiling_factor(1.0f, cfg),
+               WithinAbs(1.0f - cfg.atmosphere_cap_penalty, 1e-4f));
+    CHECK(SubsistenceModule::atmosphere_ceiling_factor(1.0f, cfg) <
+          SubsistenceModule::atmosphere_ceiling_factor(0.3f, cfg));
+}

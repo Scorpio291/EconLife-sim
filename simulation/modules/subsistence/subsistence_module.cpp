@@ -57,6 +57,24 @@ float SubsistenceModule::harvest_failure_factor(float seasonality_dial, Determin
     return std::max(0.0f, 1.0f - cfg.seasonality_failure_severity * s);  // a bad harvest year
 }
 
+float SubsistenceModule::predator_food_factor(float predators_dial, float knowledge_level,
+                                              const SubsistenceConfig& cfg) {
+    const float p = std::clamp(predators_dial, 0.0f, 1.0f);
+    if (p <= 0.0f)
+        return 1.0f;
+    // Predator pressure wanes as technique accumulates (clearance): persistence
+    // 1.0 at the dawn (knowledge 0) -> 0.5 at the half-saturation -> ~0 when advanced.
+    const float halfsat = std::max(1.0f, cfg.predator_clearance_halfsat);
+    const float persistence = halfsat / (halfsat + std::max(0.0f, knowledge_level));
+    return std::max(0.0f, 1.0f - cfg.predator_food_penalty * p * persistence);
+}
+
+float SubsistenceModule::atmosphere_ceiling_factor(float atmosphere_dial,
+                                                   const SubsistenceConfig& cfg) {
+    const float a = std::clamp(atmosphere_dial, 0.0f, 1.0f);
+    return std::max(0.0f, 1.0f - cfg.atmosphere_cap_penalty * a);
+}
+
 bool SubsistenceModule::regime_manorial(std::string_view regime) const {
     for (const auto& r : cfg_.manorial_regimes) {
         if (r == regime)
@@ -165,11 +183,19 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float harvest_factor =
         harvest_failure_factor(state.hazard_settings.seasonality, harvest_rng, cfg_);
 
+    // Chronic world-hazard food channels (M6a): predators prey on herds (waning as
+    // knowledge clears them); a hostile atmosphere caps the ceiling (planetary).
+    const float predator_factor =
+        predator_food_factor(state.hazard_settings.predators, K, cfg_);
+    const float atmosphere_factor =
+        atmosphere_ceiling_factor(state.hazard_settings.atmosphere, cfg_);
+
     // Carrying ceiling: the maximum food this land can yield given technique. Output
     // saturates toward it with labour (diminishing returns). Specialists do not farm,
     // so only the food-producers' labour counts toward output.
     const float base_ceiling = cfg_.ceiling_per_capital_unit * natural_capital * knowledge_factor *
-                               seasonality_factor * tech_food_factor * harvest_factor;
+                               seasonality_factor * tech_food_factor * harvest_factor *
+                               predator_factor * atmosphere_factor;
     const float half = cfg_.labor_half_saturation > 0.0f ? cfg_.labor_half_saturation : 1.0f;
     const float need = static_cast<float>(population) * cfg_.per_capita_food_per_tick;  // per tick
     const float ticks_per_year =
