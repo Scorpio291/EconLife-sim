@@ -26,6 +26,7 @@ namespace econlife {
 
 struct WorldState;
 struct DeltaBuffer;
+class DeterministicRNG;
 
 class SubsistenceModule : public ITickModule {
    public:
@@ -58,6 +59,12 @@ class SubsistenceModule : public ITickModule {
 
     // Is the commons food path active in `regime`? (regime ∈ cfg.active_regimes)
     bool regime_active(std::string_view regime) const;
+
+    // Episodic harvest-failure output multiplier (<= 1.0) for one province-year (M6a):
+    // a bad harvest, probability and depth scaled by the world's `seasonality` dial.
+    // 1.0 in a normal year. Pure given the RNG.
+    static float harvest_failure_factor(float seasonality_dial, DeterministicRNG& rng,
+                                        const SubsistenceConfig& cfg);
 
     // Non-farming share the regime can sustain (rises along the pre-market arc:
     // subsistence <= barter < coinage < money < feudal < mercantile < industrial;

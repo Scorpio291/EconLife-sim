@@ -1232,3 +1232,37 @@ Gates: 1558 unit (+1 epidemic), society suite, emergence (1 failed-as-expected =
 deferred national_legitimacy). Next M6: geology disasters + seasonality harvest
 failures (episodic), the chronic radiation/atmosphere split, the feudal couplings
 (gravity->haulage, predators->herds), then M6c war & diplomacy.
+
+---
+
+## 2026-06-25 — M6a episodic shocks complete: geology disasters + seasonality harvest failures
+
+Added the other two episodic hazards alongside disease (M6a now covers all three
+episodic shocks; each is an independent stochastic, pre-market-gated, conserved check):
+- GEOLOGY (population_aging::disaster_mortality_factor): quake/storm/wildfire mortality
+  spike scaled by the geology dial, NOT density-dependent. Independent RNG.
+- SEASONALITY (subsistence::harvest_failure_factor): episodic bad-harvest output cut
+  scaled by the seasonality dial, folded into base_ceiling. Seeded by YEAR (not tick)
+  so a failure is consistent across a year at any tick resolution (correct for both
+  fast-forward and full-res) and varies year to year.
+
+Both pure/static + unit-tested (dial=0 -> never fires; rate rises with the dial; the
+spike/cut matches the deterministic formula). Disease/geology fold into hazard_mortality;
+seasonality into the food ceiling -> famine via the existing loop.
+
+Calibration: cumulative M6a drift modern 11,970 -> 12,349 (+3.2%); shape intact
+(neolithic 7109, bronze 2004, iron 630, classical 1112, medieval 978, early-modern 297,
+industrial 219). The episodic hazards realistically slow the climb (plague/quake/famine
+set societies back). A single threshold re-calibration to restore modern ~12,000 is
+DEFERRED until the full hazard suite (chronic split + couplings) + war land — chasing it
+mid-suite is a moving target.
+
+Note: a harvest failure briefly dropped an existing subsistence specialist-assignment
+unit test below threshold (the test rolled a bad year). Fixed by isolating the
+surplus/specialist/proto-capital unit tests from the harvest hazard (seasonality=0 in
+those test worlds) — the new mechanic correctly couples surplus to harvest variance.
+
+Gates: 1560 unit (+2: geology, seasonality), society suite, emergence (1
+failed-as-expected = deferred national_legitimacy). Remaining M6: chronic radiation/
+atmosphere split, feudal couplings (gravity->haulage, predators->herds), multi-year/
+spread; then M6c war & diplomacy.

@@ -425,3 +425,41 @@ TEST_CASE("PopulationAging: disease epidemics — episodic, scaled by disease di
     }
     CHECK(saw_outbreak);
 }
+
+TEST_CASE("PopulationAging: geology disasters — episodic, scaled by the geology dial",
+          "[population_aging][tier11]") {
+    PopulationAgingConfig cfg{};
+
+    // A geologically calm world (dial 0) never has disasters.
+    for (uint32_t s = 0; s < 200; ++s) {
+        DeterministicRNG rng(s);
+        CHECK(PopulationAgingModule::disaster_mortality_factor(0.0f, rng, cfg) == 1.0f);
+    }
+
+    // Disaster probability rises with the geology dial (NOT density — a quake hits all).
+    auto rate = [&](float geology) {
+        int hits = 0;
+        const int N = 5000;
+        for (int s = 0; s < N; ++s) {
+            DeterministicRNG rng(static_cast<uint64_t>(s) * 40503ull + 7u);
+            if (PopulationAgingModule::disaster_mortality_factor(geology, rng, cfg) > 1.0f)
+                ++hits;
+        }
+        return static_cast<double>(hits) / N;
+    };
+    CHECK(rate(1.0f) > rate(0.3f));
+    CHECK(rate(0.3f) > 0.0);
+
+    // The disaster spike is the deterministic formula 1 + severity * geology.
+    const float expected = 1.0f + cfg.geology_disaster_severity * 1.0f;
+    bool saw = false;
+    for (uint32_t s = 0; s < 500 && !saw; ++s) {
+        DeterministicRNG rng(s);
+        const float f = PopulationAgingModule::disaster_mortality_factor(1.0f, rng, cfg);
+        if (f > 1.0f) {
+            CHECK_THAT(f, WithinAbs(expected, 1e-4f));
+            saw = true;
+        }
+    }
+    CHECK(saw);
+}

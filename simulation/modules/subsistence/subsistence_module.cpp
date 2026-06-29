@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_gen/era_catalog.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -43,6 +44,17 @@ bool SubsistenceModule::regime_active(std::string_view regime) const {
             return true;
     }
     return false;
+}
+
+float SubsistenceModule::harvest_failure_factor(float seasonality_dial, DeterministicRNG& rng,
+                                                const SubsistenceConfig& cfg) {
+    const float s = std::clamp(seasonality_dial, 0.0f, 1.0f);
+    if (s <= 0.0f)
+        return 1.0f;  // a world with no seasonal swing never has a failed harvest
+    const float p = std::clamp(cfg.seasonality_failure_base_rate * s, 0.0f, 1.0f);
+    if (rng.next_float() >= p)
+        return 1.0f;  // a normal harvest year
+    return std::max(0.0f, 1.0f - cfg.seasonality_failure_severity * s);  // a bad harvest year
 }
 
 bool SubsistenceModule::regime_manorial(std::string_view regime) const {
@@ -141,11 +153,23 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         1.0f - cfg_.seasonality_food_penalty *
                    (state.hazard_settings.seasonality - earth_hazard().seasonality),
         0.3f, 1.3f);
+    // Episodic harvest failure (M6a): on top of the chronic seasonality penalty, a bad
+    // harvest year — scaled by the seasonality dial — cuts this year's output. Seeded
+    // by YEAR (not tick) so the failure is consistent across a year at any tick
+    // resolution, and varies year to year. Deterministic.
+    const uint32_t tpy = cfg_.ticks_per_year > 0 ? cfg_.ticks_per_year : 365;
+    const uint32_t harvest_year = state.current_tick / tpy;
+    DeterministicRNG harvest_rng(state.world_seed ^
+                                 (static_cast<uint64_t>(harvest_year) * 0x9E3779B97F4A7C15ull) ^
+                                 (static_cast<uint64_t>(prov.id) << 29) ^ 0x4A12E57ull);
+    const float harvest_factor =
+        harvest_failure_factor(state.hazard_settings.seasonality, harvest_rng, cfg_);
+
     // Carrying ceiling: the maximum food this land can yield given technique. Output
     // saturates toward it with labour (diminishing returns). Specialists do not farm,
     // so only the food-producers' labour counts toward output.
     const float base_ceiling = cfg_.ceiling_per_capital_unit * natural_capital * knowledge_factor *
-                               seasonality_factor * tech_food_factor;
+                               seasonality_factor * tech_food_factor * harvest_factor;
     const float half = cfg_.labor_half_saturation > 0.0f ? cfg_.labor_half_saturation : 1.0f;
     const float need = static_cast<float>(population) * cfg_.per_capita_food_per_tick;  // per tick
     const float ticks_per_year =

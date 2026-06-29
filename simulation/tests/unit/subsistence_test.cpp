@@ -3,6 +3,7 @@
 
 #include <memory>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/subsistence/subsistence_module.h"
@@ -100,6 +101,7 @@ TEST_CASE("execute_province produces a surplus at the dawn and is inert in the m
         WorldState w{};
         w.era_catalog.load_builtin_default();
         w.technology.current_era = era;
+        w.hazard_settings.seasonality = 0.0f;  // isolate from episodic harvest failures (M6a)
         w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/1000));
         return w;
     };
@@ -141,6 +143,7 @@ TEST_CASE("subsistence: a surplus dawn province assigns specialist occupations",
     w.era_catalog.load_builtin_default();
     w.occupation_catalog.load_builtin_default();
     w.technology.current_era = 1;  // subsistence regime
+    w.hazard_settings.seasonality = 0.0f;  // isolate from episodic harvest failures (M6a)
     w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
 
     // A handful of resident heads.
@@ -179,6 +182,7 @@ TEST_CASE("subsistence: a food surplus accrues proto-capital to resident founder
     WorldState w{};
     w.era_catalog.load_builtin_default();
     w.technology.current_era = 1;  // subsistence regime
+    w.hazard_settings.seasonality = 0.0f;  // isolate from episodic harvest failures (M6a)
     w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
 
     NPC head{};
@@ -255,4 +259,43 @@ TEST_CASE("manorialism: tithe concentrates proto-capital to lords, conserved",
     for (uint32_t i = 0; i < n; ++i)
         sum += SubsistenceModule::proto_share_for(i, n, total, true, cfg);
     CHECK_THAT(sum, WithinAbs(total, 1e-3f));
+}
+
+TEST_CASE("harvest failures: episodic, scaled by the seasonality dial", "[subsistence][tier1]") {
+    SubsistenceConfig cfg{};
+
+    // A world with no seasonal swing never has a failed harvest.
+    for (uint32_t s = 0; s < 200; ++s) {
+        DeterministicRNG rng(s);
+        CHECK(SubsistenceModule::harvest_failure_factor(0.0f, rng, cfg) == 1.0f);
+    }
+
+    // Failure probability rises with the seasonality dial.
+    auto fail_rate = [&](float seasonality) {
+        int hits = 0;
+        const int N = 5000;
+        for (int s = 0; s < N; ++s) {
+            DeterministicRNG rng(static_cast<uint64_t>(s) * 2246822519ull + 3u);
+            if (SubsistenceModule::harvest_failure_factor(seasonality, rng, cfg) < 1.0f)
+                ++hits;
+        }
+        return static_cast<double>(hits) / N;
+    };
+    CHECK(fail_rate(1.0f) > fail_rate(0.3f));
+    CHECK(fail_rate(0.3f) > 0.0);
+
+    // A bad harvest cuts output; the cut is the deterministic formula and never negative.
+    const float expected = 1.0f - cfg.seasonality_failure_severity * 1.0f;  // seasonality=1
+    bool saw = false;
+    for (uint32_t s = 0; s < 500; ++s) {
+        DeterministicRNG rng(s);
+        const float f = SubsistenceModule::harvest_failure_factor(1.0f, rng, cfg);
+        CHECK(f <= 1.0f);
+        CHECK(f >= 0.0f);
+        if (f < 1.0f) {
+            CHECK_THAT(f, WithinAbs(expected, 1e-4f));
+            saw = true;
+        }
+    }
+    CHECK(saw);
 }

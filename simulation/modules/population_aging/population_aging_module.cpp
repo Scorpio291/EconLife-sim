@@ -76,6 +76,17 @@ float PopulationAgingModule::epidemic_mortality_factor(float disease_dial, float
     return 1.0f + cfg.epidemic_severity * d * (1.0f + density);
 }
 
+float PopulationAgingModule::disaster_mortality_factor(float geology_dial, DeterministicRNG& rng,
+                                                       const PopulationAgingConfig& cfg) {
+    const float g = std::clamp(geology_dial, 0.0f, 1.0f);
+    if (g <= 0.0f)
+        return 1.0f;
+    const float p = std::clamp(cfg.geology_disaster_base_rate * g, 0.0f, cfg.geology_disaster_max_prob);
+    if (rng.next_float() >= p)
+        return 1.0f;  // no disaster this year
+    return 1.0f + cfg.geology_disaster_severity * g;  // quake/storm/wildfire mortality spike
+}
+
 float PopulationAgingModule::compute_natural_death_probability(float age, float lifespan,
                                                                float base_prob) {
     if (age < lifespan)
@@ -291,6 +302,15 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                              0xED1DEC1Cull);
                     hazard_mortality *= epidemic_mortality_factor(state.hazard_settings.disease,
                                                                   urban_frac, epi_rng, cfg_);
+                    // Geology disasters (quakes/storms/wildfires) — a separate episodic
+                    // spike scaled by the geology dial (not density). Independent RNG.
+                    DeterministicRNG geo_rng(state.world_seed ^
+                                             (static_cast<uint64_t>(state.current_tick) *
+                                              0xC2B2AE3D27D4EB4Full) ^
+                                             (static_cast<uint64_t>(province.id) << 23) ^
+                                             0x6E01060715ull);
+                    hazard_mortality *=
+                        disaster_mortality_factor(state.hazard_settings.geology, geo_rng, cfg_);
                 }
 
                 // Fertility tracks the long-run food signal the subsistence module writes

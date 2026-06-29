@@ -540,13 +540,24 @@ honest verb set is small, by design.
    and war needs the M5 garrison/tithe. Split: **M6a** episodic shocks + chronic
    hazard split; **M6b** feudal couplings; **M6c** war & diplomacy (the largest — a
    polity-level diplomacy engine generalising the criminal conflict engine).
-   **✅ M6a-disease SHIPPED 2026-06-25:** disease epidemics — an episodic mortality
-   spike in population_aging, probability rising with the world's `disease` dial AND
-   urban crowding (towns are vectors → disease brakes urbanization), conserved (deaths
-   via the cohort path), gated to the pre-market arc (medicine releases it in modern).
-   Calibration-safe (modern 11,970→12,044, +74yr). Memoryless single-year spikes;
-   multi-year outbreaks + spread along links + the geology/seasonality shocks and the
-   chronic radiation/atmosphere split are the remaining M6a/M6b work.
+   **✅ M6a EPISODIC SHOCKS SHIPPED 2026-06-25:** the three episodic hazards, each an
+   independent stochastic check gated to the pre-market arc (the modern era releases
+   them via medicine/engineering/storage):
+   - **disease** — mortality spike rising with the `disease` dial AND urban crowding
+     (towns are vectors → brakes urbanization); in population_aging.
+   - **geology** — quake/storm/wildfire mortality spike scaled by the `geology` dial
+     (not density); in population_aging.
+   - **seasonality** — episodic bad-harvest output cut scaled by the `seasonality`
+     dial (seeded by YEAR so a failure is consistent across the year at any tick
+     resolution); in subsistence, on top of the chronic penalty.
+   All conserved (deaths via the cohort path / less food produced), deterministic,
+   reduce-only. Cumulative calibration drift modest: modern 11,970→12,349 (+3.2%),
+   shape intact (medieval 978 vs 950) — the hazards realistically slow the climb. A
+   single threshold re-calibration to restore modern ~12,000 is **deferred until the
+   full hazard suite + war land** (chasing it mid-suite is a moving target).
+   REMAINING M6: the chronic split (radiation→fertility, atmosphere→carrying-cap), the
+   feudal couplings (gravity→haulage, predators→herds), multi-year/spread for the
+   episodic shocks; then M6c war.
    *Deliverable:* the curve gains realistic dips/plateaus; plague/quake/famine/war
    become spectrum failure modes; shifting alliances and the rise/balancing of powers
    read as real history; the World-Class spectrum bites harder. Behavioral gate

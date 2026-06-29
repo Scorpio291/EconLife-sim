@@ -48,6 +48,12 @@ class PopulationAgingModule : public ITickModule {
     static float epidemic_mortality_factor(float disease_dial, float urban_fraction,
                                            DeterministicRNG& rng, const PopulationAgingConfig& cfg);
 
+    // Episodic geology-disaster mortality multiplier (>= 1.0) for one province-year
+    // (M6a): quakes/storms/wildfires scaled by the world's `geology` dial — NOT
+    // density-dependent (a disaster hits everyone). Pure given the RNG.
+    static float disaster_mortality_factor(float geology_dial, DeterministicRNG& rng,
+                                           const PopulationAgingConfig& cfg);
+
     // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;
     static constexpr uint32_t TICKS_PER_YEAR = 365;

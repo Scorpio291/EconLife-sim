@@ -570,6 +570,14 @@ struct SubsistenceConfig {
     float manorial_tithe_rate = 0.5f;     // share of new proto-capital that tithes to lords
     float manorial_lord_fraction = 0.1f;  // fraction of residents who are lords (>=1 lord)
 
+    // --- Seasonality harvest failures (M6a): the third episodic hazard, acting on
+    // FOOD (not mortality). On top of the chronic seasonality food penalty, a bad
+    // harvest year — probability and depth scaled by the world's `seasonality` dial —
+    // cuts that year's output, driving famine pressure and a specialist setback
+    // through the existing food loop. Conserved (less food produced). ---
+    float seasonality_failure_base_rate = 0.06f;  // annual bad-harvest prob at seasonality=1
+    float seasonality_failure_severity = 0.4f;    // max output cut in a bad year at seasonality=1
+
     // Specialization ceiling: a society can't free MORE than this share of its people
     // from food work. Pre-industrial economies ran ~80-90% farmers, so a non-farming
     // share above ~10-15% is not physically sustainable on commons agriculture. The
@@ -1461,6 +1469,15 @@ struct PopulationAgingConfig {
     float epidemic_density_weight = 2.0f;   // urban crowding multiplies the outbreak prob
     float epidemic_max_prob = 0.15f;        // cap on annual outbreak probability
     float epidemic_severity = 1.2f;         // mortality-multiplier bump at disease=1, rural
+
+    // --- Geology disasters (M6a): the second episodic hazard. Quakes / great storms /
+    // wildfires scaled by the world's `geology` dial — a mortality spike, NOT density-
+    // dependent (a quake hits everyone). Conserved; pre-market gate (engineering blunts
+    // it in the modern era). Population only here; infrastructure/grain-store damage is
+    // the follow-up. ---
+    float geology_disaster_base_rate = 0.015f;  // annual disaster prob at geology=1
+    float geology_disaster_max_prob = 0.12f;    // cap on annual disaster probability
+    float geology_disaster_severity = 1.0f;     // mortality-multiplier bump at geology=1
 };
 
 struct LodSystemConfig {
