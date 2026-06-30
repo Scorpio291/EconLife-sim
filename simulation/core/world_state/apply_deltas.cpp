@@ -631,6 +631,11 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.urban_population_replacement;
                     cs.urban_population = (v >= 0.0f) ? v : 0.0f;
                 }
+                if (d.war_mortality_replacement.has_value()) {
+                    // Replacement; warfare recomputes each tick (>= 1.0 = at-war spike).
+                    float v = *d.war_mortality_replacement;
+                    cs.war_mortality = (v >= 1.0f) ? v : 1.0f;
+                }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =
                         clamp01(safe_add(prov.community.cohesion, *d.cohesion_delta));

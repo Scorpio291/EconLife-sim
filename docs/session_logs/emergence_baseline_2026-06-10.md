@@ -1300,3 +1300,36 @@ Gates: 1562 unit (+2: predator/atmosphere, radiation), society suite, emergence 
 failed-as-expected). M6a DONE (bar optional multi-year/spread epidemics). Next: M6c war
 & diplomacy (the polity-level engine — rational war, treaties, alliances, backstabbing,
 empires).
+
+---
+
+## 2026-06-25 — M6c-1: war foundation (power, EV decision, conserved casualties)
+
+First slice of the war & diplomacy engine. New `warfare` module (global, dawn-gated,
+runs_after subsistence): at the dawn each province is a proto-polity (chiefdom/lord).
+
+- POWER (WarfareModule::military_power, pure/static): population × how well-fed it is
+  (power_surplus_floor + (1-floor)×clamp(surplus_ratio)) — levy + surplus-fed soldiers.
+- REACH: adjacency (the ox-cart reach) — you can only attack a neighbour you can march to.
+- EV DECISION: a polity attacks a neighbour only when power_A >= aggression_ratio×power_B
+  (strike where you can win), with a base annual probability. Directional, deterministic
+  (per-(year,attacker,defender) RNG; seeded by YEAR for tick-resolution consistency).
+- CONSERVED CASUALTIES: war publishes per-province war_mortality (>=1, defender worse
+  than attacker), folded into mortality by population_aging — the population war-dips.
+  Spoils deferred (war here only kills; no minting).
+
+New cohort_stats.war_mortality + RegionDelta + apply; WarfareConfig (aggression_ratio
+1.3, base_aggression 0.04, attacker_loss 0.02, defender_loss 0.06).
+
+Tests (+4): power scales with population & feeding; a strong polity attacks a weak
+reachable neighbour (both bleed, defender worse, formula-exact); evenly-matched
+neighbours stay at peace; inert in market eras. Gates: 1566 unit, society suite,
+emergence (1 failed-as-expected). Spectrum intact: earthlike modern 12,822 -> 12,826
+(negligible — wars are occasional border conflicts among the similar founding provinces,
+not constant), deathworlds survive, garden stagnates.
+
+REMAINING M6c (per EconLife_War_and_Diplomacy_v01.md): grain/territory SPOILS (makes
+starting a war rational), diplomatic relations + treaties + alliances (balance of
+power) + backstabbing (reputation economy), the EMPIRE layer (reach/leadership/mobility
++ the hold problem — Alexander/Genghis/Rome). Then the single deferred threshold
+re-calibration to restore modern ~12,000 under the full hazard+war load.

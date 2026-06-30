@@ -318,6 +318,10 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                              0x6E01060715ull);
                     hazard_mortality *=
                         disaster_mortality_factor(state.hazard_settings.geology, geo_rng, cfg_);
+                    // War casualties (M6c): the warfare module publishes this province's
+                    // war_mortality (>= 1.0) when it is in a conflict — the population
+                    // war-dips. (Published per province; conserved deaths via this path.)
+                    hazard_mortality *= std::max(1.0f, cs.war_mortality);
                 }
 
                 // Fertility tracks the long-run food signal the subsistence module writes

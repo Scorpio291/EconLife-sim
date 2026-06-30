@@ -270,6 +270,12 @@ struct RegionCohortStats {
                                      // `formal_employment_rate` (which
                                      // excludes the informal economy).
 
+    // War mortality multiplier (>= 1.0) for this province this year, published by the
+    // warfare module when the province is in a war (attacker or defender) — folded into
+    // mortality by population_aging (the population war-dips). 1.0 = at peace. Transient
+    // (recomputed each tick; not persisted).
+    float war_mortality = 1.0f;
+
     // Per-province territorial-conflict intensity (0-5), the demand-relevant
     // maximum of TerritorialConflictStage across the criminal organizations
     // operating in this province. Published each tick by criminal_operations

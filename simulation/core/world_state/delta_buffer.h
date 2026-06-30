@@ -273,6 +273,9 @@ struct RegionDelta {
     std::optional<float>
         urban_population_replacement;  // replacement; cohort_stats->urban_population,
                                        // published by grain_logistics (catchment town economy)
+    std::optional<float>
+        war_mortality_replacement;  // replacement; cohort_stats->war_mortality (>=1),
+                                    // published by warfare (consumed by population_aging)
 };
 
 // NationDelta — national-level governance state (one per nation per tick at most).

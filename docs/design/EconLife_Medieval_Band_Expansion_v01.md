@@ -566,11 +566,23 @@ honest verb set is small, by design.
    fastest, barren-deathworld stalls, none extinct). **A single threshold
    re-calibration to restore modern ~12,000 is deferred until after M6c war** (and
    must follow war so earthlike doesn't stall under the combined load). M6a DONE
-   except multi-year/spread epidemics (optional refinement). Next: M6c war.
+   except multi-year/spread epidemics (optional refinement).
+   **✅ M6c-1 WAR FOUNDATION SHIPPED 2026-06-25:** the `warfare` module — at the dawn
+   each province is a proto-polity; a polity attacks a REACHABLE (adjacent) neighbour
+   when the power balance favours it (the EV decision). Power is grounded
+   (`military_power` = population × how well-fed). War is conserved — it kills (a
+   cohort-mortality spike both sides, defender worse, `cohort_stats.war_mortality`
+   folded into mortality by population_aging — the population war-dips). Dawn-gated
+   (modern war is political_cycle's), deterministic. Negligible aggregate drift
+   (earthlike 12,822→12,826: wars are occasional border conflicts among similar
+   provinces, not constant). REMAINING M6c layers (per
+   `EconLife_War_and_Diplomacy_v01.md`): grain/territory SPOILS (makes war rational to
+   start), diplomatic relations + treaties + alliances (balance of power) +
+   backstabbing (reputation economy), and the EMPIRE layer (reach/leadership/mobility +
+   the hold problem — Alexander/Genghis/Rome). Then the single threshold re-calibration.
    *Deliverable:* the curve gains realistic dips/plateaus; plague/quake/famine/war
    become spectrum failure modes; shifting alliances and the rise/balancing of powers
-   read as real history; the World-Class spectrum bites harder. Behavioral gate
-   re-validated.
+   read as real history; the World-Class spectrum bites harder.
 7. **M7 — Entry & verbs.** Era selection surfaces the world's earned state;
    medieval player verbs. *Deliverable:* a playable medieval start.
 

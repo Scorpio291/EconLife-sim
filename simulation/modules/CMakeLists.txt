@@ -22,6 +22,7 @@ add_subdirectory(labor_market)
 add_subdirectory(seasonal_agriculture)
 add_subdirectory(subsistence)
 add_subdirectory(grain_logistics)
+add_subdirectory(warfare)
 add_subdirectory(knowledge)
 
 # Tier 3: Depends on supply chain
@@ -106,6 +107,7 @@ target_link_libraries(econlife_modules PUBLIC
     econlife_seasonal_agriculture
     econlife_subsistence
     econlife_grain_logistics
+    econlife_warfare
     econlife_knowledge
     econlife_price_engine
     econlife_trade_infrastructure

@@ -725,6 +725,25 @@ struct GrainLogisticsConfig {
     float urban_per_capita_food = 1.0f;
 };
 
+// Warfare (M6c foundation): war between province-polities (chiefdoms/lords at the dawn).
+// NOT scripted raids — a stronger polity attacks a weaker, REACHABLE neighbour when the
+// power balance favours it (the EV decision; treaties/alliances/backstabbing/empires +
+// grain spoils are the subsequent M6c layers). Conserved: war kills (cohort casualties
+// both sides). See EconLife_War_and_Diplomacy_v01.md.
+struct WarfareConfig {
+    // Active in the pre-market arc (dawn polities war). Modern war is the political_cycle's.
+    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
+                                               "feudal",      "mercantile", "industrial"};
+    float aggression_ratio = 1.3f;     // attacker must be >= this x the defender's power
+    float base_aggression_prob = 0.04f;  // annual prob a qualifying attack actually happens
+    float attacker_loss = 0.02f;       // attacker mortality bump in a war year
+    float defender_loss = 0.06f;       // defender mortality bump in a war year (war is worse to lose)
+    float war_mortality_cap = 2.0f;    // cap on the per-province war mortality multiplier
+    // Power = population x (power_surplus_floor + (1-floor) x clamp(surplus_ratio)). A
+    // bigger, better-fed polity fields a stronger army (levy + surplus-fed soldiers).
+    float power_surplus_floor = 0.5f;
+};
+
 struct SeasonalAgricultureConfig {
     uint32_t ticks_per_year = 365;
     uint32_t planting_duration_ticks = 7;
@@ -1582,6 +1601,7 @@ struct PackageConfig {
     SubsistenceConfig subsistence;
     KnowledgeConfig knowledge;
     GrainLogisticsConfig grain_logistics;
+    WarfareConfig warfare;
     RealEstateConfig real_estate;
     FinancialDistributionConfig financial_distribution;
     NpcBehaviorModuleConfig npc_behavior_module;

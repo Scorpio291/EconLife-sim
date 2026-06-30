@@ -24,6 +24,7 @@
 #include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
 #include "modules/knowledge/knowledge_module.h"
 #include "modules/grain_logistics/grain_logistics_module.h"
+#include "modules/warfare/warfare_module.h"
 #include "modules/subsistence/subsistence_module.h"
 #include "modules/supply_chain/supply_chain_module.h"
 #include "modules/trade_infrastructure/trade_infrastructure_module.h"
@@ -98,6 +99,7 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     orchestrator.register_module(std::make_unique<SubsistenceModule>(config.subsistence));
     orchestrator.register_module(
         std::make_unique<GrainLogisticsModule>(config.grain_logistics));
+    orchestrator.register_module(std::make_unique<WarfareModule>(config.warfare));
     orchestrator.register_module(std::make_unique<KnowledgeModule>(config.knowledge));
     orchestrator.register_module(
         std::make_unique<PriceEngineModule>(config.price_model, config.price_engine));
