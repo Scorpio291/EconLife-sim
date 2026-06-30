@@ -112,3 +112,49 @@ TEST_CASE("warfare: inert in market eras", "[warfare][tier2]") {
     mod.execute(w, d);
     CHECK(d.region_deltas.empty());  // no publication in a market era
 }
+
+TEST_CASE("warfare: a won war plunders the loser's wealth to the victor (conserved)",
+          "[warfare][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.current_tick = 365;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;  // feudal
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;  // the attack happens
+
+    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // A: strong victor
+    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // B: weak, wealthy victim
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    // Residents with proto-capital — B's wealth is the prize.
+    w.npc_indices_by_home_province.resize(2);
+    auto add_npc = [&](uint32_t id, uint32_t prov, float cap) {
+        NPC npc{};
+        npc.id = id;
+        npc.capital = cap;
+        const uint32_t idx = static_cast<uint32_t>(w.significant_npcs.size());
+        w.significant_npcs.push_back(npc);
+        w.npc_indices_by_home_province[prov].push_back(idx);
+    };
+    add_npc(1, 0, 100.0f);
+    add_npc(2, 0, 100.0f);  // A: 200 total
+    add_npc(3, 1, 500.0f);
+    add_npc(4, 1, 500.0f);  // B: 1000 total (the prize)
+    const float before = 1200.0f;
+
+    WarfareModule mod(cfg);
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+
+    const float a_cap = w.significant_npcs[0].capital + w.significant_npcs[1].capital;
+    const float b_cap = w.significant_npcs[2].capital + w.significant_npcs[3].capital;
+    CHECK(b_cap < 1000.0f);  // the loser is plundered
+    CHECK(a_cap > 200.0f);   // the victor takes the loot
+    CHECK_THAT(a_cap + b_cap, Catch::Matchers::WithinAbs(before, 0.5f));  // CONSERVED
+    // plunder = 0.2 x 1000 = 200 -> B keeps 800, A gains to 400.
+    CHECK_THAT(b_cap, Catch::Matchers::WithinAbs(800.0f, 0.5f));
+    CHECK_THAT(a_cap, Catch::Matchers::WithinAbs(400.0f, 0.5f));
+}

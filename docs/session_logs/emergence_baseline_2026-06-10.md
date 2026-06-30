@@ -1333,3 +1333,29 @@ starting a war rational), diplomatic relations + treaties + alliances (balance o
 power) + backstabbing (reputation economy), the EMPIRE layer (reach/leadership/mobility
 + the hold problem — Alexander/Genghis/Rome). Then the single deferred threshold
 re-calibration to restore modern ~12,000 under the full hazard+war load.
+
+---
+
+## 2026-06-25 — M6c-2: war spoils (conserved plunder + rich-target EV)
+
+Second war layer, making STARTING a war rational (attack the weak AND rich, then loot):
+- The attack probability now scales with the defender's WEALTH share (prize_weight) —
+  a rich neighbour is a more tempting target (the EV: weak AND rich).
+- A won war PLUNDERS plunder_fraction (0.2) of the loser's resident proto-capital to
+  the victor. CONSERVED: sequential depletion across multiple attackers; the loser's
+  residents debited proportional to their wealth (never below zero), the victor's
+  credited equally; global sum nets to zero (no minting). Emits NPCDeltas (capital).
+
+Tests (+1): a won war plunders the loser's wealth to the victor, conserved
+(0.2 x 1000 -> loser 800, victor 400, total unchanged). Gates: 1567 unit, society
+suite, emergence (1 failed-as-expected).
+
+Environment note: mid-session the container re-cloned onto an unrelated ancestor (a
+merged PR) and wiped build/; my work was intact on the remote and restored via
+git reset --hard origin/<branch>. The org egress policy 403s the FetchContent deps
+(Catch2/lz4/h3/nlohmann_json from github), so the build was recovered with SYSTEM
+packages (apt: catch2 3.4, libh3 4.1, liblz4 1.9.4, nlohmann-json 3.11.3) via
+-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=ALWAYS plus two local shim configs (lz4_static,
+and a bare `h3` alias) on CMAKE_PREFIX_PATH — no committed build-file changes. Caveat:
+system h3 is 4.1.0 vs the pinned 4.4.1, but all gates (incl. society/emergence, which
+exercise world-gen) passed, so the behavioural baselines are robust to that skew.

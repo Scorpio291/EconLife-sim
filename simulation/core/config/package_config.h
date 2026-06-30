@@ -742,6 +742,13 @@ struct WarfareConfig {
     // Power = population x (power_surplus_floor + (1-floor) x clamp(surplus_ratio)). A
     // bigger, better-fed polity fields a stronger army (levy + surplus-fed soldiers).
     float power_surplus_floor = 0.5f;
+    // Spoils (M6c-2): a won war plunders a fraction of the loser's accumulated wealth
+    // (resident proto-capital), transferred to the victor — conserved (the victor's
+    // residents gain exactly what the loser's lose). And richer neighbours are more
+    // tempting: the attack probability scales with the defender's wealth share (attack
+    // the weak AND rich — the rational EV).
+    float plunder_fraction = 0.2f;  // share of the loser's resident wealth seized on a win
+    float prize_weight = 1.0f;      // how much a rich target raises the attack probability
 };
 
 struct SeasonalAgricultureConfig {
