@@ -1390,3 +1390,28 @@ deferred threshold re-calibration, then M7 entry.
 Build note: this session's build ran against apt system deps (Catch2 3.4/h3 4.1/lz4
 1.9.4/json 3.11.3) + find_package mode + local shims, after the org egress policy
 blocked the pinned FetchContent deps. All gates pass under that skew.
+
+---
+
+## 2026-06-25 — M6c-4: alliances (balance of power) + backstabbing (reputation economy)
+
+Fourth war layer, both emergent from the M6c-3 relations substrate:
+- COALITION DEFENCE (balance of power): a defender's ALLIES (warm-relation neighbours,
+  relation >= ally_threshold 0.3) add their power to its defence, so an attacker must
+  out-match the whole coalition. A rising hegemon is checked by the coalitions its
+  strength provokes -> conquest is bounded by default.
+- BACKSTABBING (reputation economy): attacking a warm-relation ally is a betrayal; on
+  top of the normal war-hit, the betrayer's relations with ALL its neighbours sour
+  (backstab_reputation_penalty 0.25). A known backstabber loses its alliances and gets
+  ganged up on (self-limiting) -- so betrayal is occasional and costly, not constant.
+
+Deterministic (ordered pair/betrayer sets). Tests (+2): a B+C coalition deters a
+would-be conqueror A that could beat B alone; A betraying ally B also sours A's relation
+with the uninvolved ally C (the pariah brand). Gates: 1571 unit, society suite,
+emergence (1 failed-as-expected).
+
+The rational-war core is now complete: power (economy) + reach (adjacency) + EV (attack
+the weak AND rich) + conserved casualties & plunder + relations (sour/warm/deter) +
+coalitions (balance of power) + backstabbing (reputation). Remaining M6c: the EMPIRE
+layer (reach/leadership/mobility multipliers + the hold problem -> Alexander/Genghis/
+Rome), then the deferred threshold re-calibration, then M7 entry.

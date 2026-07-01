@@ -84,6 +84,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     std::vector<double> looted_to(n, 0.0);       // wealth seized BY this province
     std::set<uint64_t> adjacent_pairs;           // every reachable pair (for relation drift)
     std::set<uint64_t> warred_pairs;             // pairs that went to war this year
+    std::set<uint32_t> betrayers;                // polities that attacked a warm-relation ally
 
     // Each polity considers attacking each REACHABLE neighbour (adjacency = ox-cart
     // reach). It attacks a weaker neighbour — strike where you can win — and prefers a
@@ -101,8 +102,22 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             if (power[b] <= 0.0f)
                 continue;
             adjacent_pairs.insert(pair_key(a, b));
-            if (power[a] < cfg_.aggression_ratio * power[b])
-                continue;  // not strong enough to make the attack worthwhile
+            // Coalition defence (the balance of power): the defender's allies (its
+            // warm-relation neighbours) add their power, so a hegemon must out-match the
+            // whole coalition, not just its target.
+            float defender_power = power[b];
+            for (const auto& blink : state.provinces[b].links) {
+                auto bit = h3_to_idx.find(blink.neighbor_h3);
+                if (bit == h3_to_idx.end())
+                    continue;
+                const uint32_t c = bit->second;
+                if (c == a)
+                    continue;  // the attacker is not counted among the defender's allies
+                if (relation(b, c) >= cfg_.ally_threshold)
+                    defender_power += power[c];
+            }
+            if (power[a] < cfg_.aggression_ratio * defender_power)
+                continue;  // the coalition deters the attack
             // A rich neighbour is a more tempting target (the rational prize); warm
             // relations (a de-facto alliance) suppress the attack toward zero.
             const double prize_share =
@@ -125,6 +140,8 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             war_mortality[a] = std::min(cfg_.war_mortality_cap, war_mortality[a] + cfg_.attacker_loss);
             war_mortality[b] = std::min(cfg_.war_mortality_cap, war_mortality[b] + cfg_.defender_loss);
             warred_pairs.insert(pair_key(a, b));
+            if (relation(a, b) >= cfg_.ally_threshold)
+                betrayers.insert(a);  // attacking a warm ally is a betrayal
             // Spoils: the victor plunders a share of the loser's remaining wealth
             // (sequential depletion keeps it conserved across multiple attackers).
             const double plunder = cfg_.plunder_fraction * avail_capital[b];
@@ -146,6 +163,20 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         else
             rel += cfg_.relation_peace_heal;
         relations_[key] = std::clamp(rel, -1.0f, 1.0f);
+    }
+
+    // Reputation economy: a betrayer's word is worthless — its relations with ALL
+    // neighbours sour, not just the ally it stabbed. A known backstabber can't hold
+    // alliances, so it loses its coalition and gets ganged up on (self-limiting).
+    for (uint32_t a : betrayers) {
+        for (const auto& link : state.provinces[a].links) {
+            auto it = h3_to_idx.find(link.neighbor_h3);
+            if (it == h3_to_idx.end())
+                continue;
+            const uint64_t key = pair_key(a, it->second);
+            relations_[key] =
+                std::clamp(relations_[key] - cfg_.backstab_reputation_penalty, -1.0f, 1.0f);
+        }
     }
 
     for (uint32_t i = 0; i < n; ++i) {

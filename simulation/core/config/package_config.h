@@ -756,6 +756,14 @@ struct WarfareConfig {
     float relation_war_hit = 0.3f;       // relations drop this much on a war (toward -1)
     float relation_peace_heal = 0.02f;   // relations heal this much per peaceful year (toward +1)
     float relation_deter_weight = 0.9f;  // how strongly warm relations suppress an attack
+    // Alliances & backstabbing (M6c-4): a defender's ALLIES (warm-relation neighbours)
+    // add their power to its defence, so a hegemon faces a COALITION — the balance of
+    // power, bounding conquest. Betraying an ally still happens when the prize is worth
+    // it, but a known BACKSTABBER's relations with everyone sour (the reputation
+    // economy: pariahs lose their alliances and get ganged up on).
+    float ally_threshold = 0.3f;                // relation at/above which a neighbour is an ally
+    float backstab_reputation_penalty = 0.25f;  // a betrayal additionally sours the betrayer's
+                                                // relations with ALL its neighbours
 };
 
 struct SeasonalAgricultureConfig {

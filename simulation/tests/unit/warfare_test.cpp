@@ -210,3 +210,89 @@ TEST_CASE("warfare: sustained peace warms neighbours into an alliance that deter
     CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);  // B spared — allied
     CHECK(mod.relation(0, 1) > 0.5f);                            // alliance intact
 }
+
+TEST_CASE("warfare: a defensive coalition (balance of power) deters a would-be conqueror",
+          "[warfare][tier2]") {
+    // A can beat B alone, but not B once C allies with it. A-B and B-C adjacent (chain).
+    WorldState w{};
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;
+    add_polity(w, 100, 0, /*pop=*/20000, 1.0f);  // A: beats B alone (26k>20k fails vs B+C)
+    add_polity(w, 200, 1, /*pop=*/10000, 1.0f);  // B: weak
+    add_polity(w, 300, 2, /*pop=*/10000, 1.0f);  // C: B's ally-to-be
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+    w.provinces[1].links.push_back(link_to(300));
+    w.provinces[2].links.push_back(link_to(200));
+
+    WarfareModule mod(cfg);
+    // Year 1: B and C are strangers — A attacks B (coalition = B alone).
+    w.current_tick = 365;
+    DeltaBuffer d1{};
+    mod.execute(w, d1);
+    apply_deltas(w, d1);
+    CHECK(w.provinces[1].cohort_stats->war_mortality > 1.0f);
+
+    // B and C are equals at peace -> they warm into an alliance over the years.
+    for (uint32_t y = 2; y <= 30; ++y) {
+        w.current_tick = y * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+    }
+    CHECK(mod.relation(1, 2) >= cfg.ally_threshold);  // B-C allied
+
+    // The coalition B+C now out-deters A: B is spared.
+    w.current_tick = 31 * 365;
+    DeltaBuffer d2{};
+    mod.execute(w, d2);
+    apply_deltas(w, d2);
+    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);  // deterred by the coalition
+}
+
+TEST_CASE("warfare: betraying an ally brands the betrayer a pariah (reputation economy)",
+          "[warfare][tier2]") {
+    // A is warm-allied to both B and C. A then betrays B — and its relation with the
+    // uninvolved ally C sours too (a known backstabber's word is worthless).
+    WorldState w{};
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;
+    cfg.relation_deter_weight = 0.0f;  // isolate the reputation mechanic (no deterrence)
+    add_polity(w, 100, 0, /*pop=*/50000, 1.0f);  // A
+    add_polity(w, 200, 1, /*pop=*/50000, 1.0f);  // B
+    add_polity(w, 300, 2, /*pop=*/50000, 1.0f);  // C
+    w.provinces[0].links.push_back(link_to(200));  // A-B
+    w.provinces[0].links.push_back(link_to(300));  // A-C
+    w.provinces[1].links.push_back(link_to(100));
+    w.provinces[2].links.push_back(link_to(100));
+    // (B and C are not adjacent.)
+
+    WarfareModule mod(cfg);
+    for (uint32_t y = 1; y <= 20; ++y) {  // parity peace -> A-B and A-C warm
+        w.current_tick = y * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+    }
+    CHECK(mod.relation(0, 1) >= cfg.ally_threshold);
+    CHECK(mod.relation(0, 2) >= cfg.ally_threshold);
+    const float ac_before = mod.relation(0, 2);
+
+    // A becomes a hegemon over B (but not over C, which kept pace) and betrays B.
+    w.provinces[0].cohort_stats->total_population = 100000;
+    w.provinces[2].cohort_stats->total_population = 100000;  // C stays too strong to attack
+    w.current_tick = 21 * 365;
+    DeltaBuffer d2{};
+    mod.execute(w, d2);
+    apply_deltas(w, d2);
+
+    CHECK(w.provinces[1].cohort_stats->war_mortality > 1.0f);   // B was betrayed
+    CHECK(w.provinces[2].cohort_stats->war_mortality == 1.0f);  // C was not attacked
+    CHECK(mod.relation(0, 2) < ac_before);  // yet A's relation with C soured — the pariah brand
+}
