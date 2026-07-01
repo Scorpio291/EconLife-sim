@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -30,6 +31,17 @@ bool WarfareModule::regime_active(std::string_view regime) const {
             return true;
     }
     return false;
+}
+
+uint64_t WarfareModule::pair_key(uint32_t a, uint32_t b) {
+    const uint32_t lo = a < b ? a : b;
+    const uint32_t hi = a < b ? b : a;
+    return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+}
+
+float WarfareModule::relation(uint32_t a, uint32_t b) const {
+    auto it = relations_.find(pair_key(a, b));
+    return it == relations_.end() ? 0.0f : it->second;
 }
 
 void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
@@ -70,11 +82,14 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     std::vector<float> war_mortality(n, 1.0f);
     std::vector<double> plundered_from(n, 0.0);  // wealth seized FROM this province
     std::vector<double> looted_to(n, 0.0);       // wealth seized BY this province
+    std::set<uint64_t> adjacent_pairs;           // every reachable pair (for relation drift)
+    std::set<uint64_t> warred_pairs;             // pairs that went to war this year
 
     // Each polity considers attacking each REACHABLE neighbour (adjacency = ox-cart
     // reach). It attacks a weaker neighbour — strike where you can win — and prefers a
-    // RICH one (the EV: weak AND rich). Directional and deterministic. On a win it
-    // plunders a share of the loser's wealth (conserved).
+    // RICH one (the EV: weak AND rich), but WARM RELATIONS deter it (allies don't
+    // fight). Directional and deterministic. On a win it plunders a share of the
+    // loser's wealth (conserved).
     for (uint32_t a = 0; a < n; ++a) {
         if (power[a] <= 0.0f)
             continue;
@@ -85,15 +100,20 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             const uint32_t b = it->second;
             if (power[b] <= 0.0f)
                 continue;
+            adjacent_pairs.insert(pair_key(a, b));
             if (power[a] < cfg_.aggression_ratio * power[b])
                 continue;  // not strong enough to make the attack worthwhile
-            // A rich neighbour is a more tempting target (the rational prize).
+            // A rich neighbour is a more tempting target (the rational prize); warm
+            // relations (a de-facto alliance) suppress the attack toward zero.
             const double prize_share =
                 (avail_capital[a] + avail_capital[b] > 0.0)
                     ? avail_capital[b] / (avail_capital[a] + avail_capital[b])
                     : 0.0;
+            const float deter =
+                1.0f - cfg_.relation_deter_weight * std::max(0.0f, relation(a, b));
             const float attack_prob = std::clamp(
-                cfg_.base_aggression_prob * (1.0f + cfg_.prize_weight * static_cast<float>(prize_share)),
+                cfg_.base_aggression_prob *
+                    (1.0f + cfg_.prize_weight * static_cast<float>(prize_share)) * deter,
                 0.0f, 1.0f);
             DeterministicRNG rng(state.world_seed ^
                                  (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^
@@ -104,6 +124,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // War: a strikes b. Both bleed; the defender worse (war is worse to lose).
             war_mortality[a] = std::min(cfg_.war_mortality_cap, war_mortality[a] + cfg_.attacker_loss);
             war_mortality[b] = std::min(cfg_.war_mortality_cap, war_mortality[b] + cfg_.defender_loss);
+            warred_pairs.insert(pair_key(a, b));
             // Spoils: the victor plunders a share of the loser's remaining wealth
             // (sequential depletion keeps it conserved across multiple attackers).
             const double plunder = cfg_.plunder_fraction * avail_capital[b];
@@ -113,6 +134,18 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 looted_to[a] += plunder;
             }
         }
+    }
+
+    // Relations drift: a war damages the pair's relation; a peaceful adjacent year
+    // heals it. Sustained peace warms neighbours into a de-facto alliance; feuds fester.
+    // Deterministic (adjacent_pairs is ordered).
+    for (uint64_t key : adjacent_pairs) {
+        float rel = relations_.count(key) ? relations_[key] : 0.0f;
+        if (warred_pairs.count(key))
+            rel -= cfg_.relation_war_hit;
+        else
+            rel += cfg_.relation_peace_heal;
+        relations_[key] = std::clamp(rel, -1.0f, 1.0f);
     }
 
     for (uint32_t i = 0; i < n; ++i) {

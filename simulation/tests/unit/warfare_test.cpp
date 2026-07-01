@@ -158,3 +158,55 @@ TEST_CASE("warfare: a won war plunders the loser's wealth to the victor (conserv
     CHECK_THAT(b_cap, Catch::Matchers::WithinAbs(800.0f, 0.5f));
     CHECK_THAT(a_cap, Catch::Matchers::WithinAbs(400.0f, 0.5f));
 }
+
+TEST_CASE("warfare: a war sours the pair's relations", "[warfare][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.current_tick = 365;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;  // the attack happens
+    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // strong
+    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // weak
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    CHECK(mod.relation(0, 1) == 0.0f);  // strangers
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    CHECK(mod.relation(0, 1) < 0.0f);  // the war soured relations
+}
+
+TEST_CASE("warfare: sustained peace warms neighbours into an alliance that deters attack",
+          "[warfare][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;
+    cfg.relation_deter_weight = 1.0f;  // a full alliance fully deters
+    add_polity(w, 100, 0, /*pop=*/50000, /*surplus=*/1.0f);
+    add_polity(w, 200, 1, /*pop=*/50000, /*surplus=*/1.0f);  // parity -> no war
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    for (uint32_t y = 1; y <= 60; ++y) {  // 60 peaceful years
+        w.current_tick = y * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+    }
+    CHECK(mod.relation(0, 1) > 0.5f);  // sustained peace -> warm (de-facto alliance)
+
+    // A now dwarfs B — but the alliance deters the attack (no war despite the power).
+    w.provinces[0].cohort_stats->total_population = 100000000;
+    w.current_tick = 61 * 365;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);  // B spared — allied
+    CHECK(mod.relation(0, 1) > 0.5f);                            // alliance intact
+}

@@ -1359,3 +1359,34 @@ packages (apt: catch2 3.4, libh3 4.1, liblz4 1.9.4, nlohmann-json 3.11.3) via
 and a bare `h3` alias) on CMAKE_PREFIX_PATH — no committed build-file changes. Caveat:
 system h3 is 4.1.0 vs the pinned 4.4.1, but all gates (incl. society/emergence, which
 exercise world-gen) passed, so the behavioural baselines are robust to that skew.
+
+---
+
+## 2026-06-25 — M6c-3: diplomatic relations (war sours, peace warms, alliances deter)
+
+Third war layer — the substrate for treaties/alliances. The warfare module now holds
+per-province-pair relations (module state, [-1,1], starts at 0):
+- A war DROPS the pair's relation (relation_war_hit 0.3); a peaceful adjacent year
+  HEALS it (relation_peace_heal 0.02) — so sustained peace warms neighbours into a
+  de-facto alliance while feuds fester.
+- Warm relations DETER an attack: attack_prob *= (1 - relation_deter_weight *
+  max(0, relation)). A full alliance (relation ~1) with deter_weight 1 fully prevents
+  war — allies don't fight.
+
+Deterministic (ordered pair sets). New: pair_key()/relation() helpers, relations_ map.
+Note: relations_ is module state not yet serialized (save/load follow-up; not exercised
+in the dawn lab, which runs a single climb).
+
+Tests (+2): a war sours relations (goes negative); 60 peaceful years warm a pair to a
+deterring alliance that spares a now-dominant neighbour from attack. Gates: 1569 unit,
+society suite, emergence (1 failed-as-expected).
+
+Remaining M6c (per EconLife_War_and_Diplomacy_v01.md): explicit TREATIES (formal peace
+with terms), ALLIANCES (mutual defence / balance-of-power coalitions vs a hegemon),
+BACKSTABBING (rational betrayal + the reputation economy), and the EMPIRE layer
+(reach/leadership/mobility + the hold problem — Alexander/Genghis/Rome). Then the single
+deferred threshold re-calibration, then M7 entry.
+
+Build note: this session's build ran against apt system deps (Catch2 3.4/h3 4.1/lz4
+1.9.4/json 3.11.3) + find_package mode + local shims, after the org egress policy
+blocked the pinned FetchContent deps. All gates pass under that skew.

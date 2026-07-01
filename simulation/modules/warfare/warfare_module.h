@@ -15,6 +15,8 @@
 // dawn-regime-gated; modern war is the political_cycle's domain.
 
 #include <string_view>
+#include <cstdint>
+#include <map>
 #include <vector>
 
 #include "core/config/package_config.h"
@@ -42,9 +44,18 @@ class WarfareModule : public ITickModule {
     static float military_power(uint64_t population, float surplus_ratio,
                                 const WarfareConfig& cfg);
 
+    // Symmetric key for a province pair (relations are mutual).
+    static uint64_t pair_key(uint32_t a, uint32_t b);
+
+    // Diplomatic relation for a pair (0 if never interacted). For tests/observability.
+    float relation(uint32_t a, uint32_t b) const;
+
    private:
     bool regime_active(std::string_view regime) const;
     WarfareConfig cfg_;
+    // Per-province-pair diplomatic relations in [-1, 1] (module state; persists across
+    // ticks within a run). Warm pairs are de-facto allies that do not fight.
+    std::map<uint64_t, float> relations_;
 };
 
 }  // namespace econlife

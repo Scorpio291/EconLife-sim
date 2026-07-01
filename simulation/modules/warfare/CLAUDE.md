@@ -11,10 +11,15 @@ population war-dips).
 ## Tier: early (runs_after subsistence; GLOBAL, not province-parallel)
 
 ## Critical Rules
-- Conserved: war only kills (no minting). Spoils/territory transfer are later layers.
+- Conserved: war kills (cohort war_mortality) AND plunders (proto-capital loser->victor,
+  nets to zero). No minting. Territory transfer is a later layer.
+- Rational EV: attack the weak (power gate) AND rich (prize weight), but warm RELATIONS
+  deter it (allies don't fight). War sours relations; sustained peace warms them.
+- Holds module STATE: relations_ (per-pair, [-1,1]). Persists across ticks within a run;
+  NOT yet serialized (save/load — a follow-up; not exercised in the dawn lab).
 - Regime-gated to the pre-market arc; modern war is political_cycle's.
-- Deterministic: provinces in index order; per-(year,attacker,defender) RNG.
-- military_power() is pure/static (unit-tested).
+- Deterministic: provinces in index order; ordered pair sets; per-(year,attacker,
+  defender) RNG. military_power()/pair_key() are pure/static (unit-tested).
 
 ## Design
 - docs/design/EconLife_War_and_Diplomacy_v01.md (the full model: treaties, alliances,

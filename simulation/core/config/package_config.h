@@ -749,6 +749,13 @@ struct WarfareConfig {
     // the weak AND rich — the rational EV).
     float plunder_fraction = 0.2f;  // share of the loser's resident wealth seized on a win
     float prize_weight = 1.0f;      // how much a rich target raises the attack probability
+    // Diplomatic relations (M6c-3): war damages relations, sustained peace heals them,
+    // and warm relations deter an attack — so long-peaceful neighbours drift into a
+    // de-facto alliance (a treaty in all but name) while feuds fester. Per province-
+    // pair, held as warfare-module state.
+    float relation_war_hit = 0.3f;       // relations drop this much on a war (toward -1)
+    float relation_peace_heal = 0.02f;   // relations heal this much per peaceful year (toward +1)
+    float relation_deter_weight = 0.9f;  // how strongly warm relations suppress an attack
 };
 
 struct SeasonalAgricultureConfig {
