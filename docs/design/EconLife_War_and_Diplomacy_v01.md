@@ -128,6 +128,41 @@ No "treachery die". Betrayal is the EV calculation with reputation priced in.
 
 ---
 
+## 5.4 Polities are emergent and nested (settlement → city → province → kingdom → empire)
+
+Correction to the ownership model (2026-06-25): there is **no pre-assigned owner**.
+Before land is settled, no one owns it. Ownership EMERGES from settlement, and polities
+NEST upward as they grow and consolidate:
+
+**settlement → city → province → kingdom → empire → …**
+
+- **Emergence from settlement.** The founding population settles the land; a settled
+  place is owned by whoever holds it (a proto-polity per settlement). Unsettled land is
+  ownerless — there is nothing to conquer until someone settles it. (This is why the
+  dawn starts with no ownership: correct, not a gap.)
+- **Growth up the ladder.** Population and surplus (M1–M3) promote a settlement → a
+  city → a province-scale seat — the same earned-surplus ladder, now political: a place
+  that concentrates people and deliverable surplus becomes a seat that rules its
+  hinterland.
+- **Consolidation two ways.** Polities aggregate upward by **conquest** (war, §2–§5.5)
+  OR **federation** (treaty/alliance, §3–§4): strong polities or warm coalitions bind
+  neighbours into a kingdom, kingdoms into an empire. Force and consent are the two
+  routes up the hierarchy.
+- **Nesting, not replacement.** A conquered province still exists *inside* the kingdom;
+  the kingdom *inside* the empire. Fragmentation (the hold problem, §5.5) drops a
+  level — an empire shatters back into its kingdoms/provinces, which persist as the
+  successor states.
+
+This is the same grounded-emergence pattern as the rest of the sim: the political map
+is not seeded, it is **grown** — from settlement, up the surplus ladder, consolidated
+by war/diplomacy, and **capped at each level by the logistics/hold radius**. A
+settlement always holds itself (radius ~0); each higher level needs a larger coherent
+radius — a kingdom holds provinces within the ox-cart/cohesion reach; an empire needs
+roads + institutions to hold kingdoms across a larger radius, else it fragments. So the
+empire archetypes below are really *"how high up the nesting hierarchy a polity can
+climb and STAY."* Resolves **W4**: ownership is an emergent, nesting `polity_id`
+(a per-node hierarchy) — conquest/federation raises the level, hold-failure drops it.
+
 ## 5.5 Empire — the exceptions that prove the rule (Alexander, Genghis, Rome)
 
 The default (§0) is bounded, local war: the ox-cart caps reach, the balance of power
@@ -225,9 +260,11 @@ Nothing minted or vanished — people, grain, and territory only move or are con
 - **W3:** reputation representation — a per-polity faith scalar + the relations map, or
   reuse the trust/social-capital systems? Lean: a dedicated polity-faith scalar
   (distinct from NPC trust).
-- **W4:** territory transfer granularity — whole provinces change polity on decisive
-  loss, or gradual dominance shift (like the criminal `dominance_by_province`)? Lean:
-  gradual dominance, with absorption at a threshold.
+- ~~**W4:** territory transfer granularity~~ — **RESOLVED (2026-06-25, §5.4):**
+  ownership is an EMERGENT, NESTING `polity_id` (settlement → city → province → kingdom
+  → empire). It emerges from settlement (no pre-assigned owner), climbs by conquest or
+  federation, and drops a level on hold-failure (secession to the successor states).
+  Transfer is gradual dominance with absorption/secession at the hold threshold.
 - **W5:** calibration target — what peace:war ratio and conquest bound read as
   "realistic" on the spectrum (mostly-peace with periodic local wars; **rare empires**
   that blanket the map and then hold or shatter)?
