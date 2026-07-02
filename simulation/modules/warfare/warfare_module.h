@@ -50,8 +50,13 @@ class WarfareModule : public ITickModule {
     // Diplomatic relation for a pair (0 if never interacted). For tests/observability.
     float relation(uint32_t a, uint32_t b) const;
 
-    // Module state round-trip (relations_ + the reset flag): diplomacy must survive
-    // save/load or a loaded game diverges from the same-seed uninterrupted run.
+    // Polity a province belongs to (M6c-5). Lazily emergent: a province that has
+    // never been conquered is its own polity (== its index). For tests/observability.
+    uint32_t polity_of(uint32_t province) const;
+
+    // Module state round-trip (relations_, polities, win ledger, reset flag):
+    // diplomacy and the political map must survive save/load or a loaded game
+    // diverges from the same-seed uninterrupted run.
     void serialize_state(std::vector<uint8_t>& out) const override;
     bool deserialize_state(const uint8_t* data, size_t size) override;
 
@@ -64,6 +69,14 @@ class WarfareModule : public ITickModule {
     // True while the last published war_mortality state may contain a value > 1.0;
     // lets the regime-exit path publish a one-time reset (no stale phantom war).
     bool war_state_dirty_ = false;
+    // Emergent nesting polities (M6c-5): province -> polity id. Sparse — a province
+    // absent from the map is its own polity (ownership emerges from settlement).
+    // Conquest reassigns the loser's WHOLE polity (nesting: a beaten kingdom joins the
+    // empire with all its provinces); hold-failure secedes a member back to itself.
+    std::map<uint32_t, uint32_t> polity_of_;
+    // Decisive-win ledger per DIRECTED (attacker,defender) pair; at
+    // cfg_.absorb_after_wins the defender's polity is absorbed.
+    std::map<uint64_t, uint32_t> win_counts_;
 };
 
 }  // namespace econlife

@@ -764,6 +764,15 @@ struct WarfareConfig {
     float ally_threshold = 0.3f;                // relation at/above which a neighbour is an ally
     float backstab_reputation_penalty = 0.25f;  // a betrayal additionally sours the betrayer's
                                                 // relations with ALL its neighbours
+    // Emergent nesting polities (M6c-5, design §5.4): every populated province starts
+    // as its own polity (ownership emerges from settlement; unsettled land is
+    // ownerless). Repeated decisive wins ABSORB the loser's whole polity into the
+    // victor's (conquest consolidates up the settlement->kingdom->empire ladder);
+    // polity members pool power (internal peace, external weight); and a member whose
+    // own power outgrows the rest of its polity SECEDES (the hold problem — an empire
+    // that can no longer overawe a member cannot keep it).
+    uint32_t absorb_after_wins = 3;   // decisive wins (same attacker->defender) to absorb
+    float secession_power_ratio = 0.8f;  // member secedes when own power > ratio x rest-of-polity
 };
 
 struct SeasonalAgricultureConfig {

@@ -15,7 +15,9 @@ population war-dips).
   nets to zero). No minting. Territory transfer is a later layer.
 - Rational EV: attack the weak (power gate) AND rich (prize weight), but warm RELATIONS
   deter it (allies don't fight). War sours relations; sustained peace warms them.
-- Holds module STATE: relations_ (per-pair, [-1,1]) + the war_state_dirty_ reset flag.
+- Holds module STATE: relations_ (per-pair, [-1,1]), polity_of_/win_counts_ (emergent
+  nesting polities: conquest absorbs whole polities, members pool power at internal
+  peace, hold-failure secedes — design §5.4/§5.5), + the war_state_dirty_ reset flag.
   Serialized via serialize_state/deserialize_state (v1) — diplomacy survives save/load.
 - ANNUAL cadence: one decision pass per year (current_tick % 365 == 0); all rates are
   per-year. On regime exit it publishes a one-time war_mortality=1.0 reset.

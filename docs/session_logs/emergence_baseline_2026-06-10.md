@@ -1465,3 +1465,37 @@ without-receiver, +1 serialization round-trip), 37 integration (13,211; + the ne
 warfare orchestrator scenario), emergence (1 failed-as-expected). Behavioral note:
 full-res daily-tick dawn dynamics CHANGE with the annual gate (they were 365x off);
 fast-forward spectrum semantics are unchanged by construction.
+
+---
+
+## 2026-07-02 — M6c-5: emergent nesting polities (conquest absorbs, hold-failure secedes)
+
+The empire substrate, per the §5.4 correction (ownership is not seeded — it emerges
+from settlement and nests upward: settlement -> city -> province -> kingdom -> empire):
+- EMERGENT: polity_of_ is sparse; a province never conquered is its own polity.
+  Unsettled/unpopulated land is ownerless (power 0 -> never a war party).
+- CONSOLIDATION BY CONQUEST: repeated decisive wins (absorb_after_wins=3 per directed
+  pair) absorb the loser's WHOLE polity into the victor's — a beaten kingdom joins the
+  empire with all its provinces (nesting, not per-province flipping).
+- EMPIRE PEACE + POOLED POWER: members never war each other and field the polity's
+  summed power for defence AND offence (the coalition mechanic, via membership). The
+  emergent flip side showed up immediately in tests: a kingdom raids neighbours
+  through its border members with pooled weight.
+- THE HOLD PROBLEM: a member whose own power exceeds secession_power_ratio (0.8) x the
+  rest of its polity SECEDES (the centre can no longer overawe it) — the ladder drops
+  a level; successor states are the members below. This is the Alexander/Genghis/Rome
+  fall mechanic in its simplest grounded form (the rise multipliers — leadership,
+  mobility, roads — are the remaining W6/W7 layers).
+- Serialization v2 (polities + win ledger; v1 blobs still load).
+
+Tests (+3): 3 wins absorb -> empire peace inside; the kingdom deters what a lone
+province could not (and raids C through the border member — asserted as intended);
+centre collapse -> secession -> re-absorption -> save/load round-trips the political
+map. Two prior tests updated where the new mechanics invalidated their assumptions
+(coalition test now disables annexation to isolate relation-coalitions; pool test
+asserts no DEFENDER loss on the member). Gates: 1,578 unit (266,459), 37 integration
+(13,211), emergence (1 failed-as-expected).
+
+Remaining M6c: W6 leadership (Alexander) + W7 military-type reach (Genghis) + roads/
+cohesion (Rome) as power/reach/hold modifiers on this substrate; then the single
+deferred threshold re-calibration; then M7 entry.

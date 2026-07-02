@@ -34,8 +34,15 @@ docs/design/EconLife_War_and_Diplomacy_v01.md.
   (`relation_war_hit`), a peaceful adjacent year heals (`relation_peace_heal`), warm
   relations deter attack and pool coalition defence (`ally_threshold`), betrayal
   sours the betrayer's relations with all neighbours
-  (`backstab_reputation_penalty`). Round-tripped via serialize_state/
-  deserialize_state (version 1).
+  (`backstab_reputation_penalty`).
+- `polity_of_` — emergent nesting polities (design §5.4): sparse province -> polity
+  map; an absent province is its own polity (ownership emerges from settlement).
+  Repeated decisive wins (`absorb_after_wins`, per directed pair via `win_counts_`)
+  absorb the loser's WHOLE polity into the victor's; members are at internal peace
+  and pool power (defence and offence); a member whose own power outgrows the rest
+  of its polity secedes (`secession_power_ratio` — the hold problem).
+- Round-tripped via serialize_state/deserialize_state (version 2; v1 loads without
+  polity data).
 
 ## Invariants
 - Conserved: war kills (via the cohort mortality path) and moves wealth; it never

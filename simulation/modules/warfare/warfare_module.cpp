@@ -90,19 +90,35 @@ float WarfareModule::relation(uint32_t a, uint32_t b) const {
     return it == relations_.end() ? 0.0f : it->second;
 }
 
+uint32_t WarfareModule::polity_of(uint32_t province) const {
+    auto it = polity_of_.find(province);
+    return it == polity_of_.end() ? province : it->second;
+}
+
 void WarfareModule::serialize_state(std::vector<uint8_t>& out) const {
-    put_u32(out, 1u);  // version
+    put_u32(out, 2u);  // version (2: + polities and the decisive-win ledger)
     out.push_back(war_state_dirty_ ? 1u : 0u);
     put_u32(out, static_cast<uint32_t>(relations_.size()));
     for (const auto& [key, rel] : relations_) {  // std::map: deterministic key order
         put_u64(out, key);
         put_f32(out, rel);
     }
+    put_u32(out, static_cast<uint32_t>(polity_of_.size()));
+    for (const auto& [prov, pid] : polity_of_) {
+        put_u32(out, prov);
+        put_u32(out, pid);
+    }
+    put_u32(out, static_cast<uint32_t>(win_counts_.size()));
+    for (const auto& [key, wins] : win_counts_) {
+        put_u64(out, key);
+        put_u32(out, wins);
+    }
 }
 
 bool WarfareModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
-    if (r.u32() != 1u)
+    const uint32_t version = r.u32();
+    if (version < 1u || version > 2u)
         return false;
     war_state_dirty_ = (r.u8() != 0u);
     const uint32_t count = r.u32();
@@ -111,6 +127,22 @@ bool WarfareModule::deserialize_state(const uint8_t* data, size_t size) {
         const uint64_t key = r.u64();
         const float rel = r.f32();
         relations_[key] = rel;
+    }
+    polity_of_.clear();
+    win_counts_.clear();
+    if (version >= 2u) {
+        const uint32_t polities = r.u32();
+        for (uint32_t i = 0; i < polities && r.ok; ++i) {
+            const uint32_t prov = r.u32();
+            const uint32_t pid = r.u32();
+            polity_of_[prov] = pid;
+        }
+        const uint32_t wins = r.u32();
+        for (uint32_t i = 0; i < wins && r.ok; ++i) {
+            const uint64_t key = r.u64();
+            const uint32_t w = r.u32();
+            win_counts_[key] = w;
+        }
     }
     return r.ok;
 }
@@ -164,6 +196,12 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     }
     const std::vector<double> orig_capital = avail_capital;  // for proportional debit distribution
 
+    // Polity power (M6c-5): members pool their power — internal peace, external
+    // weight. A polity's power is the sum over its member provinces.
+    std::map<uint32_t, float> polity_power;
+    for (uint32_t i = 0; i < n; ++i)
+        polity_power[polity_of(i)] += power[i];
+
     // Seed by YEAR so a war is consistent across the year at any tick resolution.
     const uint32_t year = state.current_tick / kTicksPerYear;
 
@@ -191,22 +229,26 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             const uint32_t b = it->second;
             if (power[b] <= 0.0f)
                 continue;
+            // Members of the same polity are at internal peace (the empire's pax).
+            if (polity_of(a) == polity_of(b))
+                continue;
             adjacent_pairs.insert(pair_key(a, b));
-            // Coalition defence (the balance of power): the defender's allies (its
-            // warm-relation neighbours) add their power, so a hegemon must out-match the
-            // whole coalition, not just its target.
-            float defender_power = power[b];
+            // Coalition defence (the balance of power): the defender fields its WHOLE
+            // polity's power, plus warm-relation allied neighbours outside it — a
+            // hegemon must out-match the coalition, not just the border province.
+            float defender_power = polity_power[polity_of(b)];
             for (const auto& blink : state.provinces[b].links) {
                 auto bit = h3_to_idx.find(blink.neighbor_h3);
                 if (bit == h3_to_idx.end())
                     continue;
                 const uint32_t c = bit->second;
-                if (c == a)
-                    continue;  // the attacker is not counted among the defender's allies
+                if (c == a || polity_of(c) == polity_of(b))
+                    continue;  // attacker excluded; polity members already counted
                 if (relation(b, c) >= cfg_.ally_threshold)
                     defender_power += power[c];
             }
-            if (power[a] < cfg_.aggression_ratio * defender_power)
+            const float attacker_power = polity_power[polity_of(a)];
+            if (attacker_power < cfg_.aggression_ratio * defender_power)
                 continue;  // the coalition deters the attack
             // A rich neighbour is a more tempting target (the rational prize); warm
             // relations (a de-facto alliance) suppress the attack toward zero.
@@ -232,6 +274,24 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             warred_pairs.insert(pair_key(a, b));
             if (relation(a, b) >= cfg_.ally_threshold)
                 betrayers.insert(a);  // attacking a warm ally is a betrayal
+            // Consolidation up the ladder (M6c-5, §5.4): repeated decisive wins absorb
+            // the loser's WHOLE polity into the victor's — a beaten kingdom joins the
+            // empire with all its provinces. Nesting, not per-province flipping.
+            const uint64_t directed = (static_cast<uint64_t>(a) << 32) | b;
+            if (cfg_.absorb_after_wins > 0 && ++win_counts_[directed] >= cfg_.absorb_after_wins) {
+                win_counts_[directed] = 0;
+                const uint32_t victor_pid = polity_of(a);
+                const uint32_t beaten_pid = polity_of(b);
+                float moved = 0.0f;
+                for (uint32_t p = 0; p < n; ++p) {
+                    if (polity_of(p) == beaten_pid) {
+                        polity_of_[p] = victor_pid;
+                        moved += power[p];
+                    }
+                }
+                polity_power[victor_pid] += moved;
+                polity_power[beaten_pid] = 0.0f;
+            }
             // Spoils: the victor plunders a share of the loser's remaining wealth
             // (sequential depletion keeps it conserved across multiple attackers).
             // Only when the victor has a valid resident to receive it — otherwise the
@@ -266,6 +326,23 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         else
             rel += cfg_.relation_peace_heal;
         relations_[key] = std::clamp(rel, -1.0f, 1.0f);
+    }
+
+    // The hold problem (M6c-5, §5.5): a polity keeps a member only while the rest of
+    // the polity can overawe it. When a member's own power outgrows the remainder
+    // (the centre can no longer pay for its reach), it SECEDES — the ladder drops a
+    // level and the member is its own polity again. The seat (province == polity id)
+    // cannot secede from itself. Deterministic (index order).
+    for (uint32_t m = 0; m < n; ++m) {
+        const uint32_t pid = polity_of(m);
+        if (pid == m)
+            continue;  // the seat is the polity
+        const float rest = std::max(0.0f, polity_power[pid] - power[m]);
+        if (power[m] > cfg_.secession_power_ratio * rest) {
+            polity_of_[m] = m;
+            polity_power[pid] = rest;
+            polity_power[m] += power[m];
+        }
     }
 
     // Reputation economy: a betrayer's word is worthless — its relations with ALL
