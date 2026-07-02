@@ -95,8 +95,13 @@ uint32_t WarfareModule::polity_of(uint32_t province) const {
     return it == polity_of_.end() ? province : it->second;
 }
 
+bool WarfareModule::has_leader(uint32_t seat, uint32_t year) const {
+    auto it = leader_until_.find(seat);
+    return it != leader_until_.end() && year < it->second;
+}
+
 void WarfareModule::serialize_state(std::vector<uint8_t>& out) const {
-    put_u32(out, 2u);  // version (2: + polities and the decisive-win ledger)
+    put_u32(out, 3u);  // version (3: + conqueror state; 2: + polities/win ledger)
     out.push_back(war_state_dirty_ ? 1u : 0u);
     put_u32(out, static_cast<uint32_t>(relations_.size()));
     for (const auto& [key, rel] : relations_) {  // std::map: deterministic key order
@@ -113,12 +118,22 @@ void WarfareModule::serialize_state(std::vector<uint8_t>& out) const {
         put_u64(out, key);
         put_u32(out, wins);
     }
+    put_u32(out, static_cast<uint32_t>(leader_until_.size()));
+    for (const auto& [seat, until] : leader_until_) {
+        put_u32(out, seat);
+        put_u32(out, until);
+    }
+    put_u32(out, static_cast<uint32_t>(member_since_.size()));
+    for (const auto& [prov, since] : member_since_) {
+        put_u32(out, prov);
+        put_u32(out, since);
+    }
 }
 
 bool WarfareModule::deserialize_state(const uint8_t* data, size_t size) {
     Reader r{data, size};
     const uint32_t version = r.u32();
-    if (version < 1u || version > 2u)
+    if (version < 1u || version > 3u)
         return false;
     war_state_dirty_ = (r.u8() != 0u);
     const uint32_t count = r.u32();
@@ -142,6 +157,22 @@ bool WarfareModule::deserialize_state(const uint8_t* data, size_t size) {
             const uint64_t key = r.u64();
             const uint32_t w = r.u32();
             win_counts_[key] = w;
+        }
+    }
+    leader_until_.clear();
+    member_since_.clear();
+    if (version >= 3u) {
+        const uint32_t leaders = r.u32();
+        for (uint32_t i = 0; i < leaders && r.ok; ++i) {
+            const uint32_t seat = r.u32();
+            const uint32_t until = r.u32();
+            leader_until_[seat] = until;
+        }
+        const uint32_t members = r.u32();
+        for (uint32_t i = 0; i < members && r.ok; ++i) {
+            const uint32_t prov = r.u32();
+            const uint32_t since = r.u32();
+            member_since_[prov] = since;
         }
     }
     return r.ok;
@@ -196,14 +227,52 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     }
     const std::vector<double> orig_capital = avail_capital;  // for proportional debit distribution
 
-    // Polity power (M6c-5): members pool their power — internal peace, external
-    // weight. A polity's power is the sum over its member provinces.
-    std::map<uint32_t, float> polity_power;
-    for (uint32_t i = 0; i < n; ++i)
-        polity_power[polity_of(i)] += power[i];
-
     // Seed by YEAR so a war is consistent across the year at any tick resolution.
     const uint32_t year = state.current_tick / kTicksPerYear;
+
+    // Polity power (M6c-5): members pool their power — internal peace, external
+    // weight. A polity's power is the sum over its member provinces. Steppe power is
+    // tracked per polity for the cavalry (Genghis) reach rule.
+    std::map<uint32_t, float> polity_power;
+    std::map<uint32_t, float> steppe_power;
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t pid = polity_of(i);
+        polity_power[pid] += power[i];
+        const auto& geo = state.provinces[i].geography;
+        if (geo.arable_land_fraction < cfg_.steppe_arable_max &&
+            geo.forest_coverage < cfg_.steppe_forest_max)
+            steppe_power[pid] += power[i];
+    }
+
+    // GENGHIS (M6c-6): a polity whose power is predominantly steppe-bred (herd-fed
+    // cavalry, no grain supply line) fights as CAVALRY — its reach extends past the
+    // ox-cart adjacency to 2-hop targets. Classified on raw power, before leadership.
+    std::map<uint32_t, bool> cavalry;
+    for (const auto& [pid, pw] : polity_power)
+        cavalry[pid] = pw > 0.0f && steppe_power[pid] >= cfg_.cavalry_polity_min_share * pw;
+
+    // ALEXANDER (M6c-6): rarely, a polity seat produces a great commander whose
+    // tenure multiplies the polity's power. Expire dead leaders; roll for new ones
+    // (deterministic per (seat, year)); apply the multiplier while the leader lives.
+    for (auto it = leader_until_.begin(); it != leader_until_.end();) {
+        if (year >= it->second)
+            it = leader_until_.erase(it);
+        else
+            ++it;
+    }
+    for (auto& [pid, pw] : polity_power) {
+        if (pw <= 0.0f)
+            continue;
+        if (!leader_until_.count(pid) && cfg_.leadership_rate > 0.0f) {
+            DeterministicRNG lead_rng(state.world_seed ^
+                                      (static_cast<uint64_t>(year) * 0xA24BAED4963EE407ull) ^
+                                      (static_cast<uint64_t>(pid) << 13) ^ 0xA1E7ull);
+            if (lead_rng.next_float() < cfg_.leadership_rate)
+                leader_until_[pid] = year + cfg_.leadership_tenure_years;
+        }
+        if (leader_until_.count(pid))
+            pw *= cfg_.leadership_power_mult;
+    }
 
     // war_mortality accumulates per province; plundered[]/looted[] track the conserved
     // proto-capital transfers (loser -> victor) for distribution to residents below.
@@ -222,11 +291,25 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     for (uint32_t a = 0; a < n; ++a) {
         if (power[a] <= 0.0f)
             continue;
+        // Reach: 1-hop neighbours (the ox-cart limit) — and for a CAVALRY polity
+        // (Genghis), the neighbours' neighbours too (force projection past the grain
+        // radius). Ordered set: deterministic target order, duplicates collapsed.
+        std::set<uint32_t> targets;
         for (const auto& link : state.provinces[a].links) {
             auto it = h3_to_idx.find(link.neighbor_h3);
             if (it == h3_to_idx.end())
                 continue;
-            const uint32_t b = it->second;
+            const uint32_t b1 = it->second;
+            targets.insert(b1);
+            if (cavalry[polity_of(a)]) {
+                for (const auto& l2 : state.provinces[b1].links) {
+                    auto it2 = h3_to_idx.find(l2.neighbor_h3);
+                    if (it2 != h3_to_idx.end() && it2->second != a)
+                        targets.insert(it2->second);
+                }
+            }
+        }
+        for (uint32_t b : targets) {
             if (power[b] <= 0.0f)
                 continue;
             // Members of the same polity are at internal peace (the empire's pax).
@@ -244,6 +327,8 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 const uint32_t c = bit->second;
                 if (c == a || polity_of(c) == polity_of(b))
                     continue;  // attacker excluded; polity members already counted
+                if (polity_of(c) == polity_of(a))
+                    continue;  // the attacker's own members never defend its target
                 if (relation(b, c) >= cfg_.ally_threshold)
                     defender_power += power[c];
             }
@@ -286,11 +371,13 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 for (uint32_t p = 0; p < n; ++p) {
                     if (polity_of(p) == beaten_pid) {
                         polity_of_[p] = victor_pid;
+                        member_since_[p] = year;  // integration (cohesion) starts now
                         moved += power[p];
                     }
                 }
                 polity_power[victor_pid] += moved;
                 polity_power[beaten_pid] = 0.0f;
+                leader_until_.erase(beaten_pid);  // a dissolved polity has no seat
             }
             // Spoils: the victor plunders a share of the loser's remaining wealth
             // (sequential depletion keeps it conserved across multiple attackers).
@@ -331,15 +418,26 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // The hold problem (M6c-5, §5.5): a polity keeps a member only while the rest of
     // the polity can overawe it. When a member's own power outgrows the remainder
     // (the centre can no longer pay for its reach), it SECEDES — the ladder drops a
-    // level and the member is its own polity again. The seat (province == polity id)
-    // cannot secede from itself. Deterministic (index order).
+    // level and the member is its own polity again. ROME (M6c-6): integration grows
+    // with tenure — a member held for generations needs proportionally more relative
+    // power to break away, so young conquests shatter (Alexander's die with him)
+    // while old ones endure. The seat (province == polity id) cannot secede from
+    // itself. Deterministic (index order).
     for (uint32_t m = 0; m < n; ++m) {
         const uint32_t pid = polity_of(m);
         if (pid == m)
             continue;  // the seat is the polity
         const float rest = std::max(0.0f, polity_power[pid] - power[m]);
-        if (power[m] > cfg_.secession_power_ratio * rest) {
+        uint32_t years_held = 0;
+        auto since = member_since_.find(m);
+        if (since != member_since_.end() && year > since->second)
+            years_held = year - since->second;
+        const float cohesion =
+            std::min(cfg_.cohesion_max_mult,
+                     1.0f + cfg_.cohesion_per_year_held * static_cast<float>(years_held));
+        if (power[m] > cfg_.secession_power_ratio * cohesion * rest) {
             polity_of_[m] = m;
+            member_since_.erase(m);
             polity_power[pid] = rest;
             polity_power[m] += power[m];
         }

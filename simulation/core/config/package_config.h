@@ -773,6 +773,24 @@ struct WarfareConfig {
     // that can no longer overawe a member cannot keep it).
     uint32_t absorb_after_wins = 3;   // decisive wins (same attacker->defender) to absorb
     float secession_power_ratio = 0.8f;  // member secedes when own power > ratio x rest-of-polity
+    // The conqueror multipliers (M6c-6, design §5.5) — how the rare empire BREAKS the
+    // bounded-war default, each archetype through a different gate:
+    // ALEXANDER — leadership: rarely, a polity seat produces an exceptional commander
+    // whose tenure multiplies the polity's power; when the leader dies the multiplier
+    // vanishes and the hold problem fragments what institutions never caught up with.
+    float leadership_rate = 0.004f;       // annual prob a seat produces a great commander
+    float leadership_power_mult = 2.5f;   // polity power multiplier while the leader lives
+    uint32_t leadership_tenure_years = 30;  // the conqueror's active span
+    // GENGHIS — mobility: a steppe polity (herd-fed cavalry, no grain supply line)
+    // projects force PAST the adjacency reach — it can strike 2-hop targets.
+    float steppe_arable_max = 0.2f;   // a province this un-arable ...
+    float steppe_forest_max = 0.3f;   // ... and this open is steppe (grassland)
+    float cavalry_polity_min_share = 0.5f;  // steppe share of polity power to fight as cavalry
+    // ROME — cohesion: integration grows with tenure. A member held for generations
+    // needs proportionally MORE relative power to secede (assimilation/administration);
+    // a fresh conquest is as fragile as the day it was taken.
+    float cohesion_per_year_held = 0.02f;  // hold-threshold growth per year of membership
+    float cohesion_max_mult = 3.0f;        // integration ceiling on the hold threshold
 };
 
 struct SeasonalAgricultureConfig {

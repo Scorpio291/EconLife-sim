@@ -54,6 +54,10 @@ class WarfareModule : public ITickModule {
     // never been conquered is its own polity (== its index). For tests/observability.
     uint32_t polity_of(uint32_t province) const;
 
+    // Does the polity seat currently host a great commander (M6c-6, Alexander)?
+    // For tests/observability.
+    bool has_leader(uint32_t seat, uint32_t year) const;
+
     // Module state round-trip (relations_, polities, win ledger, reset flag):
     // diplomacy and the political map must survive save/load or a loaded game
     // diverges from the same-seed uninterrupted run.
@@ -77,6 +81,12 @@ class WarfareModule : public ITickModule {
     // Decisive-win ledger per DIRECTED (attacker,defender) pair; at
     // cfg_.absorb_after_wins the defender's polity is absorbed.
     std::map<uint64_t, uint32_t> win_counts_;
+    // Conqueror state (M6c-6). ALEXANDER: polity seat -> the year its great
+    // commander's tenure ends (power multiplied while active; fragmentation follows
+    // the death via the hold problem). ROME: member province -> the year it was
+    // absorbed (integration/cohesion grows with tenure).
+    std::map<uint32_t, uint32_t> leader_until_;
+    std::map<uint32_t, uint32_t> member_since_;
 };
 
 }  // namespace econlife

@@ -41,8 +41,16 @@ docs/design/EconLife_War_and_Diplomacy_v01.md.
   absorb the loser's WHOLE polity into the victor's; members are at internal peace
   and pool power (defence and offence); a member whose own power outgrows the rest
   of its polity secedes (`secession_power_ratio` — the hold problem).
-- Round-tripped via serialize_state/deserialize_state (version 2; v1 loads without
-  polity data).
+- `leader_until_` / `member_since_` — the conqueror multipliers (design §5.5):
+  ALEXANDER — a rare great commander (`leadership_rate`) multiplies the polity's
+  power (`leadership_power_mult`) for `leadership_tenure_years`, after which the
+  hold problem fragments what institutions never caught up with. GENGHIS — a polity
+  whose power is predominantly steppe-bred (`steppe_arable_max`/`steppe_forest_max`,
+  `cavalry_polity_min_share`) strikes 2-hop targets (reach past the ox-cart).
+  ROME — integration grows with tenure (`cohesion_per_year_held`, capped at
+  `cohesion_max_mult`): old conquests need proportionally more power to secede.
+- Round-tripped via serialize_state/deserialize_state (version 3; v1/v2 blobs load
+  without the newer sections).
 
 ## Invariants
 - Conserved: war kills (via the cohort mortality path) and moves wealth; it never

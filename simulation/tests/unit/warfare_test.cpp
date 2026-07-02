@@ -482,6 +482,10 @@ TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone
     add_polity(w, 100, 0, /*pop=*/100000, 1.0f);  // A: seat of the kingdom
     add_polity(w, 200, 1, /*pop=*/10000, 1.0f);   // B: member-to-be (border province)
     add_polity(w, 300, 2, /*pop=*/30000, 1.0f);   // C: would-be raider of B
+    for (auto& p : w.provinces) {
+        p.geography.arable_land_fraction = 0.8f;  // farmland: no cavalry 2-hop reach
+        p.geography.forest_coverage = 0.2f;
+    }
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
     w.provinces[1].links.push_back(link_to(300));
@@ -557,4 +561,163 @@ TEST_CASE("warfare: a member that outgrows the polity secedes (the hold problem)
     CHECK(fresh.polity_of(1) == 1);
     REQUIRE(fresh.deserialize_state(blob.data(), blob.size()));
     CHECK(fresh.polity_of(1) == 0);  // the political map survives the load
+}
+
+namespace {
+// Build a v3 module-state blob by hand (little-endian), to inject asymmetric
+// conqueror state (a leader on one seat, a long-held member) deterministically.
+struct BlobBuilder {
+    std::vector<uint8_t> bytes;
+    void u32(uint32_t v) {
+        bytes.push_back(static_cast<uint8_t>(v));
+        bytes.push_back(static_cast<uint8_t>(v >> 8));
+        bytes.push_back(static_cast<uint8_t>(v >> 16));
+        bytes.push_back(static_cast<uint8_t>(v >> 24));
+    }
+};
+std::vector<uint8_t> make_warfare_blob(
+    const std::vector<std::pair<uint32_t, uint32_t>>& polities,
+    const std::vector<std::pair<uint32_t, uint32_t>>& leaders,
+    const std::vector<std::pair<uint32_t, uint32_t>>& members_since) {
+    BlobBuilder b;
+    b.u32(3u);              // version
+    b.bytes.push_back(0u);  // war_state_dirty
+    b.u32(0u);              // relations: none
+    b.u32(static_cast<uint32_t>(polities.size()));
+    for (auto [prov, pid] : polities) {
+        b.u32(prov);
+        b.u32(pid);
+    }
+    b.u32(0u);  // win counts: none
+    b.u32(static_cast<uint32_t>(leaders.size()));
+    for (auto [seat, until] : leaders) {
+        b.u32(seat);
+        b.u32(until);
+    }
+    b.u32(static_cast<uint32_t>(members_since.size()));
+    for (auto [prov, since] : members_since) {
+        b.u32(prov);
+        b.u32(since);
+    }
+    return b.bytes;
+}
+}  // namespace
+
+TEST_CASE("warfare: the Alexander arc — a great commander conquers; his death fragments it",
+          "[warfare][conqueror][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;
+    cfg.leadership_rate = 0.0f;   // no new rolls — the injected leader is the only one
+    cfg.absorb_after_wins = 1;    // a decisive campaign
+    add_polity(w, 100, 0, /*pop=*/40000, 1.0f);  // A: small Macedon
+    add_polity(w, 200, 1, /*pop=*/60000, 1.0f);  // B: the bigger neighbour
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    // Raw power could never attack: 40k < 1.3 x 60k. Inject a great commander on A's
+    // seat (tenure through year 4): power x2.5 = 100k >= 78k — conquest qualifies.
+    auto blob = make_warfare_blob({}, {{0u, 5u}}, {});
+    REQUIRE(mod.deserialize_state(blob.data(), blob.size()));
+
+    w.current_tick = 1 * 365;
+    DeltaBuffer d1{};
+    mod.execute(w, d1);
+    apply_deltas(w, d1);
+    CHECK(mod.has_leader(0, 1));
+    CHECK(mod.polity_of(1) == 0);  // conquered in one campaign — the leadership surge
+
+    // While the commander lives, the inflated centre overawes the member.
+    for (uint32_t y = 2; y <= 4; ++y) {
+        w.current_tick = y * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+        CHECK(mod.polity_of(1) == 0);
+    }
+
+    // Year 5: the commander's tenure ends. The centre's power collapses back to 40k;
+    // the young conquest (low cohesion) out-powers it and secedes — the Diadochi.
+    w.current_tick = 5 * 365;
+    DeltaBuffer d5{};
+    mod.execute(w, d5);
+    apply_deltas(w, d5);
+    CHECK_FALSE(mod.has_leader(0, 5));
+    CHECK(mod.polity_of(1) == 1);  // the empire fragments on the conqueror's death
+}
+
+TEST_CASE("warfare: the Genghis reach — a steppe polity strikes past the grain radius",
+          "[warfare][conqueror][tier2]") {
+    // Chain A - B - C: A is NOT adjacent to C. A farming polity can only reach B;
+    // a STEPPE polity (herd-fed cavalry) projects force to the 2-hop target C.
+    auto run = [](float arable) {
+        WorldState w{};
+        w.world_seed = 1;
+        w.current_tick = 365;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        WarfareConfig cfg{};
+        cfg.base_aggression_prob = 1.0f;
+        cfg.leadership_rate = 0.0f;
+        add_polity(w, 100, 0, /*pop=*/50000, 1.0f);  // A: the (maybe) cavalry power
+        add_polity(w, 200, 1, /*pop=*/45000, 1.0f);  // B: buffer (deterred by C's 36k)
+        add_polity(w, 300, 2, /*pop=*/36000, 1.0f);  // C: 2 hops from A; only A's 50k
+                                                     // clears 1.3 x 36k — B cannot
+        w.provinces[0].geography.arable_land_fraction = arable;  // steppe or farmland
+        w.provinces[0].geography.forest_coverage = 0.1f;
+        w.provinces[1].geography.arable_land_fraction = 0.8f;  // farmers
+        w.provinces[1].geography.forest_coverage = 0.2f;
+        w.provinces[2].geography.arable_land_fraction = 0.8f;
+        w.provinces[2].geography.forest_coverage = 0.2f;
+        w.provinces[0].links.push_back(link_to(200));
+        w.provinces[1].links.push_back(link_to(100));
+        w.provinces[1].links.push_back(link_to(300));
+        w.provinces[2].links.push_back(link_to(200));
+        WarfareModule mod(cfg);
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+        return w.provinces[2].cohort_stats->war_mortality;  // was C hit?
+    };
+    const float farming = run(0.8f);   // A is farmland: C is beyond reach
+    const float steppe = run(0.05f);   // A is steppe: cavalry reaches C
+    CHECK(farming == 1.0f);
+    CHECK(steppe > 1.0f);  // the tyranny of the ox does not bind the herd-fed
+}
+
+TEST_CASE("warfare: the Rome hold — an old, integrated conquest endures where a fresh one secedes",
+          "[warfare][conqueror][tier2]") {
+    auto run = [](bool long_held) {
+        WorldState w{};
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        WarfareConfig cfg{};
+        cfg.base_aggression_prob = 0.0f;  // isolate the hold check (no new wars)
+        cfg.leadership_rate = 0.0f;
+        add_polity(w, 100, 0, /*pop=*/55000, 1.0f);  // A: the imperial centre
+        add_polity(w, 200, 1, /*pop=*/50000, 1.0f);  // B: the province in question
+        w.provinces[0].links.push_back(link_to(200));
+        w.provinces[1].links.push_back(link_to(100));
+        WarfareModule mod(cfg);
+        // B is a member of A's polity. Fresh conquest: absorbed THIS year (cohesion
+        // ~1). Old province: absorbed 150 years ago (cohesion capped at 3x).
+        const uint32_t year_now = 200;
+        const uint32_t since = long_held ? 50u : year_now;
+        auto blob = make_warfare_blob({{1u, 0u}}, {}, {{1u, since}});
+        REQUIRE(mod.deserialize_state(blob.data(), blob.size()));
+        w.current_tick = year_now * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+        return mod.polity_of(1);
+    };
+    // Borderline member (50k vs rest 55k; base threshold 0.8x55k = 44k): the fresh
+    // conquest breaks away; the province held for generations is integrated and stays.
+    CHECK(run(/*long_held=*/false) == 1);  // seceded
+    CHECK(run(/*long_held=*/true) == 0);   // Roman — it holds
 }

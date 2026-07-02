@@ -1499,3 +1499,37 @@ asserts no DEFENDER loss on the member). Gates: 1,578 unit (266,459), 37 integra
 Remaining M6c: W6 leadership (Alexander) + W7 military-type reach (Genghis) + roads/
 cohesion (Rome) as power/reach/hold modifiers on this substrate; then the single
 deferred threshold re-calibration; then M7 entry.
+
+---
+
+## 2026-07-02 — M6c-6: the conqueror multipliers (Alexander, Genghis, Rome)
+
+The rise mechanics on the polity substrate — how a rare empire BREAKS the bounded-war
+default, each archetype through a different gate (design §5.5, W6/W7/W8):
+- ALEXANDER (leadership): rarely (leadership_rate 0.004/yr/seat, deterministic per
+  (seat,year)), a polity seat produces a great commander whose tenure (30yr)
+  multiplies the polity's power x2.5. His death removes the multiplier — and the hold
+  problem fragments what institutions never caught up with. Unit test runs the whole
+  arc: a 40k polity that could never attack a 60k neighbour conquers it in one
+  campaign under a commander, holds it while he lives, and loses it to secession the
+  year his tenure ends (the Diadochi).
+- GENGHIS (mobility): a polity whose power is predominantly steppe-bred (arable <0.2,
+  forest <0.3; >=50% of polity power) fights as CAVALRY — herd-fed, no grain line —
+  and strikes 2-HOP targets, past the ox-cart adjacency. Test: farmland A cannot
+  touch a rich target two hops away; the same A as steppe raids it.
+- ROME (cohesion): integration grows with tenure — the secession threshold scales by
+  1 + 0.02/yr held (capped 3x), so a fresh conquest is as fragile as the day it was
+  taken while a province held for generations endures. Test: the same borderline
+  member secedes when freshly absorbed and holds when 150 years integrated.
+
+Also fixed a subtle coalition bug the new tests surfaced: an ally belonging to the
+ATTACKER'S own polity no longer adds its power to the defender's coalition (a member
+cannot defend an outsider against its own empire). Serialization v3 (leaders +
+membership tenure; v1/v2 blobs still load). Conqueror state injected in tests via
+hand-built v3 blobs (deterministic asymmetry).
+
+Gates: 1,581 unit (266,473), 37 integration (13,211), emergence (1 failed-as-expected).
+M6c COMPLETE: foundation -> spoils -> relations -> alliances/backstab -> nesting
+polities -> conquerors. Remaining before M7: the single deferred threshold
+re-calibration (modern ~12,000 under the full hazard+war load), ideally on a
+pinned-deps environment.
