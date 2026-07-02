@@ -296,3 +296,137 @@ TEST_CASE("warfare: betraying an ally brands the betrayer a pariah (reputation e
     CHECK(w.provinces[2].cohort_stats->war_mortality == 1.0f);  // C was not attacked
     CHECK(mod.relation(0, 2) < ac_before);  // yet A's relation with C soured — the pariah brand
 }
+
+TEST_CASE("warfare: annual gate — war decisions fire once per year, not per tick",
+          "[warfare][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;
+    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);
+    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+    w.npc_indices_by_home_province.resize(2);
+    NPC a{}, b{};
+    a.id = 1; a.capital = 100.0f;
+    b.id = 2; b.capital = 1000.0f;
+    w.significant_npcs.push_back(a);
+    w.significant_npcs.push_back(b);
+    w.npc_indices_by_home_province[0].push_back(0);
+    w.npc_indices_by_home_province[1].push_back(1);
+
+    WarfareModule mod(cfg);
+    // Mid-year ticks (a daily-resolution run): the module must do NOTHING — the same
+    // year-seeded war must not re-fire and compound plunder 365x.
+    for (uint32_t t = 366; t < 730; ++t) {
+        w.current_tick = t;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        CHECK(d.region_deltas.empty());
+        CHECK(d.npc_deltas.empty());
+    }
+    // The annual tick runs the year's decision pass exactly once.
+    w.current_tick = 730;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    CHECK_FALSE(d.region_deltas.empty());
+}
+
+TEST_CASE("warfare: leaving the pre-market arc resets war_mortality (no stale phantom war)",
+          "[warfare][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.current_tick = 365;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;  // feudal: war fires
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;
+    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);
+    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    DeltaBuffer d1{};
+    mod.execute(w, d1);
+    apply_deltas(w, d1);
+    REQUIRE(w.provinces[1].cohort_stats->war_mortality > 1.0f);  // at war
+
+    // The era advances out of warfare's regimes mid-story: the module must publish a
+    // one-time 1.0 reset instead of leaving the spike to be applied forever.
+    w.technology.current_era = 8;  // modern
+    w.current_tick = 366;          // not even an annual tick — the reset must not wait a year
+    DeltaBuffer d2{};
+    mod.execute(w, d2);
+    apply_deltas(w, d2);
+    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);  // reset
+
+    // And only once — subsequent market-era ticks publish nothing.
+    w.current_tick = 367;
+    DeltaBuffer d3{};
+    mod.execute(w, d3);
+    CHECK(d3.region_deltas.empty());
+}
+
+TEST_CASE("warfare: no plunder when the victor has no residents to receive it (conserved)",
+          "[warfare][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.current_tick = 365;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    cfg.base_aggression_prob = 1.0f;
+    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // A: strong, NO residents
+    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // B: weak, wealthy
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+    w.npc_indices_by_home_province.resize(2);
+    NPC npc{};
+    npc.id = 3;
+    npc.capital = 1000.0f;
+    w.significant_npcs.push_back(npc);
+    w.npc_indices_by_home_province[1].push_back(0);  // only B has a resident
+
+    WarfareModule mod(cfg);
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+
+    // The war still happens (casualties), but no wealth is transferred — and none is
+    // DESTROYED: B keeps its full 1000 (debit without credit would have leaked it).
+    CHECK(w.provinces[1].cohort_stats->war_mortality > 1.0f);
+    CHECK(w.significant_npcs[0].capital == 1000.0f);
+    CHECK(d.npc_deltas.empty());
+}
+
+TEST_CASE("warfare: relations survive a save/load round-trip", "[warfare][tier2]") {
+    WorldState w{};
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    WarfareConfig cfg{};
+    add_polity(w, 100, 0, 50000, 1.0f);
+    add_polity(w, 200, 1, 50000, 1.0f);
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    for (uint32_t y = 1; y <= 10; ++y) {  // peace warms relations
+        w.current_tick = y * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+    }
+    const float rel = mod.relation(0, 1);
+    REQUIRE(rel > 0.0f);
+
+    std::vector<uint8_t> blob;
+    mod.serialize_state(blob);
+    WarfareModule fresh(cfg);
+    CHECK(fresh.relation(0, 1) == 0.0f);
+    REQUIRE(fresh.deserialize_state(blob.data(), blob.size()));
+    CHECK(fresh.relation(0, 1) == rel);  // diplomacy survives the load
+}

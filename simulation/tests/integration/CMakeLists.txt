@@ -3,6 +3,7 @@ add_executable(econlife_integration_tests
     full_year_test.cpp
     world_gen_integration_test.cpp
     criminal_subsystem_integration_test.cpp
+    warfare_integration_test.cpp
     history_gen_integration_test.cpp
     society_evolution_test.cpp
 )

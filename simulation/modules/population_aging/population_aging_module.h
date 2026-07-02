@@ -62,7 +62,7 @@ class PopulationAgingModule : public ITickModule {
 
     // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;
-    static constexpr uint32_t TICKS_PER_YEAR = 365;
+    static constexpr uint32_t TICKS_PER_YEAR = kTicksPerYear;  // canonical (shared_types.h)
 
    private:
     PopulationAgingConfig cfg_;

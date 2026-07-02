@@ -15,8 +15,10 @@ population war-dips).
   nets to zero). No minting. Territory transfer is a later layer.
 - Rational EV: attack the weak (power gate) AND rich (prize weight), but warm RELATIONS
   deter it (allies don't fight). War sours relations; sustained peace warms them.
-- Holds module STATE: relations_ (per-pair, [-1,1]). Persists across ticks within a run;
-  NOT yet serialized (save/load — a follow-up; not exercised in the dawn lab).
+- Holds module STATE: relations_ (per-pair, [-1,1]) + the war_state_dirty_ reset flag.
+  Serialized via serialize_state/deserialize_state (v1) — diplomacy survives save/load.
+- ANNUAL cadence: one decision pass per year (current_tick % 365 == 0); all rates are
+  per-year. On regime exit it publishes a one-time war_mortality=1.0 reset.
 - Regime-gated to the pre-market arc; modern war is political_cycle's.
 - Deterministic: provinces in index order; ordered pair sets; per-(year,attacker,
   defender) RNG. military_power()/pair_key() are pure/static (unit-tested).

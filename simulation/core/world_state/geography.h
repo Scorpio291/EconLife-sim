@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace econlife {
@@ -953,5 +954,17 @@ struct Nation {
     NationSize size_class = NationSize::Small;  // derived from province_ids.size()
     bool is_colonial_power = false;  // true if ≥1 province has colonial development event
 };
+
+// Build the h3_index -> province-index lookup used to resolve ProvinceLink
+// neighbours. One shared helper (world-gen, grain_logistics, and warfare all need
+// it) instead of a hand-rolled copy per call site.
+inline std::unordered_map<H3Index, uint32_t> build_h3_to_province_index(
+    const std::vector<Province>& provinces) {
+    std::unordered_map<H3Index, uint32_t> h3_to_idx;
+    h3_to_idx.reserve(provinces.size());
+    for (uint32_t i = 0; i < provinces.size(); ++i)
+        h3_to_idx[provinces[i].h3_index] = i;
+    return h3_to_idx;
+}
 
 }  // namespace econlife

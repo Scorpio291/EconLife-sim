@@ -318,11 +318,14 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                              0x6E01060715ull);
                     hazard_mortality *=
                         disaster_mortality_factor(state.hazard_settings.geology, geo_rng, cfg_);
-                    // War casualties (M6c): the warfare module publishes this province's
-                    // war_mortality (>= 1.0) when it is in a conflict — the population
-                    // war-dips. (Published per province; conserved deaths via this path.)
-                    hazard_mortality *= std::max(1.0f, cs.war_mortality);
                 }
+                // War casualties (M6c): the warfare module owns this signal — it is
+                // regime-gated at the PUBLISHER (with a reset on regime exit) and 1.0
+                // at peace, so it is applied unconditionally here rather than behind a
+                // second, independently-maintained regime list (review finding: the
+                // dual-gate coupling). apply_deltas floors it at 1.0.
+                if (annual)
+                    hazard_mortality *= cs.war_mortality;
 
                 // Fertility tracks the long-run food signal the subsistence module writes
                 // (output vs need + reserve upkeep): population grows only when the land

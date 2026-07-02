@@ -30,11 +30,7 @@ float GrainLogisticsModule::delivered_fraction(LinkType type, float terrain_cost
 }
 
 bool GrainLogisticsModule::regime_active(std::string_view regime) const {
-    for (const auto& r : cfg_.active_regimes) {
-        if (r == regime)
-            return true;
-    }
-    return false;
+    return regime_in(cfg_.active_regimes, regime);
 }
 
 void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) {
@@ -49,10 +45,7 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
         return;
 
     // h3_index -> province index, for O(1) link-neighbour resolution.
-    std::unordered_map<H3Index, uint32_t> h3_to_idx;
-    h3_to_idx.reserve(n);
-    for (uint32_t i = 0; i < n; ++i)
-        h3_to_idx[state.provinces[i].h3_index] = i;
+    const auto h3_to_idx = build_h3_to_province_index(state.provinces);
 
     const float gravity_g = state.hazard_settings.gravity_g;
 

@@ -39,11 +39,7 @@ uint32_t SubsistenceModule::specialist_count(uint32_t residents, float surplus,
 }
 
 bool SubsistenceModule::regime_active(std::string_view regime) const {
-    for (const auto& r : cfg_.active_regimes) {
-        if (r == regime)
-            return true;
-    }
-    return false;
+    return regime_in(cfg_.active_regimes, regime);
 }
 
 float SubsistenceModule::harvest_failure_factor(float seasonality_dial, DeterministicRNG& rng,
@@ -76,11 +72,7 @@ float SubsistenceModule::atmosphere_ceiling_factor(float atmosphere_dial,
 }
 
 bool SubsistenceModule::regime_manorial(std::string_view regime) const {
-    for (const auto& r : cfg_.manorial_regimes) {
-        if (r == regime)
-            return true;
-    }
-    return false;
+    return regime_in(cfg_.manorial_regimes, regime);
 }
 
 float SubsistenceModule::proto_share_for(uint32_t resident_index, uint32_t residents_count,

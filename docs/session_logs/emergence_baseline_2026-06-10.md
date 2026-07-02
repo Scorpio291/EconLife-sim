@@ -1415,3 +1415,53 @@ the weak AND rich) + conserved casualties & plunder + relations (sour/warm/deter
 coalitions (balance of power) + backstabbing (reputation). Remaining M6c: the EMPIRE
 layer (reach/leadership/mobility multipliers + the hold problem -> Alexander/Genghis/
 Rome), then the deferred threshold re-calibration, then M7 entry.
+
+---
+
+## 2026-07-02 — adversarial review of the war engine (d600b7b..HEAD) + fixes
+
+Ran a high-effort multi-angle review of the M6c commits (8 finder angles + verify
+pass). Ten findings survived; the four correctness ones are FIXED in this commit:
+
+1. **Missing annual gate (CONFIRMED, critical).** warfare ran every daily tick while
+   every rate is per-year and the attack RNG is year-seeded — in full-resolution runs
+   the same war re-fired all 365 ticks: plunder compounded (0.8^365 ~ total
+   confiscation) and diplomacy drifted 365x too fast (alliances saturated in ~50 days,
+   then suppressed nearly all war). Unit tests masked it (they step whole years); the
+   spectrum baselines used fast_forward (1 execute/year) so they accidentally measured
+   the intended semantics. FIX: one decision pass per year
+   (current_tick % kTicksPerYear != 0 -> return).
+2. **Stale war_mortality on regime exit (CONFIRMED).** The regime-gate early return
+   published no reset, so the last war spike persisted forever if warfare's config
+   regime list diverged from population_aging's hardcoded commons list. FIX: publisher
+   owns the signal — war_state_dirty_ flag + one-time 1.0 reset on regime exit; the
+   consumer now applies war_mortality unconditionally (it is 1.0-neutral at peace)
+   instead of behind a second regime list.
+3. **Plunder conservation leak (PLAUSIBLE).** A victor province with no valid
+   significant-NPC residents was debiting the loser with no matching credit —
+   destroying wealth. FIX: no transfer at all unless the victor can receive
+   (victor_can_receive gate), and credit is split across VALID residents only.
+4. **relations_ unserialized (CONFIRMED).** Save/load silently reset all diplomacy.
+   FIX: serialize_state/deserialize_state v1 (relations_ + reset flag); persistence
+   auto-discovers it. Round-trip unit test added.
+
+Conventions/cleanup findings also addressed: population_aging INTERFACE.md updated
+(war_mortality + the M6a inputs); NEW docs/interfaces/warfare/INTERFACE.md and
+docs/interfaces/grain_logistics/INTERFACE.md; NEW warfare integration test
+(control-vs-war, same seed, 366 daily ticks under the real orchestrator — proves ONE
+annual plunder [ratio ~0.8, not ~0 compounded] and conservation; it also surfaced that
+npc_indices_by_home_province is empty until the first apply_deltas rebuild, so tick
+0's war has no prize — latent world-gen quirk, noted). Reuse: shared
+build_h3_to_province_index (geography.h), shared regime_in (era_catalog.h), canonical
+kTicksPerYear (shared_types.h) — warfare/grain_logistics/knowledge/subsistence/
+population_aging/lod_system migrated off their local copies.
+
+Noted, not fixed here: RegionDelta region_id fan-out is a latent codebase-wide 1:1
+assumption (~10 modules); per-tick always-emit RegionDeltas and minor map-lookup
+simplifications — deferred.
+
+Gates: 1,575 unit (266,444 assertions; +2 warfare cadence/reset, +1 no-plunder-
+without-receiver, +1 serialization round-trip), 37 integration (13,211; + the new
+warfare orchestrator scenario), emergence (1 failed-as-expected). Behavioral note:
+full-res daily-tick dawn dynamics CHANGE with the annual gate (they were 365x off);
+fast-forward spectrum semantics are unchanged by construction.

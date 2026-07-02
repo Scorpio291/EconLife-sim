@@ -50,12 +50,20 @@ class WarfareModule : public ITickModule {
     // Diplomatic relation for a pair (0 if never interacted). For tests/observability.
     float relation(uint32_t a, uint32_t b) const;
 
+    // Module state round-trip (relations_ + the reset flag): diplomacy must survive
+    // save/load or a loaded game diverges from the same-seed uninterrupted run.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
    private:
     bool regime_active(std::string_view regime) const;
     WarfareConfig cfg_;
     // Per-province-pair diplomatic relations in [-1, 1] (module state; persists across
     // ticks within a run). Warm pairs are de-facto allies that do not fight.
     std::map<uint64_t, float> relations_;
+    // True while the last published war_mortality state may contain a value > 1.0;
+    // lets the regime-exit path publish a one-time reset (no stale phantom war).
+    bool war_state_dirty_ = false;
 };
 
 }  // namespace econlife

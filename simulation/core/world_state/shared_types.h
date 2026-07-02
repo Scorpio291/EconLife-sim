@@ -16,6 +16,10 @@
 
 namespace econlife {
 
+// Canonical simulation calendar: one tick per in-game day (root CLAUDE.md). Annual
+// modules gate on this constant — do not re-hardcode 365 per module.
+inline constexpr uint32_t kTicksPerYear = 365;
+
 // ---------------------------------------------------------------------------
 // ConsequenceType — used by calendar_types.h (DeadlineConsequence)
 // Will be expanded during evidence/consequence module implementation (Tier 6).

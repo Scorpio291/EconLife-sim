@@ -12,15 +12,10 @@
 namespace econlife {
 
 namespace {
-constexpr uint32_t kTicksPerYear = 365;
 }
 
 bool KnowledgeModule::regime_active(std::string_view regime) const {
-    for (const auto& r : cfg_.active_regimes) {
-        if (r == regime)
-            return true;
-    }
-    return false;
+    return regime_in(cfg_.active_regimes, regime);
 }
 
 void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {

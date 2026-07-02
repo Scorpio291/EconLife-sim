@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -15,8 +16,57 @@
 namespace econlife {
 
 namespace {
-constexpr uint32_t kTicksPerYear = 365;
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v));
+    out.push_back(static_cast<uint8_t>(v >> 8));
+    out.push_back(static_cast<uint8_t>(v >> 16));
+    out.push_back(static_cast<uint8_t>(v >> 24));
 }
+void put_u64(std::vector<uint8_t>& out, uint64_t v) {
+    put_u32(out, static_cast<uint32_t>(v));
+    put_u32(out, static_cast<uint32_t>(v >> 32));
+}
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    static_assert(sizeof(bits) == sizeof(v));
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool ok = true;
+    uint32_t u32() {
+        if (pos + 4 > size) {
+            ok = false;
+            return 0;
+        }
+        uint32_t v = static_cast<uint32_t>(data[pos]) | (static_cast<uint32_t>(data[pos + 1]) << 8) |
+                     (static_cast<uint32_t>(data[pos + 2]) << 16) |
+                     (static_cast<uint32_t>(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint64_t u64() {
+        const uint64_t lo = u32();
+        return lo | (static_cast<uint64_t>(u32()) << 32);
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+    uint8_t u8() {
+        if (pos + 1 > size) {
+            ok = false;
+            return 0;
+        }
+        return data[pos++];
+    }
+};
+}  // namespace
 
 float WarfareModule::military_power(uint64_t population, float surplus_ratio,
                                    const WarfareConfig& cfg) {
@@ -26,11 +76,7 @@ float WarfareModule::military_power(uint64_t population, float surplus_ratio,
 }
 
 bool WarfareModule::regime_active(std::string_view regime) const {
-    for (const auto& r : cfg_.active_regimes) {
-        if (r == regime)
-            return true;
-    }
-    return false;
+    return regime_in(cfg_.active_regimes, regime);
 }
 
 uint64_t WarfareModule::pair_key(uint32_t a, uint32_t b) {
@@ -44,23 +90,67 @@ float WarfareModule::relation(uint32_t a, uint32_t b) const {
     return it == relations_.end() ? 0.0f : it->second;
 }
 
-void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    const EraDefinition* era = state.era_catalog.by_index(state.technology.current_era);
-    if (era == nullptr || !regime_active(era->economic_regime))
-        return;
+void WarfareModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, 1u);  // version
+    out.push_back(war_state_dirty_ ? 1u : 0u);
+    put_u32(out, static_cast<uint32_t>(relations_.size()));
+    for (const auto& [key, rel] : relations_) {  // std::map: deterministic key order
+        put_u64(out, key);
+        put_f32(out, rel);
+    }
+}
 
+bool WarfareModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != 1u)
+        return false;
+    war_state_dirty_ = (r.u8() != 0u);
+    const uint32_t count = r.u32();
+    relations_.clear();
+    for (uint32_t i = 0; i < count && r.ok; ++i) {
+        const uint64_t key = r.u64();
+        const float rel = r.f32();
+        relations_[key] = rel;
+    }
+    return r.ok;
+}
+
+void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     const uint32_t n = static_cast<uint32_t>(state.provinces.size());
     if (n == 0)
+        return;
+
+    const EraDefinition* era = state.era_catalog.by_index(state.technology.current_era);
+    if (era == nullptr || !regime_active(era->economic_regime)) {
+        // Regime exit: war_mortality is only ever written by this module, so if the
+        // last active year left a war spike (> 1.0) it would persist forever once we
+        // stop publishing. Publish a one-time 1.0 reset so the field really is
+        // transient (review finding: the stale phantom-war multiplier).
+        if (war_state_dirty_) {
+            for (uint32_t i = 0; i < n; ++i) {
+                RegionDelta rd{};
+                rd.region_id = state.provinces[i].region_id;
+                rd.war_mortality_replacement = 1.0f;
+                delta.region_deltas.push_back(rd);
+            }
+            war_state_dirty_ = false;
+        }
+        return;
+    }
+
+    // Annual cadence: every war parameter (attack probability, plunder fraction,
+    // relation drift) is a per-YEAR rate, and the attack RNG is seeded by year — so
+    // running per tick would re-fire the same war 365x (compounding plunder and
+    // racing diplomacy 365x too fast; review finding). One decision pass per year.
+    if (state.current_tick % kTicksPerYear != 0)
         return;
 
     // Per-polity military power, resident wealth (the war prize), and an h3 -> index
     // map for resolving neighbours.
     std::vector<float> power(n, 0.0f);
     std::vector<double> avail_capital(n, 0.0);  // resident proto-capital; the plunder prize
-    std::unordered_map<H3Index, uint32_t> h3_to_idx;
-    h3_to_idx.reserve(n);
+    const auto h3_to_idx = build_h3_to_province_index(state.provinces);
     for (uint32_t i = 0; i < n; ++i) {
-        h3_to_idx[state.provinces[i].h3_index] = i;
         if (state.provinces[i].cohort_stats) {
             power[i] = military_power(state.provinces[i].cohort_stats->total_population,
                                      state.provinces[i].cohort_stats->subsistence_surplus_ratio, cfg_);
@@ -144,7 +234,20 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 betrayers.insert(a);  // attacking a warm ally is a betrayal
             // Spoils: the victor plunders a share of the loser's remaining wealth
             // (sequential depletion keeps it conserved across multiple attackers).
-            const double plunder = cfg_.plunder_fraction * avail_capital[b];
+            // Only when the victor has a valid resident to receive it — otherwise the
+            // debit would have no matching credit and the wealth would vanish
+            // (conservation).
+            bool victor_can_receive = false;
+            if (a < state.npc_indices_by_home_province.size()) {
+                for (uint32_t idx : state.npc_indices_by_home_province[a]) {
+                    if (idx < state.significant_npcs.size()) {
+                        victor_can_receive = true;
+                        break;
+                    }
+                }
+            }
+            const double plunder =
+                victor_can_receive ? cfg_.plunder_fraction * avail_capital[b] : 0.0;
             if (plunder > 0.0) {
                 avail_capital[b] -= plunder;
                 plundered_from[b] += plunder;
@@ -184,6 +287,8 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         rd.region_id = state.provinces[i].region_id;
         rd.war_mortality_replacement = war_mortality[i];
         delta.region_deltas.push_back(rd);
+        if (war_mortality[i] > 1.0f)
+            war_state_dirty_ = true;  // a spike is out; regime exit must reset it
     }
 
     // Distribute the conserved plunder to residents: debit the loser's residents
@@ -194,9 +299,16 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         if (i >= state.npc_indices_by_home_province.size())
             continue;
         const auto& residents = state.npc_indices_by_home_province[i];
-        if (residents.empty())
-            continue;
-        const double credit_each = looted_to[i] / static_cast<double>(residents.size());
+        // Credit is split across the VALID residents only, so a malformed index can
+        // never evaporate a share of the loot (conservation).
+        uint32_t valid = 0;
+        for (uint32_t idx : residents) {
+            if (idx < state.significant_npcs.size())
+                ++valid;
+        }
+        if (valid == 0)
+            continue;  // unreachable for looted_to > 0 (victor_can_receive gate above)
+        const double credit_each = looted_to[i] / static_cast<double>(valid);
         for (uint32_t idx : residents) {
             if (idx >= state.significant_npcs.size())
                 continue;

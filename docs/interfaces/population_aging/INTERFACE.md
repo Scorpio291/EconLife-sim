@@ -27,6 +27,17 @@ Province-parallel: each province's demographic processing is fully independent. 
   - `mean_income` — weighted mean of cohort incomes
   - `gini_coefficient` — income inequality measure
   - `aggregate_skill_supply`
+  - `subsistence_surplus_ratio` — commons food signal (births/famine, Malthusian loop)
+  - `food_store` — granary buffer; famine fires only once exhausted
+  - `hardiness` — generational adaptation divisor on world-hazard mortality
+  - `urban_population` — crowding driver for the disease-epidemic hazard (M6a)
+  - `war_mortality` (>= 1.0) — per-province war-casualty multiplier published by the
+    `warfare` module (M6c); applied to annual mortality unconditionally (it is 1.0 at
+    peace and reset by the publisher on regime exit)
+- `hazard_settings` — world hazard dials (disease/geology/radiation) for the M6a
+  episodic and chronic mortality/fertility channels
+- `technology.current_era` + `tech_effects_for_era().mortality_mult` / era regime —
+  medicine release + the commons-era gate for pre-market demographics
 - `provinces[].demographics` — RegionDemographics:
   - `total_population` — labour force denominator
   - `median_age` — affects birth and death rate baselines

@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace econlife {
@@ -28,6 +29,17 @@ constexpr uint8_t MAX_ERA_CAPACITY = 32;
 // ---------------------------------------------------------------------------
 // EraDefinition — one era loaded from CSV
 // ---------------------------------------------------------------------------
+// Shared regime gate for era-gated modules: is `regime` one of the module's
+// active economic regimes? (One helper instead of a per-module copy — a change to
+// regime matching must not have to be patched in four modules.)
+inline bool regime_in(const std::vector<std::string>& active_regimes, std::string_view regime) {
+    for (const auto& r : active_regimes) {
+        if (r == regime)
+            return true;
+    }
+    return false;
+}
+
 struct EraDefinition {
     uint8_t index;                 // 1-based timeline position; the runtime era key
     std::string key;               // string id (e.g., "subsistence", "turn_of_millennium")
