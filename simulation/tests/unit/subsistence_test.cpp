@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <algorithm>
 #include <memory>
 
 #include "core/rng/deterministic_rng.h"
@@ -239,26 +240,73 @@ TEST_CASE("manorialism: tithe concentrates proto-capital to lords, conserved",
           "[subsistence][tier1]") {
     SubsistenceConfig cfg{};  // tithe 0.5, lord_fraction 0.1
     const uint32_t n = 10;
+    const uint32_t lords = SubsistenceModule::lord_count(n, cfg);
+    CHECK(lords == 1);  // round(0.1 x 10)
     const float total = 100.0f;
 
     // Commons (manorial=false): perfectly even.
-    for (uint32_t i = 0; i < n; ++i)
-        CHECK_THAT(SubsistenceModule::proto_share_for(i, n, total, false, cfg),
-                   WithinAbs(10.0f, 1e-4f));
+    CHECK_THAT(SubsistenceModule::proto_share_for(false, 0, n, total, false, cfg),
+               WithinAbs(10.0f, 1e-4f));
 
-    // Manorial: 1 lord (round(0.1*10)) takes the tithe; peasants share the rest.
-    const float lord = SubsistenceModule::proto_share_for(0, n, total, true, cfg);
-    const float peasant = SubsistenceModule::proto_share_for(5, n, total, true, cfg);
+    // Manorial: the lord takes the tithe; peasants share the rest.
+    const float lord = SubsistenceModule::proto_share_for(true, lords, n, total, true, cfg);
+    const float peasant = SubsistenceModule::proto_share_for(false, lords, n, total, true, cfg);
     CHECK(lord > peasant);             // the lord/peasant divide
     CHECK(peasant < 10.0f);            // peasants get less than the even commons share
     CHECK_THAT(lord, WithinAbs(55.0f, 0.5f));   // 5 base + 50 tithe
     CHECK_THAT(peasant, WithinAbs(5.0f, 0.5f));
 
-    // CONSERVED: the skewed distribution sums to the same total proto-capital.
-    float sum = 0.0f;
-    for (uint32_t i = 0; i < n; ++i)
-        sum += SubsistenceModule::proto_share_for(i, n, total, true, cfg);
+    // CONSERVED: lords x lord-share + peasants x peasant-share == the same total.
+    const float sum = static_cast<float>(lords) * lord + static_cast<float>(n - lords) * peasant;
     CHECK_THAT(sum, WithinAbs(total, 1e-3f));
+}
+
+TEST_CASE("manorialism: lordship is EMERGENT — the wealthiest resident collects the tithe",
+          "[subsistence][tier1]") {
+    // Ten resident heads in a feudal province; one of them (id 107, mid-list) is far
+    // richer than the rest. The tithe must flow to HIM — rank, not array position.
+    SubsistenceModule mod;
+    WorldState w{};
+    w.era_catalog.load_builtin_default();
+    w.occupation_catalog.load_builtin_default();
+    w.technology.current_era = 5;  // feudal (manorial)
+    w.hazard_settings.seasonality = 0.0f;  // no harvest-failure noise
+    w.provinces.push_back(Province{});
+    auto& p = w.provinces[0];
+    p.id = 0;
+    p.region_id = 0;
+    p.agricultural_productivity = 0.9f;
+    p.geography.arable_land_fraction = 0.9f;
+    p.geography.forest_coverage = 0.2f;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 1000;
+    p.cohort_stats->working_age_fraction = 0.6f;
+
+    w.npc_indices_by_home_province.resize(1);
+    for (uint32_t i = 0; i < 10; ++i) {
+        NPC n{};
+        n.id = 100 + i;
+        n.home_province_id = 0;
+        n.capital = (n.id == 107) ? 500.0f : 10.0f;  // the rich head, mid-list
+        w.significant_npcs.push_back(n);
+        w.npc_indices_by_home_province[0].push_back(i);
+    }
+
+    DeltaBuffer d{};
+    mod.execute_province(0, w, d);
+
+    // Find each resident's proto-capital credit: the richest head got the largest.
+    float credit_107 = 0.0f, max_other = 0.0f;
+    for (const auto& nd : d.npc_deltas) {
+        if (!nd.capital_delta.has_value())
+            continue;
+        if (nd.npc_id == 107)
+            credit_107 = *nd.capital_delta;
+        else
+            max_other = std::max(max_other, *nd.capital_delta);
+    }
+    CHECK(credit_107 > 0.0f);
+    CHECK(credit_107 > 5.0f * max_other);  // the tithe flows to wealth: aristocracy emerges
 }
 
 TEST_CASE("harvest failures: episodic, scaled by the seasonality dial", "[subsistence][tier1]") {

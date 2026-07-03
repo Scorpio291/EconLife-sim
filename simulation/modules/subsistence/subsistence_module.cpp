@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_gen/era_catalog.h"
@@ -75,25 +76,31 @@ bool SubsistenceModule::regime_manorial(std::string_view regime) const {
     return regime_in(cfg_.manorial_regimes, regime);
 }
 
-float SubsistenceModule::proto_share_for(uint32_t resident_index, uint32_t residents_count,
-                                         float total_proto, bool manorial,
-                                         const SubsistenceConfig& cfg) {
-    if (residents_count == 0 || total_proto <= 0.0f)
-        return 0.0f;
-    const float n = static_cast<float>(residents_count);
-    const float even = total_proto / n;
-    if (!manorial)
-        return even;
-    // Lords: the first `lord_fraction` of residents (deterministic by index; >= 1).
-    const float tithe = std::clamp(cfg.manorial_tithe_rate, 0.0f, 1.0f);
-    uint32_t lords = static_cast<uint32_t>(std::lround(cfg.manorial_lord_fraction * n));
+uint32_t SubsistenceModule::lord_count(uint32_t residents_count, const SubsistenceConfig& cfg) {
+    if (residents_count == 0)
+        return 0;
+    uint32_t lords = static_cast<uint32_t>(
+        std::lround(cfg.manorial_lord_fraction * static_cast<float>(residents_count)));
     if (lords < 1)
         lords = 1;
     if (lords > residents_count)
         lords = residents_count;
+    return lords;
+}
+
+float SubsistenceModule::proto_share_for(bool is_lord, uint32_t lords_count,
+                                         uint32_t residents_count, float total_proto,
+                                         bool manorial, const SubsistenceConfig& cfg) {
+    if (residents_count == 0 || total_proto <= 0.0f)
+        return 0.0f;
+    const float n = static_cast<float>(residents_count);
+    const float even = total_proto / n;
+    if (!manorial || lords_count == 0)
+        return even;
+    const float tithe = std::clamp(cfg.manorial_tithe_rate, 0.0f, 1.0f);
     const float peasant_base = total_proto * (1.0f - tithe) / n;
-    const float lord_bonus = (total_proto * tithe) / static_cast<float>(lords);
-    return (resident_index < lords) ? peasant_base + lord_bonus : peasant_base;
+    const float lord_bonus = (total_proto * tithe) / static_cast<float>(lords_count);
+    return is_lord ? peasant_base + lord_bonus : peasant_base;
 }
 
 float SubsistenceModule::specialist_ceiling(std::string_view regime) const {
@@ -288,6 +295,37 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
                                   : 0.0f;
     const bool manorial = regime_manorial(era->economic_regime);
 
+    // The lord stratum is EMERGENT: the wealthiest resident heads (capital rank,
+    // ties broken by id for determinism). Wealth collects the tithe; the tithe
+    // compounds the wealth — an aristocracy that entrenches, and can be displaced.
+    const uint32_t lords = manorial ? lord_count(static_cast<uint32_t>(residents.size()), cfg_)
+                                    : 0u;
+    std::vector<uint32_t> lord_indices;  // resident-vector positions of the lords
+    if (lords > 0) {
+        std::vector<uint32_t> order(residents.size());
+        for (uint32_t i = 0; i < residents.size(); ++i)
+            order[i] = i;
+        std::sort(order.begin(), order.end(), [&](uint32_t x, uint32_t y) {
+            const uint32_t ix = residents[x], iy = residents[y];
+            const float cx = ix < state.significant_npcs.size() ? state.significant_npcs[ix].capital
+                                                                : -1.0f;
+            const float cy = iy < state.significant_npcs.size() ? state.significant_npcs[iy].capital
+                                                                : -1.0f;
+            if (cx != cy)
+                return cx > cy;  // richest first
+            const uint32_t idx_x = ix < state.significant_npcs.size() ? state.significant_npcs[ix].id
+                                                                      : ix;
+            const uint32_t idx_y = iy < state.significant_npcs.size() ? state.significant_npcs[iy].id
+                                                                      : iy;
+            return idx_x < idx_y;  // deterministic tie-break
+        });
+        lord_indices.assign(order.begin(), order.begin() + lords);
+        std::sort(lord_indices.begin(), lord_indices.end());
+    }
+    auto is_lord_at = [&](uint32_t pos) {
+        return std::binary_search(lord_indices.begin(), lord_indices.end(), pos);
+    };
+
     for (uint32_t i = 0; i < residents.size(); ++i) {
         const uint32_t idx = residents[i];
         if (idx >= state.significant_npcs.size())
@@ -307,8 +345,9 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
             occ = chosen->index;
 
         const bool occupation_changed = (occ != npc.occupation);
-        const float proto_share = proto_share_for(i, static_cast<uint32_t>(residents.size()),
-                                                  total_proto, manorial, cfg_);
+        const float proto_share =
+            proto_share_for(is_lord_at(i), lords, static_cast<uint32_t>(residents.size()),
+                            total_proto, manorial, cfg_);
         if (!occupation_changed && proto_share <= 0.0f)
             continue;  // nothing to write for this resident
 

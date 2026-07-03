@@ -24,6 +24,12 @@ that catchment can sustain. Design: docs/design/EconLife_Medieval_Band_Expansion
   deliver after the oxen eat their share (conserved: delivered + eaten == exported)
 - `RegionDelta.urban_population_replacement` — net feedable surplus / per-capita
   food, capped at total_population (the aggregate town economy)
+- `RegionDelta.food_store_delta` (additive) — REAL grain flows (G4): stored grain
+  diffuses down the scarcity gradient along links (a per-year share of the granary-
+  fullness gap closes: kin networks, tribute, trade-in-kind), and every haul pays the
+  ox law (the transit loss is eaten by the teams — an explicit conserved sink). Takes
+  SubsistenceConfig at construction for the granary targets (one source of truth).
+  A river network is real famine insurance.
 
 ## Invariants
 - Conserved allocation (each source distributes its surplus exactly once).

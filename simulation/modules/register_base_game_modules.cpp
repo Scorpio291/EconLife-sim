@@ -98,7 +98,7 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
         std::make_unique<SeasonalAgricultureModule>(config.seasonal_agriculture));
     orchestrator.register_module(std::make_unique<SubsistenceModule>(config.subsistence));
     orchestrator.register_module(
-        std::make_unique<GrainLogisticsModule>(config.grain_logistics));
+        std::make_unique<GrainLogisticsModule>(config.grain_logistics, config.subsistence));
     orchestrator.register_module(
         std::make_unique<WarfareModule>(config.warfare, config.grain_logistics));
     orchestrator.register_module(std::make_unique<KnowledgeModule>(config.knowledge));

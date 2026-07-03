@@ -723,6 +723,13 @@ struct GrainLogisticsConfig {
     // entry. River/coastal hubs (large catchment) grow towns; stranded inland stays
     // rural — urbanization spatially driven by the ox-cart limit.
     float urban_per_capita_food = 1.0f;
+
+    // --- Real grain flows (G4): the catchment is a FLOW, not a view ---
+    // Stored grain diffuses down the scarcity gradient along links (kin networks,
+    // tribute, trade-in-kind): each year a share of the granary-FULLNESS gap between
+    // neighbours closes, and the haul pays the ox law (the transit loss is eaten by
+    // the teams — an explicit conserved sink). Kinetic constant, per year.
+    float grain_trade_rate_per_year = 0.1f;
 };
 
 // Warfare (M6c foundation): war between province-polities (chiefdoms/lords at the dawn).

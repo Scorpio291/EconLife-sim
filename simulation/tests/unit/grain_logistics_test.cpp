@@ -188,3 +188,52 @@ TEST_CASE("grain_logistics: inert in market eras (no commons surplus to haul)",
     mod.execute(w, d);
     CHECK(d.region_deltas.empty());  // no publication in a market era
 }
+
+TEST_CASE("grain_logistics: stored grain flows down the scarcity gradient, paying the ox (G4)",
+          "[grain_logistics][tier1]") {
+    // A full granary beside an empty one: grain moves toward the deficit, the haul
+    // loss is eaten by the teams, and rivers deliver far more of it than land.
+    auto run = [](LinkType type) {
+        WorldState w{};
+        w.current_tick = 365;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        SubsistenceConfig sub{};  // targets: pop x 1 x 365 x 3
+        add_province(w, 100, 0, 0.0f);  // src: no fresh surplus, but a FULL granary
+        add_province(w, 200, 1, 0.0f);  // dst: empty granary
+        w.provinces[0].cohort_stats->total_population = 1000;
+        w.provinces[1].cohort_stats->total_population = 1000;
+        const float target = 1000.0f * 365.0f * 3.0f;
+        w.provinces[0].cohort_stats->food_store = target;  // fullness 1.0
+        w.provinces[1].cohort_stats->food_store = 0.0f;    // fullness 0.0
+        w.provinces[0].links.push_back(link_to(200, type));
+        w.provinces[1].links.push_back(link_to(100, type));
+
+        GrainLogisticsModule mod({}, sub);
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+        struct Out {
+            double src, dst;
+        };
+        return Out{w.provinces[0].cohort_stats->food_store,
+                   w.provinces[1].cohort_stats->food_store};
+    };
+
+    const auto river = run(LinkType::River);
+    const auto land = run(LinkType::Land);
+    const float target = 1000.0f * 365.0f * 3.0f;
+    GrainLogisticsConfig cfg{};
+    SubsistenceConfig sub{};
+    // One tick's flow: rate/365 x gap(1.0) x target_dst, delivered x df. Exact.
+    const double sent = cfg.grain_trade_rate_per_year / 365.0 * 1.0 * target;
+    const double df_river =
+        GrainLogisticsModule::delivered_fraction(LinkType::River, 0, 0, 1.0f, cfg);
+    CHECK_THAT(river.src, WithinAbs(target - sent, 1.0));
+    CHECK_THAT(river.dst, WithinAbs(sent * df_river, 1.0));
+    // Conservation: nothing minted; the shortfall is exactly the teams' share.
+    CHECK(river.src + river.dst < target);
+    CHECK(river.src + river.dst > target - sent);
+    // Rivers are real famine insurance; land pays the ox law dearly.
+    CHECK(river.dst > land.dst);
+}

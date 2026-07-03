@@ -1584,3 +1584,39 @@ scenario), emergence (1 failed-as-expected). Spectrum sanity under the grounded
 economy + G1 de-caps: EARTHLIKE Modern @ 12,793 (Thriving — anchor holds), fertile
 deathworld 11,591, garden stagnates; the BARREN deathworld slipped Classical->Bronze
 (real drift from de-capped hazards + war costs; for the planned recalibration).
+
+---
+
+## 2026-07-03 — G3/G4: emergent lords + real grain flows
+
+G3 — LORDSHIP EMERGES FROM WEALTH (kills the lords-by-array-index rail): under
+manorialism the tithe now flows to the WEALTHIEST resident heads (capital rank, ties
+by id) — wealth buys the retinue and hall that collect the tithe, and the tithe
+compounds the wealth. An aristocracy that entrenches and can be displaced (a plundered
+dynasty falls; a richer upstart rises — war plunder now feeds directly into WHO rules).
+Unit test: the rich mid-list head, not resident[0], collects the tithe.
+
+G4 — THE CATCHMENT BECOMES A FLOW (kills the parallel-bookkeeping rail): stored grain
+now DIFFUSES down the scarcity gradient along links (grain_trade_rate_per_year 0.1 of
+the granary-fullness gap closes per year — kin networks, tribute, trade-in-kind),
+emitted as additive food_store_delta; every haul pays the ox law and the transit loss
+is eaten by the teams (explicit conserved sink). grain_logistics takes SubsistenceConfig
+for the granary targets (one source of truth). The net_feedable/urban signals remain
+the genesis VIEW; the diffusion is the real flow on the granaries. Unit test:
+full-beside-empty granaries equalize, formula-exact, conserved through the named
+sink; rivers deliver far more than land.
+
+Spectrum under the complete grounding pass (G1+G2+G3+G4): GARDEN era 2 Developing;
+EARTHLIKE Modern @ 12,785 (Thriving — anchor holds); BARREN DEATHWORLD era 4 Stalled —
+RECOVERED from the era-2 slip G2 alone caused, because grain diffusion is real famine
+insurance between provinces (the marginal world's rivers carry it back to Classical);
+FERTILE DEATHWORLD Modern @ 11,587. The grounded flow IMPROVED the marginal world's
+viability — exactly what a real redistribution mechanism should do, and nothing a rail
+would ever have revealed.
+
+Gates: 1,584 unit (266,478), 37 integration (13,211), emergence (1 failed-as-expected).
+The grounding pass (G1-G4) is complete: no behavior-shaping caps; war runs on levies,
+rations, Lanchester battles, carry-limited sacks; lords emerge from wealth; grain
+moves as a real conserved flow. Remaining from the fake-rails audit: none of the six.
+Next: the single recalibration (restore earthlike modern ~12,000 and re-anchor the
+barren world under the grounded economy), then M7 entry.

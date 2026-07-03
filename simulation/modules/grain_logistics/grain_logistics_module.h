@@ -32,7 +32,9 @@ struct DeltaBuffer;
 
 class GrainLogisticsModule : public ITickModule {
    public:
-    explicit GrainLogisticsModule(const GrainLogisticsConfig& cfg = {}) : cfg_(cfg) {}
+    explicit GrainLogisticsModule(const GrainLogisticsConfig& cfg = {},
+                                  const SubsistenceConfig& subsistence_cfg = {})
+        : cfg_(cfg), subsistence_cfg_(subsistence_cfg) {}
 
     std::string_view name() const noexcept override { return "grain_logistics"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
@@ -52,6 +54,9 @@ class GrainLogisticsModule : public ITickModule {
    private:
     bool regime_active(std::string_view regime) const;
     GrainLogisticsConfig cfg_;
+    SubsistenceConfig subsistence_cfg_;  // granary targets (reserve years, per-capita
+                                         // need) — one source of truth for the store
+                                         // scale the diffusion flows against
 };
 
 }  // namespace econlife

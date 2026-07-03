@@ -90,12 +90,18 @@ class SubsistenceModule : public ITickModule {
     bool regime_manorial(std::string_view regime) const;
 
     // Per-resident proto-capital share of `total_proto`. In the egalitarian commons
-    // (manorial=false) this is the even split. Under manorialism the lords (the first
-    // `manorial_lord_fraction` of residents by index) take the tithe on top of the
-    // even peasant base — conserved (summed over all residents == total_proto), and
-    // it concentrates wealth -> capital inequality. Pure/static for unit testing.
-    static float proto_share_for(uint32_t resident_index, uint32_t residents_count,
+    // (manorial=false) this is the even split. Under manorialism the LORDS take the
+    // tithe on top of the even peasant base — conserved (summed over all residents ==
+    // total_proto). Who is a lord is EMERGENT: the wealthiest residents (ranked by
+    // capital, ties by id) — wealth buys the retinue and the hall that collect the
+    // tithe, and the tithe compounds the wealth; a plundered dynasty can fall and a
+    // richer upstart displace it. Pure/static for unit testing.
+    static float proto_share_for(bool is_lord, uint32_t lords_count, uint32_t residents_count,
                                  float total_proto, bool manorial, const SubsistenceConfig& cfg);
+
+    // How many lords a manorial province of `residents_count` heads supports
+    // (manorial_lord_fraction, at least one). Pure/static.
+    static uint32_t lord_count(uint32_t residents_count, const SubsistenceConfig& cfg);
 
    private:
     SubsistenceConfig cfg_;

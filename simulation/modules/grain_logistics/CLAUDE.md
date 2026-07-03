@@ -22,6 +22,10 @@ can be fed from (consumed by feudal genesis in M3).
 - `delivered_fraction()` is pure/static (water << land via LinkType; mountains and
   heavy gravity shrink it toward 0; roads raise it). No physical distance yet —
   single-hop neighbours; multi-hop reach + centroid distance are the D6 refinement.
+- REAL FLOWS (G4): stored grain also DIFFUSES down the scarcity gradient along links
+  (grain_trade_rate_per_year of the granary-fullness gap closes per year), emitted as
+  additive food_store_delta with the transit loss eaten by the teams (conserved sink).
+  The catchment signals are views; the diffusion is the flow on the actual granaries.
 
 ## Key Types
 - GrainLogisticsConfig (core/config/package_config.h)
