@@ -1,7 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <algorithm>
 #include <memory>
+#include <vector>
 
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
@@ -10,17 +12,22 @@
 #include "modules/warfare/warfare_module.h"
 
 using namespace econlife;
+using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 
 namespace {
 void add_polity(WorldState& w, uint64_t h3, uint32_t region_id, uint32_t population,
-                float surplus) {
+                float surplus, float food_store = 0.0f) {
     Province p{};
     p.id = region_id;
     p.region_id = region_id;
     p.h3_index = static_cast<H3Index>(h3);
+    p.geography.arable_land_fraction = 0.8f;  // farmland unless a test says otherwise
+    p.geography.forest_coverage = 0.2f;
     p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.cohort_stats->total_population = population;
     p.cohort_stats->subsistence_surplus_ratio = surplus;
+    p.cohort_stats->food_store = food_store;
     w.provinces.push_back(std::move(p));
 }
 ProvinceLink link_to(uint64_t neighbor_h3) {
@@ -29,33 +36,60 @@ ProvinceLink link_to(uint64_t neighbor_h3) {
     l.type = LinkType::Land;
     return l;
 }
-}  // namespace
-
-TEST_CASE("warfare: military power scales with population and how well-fed", "[warfare][tier2]") {
-    WarfareConfig cfg{};
-    CHECK(WarfareModule::military_power(0, 1.0f, cfg) == 0.0f);  // no people, no army
-    CHECK(WarfareModule::military_power(2000, 1.0f, cfg) >
-          WarfareModule::military_power(1000, 1.0f, cfg));  // more people -> more power
-    const float starving = WarfareModule::military_power(1000, 0.0f, cfg);
-    const float fed = WarfareModule::military_power(1000, 1.0f, cfg);
-    const float rich = WarfareModule::military_power(1000, 2.0f, cfg);
-    CHECK(fed > starving);   // a surplus feeds more soldiers
-    CHECK(rich > fed);
-    CHECK(starving > 0.0f);  // even a starving polity can levy bodies (the floor)
-}
-
-TEST_CASE("warfare: a strong polity attacks a weak reachable neighbour; war kills both",
-          "[warfare][tier2]") {
+WorldState dawn_world(uint32_t tick = 365) {
     WorldState w{};
     w.world_seed = 1;
-    w.current_tick = 365;
+    w.current_tick = tick;
     w.era_catalog.load_builtin_default();
     w.technology.current_era = 5;  // feudal — a warfare-active regime
+    return w;
+}
+// Precision tests pin the stochastic dials so outcomes follow from the mechanism.
+WarfareConfig sure_cfg() {
     WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;  // a qualifying attack always happens (deterministic)
+    cfg.base_aggression_prob = 1.0f;  // the qualifying opportunity is always taken
+    cfg.leadership_rate = 0.0f;       // no surprise commanders
+    return cfg;
+}
+}  // namespace
 
-    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // A: strong
-    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // B: weak, reachable
+// ─────────────────────────────────────────────────────────────────────────────
+// Battle mathematics (pure)
+// ─────────────────────────────────────────────────────────────────────────────
+TEST_CASE("warfare: Lanchester square-law contest", "[warfare][tier2]") {
+    CHECK(WarfareModule::p_attacker_wins(0.0f, 0.0f) == 0.0f);  // no armies, no victory
+    CHECK(WarfareModule::p_attacker_wins(0.0f, 100.0f) == 0.0f);
+    CHECK_THAT(WarfareModule::p_attacker_wins(100.0f, 100.0f), WithinAbs(0.5f, 1e-5f));
+    // 3:1 superiority -> 9:1 odds (the square law).
+    CHECK_THAT(WarfareModule::p_attacker_wins(300.0f, 100.0f), WithinAbs(0.9f, 1e-5f));
+    // Monotonic in strength.
+    CHECK(WarfareModule::p_attacker_wins(200.0f, 100.0f) >
+          WarfareModule::p_attacker_wins(150.0f, 100.0f));
+}
+
+TEST_CASE("warfare: an army fights at forage strength with an empty commissary",
+          "[warfare][tier2]") {
+    WarfareConfig cfg{};
+    CHECK(WarfareModule::campaign_fed_factor(0.0f, 0.0f, cfg) == 1.0f);  // no rations needed
+    // Fully provisioned: full strength (store need = (1 - forage_share) x rations).
+    CHECK_THAT(WarfareModule::campaign_fed_factor(1000.0f, 500.0f, cfg), WithinAbs(1.0f, 1e-5f));
+    // Empty granary: the army lives off the land at forage_share strength.
+    CHECK_THAT(WarfareModule::campaign_fed_factor(1000.0f, 0.0f, cfg),
+               WithinAbs(cfg.forage_share, 1e-5f));
+    // Half of the store need drawn: halfway between forage and full.
+    CHECK_THAT(WarfareModule::campaign_fed_factor(1000.0f, 250.0f, cfg),
+               WithinAbs(cfg.forage_share + 0.25f, 1e-5f));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The grounded war: casualties in real units, rations from granaries
+// ─────────────────────────────────────────────────────────────────────────────
+TEST_CASE("warfare: a lopsided war kills in proportion to enemy strength (real units)",
+          "[warfare][tier2]") {
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.5f);  // A: hegemon (levy 10,000)
+    add_polity(w, 200, 1, /*pop=*/4000, 1.0f);    // B: weak neighbour (levy 400)
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
 
@@ -64,26 +98,60 @@ TEST_CASE("warfare: a strong polity attacks a weak reachable neighbour; war kill
     mod.execute(w, d);
     apply_deltas(w, d);
 
-    const float wmA = w.provinces[0].cohort_stats->war_mortality;
-    const float wmB = w.provinces[1].cohort_stats->war_mortality;
-    CHECK(wmA > 1.0f);   // the attacker bleeds too
-    CHECK(wmB > 1.0f);   // the defender is at war
-    CHECK(wmB > wmA);    // war is worse to lose
-    CHECK_THAT(wmA, Catch::Matchers::WithinAbs(1.0f + cfg.attacker_loss, 1e-4f));
-    CHECK_THAT(wmB, Catch::Matchers::WithinAbs(1.0f + cfg.defender_loss, 1e-4f));
+    // No granaries: both fight at forage strength. S_a = 10000*0.5, S_b = 400*0.5.
+    const float S_a = 10000.0f * cfg.forage_share;
+    const float S_b = 400.0f * cfg.forage_share;
+    const float dead_a_frac = cfg.battle_lethality * S_b / 100000.0f;
+    const float dead_b_frac = cfg.battle_lethality * S_a / 4000.0f;
+    CHECK_THAT(w.provinces[0].cohort_stats->war_death_fraction, WithinRel(dead_a_frac, 0.01f));
+    CHECK_THAT(w.provinces[1].cohort_stats->war_death_fraction, WithinRel(dead_b_frac, 0.01f));
+    // The weak side bleeds catastrophically MORE — from asymmetry, not a constant.
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction >
+          10.0f * w.provinces[0].cohort_stats->war_death_fraction);
+}
+
+TEST_CASE("warfare: campaigns eat granaries and a sack burns what it cannot carry (conserved)",
+          "[warfare][tier2]") {
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.5f, /*store=*/5.0e6f);  // A: hegemon
+    add_polity(w, 200, 1, /*pop=*/4000, 1.0f, /*store=*/1.0e6f);    // B: weak, full barns
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    const double total_before = 5.0e6 + 1.0e6;
+    WarfareModule mod(cfg);
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+
+    const double store_a = w.provinces[0].cohort_stats->food_store;
+    const double store_b = w.provinces[1].cohort_stats->food_store;
+    const double total_after = store_a + store_b;
+
+    // The loser's granary was eaten from (defence rations) and sacked.
+    CHECK(store_b < 1.0e6);
+    // War destroys grain ONLY through named sinks: rations eaten + sack burned.
+    const double army_a = 10000.0, army_b = 400.0;
+    const double drawn_a =
+        army_a * cfg.campaign_days * cfg.soldier_ration_mult * (1.0 - cfg.forage_share);
+    const double drawn_b =
+        army_b * cfg.defense_days * cfg.soldier_ration_mult * (1.0 - cfg.forage_share);
+    const double store_b_after_rations = 1.0e6 - drawn_b;
+    const double sack = cfg.sack_fraction * store_b_after_rations;
+    const double carry = army_a * cfg.carry_per_soldier;
+    const double delivered = std::min(sack, carry) * 1.0;  // border war: path 1
+    const double expected_total = total_before - drawn_a - drawn_b - (sack - delivered);
+    CHECK_THAT(total_after, WithinRel(expected_total, 0.001));
+    // And the victor hauled real grain home.
+    CHECK(store_a > 5.0e6 - drawn_a);
 }
 
 TEST_CASE("warfare: evenly-matched neighbours stay at peace", "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.current_tick = 365;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;  // even with certain aggression, parity deters
-
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
     add_polity(w, 100, 0, 50000, 1.0f);
-    add_polity(w, 200, 1, 50000, 1.0f);  // equal power -> neither clears aggression_ratio
+    add_polity(w, 200, 1, 50000, 1.0f);
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
 
@@ -91,44 +159,81 @@ TEST_CASE("warfare: evenly-matched neighbours stay at peace", "[warfare][tier2]"
     DeltaBuffer d{};
     mod.execute(w, d);
     apply_deltas(w, d);
+    CHECK(w.provinces[0].cohort_stats->war_death_fraction == 0.0f);
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);
+}
 
-    CHECK(w.provinces[0].cohort_stats->war_mortality == 1.0f);  // peace
-    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);
+TEST_CASE("warfare: annual gate — decisions fire once per year, not per tick",
+          "[warfare][tier2]") {
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, 100000, 1.5f);
+    add_polity(w, 200, 1, 4000, 1.0f);
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    for (uint32_t t = 366; t < 730; ++t) {
+        w.current_tick = t;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        CHECK(d.region_deltas.empty());
+        CHECK(d.npc_deltas.empty());
+    }
+    w.current_tick = 730;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    CHECK_FALSE(d.region_deltas.empty());
 }
 
 TEST_CASE("warfare: inert in market eras", "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.current_tick = 365;
-    w.era_catalog.load_builtin_default();
+    WorldState w = dawn_world();
     w.technology.current_era = 8;  // modern — warfare here is political_cycle's
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
+    WarfareConfig cfg = sure_cfg();
     add_polity(w, 100, 0, 100000, 1.5f);
     add_polity(w, 200, 1, 4000, 1.0f);
     w.provinces[0].links.push_back(link_to(200));
     WarfareModule mod(cfg);
     DeltaBuffer d{};
     mod.execute(w, d);
-    CHECK(d.region_deltas.empty());  // no publication in a market era
+    CHECK(d.region_deltas.empty());
 }
 
-TEST_CASE("warfare: a won war plunders the loser's wealth to the victor (conserved)",
+TEST_CASE("warfare: leaving the pre-market arc resets war deaths (no stale phantom war)",
           "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.current_tick = 365;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;  // feudal
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;  // the attack happens
-
-    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // A: strong victor
-    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // B: weak, wealthy victim
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, 100000, 1.5f);
+    add_polity(w, 200, 1, 4000, 1.0f);
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
 
-    // Residents with proto-capital — B's wealth is the prize.
+    WarfareModule mod(cfg);
+    DeltaBuffer d1{};
+    mod.execute(w, d1);
+    apply_deltas(w, d1);
+    REQUIRE(w.provinces[1].cohort_stats->war_death_fraction > 0.0f);  // at war
+
+    w.technology.current_era = 8;
+    w.current_tick = 366;  // the reset must not wait for an annual tick
+    DeltaBuffer d2{};
+    mod.execute(w, d2);
+    apply_deltas(w, d2);
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);
+
+    w.current_tick = 367;
+    DeltaBuffer d3{};
+    mod.execute(w, d3);
+    CHECK(d3.region_deltas.empty());  // only once
+}
+
+TEST_CASE("warfare: coin plunder moves wealth to the victor (conserved)", "[warfare][tier2]") {
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.5f);
+    add_polity(w, 200, 1, /*pop=*/4000, 1.0f);
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
     w.npc_indices_by_home_province.resize(2);
     auto add_npc = [&](uint32_t id, uint32_t prov, float cap) {
         NPC npc{};
@@ -139,9 +244,9 @@ TEST_CASE("warfare: a won war plunders the loser's wealth to the victor (conserv
         w.npc_indices_by_home_province[prov].push_back(idx);
     };
     add_npc(1, 0, 100.0f);
-    add_npc(2, 0, 100.0f);  // A: 200 total
+    add_npc(2, 0, 100.0f);
     add_npc(3, 1, 500.0f);
-    add_npc(4, 1, 500.0f);  // B: 1000 total (the prize)
+    add_npc(4, 1, 500.0f);
     const float before = 1200.0f;
 
     WarfareModule mod(cfg);
@@ -153,236 +258,15 @@ TEST_CASE("warfare: a won war plunders the loser's wealth to the victor (conserv
     const float b_cap = w.significant_npcs[2].capital + w.significant_npcs[3].capital;
     CHECK(b_cap < 1000.0f);  // the loser is plundered
     CHECK(a_cap > 200.0f);   // the victor takes the loot
-    CHECK_THAT(a_cap + b_cap, Catch::Matchers::WithinAbs(before, 0.5f));  // CONSERVED
-    // plunder = 0.2 x 1000 = 200 -> B keeps 800, A gains to 400.
-    CHECK_THAT(b_cap, Catch::Matchers::WithinAbs(800.0f, 0.5f));
-    CHECK_THAT(a_cap, Catch::Matchers::WithinAbs(400.0f, 0.5f));
-}
-
-TEST_CASE("warfare: a war sours the pair's relations", "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.current_tick = 365;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;  // the attack happens
-    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // strong
-    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // weak
-    w.provinces[0].links.push_back(link_to(200));
-    w.provinces[1].links.push_back(link_to(100));
-
-    WarfareModule mod(cfg);
-    CHECK(mod.relation(0, 1) == 0.0f);  // strangers
-    DeltaBuffer d{};
-    mod.execute(w, d);
-    CHECK(mod.relation(0, 1) < 0.0f);  // the war soured relations
-}
-
-TEST_CASE("warfare: sustained peace warms neighbours into an alliance that deters attack",
-          "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    cfg.relation_deter_weight = 1.0f;  // a full alliance fully deters
-    add_polity(w, 100, 0, /*pop=*/50000, /*surplus=*/1.0f);
-    add_polity(w, 200, 1, /*pop=*/50000, /*surplus=*/1.0f);  // parity -> no war
-    w.provinces[0].links.push_back(link_to(200));
-    w.provinces[1].links.push_back(link_to(100));
-
-    WarfareModule mod(cfg);
-    for (uint32_t y = 1; y <= 60; ++y) {  // 60 peaceful years
-        w.current_tick = y * 365;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-    }
-    CHECK(mod.relation(0, 1) > 0.5f);  // sustained peace -> warm (de-facto alliance)
-
-    // A now dwarfs B — but the alliance deters the attack (no war despite the power).
-    w.provinces[0].cohort_stats->total_population = 100000000;
-    w.current_tick = 61 * 365;
-    DeltaBuffer d{};
-    mod.execute(w, d);
-    apply_deltas(w, d);
-    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);  // B spared — allied
-    CHECK(mod.relation(0, 1) > 0.5f);                            // alliance intact
-}
-
-TEST_CASE("warfare: a defensive coalition (balance of power) deters a would-be conqueror",
-          "[warfare][tier2]") {
-    // A can beat B alone, but not B once C allies with it. A-B and B-C adjacent (chain).
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    cfg.absorb_after_wins = 0;  // isolate the relation-coalition mechanic (no annexation)
-    add_polity(w, 100, 0, /*pop=*/20000, 1.0f);  // A: beats B alone (26k>20k fails vs B+C)
-    add_polity(w, 200, 1, /*pop=*/10000, 1.0f);  // B: weak
-    add_polity(w, 300, 2, /*pop=*/10000, 1.0f);  // C: B's ally-to-be
-    w.provinces[0].links.push_back(link_to(200));
-    w.provinces[1].links.push_back(link_to(100));
-    w.provinces[1].links.push_back(link_to(300));
-    w.provinces[2].links.push_back(link_to(200));
-
-    WarfareModule mod(cfg);
-    // Year 1: B and C are strangers — A attacks B (coalition = B alone).
-    w.current_tick = 365;
-    DeltaBuffer d1{};
-    mod.execute(w, d1);
-    apply_deltas(w, d1);
-    CHECK(w.provinces[1].cohort_stats->war_mortality > 1.0f);
-
-    // B and C are equals at peace -> they warm into an alliance over the years.
-    for (uint32_t y = 2; y <= 30; ++y) {
-        w.current_tick = y * 365;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        apply_deltas(w, d);
-    }
-    CHECK(mod.relation(1, 2) >= cfg.ally_threshold);  // B-C allied
-
-    // The coalition B+C now out-deters A: B is spared.
-    w.current_tick = 31 * 365;
-    DeltaBuffer d2{};
-    mod.execute(w, d2);
-    apply_deltas(w, d2);
-    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);  // deterred by the coalition
-}
-
-TEST_CASE("warfare: betraying an ally brands the betrayer a pariah (reputation economy)",
-          "[warfare][tier2]") {
-    // A is warm-allied to both B and C. A then betrays B — and its relation with the
-    // uninvolved ally C sours too (a known backstabber's word is worthless).
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    cfg.relation_deter_weight = 0.0f;  // isolate the reputation mechanic (no deterrence)
-    add_polity(w, 100, 0, /*pop=*/50000, 1.0f);  // A
-    add_polity(w, 200, 1, /*pop=*/50000, 1.0f);  // B
-    add_polity(w, 300, 2, /*pop=*/50000, 1.0f);  // C
-    w.provinces[0].links.push_back(link_to(200));  // A-B
-    w.provinces[0].links.push_back(link_to(300));  // A-C
-    w.provinces[1].links.push_back(link_to(100));
-    w.provinces[2].links.push_back(link_to(100));
-    // (B and C are not adjacent.)
-
-    WarfareModule mod(cfg);
-    for (uint32_t y = 1; y <= 20; ++y) {  // parity peace -> A-B and A-C warm
-        w.current_tick = y * 365;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        apply_deltas(w, d);
-    }
-    CHECK(mod.relation(0, 1) >= cfg.ally_threshold);
-    CHECK(mod.relation(0, 2) >= cfg.ally_threshold);
-    const float ac_before = mod.relation(0, 2);
-
-    // A becomes a hegemon over B (but not over C, which kept pace) and betrays B.
-    w.provinces[0].cohort_stats->total_population = 100000;
-    w.provinces[2].cohort_stats->total_population = 100000;  // C stays too strong to attack
-    w.current_tick = 21 * 365;
-    DeltaBuffer d2{};
-    mod.execute(w, d2);
-    apply_deltas(w, d2);
-
-    CHECK(w.provinces[1].cohort_stats->war_mortality > 1.0f);   // B was betrayed
-    CHECK(w.provinces[2].cohort_stats->war_mortality == 1.0f);  // C was not attacked
-    CHECK(mod.relation(0, 2) < ac_before);  // yet A's relation with C soured — the pariah brand
-}
-
-TEST_CASE("warfare: annual gate — war decisions fire once per year, not per tick",
-          "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);
-    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);
-    w.provinces[0].links.push_back(link_to(200));
-    w.provinces[1].links.push_back(link_to(100));
-    w.npc_indices_by_home_province.resize(2);
-    NPC a{}, b{};
-    a.id = 1; a.capital = 100.0f;
-    b.id = 2; b.capital = 1000.0f;
-    w.significant_npcs.push_back(a);
-    w.significant_npcs.push_back(b);
-    w.npc_indices_by_home_province[0].push_back(0);
-    w.npc_indices_by_home_province[1].push_back(1);
-
-    WarfareModule mod(cfg);
-    // Mid-year ticks (a daily-resolution run): the module must do NOTHING — the same
-    // year-seeded war must not re-fire and compound plunder 365x.
-    for (uint32_t t = 366; t < 730; ++t) {
-        w.current_tick = t;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        CHECK(d.region_deltas.empty());
-        CHECK(d.npc_deltas.empty());
-    }
-    // The annual tick runs the year's decision pass exactly once.
-    w.current_tick = 730;
-    DeltaBuffer d{};
-    mod.execute(w, d);
-    CHECK_FALSE(d.region_deltas.empty());
-}
-
-TEST_CASE("warfare: leaving the pre-market arc resets war_mortality (no stale phantom war)",
-          "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.current_tick = 365;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;  // feudal: war fires
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);
-    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);
-    w.provinces[0].links.push_back(link_to(200));
-    w.provinces[1].links.push_back(link_to(100));
-
-    WarfareModule mod(cfg);
-    DeltaBuffer d1{};
-    mod.execute(w, d1);
-    apply_deltas(w, d1);
-    REQUIRE(w.provinces[1].cohort_stats->war_mortality > 1.0f);  // at war
-
-    // The era advances out of warfare's regimes mid-story: the module must publish a
-    // one-time 1.0 reset instead of leaving the spike to be applied forever.
-    w.technology.current_era = 8;  // modern
-    w.current_tick = 366;          // not even an annual tick — the reset must not wait a year
-    DeltaBuffer d2{};
-    mod.execute(w, d2);
-    apply_deltas(w, d2);
-    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);  // reset
-
-    // And only once — subsequent market-era ticks publish nothing.
-    w.current_tick = 367;
-    DeltaBuffer d3{};
-    mod.execute(w, d3);
-    CHECK(d3.region_deltas.empty());
+    CHECK_THAT(a_cap + b_cap, WithinAbs(before, 0.5f));  // conserved exactly
 }
 
 TEST_CASE("warfare: no plunder when the victor has no residents to receive it (conserved)",
           "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.current_tick = 365;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // A: strong, NO residents
-    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // B: weak, wealthy
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.5f);  // A: strong, NO residents
+    add_polity(w, 200, 1, /*pop=*/4000, 1.0f);    // B: weak, wealthy
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
     w.npc_indices_by_home_province.resize(2);
@@ -396,176 +280,239 @@ TEST_CASE("warfare: no plunder when the victor has no residents to receive it (c
     DeltaBuffer d{};
     mod.execute(w, d);
     apply_deltas(w, d);
-
-    // The war still happens (casualties), but no wealth is transferred — and none is
-    // DESTROYED: B keeps its full 1000 (debit without credit would have leaked it).
-    CHECK(w.provinces[1].cohort_stats->war_mortality > 1.0f);
-    CHECK(w.significant_npcs[0].capital == 1000.0f);
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction > 0.0f);  // the war happened
+    CHECK(w.significant_npcs[0].capital == 1000.0f);                // nothing destroyed
     CHECK(d.npc_deltas.empty());
 }
 
-TEST_CASE("warfare: relations survive a save/load round-trip", "[warfare][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    add_polity(w, 100, 0, 50000, 1.0f);
-    add_polity(w, 200, 1, 50000, 1.0f);
+// ─────────────────────────────────────────────────────────────────────────────
+// Diplomacy: relations, alliances, betrayal
+// ─────────────────────────────────────────────────────────────────────────────
+TEST_CASE("warfare: a war sours the pair's relations", "[warfare][tier2]") {
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.5f);
+    add_polity(w, 200, 1, /*pop=*/4000, 1.0f);
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
 
     WarfareModule mod(cfg);
-    for (uint32_t y = 1; y <= 10; ++y) {  // peace warms relations
-        w.current_tick = y * 365;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-    }
-    const float rel = mod.relation(0, 1);
-    REQUIRE(rel > 0.0f);
-
-    std::vector<uint8_t> blob;
-    mod.serialize_state(blob);
-    WarfareModule fresh(cfg);
-    CHECK(fresh.relation(0, 1) == 0.0f);
-    REQUIRE(fresh.deserialize_state(blob.data(), blob.size()));
-    CHECK(fresh.relation(0, 1) == rel);  // diplomacy survives the load
+    CHECK(mod.relation(0, 1) == 0.0f);
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    CHECK(mod.relation(0, 1) < 0.0f);
 }
 
-TEST_CASE("warfare: repeated decisive wins absorb the loser's polity (empire peace inside)",
-          "[warfare][polity][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;  // the qualifying attack fires every year
-    add_polity(w, 100, 0, /*pop=*/100000, /*surplus=*/1.5f);  // A: hegemon
-    add_polity(w, 200, 1, /*pop=*/4000, /*surplus=*/1.0f);    // B: weak neighbour
+TEST_CASE("warfare: sustained peace warms neighbours into an alliance that deters attack",
+          "[warfare][tier2]") {
+    WorldState w = dawn_world();
+    WarfareConfig cfg = sure_cfg();
+    cfg.relation_deter_weight = 1.0f;
+    add_polity(w, 100, 0, 50000, 1.0f);
+    add_polity(w, 200, 1, 50000, 1.0f);  // parity: peace
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
 
     WarfareModule mod(cfg);
-    CHECK(mod.polity_of(0) == 0);  // emergent: every settlement its own polity
-    CHECK(mod.polity_of(1) == 1);
-
-    // Years 1-2: wars, but B still independent. Year 3: the third decisive win
-    // absorbs B into A's polity (settlement -> kingdom, by conquest).
-    for (uint32_t y = 1; y <= 3; ++y) {
+    for (uint32_t y = 1; y <= 60; ++y) {
         w.current_tick = y * 365;
         DeltaBuffer d{};
         mod.execute(w, d);
-        apply_deltas(w, d);
-        if (y < 3)
-            CHECK(mod.polity_of(1) == 1);
     }
-    CHECK(mod.polity_of(1) == 0);  // absorbed
+    CHECK(mod.relation(0, 1) > 0.5f);
 
-    // Empire peace: members never war each other, however lopsided the power.
-    w.current_tick = 4 * 365;
+    // A now dwarfs B — but the alliance deters the attack.
+    w.provinces[0].cohort_stats->total_population = 100000000;
+    w.current_tick = 61 * 365;
     DeltaBuffer d{};
     mod.execute(w, d);
     apply_deltas(w, d);
-    CHECK(w.provinces[1].cohort_stats->war_mortality == 1.0f);
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);
+    CHECK(mod.relation(0, 1) > 0.5f);
 }
 
-TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone province cannot",
-          "[warfare][polity][tier2]") {
-    // C (30k) can beat B (10k) alone at ratio 1.3, but not once B is a member of A's
-    // polity (A 100k pools with B). Same shape as the coalition test, via membership.
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    add_polity(w, 100, 0, /*pop=*/100000, 1.0f);  // A: seat of the kingdom
-    add_polity(w, 200, 1, /*pop=*/10000, 1.0f);   // B: member-to-be (border province)
-    add_polity(w, 300, 2, /*pop=*/30000, 1.0f);   // C: would-be raider of B
-    for (auto& p : w.provinces) {
-        p.geography.arable_land_fraction = 0.8f;  // farmland: no cavalry 2-hop reach
-        p.geography.forest_coverage = 0.2f;
-    }
+TEST_CASE("warfare: a defensive coalition (balance of power) deters a would-be conqueror",
+          "[warfare][tier2]") {
+    WorldState w = dawn_world(0);
+    WarfareConfig cfg = sure_cfg();
+    cfg.absorb_after_wins = 0;  // isolate the relation-coalition mechanic
+    add_polity(w, 100, 0, /*pop=*/20000, 1.0f);
+    add_polity(w, 200, 1, /*pop=*/10000, 1.0f);
+    add_polity(w, 300, 2, /*pop=*/10000, 1.0f);
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
     w.provinces[1].links.push_back(link_to(300));
     w.provinces[2].links.push_back(link_to(200));
 
-    WarfareConfig cfg_absorb = cfg;
-    WarfareModule mod(cfg_absorb);
-    // Fold B into A's polity by force (3 wins).
-    for (uint32_t y = 1; y <= 3; ++y) {
+    WarfareModule mod(cfg);
+    w.current_tick = 365;
+    DeltaBuffer d1{};
+    mod.execute(w, d1);
+    apply_deltas(w, d1);
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction > 0.0f);  // year 1: B alone, raided
+
+    for (uint32_t y = 2; y <= 30; ++y) {  // B and C warm into allies
         w.current_tick = y * 365;
         DeltaBuffer d{};
         mod.execute(w, d);
         apply_deltas(w, d);
     }
-    REQUIRE(mod.polity_of(1) == 0);
+    CHECK(mod.relation(1, 2) >= cfg.ally_threshold);
 
-    // C would qualify against lone-B (30k >= 1.3 x 10k) — but B now fields the
-    // kingdom's pooled power, so C's raid is DETERRED: B suffers no defender loss.
-    // (Emergent flip side: the kingdom's pooled power qualifies against C, so B may
-    // bear ATTACKER losses as the empire's border spear — that is the mechanic
-    // working, not a raid on B. A no longer attacks B either — same polity.)
-    w.current_tick = 4 * 365;
-    DeltaBuffer d{};
-    mod.execute(w, d);
-    apply_deltas(w, d);
-    CHECK(w.provinces[1].cohort_stats->war_mortality < 1.0f + cfg.defender_loss);
-    CHECK(w.provinces[2].cohort_stats->war_mortality >= 1.0f + cfg.defender_loss);  // C raided
+    w.current_tick = 31 * 365;
+    DeltaBuffer d2{};
+    mod.execute(w, d2);
+    apply_deltas(w, d2);
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);  // the coalition deters
 }
 
-TEST_CASE("warfare: a member that outgrows the polity secedes (the hold problem)",
+TEST_CASE("warfare: betraying an ally brands the betrayer a pariah (reputation economy)",
+          "[warfare][tier2]") {
+    WorldState w = dawn_world(0);
+    WarfareConfig cfg = sure_cfg();
+    cfg.relation_deter_weight = 0.0f;  // isolate the reputation mechanic
+    add_polity(w, 100, 0, /*pop=*/50000, 1.0f);
+    add_polity(w, 200, 1, /*pop=*/50000, 1.0f);
+    add_polity(w, 300, 2, /*pop=*/50000, 1.0f);
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[0].links.push_back(link_to(300));
+    w.provinces[1].links.push_back(link_to(100));
+    w.provinces[2].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    for (uint32_t y = 1; y <= 20; ++y) {
+        w.current_tick = y * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+    }
+    CHECK(mod.relation(0, 1) >= cfg.ally_threshold);
+    CHECK(mod.relation(0, 2) >= cfg.ally_threshold);
+    const float ac_before = mod.relation(0, 2);
+
+    w.provinces[0].cohort_stats->total_population = 100000;
+    w.provinces[2].cohort_stats->total_population = 100000;  // C stays unattackable
+    w.current_tick = 21 * 365;
+    DeltaBuffer d2{};
+    mod.execute(w, d2);
+    apply_deltas(w, d2);
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction > 0.0f);   // B betrayed
+    CHECK(w.provinces[2].cohort_stats->war_death_fraction == 0.0f);  // C untouched
+    CHECK(mod.relation(0, 2) < ac_before);  // the pariah brand
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Polities: absorption, pooling, secession, conquerors
+// ─────────────────────────────────────────────────────────────────────────────
+namespace {
+// Run annual passes until the member province joins the seat's polity (battle
+// outcomes are stochastic per seed; absorption needs absorb_after_wins VICTORIES).
+uint32_t years_to_absorb(WarfareModule& mod, WorldState& w, uint32_t member, uint32_t seat,
+                         uint32_t start_year, uint32_t max_year) {
+    for (uint32_t y = start_year; y <= max_year; ++y) {
+        w.current_tick = y * 365;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        apply_deltas(w, d);
+        if (mod.polity_of(member) == seat)
+            return y;
+    }
+    return 0;
+}
+}  // namespace
+
+TEST_CASE("warfare: repeated victories absorb the loser's polity (empire peace inside)",
           "[warfare][polity][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    add_polity(w, 100, 0, /*pop=*/100000, 1.5f);  // A: hegemon
-    add_polity(w, 200, 1, /*pop=*/4000, 1.0f);    // B: absorbed member
+    WorldState w = dawn_world(0);
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.5f);
+    add_polity(w, 200, 1, /*pop=*/4000, 1.0f);
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
 
     WarfareModule mod(cfg);
-    for (uint32_t y = 1; y <= 3; ++y) {  // absorb B
-        w.current_tick = y * 365;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        apply_deltas(w, d);
-    }
-    REQUIRE(mod.polity_of(1) == 0);
+    CHECK(mod.polity_of(0) == 0);
+    CHECK(mod.polity_of(1) == 1);
+    const uint32_t absorbed_year = years_to_absorb(mod, w, 1, 0, 1, 10);
+    REQUIRE(absorbed_year > 0);
+    REQUIRE(absorbed_year >= cfg.absorb_after_wins);  // needs that many victories
 
-    // The centre collapses (plague/decline): it can no longer overawe the member —
-    // the member secedes and the ladder drops a level (successor state).
-    w.provinces[0].cohort_stats->total_population = 1000;
-    w.current_tick = 4 * 365;
+    // Empire peace: members never war each other, however lopsided the power.
+    w.current_tick = (absorbed_year + 1) * 365;
     DeltaBuffer d{};
     mod.execute(w, d);
     apply_deltas(w, d);
-    CHECK(mod.polity_of(1) == 1);  // seceded
+    CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);
+}
 
-    // And the polity map survives save/load (serialization v2).
-    for (uint32_t y = 5; y <= 7; ++y) {  // re-absorb under restored A
-        w.provinces[0].cohort_stats->total_population = 100000;
-        w.current_tick = y * 365;
-        DeltaBuffer d2{};
-        mod.execute(w, d2);
-        apply_deltas(w, d2);
-    }
-    REQUIRE(mod.polity_of(1) == 0);
+TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone province cannot",
+          "[warfare][polity][tier2]") {
+    WorldState w = dawn_world(0);
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.0f);  // A: seat
+    add_polity(w, 200, 1, /*pop=*/10000, 1.0f);   // B: member-to-be (border)
+    add_polity(w, 300, 2, /*pop=*/30000, 1.0f);   // C: would-be raider of B
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+    w.provinces[1].links.push_back(link_to(300));
+    w.provinces[2].links.push_back(link_to(200));
+
+    WarfareModule mod(cfg);
+    REQUIRE(years_to_absorb(mod, w, 1, 0, 1, 10) > 0);
+
+    // C (levy 3000) can no longer touch B: B fields the KINGDOM's pooled strength
+    // (levy 11,000 x forage = 5,500), so C's raid fails the gate — and the same
+    // pooled strength is what strikes C through the border member B. C's losses
+    // match the POOLED-army prediction exactly: numbers only a kingdom can field.
+    w.current_tick = 12 * 365;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+    const float S_kingdom = (10000.0f + 1000.0f) * cfg.forage_share;
+    const float dead_c_frac = cfg.battle_lethality * S_kingdom / 30000.0f;
+    CHECK_THAT(w.provinces[2].cohort_stats->war_death_fraction, WithinRel(dead_c_frac, 0.02f));
+    // And B, the border member, bears only attacker-scale losses from C's defence —
+    // it is the empire's spear, not C's victim.
+    const float S_c_def = 3000.0f * cfg.forage_share;
+    const float dead_b_frac = cfg.battle_lethality * S_c_def / 10000.0f;
+    CHECK_THAT(w.provinces[1].cohort_stats->war_death_fraction, WithinRel(dead_b_frac, 0.02f));
+}
+
+TEST_CASE("warfare: a member that outgrows the polity secedes (the hold problem)",
+          "[warfare][polity][tier2]") {
+    WorldState w = dawn_world(0);
+    WarfareConfig cfg = sure_cfg();
+    add_polity(w, 100, 0, /*pop=*/100000, 1.5f);
+    add_polity(w, 200, 1, /*pop=*/4000, 1.0f);
+    w.provinces[0].links.push_back(link_to(200));
+    w.provinces[1].links.push_back(link_to(100));
+
+    WarfareModule mod(cfg);
+    const uint32_t absorbed_year = years_to_absorb(mod, w, 1, 0, 1, 10);
+    REQUIRE(absorbed_year > 0);
+
+    // The centre collapses: it can no longer overawe the member — secession.
+    w.provinces[0].cohort_stats->total_population = 1000;
+    w.current_tick = (absorbed_year + 1) * 365;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+    CHECK(mod.polity_of(1) == 1);
+
+    // And the polity map + diplomacy survive save/load.
+    w.provinces[0].cohort_stats->total_population = 100000;
+    const uint32_t reabsorbed =
+        years_to_absorb(mod, w, 1, 0, absorbed_year + 2, absorbed_year + 14);
+    REQUIRE(reabsorbed > 0);
     std::vector<uint8_t> blob;
     mod.serialize_state(blob);
     WarfareModule fresh(cfg);
     CHECK(fresh.polity_of(1) == 1);
     REQUIRE(fresh.deserialize_state(blob.data(), blob.size()));
-    CHECK(fresh.polity_of(1) == 0);  // the political map survives the load
+    CHECK(fresh.polity_of(1) == 0);
 }
 
 namespace {
-// Build a v3 module-state blob by hand (little-endian), to inject asymmetric
-// conqueror state (a leader on one seat, a long-held member) deterministically.
 struct BlobBuilder {
     std::vector<uint8_t> bytes;
     void u32(uint32_t v) {
@@ -580,9 +527,9 @@ std::vector<uint8_t> make_warfare_blob(
     const std::vector<std::pair<uint32_t, uint32_t>>& leaders,
     const std::vector<std::pair<uint32_t, uint32_t>>& members_since) {
     BlobBuilder b;
-    b.u32(3u);              // version
-    b.bytes.push_back(0u);  // war_state_dirty
-    b.u32(0u);              // relations: none
+    b.u32(3u);
+    b.bytes.push_back(0u);
+    b.u32(0u);  // relations: none
     b.u32(static_cast<uint32_t>(polities.size()));
     for (auto [prov, pid] : polities) {
         b.u32(prov);
@@ -605,34 +552,26 @@ std::vector<uint8_t> make_warfare_blob(
 
 TEST_CASE("warfare: the Alexander arc — a great commander conquers; his death fragments it",
           "[warfare][conqueror][tier2]") {
-    WorldState w{};
-    w.world_seed = 1;
-    w.era_catalog.load_builtin_default();
-    w.technology.current_era = 5;
-    WarfareConfig cfg{};
-    cfg.base_aggression_prob = 1.0f;
-    cfg.leadership_rate = 0.0f;   // no new rolls — the injected leader is the only one
-    cfg.absorb_after_wins = 1;    // a decisive campaign
-    add_polity(w, 100, 0, /*pop=*/40000, 1.0f);  // A: small Macedon
-    add_polity(w, 200, 1, /*pop=*/60000, 1.0f);  // B: the bigger neighbour
+    WorldState w = dawn_world(0);
+    WarfareConfig cfg = sure_cfg();
+    cfg.absorb_after_wins = 1;  // a decisive campaign
+    add_polity(w, 100, 0, /*pop=*/40000, 1.0f);  // A: small Macedon (levy 4000)
+    add_polity(w, 200, 1, /*pop=*/48000, 1.0f);  // B: the bigger neighbour (levy 4800)
     w.provinces[0].links.push_back(link_to(200));
     w.provinces[1].links.push_back(link_to(100));
 
     WarfareModule mod(cfg);
-    // Raw power could never attack: 40k < 1.3 x 60k. Inject a great commander on A's
-    // seat (tenure through year 4): power x2.5 = 100k >= 78k — conquest qualifies.
-    auto blob = make_warfare_blob({}, {{0u, 5u}}, {});
+    // Raw strength could never attack: 2000 < 1.3 x 2400. Inject a great commander
+    // on A's seat (tenure through year 12): x2.5 -> the conquest qualifies.
+    auto blob = make_warfare_blob({}, {{0u, 12u}}, {});
     REQUIRE(mod.deserialize_state(blob.data(), blob.size()));
 
-    w.current_tick = 1 * 365;
-    DeltaBuffer d1{};
-    mod.execute(w, d1);
-    apply_deltas(w, d1);
-    CHECK(mod.has_leader(0, 1));
-    CHECK(mod.polity_of(1) == 0);  // conquered in one campaign — the leadership surge
+    const uint32_t conquered = years_to_absorb(mod, w, 1, 0, 1, 8);
+    REQUIRE(conquered > 0);  // the leadership surge conquers
+    CHECK(mod.has_leader(0, conquered));
 
     // While the commander lives, the inflated centre overawes the member.
-    for (uint32_t y = 2; y <= 4; ++y) {
+    for (uint32_t y = conquered + 1; y <= 11; ++y) {
         w.current_tick = y * 365;
         DeltaBuffer d{};
         mod.execute(w, d);
@@ -640,39 +579,29 @@ TEST_CASE("warfare: the Alexander arc — a great commander conquers; his death 
         CHECK(mod.polity_of(1) == 0);
     }
 
-    // Year 5: the commander's tenure ends. The centre's power collapses back to 40k;
-    // the young conquest (low cohesion) out-powers it and secedes — the Diadochi.
-    w.current_tick = 5 * 365;
-    DeltaBuffer d5{};
-    mod.execute(w, d5);
-    apply_deltas(w, d5);
-    CHECK_FALSE(mod.has_leader(0, 5));
-    CHECK(mod.polity_of(1) == 1);  // the empire fragments on the conqueror's death
+    // Year 12: the tenure ends; the centre's strength collapses back; the young
+    // conquest (low cohesion) out-powers it and secedes — the Diadochi.
+    w.current_tick = 12 * 365;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+    CHECK_FALSE(mod.has_leader(0, 12));
+    CHECK(mod.polity_of(1) == 1);
 }
 
 TEST_CASE("warfare: the Genghis reach — a steppe polity strikes past the grain radius",
           "[warfare][conqueror][tier2]") {
-    // Chain A - B - C: A is NOT adjacent to C. A farming polity can only reach B;
-    // a STEPPE polity (herd-fed cavalry) projects force to the 2-hop target C.
+    // Chain A - B - C: a farming A's supply line to the 2-hop target C pays the ox
+    // law on both legs (path ~0.25) and arrives too weak; a STEPPE A (herd-fed
+    // cavalry) pays nothing and strikes.
     auto run = [](float arable) {
-        WorldState w{};
-        w.world_seed = 1;
-        w.current_tick = 365;
-        w.era_catalog.load_builtin_default();
-        w.technology.current_era = 5;
-        WarfareConfig cfg{};
-        cfg.base_aggression_prob = 1.0f;
-        cfg.leadership_rate = 0.0f;
-        add_polity(w, 100, 0, /*pop=*/50000, 1.0f);  // A: the (maybe) cavalry power
-        add_polity(w, 200, 1, /*pop=*/45000, 1.0f);  // B: buffer (deterred by C's 36k)
-        add_polity(w, 300, 2, /*pop=*/36000, 1.0f);  // C: 2 hops from A; only A's 50k
-                                                     // clears 1.3 x 36k — B cannot
-        w.provinces[0].geography.arable_land_fraction = arable;  // steppe or farmland
+        WorldState w = dawn_world();
+        WarfareConfig cfg = sure_cfg();
+        add_polity(w, 100, 0, /*pop=*/50000, 1.0f);
+        add_polity(w, 200, 1, /*pop=*/45000, 1.0f);  // buffer: deterred by C's size
+        add_polity(w, 300, 2, /*pop=*/36000, 1.0f);  // only A's 50k clears 1.3 x 36k
+        w.provinces[0].geography.arable_land_fraction = arable;
         w.provinces[0].geography.forest_coverage = 0.1f;
-        w.provinces[1].geography.arable_land_fraction = 0.8f;  // farmers
-        w.provinces[1].geography.forest_coverage = 0.2f;
-        w.provinces[2].geography.arable_land_fraction = 0.8f;
-        w.provinces[2].geography.forest_coverage = 0.2f;
         w.provinces[0].links.push_back(link_to(200));
         w.provinces[1].links.push_back(link_to(100));
         w.provinces[1].links.push_back(link_to(300));
@@ -681,31 +610,30 @@ TEST_CASE("warfare: the Genghis reach — a steppe polity strikes past the grain
         DeltaBuffer d{};
         mod.execute(w, d);
         apply_deltas(w, d);
-        return w.provinces[2].cohort_stats->war_mortality;  // was C hit?
+        return w.provinces[2].cohort_stats->war_death_fraction;
     };
-    const float farming = run(0.8f);   // A is farmland: C is beyond reach
-    const float steppe = run(0.05f);   // A is steppe: cavalry reaches C
-    CHECK(farming == 1.0f);
-    CHECK(steppe > 1.0f);  // the tyranny of the ox does not bind the herd-fed
+    CHECK(run(0.8f) == 0.0f);  // farmland: C is beyond a supplyable strike
+    CHECK(run(0.05f) > 0.0f);  // steppe cavalry: the ox does not bind the herd-fed
 }
 
-TEST_CASE("warfare: the Rome hold — an old, integrated conquest endures where a fresh one secedes",
+TEST_CASE("warfare: the Rome hold — integration needs tenure AND a route for administration",
           "[warfare][conqueror][tier2]") {
-    auto run = [](bool long_held) {
-        WorldState w{};
-        w.world_seed = 1;
-        w.era_catalog.load_builtin_default();
-        w.technology.current_era = 5;
-        WarfareConfig cfg{};
-        cfg.base_aggression_prob = 0.0f;  // isolate the hold check (no new wars)
-        cfg.leadership_rate = 0.0f;
-        add_polity(w, 100, 0, /*pop=*/55000, 1.0f);  // A: the imperial centre
-        add_polity(w, 200, 1, /*pop=*/50000, 1.0f);  // B: the province in question
-        w.provinces[0].links.push_back(link_to(200));
-        w.provinces[1].links.push_back(link_to(100));
+    auto run = [](bool long_held, bool with_route) {
+        WorldState w = dawn_world(0);
+        WarfareConfig cfg = sure_cfg();
+        cfg.base_aggression_prob = 0.0f;  // isolate the hold check
+        add_polity(w, 100, 0, /*pop=*/55000, 1.0f);
+        add_polity(w, 200, 1, /*pop=*/50000, 1.0f);
+        if (with_route) {
+            // A river link: administration (like grain) moves near-losslessly.
+            ProvinceLink l = link_to(200);
+            l.type = LinkType::River;
+            w.provinces[0].links.push_back(l);
+            ProvinceLink r = link_to(100);
+            r.type = LinkType::River;
+            w.provinces[1].links.push_back(r);
+        }
         WarfareModule mod(cfg);
-        // B is a member of A's polity. Fresh conquest: absorbed THIS year (cohesion
-        // ~1). Old province: absorbed 150 years ago (cohesion capped at 3x).
         const uint32_t year_now = 200;
         const uint32_t since = long_held ? 50u : year_now;
         auto blob = make_warfare_blob({{1u, 0u}}, {}, {{1u, since}});
@@ -716,8 +644,10 @@ TEST_CASE("warfare: the Rome hold — an old, integrated conquest endures where 
         apply_deltas(w, d);
         return mod.polity_of(1);
     };
-    // Borderline member (50k vs rest 55k; base threshold 0.8x55k = 44k): the fresh
-    // conquest breaks away; the province held for generations is integrated and stays.
-    CHECK(run(/*long_held=*/false) == 1);  // seceded
-    CHECK(run(/*long_held=*/true) == 0);   // Roman — it holds
+    // Borderline member (levy 5000 vs rest 5500): a fresh conquest secedes; the
+    // province held 150 years WITH a route is integrated and stays; the same tenure
+    // WITHOUT any route to its polity never integrated — no road to Rome, no Rome.
+    CHECK(run(false, true) == 1);  // fresh: secedes
+    CHECK(run(true, true) == 0);   // old + river route: holds
+    CHECK(run(true, false) == 1);  // old but unreachable: never integrated, secedes
 }

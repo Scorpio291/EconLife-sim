@@ -274,8 +274,13 @@ struct RegionDelta {
         urban_population_replacement;  // replacement; cohort_stats->urban_population,
                                        // published by grain_logistics (catchment town economy)
     std::optional<float>
-        war_mortality_replacement;  // replacement; cohort_stats->war_mortality (>=1),
-                                    // published by warfare (consumed by population_aging)
+        war_death_fraction_replacement;  // replacement; cohort_stats->war_death_fraction
+                                         // [0,1], published by warfare (extra annual death
+                                         // fraction; consumed by population_aging)
+    std::optional<float>
+        food_store_delta;  // ADDITIVE; cohort_stats->food_store. Conserved grain flows
+                           // (war rations/plunder/burn, grain redistribution). Floor 0
+                           // at apply; capacity re-enforced by subsistence banking.
 };
 
 // NationDelta — national-level governance state (one per nation per tick at most).

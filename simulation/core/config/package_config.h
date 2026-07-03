@@ -734,13 +734,23 @@ struct WarfareConfig {
     // Active in the pre-market arc (dawn polities war). Modern war is the political_cycle's.
     std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
                                                "feudal",      "mercantile", "industrial"};
-    float aggression_ratio = 1.3f;     // attacker must be >= this x the defender's power
-    float base_aggression_prob = 0.04f;  // annual prob a qualifying attack actually happens
-    float attacker_loss = 0.02f;       // attacker mortality bump in a war year
-    float defender_loss = 0.06f;       // defender mortality bump in a war year (war is worse to lose)
-    // Power = population x (power_surplus_floor + (1-floor) x clamp(surplus_ratio)). A
-    // bigger, better-fed polity fields a stronger army (levy + surplus-fed soldiers).
-    float power_surplus_floor = 0.5f;
+    float aggression_ratio = 1.3f;     // attack only with >= this strength edge (risk policy)
+    float base_aggression_prob = 0.04f;  // annual prob a qualifying opportunity is taken
+    // --- The grounded war economy (G2): armies are PEOPLE eating GRAIN. All
+    // constants are defensible in real units (grounding doctrine).
+    float levy_fraction = 0.10f;      // share of population an agrarian polity can field
+    float campaign_days = 120.0f;     // an attacking army's campaign season
+    float defense_days = 60.0f;       // the defender mobilizes once invaded
+    float soldier_ration_mult = 2.0f;  // campaign consumption vs civilian (baggage, waste, animals)
+    float forage_share = 0.5f;        // ration share coverable off the land (pillage / home fields);
+                                      // the rest must come from the GRANARY (food_store) — an
+                                      // unprovisioned army fights at forage strength
+    float battle_lethality = 0.10f;   // fraction of the enemy's effective strength that becomes
+                                      // your dead over a season (Lanchester attrition coefficient)
+    float sack_fraction = 0.25f;      // of the loser's granary a victorious sack reaches
+    float carry_per_soldier = 100.0f;  // food units a soldier + cart share hauls home (loot limit);
+                                       // what is sacked but cannot be carried is BURNED (conserved
+                                       // to an explicit destruction sink)
     // Spoils (M6c-2): a won war plunders a fraction of the loser's accumulated wealth
     // (resident proto-capital), transferred to the victor — conserved (the victor's
     // residents gain exactly what the loser's lose). And richer neighbours are more

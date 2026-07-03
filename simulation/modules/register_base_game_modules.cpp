@@ -99,7 +99,8 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     orchestrator.register_module(std::make_unique<SubsistenceModule>(config.subsistence));
     orchestrator.register_module(
         std::make_unique<GrainLogisticsModule>(config.grain_logistics));
-    orchestrator.register_module(std::make_unique<WarfareModule>(config.warfare));
+    orchestrator.register_module(
+        std::make_unique<WarfareModule>(config.warfare, config.grain_logistics));
     orchestrator.register_module(std::make_unique<KnowledgeModule>(config.knowledge));
     orchestrator.register_module(
         std::make_unique<PriceEngineModule>(config.price_model, config.price_engine));

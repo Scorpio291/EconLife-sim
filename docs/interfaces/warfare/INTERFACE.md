@@ -10,21 +10,27 @@ docs/design/EconLife_War_and_Diplomacy_v01.md.
 ## Cadence & gating
 - Runs one decision pass per YEAR (`current_tick % 365 == 0`); all rates are per-year.
 - Regime-gated to `WarfareConfig.active_regimes` (pre-market arc). On regime exit it
-  publishes a one-time `war_mortality = 1.0` reset for all provinces (no stale spike).
+  publishes a one-time `war_death_fraction = 0` reset for all provinces (no stale spike).
 - Global (cross-province); NOT province-parallel. `runs_after: [subsistence]`.
 
 ## Inputs (from WorldState)
 - `technology.current_era` + `era_catalog` — regime gate
 - `provinces[]`: `h3_index`, `links[].neighbor_h3` (reach = adjacency), `region_id`
-- `provinces[].cohort_stats`: `total_population`, `subsistence_surplus_ratio`
-  (military power = population x how well-fed)
+- `provinces[].cohort_stats`: `total_population` (the levy = levy_fraction x pop) and
+  `food_store` (the granary that provisions campaigns; an unprovisioned army fights
+  at forage strength)
 - `npc_indices_by_home_province` + `significant_npcs[].capital` (the plunder prize
   and its holders)
 - `world_seed`, `current_tick` (deterministic per-(year,attacker,defender) RNG)
 
 ## Outputs (to DeltaBuffer)
-- `RegionDelta.war_mortality_replacement` (>= 1.0; floored at apply) — per-province
-  war-casualty multiplier, consumed by population_aging's annual mortality
+- `RegionDelta.war_death_fraction_replacement` ([0,1] at apply) — per-province EXTRA
+  annual death fraction (real units: battle dead / people, Lanchester attrition),
+  added to population_aging's annual mortality
+- `RegionDelta.food_store_delta` (additive) — the conserved grain flows of war:
+  campaign rations eaten from the granaries (both sides), sack plunder delivered to
+  the victor (carry-limited, paying the ox law home), and the burned remainder (an
+  explicit destruction sink)
 - `NPCDelta.capital_delta` — conserved plunder transfers (loser residents debited
   proportional to wealth, victor residents credited equally; sums to zero; no
   transfer at all if the victor has no valid resident to receive it)

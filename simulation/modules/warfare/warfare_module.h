@@ -24,12 +24,16 @@
 
 namespace econlife {
 
+class DeterministicRNG;
+
 struct WorldState;
 struct DeltaBuffer;
 
 class WarfareModule : public ITickModule {
    public:
-    explicit WarfareModule(const WarfareConfig& cfg = {}) : cfg_(cfg) {}
+    explicit WarfareModule(const WarfareConfig& cfg = {},
+                           const GrainLogisticsConfig& grain_cfg = {})
+        : cfg_(cfg), grain_cfg_(grain_cfg) {}
 
     std::string_view name() const noexcept override { return "warfare"; }
     std::string_view package_id() const noexcept override { return "base_game"; }
@@ -39,10 +43,15 @@ class WarfareModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
-    // Military power of a province-polity: the levy (population) scaled by how well-fed
-    // it is (a surplus feeds more/better soldiers). Pure/static for unit testing.
-    static float military_power(uint64_t population, float surplus_ratio,
-                                const WarfareConfig& cfg);
+    // Lanchester square-law contest: P(attacker wins) = Sa^2 / (Sa^2 + Sb^2).
+    // Pure/static for unit testing.
+    static float p_attacker_wins(float attacker_strength, float defender_strength);
+
+    // How well-fed an army fights: forage covers cfg.forage_share of its rations
+    // (off the land); the rest must be DRAWN from the granary. Returns the strength
+    // factor in [forage_share, 1]. Pure/static for unit testing.
+    static float campaign_fed_factor(float rations_needed, float rations_drawn,
+                                     const WarfareConfig& cfg);
 
     // Symmetric key for a province pair (relations are mutual).
     static uint64_t pair_key(uint32_t a, uint32_t b);
@@ -67,10 +76,12 @@ class WarfareModule : public ITickModule {
    private:
     bool regime_active(std::string_view regime) const;
     WarfareConfig cfg_;
+    GrainLogisticsConfig grain_cfg_;  // military supply moves on the same carts (one
+                                      // logistics law: delivered_fraction per link)
     // Per-province-pair diplomatic relations in [-1, 1] (module state; persists across
     // ticks within a run). Warm pairs are de-facto allies that do not fight.
     std::map<uint64_t, float> relations_;
-    // True while the last published war_mortality state may contain a value > 1.0;
+    // True while the last published war_death_fraction may be > 0;
     // lets the regime-exit path publish a one-time reset (no stale phantom war).
     bool war_state_dirty_ = false;
     // Emergent nesting polities (M6c-5): province -> polity id. Sparse — a province

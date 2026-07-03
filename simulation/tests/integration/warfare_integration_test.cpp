@@ -47,7 +47,7 @@ TEST_CASE("Warfare: annual cadence and conserved plunder under the real orchestr
     // per-tick re-fire (the review finding) would compound 0.8^365 to ~0.
     auto run_world = [](float aggression_prob, uint32_t& weak_out,
                         double& weak_capital_out, double& total_capital_out,
-                        float& weak_war_mortality_out) {
+                        float& weak_war_death_out) {
         WorldGeneratorConfig config{};
         config.seed = 777;
         config.province_count = 6;
@@ -118,7 +118,7 @@ TEST_CASE("Warfare: annual cadence and conserved plunder under the real orchestr
                 weak_capital_out += npc.capital;
             total_capital_out += npc.capital;
         }
-        weak_war_mortality_out = world.provinces[weak].cohort_stats->war_mortality;
+        weak_war_death_out = world.provinces[weak].cohort_stats->war_death_fraction;
     };
 
     uint32_t weak_ctl = 0, weak_war = 0;
@@ -129,8 +129,8 @@ TEST_CASE("Warfare: annual cadence and conserved plunder under the real orchestr
     REQUIRE(weak_ctl == weak_war);  // same seed -> same geography/target
 
     // Control: no war fired; war world: the hegemon attacked the weak neighbour.
-    CHECK(wm_ctl == 1.0f);
-    CHECK(wm_war > 1.0f);
+    CHECK(wm_ctl == 0.0f);
+    CHECK(wm_war > 0.0f);
     REQUIRE(weak_cap_ctl > 0.0);
 
     // Exactly ONE plunder for the whole year: the weak province holds ~80% of its

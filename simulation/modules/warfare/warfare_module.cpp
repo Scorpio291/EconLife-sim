@@ -1,6 +1,7 @@
 #include "modules/warfare/warfare_module.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <set>
@@ -12,6 +13,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/geography.h"
 #include "core/world_state/world_state.h"
+#include "modules/grain_logistics/grain_logistics_module.h"
 
 namespace econlife {
 
@@ -68,11 +70,27 @@ struct Reader {
 };
 }  // namespace
 
-float WarfareModule::military_power(uint64_t population, float surplus_ratio,
-                                   const WarfareConfig& cfg) {
-    const float fed =
-        cfg.power_surplus_floor + (1.0f - cfg.power_surplus_floor) * std::clamp(surplus_ratio, 0.0f, 2.0f);
-    return static_cast<float>(population) * std::max(0.0f, fed);
+float WarfareModule::p_attacker_wins(float attacker_strength, float defender_strength) {
+    // Lanchester square law: concentrated force wins disproportionately. The contest
+    // probability is the square-strength share — grounded in the classic attrition
+    // model, naturally in [0, 1] with no clamp.
+    const double sa = std::max(0.0f, attacker_strength);
+    const double sb = std::max(0.0f, defender_strength);
+    const double denom = sa * sa + sb * sb;
+    if (denom <= 0.0)
+        return 0.0f;
+    return static_cast<float>((sa * sa) / denom);
+}
+
+float WarfareModule::campaign_fed_factor(float rations_needed, float rations_drawn,
+                                         const WarfareConfig& cfg) {
+    // Forage covers cfg.forage_share of the rations off the land (pillage / home
+    // fields); the rest must come from the granary. An army with an empty commissary
+    // still fights — at forage strength. Bounded by structure: [forage_share, 1].
+    if (rations_needed <= 0.0f)
+        return 1.0f;
+    const float share = std::clamp(cfg.forage_share, 0.0f, 1.0f);
+    return std::min(1.0f, share + std::max(0.0f, rations_drawn) / rations_needed);
 }
 
 bool WarfareModule::regime_active(std::string_view regime) const {
@@ -185,15 +203,14 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
     const EraDefinition* era = state.era_catalog.by_index(state.technology.current_era);
     if (era == nullptr || !regime_active(era->economic_regime)) {
-        // Regime exit: war_mortality is only ever written by this module, so if the
-        // last active year left a war spike (> 1.0) it would persist forever once we
-        // stop publishing. Publish a one-time 1.0 reset so the field really is
-        // transient (review finding: the stale phantom-war multiplier).
+        // Regime exit: war_death_fraction is only ever written by this module, so a
+        // last active-year value would persist forever once we stop publishing.
+        // Publish a one-time 0 reset so the field really is transient.
         if (war_state_dirty_) {
             for (uint32_t i = 0; i < n; ++i) {
                 RegionDelta rd{};
                 rd.region_id = state.provinces[i].region_id;
-                rd.war_mortality_replacement = 1.0f;
+                rd.war_death_fraction_replacement = 0.0f;
                 delta.region_deltas.push_back(rd);
             }
             war_state_dirty_ = false;
@@ -201,22 +218,28 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         return;
     }
 
-    // Annual cadence: every war parameter (attack probability, plunder fraction,
-    // relation drift) is a per-YEAR rate, and the attack RNG is seeded by year — so
-    // running per tick would re-fire the same war 365x (compounding plunder and
-    // racing diplomacy 365x too fast; review finding). One decision pass per year.
+    // Annual cadence: every war parameter is a per-YEAR rate and the attack RNG is
+    // seeded by year. One decision pass per year.
     if (state.current_tick % kTicksPerYear != 0)
         return;
 
-    // Per-polity military power, resident wealth (the war prize), and an h3 -> index
-    // map for resolving neighbours.
-    std::vector<float> power(n, 0.0f);
-    std::vector<double> avail_capital(n, 0.0);  // resident proto-capital; the plunder prize
+    // Seed by YEAR so a war is consistent across the year at any tick resolution.
+    const uint32_t year = state.current_tick / kTicksPerYear;
+    const float gravity_g = state.hazard_settings.gravity_g;
     const auto h3_to_idx = build_h3_to_province_index(state.provinces);
+
+    // Grounded inputs per province: the LEVY (people who can campaign), the GRANARY
+    // (rations they can draw), and resident wealth (the coin prize).
+    std::vector<double> pop(n, 0.0);
+    std::vector<float> levy(n, 0.0f);
+    std::vector<double> avail_store(n, 0.0);  // granary available this year (mutable)
+    std::vector<double> store_delta(n, 0.0);  // net grain change to publish
+    std::vector<double> avail_capital(n, 0.0);
     for (uint32_t i = 0; i < n; ++i) {
         if (state.provinces[i].cohort_stats) {
-            power[i] = military_power(state.provinces[i].cohort_stats->total_population,
-                                     state.provinces[i].cohort_stats->subsistence_surplus_ratio, cfg_);
+            pop[i] = static_cast<double>(state.provinces[i].cohort_stats->total_population);
+            levy[i] = cfg_.levy_fraction * static_cast<float>(pop[i]);
+            avail_store[i] = std::max(0.0f, state.provinces[i].cohort_stats->food_store);
         }
         if (i < state.npc_indices_by_home_province.size()) {
             for (uint32_t idx : state.npc_indices_by_home_province[i]) {
@@ -225,43 +248,50 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
         }
     }
-    const std::vector<double> orig_capital = avail_capital;  // for proportional debit distribution
+    const std::vector<double> orig_capital = avail_capital;  // for proportional debit
 
-    // Seed by YEAR so a war is consistent across the year at any tick resolution.
-    const uint32_t year = state.current_tick / kTicksPerYear;
+    // Military supply moves on the same carts as grain — ONE logistics law. The
+    // delivered fraction of a link bounds both rations to the front and loot home.
+    auto link_df = [&](uint32_t from, uint32_t to) -> float {
+        float best = 0.0f;
+        for (const auto& link : state.provinces[from].links) {
+            auto it = h3_to_idx.find(link.neighbor_h3);
+            if (it != h3_to_idx.end() && it->second == to) {
+                best = std::max(best, GrainLogisticsModule::delivered_fraction(
+                                          link.type, link.transit_terrain_cost,
+                                          link.infrastructure_bonus, gravity_g, grain_cfg_));
+            }
+        }
+        return best;
+    };
 
-    // Polity power (M6c-5): members pool their power — internal peace, external
-    // weight. A polity's power is the sum over its member provinces. Steppe power is
-    // tracked per polity for the cavalry (Genghis) reach rule.
-    std::map<uint32_t, float> polity_power;
-    std::map<uint32_t, float> steppe_power;
+    // Polity aggregates (M6c-5): members pool their levy — internal peace, external
+    // weight. Steppe share classifies the cavalry polities (Genghis).
+    std::map<uint32_t, float> polity_levy;
+    std::map<uint32_t, float> steppe_levy;
     for (uint32_t i = 0; i < n; ++i) {
         const uint32_t pid = polity_of(i);
-        polity_power[pid] += power[i];
+        polity_levy[pid] += levy[i];
         const auto& geo = state.provinces[i].geography;
         if (geo.arable_land_fraction < cfg_.steppe_arable_max &&
             geo.forest_coverage < cfg_.steppe_forest_max)
-            steppe_power[pid] += power[i];
+            steppe_levy[pid] += levy[i];
     }
-
-    // GENGHIS (M6c-6): a polity whose power is predominantly steppe-bred (herd-fed
-    // cavalry, no grain supply line) fights as CAVALRY — its reach extends past the
-    // ox-cart adjacency to 2-hop targets. Classified on raw power, before leadership.
     std::map<uint32_t, bool> cavalry;
-    for (const auto& [pid, pw] : polity_power)
-        cavalry[pid] = pw > 0.0f && steppe_power[pid] >= cfg_.cavalry_polity_min_share * pw;
+    for (const auto& [pid, lv] : polity_levy)
+        cavalry[pid] = lv > 0.0f && steppe_levy[pid] >= cfg_.cavalry_polity_min_share * lv;
 
     // ALEXANDER (M6c-6): rarely, a polity seat produces a great commander whose
-    // tenure multiplies the polity's power. Expire dead leaders; roll for new ones
-    // (deterministic per (seat, year)); apply the multiplier while the leader lives.
+    // tenure multiplies the polity's fighting quality while he lives.
     for (auto it = leader_until_.begin(); it != leader_until_.end();) {
         if (year >= it->second)
             it = leader_until_.erase(it);
         else
             ++it;
     }
-    for (auto& [pid, pw] : polity_power) {
-        if (pw <= 0.0f)
+    std::map<uint32_t, float> leader_mult;
+    for (const auto& [pid, lv] : polity_levy) {
+        if (lv <= 0.0f)
             continue;
         if (!leader_until_.count(pid) && cfg_.leadership_rate > 0.0f) {
             DeterministicRNG lead_rng(state.world_seed ^
@@ -270,73 +300,119 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             if (lead_rng.next_float() < cfg_.leadership_rate)
                 leader_until_[pid] = year + cfg_.leadership_tenure_years;
         }
-        if (leader_until_.count(pid))
-            pw *= cfg_.leadership_power_mult;
+        leader_mult[pid] = leader_until_.count(pid) ? cfg_.leadership_power_mult : 1.0f;
     }
 
-    // war_mortality accumulates per province; plundered[]/looted[] track the conserved
-    // proto-capital transfers (loser -> victor) for distribution to residents below.
-    std::vector<float> war_mortality(n, 1.0f);
-    std::vector<double> plundered_from(n, 0.0);  // wealth seized FROM this province
-    std::vector<double> looted_to(n, 0.0);       // wealth seized BY this province
-    std::set<uint64_t> adjacent_pairs;           // every reachable pair (for relation drift)
-    std::set<uint64_t> warred_pairs;             // pairs that went to war this year
-    std::set<uint32_t> betrayers;                // polities that attacked a warm-relation ally
+    // Granary availability and draws at polity scope (members provision the army).
+    auto polity_store = [&](uint32_t pid) {
+        double s = 0.0;
+        for (uint32_t p = 0; p < n; ++p)
+            if (polity_of(p) == pid)
+                s += avail_store[p];
+        return s;
+    };
+    auto draw_from_polity = [&](uint32_t pid, double amount) {
+        // Deterministic sequential draw across members in index order; conserved:
+        // exactly `amount` leaves the granaries (callers bound amount by availability).
+        for (uint32_t p = 0; p < n && amount > 0.0; ++p) {
+            if (polity_of(p) != pid)
+                continue;
+            const double take = std::min(amount, avail_store[p]);
+            avail_store[p] -= take;
+            store_delta[p] -= take;
+            amount -= take;
+        }
+    };
 
-    // Each polity considers attacking each REACHABLE neighbour (adjacency = ox-cart
-    // reach). It attacks a weaker neighbour — strike where you can win — and prefers a
-    // RICH one (the EV: weak AND rich), but WARM RELATIONS deter it (allies don't
-    // fight). Directional and deterministic. On a win it plunders a share of the
-    // loser's wealth (conserved).
+    std::vector<double> war_death(n, 0.0);       // extra annual death fraction, per province
+    std::vector<double> plundered_from(n, 0.0);  // coin seized FROM this province
+    std::vector<double> looted_to(n, 0.0);       // coin seized BY this province
+    std::set<uint64_t> considered_pairs;         // for relation drift
+    std::set<uint64_t> warred_pairs;
+    std::set<uint32_t> betrayers;
+
+    // Each polity considers striking targets within supply reach: 1-hop neighbours
+    // (the border), and 2-hop targets THROUGH an intermediate — where the supply line
+    // pays the ox law (path = product of link delivered-fractions) unless the army is
+    // herd-fed cavalry (path 1). Distant campaigns are not forbidden; they are
+    // expensive and weak, so infeasible ones fail the strength gate naturally.
     for (uint32_t a = 0; a < n; ++a) {
-        if (power[a] <= 0.0f)
+        if (levy[a] <= 0.0f)
             continue;
-        // Reach: 1-hop neighbours (the ox-cart limit) — and for a CAVALRY polity
-        // (Genghis), the neighbours' neighbours too (force projection past the grain
-        // radius). Ordered set: deterministic target order, duplicates collapsed.
-        std::set<uint32_t> targets;
+        const uint32_t pid_a = polity_of(a);
+        // target -> supply path fraction (best route; deterministic tie-break by
+        // enumeration order: ordered map keeps ascending target order).
+        std::map<uint32_t, float> targets;
         for (const auto& link : state.provinces[a].links) {
             auto it = h3_to_idx.find(link.neighbor_h3);
             if (it == h3_to_idx.end())
                 continue;
             const uint32_t b1 = it->second;
-            targets.insert(b1);
-            if (cavalry[polity_of(a)]) {
-                for (const auto& l2 : state.provinces[b1].links) {
-                    auto it2 = h3_to_idx.find(l2.neighbor_h3);
-                    if (it2 != h3_to_idx.end() && it2->second != a)
-                        targets.insert(it2->second);
+            // Border war: the front is home's edge; supply carries directly (path 1).
+            targets[b1] = std::max(targets[b1], 1.0f);
+            for (const auto& l2 : state.provinces[b1].links) {
+                auto it2 = h3_to_idx.find(l2.neighbor_h3);
+                if (it2 == h3_to_idx.end() || it2->second == a)
+                    continue;
+                const uint32_t b2 = it2->second;
+                const float path = cavalry[pid_a]
+                                       ? 1.0f
+                                       : link_df(a, b1) * link_df(b1, b2);
+                if (path > 0.0f) {
+                    auto t = targets.find(b2);
+                    if (t == targets.end() || path > t->second)
+                        targets[b2] = path;
                 }
             }
         }
-        for (uint32_t b : targets) {
-            if (power[b] <= 0.0f)
+        for (const auto& [b, path_fraction] : targets) {
+            if (pop[b] <= 0.0)
                 continue;
-            // Members of the same polity are at internal peace (the empire's pax).
-            if (polity_of(a) == polity_of(b))
+            if (pid_a == polity_of(b))
+                continue;  // members of the same polity are at internal peace
+            const uint32_t pid_b = polity_of(b);
+            considered_pairs.insert(pair_key(a, b));
+
+            // ATTACKER: the polity's levy marches; rations for the season must cross
+            // the supply path, so the granary need scales 1/path (the ox law).
+            const float army_a = polity_levy[pid_a];
+            if (army_a <= 0.0f)
                 continue;
-            adjacent_pairs.insert(pair_key(a, b));
-            // Coalition defence (the balance of power): the defender fields its WHOLE
-            // polity's power, plus warm-relation allied neighbours outside it — a
-            // hegemon must out-match the coalition, not just the border province.
-            float defender_power = polity_power[polity_of(b)];
+            const float rations_a =
+                army_a * cfg_.campaign_days * cfg_.soldier_ration_mult / std::max(path_fraction, 1e-3f);
+            const float store_need_a = rations_a * (1.0f - cfg_.forage_share);
+            const float drawn_a = static_cast<float>(
+                std::min(static_cast<double>(store_need_a), polity_store(pid_a)));
+            const float fed_a = campaign_fed_factor(rations_a, drawn_a, cfg_);
+            const float S_a = army_a * fed_a * leader_mult[pid_a] * path_fraction;
+
+            // DEFENDER: home mobilization (shorter season, home granaries), plus
+            // warm-relation allied neighbours marching without organized supply
+            // (they fight at forage strength).
+            const float army_b = polity_levy[pid_b];
+            const float rations_b = army_b * cfg_.defense_days * cfg_.soldier_ration_mult;
+            const float store_need_b = rations_b * (1.0f - cfg_.forage_share);
+            const float drawn_b = static_cast<float>(
+                std::min(static_cast<double>(store_need_b), polity_store(pid_b)));
+            const float fed_b = campaign_fed_factor(rations_b, drawn_b, cfg_);
+            float S_b = army_b * fed_b * leader_mult[pid_b];
             for (const auto& blink : state.provinces[b].links) {
                 auto bit = h3_to_idx.find(blink.neighbor_h3);
                 if (bit == h3_to_idx.end())
                     continue;
                 const uint32_t c = bit->second;
-                if (c == a || polity_of(c) == polity_of(b))
+                if (c == a || polity_of(c) == pid_b)
                     continue;  // attacker excluded; polity members already counted
-                if (polity_of(c) == polity_of(a))
+                if (polity_of(c) == pid_a)
                     continue;  // the attacker's own members never defend its target
                 if (relation(b, c) >= cfg_.ally_threshold)
-                    defender_power += power[c];
+                    S_b += levy[c] * cfg_.forage_share;
             }
-            const float attacker_power = polity_power[polity_of(a)];
-            if (attacker_power < cfg_.aggression_ratio * defender_power)
-                continue;  // the coalition deters the attack
-            // A rich neighbour is a more tempting target (the rational prize); warm
-            // relations (a de-facto alliance) suppress the attack toward zero.
+
+            // The decision gate: a rational polity attacks only with a clear edge
+            // (risk policy), preferring rich targets, deterred by warm relations.
+            if (S_a <= 0.0f || S_a < cfg_.aggression_ratio * S_b)
+                continue;
             const double prize_share =
                 (avail_capital[a] + avail_capital[b] > 0.0)
                     ? avail_capital[b] / (avail_capital[a] + avail_capital[b])
@@ -353,37 +429,62 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                  (static_cast<uint64_t>(b) << 41) ^ 0x4A1207ull);
             if (rng.next_float() >= attack_prob)
                 continue;  // no war this year
-            // War: a strikes b. Both bleed; the defender worse (war is worse to lose).
-            war_mortality[a] += cfg_.attacker_loss;
-            war_mortality[b] += cfg_.defender_loss;
+
+            // WAR. Both armies eat their campaign rations from the granaries —
+            // conserved: the grain is consumed by soldiers' mouths (the sink is real).
+            draw_from_polity(pid_a, drawn_a);
+            draw_from_polity(pid_b, drawn_b);
             warred_pairs.insert(pair_key(a, b));
             if (relation(a, b) >= cfg_.ally_threshold)
                 betrayers.insert(a);  // attacking a warm ally is a betrayal
-            // Consolidation up the ladder (M6c-5, §5.4): repeated decisive wins absorb
-            // the loser's WHOLE polity into the victor's — a beaten kingdom joins the
-            // empire with all its provinces. Nesting, not per-province flipping.
+
+            // BATTLE (Lanchester): each side's dead are proportional to the ENEMY's
+            // effective strength; the outcome is the square-law contest. Real units:
+            // people, attributed to the border provinces where the armies muster.
+            const float dead_a = cfg_.battle_lethality * S_b;
+            const float dead_b = cfg_.battle_lethality * S_a;
+            if (pop[a] > 0.0)
+                war_death[a] += dead_a / pop[a];
+            if (pop[b] > 0.0)
+                war_death[b] += dead_b / pop[b];
+            const bool attacker_won = rng.next_float() < p_attacker_wins(S_a, S_b);
+            if (!attacker_won)
+                continue;  // repelled: the attacker paid rations and blood for nothing
+
+            // SACK (victor only): grain plunder is carry-limited and pays the ox law
+            // on the way home; what is sacked but not delivered is BURNED — an
+            // explicit destruction sink, conserved.
+            const double sack = cfg_.sack_fraction * avail_store[b];
+            if (sack > 0.0) {
+                const double carry = static_cast<double>(army_a) * cfg_.carry_per_soldier;
+                const double delivered = std::min(sack, carry) * path_fraction;
+                avail_store[b] -= sack;
+                store_delta[b] -= sack;
+                avail_store[a] += delivered;
+                store_delta[a] += delivered;
+            }
+
+            // Consolidation up the ladder (M6c-5, §5.4): repeated decisive VICTORIES
+            // absorb the loser's whole polity into the victor's.
             const uint64_t directed = (static_cast<uint64_t>(a) << 32) | b;
             if (cfg_.absorb_after_wins > 0 && ++win_counts_[directed] >= cfg_.absorb_after_wins) {
                 win_counts_[directed] = 0;
-                const uint32_t victor_pid = polity_of(a);
                 const uint32_t beaten_pid = polity_of(b);
                 float moved = 0.0f;
                 for (uint32_t p = 0; p < n; ++p) {
                     if (polity_of(p) == beaten_pid) {
-                        polity_of_[p] = victor_pid;
+                        polity_of_[p] = pid_a;
                         member_since_[p] = year;  // integration (cohesion) starts now
-                        moved += power[p];
+                        moved += levy[p];
                     }
                 }
-                polity_power[victor_pid] += moved;
-                polity_power[beaten_pid] = 0.0f;
+                polity_levy[pid_a] += moved;
+                polity_levy[beaten_pid] = 0.0f;
                 leader_until_.erase(beaten_pid);  // a dissolved polity has no seat
             }
-            // Spoils: the victor plunders a share of the loser's remaining wealth
-            // (sequential depletion keeps it conserved across multiple attackers).
-            // Only when the victor has a valid resident to receive it — otherwise the
-            // debit would have no matching credit and the wealth would vanish
-            // (conservation).
+
+            // Coin plunder (portable wealth), conserved — only when the victor has a
+            // valid resident to receive it.
             bool victor_can_receive = false;
             if (a < state.npc_indices_by_home_province.size()) {
                 for (uint32_t idx : state.npc_indices_by_home_province[a]) {
@@ -393,20 +494,19 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     }
                 }
             }
-            const double plunder =
+            const double coin =
                 victor_can_receive ? cfg_.plunder_fraction * avail_capital[b] : 0.0;
-            if (plunder > 0.0) {
-                avail_capital[b] -= plunder;
-                plundered_from[b] += plunder;
-                looted_to[a] += plunder;
+            if (coin > 0.0) {
+                avail_capital[b] -= coin;
+                plundered_from[b] += coin;
+                looted_to[a] += coin;
             }
         }
     }
 
-    // Relations drift: a war damages the pair's relation; a peaceful adjacent year
-    // heals it. Sustained peace warms neighbours into a de-facto alliance; feuds fester.
-    // Deterministic (adjacent_pairs is ordered).
-    for (uint64_t key : adjacent_pairs) {
+    // Relations drift: a war damages the pair's relation; a peaceful considered year
+    // heals it. Deterministic (ordered sets).
+    for (uint64_t key : considered_pairs) {
         float rel = relations_.count(key) ? relations_[key] : 0.0f;
         if (warred_pairs.count(key))
             rel -= cfg_.relation_war_hit;
@@ -415,39 +515,45 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         relations_[key] = std::clamp(rel, -1.0f, 1.0f);
     }
 
-    // The hold problem (M6c-5, §5.5): a polity keeps a member only while the rest of
-    // the polity can overawe it. When a member's own power outgrows the remainder
-    // (the centre can no longer pay for its reach), it SECEDES — the ladder drops a
-    // level and the member is its own polity again. ROME (M6c-6): integration grows
-    // with tenure — a member held for generations needs proportionally more relative
-    // power to break away, so young conquests shatter (Alexander's die with him)
-    // while old ones endure. The seat (province == polity id) cannot secede from
-    // itself. Deterministic (index order).
+    // The hold problem (M6c-5/§5.5): a polity keeps a member only while the rest can
+    // overawe it. ROME (M6c-6): integration grows with tenure AND with the quality of
+    // the routes that carry administration — the same links that carry grain (roads
+    // and rivers integrate; a member with no route to its polity never integrates).
+    // Saturating on the assimilation timescale; the asymptote is the mechanism.
     for (uint32_t m = 0; m < n; ++m) {
         const uint32_t pid = polity_of(m);
         if (pid == m)
             continue;  // the seat is the polity
-        const float rest = std::max(0.0f, polity_power[pid] - power[m]);
+        // The centre overawes with STRENGTH, not headcount: a living great
+        // commander (Alexander) holds what raw numbers could not — and his death
+        // is what lets the members go.
+        const float rest =
+            std::max(0.0f, polity_levy[pid] - levy[m]) *
+            (leader_mult.count(pid) ? leader_mult[pid] : 1.0f);
         uint32_t years_held = 0;
         auto since = member_since_.find(m);
         if (since != member_since_.end() && year > since->second)
             years_held = year - since->second;
-        // Saturating integration (no hard cap): assimilation has diminishing
-        // returns on its own timescale — the asymptote is the mechanism.
-        const float yrs = static_cast<float>(years_held);
+        float admin_route = 0.0f;  // best link quality to a fellow polity member
+        for (const auto& link : state.provinces[m].links) {
+            auto it = h3_to_idx.find(link.neighbor_h3);
+            if (it == h3_to_idx.end() || polity_of(it->second) != pid || it->second == m)
+                continue;
+            admin_route = std::max(admin_route, link_df(m, it->second));
+        }
+        const float eff_years = static_cast<float>(years_held) * admin_route;
         const float cohesion =
-            1.0f + cfg_.cohesion_gain_max * yrs / (yrs + std::max(1.0f, cfg_.cohesion_halfsat_years));
-        if (power[m] > cfg_.secession_power_ratio * cohesion * rest) {
+            1.0f + cfg_.cohesion_gain_max * eff_years /
+                       (eff_years + std::max(1.0f, cfg_.cohesion_halfsat_years));
+        if (levy[m] > cfg_.secession_power_ratio * cohesion * rest) {
             polity_of_[m] = m;
             member_since_.erase(m);
-            polity_power[pid] = rest;
-            polity_power[m] += power[m];
+            polity_levy[pid] = rest;
+            polity_levy[m] += levy[m];
         }
     }
 
-    // Reputation economy: a betrayer's word is worthless — its relations with ALL
-    // neighbours sour, not just the ally it stabbed. A known backstabber can't hold
-    // alliances, so it loses its coalition and gets ganged up on (self-limiting).
+    // Reputation economy: a betrayer's relations with ALL its neighbours sour.
     for (uint32_t a : betrayers) {
         for (const auto& link : state.provinces[a].links) {
             auto it = h3_to_idx.find(link.neighbor_h3);
@@ -459,16 +565,20 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         }
     }
 
+    // Publish: war deaths (real units: extra annual death fraction) and the conserved
+    // grain flows (rations eaten, plunder delivered, sack burned).
     for (uint32_t i = 0; i < n; ++i) {
         RegionDelta rd{};
         rd.region_id = state.provinces[i].region_id;
-        rd.war_mortality_replacement = war_mortality[i];
+        rd.war_death_fraction_replacement = static_cast<float>(war_death[i]);
+        if (store_delta[i] != 0.0)
+            rd.food_store_delta = static_cast<float>(store_delta[i]);
         delta.region_deltas.push_back(rd);
-        if (war_mortality[i] > 1.0f)
+        if (war_death[i] > 0.0)
             war_state_dirty_ = true;  // a spike is out; regime exit must reset it
     }
 
-    // Distribute the conserved plunder to residents: debit the loser's residents
+    // Distribute the conserved coin plunder to residents: debit the loser's residents
     // proportional to their wealth (never below zero), credit the victor's equally.
     for (uint32_t i = 0; i < n; ++i) {
         if (plundered_from[i] <= 0.0 && looted_to[i] <= 0.0)
@@ -476,8 +586,6 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         if (i >= state.npc_indices_by_home_province.size())
             continue;
         const auto& residents = state.npc_indices_by_home_province[i];
-        // Credit is split across the VALID residents only, so a malformed index can
-        // never evaporate a share of the loot (conservation).
         uint32_t valid = 0;
         for (uint32_t idx : residents) {
             if (idx < state.significant_npcs.size())

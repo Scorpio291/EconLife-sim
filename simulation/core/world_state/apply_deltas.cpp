@@ -631,10 +631,20 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.urban_population_replacement;
                     cs.urban_population = (v >= 0.0f) ? v : 0.0f;
                 }
-                if (d.war_mortality_replacement.has_value()) {
-                    // Replacement; warfare recomputes each tick (>= 1.0 = at-war spike).
-                    float v = *d.war_mortality_replacement;
-                    cs.war_mortality = (v >= 1.0f) ? v : 1.0f;
+                if (d.war_death_fraction_replacement.has_value()) {
+                    // Replacement; warfare recomputes annually. Physical bounds: an
+                    // extra death fraction lies in [0, 1] (you cannot lose more than
+                    // everyone). NaN falls to 0.
+                    float v = *d.war_death_fraction_replacement;
+                    cs.war_death_fraction = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
+                }
+                if (d.food_store_delta.has_value()) {
+                    // Additive conserved grain flow (war rations/plunder/burn,
+                    // redistribution). Physical floor: a granary cannot go negative;
+                    // capacity is re-enforced by subsistence banking next tick.
+                    float dv = *d.food_store_delta;
+                    if (!std::isnan(dv))
+                        cs.food_store = std::max(0.0f, cs.food_store + dv);
                 }
                 if (d.cohesion_delta.has_value()) {
                     prov.community.cohesion =

@@ -133,7 +133,7 @@ bool is_retiree_group(DemographicGroup g) {
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
                            float sick_rate, float addiction_rate, float birth_surplus,
                            float famine_surplus, float hazard_mortality, float fertility_mult,
-                           const PopulationAgingConfig& cfg) {
+                           float war_death_fraction, const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
         (void)g;
@@ -174,7 +174,11 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     for (auto& [g, c] : cohorts) {
         if (c.size == 0)
             continue;
-        float mort = cfg.base_annual_death_rate * mortality_env;
+        // Background mortality scaled by environment, PLUS war casualties as an
+        // additive death fraction (real units; G2). Deaths are capped at cohort size
+        // below — the physical bound.
+        float mort = cfg.base_annual_death_rate * mortality_env +
+                     std::clamp(war_death_fraction, 0.0f, 1.0f);
         if (is_retiree_group(g))
             mort *= cfg.retiree_mortality_multiplier;
         auto deaths = static_cast<uint32_t>(
@@ -320,13 +324,13 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                     hazard_mortality *=
                         disaster_mortality_factor(state.hazard_settings.geology, geo_rng, cfg_);
                 }
-                // War casualties (M6c): the warfare module owns this signal — it is
-                // regime-gated at the PUBLISHER (with a reset on regime exit) and 1.0
-                // at peace, so it is applied unconditionally here rather than behind a
-                // second, independently-maintained regime list (review finding: the
-                // dual-gate coupling). apply_deltas floors it at 1.0.
-                if (annual)
-                    hazard_mortality *= cs.war_mortality;
+                // War casualties (G2): warfare publishes an EXTRA annual death
+                // fraction (real units: battle dead / population, Lanchester
+                // attrition). Owned by the publisher (reset on regime exit; 0 at
+                // peace), applied unconditionally here. Passed as an additive rate,
+                // not a multiplier — war kills a fraction of people, it does not
+                // scale background mortality.
+                const float war_deaths = annual ? cs.war_death_fraction : 0.0f;
 
                 // Fertility tracks the long-run food signal the subsistence module writes
                 // (output vs need + reserve upkeep): population grows only when the land
@@ -344,7 +348,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                     radiation_fertility_factor(state.hazard_settings.radiation, cfg_);
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       birth_surplus, famine_surplus, hazard_mortality,
-                                      fertility_mult, cfg_);
+                                      fertility_mult, war_deaths, cfg_);
 
                 // Hardiness drifts toward the world's hazard level over generations
                 // (adaptation under sustained pressure; softening under ease).

@@ -31,9 +31,10 @@ Province-parallel: each province's demographic processing is fully independent. 
   - `food_store` — granary buffer; famine fires only once exhausted
   - `hardiness` — generational adaptation divisor on world-hazard mortality
   - `urban_population` — crowding driver for the disease-epidemic hazard (M6a)
-  - `war_mortality` (>= 1.0) — per-province war-casualty multiplier published by the
-    `warfare` module (M6c); applied to annual mortality unconditionally (it is 1.0 at
-    peace and reset by the publisher on regime exit)
+  - `war_death_fraction` ([0,1]) — per-province EXTRA annual death fraction from war
+    (real units: battle dead / people), published by the `warfare` module; added to
+    annual cohort mortality unconditionally (0 at peace; reset by the publisher on
+    regime exit); deaths remain capped at cohort size (the physical bound)
 - `hazard_settings` — world hazard dials (disease/geology/radiation) for the M6a
   episodic and chronic mortality/fertility channels
 - `technology.current_era` + `tech_effects_for_era().mortality_mult` / era regime —

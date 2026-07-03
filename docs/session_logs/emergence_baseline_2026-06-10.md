@@ -1533,3 +1533,54 @@ M6c COMPLETE: foundation -> spoils -> relations -> alliances/backstab -> nesting
 polities -> conquerors. Remaining before M7: the single deferred threshold
 re-calibration (modern ~12,000 under the full hazard+war load), ideally on a
 pinned-deps environment.
+
+---
+
+## 2026-07-03 — G2: the grounded war economy (no rails; every constant in real units)
+
+Full rewrite of the warfare mechanics per the grounding doctrine. War now runs on
+PEOPLE and GRAIN, not proxy constants:
+
+- ARMIES: the levy (levy_fraction 10% of population). Campaign RATIONS are real grain
+  drawn from the granary (food_store): soldier_ration_mult 2x civilian for
+  campaign_days 120 (attacker) / defense_days 60 (defender); forage covers
+  forage_share 50% off the land; the rest comes from the polity's granaries
+  (deterministic member-by-member draw) — an unprovisioned army fights at forage
+  strength. Rations EATEN are an explicit conserved sink (soldiers' mouths).
+- BATTLES: Lanchester. P(attacker wins) = Sa^2/(Sa^2+Sb^2) (square law — the auto-win
+  rail is dead; defenders can and do win, and a repelled attacker paid rations and
+  blood for nothing). Casualties are REAL PEOPLE proportional to enemy effective
+  strength (battle_lethality 0.1 x S_enemy), published as war_death_fraction — the
+  field was RENAMED from the war_mortality multiplier to an additive annual death
+  fraction so the units are honest end-to-end (population_aging adds it to cohort
+  mortality; deaths capped at cohort size — the physical bound).
+- SACK: the victor plunders the loser's granary, CARRY-LIMITED (carry_per_soldier
+  100 units) and paying the ox law home (path delivered-fraction); what is sacked but
+  not delivered is BURNED — an explicit destruction sink. Coin plunder unchanged.
+- SUPPLY-EMERGENT REACH (replaces the cavalry 2-hop boolean): ALL polities may strike
+  2-hop targets, but infantry supply pays the path's delivered-fraction twice
+  (strength x path, rations / path) — so farmland armies arrive starving unless
+  roads/rivers carry the supply (Rome strikes far), while steppe cavalry is herd-fed
+  and pays nothing (Genghis). Reach EMERGES from the logistics law; nothing is
+  forbidden, distant wars just fail the strength gate naturally.
+- ROME/HOLD: integration needs tenure AND a route — cohesion accrues as
+  years_held x best link delivered-fraction to a fellow polity member ("no road to
+  Rome, no Rome"), saturating on the assimilation timescale. And the centre overawes
+  with STRENGTH: a living great commander holds what raw numbers could not — his
+  death is what lets the members go (the Alexander fragmentation now flows through
+  the same hold ledger).
+- NEW RegionDelta.food_store_delta (additive, floor-0 physical) carries all war grain
+  flows; WarfareModule takes GrainLogisticsConfig (one logistics law).
+
+Test suite rewritten (20 cases): square-law math; forage/fed factors; casualties
+formula-exact in real units; granary conservation through named sinks (rations +
+burn); Alexander arc (conquer -> overawe -> die -> Diadochi); Genghis
+(farmland cannot strike 2-hop, steppe can); Rome (fresh secedes / 150yr+route holds /
+150yr without a route never integrated); alliances/coalitions/backstab/pool/secession
+re-proven under the new units.
+
+Gates: 1,582 unit (266,479), 37 integration (13,211, incl. the orchestrator war
+scenario), emergence (1 failed-as-expected). Spectrum sanity under the grounded
+economy + G1 de-caps: EARTHLIKE Modern @ 12,793 (Thriving — anchor holds), fertile
+deathworld 11,591, garden stagnates; the BARREN deathworld slipped Classical->Bronze
+(real drift from de-capped hazards + war costs; for the planned recalibration).
