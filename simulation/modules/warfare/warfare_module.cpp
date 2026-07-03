@@ -354,8 +354,8 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             if (rng.next_float() >= attack_prob)
                 continue;  // no war this year
             // War: a strikes b. Both bleed; the defender worse (war is worse to lose).
-            war_mortality[a] = std::min(cfg_.war_mortality_cap, war_mortality[a] + cfg_.attacker_loss);
-            war_mortality[b] = std::min(cfg_.war_mortality_cap, war_mortality[b] + cfg_.defender_loss);
+            war_mortality[a] += cfg_.attacker_loss;
+            war_mortality[b] += cfg_.defender_loss;
             warred_pairs.insert(pair_key(a, b));
             if (relation(a, b) >= cfg_.ally_threshold)
                 betrayers.insert(a);  // attacking a warm ally is a betrayal
@@ -432,9 +432,11 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         auto since = member_since_.find(m);
         if (since != member_since_.end() && year > since->second)
             years_held = year - since->second;
+        // Saturating integration (no hard cap): assimilation has diminishing
+        // returns on its own timescale — the asymptote is the mechanism.
+        const float yrs = static_cast<float>(years_held);
         const float cohesion =
-            std::min(cfg_.cohesion_max_mult,
-                     1.0f + cfg_.cohesion_per_year_held * static_cast<float>(years_held));
+            1.0f + cfg_.cohesion_gain_max * yrs / (yrs + std::max(1.0f, cfg_.cohesion_halfsat_years));
         if (power[m] > cfg_.secession_power_ratio * cohesion * rest) {
             polity_of_[m] = m;
             member_since_.erase(m);

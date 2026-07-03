@@ -738,7 +738,6 @@ struct WarfareConfig {
     float base_aggression_prob = 0.04f;  // annual prob a qualifying attack actually happens
     float attacker_loss = 0.02f;       // attacker mortality bump in a war year
     float defender_loss = 0.06f;       // defender mortality bump in a war year (war is worse to lose)
-    float war_mortality_cap = 2.0f;    // cap on the per-province war mortality multiplier
     // Power = population x (power_surplus_floor + (1-floor) x clamp(surplus_ratio)). A
     // bigger, better-fed polity fields a stronger army (levy + surplus-fed soldiers).
     float power_surplus_floor = 0.5f;
@@ -786,11 +785,12 @@ struct WarfareConfig {
     float steppe_arable_max = 0.2f;   // a province this un-arable ...
     float steppe_forest_max = 0.3f;   // ... and this open is steppe (grassland)
     float cavalry_polity_min_share = 0.5f;  // steppe share of polity power to fight as cavalry
-    // ROME — cohesion: integration grows with tenure. A member held for generations
-    // needs proportionally MORE relative power to secede (assimilation/administration);
-    // a fresh conquest is as fragile as the day it was taken.
-    float cohesion_per_year_held = 0.02f;  // hold-threshold growth per year of membership
-    float cohesion_max_mult = 3.0f;        // integration ceiling on the hold threshold
+    // ROME — cohesion: integration grows with tenure and SATURATES on the
+    // assimilation timescale (no hard cap; diminishing returns are the mechanism:
+    // cohesion = 1 + gain_max * years / (years + halfsat)). A fresh conquest is as
+    // fragile as the day it was taken; one held for generations is integrated.
+    float cohesion_gain_max = 2.0f;        // asymptotic integration advantage (3x total hold)
+    float cohesion_halfsat_years = 50.0f;  // ~two generations: the assimilation timescale
 };
 
 struct SeasonalAgricultureConfig {
@@ -1542,9 +1542,10 @@ struct PopulationAgingConfig {
     // medicine releases disease-as-population-check in the modern era (the hockey-stick
     // cause). Memoryless single-year spikes for now; multi-year outbreaks + spread
     // along trade links are the follow-up (design §5.5, D8).
-    float epidemic_base_rate = 0.02f;       // annual outbreak prob at disease=1, rural
-    float epidemic_density_weight = 2.0f;   // urban crowding multiplies the outbreak prob
-    float epidemic_max_prob = 0.15f;        // cap on annual outbreak probability
+    float epidemic_base_rate = 0.02f;       // annual outbreak HAZARD RATE at disease=1, rural;
+                                            // probability arrives as 1 - exp(-rate) (Poisson) —
+                                            // physically bounded, no cap (grounding doctrine)
+    float epidemic_density_weight = 2.0f;   // urban crowding multiplies the outbreak rate
     float epidemic_severity = 1.2f;         // mortality-multiplier bump at disease=1, rural
 
     // --- Geology disasters (M6a): the second episodic hazard. Quakes / great storms /
@@ -1552,8 +1553,8 @@ struct PopulationAgingConfig {
     // dependent (a quake hits everyone). Conserved; pre-market gate (engineering blunts
     // it in the modern era). Population only here; infrastructure/grain-store damage is
     // the follow-up. ---
-    float geology_disaster_base_rate = 0.015f;  // annual disaster prob at geology=1
-    float geology_disaster_max_prob = 0.12f;    // cap on annual disaster probability
+    float geology_disaster_base_rate = 0.015f;  // annual disaster HAZARD RATE at geology=1;
+                                                // probability = 1 - exp(-rate), no cap
     float geology_disaster_severity = 1.0f;     // mortality-multiplier bump at geology=1
 
     // Radiation chronically depresses FERTILITY (a distinct channel from the

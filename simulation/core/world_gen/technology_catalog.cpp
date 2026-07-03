@@ -3,6 +3,7 @@
 #include "core/world_gen/technology_catalog.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -224,18 +225,16 @@ EraTechEffects TechnologyCatalog::aggregate_effects(uint8_t era) const {
             e.mortality_mult *= n.mortality_mult;
         }
     }
-    // Sanity bounds: cap the boosts and floor the mortality relief to keep the
-    // aggregate sane (no runaway, no near-zero deaths). Both production caps are set
-    // high enough that the data-driven tech tree is FULLY EXPRESSIVE across the V1
-    // eras — the "learning to learn" knowledge stack (writing -> printing ->
-    // scientific method) and the agricultural stack (plough -> heavy plough /
-    // three-field / watermill -> mechanized agriculture) each drive their curve.
-    // Era thresholds, not these caps, set the pace. (A bare 6.0 food cap previously
-    // bit at era 2, flattening the entire agricultural arc — incl. the medieval
-    // revolution — so technique could not raise the carrying ceiling.)
-    e.knowledge_mult = std::min(e.knowledge_mult, 200.0f);
-    e.food_mult = std::min(e.food_mult, 40.0f);
-    e.mortality_mult = std::max(e.mortality_mult, 0.35f);
+    // Grounding doctrine (root CLAUDE.md): NO behavior-shaping caps. The tech tree
+    // CONTENT is the ceiling — the aggregate is exactly the product of the techs a
+    // society has actually earned, and a modded tree means what it says. (A bare 6.0
+    // food cap once bit at era 2 and flattened the whole agricultural arc; the 40/200
+    // caps that replaced it were still silent flatteners for larger trees.) Only
+    // non-physicality guards remain: a multiplier cannot be negative or non-finite.
+    auto physical = [](float v) { return (std::isfinite(v) && v >= 0.0f) ? v : 1.0f; };
+    e.knowledge_mult = physical(e.knowledge_mult);
+    e.food_mult = physical(e.food_mult);
+    e.mortality_mult = physical(e.mortality_mult);
     return e;
 }
 

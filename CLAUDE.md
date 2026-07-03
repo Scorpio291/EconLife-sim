@@ -17,6 +17,24 @@ Never use std::rand, system time, or thread ID as entropy sources.
 Same seed + same inputs = same outputs. CI runs determinism tests on
 every commit.
 
+## Grounding Doctrine — No Magic Rails (ratified 2026-07-03)
+Mechanisms first, calibration second, rails never:
+- **No arbitrary caps that shape behavior.** A limit must be physical: a
+  probability arrives as `1 - exp(-rate)`; land is finite; a granary holds what
+  was stored; assimilation saturates on a timescale. `std::clamp`/`std::min` are
+  permitted only as crash sentinels for non-finite values — never as gameplay.
+- **Every flow is conserved and located.** Every effect must trace to a mechanism
+  you can point at in the world: who ate the grain, who paid the coin, who died,
+  where the loss went. Signals derived from stocks must eventually be wired as
+  real flows on those stocks, not remain parallel bookkeeping.
+- **Constants must be defensible in real units** (an ox eats X per km, a soldier
+  eats Y per campaign day, a levy is Z% of population). Pure pacing dials (era
+  thresholds) are calibration and acceptable; mechanism-shaped constants that
+  merely "make it work" are rails and are not.
+- **Build the advanced mechanism first; scale back for performance explicitly**
+  (LOD, batching, cadence, hop caps) and document each scaleback as such — never
+  by silently replacing the mechanism with a rail.
+
 ## Module Interface Contract
 Every module in simulation/modules/ has a corresponding interface spec
 in docs/interfaces/[module]/INTERFACE.md. Read the interface spec before

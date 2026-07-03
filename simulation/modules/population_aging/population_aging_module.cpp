@@ -65,11 +65,11 @@ float PopulationAgingModule::epidemic_mortality_factor(float disease_dial, float
     if (d <= 0.0f)
         return 1.0f;
     const float density = std::clamp(urban_fraction, 0.0f, 1.0f);
-    // Outbreak probability rises with the world's disease load AND crowding (towns
-    // are disease vectors — so disease brakes urbanization).
-    const float p = std::clamp(
-        cfg.epidemic_base_rate * d * (1.0f + cfg.epidemic_density_weight * density), 0.0f,
-        cfg.epidemic_max_prob);
+    // Outbreak hazard rate rises with the world's disease load AND crowding (towns
+    // are disease vectors — so disease brakes urbanization). The annual probability
+    // is the Poisson arrival 1 - exp(-rate): physically in [0,1) with no cap.
+    const float rate = cfg.epidemic_base_rate * d * (1.0f + cfg.epidemic_density_weight * density);
+    const float p = 1.0f - std::exp(-std::max(0.0f, rate));
     if (rng.next_float() >= p)
         return 1.0f;  // no outbreak this year
     // Outbreak: a mortality spike scaled by the disease load and the crowding.
@@ -81,7 +81,8 @@ float PopulationAgingModule::disaster_mortality_factor(float geology_dial, Deter
     const float g = std::clamp(geology_dial, 0.0f, 1.0f);
     if (g <= 0.0f)
         return 1.0f;
-    const float p = std::clamp(cfg.geology_disaster_base_rate * g, 0.0f, cfg.geology_disaster_max_prob);
+    // Poisson arrival: probability = 1 - exp(-rate); physical, uncapped.
+    const float p = 1.0f - std::exp(-std::max(0.0f, cfg.geology_disaster_base_rate * g));
     if (rng.next_float() >= p)
         return 1.0f;  // no disaster this year
     return 1.0f + cfg.geology_disaster_severity * g;  // quake/storm/wildfire mortality spike
