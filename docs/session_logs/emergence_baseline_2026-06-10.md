@@ -1620,3 +1620,37 @@ rations, Lanchester battles, carry-limited sacks; lords emerge from wealth; grai
 moves as a real conserved flow. Remaining from the fake-rails audit: none of the six.
 Next: the single recalibration (restore earthlike modern ~12,000 and re-anchor the
 barren world under the grounded economy), then M7 entry.
+
+---
+
+## 2026-07-04 — RC: the single recalibration under the grounded economy
+
+With the grounding pass complete (G1-G4: de-capped tech/hazards, the full war economy,
+emergent lords, real grain flows), the deferred one-shot re-tune of the era pacing
+dials (knowledge_to_advance — the ratified calibration surface; mechanisms untouched).
+
+Method: one measured iteration. Ran the earthlike baseline, took each era's observed
+within-era knowledge rate (stable because population is bounded by that era's food
+ceiling), and set each threshold gap = rate x real-history duration target.
+
+New thresholds: 3830 / 12740 / 19650 / 49250 / 253000 / 892000 / 2117000 (builtin +
+eras.csv in sync). Result vs real history:
+
+  Neolithic 6784/6700, Bronze 2127/2100, Iron 652/650, Classical 1040/1050,
+  Medieval 969/950, Early-modern 305/300, Industrial 237/250 — every era within ~4% —
+  and MODERN AT YEAR 12,114 (real ~12,000; 0.95% off).
+
+Full spectrum, all anchors restored under the grounded economy:
+  GARDEN era 2 Developing (abundance breeds stagnation);
+  EARTHLIKE Modern @ 12,114 Thriving;
+  BARREN DEATHWORLD era 4 STALLED at Classical (the original intended anchor —
+    recovered by the G4 grain-diffusion famine insurance, then held by this re-tune);
+  FERTILE DEATHWORLD Modern @ 10,976 Thriving (fastest, as designed).
+
+Gates: 1,584 unit (266,478), 37 integration (13,211), emergence (1 failed-as-expected).
+
+The medieval band now stands: M1-M5 shipped, M6a all seven hazards, M6c the full war &
+diplomacy engine (through conquerors), the G1-G4 grounding pass, and this calibration —
+all on a fully grounded, conserved, deterministic economy with historical timing.
+Remaining: M7 entry materialization (workshops/manors/castles/polities from the cohort
+aggregates; the M4 content goes live).

@@ -66,7 +66,7 @@ TEST_CASE("knowledge: scholars produce knowledge at the dawn, none in market era
 
 TEST_CASE("knowledge: accumulated knowledge advances the era", "[knowledge][tier1]") {
     KnowledgeModule mod;
-    // era 1 (subsistence) advances at knowledge_to_advance = 4200 (builtin; the
+    // era 1 (subsistence) advances at its builtin knowledge_to_advance (the
     // historically-grounded era thresholds — see era_catalog).
     WorldState w = make_world(/*era=*/1, /*scholars=*/2, /*knowledge=*/4300.0f);
     DeltaBuffer d{};
