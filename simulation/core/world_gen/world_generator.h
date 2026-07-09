@@ -66,6 +66,11 @@ struct WorldGeneratorConfig {
     float founding_hardiness = 0.0f;
     std::string goods_directory;       // path to packages/base_game/goods/
     std::string recipes_directory;     // path to packages/base_game/recipes/
+    // Pre-market entry materialization (M7): a medieval-band start spins the town
+    // economy up from the same laws the climb uses. Real units.
+    float premarket_workers_per_workshop = 8.0f;   // a medieval workshop's headcount
+    float premarket_endowment_fraction = 0.5f;     // founder's capital share endowed
+                                                   // into the firm (conserved transfer)
     std::string
         facility_types_filepath;  // path to packages/base_game/facility_types/facility_types.csv
     std::string technology_directory;  // path to packages/base_game/technology/

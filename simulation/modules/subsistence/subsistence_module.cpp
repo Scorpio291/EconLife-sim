@@ -7,21 +7,10 @@
 #include "core/rng/deterministic_rng.h"
 #include "core/world_gen/era_catalog.h"
 #include "core/world_state/delta_buffer.h"
+#include "core/world_state/geography.h"
 #include "core/world_state/world_state.h"
 
 namespace econlife {
-
-float SubsistenceModule::subsistence_output(float natural_capital, float labor,
-                                            const SubsistenceConfig& cfg) {
-    if (natural_capital <= 0.0f || labor <= 0.0f)
-        return 0.0f;
-    const float ceiling = cfg.ceiling_per_capital_unit * natural_capital;
-    // Diminishing returns on labour: output -> ceiling as labour grows. At
-    // labor == labor_half_saturation, output is ~63% (1 - 1/e) of the ceiling.
-    const float half = cfg.labor_half_saturation > 0.0f ? cfg.labor_half_saturation : 1.0f;
-    const float saturation = 1.0f - std::exp(-labor / half);
-    return ceiling * saturation;
-}
 
 float SubsistenceModule::surplus_ratio(float output, uint32_t population,
                                        const SubsistenceConfig& cfg) {
@@ -74,18 +63,6 @@ float SubsistenceModule::atmosphere_ceiling_factor(float atmosphere_dial,
 
 bool SubsistenceModule::regime_manorial(std::string_view regime) const {
     return regime_in(cfg_.manorial_regimes, regime);
-}
-
-uint32_t SubsistenceModule::lord_count(uint32_t residents_count, const SubsistenceConfig& cfg) {
-    if (residents_count == 0)
-        return 0;
-    uint32_t lords = static_cast<uint32_t>(
-        std::lround(cfg.manorial_lord_fraction * static_cast<float>(residents_count)));
-    if (lords < 1)
-        lords = 1;
-    if (lords > residents_count)
-        lords = residents_count;
-    return lords;
 }
 
 float SubsistenceModule::proto_share_for(bool is_lord, uint32_t lords_count,
@@ -147,11 +124,7 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float working_fraction = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
 
     // Natural capital the population can draw food from this tick.
-    const float natural_capital =
-        cfg_.weight_agricultural_productivity * prov.agricultural_productivity +
-        cfg_.weight_arable_land * prov.geography.arable_land_fraction +
-        cfg_.weight_forest_forage * prov.geography.forest_coverage +
-        cfg_.weight_fisheries * prov.fisheries.current_stock;
+    const float natural_capital = natural_capital_of(prov, cfg_);
 
     // Knowledge raises the land's carrying capacity (better technique) — the escape
     // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.

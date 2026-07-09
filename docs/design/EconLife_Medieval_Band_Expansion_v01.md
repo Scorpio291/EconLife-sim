@@ -585,6 +585,23 @@ honest verb set is small, by design.
    read as real history; the World-Class spectrum bites harder.
 7. **M7 — Entry & verbs.** Era selection surfaces the world's earned state;
    medieval player verbs. *Deliverable:* a playable medieval start.
+   **STATUS: entry materialization SHIPPED (2026-07-09).** A fresh pre-modern,
+   non-founding start (`starting_era` in a manorial/premarket regime:
+   feudal/mercantile/industrial) materializes the town economy at world gen from
+   the SAME laws the climb runs on (`PremarketGenesis::materialize`, called from
+   `WorldGenerator::generate` on a forked stream): subsistence surplus × tech
+   food_mult → ox-cart catchment (GrainLogisticsModule::delivered_fraction, the
+   M2 allocation) → urban heads → `floor(urban/8)` workshops at real headcounts,
+   each founder-gated (`capital >= base_construction_cost`, wealth-ranked — the
+   G3 lord ordering) and founder-FUNDED (endowment = 0.5×capital, a conserved
+   transfer into `biz.cash`); the lord stratum (`lord_count`) holds manors
+   (`manor_farming`, era 2, 30 workers). Founding-seed worlds skip it (the climb
+   carries aggregates; D3 resolved as reuse-NPCBusiness). EARNED: a
+   subsistence-locked province gets no workshops. Gate:
+   premarket_genesis_integration_test.cpp (era-consistency, conservation vs
+   control world, bronze/founding starts materialize nothing, determinism).
+   Deferred: medieval player verbs/UI surfacing; entry-from-climb at LOD
+   promotion (materializing from warfare's polity map).
 
 M1 is the linchpin and the riskiest (spectrum rebalance); everything downstream
 is inert without it, and it is the only milestone that touches the food/population
@@ -603,8 +620,12 @@ core — which it does *by raising the ceiling, never by softening the wall.*
   (emergence_baseline_2026-06-10.md, 2026-06-25 M1 entry).
 - **D2:** is `agricultural_capital` (land improvement as a located stock) in scope
   for M1, or is knowledge+food-tech enough to drive the first surplus pulses?
-- **D3:** manorial ownership model — reuse `NPCBusiness` (manor as a firm with a
-  land endowment) or a dedicated estate entity? (Reuse preferred.)
+- ~~**D3:** manorial ownership model — reuse `NPCBusiness` (manor as a firm with a
+  land endowment) or a dedicated estate entity? (Reuse preferred.)~~ —
+  **RESOLVED & SHIPPED (2026-07-09, M7):** reuse. A manor is an `NPCBusiness`
+  (sector agriculture) + `Facility` running the `manor_farming` recipe, owned by
+  a wealth-ranked lord and funded by a conserved endowment from the lord's own
+  proto-capital.
 - **D4:** guild representation — a new lightweight per-craft/per-town record, or
   encode guild state on existing business/market fields? (Lean lightweight.)
 - **D5:** does the mercantile band (era 6) reuse this genesis path wholesale

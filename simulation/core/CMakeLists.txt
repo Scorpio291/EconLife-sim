@@ -17,6 +17,7 @@ add_library(econlife_core STATIC
     world_gen/occupation_catalog.cpp
     world_gen/facility_type_catalog.cpp
     world_gen/technology_catalog.cpp
+    world_gen/premarket_genesis.cpp
     world_gen/world_generator.cpp
     world_gen/nation_generator.cpp
     world_gen/settlement_generator.cpp

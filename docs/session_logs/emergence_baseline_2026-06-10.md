@@ -1654,3 +1654,58 @@ diplomacy engine (through conquerors), the G1-G4 grounding pass, and this calibr
 all on a fully grounded, conserved, deterministic economy with historical timing.
 Remaining: M7 entry materialization (workshops/manors/castles/polities from the cohort
 aggregates; the M4 content goes live).
+
+---
+
+## 2026-07-09 — M7: entry materialization (the band's finale)
+
+A fresh pre-modern, non-founding start ("start in 500 CE") now opens with the town
+economy already standing — spun up at world gen from the SAME laws the climb runs on,
+not conjured. `PremarketGenesis::materialize` (core/world_gen/premarket_genesis.cpp),
+called from `WorldGenerator::generate` on an independently forked stream
+(kPremarketGenesisRngSalt) when `starting_era`'s regime is premarket-manorial
+(feudal/mercantile/industrial), `founding_seed_mode` is off, and the production
+catalogs are loaded:
+
+1. SURPLUS (subsistence law): per province, `natural_capital_of` (newly exposed
+   static) → `subsistence_output` × the era's tech food_mult, minus need — the same
+   Malthusian arithmetic the climb runs.
+2. CATCHMENT (the ox-cart law, M2): each source allocates its surplus across
+   {self + neighbours} weighted by `GrainLogisticsModule::delivered_fraction`
+   (terrain/roads/gravity; the teams eat the difference) → net feedable → urban heads
+   at `urban_per_capita_food`.
+3. ENTITIES: `floor(urban / 8)` workshops per province (8 workers each — a real
+   medieval shop headcount), rotating over the era-available crafts (lowest-era
+   recipe per facility type, era_available ≤ starting era — no anachronisms). Each
+   is FOUNDER-GATED (owner must hold `capital >= base_construction_cost`; candidates
+   wealth-ranked capital desc/id asc — the same emergent ordering that makes G3
+   lords) and FOUNDER-FUNDED: endowment = 0.5 × the founder's capital, a conserved
+   transfer into `biz.cash`. The lord stratum (`lord_count`) holds manors — new
+   `manor_farming` recipe (era 2, wheat 8 + wool 1, labor 30, no fertilizer input)
+   on the existing manor_farm facility type. D3 resolved: a manor IS an NPCBusiness
+   + Facility (reuse, as preferred).
+
+EARNED, both ways: a subsistence-locked province (no catchment surplus) gets no
+workshops; a bronze/barter start gets nothing at all (livelihoods, not firms); a
+founding-seed world skips it (the climb carries aggregates — entities appear at
+entry/LOD promotion, the deferred follow-up that will also read warfare's polity map).
+
+Gate: premarket_genesis_integration_test.cpp — era-consistency (all facility recipes
+era ≤ start), manors present under feudal, endowment conservation proven against a
+control world (same seed, no catalogs → identical NPC layer; total wealth equal to
+1e-5), bronze/founding starts materialize nothing, determinism (two generations
+identical). Config: premarket_workers_per_workshop 8, premarket_endowment_fraction 0.5.
+
+Link note: core->module shared laws (natural_capital_of, subsistence_output,
+lord_count, delivered_fraction) moved to header-inline definitions -- targets that
+never pull the module objects (scenario tests) otherwise fail to resolve them from
+libeconlife_core.a's premarket_genesis.o (static-archive ordering). One law, one
+definition, no module object code needed by core.
+
+Gates: 1,584 unit (266,478), 41 integration (13,647 incl. the 4 new M7), full fast
+gate 1,750/1,750 (unit+integration+scenario+determinism+benchmarks), emergence
+green (122.8s). THE MEDIEVAL BAND IS COMPLETE: M1 earned surplus → M2 ox-cart logistics →
+M3 feudal genesis → M4 era content → M5 guild/specialist layer → M6a hazards →
+M6c war & diplomacy → G1-G4 grounding → RC calibration → M7 entry. Deferred (logged,
+not blocking): medieval player verbs/UI, entry-from-climb at LOD promotion, castles
+at polity seats, D4 guild records.

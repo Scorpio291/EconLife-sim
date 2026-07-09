@@ -6,6 +6,7 @@
 // All random draws go through DeterministicRNG for full reproducibility.
 
 #include "core/world_gen/world_generator.h"
+#include "core/world_gen/premarket_genesis.h"
 
 #include <algorithm>
 #include <cmath>
@@ -182,6 +183,7 @@ bool WorldGeneratorConfig::load_from_json(const std::string& path, WorldGenerato
 // constants; only their stability matters (changing them re-rolls those layers).
 static constexpr uint32_t kGoodsLayerRngSalt = 0x600D0001u;
 static constexpr uint32_t kProductionLayerRngSalt = 0x600D0002u;
+static constexpr uint32_t kPremarketGenesisRngSalt = 0x600D0003u;
 // Founding population in the pre-market commons regimes is a small fraction of the
 // modern-scale provincial population, so a dawn world starts within the land's
 // subsistence carrying capacity. Tuned against the society-evolution harness.
@@ -467,6 +469,21 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     world.tech_effects_by_era.clear();
     for (uint8_t era = 1; era <= world.era_catalog.max_era(); ++era)
         world.tech_effects_by_era.push_back(tech_catalog.aggregate_effects(era));
+
+    // M7 — pre-market entry materialization. A fresh medieval-band start ("start in
+    // 500 CE") spins the town economy up from the SAME laws the climb runs on:
+    // workshops where the ox-cart catchment feeds a town (earned; a subsistence-
+    // locked province gets none), founder-funded from the wealthiest residents
+    // (conserved transfers), and manors for the lord stratum. Founding-seed worlds
+    // skip this (the climb carries aggregates; entities appear at entry/full-LOD).
+    const bool premarket_regime =
+        (start_regime == "feudal" || start_regime == "mercantile" || start_regime == "industrial");
+    if (!config.founding_seed_mode && premarket_regime && recipe_catalog.size() > 0 &&
+        facility_type_catalog.size() > 0) {
+        DeterministicRNG premarket_rng = rng.fork(kPremarketGenesisRngSalt);
+        PremarketGenesis::materialize(world, recipe_catalog, facility_type_catalog, config,
+                                      config.starting_era, premarket_rng);
+    }
 
     // Step 9: Stage 11 — Output world.json if path configured.
     if (!config.output_world_file.empty()) {

@@ -18,6 +18,7 @@
 // extend it with latency for the lightspeed limit — see
 // docs/design/EconLife_Logistics_and_Political_Scale_v01.md.
 
+#include <algorithm>
 #include <string_view>
 #include <vector>
 
@@ -47,9 +48,26 @@ class GrainLogisticsModule : public ITickModule {
 
     // Fraction of a load delivered across a link after the draft team eats its share.
     // Pure and static (unit-testable). Water << land; mountains/heavy-gravity shrink
-    // it toward 0 (no economic haul); roads raise it.
+    // it toward 0 (no economic haul); roads raise it. Defined inline: entry
+    // materialization (core/world_gen/premarket_genesis.cpp) runs the SAME law, and
+    // core must not need module object code to link.
     static float delivered_fraction(LinkType type, float terrain_cost, float infra_bonus,
-                                    float gravity_g, const GrainLogisticsConfig& cfg);
+                                    float gravity_g, const GrainLogisticsConfig& cfg) {
+        float mode = cfg.land_mode;
+        if (type == LinkType::River)
+            mode = cfg.river_mode;
+        else if (type == LinkType::Maritime)
+            mode = cfg.maritime_mode;
+
+        const float terrain_factor =
+            1.0f + cfg.terrain_weight * std::clamp(terrain_cost, 0.0f, 1.0f);
+        const float infra_factor =
+            std::max(0.0f, 1.0f - cfg.infra_relief * std::clamp(infra_bonus, 0.0f, 1.0f));
+        const float gravity_factor = 1.0f + cfg.gravity_weight * std::max(0.0f, gravity_g - 1.0f);
+
+        const float k = cfg.k_base * mode * terrain_factor * infra_factor * gravity_factor;
+        return std::clamp(1.0f - k, 0.0f, 1.0f);
+    }
 
    private:
     bool regime_active(std::string_view regime) const;

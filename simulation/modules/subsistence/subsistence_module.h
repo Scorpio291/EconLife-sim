@@ -15,12 +15,15 @@
 // the modern economy is untouched. See docs/design/
 // EconLife_Origin_Economy_and_Early_Jobs_v01.md.
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string_view>
 #include <vector>
 
 #include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
+#include "core/world_state/geography.h"  // Province (inline shared-law statics)
 
 namespace econlife {
 
@@ -48,11 +51,33 @@ class SubsistenceModule : public ITickModule {
 
     // --- Pure, testable production model ---
 
+    // The province's natural capital available to the commons food economy — the
+    // weighted blend of arable land, forage, fisheries, and agricultural technique.
+    // Shared with entry materialization (one law). Pure/static. Defined inline:
+    // core/world_gen/premarket_genesis.cpp runs the SAME law, and core must not
+    // need module object code to link.
+    static float natural_capital_of(const Province& province, const SubsistenceConfig& cfg) {
+        return cfg.weight_agricultural_productivity * province.agricultural_productivity +
+               cfg.weight_arable_land * province.geography.arable_land_fraction +
+               cfg.weight_forest_forage * province.geography.forest_coverage +
+               cfg.weight_fisheries * province.fisheries.current_stock;
+    }
+
     // Food the province's natural capital yields when worked by `labor` people.
     // Rises with labour toward a ceiling (carrying capacity) set by natural
     // capital — diminishing returns, so fixed land caps the head count it feeds.
+    // Inline for the same reason as natural_capital_of.
     static float subsistence_output(float natural_capital, float labor,
-                                    const SubsistenceConfig& cfg);
+                                    const SubsistenceConfig& cfg) {
+        if (natural_capital <= 0.0f || labor <= 0.0f)
+            return 0.0f;
+        const float ceiling = cfg.ceiling_per_capital_unit * natural_capital;
+        // Diminishing returns on labour: output -> ceiling as labour grows. At
+        // labor == labor_half_saturation, output is ~63% (1 - 1/e) of the ceiling.
+        const float half = cfg.labor_half_saturation > 0.0f ? cfg.labor_half_saturation : 1.0f;
+        const float saturation = 1.0f - std::exp(-labor / half);
+        return ceiling * saturation;
+    }
 
     // produced / needed for `population` people. 1.0 = exactly fed.
     static float surplus_ratio(float output, uint32_t population, const SubsistenceConfig& cfg);
@@ -100,8 +125,19 @@ class SubsistenceModule : public ITickModule {
                                  float total_proto, bool manorial, const SubsistenceConfig& cfg);
 
     // How many lords a manorial province of `residents_count` heads supports
-    // (manorial_lord_fraction, at least one). Pure/static.
-    static uint32_t lord_count(uint32_t residents_count, const SubsistenceConfig& cfg);
+    // (manorial_lord_fraction, at least one). Pure/static. Inline for the same
+    // reason as natural_capital_of.
+    static uint32_t lord_count(uint32_t residents_count, const SubsistenceConfig& cfg) {
+        if (residents_count == 0)
+            return 0;
+        uint32_t lords = static_cast<uint32_t>(
+            std::lround(cfg.manorial_lord_fraction * static_cast<float>(residents_count)));
+        if (lords < 1)
+            lords = 1;
+        if (lords > residents_count)
+            lords = residents_count;
+        return lords;
+    }
 
    private:
     SubsistenceConfig cfg_;
