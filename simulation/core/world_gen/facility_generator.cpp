@@ -154,16 +154,27 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
     // enters at config.starting_era (already resolved from the era_catalog default).
     world.technology.current_era = config.starting_era;
     world.technology.era_started_tick = 0;
-    if (const EraDefinition* e = world.era_catalog.by_index(config.starting_era)) {
-        world.technology.base_year = e->start_year;
+    const EraDefinition* start_era_def = world.era_catalog.by_index(config.starting_era);
+    if (start_era_def != nullptr) {
+        world.technology.base_year = start_era_def->start_year;
     } else {
         world.technology.base_year = 2000;
     }
 
-    // Seed initial domain knowledge from config defaults.
+    // Seed initial domain knowledge. The configured table describes the MODERN
+    // entry point (year-2000 levels: semiconductor physics mid-frontier, software
+    // rising), so it only applies to a world that starts in a market era. A
+    // pre-modern start has none of it — a Neolithic world does not open with
+    // 0.35 semiconductor physics; it earns its domain knowledge through the
+    // climb. (Before the era re-base this table was seeded unconditionally.)
+    const std::string start_regime =
+        start_era_def != nullptr ? start_era_def->economic_regime : std::string();
+    const bool market_start = (start_regime == "modern" || start_regime == "near_future" ||
+                               start_regime == "space_age");
     TechnologyConfig tech_config;
     for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
-        world.technology.domain_knowledge[i] = tech_config.era1_domain_knowledge[i];
+        world.technology.domain_knowledge[i] =
+            market_start ? tech_config.era1_domain_knowledge[i] : 0.0f;
     }
 
     // Get baseline technology nodes (available at game start).
@@ -230,10 +241,15 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
             biz.actor_tech_state.holdings[node->node_key] = std::move(holding);
         }
 
-        // Also give a few non-baseline Era 1 techs to a fraction of businesses
-        // (simulating early R&D investment that existed before year 2000).
-        auto era1_nodes = tech_catalog.nodes_available_at(1);
-        for (const TechnologyNode* node : era1_nodes) {
+        // Also give a few non-baseline techs from the STARTING era's frontier to a
+        // fraction of businesses (simulating the R&D investment that already
+        // existed when the world opens). This must follow the starting era, not a
+        // hardcoded era 1: after the era re-base, era 1 is the Neolithic, so a
+        // modern world was being seeded with pottery and looms while the actual
+        // era-8 frontier nodes (the ones the era-transition score reads
+        // maturation from) were never seeded to anyone.
+        auto frontier_nodes = tech_catalog.nodes_available_at(config.starting_era);
+        for (const TechnologyNode* node : frontier_nodes) {
             if (node->is_baseline)
                 continue;
 

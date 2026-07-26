@@ -95,3 +95,84 @@ TEST_CASE("Technology: module name and dependencies match spec", "[technology][t
     REQUIRE(before.size() == 1);
     REQUIRE(before[0] == "production");
 }
+
+// ===========================================================================
+// Era advancement — the calendar gate is DATA-DRIVEN and the two advancement
+// paths are cleanly split (F1 repair).
+//
+// These pin the bugs found in review: a hardcoded year table that was never
+// renumbered when the seven pre-modern eras were inserted (it pinned era 9 to
+// year 2100 and dead-ended the timeline at era 10), and an unsigned base_year
+// that wrapped for every BCE start and made the gate vacuously true.
+// ===========================================================================
+
+TEST_CASE("Technology: modern era advances at the catalog's scheduled year",
+          "[technology][tier1][era]") {
+    // Era 8 (turn_of_millennium, start 2000) -> era 9 (disruption, start 2007).
+    // The scheduled year is the trigger; no tech maturation is needed.
+    WorldState w = make_world_with_tech(8, 0);
+    w.technology.base_year = 2000;
+
+    TechnologyModule mod;
+    DeltaBuffer before{};
+    mod.execute(w, before);
+    // Year 2000: the next era is not due yet.
+    bool advanced_early = false;
+    for (const auto& td : before.technology_deltas)
+        if (td.new_era.has_value())
+            advanced_early = true;
+    CHECK_FALSE(advanced_early);
+
+    // Year 2007 (7 years of daily ticks): the era is due and opens.
+    w.current_tick = 7u * 365u;
+    DeltaBuffer after{};
+    mod.execute(w, after);
+    bool advanced = false;
+    for (const auto& td : after.technology_deltas)
+        if (td.new_era.has_value() && *td.new_era == 9)
+            advanced = true;
+    CHECK(advanced);
+}
+
+TEST_CASE("Technology: knowledge-gated pre-modern eras are not advanced by the calendar",
+          "[technology][tier1][era]") {
+    // Era 1 (neolithic) has knowledge_to_advance > 0, so the pre-modern climb is
+    // knowledge_module's to pace — each world advances on what it earned. If the
+    // calendar could advance it, every world would be dragged through the
+    // pre-modern eras on a fixed historical schedule and the World-Class
+    // spectrum (garden stalls in the Bronze Age, fertile races ahead) would die.
+    WorldState w = make_world_with_tech(1, 0);
+    w.technology.base_year = -10000;  // the Neolithic opens at 10000 BCE
+
+    // Run well past era 2's scheduled year (-3300): 7000 years of ticks.
+    w.current_tick = 7000u * 365u;
+    TechnologyModule mod;
+    DeltaBuffer delta{};
+    mod.execute(w, delta);
+
+    bool advanced = false;
+    for (const auto& td : delta.technology_deltas)
+        if (td.new_era.has_value())
+            advanced = true;
+    CHECK_FALSE(advanced);
+}
+
+TEST_CASE("Technology: a BCE start year does not wrap the calendar",
+          "[technology][tier1][era]") {
+    // base_year is signed: an unsigned field turned -10000 into ~4.29e9, which
+    // satisfied every calendar comparison from tick 0 onward.
+    GlobalTechnologyState gts;
+    gts.base_year = -10000;
+    CHECK(gts.base_year < 0);
+
+    WorldState w = make_world_with_tech(1, 0);
+    w.technology.base_year = -10000;
+    // A world at the dawn must report a BCE calendar year, not a 4-billion-year
+    // one. Exercised through the module's public path: era 2 is scheduled at
+    // -3300, so at tick 0 the dawn world is nowhere near any modern threshold.
+    TechnologyModule mod;
+    DeltaBuffer delta{};
+    mod.execute(w, delta);
+    for (const auto& td : delta.technology_deltas)
+        CHECK_FALSE(td.new_era.has_value());
+}

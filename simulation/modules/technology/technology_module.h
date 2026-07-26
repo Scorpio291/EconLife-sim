@@ -82,7 +82,7 @@ class TechnologyModule : public ITickModule {
     void update_maturation_ceilings(const WorldState& state, DeltaBuffer& delta);
 
     // --- Helpers ---
-    float compute_calendar_year(uint32_t tick, uint32_t base_year) const;
+    float compute_calendar_year(uint32_t tick, int32_t base_year) const;
     float compute_era_transition_score(const WorldState& state, uint8_t target_era) const;
 };
 

@@ -247,7 +247,12 @@ TEST_CASE("ActorTechnologyState aggregate init backward compat", "[technology][s
 
 TEST_CASE("GlobalTechnologyState defaults", "[technology][state]") {
     GlobalTechnologyState gts;
-    CHECK(gts.current_era == kDefaultEntryEra);  // modern anchor (era 5)
+    // The piecemeal-construction fallback must be the MODERN anchor, i.e. the
+    // is_default_entry row of eras.csv (era 8, turn_of_millennium). It read 5
+    // after the era re-base, which is feudal Medieval — a piecemeal WorldState
+    // silently came up in a pre-market regime.
+    CHECK(gts.current_era == kDefaultEntryEra);
+    CHECK(kDefaultEntryEra == 8);
     CHECK(gts.era_started_tick == 0);
     CHECK(gts.base_year == 2000);
     CHECK(gts.active_research_projects.empty());

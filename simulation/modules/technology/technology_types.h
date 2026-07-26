@@ -18,15 +18,17 @@ namespace econlife {
 
 // ---------------------------------------------------------------------------
 // Eras are data-driven (see EraCatalog / packages/base_game/eras/eras.csv). The
-// timeline runs from the dawn (era 1, Subsistence) forward; the modern "Turn of
-// the Millennium" (~2000) is era 5. An era is a 1-based uint8 index; the catalog
-// is the source of truth for how many eras exist, their regimes, scope, and the
-// default entry point. There is no hardcoded SimulationEra enum any more.
+// timeline runs from the dawn (era 1, Neolithic) forward through the seven
+// pre-modern eras; the modern "Turn of the Millennium" (~2000) is era 8. An era
+// is a 1-based uint8 index; the catalog is the source of truth for how many eras
+// exist, their regimes, scope, and the default entry point. There is no
+// hardcoded SimulationEra enum any more.
 //
 // kDefaultEntryEra is the struct-init fallback used only when a WorldState is
 // built piecemeal (e.g. unit tests) without world-gen resolving the era from the
-// catalog. It mirrors the is_default_entry row in eras.csv (the modern anchor).
-constexpr uint8_t kDefaultEntryEra = 5;
+// catalog. It mirrors the is_default_entry row in eras.csv (the modern anchor,
+// era 8 turn_of_millennium) — keep the two in sync when the timeline changes.
+constexpr uint8_t kDefaultEntryEra = 8;
 
 // ---------------------------------------------------------------------------
 // ResearchDomain — categorization of technology research.
@@ -172,7 +174,10 @@ struct GlobalTechnologyState {
     std::map<uint8_t, std::vector<EraTrigger>> era_triggers;  // target_era -> triggers
 
     // Calendar year tracking (derived from tick: year = 2000 + tick / 365).
-    uint32_t base_year = 2000;
+    // Calendar year the STARTING era opens. Signed: pre-Common-Era starts are
+    // negative (the Neolithic opens at -10000), and an unsigned field wrapped
+    // those to ~4.29e9, which made every calendar gate vacuously true.
+    int32_t base_year = 2000;
 
     // Accumulated practical knowledge produced by scholars/scribes (the knowledge
     // module). Raises subsistence productivity (escaping the Malthusian trap) and,

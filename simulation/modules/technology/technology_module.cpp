@@ -50,7 +50,7 @@ void TechnologyModule::execute(const WorldState& state, DeltaBuffer& delta) {
 // TechnologyModule — era transition
 // ===========================================================================
 
-float TechnologyModule::compute_calendar_year(uint32_t tick, uint32_t base_year) const {
+float TechnologyModule::compute_calendar_year(uint32_t tick, int32_t base_year) const {
     return static_cast<float>(base_year) + static_cast<float>(tick) / 365.0f;
 }
 
@@ -59,30 +59,22 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
     float score = 0.0f;
     float calendar_year = compute_calendar_year(state.current_tick, state.technology.base_year);
 
-    // Calendar year thresholds for each era transition.
-    // These are the primary triggers; technology conditions add weight.
-    struct EraYearThreshold {
-        uint8_t target_era;
-        float year;
-        float weight;
-    };
-    static constexpr EraYearThreshold year_thresholds[] = {
-        {2, 2007.0f, 0.40f},   // Era 1→2
-        {3, 2013.0f, 0.40f},   // Era 2→3
-        {4, 2019.0f, 0.40f},   // Era 3→4
-        {5, 2024.0f, 0.40f},   // Era 4→5
-        {6, 2035.0f, 0.40f},   // Era 5→6
-        {7, 2050.0f, 0.40f},   // Era 6→7
-        {8, 2075.0f, 0.40f},   // Era 7→8
-        {9, 2100.0f, 0.40f},   // Era 8→9
-        {10, 2150.0f, 0.40f},  // Era 9→10
-    };
-
-    // Calendar year contribution.
-    for (const auto& t : year_thresholds) {
-        if (t.target_era == target_era && calendar_year >= t.year) {
-            score += t.weight;
-        }
+    // Calendar-year gate: an era cannot open before the calendar year the era
+    // catalog says it opens. DATA-DRIVEN — the threshold is the target era's
+    // start_year from eras.csv, not a table here. A hardcoded copy of the
+    // timeline silently rots whenever the era indices are renumbered (it did:
+    // a stale table pinned era 9 to year 2100 and dead-ended the timeline at
+    // era 10), so the catalog is the single source of truth.
+    // Semantics: the catalog's start_year is the era's SCHEDULED date, so reaching
+    // it is sufficient on its own (weight == the transition threshold). The
+    // technology conditions below then let a precocious world pull an era in
+    // early; they no longer have to make up a shortfall. The old 0.40-of-0.70
+    // split could never advance the modern timeline at all, because the tech
+    // maturation it depended on is seeded per-era and read 0.0 for every
+    // modern node (see FacilityGenerator::seed_technology).
+    const EraDefinition* target_def = state.era_catalog.by_index(target_era);
+    if (target_def != nullptr && calendar_year >= static_cast<float>(target_def->start_year)) {
+        score += config_.era_transition_threshold;
     }
 
     // Technology-based conditions from era triggers stored in GlobalTechnologyState.
@@ -128,69 +120,45 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
         }
     }
 
-    // Additional technology-driven scoring for V1 era transitions.
-    // These supplement calendar_year and are based on the spec's era trigger table.
-    switch (target_era) {
-        case 2: {
-            // 1→2: smartphone maturation, broadband, social media
-            float max_smartphone = 0.0f;
-            for (const auto& biz : state.npc_businesses) {
-                max_smartphone =
-                    std::max(max_smartphone, biz.actor_tech_state.maturation_of("smartphone_os"));
-            }
-            if (max_smartphone > 0.5f)
-                score += 0.20f;
+    // Additional technology-driven scoring for the modern V1 era transitions.
+    // These supplement calendar_year and are based on the spec's era trigger
+    // table. Keyed by the target era's STRING key, not its numeric index: the
+    // index moved when the pre-modern eras were added (these bonuses used to be
+    // cases 2-5 and, left numeric, ended up scoring Neolithic->Bronze Age with
+    // smartphone maturation). The key is stable across renumbering.
+    const std::string target_key = target_def != nullptr ? target_def->key : std::string();
+    auto max_maturation_of = [&state](const char* node_key) {
+        float best = 0.0f;
+        for (const auto& biz : state.npc_businesses)
+            best = std::max(best, biz.actor_tech_state.maturation_of(node_key));
+        return best;
+    };
 
-            // Software domain knowledge as proxy for broadband/digital adoption.
-            if (state.technology.domain_knowledge[5] > 0.40f)
-                score += 0.15f;  // software_systems
-            break;
-        }
-        case 3: {
-            // 2→3: cloud computing, renewable cost parity, EV early adoption
-            float max_cloud = 0.0f;
-            float max_solar = 0.0f;
-            for (const auto& biz : state.npc_businesses) {
-                max_cloud =
-                    std::max(max_cloud, biz.actor_tech_state.maturation_of("cloud_computing"));
-                max_solar = std::max(max_solar,
-                                     biz.actor_tech_state.maturation_of("cost_competitive_solar"));
-            }
-            if (max_cloud > 0.3f)
-                score += 0.15f;
-            if (max_solar > 0.3f)
-                score += 0.15f;
-            break;
-        }
-        case 4: {
-            // 3→4: EV mainstream, renewable dominant, GenAI
-            float max_ev = 0.0f;
-            float max_genai = 0.0f;
-            for (const auto& biz : state.npc_businesses) {
-                max_ev = std::max(max_ev, biz.actor_tech_state.maturation_of("electric_vehicle"));
-                max_genai =
-                    std::max(max_genai, biz.actor_tech_state.maturation_of("generative_ai"));
-            }
-            if (max_ev > 0.3f)
-                score += 0.15f;
-            if (max_genai > 0.2f)
-                score += 0.15f;
-            break;
-        }
-        case 5: {
-            // 4→5: Renewables parity, EV penetration, AI integration
-            float max_ai = 0.0f;
-            for (const auto& biz : state.npc_businesses) {
-                max_ai = std::max(max_ai, biz.actor_tech_state.maturation_of("ai_integration"));
-            }
-            if (max_ai > 0.3f)
-                score += 0.15f;
-            if (state.technology.domain_knowledge[3] > 0.70f)
-                score += 0.15f;  // energy_systems
-            break;
-        }
-        default:
-            break;
+    if (target_key == "disruption") {
+        // turn_of_millennium -> disruption: smartphone maturation, broadband, social media
+        if (max_maturation_of("smartphone_os") > 0.5f)
+            score += 0.20f;
+        // Software domain knowledge as proxy for broadband/digital adoption.
+        if (state.technology.domain_knowledge[5] > 0.40f)
+            score += 0.15f;  // software_systems
+    } else if (target_key == "acceleration") {
+        // disruption -> acceleration: cloud computing, renewable cost parity, EV early adoption
+        if (max_maturation_of("cloud_computing") > 0.3f)
+            score += 0.15f;
+        if (max_maturation_of("cost_competitive_solar") > 0.3f)
+            score += 0.15f;
+    } else if (target_key == "fracture") {
+        // acceleration -> fracture: EV mainstream, renewable dominant, GenAI
+        if (max_maturation_of("electric_vehicle") > 0.3f)
+            score += 0.15f;
+        if (max_maturation_of("generative_ai") > 0.2f)
+            score += 0.15f;
+    } else if (target_key == "transition") {
+        // fracture -> transition: renewables parity, EV penetration, AI integration
+        if (max_maturation_of("ai_integration") > 0.3f)
+            score += 0.15f;
+        if (state.technology.domain_knowledge[3] > 0.70f)
+            score += 0.15f;  // energy_systems
     }
 
     return score;
@@ -201,6 +169,19 @@ void TechnologyModule::check_era_transition(const WorldState& state, DeltaBuffer
     // The timeline length is data-driven: cap advancement at the catalog's last era.
     uint8_t max_era = state.era_catalog.max_era();
     if (max_era == 0 || current_era >= max_era)
+        return;
+
+    // Ownership split between the two advancement paths, decided by the data:
+    // an era with knowledge_to_advance > 0 is KNOWLEDGE-gated and belongs to
+    // knowledge_module (the pre-modern climb, where each world advances at the
+    // pace its own food/knowledge economy earns — that is what makes a garden
+    // world stall in the Bronze Age and a fertile one race ahead). Only eras
+    // with no knowledge gate (the modern band, which has real historical dates)
+    // advance on the calendar + technology score computed here. Without this
+    // split a calendar-sufficient gate would drag every world through the
+    // pre-modern eras on a fixed schedule regardless of what it had earned.
+    const EraDefinition* current_def = state.era_catalog.by_index(current_era);
+    if (current_def != nullptr && current_def->knowledge_to_advance > 0.0f)
         return;
 
     uint8_t target_era = current_era + 1;
