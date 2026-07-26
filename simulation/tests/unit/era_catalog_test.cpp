@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <filesystem>
 #include <string>
@@ -51,11 +52,14 @@ TEST_CASE("EraCatalog builtin default defines the re-based timeline", "[era_cata
 
 TEST_CASE("EraCatalog loads the base-game CSV matching the builtin default",
           "[era_catalog][tier0]") {
+    // This guard is the only thing standing between the two copies of the timeline
+    // (era_catalog.cpp's builtin and packages/base_game/eras/eras.csv) and silent
+    // drift: nearly every unit test runs on the builtin while the shipped game
+    // loads the CSV, and world_generator falls back to the builtin without a word
+    // if the CSV cannot be read. It must NOT self-skip — a skip on a missing
+    // directory is exactly how a drifted timeline would slip through CI.
     std::string dir = find_eras_dir();
-    if (dir.empty()) {
-        WARN("packages/base_game/eras not found from test working dir; skipping CSV load");
-        return;
-    }
+    REQUIRE_FALSE(dir.empty());
     EraCatalog from_csv;
     REQUIRE(from_csv.load_from_directory(dir));
 
@@ -74,6 +78,14 @@ TEST_CASE("EraCatalog loads the base-game CSV matching the builtin default",
         CHECK(a->start_year == b->start_year);
         CHECK(a->economic_regime == b->economic_regime);
         CHECK(a->v1_in_scope == b->v1_in_scope);
+        CHECK(a->display_name == b->display_name);
+        CHECK(a->is_default_entry == b->is_default_entry);
+        // knowledge_to_advance is the ratified era PACING surface — the thresholds
+        // the recalibration tunes. It was the one field this guard did not compare,
+        // so the two copies could disagree on how long every era lasts while the
+        // test stayed green.
+        CHECK_THAT(a->knowledge_to_advance,
+                   Catch::Matchers::WithinRel(b->knowledge_to_advance, 1e-6f));
     }
 }
 
