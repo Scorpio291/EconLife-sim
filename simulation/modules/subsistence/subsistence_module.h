@@ -23,6 +23,7 @@
 
 #include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
+#include "core/world_gen/world_class.h"  // WorldHazardSettings, earth_hazard
 #include "core/world_state/geography.h"  // Province (inline shared-law statics)
 
 namespace econlife {
@@ -100,6 +101,36 @@ class SubsistenceModule : public ITickModule {
     // Chronic carrying-ceiling multiplier (<= 1.0) from a hostile/toxic atmosphere
     // (M6a chronic): scaled by the `atmosphere` dial. Planetary — never wanes.
     static float atmosphere_ceiling_factor(float atmosphere_dial, const SubsistenceConfig& cfg);
+
+    // The product of every CHRONIC multiplier on the carrying ceiling: accumulated
+    // technique (knowledge), climate reliability (seasonality relative to Earth),
+    // era food technology, predator pressure on herds, and atmospheric hostility.
+    // Episodic harvest failure is deliberately NOT included — that is a per-year
+    // RNG draw, and world-gen has no year to draw for.
+    //
+    // Shared with entry materialization (core/world_gen/premarket_genesis.cpp) so a
+    // fresh pre-modern start sizes its towns against the SAME ceiling the climb
+    // would have produced. Genesis previously applied only the food-tech multiplier
+    // and so overestimated the sustainable town by ~8-9% on a default Earth world
+    // (and more on hazard worlds), founding workshops the first real harvest could
+    // not feed. NOTE: execute_province deliberately keeps its own expanded form of
+    // this product to preserve exact floating-point association for the golden
+    // determinism dumps — if you change the law here, change it there too.
+    static float chronic_ceiling_factors(float knowledge_level, float tech_food_mult,
+                                         const WorldHazardSettings& hazards,
+                                         const SubsistenceConfig& cfg) {
+        const float K = std::max(0.0f, knowledge_level);
+        const float knowledge_factor =
+            1.0f + cfg.knowledge_productivity_max * K /
+                       (K + std::max(1.0f, cfg.knowledge_productivity_halfsat));
+        const float seasonality_factor =
+            std::clamp(1.0f - cfg.seasonality_food_penalty *
+                                  (hazards.seasonality - earth_hazard().seasonality),
+                       0.3f, 1.3f);
+        return knowledge_factor * seasonality_factor * tech_food_mult *
+               predator_food_factor(hazards.predators, K, cfg) *
+               atmosphere_ceiling_factor(hazards.atmosphere, cfg);
+    }
 
     // Non-farming share the regime can sustain (rises along the pre-market arc:
     // subsistence <= barter < coinage < money < feudal < mercantile < industrial;
