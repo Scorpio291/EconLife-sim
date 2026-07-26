@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -199,6 +200,11 @@ void TechnologyModule::check_era_transition(const WorldState& state, DeltaBuffer
 // ===========================================================================
 
 void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& delta) {
+    // R&D committed per business so far in this pass. Projects are visited in the
+    // fixed order of active_maturation_projects, and this map is only ever probed
+    // by business id, so it does not affect determinism.
+    std::map<uint32_t, float> committed_by_business;
+
     // Process each active maturation project.
     for (const auto& project : state.technology.active_maturation_projects) {
         // Find the business.
@@ -262,12 +268,20 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
         // with the assigned research effort; a cash-poor actor funds only what it can
         // afford and matures proportionally slower. The cash spent (rd_spend) is
         // deducted below once progress is confirmed — no free R&D.
+        // A firm's cash is ONE purse: each project must be funded from what is left
+        // after the projects already funded in this pass, not from the same pre-tick
+        // snapshot. WorldState is const mid-tick, so measuring affordability against
+        // biz->cash alone let a firm with three projects charge each one its full
+        // cash and go negative (apply_business_deltas sums the deltas and has no
+        // zero floor) — R&D funded from money that never existed.
         float funding_adequacy = 1.0f;
         float rd_spend = 0.0f;
         const float ideal_funding =
             config_.rd_funding_per_researcher * static_cast<float>(project.researchers_assigned);
         if (ideal_funding > 0.0f) {
-            const float affordable = std::clamp(std::min(ideal_funding, biz->cash), 0.0f, ideal_funding);
+            const float already_committed = committed_by_business[project.business_id];
+            const float cash_left = std::max(0.0f, biz->cash - already_committed);
+            const float affordable = std::min(ideal_funding, cash_left);
             funding_adequacy = affordable / ideal_funding;
             rd_spend = affordable;
         }
@@ -299,6 +313,8 @@ void TechnologyModule::advance_maturation(const WorldState& state, DeltaBuffer& 
                 bd.business_id = project.business_id;
                 bd.cash_delta = -rd_spend;
                 delta.business_deltas.push_back(bd);
+                // Reserve it against this firm's purse for the rest of the pass.
+                committed_by_business[project.business_id] += rd_spend;
             }
         }
     }

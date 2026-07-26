@@ -176,3 +176,57 @@ TEST_CASE("Technology: a BCE start year does not wrap the calendar",
     for (const auto& td : delta.technology_deltas)
         CHECK_FALSE(td.new_era.has_value());
 }
+
+// ===========================================================================
+// R&D funding comes out of ONE purse (F2c).
+//
+// Affordability was measured against the same pre-tick cash snapshot for every
+// project, so a firm running several maturation projects charged each one its
+// full cash and went negative — apply_business_deltas sums the deltas and has no
+// zero floor, so R&D was funded from money that never existed.
+// ===========================================================================
+TEST_CASE("Technology: several maturation projects cannot overdraw one firm's cash",
+          "[technology][tier1][rd]") {
+    WorldState w = make_world_with_tech(8, 1);
+
+    NPCBusiness biz{};
+    biz.id = 7;
+    biz.province_id = 0;
+    biz.cash = 100.0f;  // far less than three projects would ideally spend
+    biz.actor_tech_state.effective_tech_tier = 1.0f;
+    for (const char* key : {"node_a", "node_b", "node_c"}) {
+        TechHolding h{};
+        h.node_key = key;
+        h.holder_id = biz.id;
+        h.maturation_level = 0.10f;
+        h.maturation_ceiling = 1.0f;
+        biz.actor_tech_state.holdings[key] = h;
+    }
+    w.npc_businesses.push_back(std::move(biz));
+    rebuild_npc_indices(w);
+
+    for (const char* key : {"node_a", "node_b", "node_c"}) {
+        MaturationProject p{};
+        p.node_key = key;
+        p.business_id = 7;
+        p.researchers_assigned = 5;
+        w.technology.active_maturation_projects.push_back(p);
+    }
+
+    TechnologyModule mod;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+
+    float charged = 0.0f;
+    for (const auto& bd : d.business_deltas)
+        if (bd.business_id == 7 && bd.cash_delta.has_value())
+            charged += -*bd.cash_delta;
+
+    // The firm may spend everything it has, but never more.
+    CHECK(charged <= 100.0f + 0.01f);
+    CHECK(charged > 0.0f);
+
+    // And after application the purse is not negative.
+    apply_deltas(w, d);
+    CHECK(w.npc_businesses[0].cash >= -0.01f);
+}
