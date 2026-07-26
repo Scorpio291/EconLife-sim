@@ -1426,3 +1426,207 @@ TEST_CASE("test_yield_modifier_full_with_fertilizer", "[production][tier1]") {
     auto fert = summarize_deltas(delta, "fertilizer_npk", province_id);
     REQUIRE_THAT(fert.total_demand_delta, WithinAbs(1.0f, 0.001f));
 }
+
+// ===========================================================================
+// Conservation: one deposit is one physical stock, and a throttled process does
+// not swallow the feed it cannot transform.
+// ===========================================================================
+
+namespace {
+
+// Two independent iron mines (one business + one facility each) over the same
+// province deposit set. find_extractable_deposit() hands BOTH facilities the same
+// deposit, so this is the multi-facility over-extraction case.
+DeltaBuffer run_two_iron_mines(WorldState& state, uint32_t province_id,
+                               const std::vector<ResourceDeposit>& deposits) {
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+    state.npc_businesses.push_back(make_test_business(2, province_id));
+
+    add_market(state, "iron_ore", province_id, 0.0f, 20.0f);
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    prov.deposits = deposits;
+    state.provinces.push_back(std::move(prov));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_iron_extraction_recipe());
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "iron_mining"));
+    module.facility_registry().register_facility(
+        make_test_facility(2, 2, province_id, "iron_mining"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+    return delta;
+}
+
+// Steel smelting that also needs electricity, so a province brownout attenuates it.
+Recipe make_powered_steel_recipe() {
+    Recipe recipe = make_steel_recipe();
+    recipe.id = "powered_steel_smelting";
+    recipe.energy_per_tick = 10.0f;
+    return recipe;
+}
+
+// One powered smelter in a province whose only generation is wind capacity
+// (renewable_mwh_per_capacity = 0.02 MWh per unit of capacity * quality).
+DeltaBuffer run_powered_smelter(WorldState& state, uint32_t province_id, float wind_capacity) {
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+
+    add_market(state, "iron_ore", province_id, 1000.0f);
+    add_market(state, "coking_coal", province_id, 1000.0f);
+    add_market(state, "steel", province_id, 0.0f, 15.0f);
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    prov.deposits = {make_deposit(1, ResourceType::WindPotential, wind_capacity, 1.0f)};
+    state.provinces.push_back(std::move(prov));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_powered_steel_recipe());
+    module.facility_registry().register_facility(
+        make_test_facility(1, 1, province_id, "powered_steel_smelting"));
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+    return delta;
+}
+
+}  // namespace
+
+TEST_CASE("test_shared_deposit_cannot_be_over_extracted",
+          "[production][tier1][extraction][conservation]") {
+    // Two mines drawing on ONE nearly-exhausted deposit. WorldState is const for the
+    // whole tick, so each facility used to cap against the full pre-tick remainder and
+    // the pair jointly extracted 20 units out of a 15-unit deposit — apply_deposit_deltas
+    // then floored the deposit at 0 while both outputs had already been booked as market
+    // supply. Matter minted on the exhaustion tick.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    constexpr float remaining = 15.0f;  // each mine would take 10 -> 20 requested
+
+    auto delta = run_two_iron_mines(state, province_id,
+                                    {make_deposit(700, ResourceType::IronOre, remaining)});
+
+    // Both mines run (the deposit is not exhausted when the first one starts)...
+    auto ore = summarize_deltas(delta, "iron_ore", province_id);
+    REQUIRE(ore.supply_count == 2);
+
+    // ...but the tick's combined extraction cannot exceed what the deposit holds:
+    // 10 for the first mine, the residual 5 for the second.
+    REQUIRE(ore.total_supply_delta <= remaining + 0.001f);
+    REQUIRE_THAT(ore.total_supply_delta, Catch::Matchers::WithinAbs(remaining, 0.001f));
+
+    // Every unit sold into the market is located: it came out of that one deposit, and
+    // the deposit is drawn down by exactly that much and no more.
+    float extracted = 0.0f;
+    for (const auto& dd : delta.deposit_deltas) {
+        REQUIRE(dd.province_id == province_id);
+        REQUIRE(dd.deposit_id == 700u);
+        extracted += dd.quantity_extracted;
+    }
+    REQUIRE(extracted <= remaining + 0.001f);
+    REQUIRE_THAT(extracted, Catch::Matchers::WithinAbs(ore.total_supply_delta, 0.001f));
+}
+
+TEST_CASE("test_exhausted_deposit_yields_nothing_to_later_facility",
+          "[production][tier1][extraction][conservation]") {
+    // The first mine takes the whole 8-unit remainder; the second finds nothing left
+    // this tick and produces nothing at all (not a phantom batch out of an empty pit).
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+    constexpr float remaining = 8.0f;
+
+    auto delta = run_two_iron_mines(state, province_id,
+                                    {make_deposit(701, ResourceType::IronOre, remaining)});
+
+    auto ore = summarize_deltas(delta, "iron_ore", province_id);
+    REQUIRE(ore.supply_count == 1);  // only the first mine produced
+    REQUIRE_THAT(ore.total_supply_delta, Catch::Matchers::WithinAbs(remaining, 0.001f));
+
+    REQUIRE(delta.deposit_deltas.size() == 1);
+    REQUIRE_THAT(delta.deposit_deltas[0].quantity_extracted,
+                 Catch::Matchers::WithinAbs(remaining, 0.001f));
+}
+
+TEST_CASE("test_power_shortfall_scales_input_debit", "[production][tier1][energy][conservation]") {
+    // Conservation: a brownout throttles the FURNACE, it does not destroy its feed.
+    // Inputs are debited at the same ratio the output is produced at, so the
+    // inputs-consumed / output-produced ratio is identical at half power and full power.
+    // Before the fix the half-power case drew the full 15 units of feed to make 4 units
+    // of steel: 7.5 units of ore and coal became neither product, nor waste, nor stock.
+    constexpr uint32_t province_id = 0;
+
+    // Full power: wind 1000 * quality 1.0 * 0.02 = 20 MWh >= 10 MWh demand -> ratio 1.0.
+    auto full_state = make_test_world_state();
+    auto full = run_powered_smelter(full_state, province_id, 1000.0f);
+
+    // Half power: wind 250 * 1.0 * 0.02 = 5 MWh vs 10 MWh demand -> ratio 0.5, and no
+    // fossil stock in the province to cover the shortfall.
+    auto short_state = make_test_world_state();
+    auto shortfall = run_powered_smelter(short_state, province_id, 250.0f);
+
+    auto full_iron = summarize_deltas(full, "iron_ore", province_id);
+    auto full_coal = summarize_deltas(full, "coking_coal", province_id);
+    auto full_steel = summarize_deltas(full, "steel", province_id);
+    REQUIRE_THAT(full_iron.total_supply_delta, WithinAbs(-10.0f, 0.001f));
+    REQUIRE_THAT(full_coal.total_supply_delta, WithinAbs(-5.0f, 0.001f));
+    REQUIRE_THAT(full_steel.total_supply_delta, WithinAbs(8.0f, 0.001f));
+
+    // Half the power -> half the batch: half the feed drawn, half the steel made.
+    auto short_iron = summarize_deltas(shortfall, "iron_ore", province_id);
+    auto short_coal = summarize_deltas(shortfall, "coking_coal", province_id);
+    auto short_steel = summarize_deltas(shortfall, "steel", province_id);
+    REQUIRE_THAT(short_steel.total_supply_delta, WithinAbs(4.0f, 0.001f));
+    REQUIRE_THAT(short_iron.total_supply_delta, WithinAbs(-5.0f, 0.001f));
+    REQUIRE_THAT(short_coal.total_supply_delta, WithinAbs(-2.5f, 0.001f));
+
+    // Derived demand tracks the physical draw (the price signal cannot claim feed that
+    // was never taken).
+    REQUIRE_THAT(short_iron.total_demand_delta, WithinAbs(5.0f, 0.001f));
+    REQUIRE_THAT(short_coal.total_demand_delta, WithinAbs(2.5f, 0.001f));
+
+    // The invariant: matter in per unit of matter out is unchanged by the brownout.
+    const float full_ratio = -(full_iron.total_supply_delta + full_coal.total_supply_delta) /
+                             full_steel.total_supply_delta;
+    const float short_ratio = -(short_iron.total_supply_delta + short_coal.total_supply_delta) /
+                              short_steel.total_supply_delta;
+    REQUIRE_THAT(short_ratio, WithinRel(full_ratio, 0.0001f));
+}
+
+TEST_CASE("test_unstaffed_facility_consumes_no_inputs", "[production][tier1][conservation]") {
+    // Zero workers already meant zero output; it must also mean zero input draw. You do
+    // not shovel ore into a furnace nobody is operating.
+    auto state = make_test_world_state();
+    constexpr uint32_t province_id = 0;
+
+    state.npc_businesses.push_back(make_test_business(1, province_id));
+    add_market(state, "iron_ore", province_id, 100.0f);
+    add_market(state, "coking_coal", province_id, 50.0f);
+    add_market(state, "steel", province_id, 0.0f, 15.0f);
+
+    Province prov{};
+    prov.cohort_stats = std::make_unique<RegionCohortStats>();
+    prov.id = province_id;
+    state.provinces.push_back(std::move(prov));
+
+    ProductionModule module;
+    module.recipe_registry().register_recipe(make_steel_recipe());
+    auto facility = make_test_facility(1, 1, province_id, "steel_smelting");
+    facility.worker_count = 0;
+    module.facility_registry().register_facility(facility);
+
+    DeltaBuffer delta{};
+    module.execute_province(province_id, state, delta);
+
+    REQUIRE(summarize_deltas(delta, "steel", province_id).supply_count == 0);
+    auto iron = summarize_deltas(delta, "iron_ore", province_id);
+    REQUIRE(iron.supply_count == 0);
+    REQUIRE(iron.total_supply_delta == 0.0f);
+    auto coal = summarize_deltas(delta, "coking_coal", province_id);
+    REQUIRE(coal.supply_count == 0);
+    REQUIRE(coal.total_supply_delta == 0.0f);
+}

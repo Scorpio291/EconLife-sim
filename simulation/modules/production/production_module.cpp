@@ -157,6 +157,14 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
         }
     }
 
+    // Track how much has already been drawn from each deposit by facilities processed
+    // earlier in this tick, so every facility sees the drawn-down remainder rather than
+    // the pre-tick (const WorldState) value. Without this, N facilities over the same
+    // nearly-exhausted deposit each cap against the full remainder and jointly extract
+    // more than exists. Same scratch pattern (and same determinism argument) as
+    // `available_supply`. See DepositDrawLedger in production_module.h.
+    DepositDrawLedger deposit_drawn;
+
     // Motive-power pre-pass: supply the province's electricity, mechanical work, and
     // process heat from its endowment (burning biomass/fossil for the shortfalls,
     // conserving matter) before any facility runs, so the same-tick availability ratios
@@ -166,7 +174,7 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
 
     // Process each business.
     for (const NPCBusiness* biz : province_businesses) {
-        process_business(*biz, state, province_delta, available_supply, power, rng);
+        process_business(*biz, state, province_delta, available_supply, deposit_drawn, power, rng);
     }
 }
 
@@ -185,6 +193,7 @@ void ProductionModule::execute(const WorldState& state, DeltaBuffer& delta) {
 void ProductionModule::process_business(const NPCBusiness& biz, const WorldState& state,
                                         DeltaBuffer& delta,
                                         std::unordered_map<std::string, float>& available_supply,
+                                        DepositDrawLedger& deposit_drawn,
                                         const ProvincePower& power, DeterministicRNG& rng) {
     // Skip bankrupt businesses: cash <= 0 and no revenue.
     if (biz.cash <= 0.0f && biz.revenue_per_tick <= 0.0f) {
@@ -221,7 +230,7 @@ void ProductionModule::process_business(const NPCBusiness& biz, const WorldState
             continue;
         }
 
-        process_facility(biz, facility, state, delta, available_supply, power, rng);
+        process_facility(biz, facility, state, delta, available_supply, deposit_drawn, power, rng);
     }
 }
 
@@ -252,6 +261,12 @@ static const ResourceDeposit* find_extractable_deposit(const WorldState& state,
         }
     }
     return best;
+}
+
+// Composite key identifying a deposit for the per-tick draw ledger. Deposit ids are
+// unique within a province, so (province, id) uniquely identifies the physical deposit.
+static uint64_t deposit_ledger_key(uint32_t province_id, uint32_t deposit_id) {
+    return (static_cast<uint64_t>(province_id) << 32) | static_cast<uint64_t>(deposit_id);
 }
 
 // Waste typing by output good category (conservation: matter not embodied in the
@@ -448,6 +463,7 @@ ProvincePower ProductionModule::supply_province_power(
 void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& facility,
                                         const WorldState& state, DeltaBuffer& delta,
                                         std::unordered_map<std::string, float>& available_supply,
+                                        DepositDrawLedger& deposit_drawn,
                                         const ProvincePower& power, DeterministicRNG& /*rng*/) {
     // Look up recipe. Recipe ↔ facility cross-validation runs at world load
     // (RecipeCatalog::validate_against_goods); silently skipping here keeps
@@ -562,11 +578,93 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
             ? cfg_.yield_modifier_floor + (1.0f - cfg_.yield_modifier_floor) * modifier_avail
             : 1.0f;
 
-    // Consume inputs. Hard inputs are drawn at the bottleneck ratio; yield-modifier inputs
-    // only in proportion to how much was actually applied (modifier_avail), so unfertilized
+    // -----------------------------------------------------------------------
+    // Final achievable throughput — computed BEFORE any input is consumed.
+    //
+    // Conservation: hard inputs must be drawn at the ratio the facility can actually
+    // transform, not at the input-availability ratio alone. Output is further
+    // attenuated by motive power, staffing and (for extraction) the deposit
+    // remainder; debiting inputs at the higher ratio DESTROYED the difference — the
+    // untransformed matter became neither product, nor waste (waste is derived from
+    // actual output), nor returned stock. Physically: you do not shovel ore into an
+    // unpowered, unstaffed furnace.
+    // -----------------------------------------------------------------------
+
+    // Outputs sorted by good_id ascending for deterministic accumulation. Built here
+    // because the deposit remainder caps OUTPUT quantity and has to be converted into
+    // an equivalent input-side ratio before inputs are drawn.
+    std::vector<const RecipeOutput*> sorted_outputs;
+    sorted_outputs.reserve(recipe->outputs.size());
+    for (const auto& output : recipe->outputs) {
+        sorted_outputs.push_back(&output);
+    }
+    std::sort(sorted_outputs.begin(), sorted_outputs.end(),
+              [](const RecipeOutput* a, const RecipeOutput* b) { return a->good_id < b->good_id; });
+
+    // Worker effect, split into its two physically distinct halves:
+    //  - staffing_ratio ATTENUATES: an unstaffed plant transforms nothing, so it must
+    //    not draw inputs either.
+    //  - worker_output_bonus AMPLIFIES throughput with diminishing returns (10 workers
+    //    = 1 + 0.15*9 = 2.35x, not 10x) and applies to output only, as before.
+    // Their product is exactly the previous single worker_multiplier: 0 workers -> 0.0,
+    // 1 -> 1.0, n -> 1 + 0.15*(n-1).
+    const float staffing_ratio = (facility.worker_count == 0) ? 0.0f : 1.0f;
+    float worker_output_bonus = 1.0f;
+    if (facility.worker_count > 1) {
+        worker_output_bonus = 1.0f + 0.15f * static_cast<float>(facility.worker_count - 1);
+    }
+
+    // Extraction output is scaled by deposit grade: higher-quality ore/reserves
+    // yield more usable output per unit of effort.
+    float extraction_quality_scale = 1.0f;
+    if (extraction_deposit != nullptr) {
+        extraction_quality_scale =
+            0.5f + 0.5f * std::max(0.0f, std::min(1.0f, extraction_deposit->quality));
+    }
+
+    // Throughput before the deposit remainder is considered: the fraction of the
+    // recipe's nominal batch this facility can run given input availability, motive
+    // power, and staffing.
+    const float supply_side_ratio = bottleneck_ratio * power_ratio * staffing_ratio;
+
+    // Deposit remainder → input-side ratio. The primary extracted good cannot exceed
+    // what physically remains in the deposit AFTER the draw of facilities already
+    // processed in this province this tick (deposit_drawn — WorldState still shows the
+    // pre-tick value). Expressing that output-side cap as a throughput fraction keeps
+    // inputs, the primary output and byproducts mutually consistent: you cannot mine
+    // ore that is not there, so the inputs it would have taken are not consumed and
+    // the byproducts riding along with it do not appear either.
+    const uint64_t deposit_key = extraction_deposit != nullptr
+                                     ? deposit_ledger_key(biz.province_id, extraction_deposit->id)
+                                     : 0;
+    float deposit_remaining = 0.0f;  // deposit matter still available to THIS facility
+    float deposit_fraction = 1.0f;
+    if (extraction_deposit != nullptr) {
+        const auto drawn_it = deposit_drawn.find(deposit_key);
+        const float already_drawn = (drawn_it != deposit_drawn.end()) ? drawn_it->second : 0.0f;
+        deposit_remaining = std::max(0.0f, extraction_deposit->quantity_remaining - already_drawn);
+        float primary_uncapped = 0.0f;
+        for (const RecipeOutput* output : sorted_outputs) {
+            if (output->good_id != extraction_primary_good)
+                continue;
+            primary_uncapped += output->quantity_per_tick * output_multiplier * supply_side_ratio *
+                                yield_modifier_factor * worker_output_bonus *
+                                facility.output_rate_modifier * extraction_quality_scale;
+        }
+        if (primary_uncapped > 0.0f && primary_uncapped > deposit_remaining) {
+            deposit_fraction = deposit_remaining / primary_uncapped;
+        }
+    }
+
+    // The ratio at which this facility actually runs this tick. Inputs are drawn at it
+    // and outputs are produced from it, so matter in == matter transformed.
+    const float effective_ratio = supply_side_ratio * deposit_fraction;
+
+    // Consume inputs at the achievable throughput ratio; yield-modifier inputs only in
+    // proportion to how much was actually applied (modifier_avail), so unfertilized
     // farming consumes no fertilizer. Record derived demand for each consumed input.
     for (const RecipeInput* input : sorted_inputs) {
-        float draw = input->yield_modifier ? bottleneck_ratio * modifier_avail : bottleneck_ratio;
+        float draw = input->yield_modifier ? effective_ratio * modifier_avail : effective_ratio;
         float consumed = input->quantity_per_tick * draw;
         if (consumed <= 0.0f) {
             continue;
@@ -598,15 +696,6 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         }
     }
 
-    // Compute outputs — sort by good_id ascending for deterministic accumulation.
-    std::vector<const RecipeOutput*> sorted_outputs;
-    sorted_outputs.reserve(recipe->outputs.size());
-    for (const auto& output : recipe->outputs) {
-        sorted_outputs.push_back(&output);
-    }
-    std::sort(sorted_outputs.begin(), sorted_outputs.end(),
-              [](const RecipeOutput* a, const RecipeOutput* b) { return a->good_id < b->good_id; });
-
     // Compute quality ceiling.
     float quality_ceiling =
         cfg_.tech_quality_ceiling_base +
@@ -626,26 +715,8 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
     // Clamp quality ceiling to valid range.
     quality_ceiling = std::max(0.0f, std::min(1.0f, quality_ceiling));
 
-    // Worker count throughput effect.
-    // Baseline assumes 1 worker. Each additional worker adds diminishing returns.
-    // Formula: worker_multiplier = min(worker_count, 1) + 0.15 * max(0, worker_count - 1)
-    // Capped so that 10 workers = 1 + 0.15*9 = 2.35x throughput (not 10x).
-    float worker_multiplier = 1.0f;
-    if (facility.worker_count > 1) {
-        worker_multiplier = 1.0f + 0.15f * static_cast<float>(facility.worker_count - 1);
-    } else if (facility.worker_count == 0) {
-        worker_multiplier = 0.0f;  // no workers = no production
-    }
-
     float total_revenue = 0.0f;
 
-    // Extraction output is scaled by deposit grade: higher-quality ore/reserves
-    // yield more usable output per unit of effort.
-    float extraction_quality_scale = 1.0f;
-    if (extraction_deposit != nullptr) {
-        extraction_quality_scale =
-            0.5f + 0.5f * std::max(0.0f, std::min(1.0f, extraction_deposit->quality));
-    }
     float deposit_extracted = 0.0f;  // primary resource drawn from the deposit this tick
 
     // Waste accumulated this tick by waste good (industrial_waste / hazardous_waste).
@@ -653,23 +724,25 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
     float industrial_waste = 0.0f;
 
     for (const RecipeOutput* output : sorted_outputs) {
-        float actual_output = output->quantity_per_tick * output_multiplier * bottleneck_ratio *
-                              yield_modifier_factor * worker_multiplier *
-                              facility.output_rate_modifier * power_ratio;
+        // effective_ratio carries the input bottleneck, motive power, staffing and the
+        // deposit remainder — the same ratio the inputs were drawn at above.
+        float actual_output = output->quantity_per_tick * output_multiplier * effective_ratio *
+                              yield_modifier_factor * worker_output_bonus *
+                              facility.output_rate_modifier;
 
         // Clamp NaN or negative to 0.
         if (std::isnan(actual_output) || actual_output < 0.0f) {
             actual_output = 0.0f;
         }
 
-        // Extraction: scale every output by deposit grade, and cap the primary
-        // extracted good by what physically remains in the deposit (a nearly
-        // exhausted deposit yields only its remainder before going to zero).
+        // Extraction: scale every output by deposit grade. effective_ratio has already
+        // scaled the batch to the deposit remainder; the min below is the exact physical
+        // limit (a float-rounding sentinel on that division), measured against what is
+        // left after earlier facilities this tick and after this facility's own draw.
         if (extraction_deposit != nullptr) {
             actual_output *= extraction_quality_scale;
             if (output->good_id == extraction_primary_good) {
-                float cap =
-                    std::max(0.0f, extraction_deposit->quantity_remaining - deposit_extracted);
+                float cap = std::max(0.0f, deposit_remaining - deposit_extracted);
                 actual_output = std::min(actual_output, cap);
                 deposit_extracted += actual_output;
             }
@@ -746,6 +819,10 @@ void ProductionModule::process_facility(const NPCBusiness& biz, const Facility& 
         dd.deposit_id = extraction_deposit->id;
         dd.quantity_extracted = deposit_extracted;
         delta.deposit_deltas.push_back(dd);
+        // Record the draw so facilities processed later in this province see the
+        // drawn-down remainder: one deposit is one physical stock, and the sum of a
+        // tick's extraction from it can never exceed quantity_remaining.
+        deposit_drawn[deposit_key] += deposit_extracted;
     }
 
     // Operating cost scales with bottleneck_ratio: zero production = zero variable cost.

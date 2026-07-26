@@ -39,6 +39,24 @@ struct ProvincePower {
 };
 
 // ---------------------------------------------------------------------------
+// DepositDrawLedger — per-province, per-tick scratch recording how much has
+// already been drawn from each resource deposit by facilities processed earlier
+// in this tick, keyed by (province_id << 32 | deposit_id).
+//
+// WorldState is const for the whole tick and find_extractable_deposit()
+// deterministically returns the SAME deposit to every facility in a province
+// extracting the same resource. Without this ledger each facility would cap its
+// extraction against the full pre-tick `quantity_remaining`, so N facilities over
+// one nearly-exhausted deposit would jointly extract more than physically exists
+// (apply_deposit_deltas floors the deposit at 0 while every facility's output has
+// already been booked as market supply — matter created on the exhaustion tick).
+//
+// Mirrors the `available_supply` scratch pattern: only ever probed by explicit
+// key, never iterated, so the unordered container cannot affect determinism.
+// ---------------------------------------------------------------------------
+using DepositDrawLedger = std::unordered_map<uint64_t, float>;
+
+// ---------------------------------------------------------------------------
 // RecipeRegistry — holds all loaded recipes, keyed by recipe id.
 // Populated at startup from package content files. Immutable after loading.
 // ---------------------------------------------------------------------------
@@ -122,12 +140,14 @@ class ProductionModule : public ITickModule {
 
     void process_business(const NPCBusiness& biz, const WorldState& state, DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,
-                          const ProvincePower& power, DeterministicRNG& rng);
+                          DepositDrawLedger& deposit_drawn, const ProvincePower& power,
+                          DeterministicRNG& rng);
 
     void process_facility(const NPCBusiness& biz, const Facility& facility, const WorldState& state,
                           DeltaBuffer& delta,
                           std::unordered_map<std::string, float>& available_supply,
-                          const ProvincePower& power, DeterministicRNG& rng);
+                          DepositDrawLedger& deposit_drawn, const ProvincePower& power,
+                          DeterministicRNG& rng);
 
     // Supply the province's motive power for this tick from its endowment and emit
     // the resulting market deltas (electricity produced/consumed; biomass/fossil fuel
