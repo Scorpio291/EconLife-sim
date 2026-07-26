@@ -232,9 +232,27 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
                                               : 0.0f;
     rdelta.crime_rate_delta = crime_sample - cohort_stats->crime_rate;
 
-    // --- Addiction rate: dependent+ NPCs / population (authoritative) ---
-    rdelta.addiction_rate_delta =
-        compute_population_rate(addicted_count, population) - cohort_stats->addiction_rate;
+    // --- Addiction rate: dependent+ fraction of the tracked-actor sample ---
+    // Exactly the same sampling correction as crime_rate above, for exactly the
+    // same reason. Dividing the addicted count from a ~300-NPC sample by a ~500k
+    // demographic population pinned the rate near 1e-5, which erased world-gen's
+    // seeded 0.02-0.07 on the first tick, meant drug_economy's seeding saturation
+    // cap could never bind (so seeding ran forever), and collapsed
+    // addiction-driven drug demand (rate x population) to near nothing.
+    //
+    // OWNERSHIP: this module is the single owner of cohort_stats->addiction_rate,
+    // as it is for crime_rate — the snap re-anchors the field every tick, so any
+    // other module's additive contribution is overwritten rather than combined.
+    // addiction_module (stage transitions) and drug_economy (consumption growth)
+    // both still emit addiction_rate_delta; their per-NPC transitions are already
+    // reflected here through addicted_count, but those writers should be retired
+    // so the field has one owner in code as well as in effect (F3 follow-up,
+    // deliberately left to their own modules rather than edited blind from here).
+    const float addiction_sample =
+        active_npc_count > 0
+            ? static_cast<float>(addicted_count) / static_cast<float>(active_npc_count)
+            : 0.0f;
+    rdelta.addiction_rate_delta = addiction_sample - cohort_stats->addiction_rate;
 
     // --- Formal employment: size-weighted mean of cohort employment_rate ---
     rdelta.formal_employment_rate_delta =

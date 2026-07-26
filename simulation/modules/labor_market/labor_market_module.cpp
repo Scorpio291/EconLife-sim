@@ -296,7 +296,15 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
 
             RegionDelta rd{};
             rd.region_id = state.provinces[province_idx].region_id;
-            rd.formal_employment_rate_delta = RATE_CONVERGENCE * (formal_fraction - cur_formal);
+            // unemployment_rate is this module's own field and it remains the sole
+            // writer. formal_employment_rate is NOT: regional_conditions snaps it to
+            // the cohort size-weighted mean, the authoritative population-level view
+            // (the tracked NPCs are only a sample). Both deltas were additive against
+            // the same pre-tick value, so the field settled at a blend neither module
+            // intended and this nudge was almost entirely overridden. Single owner —
+            // the same conclusion this codebase already reached for grievance.
+            (void)cur_formal;
+            (void)formal_fraction;
             rd.unemployment_rate_delta = RATE_CONVERGENCE * (unemp_fraction - cur_unemp);
             province_delta.region_deltas.push_back(rd);
         }

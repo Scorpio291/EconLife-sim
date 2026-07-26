@@ -818,7 +818,7 @@ TEST_CASE("test_salary_expectation_with_money_motivation", "[labor_market][tier2
 // and no employment record, sample employed = 0 → unemployment delta
 // pulls upward, formal_employment delta pulls downward.
 
-TEST_CASE("labor_market: emits unemployment + formal_employment deltas converging on sample",
+TEST_CASE("labor_market: emits an unemployment delta converging on the sample (and no longer formal_employment)",
           "[labor_market][tier2][unemployment]") {
     WorldState state = make_test_world_state();
     state.provinces.push_back(make_test_province(0));
@@ -861,15 +861,16 @@ TEST_CASE("labor_market: emits unemployment + formal_employment deltas convergin
             REQUIRE_THAT(*rd.unemployment_rate_delta, WithinAbs(0.010f, 0.001f));
             found_unemp = true;
         }
-        if (rd.formal_employment_rate_delta.has_value()) {
-            // sample = 0.0, current = 0.7 → 0.05 * -0.7 = -0.035.
-            REQUIRE(*rd.formal_employment_rate_delta < 0.0f);
-            REQUIRE_THAT(*rd.formal_employment_rate_delta, WithinAbs(-0.035f, 0.001f));
+        if (rd.formal_employment_rate_delta.has_value())
             found_formal = true;
-        }
     }
     REQUIRE(found_unemp);
-    REQUIRE(found_formal);
+    // formal_employment_rate is regional_conditions' field: it snaps the cohort
+    // size-weighted mean (the authoritative population view), and this module used
+    // to ALSO nudge it 5%/tick toward the tracked-NPC sample. Both deltas were
+    // additive against the same pre-tick value, so the field settled at a blend
+    // neither module intended. Single owner now, so labor_market must not write it.
+    REQUIRE_FALSE(found_formal);
 }
 
 // ---------------------------------------------------------------------------
