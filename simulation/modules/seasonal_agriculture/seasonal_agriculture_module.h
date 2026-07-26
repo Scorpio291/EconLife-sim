@@ -112,6 +112,9 @@ class SeasonalAgricultureModule : public ITickModule {
 
     // Schaefer surplus-production fisheries dynamics for a province's fish stock:
     // logistic growth + effort-based harvest, landed as fish_wild supply.
+    // Both the intrinsic growth rate (FisheriesProfile) and the fishing effort
+    // (SeasonalAgricultureConfig) are ANNUAL rates; this converts them to
+    // per-tick rates with cfg_.ticks_per_year.
     void process_fisheries(uint32_t province_idx, const Province& province, const WorldState& state,
                            DeltaBuffer& province_delta);
 };

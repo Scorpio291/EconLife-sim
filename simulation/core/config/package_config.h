@@ -829,11 +829,27 @@ struct SeasonalAgricultureConfig {
     // --- Fisheries (Schaefer surplus-production model) ---
     // Coastal/freshwater provinces fish their stock each tick: logistic growth
     // (r·N·(1−N/K)) replenishes it; fishing effort harvests a fraction. Effort
-    // below the intrinsic growth rate is sustainable; push it higher (config/mods)
-    // and the stock is overfished toward collapse — the shared-access problem.
+    // below the intrinsic growth rate is sustainable — equilibrium stock is
+    // N* = K(1 − F/r) — while F pushed above r (config/mods) overfishes the stock
+    // toward collapse: the shared-access problem.
     // current_stock and carrying_capacity are normalized [0,1]; catch is scaled to
     // tonnes of fish_wild for the market.
-    float fishing_effort = 0.06f;          // fraction of stock harvested per tick
+    //
+    // UNITS: fishing_effort is an ANNUAL harvest fraction, matching
+    // FisheriesProfile.intrinsic_growth_rate, which WorldGen v0.16 defines per
+    // simulated year. seasonal_agriculture divides both by ticks_per_year, so one
+    // daily tick integrates 1/365 of the biological year. (Before 2026-07-25 the
+    // module applied both rates once per tick with no annual gate — the fishery
+    // ran 365 biological years per year, landing ~90x the declared MSY.)
+    //
+    // 0.15/yr = 15% of standing biomass landed per year: the exploitation rate of
+    // a fully-exploited-but-not-overfished stock (managed groundfish sit at
+    // F ≈ 0.1–0.3 yr⁻¹). It is below r for every access type WorldGen seeds —
+    // including slow-growing Offshore cod at r = 0.25/yr — so the baseline world
+    // is sustainable as claimed above, and equilibrium landings F·K(1 − F/r) come
+    // to 75–98% of the Schaefer MSY (r·K/4) across r = 0.25–0.60.
+    float fishing_effort = 0.15f;             // ANNUAL fraction of stock harvested
+                                              // (module converts to per-tick)
     float fishing_catch_to_tonnes = 5000.0f;  // normalized-stock → fish_wild tonnes
 };
 

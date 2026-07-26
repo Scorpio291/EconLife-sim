@@ -277,8 +277,14 @@ struct FisheriesProfile {
     FishingAccessType access_type = FishingAccessType::NoAccess;
     float carrying_capacity = 0.0f;      // max sustainable fish stock; 0.0-1.0 normalized
     float current_stock = 0.0f;          // starts at carrying_capacity * 0.85
-    float max_sustainable_yield = 0.0f;  // MSY = 0.5 * intrinsic_growth_rate * carrying_capacity
-    float intrinsic_growth_rate = 0.0f;  // r; species-dependent; derived from access_type
+    float max_sustainable_yield = 0.0f;  // ANNUAL yield, normalized stock units. Seeded as
+                                         // 0.5 * intrinsic_growth_rate * carrying_capacity per
+                                         // WorldGen v0.16. FLAGGED for spec review: the Schaefer
+                                         // surplus at the MSY stock K/2 is r*K/4, so this field is
+                                         // 2x the model's own MSY (not changed here).
+    float intrinsic_growth_rate = 0.0f;  // r PER SIMULATED YEAR; species-dependent; derived from
+                                         // access_type. Consumers ticking daily must divide by
+                                         // ticks_per_year (see seasonal_agriculture fisheries).
     float seasonal_closure = 0.05f;      // fraction of year fishing impossible (ice, spawning)
     bool is_migratory = false;           // stock moves between provinces; shared-access problem
 };

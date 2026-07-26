@@ -6,6 +6,7 @@
 // continuous-output seasonal multiplier (perennial cosine curve), and
 // Southern Hemisphere offset.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -124,6 +125,43 @@ SupplySummary summarize_supply(const DeltaBuffer& delta, const std::string& good
         }
     }
     return summary;
+}
+
+// A coastal province with a seeded fish stock, as world generation would leave it:
+// stock at 85% of carrying capacity and max_sustainable_yield = 0.5 * r * K
+// (WorldGen v0.16). r and the module's fishing_effort are ANNUAL rates.
+Province make_fishery_province(uint32_t id, FishingAccessType access, float carrying_capacity,
+                               float annual_growth_rate, float seasonal_closure = 0.0f) {
+    Province prov = make_test_province(id);
+    prov.geography.is_landlocked = false;
+    prov.geography.coastal_length_km = 250.0f;
+    prov.fisheries.access_type = access;
+    prov.fisheries.carrying_capacity = carrying_capacity;
+    prov.fisheries.current_stock = carrying_capacity * 0.85f;
+    prov.fisheries.intrinsic_growth_rate = annual_growth_rate;
+    prov.fisheries.max_sustainable_yield = 0.5f * annual_growth_rate * carrying_capacity;
+    prov.fisheries.seasonal_closure = seasonal_closure;
+    return prov;
+}
+
+// Advance a province's fish stock through `ticks` ticks of the module's Schaefer
+// dynamics, mirroring apply_fisheries_deltas (additive, clamped to [0, K]) so the
+// stock actually carries across ticks. Returns total fish_wild tonnage landed.
+float run_fishery_ticks(SeasonalAgricultureModule& module, WorldState& state, uint32_t province_id,
+                        uint32_t first_tick, uint32_t ticks) {
+    float landed = 0.0f;
+    FisheriesProfile& fish = state.provinces[province_id].fisheries;
+    for (uint32_t t = 0; t < ticks; ++t) {
+        state.current_tick = first_tick + t;
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        landed += summarize_supply(delta, "fish_wild", province_id).total_supply;
+        for (const auto& fd : delta.fisheries_deltas) {
+            fish.current_stock = std::max(
+                0.0f, std::min(fish.current_stock + fd.stock_delta, fish.carrying_capacity));
+        }
+    }
+    return landed;
 }
 
 }  // anonymous namespace
@@ -862,10 +900,14 @@ TEST_CASE("fisheries: a stocked coastal province lands a catch and updates stock
     DeltaBuffer delta{};
     module.execute_province(province_id, state, delta);
 
-    // Catch landed as fish_wild: effort 0.06 * stock 0.85 * 5000 t = 255 t.
+    // Catch landed as fish_wild for ONE DAY. fishing_effort is an annual fraction,
+    // so the per-tick rate is 0.15 / 365 = 4.1096e-4:
+    //   4.1096e-4 * stock 0.85 * 5000 t = 1.747 t.
+    // (Was 255 t = 0.06 * 0.85 * 5000 — the pre-fix landing, which applied a whole
+    //  year of effort every tick and so landed ~365x too much.)
     auto fish = summarize_supply(delta, "fish_wild", province_id);
     REQUIRE(fish.count == 1);
-    REQUIRE_THAT(fish.total_supply, Catch::Matchers::WithinAbs(255.0f, 1.0f));
+    REQUIRE_THAT(fish.total_supply, Catch::Matchers::WithinAbs(1.747f, 0.01f));
     // Stock is updated (a fisheries delta is emitted).
     REQUIRE(delta.fisheries_deltas.size() == 1);
     REQUIRE(delta.fisheries_deltas[0].province_id == province_id);
@@ -887,4 +929,82 @@ TEST_CASE("fisheries: landlocked province lands no catch",
     auto fish = summarize_supply(delta, "fish_wild", province_id);
     REQUIRE(fish.count == 0);
     REQUIRE(delta.fisheries_deltas.empty());
+}
+
+// Units regression: the intrinsic growth rate and the fishing effort are ANNUAL
+// rates integrated one day at a time, so a full year of ticks must land a tonnage
+// of the same order as the declared (annual) max_sustainable_yield. Before the
+// 2026-07-25 fix both rates were applied whole every tick and this province landed
+// ~93,000 t/yr against a declared MSY of 1,000 t/yr (~90x), while the equally
+// inflated growth term hid the depletion.
+TEST_CASE("fisheries: a year of ticks lands on the order of the declared MSY",
+          "[seasonal_agriculture][tier2][fisheries]") {
+    constexpr uint32_t province_id = 0;
+    const SeasonalAgricultureConfig cfg{};
+
+    auto state = make_test_world_state(0);
+    // K = 1.0, r = 0.40/yr (Inshore), no closure so the whole year is fishable.
+    state.provinces.push_back(
+        make_fishery_province(province_id, FishingAccessType::Inshore, 1.0f, 0.40f, 0.0f));
+
+    SeasonalAgricultureModule module;
+    const float landed = run_fishery_ticks(module, state, province_id, 0, cfg.ticks_per_year);
+
+    // Declared annual MSY in tonnes (world generator seeds 0.5 * r * K).
+    const float msy_tonnes = state.provinces[province_id].fisheries.max_sustainable_yield *
+                             cfg.fishing_catch_to_tonnes;
+    REQUIRE_THAT(msy_tonnes, WithinAbs(1000.0f, 1.0f));
+
+    // Effort F = 0.15/yr against r = 0.40/yr: the stock walks from 0.85K toward its
+    // equilibrium N* = K(1 - F/r) = 0.625K, landing ~610 t over the first year —
+    // between a quarter and 1.5x the declared MSY, i.e. the same order of magnitude.
+    REQUIRE(landed > 0.25f * msy_tonnes);
+    REQUIRE(landed < 1.5f * msy_tonnes);
+    REQUIRE_THAT(landed, WithinRel(612.0f, 0.05f));
+
+    // Sustainable effort: the stock settles above half of K, it does not collapse.
+    const float stock = state.provinces[province_id].fisheries.current_stock;
+    REQUIRE(stock > 0.5f);
+    REQUIRE(stock < 0.85f);  // and it did draw down from the seeded 0.85K
+}
+
+TEST_CASE("fisheries: effort above MSY depletes the stock year over year",
+          "[seasonal_agriculture][tier2][fisheries]") {
+    constexpr uint32_t province_id = 0;
+    SeasonalAgricultureConfig cfg{};
+    // 0.60/yr harvest against r = 0.40/yr growth: beyond F_MSY (r/2 = 0.20) and
+    // beyond r itself, so there is no positive equilibrium — the classic collapse.
+    cfg.fishing_effort = 0.60f;
+
+    auto state = make_test_world_state(0);
+    auto prov = make_fishery_province(province_id, FishingAccessType::Inshore, 1.0f, 0.40f, 0.0f);
+    prov.fisheries.current_stock = prov.fisheries.carrying_capacity;  // start at K
+    state.provinces.push_back(std::move(prov));
+
+    SeasonalAgricultureModule module(cfg);
+
+    const float year1 = run_fishery_ticks(module, state, province_id, 0, cfg.ticks_per_year);
+    const float stock1 = state.provinces[province_id].fisheries.current_stock;
+    const float year2 =
+        run_fishery_ticks(module, state, province_id, cfg.ticks_per_year, cfg.ticks_per_year);
+    const float stock2 = state.provinces[province_id].fisheries.current_stock;
+    const float year3 =
+        run_fishery_ticks(module, state, province_id, 2 * cfg.ticks_per_year, cfg.ticks_per_year);
+    const float stock3 = state.provinces[province_id].fisheries.current_stock;
+
+    // The stock visibly depletes: a third of the biomass is gone after one year.
+    REQUIRE(stock1 < 0.75f);
+    REQUIRE(stock2 < stock1);
+    REQUIRE(stock3 < stock2);
+    REQUIRE(stock3 < 0.5f);
+
+    // Landings fall with the stock — overfishing is felt in the catch, not just in
+    // the biomass, so the depletion is a real conserved flow.
+    REQUIRE(year2 < year1);
+    REQUIRE(year3 < year2);
+
+    // And the first, biggest year already overshoots the declared annual MSY.
+    const float msy_tonnes = state.provinces[province_id].fisheries.max_sustainable_yield *
+                             cfg.fishing_catch_to_tonnes;
+    REQUIRE(year1 > msy_tonnes);
 }

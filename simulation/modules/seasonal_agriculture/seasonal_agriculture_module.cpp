@@ -217,21 +217,51 @@ void SeasonalAgricultureModule::process_fisheries(uint32_t province_idx, const P
     if (fish.access_type == FishingAccessType::NoAccess || fish.carrying_capacity <= 0.0f) {
         return;  // landlocked / no fishery
     }
+    if (cfg_.ticks_per_year == 0) {
+        return;  // degenerate calendar: no year to divide by (division sentinel, not gameplay)
+    }
 
     const float N = std::max(0.0f, fish.current_stock);
     const float K = fish.carrying_capacity;
-    const float r = fish.intrinsic_growth_rate;
+
+    // --- Units: annual biology integrated on a daily tick ------------------
+    // FisheriesProfile.intrinsic_growth_rate is r PER SIMULATED YEAR (WorldGen
+    // v0.16: Upwelling 0.60/yr, Inshore 0.40/yr, Offshore 0.25/yr, ...) and
+    // SeasonalAgricultureConfig::fishing_effort is likewise an ANNUAL harvest
+    // fraction. This module runs once per in-game day, so each is divided by
+    // the same ticks_per_year the rest of the module uses for its calendar.
+    // Applying the annual rates once per tick ran the fishery's whole
+    // biological year every day: it inflated growth and landings by the same
+    // 365x, so the stock never appeared to deplete and max_sustainable_yield
+    // (an annual figure) was decorative.
+    const float ticks_per_year = static_cast<float>(cfg_.ticks_per_year);
+    const float r_per_tick = fish.intrinsic_growth_rate / ticks_per_year;
+    const float effort_per_tick = cfg_.fishing_effort / ticks_per_year;
+
+    // Unit check, modal WorldGen inshore province: K = 0.5, r = 0.40/yr,
+    // fishing_effort F = 0.15/yr, fishing_catch_to_tonnes = 5000 t.
+    //   equilibrium stock  N* = K(1 - F/r) = 0.5 x (1 - 0.375) = 0.3125
+    //   annual landings    F x N* x 5000   = 0.15 x 0.3125 x 5000 ~= 234 t/yr
+    //   Schaefer MSY       (r x K / 4) x 5000 = 0.05 x 5000       =  250 t/yr
+    // So the fleet lands just under MSY, where before the fix the same province
+    // settled at 0.85K and landed ~46,500 t/yr (~90x the declared MSY).
+    // FLAGGED, not changed here: world_generator seeds
+    // max_sustainable_yield = 0.5 * r * K (following WorldGen v0.16), but the
+    // Schaefer surplus at the MSY stock N = K/2 is r*(K/2)*(1 - 1/2) = r*K/4.
+    // The seeded field is therefore 2x this model's own MSY, so the landings
+    // above are ~0.94x the true MSY and ~0.47x the seeded field. Correcting the
+    // seed is a world_gen + spec change, out of scope for this module.
 
     // Seasonal closure: no fishing during the closed fraction of the year (ice,
-    // spawning). Stock still grows; it just isn't harvested.
+    // spawning). Stock still grows; it just isn't harvested — so a closure also
+    // reduces the annual landings below F x N (an ice-locked fishery lands less).
     const uint32_t tick_of_year = state.current_tick % cfg_.ticks_per_year;
-    const float year_frac =
-        static_cast<float>(tick_of_year) / static_cast<float>(cfg_.ticks_per_year);
+    const float year_frac = static_cast<float>(tick_of_year) / ticks_per_year;
     const bool closed = year_frac < fish.seasonal_closure;
 
     // Logistic growth replenishes the stock; effort harvests a fraction of it.
-    const float growth = r * N * (1.0f - (K > 0.0f ? N / K : 0.0f));
-    const float harvest = closed ? 0.0f : cfg_.fishing_effort * N;
+    const float growth = r_per_tick * N * (1.0f - (K > 0.0f ? N / K : 0.0f));
+    const float harvest = closed ? 0.0f : effort_per_tick * N;
 
     // Update stock (growth − harvest), applied/clamped to [0, K] on apply.
     const float stock_delta = growth - harvest;
