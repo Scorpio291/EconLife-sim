@@ -1709,3 +1709,67 @@ M3 feudal genesis → M4 era content → M5 guild/specialist layer → M6a hazar
 M6c war & diplomacy → G1-G4 grounding → RC calibration → M7 entry. Deferred (logged,
 not blocking): medieval player verbs/UI, entry-from-climb at LOD promotion, castles
 at polity seats, D4 guild records.
+
+---
+
+## 2026-07-26 — Deep review, then F1-F3 of the remediation
+
+A max-effort review of the whole branch (10 independent finder angles over the
+178-commit diff, every candidate put through an adversarial verifier) found 22
+confirmed defects and refuted 3 candidate ones. The refutations are worth
+recording: the food_store apply-order "mint" is not real (the orchestrator applies
+each module's deltas immediately after that module runs, and both consumers declare
+runs_after subsistence, so they read the post-banking store and bound every draw
+against a live mirror); warfare's leader_mult default-insert is provably latent;
+and the deleted facility_signals regulator feed was inert code, deliberately
+retired.
+
+The single worst finding was that ERA PROGRESSION WAS FROZEN for the default
+modern game — which silently invalidates any long-horizon result the emergence
+suite produced on this branch. Fixed in F1 (see the commit): the calendar gate now
+reads the target era's start_year from the era catalog instead of a hardcoded table
+that was never renumbered, the tech-condition bonuses are keyed by era string key,
+base_year is signed so BCE starts stop wrapping to ~4.29e9, and tech/domain-knowledge
+seeding follows the starting era instead of a hardcoded era 1. The two advancement
+paths are now split BY THE DATA: an era with knowledge_to_advance > 0 belongs to
+knowledge_module (the pre-modern climb, paced by what each world earns — this is
+what keeps the World-Class spectrum alive), and only the modern band, which has
+real historical dates, advances on the calendar.
+
+F2 closed three conservation leaks. Production could mint matter (N facilities each
+capped extraction against the same pre-tick deposit remainder; now a per-province
+per-tick draw ledger) and destroy it (inputs were debited at full ratio while output
+was scaled by power/staffing/deposit caps; the achievable throughput is now computed
+BEFORE anything is consumed). The fishery was integrating a year of Schaefer biology
+every day — ~90x MSY landings that never depleted the stock because growth was
+inflated identically; rates are now explicitly annual, converted per tick, and
+fishing_effort is retuned to a defensible 15%/yr exploitation rate.
+
+F3 fixed the war-death timing cluster with a one-line ordering edge (warfare
+runs_before population_aging), which makes publication and consumption same-tick
+and thereby retires three separate defects at once: the year-late application, the
+loss of a whole year's dead across a save, and the regime-exit reset wiping the
+final war year. Battle dead are now debited to the provinces that RAISED the levy in
+proportion to their contribution, each bounded by the soldiers it actually fielded —
+a physical bound, which is why the fraction can no longer exceed 1.0 and be silently
+clamped (an empire fighting through a small frontier province used to annihilate it
+in one year while the surplus dead vanished). Secession stores the remaining
+headcount instead of a leader-multiplied strength, so cascading fragmentation works.
+Knowledge production now counts only living scholars (the era clock was being paced
+by the cumulative death toll, since significant_npcs is append-only). Subsistence
+publishes a one-time surplus reset on regime exit, so a famine year's ratio stops
+scaling modern births forever. M7's workshop genesis now picks the cheapest
+affordable craft per founder instead of halting permanently at the first
+unaffordable one.
+
+Two warfare unit tests pinned the old casualty formula and were updated with the
+reason recorded: one asserted a death fraction of 0.125 for a province whose entire
+levy was 400 of 4000 people — i.e. more dead soldiers than soldiers.
+
+Deferred with tasks tracked: F4 (save/load — fisheries, national_legitimacy, the
+political_cycle offices/unrest ratchet, the self-healing election trigger, unbounded
+restore allocations, schema v25 with a raised floor), F5 (the remaining doctrine
+rails: the hazard-mortality band and the addiction price band), F6 (regime-predicate
+and catchment duplication, ticks_per_year triple source, dead code, hot-path scans),
+F7 (re-anchor the spectrum — F1-F3 all move behavior, so the pacing thresholds and
+the four World-Class anchors must be re-measured).

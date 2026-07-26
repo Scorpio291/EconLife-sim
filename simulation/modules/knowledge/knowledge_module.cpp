@@ -32,6 +32,13 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Dedicated knowledge work: sum over scholar/scribe/elder livelihoods.
     double specialist_term = 0.0;
     for (const auto& npc : state.significant_npcs) {
+        // Only the LIVING produce knowledge. significant_npcs is append-only —
+        // the dead are retained for forensic and memory references and their
+        // occupation is never cleared — so an unfiltered sum ratcheted upward
+        // with the cumulative death toll and paced the era clock off corpses
+        // rather than off the living scholar corps.
+        if (npc.status != NPCStatus::active)
+            continue;
         if (npc.occupation == 0)
             continue;
         const OccupationDefinition* o = state.occupation_catalog.by_index(npc.occupation);

@@ -524,20 +524,31 @@ void GovernmentBudgetModule::check_fiscal_health(DeltaBuffer& delta, uint32_t cu
                 (budget.surplus_deficit < 0.0f) ? -std::numeric_limits<float>::infinity() : 0.0f;
         }
 
+        // Where a fiscal consequence lands: a province-level budget's crisis is felt
+        // in its own province (jurisdiction_id IS the region id — apply_spending_effects
+        // already routes that way); a national budget's crisis has no single province,
+        // so it says so explicitly rather than defaulting onto province 0, which is a
+        // real province that was silently absorbing every nation's fiscal shock.
+        const uint32_t consequence_province = budget.level == GovernmentLevel::province
+                                                  ? static_cast<uint32_t>(budget.jurisdiction_id)
+                                                  : kConsequenceNoProvince;
+
         // Check fiscal stress thresholds.
         if (budget.debt_to_revenue_ratio > cfg_.debt_crisis_ratio) {
             // Fiscal crisis consequence.
             ConsequenceDelta consequence{};
             consequence.new_consequence =
                 make_consequence(static_cast<uint32_t>(budget.jurisdiction_id * 100 + 2),
-                                 ConsequenceCategory::political_consequence, 0, 0, 0, current_tick);
+                                 ConsequenceCategory::political_consequence, 0, 0,
+                                 consequence_province, current_tick);
             delta.consequence_deltas.push_back(consequence);
         } else if (budget.debt_to_revenue_ratio > cfg_.debt_warning_ratio) {
             // Fiscal pressure warning consequence.
             ConsequenceDelta consequence{};
             consequence.new_consequence =
                 make_consequence(static_cast<uint32_t>(budget.jurisdiction_id * 100 + 1),
-                                 ConsequenceCategory::political_consequence, 0, 0, 0, current_tick);
+                                 ConsequenceCategory::political_consequence, 0, 0,
+                                 consequence_province, current_tick);
             delta.consequence_deltas.push_back(consequence);
         }
 
@@ -546,7 +557,8 @@ void GovernmentBudgetModule::check_fiscal_health(DeltaBuffer& delta, uint32_t cu
             ConsequenceDelta insolvency{};
             insolvency.new_consequence =
                 make_consequence(static_cast<uint32_t>(budget.jurisdiction_id * 100 + 3),
-                                 ConsequenceCategory::political_consequence, 0, 0, 0, current_tick);
+                                 ConsequenceCategory::political_consequence, 0, 0,
+                                 consequence_province, current_tick);
             delta.consequence_deltas.push_back(insolvency);
         }
     }

@@ -141,6 +141,10 @@ class SubsistenceModule : public ITickModule {
 
    private:
     SubsistenceConfig cfg_;
+    // True once the commons food path has published in an active regime, so the
+    // one-time regime-exit reset (execute()) knows there is a stale value to
+    // clear. Mirrors warfare's war_state_dirty_.
+    bool commons_state_dirty_ = false;
 };
 
 }  // namespace econlife

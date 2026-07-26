@@ -470,8 +470,10 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
         // system can schedule downstream effects (new facility, competitor response, etc.).
         // new_entry_id encodes the business id; the consequence engine resolves the type.
         ConsequenceDelta expansion_cons{};
+        // The grievance lands where the firm actually is. This passed a literal 0,
+        // so every province's business churn piled onto province 0.
         expansion_cons.new_consequence = make_consequence(
-            biz.id, ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
+            biz.id, ConsequenceCategory::social_consequence, 0, 0, biz.province_id, current_tick);
         delta.consequence_deltas.push_back(expansion_cons);
     }
 
@@ -484,8 +486,9 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
         delta.dissolved_businesses.push_back(dissolve);
         ConsequenceDelta cons_delta{};
         // Use id offset to distinguish exit consequences from expansion consequences.
-        cons_delta.new_consequence = make_consequence(
-            biz.id + 1000000u, ConsequenceCategory::social_consequence, 0, 0, 0, current_tick);
+        cons_delta.new_consequence =
+            make_consequence(biz.id + 1000000u, ConsequenceCategory::social_consequence, 0, 0,
+                             biz.province_id, current_tick);
         delta.consequence_deltas.push_back(cons_delta);
     }
 

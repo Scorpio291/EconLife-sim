@@ -440,13 +440,39 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
             // BATTLE (Lanchester): each side's dead are proportional to the ENEMY's
             // effective strength; the outcome is the square-law contest. Real units:
-            // people, attributed to the border provinces where the armies muster.
-            const float dead_a = cfg_.battle_lethality * S_b;
-            const float dead_b = cfg_.battle_lethality * S_a;
-            if (pop[a] > 0.0)
-                war_death[a] += dead_a / pop[a];
-            if (pop[b] > 0.0)
-                war_death[b] += dead_b / pop[b];
+            // people.
+            //
+            // The dead are the SOLDIERS THE POLITY FIELDED, so they are attributed
+            // across the member provinces that raised the levy, in proportion to
+            // what each contributed — and each province can lose at most the
+            // soldiers it actually sent. That per-province bound is physical (you
+            // cannot bury more men than you mustered), which is what keeps the
+            // published fraction inside [0, levy_fraction] on its own.
+            //
+            // Before this, a whole polity's pooled dead were charged to the single
+            // border province of the pair: an empire fighting through a small
+            // frontier province produced a death fraction above 1.0, the [0,1]
+            // clamp in apply_deltas pinned it at 1.0, and population_aging wiped
+            // every cohort in that province in one year while the surplus dead
+            // vanished and the provinces that supplied the army lost nobody.
+            auto attribute_casualties = [&](uint32_t pid, float dead) {
+                const float mustered = polity_levy[pid];
+                if (mustered <= 0.0f || dead <= 0.0f)
+                    return;
+                for (uint32_t i = 0; i < n; ++i) {
+                    if (polity_of(i) != pid || levy[i] <= 0.0f || pop[i] <= 0.0)
+                        continue;
+                    const float share = dead * (levy[i] / mustered);
+                    const float fallen = std::min(share, levy[i]);  // physical bound
+                    war_death[i] += fallen / static_cast<float>(pop[i]);
+                }
+            };
+            // Allied contingents add strength at forage rates but are not yet
+            // debited casualties of their own (documented simplification: allies
+            // send men, not their whole levy). Nothing is minted by it — the
+            // attacker's dead are still drawn from the attacker's own muster.
+            attribute_casualties(pid_a, cfg_.battle_lethality * S_b);
+            attribute_casualties(pid_b, cfg_.battle_lethality * S_a);
             const bool attacker_won = rng.next_float() < p_attacker_wins(S_a, S_b);
             if (!attacker_won)
                 continue;  // repelled: the attacker paid rations and blood for nothing
@@ -548,7 +574,13 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         if (levy[m] > cfg_.secession_power_ratio * cohesion * rest) {
             polity_of_[m] = m;
             member_since_.erase(m);
-            polity_levy[pid] = rest;
+            // Store the remaining HEADCOUNT, not `rest` — rest is a strength (the
+            // headcount already multiplied by the leader bonus). Writing a strength
+            // into the levy aggregate made every later member of the same polity in
+            // this pass re-apply the multiplier, seeing up to mult^2 the true
+            // remaining levy and suppressing the cascade that should follow the
+            // first secession.
+            polity_levy[pid] = std::max(0.0f, polity_levy[pid] - levy[m]);
             polity_levy[m] += levy[m];
         }
     }

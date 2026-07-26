@@ -334,8 +334,36 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     }
 }
 
-void SubsistenceModule::execute(const WorldState&, DeltaBuffer&) {
-    // Province-parallel: all work happens in execute_province().
+void SubsistenceModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Province-parallel: the food economy itself runs in execute_province().
+    //
+    // The one thing that must happen globally is the REGIME-EXIT RESET. This
+    // module is the sole writer of cohort_stats->subsistence_surplus_ratio, and it
+    // goes inert the moment the era leaves the commons regimes — so without a
+    // reset the last pre-market value (a famine year's 0.7, say) persisted forever
+    // and kept scaling births in every later era, because population_aging
+    // consumes the field unconditionally. The publisher owns the invariant, so
+    // publish a one-time return to the neutral 1.0 ("fed") on the way out. Same
+    // dirty-flag pattern warfare uses for war_death_fraction.
+    const uint32_t n = static_cast<uint32_t>(state.provinces.size());
+    if (n == 0)
+        return;
+    const EraDefinition* era = state.era_catalog.by_index(state.technology.current_era);
+    const bool active = era != nullptr && regime_active(era->economic_regime);
+    if (active) {
+        commons_state_dirty_ = true;
+        return;
+    }
+    if (!commons_state_dirty_)
+        return;
+    for (uint32_t i = 0; i < n; ++i) {
+        RegionDelta rd{};
+        rd.region_id = state.provinces[i].region_id;
+        rd.subsistence_surplus_replacement = 1.0f;  // neutral: "fed"
+        rd.grain_surplus_replacement = 0.0f;        // no commons surplus to haul
+        delta.region_deltas.push_back(rd);
+    }
+    commons_state_dirty_ = false;
 }
 
 }  // namespace econlife

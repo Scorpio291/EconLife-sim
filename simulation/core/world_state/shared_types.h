@@ -276,9 +276,13 @@ struct RegionCohortStats {
 
     // War casualties for this province this year, as an EXTRA annual death fraction
     // of the population (real units: battle dead / people). Published by the warfare
-    // module (Lanchester attrition on the border provinces; conserved to cohort
-    // deaths by population_aging). 0 = at peace. The publisher resets it on regime
-    // exit; not persisted.
+    // module and consumed by population_aging in the SAME annual tick (warfare
+    // declares runs_before population_aging — the ordering is a contract, not a
+    // tie-break accident). The dead are debited to the provinces that raised the
+    // levy, each bounded by the soldiers it fielded, so this stays within
+    // [0, levy_fraction]. 0 = at peace. The publisher resets it on regime exit.
+    // Not persisted, and it does not need to be: it is produced and consumed
+    // inside one tick, so no save can ever fall between the two.
     float war_death_fraction = 0.0f;
 
     // Per-province territorial-conflict intensity (0-5), the demand-relevant

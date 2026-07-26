@@ -26,13 +26,36 @@ enum class ConsequenceCategory : uint8_t {
     rival_escalation = 7,
 };
 
+// "This consequence has no single province." Province 0 is a REAL province
+// (world-gen numbers regions from 0), so it cannot double as "unknown" — passing
+// a literal 0 from a call site that does not know where the effect lands quietly
+// dumps that effect onto province 0, and the drain has no way to tell the
+// difference. Call sites that genuinely have no province must say so explicitly
+// with this sentinel; the drain then skips region routing instead of
+// misattributing. Never use it to avoid looking up a province that is known.
+//
+// AUDIT (F3): npc_business and government_budget now pass the real province (or
+// this sentinel for national-scope budgets). These call sites still pass a
+// literal 0 and each needs either the province the effect belongs to or this
+// sentinel, one module at a time with its own test: legal_process (x2),
+// scene_cards, antitrust, trade_infrastructure, banking (x2), calendar,
+// political_cycle, weapons_trafficking, community_response, criminal_operations,
+// designer_drug, protection_rackets, obligation_network, addiction. Until then
+// their effects continue to land on province 0. They were deliberately NOT
+// blanket-converted to the sentinel: silently dropping a real effect is no
+// improvement over misattributing it, and each site needs its own judgement
+// about where the effect actually belongs.
+inline constexpr uint32_t kConsequenceNoProvince = 0xFFFFFFFFu;
+
 // A single scheduled consequence.
 struct ConsequenceEntry {
     uint32_t id = 0;
     ConsequenceCategory category = ConsequenceCategory::social_consequence;
     uint32_t source_npc_id = 0;  // who set it in motion (may be dead by fire time)
     uint32_t target_id = 0;      // defendant/affected NPC; 0 = player
-    uint32_t province_id = 0;    // where the effect lands
+    // Where the effect lands. kConsequenceNoProvince = nowhere in particular
+    // (national/global scope); any other value is a real region id.
+    uint32_t province_id = 0;
     uint32_t scheduled_tick = 0;
     bool fired = false;
     bool cancelled = false;

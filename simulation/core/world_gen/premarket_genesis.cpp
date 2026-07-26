@@ -207,12 +207,31 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
             urban / std::max(config.premarket_workers_per_workshop, 1.0f));
         for (uint32_t s = 0; s < shops && cursor < res.size(); ++cursor) {
             NPC& founder = world.significant_npcs[res[cursor]];
-            const std::string& ftype = workshop_types[created % workshop_types.size()];
-            const FacilityType* ft = facility_types.find(ftype);
             // Founder-gated: only someone whose wealth could have raised the
             // building owns one (the qualification the proto-capital climb earns).
-            if (ft == nullptr || founder.capital < ft->base_construction_cost)
-                continue;  // next-wealthiest may still qualify for a cheaper craft
+            // Each founder takes the CHEAPEST craft still owed a shop that they can
+            // actually afford, walking the rotation forward from where it stands.
+            // Rotating blindly and skipping on failure could never work: residents
+            // are ranked by descending wealth, so the moment the rotation landed on
+            // a craft the wealthiest remaining resident could not afford, every
+            // poorer resident failed the identical test and the province's workshop
+            // genesis halted for good — far short of what the catchment can feed.
+            const size_t type_count = workshop_types.size();
+            const FacilityType* chosen_ft = nullptr;
+            size_t chosen_offset = 0;
+            for (size_t k = 0; k < type_count; ++k) {
+                const size_t idx = (created + k) % type_count;
+                const FacilityType* ft = facility_types.find(workshop_types[idx]);
+                if (ft == nullptr || founder.capital < ft->base_construction_cost)
+                    continue;
+                if (chosen_ft == nullptr || ft->base_construction_cost < chosen_ft->base_construction_cost) {
+                    chosen_ft = ft;
+                    chosen_offset = idx;
+                }
+            }
+            if (chosen_ft == nullptr)
+                continue;  // this resident cannot raise any of the era's workshops
+            const std::string& ftype = workshop_types[chosen_offset];
             found_firm(i, founder, ftype, recipe_for_type.at(ftype),
                        config.premarket_workers_per_workshop);
             ++created;

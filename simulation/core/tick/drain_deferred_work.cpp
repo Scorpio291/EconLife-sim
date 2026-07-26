@@ -294,6 +294,12 @@ static void process_consequence_queue(WorldState& world, DeltaBuffer& delta) {
         if (e.scheduled_tick > world.current_tick)
             continue;
 
+        // A consequence with no province lands nowhere: skip the region-scoped
+        // effects rather than defaulting them onto province 0, which is a real
+        // province and was silently absorbing every unattributed grievance and
+        // trust hit in the simulation. Region-less categories still run below.
+        const bool has_province = e.province_id != kConsequenceNoProvince;
+
         switch (e.category) {
             case ConsequenceCategory::financial_investigation:
             case ConsequenceCategory::criminal_investigation:
@@ -314,6 +320,8 @@ static void process_consequence_queue(WorldState& world, DeltaBuffer& delta) {
             }
             case ConsequenceCategory::media_exposure:
             case ConsequenceCategory::political_consequence: {
+                if (!has_province)
+                    break;
                 RegionDelta rd;
                 rd.region_id = e.province_id;
                 rd.institutional_trust_delta = -0.03f;
@@ -321,6 +329,8 @@ static void process_consequence_queue(WorldState& world, DeltaBuffer& delta) {
                 break;
             }
             case ConsequenceCategory::social_consequence: {
+                if (!has_province)
+                    break;
                 RegionDelta rd;
                 rd.region_id = e.province_id;
                 // Genuine social harms (deaths, closures, defaults, interceptions)
@@ -331,6 +341,8 @@ static void process_consequence_queue(WorldState& world, DeltaBuffer& delta) {
                 break;
             }
             case ConsequenceCategory::rival_escalation: {
+                if (!has_province)
+                    break;
                 RegionDelta rd;
                 rd.region_id = e.province_id;
                 rd.criminal_dominance_delta = 0.02f;

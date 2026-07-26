@@ -101,11 +101,20 @@ TEST_CASE("warfare: a lopsided war kills in proportion to enemy strength (real u
     // No granaries: both fight at forage strength. S_a = 10000*0.5, S_b = 400*0.5.
     const float S_a = 10000.0f * cfg.forage_share;
     const float S_b = 400.0f * cfg.forage_share;
+    // A's losses come out of its own muster and are nowhere near it.
     const float dead_a_frac = cfg.battle_lethality * S_b / 100000.0f;
-    const float dead_b_frac = cfg.battle_lethality * S_a / 4000.0f;
     CHECK_THAT(w.provinces[0].cohort_stats->war_death_fraction, WithinRel(dead_a_frac, 0.01f));
-    CHECK_THAT(w.provinces[1].cohort_stats->war_death_fraction, WithinRel(dead_b_frac, 0.01f));
-    // The weak side bleeds catastrophically MORE — from asymmetry, not a constant.
+
+    // B's raw Lanchester losses exceed the army it actually fielded (0.1 * S_a =
+    // 500 dead against a levy of 400), so its army is ANNIHILATED and the death
+    // fraction saturates at the levy it mustered: you cannot bury more men than
+    // you sent. That bound is physical, which is why the fraction can no longer
+    // run past 1.0 and be silently clamped. Before the casualty fix this
+    // published 500/4000 = 0.125 — more dead soldiers than soldiers.
+    CHECK(cfg.battle_lethality * S_a > 400.0f);
+    CHECK_THAT(w.provinces[1].cohort_stats->war_death_fraction,
+               WithinRel(cfg.levy_fraction, 0.01f));
+    // The weak side still bleeds catastrophically MORE — from asymmetry, not a constant.
     CHECK(w.provinces[1].cohort_stats->war_death_fraction >
           10.0f * w.provinces[0].cohort_stats->war_death_fraction);
 }
@@ -471,11 +480,24 @@ TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone
     const float S_kingdom = (10000.0f + 1000.0f) * cfg.forage_share;
     const float dead_c_frac = cfg.battle_lethality * S_kingdom / 30000.0f;
     CHECK_THAT(w.provinces[2].cohort_stats->war_death_fraction, WithinRel(dead_c_frac, 0.02f));
-    // And B, the border member, bears only attacker-scale losses from C's defence —
-    // it is the empire's spear, not C's victim.
+    // C's defence kills 150 of the kingdom's men, and they are debited to the
+    // member provinces that RAISED that army, in proportion to what each
+    // contributed — not dumped entirely on the border province the campaign was
+    // routed through (which is what produced province-annihilating fractions
+    // before the fix). Because levies are proportional to population, the seat
+    // and the border member bleed the same fraction of their people.
     const float S_c_def = 3000.0f * cfg.forage_share;
-    const float dead_b_frac = cfg.battle_lethality * S_c_def / 10000.0f;
+    const float kingdom_dead = cfg.battle_lethality * S_c_def;
+    const float pooled_levy = 10000.0f + 1000.0f;
+    const float dead_b_frac = kingdom_dead * (1000.0f / pooled_levy) / 10000.0f;
+    const float dead_seat_frac = kingdom_dead * (10000.0f / pooled_levy) / 100000.0f;
     CHECK_THAT(w.provinces[1].cohort_stats->war_death_fraction, WithinRel(dead_b_frac, 0.02f));
+    CHECK_THAT(w.provinces[0].cohort_stats->war_death_fraction, WithinRel(dead_seat_frac, 0.02f));
+    // Conserved: the dead debited across the kingdom equal the dead the battle
+    // produced (no losses vanish, none are invented).
+    const float debited = w.provinces[0].cohort_stats->war_death_fraction * 100000.0f +
+                          w.provinces[1].cohort_stats->war_death_fraction * 10000.0f;
+    CHECK_THAT(debited, WithinRel(kingdom_dead, 0.02f));
 }
 
 TEST_CASE("warfare: a member that outgrows the polity secedes (the hold problem)",

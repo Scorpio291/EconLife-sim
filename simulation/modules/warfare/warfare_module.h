@@ -41,6 +41,16 @@ class WarfareModule : public ITickModule {
 
     std::vector<std::string_view> runs_after() const override { return {"subsistence"}; }
 
+    // war_death_fraction is published here and consumed by population_aging in the
+    // SAME annual tick, so the ordering must be declared rather than left to the
+    // topological sort's alphabetical tie-break. It was undeclared, and the
+    // tie-break happened to place population_aging first: every year's battle dead
+    // were applied a year late, were lost entirely if the game was saved in
+    // between (the field is transient by design), and were wiped without ever
+    // being applied if the era left the pre-market regime mid-year (the one-time
+    // reset below fired first). Same-tick consumption removes all three.
+    std::vector<std::string_view> runs_before() const override { return {"population_aging"}; }
+
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
     // Lanchester square-law contest: P(attacker wins) = Sa^2 / (Sa^2 + Sb^2).
