@@ -121,21 +121,22 @@ TEST_CASE("emergence: identical seed reproduces identical behavior", "[emergence
 }
 
 TEST_CASE("emergence: national legitimacy reflects (healthy) conditions",
-          "[emergence][integration][!shouldfail]") {
-    // Intended invariant (Group 2, expected to FAIL today — drop [!shouldfail] when
-    // it passes): a materially-healthy nation retains the population's consent, so
-    // legitimacy stays above the 0.30 crisis line rather than cratering.
+          "[emergence][integration]") {
+    // PROMOTED from a ratchet (F3b). A materially-healthy nation retains the
+    // population's consent, so legitimacy stays above the 0.30 crisis line rather
+    // than cratering.
     //
-    // DEFERRED to the modern-economy grounding pass. Legitimacy now honestly tracks
-    // grounded conditions (Phase 2 stopped stability auto-healing to 1.0). On the
-    // modern baseline those conditions are mediocre — measured employment ~0.42 and
-    // inequality ~0.41 — so stability sits ~0.34 and legitimacy lands ~0.23, below
-    // 0.25. That is the grounded truth of an under-wired modern economy, NOT a
-    // legitimacy bug: the real fix is grounding modern employment / wages /
-    // inequality (the documented modern-economy follow-up). When that lands, this
-    // test should start passing and the tag comes off. (Legitimacy CRATERING under a
-    // forced crisis + the regime-differentiated response are covered by the
-    // political_cycle [unrest] unit tests.)
+    // Why it was failing: measured formal employment was depressed — not by the
+    // economy, but by an accounting defect. formal_employment_rate had TWO
+    // additive writers against the same pre-tick value (regional_conditions
+    // snapping the cohort size-weighted mean, labor_market nudging toward the
+    // tracked-NPC sample, which is ~0 while formal hiring is under-wired), so the
+    // field settled at a blend neither module intended. Stability fed on that
+    // depressed number and legitimacy followed it under the 0.25 line. Giving the
+    // field a single owner (the cohort mean is the authoritative population view)
+    // let it report what the economy actually is, and the loop closes.
+    // (Legitimacy CRATERING under a forced crisis and the regime-differentiated
+    // response are covered by the political_cycle [unrest] unit tests.)
     const auto& s = baseline();
     REQUIRE(s.back().mean_grievance < 0.5);  // not a grievance-driven collapse
     CHECK(s.back().national_legitimacy > 0.25);
