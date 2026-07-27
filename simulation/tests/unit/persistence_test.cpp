@@ -3,7 +3,9 @@
 
 #include "core/world_gen/goods_catalog.h"
 #include "core/world_state/apply_deltas.h"  // lookup_good_id
+#include "core/world_state/delta_buffer.h"
 #include "modules/persistence/persistence_module.h"
+#include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
 #include "tests/test_world_factory.h"
 
 using namespace econlife;
@@ -31,42 +33,46 @@ TEST_CASE("Persistence: checksum empty data", "[persistence][tier12]") {
 }
 
 TEST_CASE("Persistence: schema compatible same version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(7, 7) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(24, 24) == true);
+    REQUIRE(PersistenceModule::is_schema_compatible(PersistenceModule::CURRENT_SCHEMA_VERSION,
+                                                    PersistenceModule::CURRENT_SCHEMA_VERSION) ==
+            true);
 }
 
-// v7 builds reject pre-v7 saves: every prior bump (v3 catalog, v4 addiction
-// state, v5 cohort_stats migration, v6 currency/facility/technology footers,
-// v7 module-state section) changes the byte-stream layout, so reading an
-// older save with v7 code short-reads at the new trailing blocks.
-TEST_CASE("Persistence: schema rejects pre-v7 saves", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(1, 7) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(2, 7) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(3, 7) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(4, 7) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(5, 7) == false);
-    REQUIRE(PersistenceModule::is_schema_compatible(6, 7) == false);
+// The floor is v24, not v7: the era byte was re-based twice (modern era
+// 1 -> 5 -> 8) and the SECOND re-base landed inside schema v23 with no version
+// bump, so v23 saves exist with two meanings for the same byte and nothing in
+// the file tells them apart. Migration is impossible by construction, so every
+// pre-renumbering save is rejected outright rather than silently reinterpreted
+// (a modern world would load into the Medieval era, or the reverse).
+TEST_CASE("Persistence: schema rejects pre-renumbering saves", "[persistence][tier12]") {
+    REQUIRE(PersistenceModule::MIN_SUPPORTED_SCHEMA_VERSION == 24);
+    for (uint32_t v = 1; v < PersistenceModule::MIN_SUPPORTED_SCHEMA_VERSION; ++v) {
+        REQUIRE(PersistenceModule::is_schema_compatible(
+                    v, PersistenceModule::CURRENT_SCHEMA_VERSION) == false);
+    }
+    // v23 in particular: the ambiguous version.
+    REQUIRE(PersistenceModule::is_schema_compatible(23, PersistenceModule::CURRENT_SCHEMA_VERSION) ==
+            false);
 }
 
-TEST_CASE("Persistence: schema accepts v7..v15", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(7, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(8, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(9, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(10, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(11, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(12, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(13, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(14, 15) == true);
-    REQUIRE(PersistenceModule::is_schema_compatible(15, 15) == true);
+TEST_CASE("Persistence: schema accepts v24..current", "[persistence][tier12]") {
+    for (uint32_t v = PersistenceModule::MIN_SUPPORTED_SCHEMA_VERSION;
+         v <= PersistenceModule::CURRENT_SCHEMA_VERSION; ++v) {
+        REQUIRE(PersistenceModule::is_schema_compatible(
+                    v, PersistenceModule::CURRENT_SCHEMA_VERSION) == true);
+    }
 }
 
 TEST_CASE("Persistence: schema incompatible newer version", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::is_schema_compatible(16, 15) == false);
+    REQUIRE(PersistenceModule::is_schema_compatible(PersistenceModule::CURRENT_SCHEMA_VERSION + 1,
+                                                    PersistenceModule::CURRENT_SCHEMA_VERSION) ==
+            false);
 }
 
 TEST_CASE("Persistence: needs migration", "[persistence][tier12]") {
-    REQUIRE(PersistenceModule::needs_migration(7, 15) == true);
-    REQUIRE(PersistenceModule::needs_migration(14, 15) == true);
-    REQUIRE(PersistenceModule::needs_migration(15, 15) == false);
+    REQUIRE(PersistenceModule::needs_migration(24, 25) == true);
+    REQUIRE(PersistenceModule::needs_migration(25, 25) == false);
 }
 
 TEST_CASE("Persistence: save allowed when buffer empty", "[persistence][tier12]") {
@@ -119,7 +125,9 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // v22: WorldState.hazard_settings (world spectrum).
     // v23: cohort_stats.hardiness (generational adaptation).
     // v24: cohort_stats.food_store (granary / commons food economy).
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 24);
+    // v25: per-province FisheriesProfile, Nation national_legitimacy,
+    //      political_cycle module-private state.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 25);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -845,4 +853,177 @@ TEST_CASE("Persistence: round-trip preserves the consequence queue (v17)",
     REQUIRE(r.category == ConsequenceCategory::legal_proceeding);
     REQUIRE(r.target_id == 9);
     REQUIRE(r.scheduled_tick == 5000u);
+}
+
+// ── Schema v25: fisheries, national legitimacy, and hostile-length rejection ──
+
+namespace {
+
+// Patch a little-endian u32 in the (non-checksum-covered) save header.
+void patch_header_le32(std::vector<uint8_t>& bytes, size_t offset, uint32_t value) {
+    REQUIRE(bytes.size() >= offset + 4);
+    bytes[offset] = static_cast<uint8_t>(value & 0xFF);
+    bytes[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+    bytes[offset + 2] = static_cast<uint8_t>((value >> 16) & 0xFF);
+    bytes[offset + 3] = static_cast<uint8_t>((value >> 24) & 0xFF);
+}
+
+// A coastal province as world generation leaves it, with a deliberately
+// non-default value in every FisheriesProfile field so a dropped field shows up
+// as a mismatch rather than coinciding with the struct default.
+void seed_upwelling_fishery(Province& p) {
+    p.geography.is_landlocked = false;
+    p.geography.coastal_length_km = 250.0f;
+    p.fisheries.access_type = FishingAccessType::Upwelling;
+    p.fisheries.carrying_capacity = 0.62f;
+    p.fisheries.current_stock = 0.124f;  // 0.2 * K — below the MSY stock
+    p.fisheries.max_sustainable_yield = 0.186f;
+    p.fisheries.intrinsic_growth_rate = 0.60f;
+    p.fisheries.seasonal_closure = 0.07f;
+    p.fisheries.is_migratory = true;
+}
+
+}  // namespace
+
+TEST_CASE("Persistence: round-trip preserves the full FisheriesProfile (v25)",
+          "[persistence][tier12][serialization][v25][fisheries]") {
+    auto world = test::create_test_world(42, 10, 2, 5);
+    REQUIRE(world.provinces.size() == 2);
+    seed_upwelling_fishery(world.provinces[0]);
+    // Province 1 stays landlocked, so the NoAccess case round-trips too.
+    REQUIRE(world.provinces[1].fisheries.access_type == FishingAccessType::NoAccess);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    const auto& f = restored.provinces[0].fisheries;
+    // access_type and carrying_capacity are the load-bearing pair: with either
+    // one lost, seasonal_agriculture's process_fisheries early-returns forever.
+    REQUIRE(f.access_type == FishingAccessType::Upwelling);
+    REQUIRE_THAT(f.carrying_capacity, WithinAbs(0.62f, 1e-6f));
+    REQUIRE_THAT(f.current_stock, WithinAbs(0.124f, 1e-6f));
+    REQUIRE_THAT(f.max_sustainable_yield, WithinAbs(0.186f, 1e-6f));
+    REQUIRE_THAT(f.intrinsic_growth_rate, WithinAbs(0.60f, 1e-6f));
+    REQUIRE_THAT(f.seasonal_closure, WithinAbs(0.07f, 1e-6f));
+    REQUIRE(f.is_migratory == true);
+
+    const auto& landlocked = restored.provinces[1].fisheries;
+    REQUIRE(landlocked.access_type == FishingAccessType::NoAccess);
+    REQUIRE(landlocked.carrying_capacity == 0.0f);
+}
+
+TEST_CASE("Persistence: a loaded coastal province still grows its fish stock (v25)",
+          "[persistence][tier12][serialization][v25][fisheries]") {
+    // The failure this pins down was not a cosmetic field loss: a province that
+    // loaded with the FisheriesProfile defaults (NoAccess, K = 0) hit the
+    // early-return in process_fisheries, so its stock could never grow again and
+    // it landed nothing — a coastal province turned permanently landlocked.
+    auto world = test::create_test_world(42, 10, 2, 5);
+    world.current_tick = 1500;  // 1500 % 365 = 40 -> past the 0.07 closure window
+    seed_upwelling_fishery(world.provinces[0]);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    SeasonalAgricultureModule ag;
+    DeltaBuffer delta{};
+    ag.execute_province(0, restored, delta);
+
+    // The fishery is live and, below the MSY stock, growing: logistic growth
+    // (r/365 * N * (1 - N/K)) exceeds the harvest (F/365 * N).
+    REQUIRE(delta.fisheries_deltas.size() == 1);
+    REQUIRE(delta.fisheries_deltas[0].province_id == 0u);
+    REQUIRE(delta.fisheries_deltas[0].stock_delta > 0.0f);
+
+    // Control: the landlocked province produces no fisheries delta either way,
+    // which is exactly what every province looked like before v25.
+    DeltaBuffer landlocked_delta{};
+    ag.execute_province(1, restored, landlocked_delta);
+    REQUIRE(landlocked_delta.fisheries_deltas.empty());
+}
+
+TEST_CASE("Persistence: round-trip preserves national_legitimacy (v25)",
+          "[persistence][tier12][serialization][v25][legitimacy]") {
+    // national_legitimacy is an EMA over its own prior value, so it is genuine
+    // cross-tick state. Dropping it reset a nation in legitimacy crisis back to
+    // the 0.5 default on load, skipping dozens of monthly crackdown /
+    // concession / collapse steps.
+    auto world = test::create_test_world(42, 10, 2, 5);
+    REQUIRE(world.nations.size() == 1);
+    world.nations[0].political_cycle.national_legitimacy = 0.17f;  // deep crisis
+    world.nations[0].political_cycle.national_approval = 0.23f;
+    world.nations[0].political_cycle.current_administration_tick = 900;
+    world.nations[0].political_cycle.next_election_tick = 2920;
+    world.nations[0].political_cycle.election_campaign_active = true;
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    const auto& pc = restored.nations[0].political_cycle;
+    REQUIRE_THAT(pc.national_legitimacy, WithinAbs(0.17f, 1e-6f));
+    // Still in crisis (< the 0.30 threshold), not silently restored to 0.5.
+    REQUIRE(pc.national_legitimacy < 0.30f);
+    // The neighbouring fields in the same block are unshifted.
+    REQUIRE_THAT(pc.national_approval, WithinAbs(0.23f, 1e-6f));
+    REQUIRE(pc.current_administration_tick == 900u);
+    REQUIRE(pc.next_election_tick == 2920u);
+    REQUIRE(pc.election_campaign_active == true);
+}
+
+TEST_CASE("Persistence: an impossible declared uncompressed size is rejected, not allocated",
+          "[persistence][tier12][serialization][v25][robustness]") {
+    // The header's uncompressed size is NOT checksum-covered — the checksum can
+    // only be verified after decompressing into a buffer of that size — so one
+    // corrupt header byte used to reach a ~4 GiB allocation with no try/catch
+    // anywhere in the load path.
+    auto world = test::create_test_world(42, 10, 2, 5);
+    auto original = PersistenceModule::serialize(world);
+
+    for (uint32_t bogus_size : {0xFFFFFFFFu, 0x40000000u, 64u * 1024u * 1024u}) {
+        auto bytes = original;
+        patch_header_le32(bytes, 8, bogus_size);
+
+        WorldState restored{};
+        restored.current_tick = 7;  // sentinel: must survive a rejected load
+        auto result = PersistenceModule::deserialize(bytes, restored);
+        REQUIRE(result == RestoreResult::io_error);
+        REQUIRE(restored.current_tick == 7u);
+        REQUIRE(restored.provinces.empty());
+    }
+
+    // The unpatched save still loads: the bound rejects only sizes the payload
+    // could not possibly expand to.
+    WorldState good{};
+    REQUIRE(PersistenceModule::deserialize(original, good) == RestoreResult::success);
+}
+
+TEST_CASE("Persistence: pre-renumbering schema versions are rejected with an error",
+          "[persistence][tier12][serialization][v25][robustness]") {
+    // Decision on record: pre-renumbering saves are REJECTED, not migrated. The
+    // era byte was re-based twice and the second re-base landed inside v23 with
+    // no bump, so a v23 era value has two possible meanings and no version-keyed
+    // remap can disambiguate them.
+    auto world = test::create_test_world(42, 10, 2, 5);
+    auto original = PersistenceModule::serialize(world);
+
+    for (uint32_t old_version : {1u, 7u, 18u, 23u}) {
+        auto bytes = original;
+        patch_header_le32(bytes, 4, old_version);
+
+        WorldState restored{};
+        restored.current_tick = 11;  // sentinel: no state change on rejection
+        auto result = PersistenceModule::deserialize(bytes, restored);
+        REQUIRE(result == RestoreResult::migration_failed);
+        REQUIRE(restored.current_tick == 11u);
+        REQUIRE(restored.nations.empty());
+    }
+
+    // A newer-than-current version is still a distinct, separately reported case.
+    auto too_new = original;
+    patch_header_le32(too_new, 4, PersistenceModule::CURRENT_SCHEMA_VERSION + 1);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(too_new, restored) == RestoreResult::schema_too_new);
 }

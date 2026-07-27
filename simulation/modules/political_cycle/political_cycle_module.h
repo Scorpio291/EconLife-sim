@@ -25,6 +25,18 @@ class PoliticalCycleModule : public ITickModule {
     bool is_province_parallel() const noexcept override { return false; }
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Module-private state persistence (schema v25 participant). Covers the
+    // whole of political_state_ — offices, campaigns, proposals, nation_unrest —
+    // plus the one-shot formation guard. Without these the office topology
+    // re-seeded from world-gen data on every load (killing elections outright,
+    // see the self-healing due-tick logic in execute) and the autocratic
+    // repression ratchet reset, which restarted the FailedState collapse clock
+    // and flipped suppression back to grievance-reducing.
+    // cfg_ is deliberately excluded: it is package-config reference data,
+    // reloaded on startup like the technology module's era_triggers.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     // --- Static utilities for testing ---
     static float compute_raw_vote_share(
         const std::unordered_map<std::string, float>& approval_by_demographic,
@@ -85,8 +97,11 @@ class PoliticalCycleModule : public ITickModule {
 
     PoliticalCycleConfig cfg_;
     PoliticalCycleModuleState political_state_;
-    // One-shot formation guard. Not persisted: re-seeds after a load (offices
-    // are not yet in the persistence schema -- flagged follow-up).
+    // One-shot formation guard. Persisted since schema v25 along with the
+    // offices themselves: a run that had already formed its offices must not
+    // re-form them after a load, or a world whose offices were legitimately
+    // emptied would silently grow a fresh set and diverge from the
+    // uninterrupted run.
     bool formed_ = false;
 };
 

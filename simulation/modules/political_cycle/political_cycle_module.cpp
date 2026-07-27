@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <utility>
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -382,14 +384,29 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
         return true;
     };
 
-    // Process elections for offices due this tick.
+    // Process elections for offices whose election is DUE — due tick reached or
+    // already passed. The `>=` (not `==`) is what makes the cycle self-healing:
+    // a past-due tick catches up on the next tick instead of dead-locking.
+    //
+    // An exact-equality trigger deadlocked permanently whenever an office
+    // carried a due tick in the past, because the only two reschedule sites live
+    // inside this matched branch and activate_campaigns() also skips offices
+    // whose due tick is <= current_tick. Past-due ticks are not exotic: they
+    // arrive from world-gen data that is written once and never advanced
+    // (Province::political.election_due_tick = 1460), from a save taken after
+    // that tick, and from any mod or hand-built world that ships an office with
+    // a stale tick. Every fired office is rescheduled below (both branches), so
+    // the catch-up costs exactly one election and then resumes the normal term.
     for (auto& office : political_state_.offices) {
-        if (office.election_due_tick != state.current_tick)
+        if (office.election_due_tick > state.current_tick)
             continue;
 
         const Province* prov = find_province(office.province_id);
         if (!nation_holds_elections(prov)) {
             // Autocracy / FailedState: no election (valid state); reschedule.
+            // Anchored on current_tick, not on the old due tick, so a stale tick
+            // resolves to one term from now rather than replaying the whole
+            // backlog of missed terms one tick at a time.
             office.election_due_tick = state.current_tick + office.term_length_ticks;
             continue;
         }
@@ -494,6 +511,9 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
         rd.institutional_trust_delta = won ? 0.02f : -0.01f;
         delta.region_deltas.push_back(rd);
 
+        // Always reschedule, anchored on current_tick (see the due-tick comment
+        // above): a fired office must never be left at or behind the current
+        // tick, or it would re-run its election every tick from here on.
         office.election_due_tick = state.current_tick + office.term_length_ticks;
     }
 
@@ -550,6 +570,324 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
                 break;
         }
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Module-private state persistence (persistence schema v25)
+// ═════════════════════════════════════════════════════════════════════════════
+// Encoding follows the convention the other opt-in modules use (see
+// criminal_operations / banking): little-endian scalars, a u32 format version
+// first so the blob can evolve independently of the save schema, and
+// length-prefixed strings. The unordered_map members are written in sorted key
+// order so the blob is byte-identical for identical state (round-trip
+// determinism is the persistence module's central invariant).
+
+namespace {
+
+constexpr uint32_t kPoliticalStateBlobVersion = 1u;
+
+void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+void put_u64(std::vector<uint8_t>& out, uint64_t v) {
+    put_u32(out, static_cast<uint32_t>(v & 0xFFFFFFFFull));
+    put_u32(out, static_cast<uint32_t>((v >> 32) & 0xFFFFFFFFull));
+}
+
+void put_f32(std::vector<uint8_t>& out, float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    put_u32(out, bits);
+}
+
+void put_string(std::vector<uint8_t>& out, const std::string& s) {
+    put_u32(out, static_cast<uint32_t>(s.size()));
+    for (char c : s)
+        out.push_back(static_cast<uint8_t>(c));
+}
+
+// Approval maps are unordered_map: write them in ascending key order so equal
+// state always produces equal bytes.
+void put_approval_map(std::vector<uint8_t>& out,
+                      const std::unordered_map<std::string, float>& approval) {
+    std::vector<const std::pair<const std::string, float>*> sorted;
+    sorted.reserve(approval.size());
+    for (const auto& kv : approval)
+        sorted.push_back(&kv);
+    std::sort(sorted.begin(), sorted.end(),
+              [](const std::pair<const std::string, float>* a,
+                 const std::pair<const std::string, float>* b) { return a->first < b->first; });
+    put_u32(out, static_cast<uint32_t>(sorted.size()));
+    for (const auto* kv : sorted) {
+        put_string(out, kv->first);
+        put_f32(out, kv->second);
+    }
+}
+
+struct Reader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+    bool error = false;
+    bool need(size_t n) {
+        if (error || pos + n > size) {
+            error = true;
+            return false;
+        }
+        return true;
+    }
+    uint32_t u32() {
+        if (!need(4))
+            return 0;
+        uint32_t v = data[pos] | (uint32_t(data[pos + 1]) << 8) | (uint32_t(data[pos + 2]) << 16) |
+                     (uint32_t(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    }
+    uint64_t u64() {
+        uint32_t lo = u32();
+        uint32_t hi = u32();
+        return static_cast<uint64_t>(lo) | (static_cast<uint64_t>(hi) << 32);
+    }
+    uint8_t u8() {
+        if (!need(1))
+            return 0;
+        return data[pos++];
+    }
+    float f32() {
+        uint32_t bits = u32();
+        float v;
+        std::memcpy(&v, &bits, sizeof(v));
+        return v;
+    }
+    std::string str() {
+        uint32_t len = u32();
+        // Bound the declared length against what is actually left before
+        // allocating: the length is untrusted input.
+        if (!need(len))
+            return {};
+        std::string s(reinterpret_cast<const char*>(data + pos), len);
+        pos += len;
+        return s;
+    }
+    // A count is only plausible if the remaining bytes could hold that many
+    // one-byte elements. Cheap guard against a corrupt count reaching reserve().
+    bool count_fits(uint32_t count) const { return static_cast<size_t>(count) <= size - pos; }
+};
+
+bool read_approval_map(Reader& r, std::unordered_map<std::string, float>& out) {
+    uint32_t count = r.u32();
+    if (r.error || !r.count_fits(count))
+        return false;
+    for (uint32_t i = 0; i < count; ++i) {
+        std::string key = r.str();
+        float value = r.f32();
+        if (r.error)
+            return false;
+        out[key] = value;
+    }
+    return true;
+}
+
+}  // namespace
+
+void PoliticalCycleModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32(out, kPoliticalStateBlobVersion);
+    out.push_back(formed_ ? 1u : 0u);
+
+    put_u32(out, static_cast<uint32_t>(political_state_.offices.size()));
+    for (const auto& o : political_state_.offices) {
+        put_u64(out, o.id);
+        put_u32(out, o.province_id);
+        out.push_back(static_cast<uint8_t>(o.office_type));
+        put_u64(out, o.current_holder_id);
+        put_u64(out, o.election_due_tick);
+        put_u32(out, o.term_length_ticks);
+        put_f32(out, o.win_threshold);
+        put_approval_map(out, o.approval_by_demographic);
+    }
+
+    put_u32(out, static_cast<uint32_t>(political_state_.campaigns.size()));
+    for (const auto& c : political_state_.campaigns) {
+        put_u64(out, c.id);
+        put_u64(out, c.active_candidate_id);
+        put_u64(out, c.office_id);
+        put_u64(out, c.campaign_start_tick);
+        put_u64(out, c.election_tick);
+        put_u32(out, static_cast<uint32_t>(c.coalition_commitments.size()));
+        for (const auto& cc : c.coalition_commitments) {
+            put_string(out, cc.demographic);
+            put_string(out, cc.promise_text);
+            put_u64(out, cc.obligation_node_id);
+            out.push_back(cc.delivered ? 1u : 0u);
+        }
+        put_u32(out, static_cast<uint32_t>(c.endorsements.size()));
+        for (const auto& e : c.endorsements) {
+            put_u64(out, e.endorser_npc_id);
+            put_string(out, e.primary_demographic);
+            put_f32(out, e.approval_bonus);
+        }
+        put_f32(out, c.resource_deployment);
+        put_approval_map(out, c.current_approval_by_demographic);
+        put_u32(out, static_cast<uint32_t>(c.event_modifiers.size()));
+        for (float m : c.event_modifiers)
+            put_f32(out, m);
+        out.push_back(c.resolved ? 1u : 0u);
+    }
+
+    put_u32(out, static_cast<uint32_t>(political_state_.proposals.size()));
+    for (const auto& p : political_state_.proposals) {
+        put_u64(out, p.id);
+        out.push_back(static_cast<uint8_t>(p.status));
+        put_u64(out, p.sponsor_id);
+        put_u64(out, p.vote_tick);
+        put_f32(out, p.votes_for);
+        put_f32(out, p.votes_against);
+        put_string(out, p.policy_effect_id);
+    }
+
+    // The repression ratchet. Losing repression_count restarted the
+    // FailedState collapse clock (8 fresh monthly crackdowns), and losing
+    // repression_grievance_floor flipped suppression back to grievance-REDUCING
+    // — the martyr backlash a sustained crackdown has already earned.
+    put_u32(out, static_cast<uint32_t>(political_state_.nation_unrest.size()));
+    for (const auto& u : political_state_.nation_unrest) {
+        put_u32(out, u.nation_id);
+        put_u32(out, u.repression_count);
+        put_f32(out, u.repression_grievance_floor);
+    }
+}
+
+bool PoliticalCycleModule::deserialize_state(const uint8_t* data, size_t size) {
+    Reader r{data, size};
+    if (r.u32() != kPoliticalStateBlobVersion)
+        return false;
+
+    // Everything is parsed into locals and only moved into the members once the
+    // whole blob has read cleanly: a truncated or corrupt block must leave the
+    // module exactly as it was, never half-wiped.
+    const bool formed = r.u8() != 0u;
+    std::vector<PoliticalOffice> offices;
+    std::vector<Campaign> campaigns;
+    std::vector<LegislativeProposal> proposals;
+    std::vector<NationUnrestState> nation_unrest;
+
+    uint32_t office_count = r.u32();
+    if (r.error || !r.count_fits(office_count))
+        return false;
+    offices.reserve(office_count);
+    for (uint32_t i = 0; i < office_count; ++i) {
+        PoliticalOffice o{};
+        o.id = r.u64();
+        o.province_id = r.u32();
+        o.office_type = static_cast<PoliticalOfficeType>(r.u8());
+        o.current_holder_id = r.u64();
+        o.election_due_tick = r.u64();
+        o.term_length_ticks = r.u32();
+        o.win_threshold = r.f32();
+        if (r.error || !read_approval_map(r, o.approval_by_demographic))
+            return false;
+        offices.push_back(std::move(o));
+    }
+
+    uint32_t campaign_count = r.u32();
+    if (r.error || !r.count_fits(campaign_count))
+        return false;
+    campaigns.reserve(campaign_count);
+    for (uint32_t i = 0; i < campaign_count; ++i) {
+        Campaign c{};
+        c.id = r.u64();
+        c.active_candidate_id = r.u64();
+        c.office_id = r.u64();
+        c.campaign_start_tick = r.u64();
+        c.election_tick = r.u64();
+        uint32_t commitment_count = r.u32();
+        if (r.error || !r.count_fits(commitment_count))
+            return false;
+        c.coalition_commitments.reserve(commitment_count);
+        for (uint32_t j = 0; j < commitment_count; ++j) {
+            CoalitionCommitment cc{};
+            cc.demographic = r.str();
+            cc.promise_text = r.str();
+            cc.obligation_node_id = r.u64();
+            cc.delivered = r.u8() != 0u;
+            if (r.error)
+                return false;
+            c.coalition_commitments.push_back(std::move(cc));
+        }
+        uint32_t endorsement_count = r.u32();
+        if (r.error || !r.count_fits(endorsement_count))
+            return false;
+        c.endorsements.reserve(endorsement_count);
+        for (uint32_t j = 0; j < endorsement_count; ++j) {
+            Endorsement e{};
+            e.endorser_npc_id = r.u64();
+            e.primary_demographic = r.str();
+            e.approval_bonus = r.f32();
+            if (r.error)
+                return false;
+            c.endorsements.push_back(std::move(e));
+        }
+        c.resource_deployment = r.f32();
+        if (r.error || !read_approval_map(r, c.current_approval_by_demographic))
+            return false;
+        uint32_t modifier_count = r.u32();
+        if (r.error || !r.count_fits(modifier_count))
+            return false;
+        c.event_modifiers.reserve(modifier_count);
+        for (uint32_t j = 0; j < modifier_count; ++j)
+            c.event_modifiers.push_back(r.f32());
+        c.resolved = r.u8() != 0u;
+        if (r.error)
+            return false;
+        campaigns.push_back(std::move(c));
+    }
+
+    uint32_t proposal_count = r.u32();
+    if (r.error || !r.count_fits(proposal_count))
+        return false;
+    proposals.reserve(proposal_count);
+    for (uint32_t i = 0; i < proposal_count; ++i) {
+        LegislativeProposal p{};
+        p.id = r.u64();
+        p.status = static_cast<LegislativeProposalStatus>(r.u8());
+        p.sponsor_id = r.u64();
+        p.vote_tick = r.u64();
+        p.votes_for = r.f32();
+        p.votes_against = r.f32();
+        p.policy_effect_id = r.str();
+        if (r.error)
+            return false;
+        proposals.push_back(std::move(p));
+    }
+
+    uint32_t unrest_count = r.u32();
+    if (r.error || !r.count_fits(unrest_count))
+        return false;
+    nation_unrest.reserve(unrest_count);
+    for (uint32_t i = 0; i < unrest_count; ++i) {
+        NationUnrestState u{};
+        u.nation_id = r.u32();
+        u.repression_count = r.u32();
+        u.repression_grievance_floor = r.f32();
+        if (r.error)
+            return false;
+        nation_unrest.push_back(u);
+    }
+
+    if (r.error)
+        return false;
+
+    political_state_.offices = std::move(offices);
+    political_state_.campaigns = std::move(campaigns);
+    political_state_.proposals = std::move(proposals);
+    political_state_.nation_unrest = std::move(nation_unrest);
+    formed_ = formed;
+    return true;
 }
 
 }  // namespace econlife

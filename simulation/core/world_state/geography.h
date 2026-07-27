@@ -876,8 +876,12 @@ struct NationPoliticalCycleState {
     // Does the population accept the government's right to rule. Aggregated each
     // tick by political_cycle from provincial conditions (stability, institutional
     // trust, grievance, unemployment). Drives the regime-differentiated unrest
-    // response. Derived per tick — recomputed before any consumer reads it — so
-    // it is NOT serialized (transient), like NPCBusiness.net_signal.
+    // response. NOT derived-and-discarded: political_cycle folds the provincial
+    // target into the PREVIOUS value as an EMA (alpha 0.05), so this field is its
+    // own input on every tick — genuine cross-tick state with a ~20-tick memory.
+    // Serialized since schema v25; before that a load silently reset a nation in
+    // legitimacy crisis (< 0.30) back to the 0.5 default and skipped dozens of
+    // monthly crackdown / concession / collapse steps.
     float national_legitimacy = 0.5f;
 };
 

@@ -163,7 +163,36 @@ class PersistenceModule : public ITickModule {
     //      v22: WorldState.hazard_settings (7 f32). Older saves default to Earth.
     //      v23: per-province cohort_stats.hardiness (f32). Older saves default 1.0.
     //      v24: per-province cohort_stats.food_store (f32, granary). Older saves 0.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 24;
+    //      v25: three save/load state gaps closed.
+    //           (a) per-province trailing FisheriesProfile — u8 access_type,
+    //               f32 carrying_capacity, f32 current_stock, f32
+    //               max_sustainable_yield, f32 intrinsic_growth_rate, f32
+    //               seasonal_closure, u8 is_migratory. Never serialized before,
+    //               so every load turned coastal provinces landlocked
+    //               permanently (access_type NoAccess + K 0 makes
+    //               seasonal_agriculture's process_fisheries early-return, so
+    //               the stock could never regrow).
+    //           (b) NationPoliticalCycleState trailing national_legitimacy
+    //               (f32). It is an EMA over its own prior value, not a
+    //               per-tick derivation, so dropping it reset every nation to
+    //               the 0.5 default on load.
+    //           (c) political_cycle joins the module-private state section
+    //               (offices, campaigns, proposals, nation_unrest, formation
+    //               guard). Its own blob is versioned independently.
+    //           v24 saves still load: (a) and (b) are version-gated and default
+    //           to NoAccess / 0.5, and a missing module block leaves the module
+    //           at its defaults.
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 25;
+    // Oldest save this build will load. Raised from 7 to 24 because the era
+    // byte was re-based twice (modern era 1 -> 5 -> 8) and the SECOND re-base
+    // landed inside schema v23 without a version bump. v23 saves therefore
+    // exist with two incompatible meanings for the same byte and no
+    // version-keyed remap can tell them apart, so everything below the first
+    // version written entirely under the current era numbering (v24) is
+    // rejected rather than silently misinterpreted (a v23 save loaded here
+    // would place a modern world in the Medieval era, or vice versa).
+    // Migration is impossible by construction, not merely unimplemented.
+    static constexpr uint32_t MIN_SUPPORTED_SCHEMA_VERSION = 24;
     static constexpr uint32_t SNAPSHOT_INTERVAL = 30;    // ticks per snapshot (monthly)
     static constexpr uint32_t WAL_SEGMENT_TICKS = 30;    // ticks per WAL segment
     static constexpr uint32_t MAGIC_BYTES = 0x45434F4E;  // "ECON"
@@ -171,6 +200,13 @@ class PersistenceModule : public ITickModule {
     static constexpr uint32_t HEADER_SIZE = 16;  // magic + schema + uncompressed_size + checksum
 
    private:
+    // Parse implementation behind deserialize(). Split out so the public entry
+    // point can wrap the whole parse in one try/catch: every container in here
+    // is sized from an untrusted length in the save file, and an uncaught
+    // bad_alloc would terminate the process instead of rejecting the load.
+    static RestoreResult deserialize_body(const std::vector<uint8_t>& data, WorldState& out_state,
+                                          const std::vector<ITickModule*>& modules);
+
     bool is_restoring_ = false;
     std::vector<SchemaMigration> migrations_;
 };

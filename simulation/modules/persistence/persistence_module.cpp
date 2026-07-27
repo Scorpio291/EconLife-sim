@@ -3,7 +3,10 @@
 #include <lz4.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
+#include <new>
+#include <stdexcept>
 #include <unordered_map>
 #include <utility>
 
@@ -112,6 +115,11 @@ class ByteReader {
     }
 
     bool has_error() const { return error_; }
+
+    // Bytes left in the decompressed buffer. Used to reject a declared length
+    // that cannot possibly be backed by the data before anything is allocated
+    // for it — a length in the save file is untrusted input.
+    size_t remaining() const { return pos_ <= size_ ? size_ - pos_ : 0; }
 
    private:
     const uint8_t* data_;
@@ -451,6 +459,20 @@ void write_province(ByteWriter& w, const Province& p) {
     w.write_u32(static_cast<uint32_t>(p.market_ids.size()));
     for (uint32_t mid : p.market_ids)
         w.write_u32(mid);
+
+    // v25: the full FisheriesProfile. access_type and carrying_capacity are
+    // load-bearing, not just current_stock: seasonal_agriculture's
+    // process_fisheries early-returns on NoAccess or K <= 0, so a province that
+    // loaded with the struct's defaults could never grow or land a stock again —
+    // a coastal province became permanently landlocked, and subsistence lost its
+    // fisheries natural-capital term. Trailing block; read gated on v25.
+    w.write_u8(static_cast<uint8_t>(p.fisheries.access_type));
+    w.write_float(p.fisheries.carrying_capacity);
+    w.write_float(p.fisheries.current_stock);
+    w.write_float(p.fisheries.max_sustainable_yield);
+    w.write_float(p.fisheries.intrinsic_growth_rate);
+    w.write_float(p.fisheries.seasonal_closure);
+    w.write_bool(p.fisheries.is_migratory);
 }
 
 void write_nation_political(ByteWriter& w, const NationPoliticalCycleState& p) {
@@ -458,6 +480,11 @@ void write_nation_political(ByteWriter& w, const NationPoliticalCycleState& p) {
     w.write_float(p.national_approval);
     w.write_bool(p.election_campaign_active);
     w.write_u32(p.next_election_tick);
+    // v25: national_legitimacy. political_cycle folds the provincial target into
+    // the previous value as an EMA (alpha 0.05), so the field is its own input
+    // every tick — cross-tick state, not a per-tick derivation. Trailing field;
+    // read gated on v25 so v24 saves load the 0.5 default.
+    w.write_float(p.national_legitimacy);
 }
 
 void write_nation(ByteWriter& w, const Nation& n) {
@@ -1313,25 +1340,42 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
     for (uint32_t i = 0; i < market_id_count; ++i)
         p.market_ids[i] = r.read_u32();
 
+    // v25: the full FisheriesProfile. v24 saves keep the struct defaults
+    // (NoAccess, K = 0) — the same landlocked state they had in memory.
+    if (schema_ver >= 25u) {
+        p.fisheries.access_type = static_cast<FishingAccessType>(r.read_u8());
+        p.fisheries.carrying_capacity = r.read_float();
+        p.fisheries.current_stock = r.read_float();
+        p.fisheries.max_sustainable_yield = r.read_float();
+        p.fisheries.intrinsic_growth_rate = r.read_float();
+        p.fisheries.seasonal_closure = r.read_float();
+        p.fisheries.is_migratory = r.read_bool();
+    }
+
     return p;
 }
 
-NationPoliticalCycleState read_nation_political(ByteReader& r) {
+NationPoliticalCycleState read_nation_political(ByteReader& r, uint32_t schema_ver) {
     NationPoliticalCycleState p{};
     p.current_administration_tick = r.read_u32();
     p.national_approval = r.read_float();
     p.election_campaign_active = r.read_bool();
     p.next_election_tick = r.read_u32();
+    // v25: national_legitimacy. Older saves keep the 0.5 default and re-converge
+    // on the provincial target over ~20 ticks of EMA.
+    if (schema_ver >= 25u) {
+        p.national_legitimacy = r.read_float();
+    }
     return p;
 }
 
-Nation read_nation(ByteReader& r) {
+Nation read_nation(ByteReader& r, uint32_t schema_ver) {
     Nation n{};
     n.id = r.read_u32();
     n.name = r.read_string();
     n.currency_code = r.read_string();
     n.government_type = static_cast<GovernmentType>(r.read_u8());
-    n.political_cycle = read_nation_political(r);
+    n.political_cycle = read_nation_political(r, schema_ver);
 
     uint32_t prov_count = r.read_u32();
     n.province_ids.resize(prov_count);
@@ -1673,18 +1717,26 @@ uint32_t PersistenceModule::compute_checksum(const uint8_t* data, size_t length)
 }
 
 bool PersistenceModule::is_schema_compatible(uint32_t saved_version, uint32_t current_version) {
-    // Each schema bump (v3 catalog, v4 addiction footer, v5 cohort_stats
+    // Floor: MIN_SUPPORTED_SCHEMA_VERSION (24). Pre-renumbering saves are
+    // REJECTED, not migrated.
+    //
+    // The era byte (GlobalTechnologyState::current_era, plus every
+    // era_available / era_unlock gate keyed to it) was re-based twice as the
+    // timeline grew: the modern era moved from index 1 to 5 to 8. The first
+    // re-base coincided with a bump (v18, data-driven era catalog); the SECOND
+    // one landed inside schema v23 with no bump at all. So v23 saves exist with
+    // two mutually exclusive meanings for the same byte — era 5 means "modern"
+    // in one and "Medieval" in the other — and the save carries nothing that
+    // distinguishes them. No version-keyed remap can disambiguate, and guessing
+    // would drop a modern world into the Middle Ages (or the reverse) while
+    // reporting a clean load. v24 is the first version written entirely under
+    // the current numbering, so it is the floor.
+    //
+    // Older byte-layout bumps (v3 catalog, v4 addiction footer, v5 cohort_stats
     // migration, v6 currency/facility/technology footers, v7 module-state
-    // section, v8 pending_random_event_triggers footer, v9
-    // pending_transactions footer, v10 pending_transactions Phase 4
-    // mortgage extension, v11 pending_property_foreclosures footer,
-    // v12 active_auctions footer, v13 pending_business_acquisitions
-    // footer, v14 facility property_id + construction_contracts footer)
-    // changes the byte-stream layout. V1 is pre-release; reject anything
-    // older than the current floor outright. v7..v13 saves remain
-    // loadable: each footer or trailing-field extension is gated on
-    // saved_version checks.
-    if (saved_version < 7u)
+    // section, v8..v14 trailing queues) are subsumed by this floor. V1 is
+    // pre-release, so raising the floor affects no shipped saves.
+    if (saved_version < MIN_SUPPORTED_SCHEMA_VERSION)
         return false;
     return saved_version <= current_version;
 }
@@ -2079,6 +2131,31 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
 RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
                                              WorldState& out_state,
                                              const std::vector<ITickModule*>& modules) {
+    // Every length in a save file is untrusted input, and the parse path
+    // allocates from those lengths (containers sized by a u32 count, the
+    // decompression buffer sized by the header). The individual sites bound
+    // what they can before allocating; this converts anything that still
+    // escapes into the documented rejection instead of a std::terminate on an
+    // uncaught bad_alloc (INTERFACE.md: "Memory allocation failure during
+    // deserialization: load rejected. Error logged.").
+    try {
+        return deserialize_body(data, out_state, modules);
+    } catch (const std::bad_alloc&) {
+        std::fprintf(stderr,
+                     "[persistence] load rejected: allocation failed while parsing the save "
+                     "(declared length exceeds available memory)\n");
+        return RestoreResult::io_error;
+    } catch (const std::length_error&) {
+        std::fprintf(stderr,
+                     "[persistence] load rejected: declared length exceeds the maximum container "
+                     "size\n");
+        return RestoreResult::io_error;
+    }
+}
+
+RestoreResult PersistenceModule::deserialize_body(const std::vector<uint8_t>& data,
+                                                  WorldState& out_state,
+                                                  const std::vector<ITickModule*>& modules) {
     if (data.size() < HEADER_SIZE)
         return RestoreResult::io_error;
 
@@ -2094,11 +2171,47 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
         return RestoreResult::io_error;
 
     uint32_t schema_ver = read_le32(4);
-    if (!is_schema_compatible(schema_ver, CURRENT_SCHEMA_VERSION))
+    if (schema_ver > CURRENT_SCHEMA_VERSION) {
+        std::fprintf(stderr,
+                     "[persistence] load rejected: save schema v%u is newer than this build "
+                     "(v%u)\n",
+                     schema_ver, CURRENT_SCHEMA_VERSION);
         return RestoreResult::schema_too_new;
+    }
+    if (!is_schema_compatible(schema_ver, CURRENT_SCHEMA_VERSION)) {
+        // Below the floor. Not a migration we declined to write — a migration
+        // that cannot exist: the era byte was re-based inside v23 without a
+        // bump, so a pre-v24 era value is ambiguous. See is_schema_compatible.
+        std::fprintf(stderr,
+                     "[persistence] load rejected: save schema v%u predates the era renumbering "
+                     "(minimum supported v%u). The era index in pre-v%u saves is ambiguous and "
+                     "cannot be migrated.\n",
+                     schema_ver, MIN_SUPPORTED_SCHEMA_VERSION, MIN_SUPPORTED_SCHEMA_VERSION);
+        return RestoreResult::migration_failed;
+    }
 
     uint32_t raw_size = read_le32(8);
     uint32_t expected_checksum = read_le32(12);
+
+    // The declared uncompressed size is NOT checksum-covered — the checksum can
+    // only be verified after decompressing into a buffer of this size, so one
+    // corrupt header byte would otherwise reach a ~4 GiB allocation. Bound it
+    // by what the compressed payload could possibly expand to. This is a
+    // property of the LZ4 block format, not a tuning dial: a sequence costs at
+    // least 3 bytes (token + 2-byte offset) and each additional match-length
+    // extension byte emits at most 255 more bytes, so output can never exceed
+    // 255x the payload. The 64 KiB slack covers the short-input constant terms
+    // so no legitimate save is ever rejected.
+    const size_t payload_size = data.size() - HEADER_SIZE;
+    const uint64_t max_decompressed =
+        static_cast<uint64_t>(payload_size) * 255ull + (64ull * 1024ull);
+    if (static_cast<uint64_t>(raw_size) > max_decompressed) {
+        std::fprintf(stderr,
+                     "[persistence] load rejected: header declares %u uncompressed bytes but the "
+                     "%zu-byte payload can expand to at most %llu (corrupt header)\n",
+                     raw_size, payload_size, static_cast<unsigned long long>(max_decompressed));
+        return RestoreResult::io_error;
+    }
 
     // Decompress
     std::vector<uint8_t> raw(raw_size);
@@ -2168,7 +2281,7 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
     uint32_t nation_count = r.read_u32();
     out_state.nations.resize(nation_count);
     for (uint32_t i = 0; i < nation_count; ++i)
-        out_state.nations[i] = read_nation(r);
+        out_state.nations[i] = read_nation(r, schema_ver);
 
     // Provinces
     uint32_t prov_count = r.read_u32();
@@ -2379,6 +2492,17 @@ RestoreResult PersistenceModule::deserialize(const std::vector<uint8_t>& data,
             uint32_t psize = r.read_u32();
             if (r.has_error())
                 return RestoreResult::io_error;
+            // psize is an untrusted u32 from the save. A block can never be
+            // larger than what is left of the decompressed buffer, so check
+            // before allocating — otherwise a corrupt length reaches a ~4 GiB
+            // allocation and the read below just spins on read_u8() errors.
+            if (static_cast<size_t>(psize) > r.remaining()) {
+                std::fprintf(stderr,
+                             "[persistence] load rejected: module-state block '%s' declares %u "
+                             "bytes but only %zu remain in the save\n",
+                             mname.c_str(), psize, r.remaining());
+                return RestoreResult::io_error;
+            }
             std::vector<uint8_t> payload(psize);
             for (uint32_t j = 0; j < psize; ++j)
                 payload[j] = r.read_u8();
