@@ -75,3 +75,79 @@ TEST_CASE("knowledge: accumulated knowledge advances the era", "[knowledge][tier
     REQUIRE(d.technology_deltas[0].new_era.has_value());
     CHECK(*d.technology_deltas[0].new_era == 2);
 }
+
+// ===========================================================================
+// Liveness: who counts as a working scholar.
+//
+// These guard a regression that all three test gates missed. A filter of
+// `status != NPCStatus::active` looks right but excludes NPCStatus::waiting —
+// documented in npc.h as "Active but chose inaction this tick" — which is where
+// most of a dawn population sits. Knowledge production fell to the diffuse
+// population term alone (~0.01/yr against a first-era threshold of 3,830), so
+// every world in the spectrum sat at era 1 for 13,000 years: a stall with no
+// cause in the world itself. Nothing outside the hidden observe runs noticed.
+// ===========================================================================
+
+TEST_CASE("knowledge: an idle (waiting) scholar still does a year's work",
+          "[knowledge][tier1][liveness]") {
+    KnowledgeModule mod;
+
+    WorldState active_world = make_world(/*era=*/4, /*n_scholars=*/8, /*knowledge=*/0.0f);
+    DeltaBuffer active_delta{};
+    mod.execute(active_world, active_delta);
+    REQUIRE(active_delta.technology_deltas.size() == 1);
+    REQUIRE(active_delta.technology_deltas[0].knowledge_delta.has_value());
+    const float active_production = *active_delta.technology_deltas[0].knowledge_delta;
+    CHECK(active_production > 0.0f);
+
+    // Same corps, every one of them idle this tick. The sum is an ANNUAL
+    // aggregate, so the year's work is identical.
+    WorldState waiting_world = make_world(/*era=*/4, /*n_scholars=*/8, /*knowledge=*/0.0f);
+    for (auto& npc : waiting_world.significant_npcs)
+        npc.status = NPCStatus::waiting;
+    DeltaBuffer waiting_delta{};
+    mod.execute(waiting_world, waiting_delta);
+    REQUIRE(waiting_delta.technology_deltas.size() == 1);
+    REQUIRE(waiting_delta.technology_deltas[0].knowledge_delta.has_value());
+    CHECK(*waiting_delta.technology_deltas[0].knowledge_delta == active_production);
+}
+
+TEST_CASE("knowledge: the dead, fled and imprisoned produce nothing",
+          "[knowledge][tier1][liveness]") {
+    KnowledgeModule mod;
+
+    for (NPCStatus gone : {NPCStatus::dead, NPCStatus::fled, NPCStatus::imprisoned}) {
+        WorldState w = make_world(/*era=*/4, /*n_scholars=*/8, /*knowledge=*/0.0f);
+        for (auto& npc : w.significant_npcs)
+            npc.status = gone;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        // No provinces in this fixture, so the population term is zero: with no
+        // working scholars there is nothing to publish at all.
+        bool produced = false;
+        for (const auto& td : d.technology_deltas)
+            if (td.knowledge_delta.has_value() && *td.knowledge_delta > 0.0f)
+                produced = true;
+        CHECK_FALSE(produced);
+    }
+}
+
+TEST_CASE("knowledge: the scholar corps is what drives the climb, not a constant",
+          "[knowledge][tier1][liveness]") {
+    // The mechanical link the era clock depends on: more knowledge-keepers must
+    // mean strictly more knowledge per year. If this ever holds flat, the climb is
+    // being paced by something other than the people doing the work.
+    KnowledgeModule mod;
+    float previous = -1.0f;
+    for (uint32_t corps : {0u, 1u, 4u, 16u}) {
+        WorldState w = make_world(/*era=*/4, corps, /*knowledge=*/0.0f);
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        float produced = 0.0f;
+        for (const auto& td : d.technology_deltas)
+            if (td.knowledge_delta.has_value())
+                produced += *td.knowledge_delta;
+        CHECK(produced > previous);
+        previous = produced;
+    }
+}

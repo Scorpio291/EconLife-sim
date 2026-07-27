@@ -157,3 +157,70 @@ TEST_CASE("society observe: transplant — soft vs native people on a harsh worl
     REQUIRE(native.size() == kYears + 1);
     REQUIRE(soft.size() == kYears + 1);
 }
+
+TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
+          "[.society-knowledge-who]") {
+    // Calibration/diagnostic companion to the knowledge trace. The trace shows the
+    // RATE; this shows WHERE it comes from, so a stall can be attributed to a
+    // mechanism instead of guessed at. It exists because a filter regression once
+    // zeroed the scholar corps and left every world at era 1 for 13,000 years while
+    // all three test gates stayed green — the rate looked like "slow progress"
+    // rather than "nobody is doing the work".
+    //
+    // Prints, over a short dawn run: the surplus, how many significant NPCs hold a
+    // knowledge-bearing occupation (elder/scribe/scholar), and the split of the
+    // year's knowledge production between the scholar corps and the diffuse
+    // population term.
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 300;
+
+    WorldGeneratorConfig config{};
+    config.seed = 7;
+    config.province_count = 6;
+    config.npc_count = kNpcs;
+    config.starting_era = 1;
+    config.founding_seed_mode = true;
+    config.goods_directory = find_goods_dir_society();
+    config.technology_directory = find_base_game_subdir("technology");
+    config.bounty_scale = archetype_earthlike().bounty;
+    config.hazard_settings = archetype_earthlike().hazard;
+
+    WorldState world = WorldGenerator::generate(config);
+    TickOrchestrator orch;
+    register_base_game_modules(orch);
+    orch.finalize_registration();
+    ThreadPool pool(1);
+
+    std::printf("\n=== WHO PRODUCES KNOWLEDGE (earthlike dawn) ===\n");
+    std::printf("  year | surplus | occupied | knowledge-keepers | knowledge\n");
+    for (uint32_t y = 0; y <= kYears; ++y) {
+        if (y % 50 == 0) {
+            uint32_t occupied = 0;
+            uint32_t keepers = 0;
+            double keeper_output = 0.0;
+            for (const auto& npc : world.significant_npcs) {
+                if (npc.occupation == 0)
+                    continue;
+                ++occupied;
+                const OccupationDefinition* o = world.occupation_catalog.by_index(npc.occupation);
+                if (o != nullptr && o->knowledge_output > 0.0f) {
+                    ++keepers;
+                    keeper_output += static_cast<double>(o->knowledge_output);
+                }
+            }
+            double surplus = 0.0;
+            int counted = 0;
+            for (const auto& p : world.provinces) {
+                if (p.cohort_stats) {
+                    surplus += static_cast<double>(p.cohort_stats->subsistence_surplus_ratio);
+                    ++counted;
+                }
+            }
+            std::printf("  %5u |  %.3f  | %8u | %8u (out %.1f) | %9.1f\n", y,
+                        counted > 0 ? surplus / counted : 0.0, occupied, keepers, keeper_output,
+                        static_cast<double>(world.technology.knowledge_level));
+        }
+        for (uint32_t t = 0; t < 365; ++t)
+            orch.execute_tick(world, pool);
+    }
+}
