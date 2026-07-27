@@ -40,6 +40,40 @@ inline bool regime_in(const std::vector<std::string>& active_regimes, std::strin
     return false;
 }
 
+// ---------------------------------------------------------------------------
+// Canonical regime classes.
+//
+// regime_in() answers "is this regime in MY configured list", which is the right
+// question for a module whose active set is a tunable. These answer the different,
+// structural question "what KIND of economy is this regime" — and that answer must
+// be the same everywhere, because modules that disagree about it silently
+// desynchronize. That is not hypothetical: the same list was hand-expanded in
+// population_aging, world_generator, premarket_genesis and the society-evolution
+// harness, and a drift between two of those copies produced a real bug (a stale
+// war-mortality signal) recorded in the session log.
+//
+// Adding a regime means editing these lists, once.
+// ---------------------------------------------------------------------------
+
+// The pre-market arc: the whole climb from the dawn to the eve of the modern
+// economy. Commons food, no markets to speak of, era-paced by knowledge.
+inline bool is_premarket_regime(std::string_view regime) {
+    return regime == "subsistence" || regime == "barter" || regime == "coinage" ||
+           regime == "money" || regime == "feudal" || regime == "mercantile" ||
+           regime == "industrial";
+}
+
+// Stratified regimes: wealth concentrates into a lord/owner stratum that takes a
+// tithe, and estates (manors) exist as ownable holdings.
+inline bool is_manorial_regime(std::string_view regime) {
+    return regime == "feudal" || regime == "mercantile" || regime == "industrial";
+}
+
+// The modern market economy and beyond: firms, prices and wages do the allocating.
+inline bool is_market_regime(std::string_view regime) {
+    return regime == "modern" || regime == "near_future" || regime == "space_age";
+}
+
 struct EraDefinition {
     uint8_t index;                 // 1-based timeline position; the runtime era key
     std::string key;               // string id (e.g., "subsistence", "turn_of_millennium")

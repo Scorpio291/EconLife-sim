@@ -341,8 +341,7 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // Facilities (Step 7) attach to businesses, so they are empty when none seed.
     const EraDefinition* start_era_def = world.era_catalog.by_index(config.starting_era);
     const std::string start_regime = start_era_def ? start_era_def->economic_regime : std::string();
-    const bool market_regime = (start_regime == "modern" || start_regime == "near_future" ||
-                                start_regime == "space_age");
+    const bool market_regime = is_market_regime(start_regime);
     if (!config.founding_seed_mode && market_regime) {
         SettlementGenerator::create_businesses(world, rng, config);
     }
@@ -476,8 +475,9 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // locked province gets none), founder-funded from the wealthiest residents
     // (conserved transfers), and manors for the lord stratum. Founding-seed worlds
     // skip this (the climb carries aggregates; entities appear at entry/full-LOD).
-    const bool premarket_regime =
-        (start_regime == "feudal" || start_regime == "mercantile" || start_regime == "industrial");
+    // Manorial, not merely pre-market: entry materialization gives the lord stratum
+    // estates, which only exists in the stratified regimes.
+    const bool premarket_regime = is_manorial_regime(start_regime);
     if (!config.founding_seed_mode && premarket_regime && recipe_catalog.size() > 0 &&
         facility_type_catalog.size() > 0) {
         DeterministicRNG premarket_rng = rng.fork(kPremarketGenesisRngSalt);

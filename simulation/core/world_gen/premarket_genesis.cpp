@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_gen/era_catalog.h"
 #include "core/world_gen/facility_type_catalog.h"
 #include "core/world_gen/recipe_catalog.h"
 #include "core/world_gen/world_generator.h"
@@ -112,8 +113,7 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
 
     const EraDefinition* era_def = world.era_catalog.by_index(era);
     const std::string regime = era_def ? era_def->economic_regime : std::string();
-    const bool manorial =
-        (regime == "feudal" || regime == "mercantile" || regime == "industrial");
+    const bool manorial = is_manorial_regime(regime);
 
     // Fresh id counters continue from whatever already exists.
     uint32_t next_biz_id = 1;

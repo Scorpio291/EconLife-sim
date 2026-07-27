@@ -248,7 +248,18 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
         // modern world was being seeded with pottery and looms while the actual
         // era-8 frontier nodes (the ones the era-transition score reads
         // maturation from) were never seeded to anyone.
-        auto frontier_nodes = tech_catalog.nodes_available_at(config.starting_era);
+        // The FRONTIER only — nodes whose era_available IS the starting era, not the
+        // whole cumulative set available by it. nodes_available_at() is cumulative
+        // (143 nodes by era 8 against 24 at the frontier), and seeding all of them
+        // inflated every business's holdings ~9x, which the technology module walks
+        // each tick: it cost 5-10x on multi-year runs. The original call read
+        // nodes_available_at(1) back when era 1 WAS the modern anchor, so "the
+        // current era's newest tier" is what it always meant.
+        std::vector<const TechnologyNode*> frontier_nodes;
+        for (const TechnologyNode* node : tech_catalog.nodes_available_at(config.starting_era)) {
+            if (node->era_available == config.starting_era)
+                frontier_nodes.push_back(node);
+        }
         for (const TechnologyNode* node : frontier_nodes) {
             if (node->is_baseline)
                 continue;

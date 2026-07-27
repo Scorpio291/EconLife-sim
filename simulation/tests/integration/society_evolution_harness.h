@@ -82,9 +82,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     // -> mercantile -> industrial; the climb is "complete" only when it reaches a true
     // market economy (modern) beyond those.
     const std::string regime = edef ? edef->economic_regime : std::string();
-    s.reached_market = edef && regime != "subsistence" && regime != "barter" &&
-                       regime != "coinage" && regime != "money" && regime != "feudal" &&
-                       regime != "mercantile" && regime != "industrial";
+    s.reached_market = edef && !is_premarket_regime(regime);
 
     double surplus_sum = 0.0;
     int prov_with_cohorts = 0;
@@ -154,9 +152,7 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
         const EraDefinition* e = world.era_catalog.by_index(era);
         if (!e)
             return false;
-        const std::string& r = e->economic_regime;
-        return r == "subsistence" || r == "barter" || r == "coinage" || r == "money" ||
-               r == "feudal" || r == "mercantile" || r == "industrial";
+        return is_premarket_regime(e->economic_regime);
     };
 
     std::vector<SocietySnapshot> series;
