@@ -1773,3 +1773,58 @@ rails: the hazard-mortality band and the addiction price band), F6 (regime-predi
 and catchment duplication, ticks_per_year triple source, dead code, hot-path scans),
 F7 (re-anchor the spectrum — F1-F3 all move behavior, so the pacing thresholds and
 the four World-Class anchors must be re-measured).
+
+---
+
+## 2026-07-27 — F7 blocked: the dawn climb is real but ~20x too slow (diagnosis)
+
+F1-F6 shipped (see the commits). F7, the recalibration, is deliberately NOT done,
+because retuning thresholds now would produce a curve that reaches modernity on
+schedule while the mechanism underneath is not yet understood — the exact magic rail
+the doctrine forbids. Recording the measurements so the next pass starts from data.
+
+FIRST, a regression I introduced and fixed: the F3 dead-NPC filter on knowledge
+production tested `status != NPCStatus::active`, which excludes NPCStatus::waiting
+("alive and present, chose inaction this tick") — where most of a dawn population
+sits. Knowledge production fell to the diffuse population term alone and ALL FOUR
+spectrum worlds sat at era 1 "Developing" for 13,000 years. A stall with no cause in
+the world: nobody starved, no granary emptied, no war was lost. All three gates
+(1,601 unit / 41 integration / 10 emergence) passed throughout — nothing outside the
+hidden [.society-*] observe runs pins the climb. Fixed (dead/fled/imprisoned excluded,
+active+waiting counted) and now guarded by [liveness] unit tests, including one that
+asserts production is strictly increasing in the size of the scholar corps.
+
+THE MECHANISM IS ALIVE — measured via the new [.society-knowledge-who] diagnostic
+(earthlike dawn, 200 NPCs, seed 7):
+
+  year | surplus | occupied | knowledge-keepers | knowledge
+     0 |  1.000  |        0 |  0 (output 0.0)   |    0.0
+    50 |  2.184  |      200 |  6 (output 1.2)   |   11.6
+   150 |  1.574  |      200 |  7 (output 1.4)   |   15.0
+   300 |  1.196  |      200 |  8 (output 1.6)   |   22.5
+
+and over the long horizon ([.society-knowledge-trace], 14,000 years): population
+21,127 -> 126,616, surplus settling ~1.12, specialists 14%, urban 25%, knowledge
+1,312. Every link is traceable: surplus frees specialists, the layer-2 rotation makes
+some of them elders (knowledge-keepers lead the list), elders produce knowledge. Only
+6-8 of 200 NPCs are knowledge-keepers because the surplus funds many crafts and few
+scholars — a real result, not a cap.
+
+WHAT BLOCKS CALIBRATION: the observed rate is ~9x BELOW what the module's own formula
+predicts, and that gap is unexplained. At year 300: keeper output 1.6 x
+production_scalar 0.4 = 0.64, plus population term ~1.5e-6 x ~45,000 = 0.068, times
+pressure (adversity_base 0.35 + 0.6 x (world_hazard 1.0 - garden 0.45) = 0.68) and
+knowledge_mult 1.0 (no era-1 node carries a knowledge multiplier — verified) gives
+~0.48/yr. Measured: (22.5 - 19.8) / 50 = ~0.054/yr. Note 6 provinces x 1.5 = 9, so a
+per-province vs global accounting factor is the first thing to check.
+
+Until that is resolved the thresholds must not move: at the measured rate era 1 alone
+(threshold 3,830) needs ~88,000 years against a real-history target of ~6,700, so the
+apparent gap is ~13-20x — but tuning against a rate that is itself 9x off its own
+formula would bake the discrepancy into the pacing dials permanently.
+
+NEXT: (1) find the ~9x (start with whether knowledge production is being applied once
+globally or diluted per province); (2) re-measure; (3) THEN recalibrate
+knowledge_to_advance (builtin + eras.csv in sync, drift guard now covers the field);
+(4) confirm the four spectrum worlds diverge for mechanical reasons — food ceiling,
+mortality, logistics — and not because a dial was tuned to separate them.
