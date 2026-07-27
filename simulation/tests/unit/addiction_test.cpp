@@ -243,6 +243,53 @@ TEST_CASE("Addiction: spend scales with substance market scarcity premium",
     REQUIRE_THAT(charged(200.0f, 100.0f, 50.0f), WithinAbs(-30.0f, 0.01f));
     // Out of stock -> cannot buy -> no charge (drives a supply gap instead).
     REQUIRE_THAT(charged(100.0f, 100.0f, 0.0f), WithinAbs(0.0f, 0.001f));
+
+    // RAIL RETIRED (2026-07-26): the premium used to be clamped to [0.25, 4.0], so a real
+    // drug drought was truncated at 4x — capping the very chain the mechanism exists to
+    // drive (premium -> spend -> affordability -> supply gap -> withdrawal). A 10x spot
+    // price now reaches the addict's wallet in full: 15 * 10 = 150.
+    // (Under the cap this charged -60.0.)
+    REQUIRE_THAT(charged(1000.0f, 100.0f, 50.0f), WithinAbs(-150.0f, 0.01f));
+    // Symmetrically, a glut is not floored at 0.25x either: spot at a tenth of
+    // equilibrium charges 15 * 0.1 = 1.5. (Under the floor this charged -3.75.)
+    REQUIRE_THAT(charged(10.0f, 100.0f, 50.0f), WithinAbs(-1.5f, 0.01f));
+    // No usable reference (equilibrium_price never set) -> neutral premium, i.e. the
+    // NPC pays the calibrated baseline. Not a band on the premium: a fallback price.
+    REQUIRE_THAT(charged(100.0f, 0.0f, 50.0f), WithinAbs(-15.0f, 0.01f));
+}
+
+TEST_CASE("Addiction: an unaffordable scarcity premium starves the addict instead of banding",
+          "[addiction][tier10][market]") {
+    // The premium is unbanded, so a genuine drought can price an addict out entirely.
+    // That must land as a SUPPLY GAP (the withdrawal driver for dependent+ NPCs), never
+    // as a negative or non-finite charge.
+    auto world = make_world_with_npc(/*npc_id=*/100, /*province=*/0);
+    world.significant_npcs[0].capital = 20.0f;  // can afford 15 at normal price, not 1500
+    AddictionState seed{};
+    seed.stage = AddictionStage::dependent;  // dependent+ is where withdrawal bites
+    seed.substance_key = "cannabis_processed";
+    seed.withdrawal_health = 1.0f;
+    world.significant_npcs[0].addiction_state = seed;
+
+    RegionalMarket m{};
+    m.good_id = good_id_hash("cannabis_processed");
+    m.province_id = 0;
+    m.spot_price = 5000.0f;  // a 50x drought premium: dependent spend = 3 * 10 * 50 = 1500
+    m.equilibrium_price = 100.0f;
+    m.supply = 50.0f;
+    world.regional_markets.push_back(m);
+    world.market_index_by_good_province[(static_cast<uint64_t>(m.good_id) << 32) | 0ull] =
+        world.regional_markets.size() - 1;
+
+    AddictionModule module;
+    DeltaBuffer delta{};
+    module.execute_province(0, world, delta);
+    apply_deltas(world, delta);
+
+    const NPC& npc = world.significant_npcs[0];
+    CHECK_THAT(npc.capital, WithinAbs(20.0f, 0.001f));    // priced out: never charged
+    CHECK(npc.addiction_state.supply_gap_ticks == 1u);    // the gap is what he gets
+    CHECK(npc.addiction_state.withdrawal_health < 1.0f);  // and withdrawal begins
 }
 
 TEST_CASE("Addiction: stage progresses casual -> regular over enough ticks",

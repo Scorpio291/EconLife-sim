@@ -200,6 +200,24 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         // independent of the absolute drug-price scale. An NPC short of cash, OR in a
         // province where the substance is out of stock, gets a supply gap (no charge)
         // which drives withdrawal for dependent+ NPCs.
+        //
+        // RAIL RETIRED (2026-07-26): the premium used to be clamped to
+        // [min_substance_price_factor, max_substance_price_factor] = [0.25, 4.0]. Both
+        // operands are already guarded strictly positive, so the ratio was finite and the
+        // band was pure gameplay shaping — and it capped exactly the dynamic this
+        // mechanism exists to produce. A real drug drought runs far past 4x (spot price
+        // is what a desperate buyer pays), and the premium is the whole causal chain:
+        // premium -> spend -> can the NPC afford it -> supply gap -> withdrawal for
+        // dependent+ NPCs. The full ratio now passes through.
+        //
+        // The reference is meaningful: price_engine deliberately never overwrites
+        // equilibrium_price (see price_engine_module.cpp step 3) — it stays the stable
+        // per-province base price set at world-gen from the goods CSV, so the ratio is a
+        // genuine premium over base and cannot be eroded by a thin market. When the
+        // reference is absent (equilibrium_price <= 0, e.g. a market never priced) or
+        // non-finite, we fall back to a NEUTRAL premium of 1.0 — i.e. the NPC pays the
+        // calibrated baseline_substance_price. That is a defensible reference price, not
+        // a band on the premium.
         float price_factor = 1.0f;
         bool market_exists = false;
         bool in_stock = true;
@@ -215,13 +233,17 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
                     const RegionalMarket& m = state.regional_markets[it->second];
                     in_stock = m.supply > 0.0f;
                     if (m.spot_price > 0.0f && m.equilibrium_price > 0.0f) {
-                        price_factor = std::clamp(m.spot_price / m.equilibrium_price,
-                                                  cfg_.min_substance_price_factor,
-                                                  cfg_.max_substance_price_factor);
+                        const float premium = m.spot_price / m.equilibrium_price;
+                        if (std::isfinite(premium))  // crash sentinel only; keeps spend finite
+                            price_factor = premium;
                     }
                 }
             }
         }
+        // spend is a product of non-negative terms, so it can never be negative however
+        // large the premium gets; and an unaffordable spend (up to and including an
+        // overflowed one) simply fails the capital test below, so the NPC goes unsupplied
+        // and no non-finite value ever reaches capital_delta.
         const float spend = consumption_units_for_stage(current.stage, cfg_) *
                             cfg_.baseline_substance_price * price_factor;
         bool supplied = false;

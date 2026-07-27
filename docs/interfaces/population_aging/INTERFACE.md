@@ -32,9 +32,33 @@ Province-parallel: each province's demographic processing is fully independent. 
   - `hardiness` — generational adaptation divisor on world-hazard mortality
   - `urban_population` — crowding driver for the disease-epidemic hazard (M6a)
   - `war_death_fraction` ([0,1]) — per-province EXTRA annual death fraction from war
-    (real units: battle dead / people), published by the `warfare` module; added to
-    annual cohort mortality unconditionally (0 at peace; reset by the publisher on
-    regime exit); deaths remain capped at cohort size (the physical bound)
+    (real units: battle dead / people), published by the `warfare` module in the SAME
+    annual tick (warfare declares `runs_before` population_aging, so publication and
+    consumption never straddle a tick — the field needs no persistence). Consumed
+    unconditionally in every era; 0 at peace; reset by the publisher on regime exit.
+    Composed as an INDEPENDENT COMPETING RISK, not added to the environmental
+    probability: `p_death = 1 - (1 - p_env) * (1 - p_war)`, which is exactly the
+    addition of the two hazard RATES, so nothing is double-counted. With no
+    environmental deaths a cohort loses precisely the published fraction, and a
+    published 1.0 still annihilates it.
+
+### Mortality composition (updated 2026-07-26 — rail retired)
+
+Mortality is composed as an annual HAZARD RATE (expected deaths per person-year):
+instability, addiction, famine, the world's hazard dials divided by generational
+`hardiness`, and medicine each SCALE that rate. The annual death probability is then
+the Poisson first-arrival `p = 1 - exp(-rate)`.
+
+That conversion IS the bound: mortality approaches 100% and can never exceed it, so
+nothing in the chain needs a cap. This replaced a `[hazard_mortality_min,
+hazard_mortality_max]` = [0.15, 3.0] band on the hazard term, which was a
+behaviour-shaping cap on finite values (the doctrine permits clamps only as
+crash sentinels for non-finite values) and bound precisely during the multi-decade
+maladaptation transient that is the deathworld-colonisation arc — a garden-adapted
+people landing on a deathworld had its culling softened ~1.84x. `hardiness_floor`
+remains, documented as a divide-by-zero sentinel only. Earth-normal mortality is
+unchanged by construction (the maladaptation term is exactly 1.0 for an adapted
+people); the rate→probability conversion alone moves Earth-normal deaths by −0.45%.
 - `hazard_settings` — world hazard dials (disease/geology/radiation) for the M6a
   episodic and chronic mortality/fertility channels
 - `technology.current_era` + `tech_effects_for_era().mortality_mult` / era regime —

@@ -88,6 +88,24 @@ float PopulationAgingModule::disaster_mortality_factor(float geology_dial, Deter
     return 1.0f + cfg.geology_disaster_severity * g;  // quake/storm/wildfire mortality spike
 }
 
+float PopulationAgingModule::annual_probability_from_rate(float annual_rate) {
+    // Poisson first-arrival: with a hazard rate of `annual_rate` deaths per person-year,
+    // the chance of dying at least once during the year is 1 - exp(-rate). Physically
+    // self-bounding in [0, 1) — the reason no cap is needed on the rate.
+    if (std::isnan(annual_rate))
+        return 0.0f;  // crash sentinel only: a NaN rate must not annihilate a cohort
+    if (annual_rate <= 0.0f)
+        return 0.0f;
+    return 1.0f - std::exp(-annual_rate);  // +inf -> exactly 1.0
+}
+
+float PopulationAgingModule::hazard_rate_multiplier(float world_hazard, float hardiness,
+                                                    float hardiness_floor) {
+    // std::max is the divide-by-zero sentinel, NOT an outcome bound: the ratio itself is
+    // deliberately uncapped (see annual_probability_from_rate for the physical bound).
+    return world_hazard / std::max(hardiness, hardiness_floor);
+}
+
 float PopulationAgingModule::radiation_fertility_factor(float radiation_dial,
                                                         const PopulationAgingConfig& cfg) {
     const float r = std::clamp(radiation_dial, 0.0f, 1.0f);
@@ -130,9 +148,11 @@ bool is_retiree_group(DemographicGroup g) {
 // (immediate availability, buffered by the granary). They differ in the commons: a
 // society at its sustainable ceiling has birth_surplus ~1 (stops growing) but, with full
 // granaries, famine_surplus ~1 (nobody starves). Both are 1.0 in market eras (neutral).
+// hazard_rate_mult scales the mortality RATE (it is not a probability): see
+// PopulationAgingModule::hazard_rate_multiplier.
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
                            float sick_rate, float addiction_rate, float birth_surplus,
-                           float famine_surplus, float hazard_mortality, float fertility_mult,
+                           float famine_surplus, float hazard_rate_mult, float fertility_mult,
                            float war_death_fraction, const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
@@ -166,23 +186,39 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     cohorts[DemographicGroup::youth_urban].size += births / 2u;
     cohorts[DemographicGroup::youth_rural].size += births - births / 2u;
 
-    // Deaths: per-cohort mortality rises with instability, addiction, and famine,
-    // and is multiplied for retiree cohorts.
-    float mortality_env = (1.0f + (1.0f - std::clamp(stability, 0.0f, 1.0f))) *
-                          (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f)) * famine_mortality_factor *
-                          hazard_mortality;  // per-setting world hazards (1.0 = earthlike)
+    // Deaths. Mortality is composed as an annual HAZARD RATE (expected deaths per
+    // person-year) — instability, addiction, famine and the world's hazards each scale
+    // the rate — and the annual death PROBABILITY is the Poisson first-arrival
+    // 1 - exp(-rate). That conversion is the bound: mortality approaches 100% and can
+    // never exceed it, so nothing in the chain needs a cap.
+    float mortality_rate_env = (1.0f + (1.0f - std::clamp(stability, 0.0f, 1.0f))) *
+                               (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f)) *
+                               famine_mortality_factor *
+                               hazard_rate_mult;  // per-setting world hazards (1.0 = earthlike)
+    // War casualties are an INDEPENDENT competing risk, published by warfare in real
+    // units (battle dead / population; G2). Compose SURVIVALS instead of adding
+    // probabilities: S = (1 - p_env) * (1 - p_war). This is exactly the addition of the
+    // two hazard RATES — 1 - (1-p_env)(1-p_war) == 1 - exp(-(rate_env + rate_war)) with
+    // rate_war = -ln(1 - p_war) — so nothing is double-counted, and the publisher's
+    // contract stays exact at both ends: with no environmental deaths a cohort loses
+    // precisely the published fraction, and a published 1.0 still annihilates it. (The
+    // old form added the two probabilities, which could exceed 1.0 and leaned on the
+    // cohort-size floor below to stay physical; at Earth-normal rates the two agree to
+    // within p_env * p_war, i.e. under 1% of the war term.)
+    const float p_war = std::clamp(war_death_fraction, 0.0f, 1.0f);  // domain sentinel: it is
+                                                                     // published as a fraction;
+                                                                     // warfare owns its size
     for (auto& [g, c] : cohorts) {
         if (c.size == 0)
             continue;
-        // Background mortality scaled by environment, PLUS war casualties as an
-        // additive death fraction (real units; G2). Deaths are capped at cohort size
-        // below — the physical bound.
-        float mort = cfg.base_annual_death_rate * mortality_env +
-                     std::clamp(war_death_fraction, 0.0f, 1.0f);
+        float death_rate = cfg.base_annual_death_rate * mortality_rate_env;
         if (is_retiree_group(g))
-            mort *= cfg.retiree_mortality_multiplier;
+            death_rate *= cfg.retiree_mortality_multiplier;  // frailer bodies: a higher rate
+        const float p_env = PopulationAgingModule::annual_probability_from_rate(death_rate);
+        const float p_death = 1.0f - (1.0f - p_env) * (1.0f - p_war);
         auto deaths = static_cast<uint32_t>(
-            std::llround(static_cast<double>(c.size) * static_cast<double>(mort)));
+            std::llround(static_cast<double>(c.size) * static_cast<double>(p_death)));
+        // A cohort cannot lose more people than it has (the remaining physical bound).
         c.size = (deaths >= c.size) ? 0u : (c.size - deaths);
     }
 }
@@ -285,17 +321,42 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // The world's hazard pressure (disease/predators/radiation/atmosphere/
                 // geology/gravity-falls), Earth-normalized.
                 const float world_hazard = hazard_mortality_from_settings(state.hazard_settings);
-                // Generational hardiness: mortality scales with how far the population's
-                // adaptation falls short of what the world demands. A people matched to
-                // their world (hardiness == world_hazard) is neutral; a soft people on a
-                // hard world (hardiness << world_hazard) is culled until they adapt; an
-                // over-hardened people survive better. So harshness is relative to the
-                // adapted population.
-                float hazard_mortality =
-                    std::clamp(world_hazard / std::max(cs.hardiness, cfg_.hardiness_floor),
-                               cfg_.hazard_mortality_min, cfg_.hazard_mortality_max);
-                // Medicine (germ theory, …) from the tech tree cuts mortality.
-                hazard_mortality *=
+                // Generational hardiness: the mortality RATE scales with how far the
+                // population's adaptation falls short of what the world demands. A people
+                // matched to their world (hardiness == world_hazard) is neutral; a soft
+                // people on a hard world (hardiness << world_hazard) is culled until they
+                // adapt; an over-hardened people survive better. So harshness is relative
+                // to the adapted population.
+                //
+                // --- Calibration: Earth-normal preserved, the transient un-softened -----
+                // The rate coefficient is base_annual_death_rate itself — 0.008 deaths per
+                // person-year, a real unit (Earth's crude death rate is ~0.0076/yr) — and
+                // the maladaptation term is dimensionless and exactly 1.0 for an adapted
+                // people (hazard_mortality_from_settings is Earth-normalized), so no new
+                // coefficient is needed and Earth-normal mortality is preserved by
+                // construction. Earth-normal, stability 0.9, unaddicted, fed:
+                //     rate = 0.008 * (1 + 0.1) * 1.0 * 1.0 = 0.0088 per person-year
+                //     was (rate used directly AS a probability): p = 0.008800
+                //     now  p = 1 - exp(-0.0088)                  = 0.0087614  (-0.45% rel.)
+                //     retirees (x4): rate 0.0352 -> was 0.035200, now 0.034587 (-1.74% rel.)
+                // i.e. Earth-normal cohort deaths fall by under 2%; on a 100k cohort that
+                // is 876 deaths/yr instead of 880.
+                // Where the retired [0.15, 3.0] band actually bound — the multi-decade
+                // maladaptation transient that IS the deathworld-colonisation arc — the
+                // change is deliberate and large. Garden-bred hardiness 0.19 on a
+                // deathworld (world_hazard 1.076) gives a ratio of 5.66, formerly pinned
+                // to 3.0 (a 1.9x softening of the culling):
+                //     rate = 0.008 * 1.1 * 5.66 = 0.0498 -> p = 4.86%/yr (was 2.64%)
+                // and the ceiling is now physical: as the ratio grows p -> 100%, never
+                // past it, and it is reached by dying, not by hitting a number.
+                float hazard_rate_mult =
+                    hazard_rate_multiplier(world_hazard, cs.hardiness, cfg_.hardiness_floor);
+                // Medicine (germ theory, sanitation, …) from the tech tree cuts the
+                // mortality RATE — halving the rate halves expected deaths. Applied to the
+                // rate, before the rate->probability conversion, so (unlike under the old
+                // band, which medicine was applied AFTER and could therefore push the
+                // result below the supposed minimum anyway) there is no ordering subtlety.
+                hazard_rate_mult *=
                     state.tech_effects_for_era(state.technology.current_era).mortality_mult;
 
                 // Disease epidemics (M6a): an episodic mortality spike in the pre-market
@@ -312,7 +373,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                               0x9E3779B97F4A7C15ull) ^
                                              (static_cast<uint64_t>(province.id) << 17) ^
                                              0xED1DEC1Cull);
-                    hazard_mortality *= epidemic_mortality_factor(state.hazard_settings.disease,
+                    hazard_rate_mult *= epidemic_mortality_factor(state.hazard_settings.disease,
                                                                   urban_frac, epi_rng, cfg_);
                     // Geology disasters (quakes/storms/wildfires) — a separate episodic
                     // spike scaled by the geology dial (not density). Independent RNG.
@@ -321,7 +382,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                               0xC2B2AE3D27D4EB4Full) ^
                                              (static_cast<uint64_t>(province.id) << 23) ^
                                              0x6E01060715ull);
-                    hazard_mortality *=
+                    hazard_rate_mult *=
                         disaster_mortality_factor(state.hazard_settings.geology, geo_rng, cfg_);
                 }
                 // War casualties (G2): warfare publishes an EXTRA annual death
@@ -347,7 +408,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 const float fertility_mult =
                     radiation_fertility_factor(state.hazard_settings.radiation, cfg_);
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
-                                      birth_surplus, famine_surplus, hazard_mortality,
+                                      birth_surplus, famine_surplus, hazard_rate_mult,
                                       fertility_mult, war_deaths, cfg_);
 
                 // Hardiness drifts toward the world's hazard level over generations

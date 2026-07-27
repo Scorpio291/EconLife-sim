@@ -1321,8 +1321,14 @@ struct AddictionConfig {
     float dependent_consumption_units = 3.0f;
     float active_consumption_units = 5.0f;
     float terminal_consumption_units = 2.0f;
-    float min_substance_price_factor = 0.25f;  // floor on the scarcity premium
-    float max_substance_price_factor = 4.0f;   // cap on the scarcity premium
+    // RAIL RETIRED (2026-07-26): min/max_substance_price_factor = [0.25, 4.0] used to band
+    // the scarcity premium. Both operands of spot/equilibrium are guarded strictly
+    // positive, so the ratio was finite and the band was pure gameplay shaping — and it
+    // truncated the very dynamic the mechanism exists to produce (a real drug drought runs
+    // well past 4x, and premium -> spend -> affordability -> supply gap -> withdrawal is
+    // the whole chain). The unbanded ratio now passes through; when equilibrium_price is
+    // not a meaningful reference the premium falls back to a neutral 1.0 (the NPC pays
+    // baseline_substance_price). See addiction_module.cpp.
 };
 
 struct AlternativeIdentityConfig {
@@ -1553,18 +1559,28 @@ struct PopulationAgingConfig {
     // pushes closer to the ceiling (less surplus); lower => more headroom.
     float commons_stability_floor = 0.76f;
     // Generational hardiness: a population's adaptation (cohort_stats.hardiness) drifts
-    // toward the world's hazard level by this fraction per year — slow, generational.
-    // Mortality scales with how far hardiness falls short of the world's demand, never
-    // dividing by less than hardiness_floor (so a wholly-unadapted people still bottoms
-    // out rather than blowing up).
+    // toward the world's hazard level by this fraction per year — slow, generational
+    // (5%/yr, so the maladaptation transient after a transplant lasts decades).
+    // The mortality RATE scales with how far hardiness falls short of the world's demand.
     float hardiness_drift_rate = 0.05f;
+    // Divide-by-zero sentinel ONLY: the rate multiplier is world_hazard / hardiness, so
+    // hardiness is never divided by less than this. It is not an outcome bound — the
+    // outcome is bounded physically by the rate->probability conversion
+    // p = 1 - exp(-rate) in population_aging, which saturates at 100% mortality.
+    // (apply_deltas already holds hardiness in [0.05, 5.0], so this only bites on states
+    // written outside that path; it therefore still trims the very deepest transient and
+    // is worth a review pass of its own.)
     float hardiness_floor = 0.10f;
-    // Physical bounds on the hazard-mortality multiplier (world_hazard / hardiness).
-    // These are NOT a rail: at equilibrium an adapted people sits at ~1.0, well inside
-    // the band. The bounds only catch the maladaptation transient — a people cannot be
-    // wiped out instantly (max), nor can adaptation + medicine make them immortal (min).
-    float hazard_mortality_min = 0.15f;
-    float hazard_mortality_max = 3.0f;
+    // RAIL RETIRED (2026-07-26): hazard_mortality_min/max = [0.15, 3.0] used to clamp the
+    // maladaptation multiplier (world_hazard / hardiness). Both operands were finite, so
+    // it was never a sentinel — it was a behaviour-shaping cap, and it bound precisely
+    // during the multi-decade maladaptation transient that IS the deathworld-colonisation
+    // arc (garden-bred hardiness 0.19 on a deathworld => ratio 5.66, pinned to 3.0: a
+    // 1.9x softening of the culling). The old defence of the minimum was also wrong: the
+    // medicine multiplier was applied AFTER the clamp, so the final multiplier could sit
+    // below it anyway. Mortality is now composed as an annual RATE and the annual
+    // probability arrives as 1 - exp(-rate) — self-bounding at 100%, no cap. The
+    // calibration arithmetic lives in population_aging_module.cpp.
 
     // --- Disease epidemics (M6a): the first world-classification hazard brought in
     // distinctly as an EPISODIC shock (the plague dips real population history shows).

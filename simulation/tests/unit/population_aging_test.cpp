@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <limits>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/apply_deltas.h"
@@ -135,32 +136,110 @@ TEST_CASE("PopulationAging: generational hardiness — soft people on a harsh wo
     auto native_d = run(native);   // native, adapted
 
     // The unadapted soft people suffer more mortality -> fewer survivors than natives.
+    // (Unchanged intent; the GAP is now larger than it was, because the maladaptation
+    // ratio of ~5.4 here is no longer pinned to the retired 3x cap.)
     CHECK(soft_d.total_population < native_d.total_population);
     // Hardiness drifts toward the world's hazard level (up from 0.2 toward ~1.07).
     CHECK(soft_d.hardiness > 0.2f);
     CHECK(soft_d.hardiness < native);  // but only partway in one year (generational)
 }
 
-TEST_CASE("PopulationAging: hazard-mortality bounds are physical (not a rail)",
+TEST_CASE("PopulationAging: hazard mortality is a RATE that saturates at 1.0 (no 3x rail)",
           "[population_aging][hardiness][tier11]") {
-    // The clamp on world_hazard/hardiness is a safety bound, not an outcome rail:
-    // adapted people sit well inside it, and even a wildly-unadapted people on a
-    // brutal world is bounded (culled, never annihilated in a single year).
+    // UPDATED 2026-07-26 — this test used to pin cfg.hazard_mortality_min == 0.15 and
+    // cfg.hazard_mortality_max == 3.0 and assert survivors remained a majority *because
+    // of the 3x cap*. Those config fields are gone: the maladaptation term is now an
+    // uncapped multiplier on the annual mortality RATE, and the bound is physical — the
+    // annual probability arrives as p = 1 - exp(-rate), which rises toward 100% and can
+    // never exceed it. Same intent (mortality is bounded, not arbitrary), grounded cause.
     constexpr PopulationAgingConfig cfg{};
-    CHECK(cfg.hazard_mortality_min == 0.15f);
-    CHECK(cfg.hazard_mortality_max == 3.0f);
+    using PA = PopulationAgingModule;
 
+    // 1) The multiplier is uncapped. Garden-bred hardiness 0.19 on a deathworld
+    //    (world_hazard ~1.076) is exactly where the old band bound hardest: the true
+    //    ratio is ~5.7, formerly pinned to 3.0 — a 1.9x softening of the culling.
+    const float deathworld = hazard_mortality_from_settings(deathworld_hazard());
+    const float soft_mult = PA::hazard_rate_multiplier(deathworld, 0.19f, cfg.hardiness_floor);
+    CHECK(soft_mult > 5.0f);  // was pinned at 3.0
+    CHECK_THAT(soft_mult, WithinAbs(deathworld / 0.19f, 1e-4f));
+    // hardiness_floor is only the divide-by-zero sentinel.
+    CHECK_THAT(PA::hazard_rate_multiplier(1.0f, 0.0f, cfg.hardiness_floor),
+               WithinAbs(1.0f / cfg.hardiness_floor, 1e-4f));
+
+    // 2) The probability is what saturates: monotone in the rate, never above certainty.
+    CHECK(PA::annual_probability_from_rate(0.0f) == 0.0f);
+    CHECK_THAT(PA::annual_probability_from_rate(0.0088f), WithinAbs(0.0087614f, 1e-6f));
+    float prev = 0.0f;
+    for (float rate : {0.05f, 0.5f, 2.0f, 10.0f}) {
+        const float p = PA::annual_probability_from_rate(rate);
+        CHECK(p > prev);   // strictly increasing in the rate
+        CHECK(p <= 1.0f);  // never exceeds certainty
+        prev = p;
+    }
+    CHECK_THAT(PA::annual_probability_from_rate(1.0e6f), WithinAbs(1.0f, 1e-6f));  // -> 100%
+    // Non-finite input is a crash sentinel, not a massacre.
+    CHECK(PA::annual_probability_from_rate(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+
+    // 3) End to end. A pathologically unadapted people on a deathworld now takes the
+    //    full rate: hardiness 0.01 sits below hardiness_floor, so the multiplier is
+    //    world_hazard/0.10 = 10.76 -> rate = 0.008 * 1.1 * 10.76 = 0.0947/person-year
+    //    -> p = 9.0%/yr, against 2.6%/yr under the retired 3x cap. Still bounded: the
+    //    cohort is culled hard, not annihilated, and population never goes negative.
     PopulationAgingModule module;
     WorldState w = make_annual_cohort_world(/*surplus=*/1.5f);  // fed: deaths are hazard-driven
     w.hazard_settings = deathworld_hazard();
     w.provinces[0].cohort_stats->hardiness = 0.01f;  // pathologically unadapted
-    const uint32_t before = w.provinces[0].cohort_stats->total_population;
+    uint32_t before = 0;
+    for (const auto& [g, c] : w.provinces[0].cohort_stats->cohorts) {
+        (void)g;
+        before += c.size;  // the seeded stats.total_population field is not populated
+    }
+    REQUIRE(before == 100000u);
     DeltaBuffer d{};
     module.execute_province(0, w, d);
     REQUIRE(d.cohort_stats_deltas.size() == 1);
-    // Bounded by the 3x cap: a year of hazard culls the unadapted but does not wipe
-    // them out (survivors remain a clear majority), and population never goes negative.
-    CHECK(d.cohort_stats_deltas[0].total_population > before / 2);
+    const uint32_t after = d.cohort_stats_deltas[0].total_population;
+    CHECK(after > before / 2);  // bounded: a majority survives one brutal year
+    CHECK(after < 95000u);      // and the culling is no longer softened by the cap
+                                // (the capped form left ~98,900 of 100,000)
+}
+
+TEST_CASE("PopulationAging: Earth-normal mortality survives the rate reform unchanged",
+          "[population_aging][hardiness][tier11]") {
+    // The rate->probability reform must not move the long-horizon baseline. An
+    // Earth-normal world with an Earth-adapted people is the anchor: world_hazard is
+    // Earth-normalized to exactly 1.0 and cohort hardiness defaults to 1.0, so the
+    // maladaptation multiplier is exactly 1.0 and the composed rate is unchanged. Only
+    // the rate -> probability conversion differs, and at Earth-normal rates that is a
+    // sub-percent effect:
+    //     rate = base_annual_death_rate 0.008 * (1 + (1 - stability 0.9)) = 0.0088/yr
+    //     was (rate used directly AS a probability): p = 0.008800
+    //     now  p = 1 - exp(-0.0088)                  = 0.0087614   (-0.45% relative)
+    constexpr PopulationAgingConfig cfg{};
+    const float rate = cfg.base_annual_death_rate * 1.1f;
+    const float p = PopulationAgingModule::annual_probability_from_rate(rate);
+    CHECK_THAT(p, WithinAbs(0.0087614f, 1e-6f));
+    CHECK(p < rate);                    // the rate form is very slightly gentler
+    CHECK((rate - p) / rate < 0.005f);  // by under 0.5% of deaths
+    // Retirees take the same rate x4; still under 2%.
+    const float retiree_rate = rate * cfg.retiree_mortality_multiplier;
+    const float p_ret = PopulationAgingModule::annual_probability_from_rate(retiree_rate);
+    CHECK((retiree_rate - p_ret) / retiree_rate < 0.02f);
+
+    // End to end on an Earth-normal, exactly-fed province of 100,000:
+    //   births = round(100000 * 0.012 * 0.9 * 1.0 * (1 - 0.18*0.20 radiation)) = 1041
+    //   deaths = round(cohort * p) on each cohort (the newborn youth cohorts included)
+    //   was: 100000 + 1041 - 880 - 5 - 5 = 100,151
+    //   now: 100000 + 1041 - 876 - 5 - 5 = 100,155   (+0.004% population)
+    PopulationAgingModule module;
+    WorldState w = make_annual_cohort_world(/*surplus=*/1.0f);  // exactly fed: neutral food
+    REQUIRE_THAT(hazard_mortality_from_settings(w.hazard_settings), WithinAbs(1.0f, 1e-6f));
+    DeltaBuffer d{};
+    module.execute_province(0, w, d);
+    REQUIRE(d.cohort_stats_deltas.size() == 1);
+    const uint32_t after = d.cohort_stats_deltas[0].total_population;
+    CHECK(after >= 100150u);  // the pre-reform figure was 100,151 — the baseline is intact
+    CHECK(after <= 100160u);
 }
 
 TEST_CASE("PopulationAging: subsistence surplus drives the Malthusian loop",

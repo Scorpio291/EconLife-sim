@@ -54,6 +54,23 @@ class PopulationAgingModule : public ITickModule {
     static float disaster_mortality_factor(float geology_dial, DeterministicRNG& rng,
                                            const PopulationAgingConfig& cfg);
 
+    // Annual death PROBABILITY from a composed annual death RATE (expected deaths per
+    // person-year): the Poisson first-arrival p = 1 - exp(-rate). This is where cohort
+    // mortality is bounded, and the bound is physical — p rises toward 100% and can
+    // never exceed it, however large the rate gets. No cap anywhere in the rate chain
+    // (grounding doctrine: "a probability arrives as 1 - exp(-rate)").
+    // A non-finite rate yields 0 (crash sentinel only — a NaN must not annihilate a
+    // cohort); +inf yields exactly 1.0, which is the correct limit.
+    static float annual_probability_from_rate(float annual_rate);
+
+    // Maladaptation multiplier on the mortality rate: how far a population's
+    // adaptation falls short of what its world demands (world_hazard / hardiness, both
+    // Earth-normalized, so an adapted people sits at exactly 1.0). UNCAPPED by design —
+    // a wholly-unadapted people faces an arbitrarily high hazard *rate*; it is the
+    // resulting *probability* that saturates. hardiness_floor is the divide-by-zero
+    // sentinel, not an outcome bound.
+    static float hazard_rate_multiplier(float world_hazard, float hardiness, float hardiness_floor);
+
     // Chronic fertility multiplier (<= 1.0) from ambient radiation (M6a chronic split):
     // a distinct channel from the background mortality scalar — radiation kills AND
     // suppresses births. Planetary; never wanes. Scaled by the `radiation` dial.

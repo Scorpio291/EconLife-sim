@@ -118,10 +118,10 @@ struct WorldArchetype {
     WorldHazardSettings hazard{};   // -> World Class (computed)
 };
 
-// Mortality multiplier from the (computed) World Class, anchored so Earth = 1.0.
-inline float hazard_mortality_multiplier(const WorldHazardSettings& s) {
-    return std::clamp(world_class(s) / 12.0f, 0.15f, 3.0f);
-}
+// (A Class-derived mortality multiplier used to live here — `hazard_mortality_multiplier`,
+// clamped to [0.15, 3.0]. It had no callers anywhere in the repo: the live path is
+// hazard_mortality_from_settings() below, which scores the individual hazards rather than
+// the single Class number. Deleted 2026-07-26 with the mortality-rail cleanup.)
 
 inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_hazard()}; }
 inline WorldArchetype archetype_earthlike() { return {"earthlike", 1.0f, earth_hazard()}; }
@@ -157,6 +157,14 @@ struct HazardMortalityWeights {
 // Cohort mortality multiplier from the world's hazards, normalized so Earth = 1.0.
 // Each hazard contributes distinctly; a plagued world raises mortality via disease,
 // a heavy world via falls, etc.
+//
+// The [0.15, 3.0] clamp below bounds a STATIC world-creation normalization (a property of
+// the chosen dials, not of anything that evolves in play), and it is inert for every
+// shipped preset: garden scores 0.19, Earth 1.0, deathworld 1.08 — all far inside the
+// band. It is therefore spectrum calibration on the world-authoring surface rather than a
+// mechanism, and is UNDER REVIEW as such; it is not the population-mortality rail (that
+// one lived in population_aging and was retired 2026-07-26 in favour of
+// p = 1 - exp(-rate), which is where mortality is now physically bounded).
 inline float hazard_mortality_from_settings(const WorldHazardSettings& s,
                                             const HazardMortalityWeights& w = {}) {
     auto score = [&](const WorldHazardSettings& x) {
