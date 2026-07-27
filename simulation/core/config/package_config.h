@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "core/world_state/shared_types.h"  // kTicksPerYear (the calendar constant)
 #include "modules/economy/economy_types.h"  // BusinessSector, BusinessProfile
 
 // PackageConfig — spec-correct defaults for all data-driven module parameters.
@@ -634,7 +635,11 @@ struct SubsistenceConfig {
                                            // not a margin.
     float granary_build_rate = 0.10f;      // fraction of the reserve gap a society aims to close
                                            // per year while under-stocked (extra farming).
-    uint32_t ticks_per_year = 365;         // for converting per-tick rates to annual stocks
+    // Defaults to the canonical kTicksPerYear rather than re-spelling 365: modules
+    // that gate annually on the constant (warfare, knowledge, population_aging) and
+    // modules that use this field (subsistence, grain_logistics) must agree, or the
+    // granary fills on one calendar while armies eat on another.
+    uint32_t ticks_per_year = kTicksPerYear;  // for converting per-tick rates to annual stocks
 
     // Knowledge -> productivity (the Malthusian escape): accumulated knowledge (from
     // scholars) raises how many people a given land can feed, letting a society grow
@@ -811,7 +816,7 @@ struct WarfareConfig {
 };
 
 struct SeasonalAgricultureConfig {
-    uint32_t ticks_per_year = 365;
+    uint32_t ticks_per_year = kTicksPerYear;  // see the note on SubsistenceConfig
     uint32_t planting_duration_ticks = 7;
     uint32_t harvest_duration_ticks = 14;
     float fallow_soil_recovery_rate = 0.003f;

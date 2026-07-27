@@ -215,7 +215,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // or draw it down, once per year. A conserved, capped per-province stock.
     const float net_per_tick = output - need - spoilage;
     float new_store = cs.food_store;
-    const bool annual = state.current_tick > 0 && state.current_tick % cfg_.ticks_per_year == 0;
+    // Use the sanitized tpy from above: cfg_.ticks_per_year is guarded against 0
+    // twice earlier in this function, and dividing by the raw field here was
+    // modulo-by-zero UB for exactly the input those guards anticipate.
+    const bool annual = state.current_tick > 0 && state.current_tick % tpy == 0;
     if (annual)
         new_store = std::clamp(cs.food_store + net_per_tick * ticks_per_year, 0.0f, target_store);
 
