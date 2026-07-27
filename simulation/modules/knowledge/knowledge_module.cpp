@@ -32,12 +32,20 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Dedicated knowledge work: sum over scholar/scribe/elder livelihoods.
     double specialist_term = 0.0;
     for (const auto& npc : state.significant_npcs) {
-        // Only the LIVING produce knowledge. significant_npcs is append-only —
-        // the dead are retained for forensic and memory references and their
-        // occupation is never cleared — so an unfiltered sum ratcheted upward
-        // with the cumulative death toll and paced the era clock off corpses
-        // rather than off the living scholar corps.
-        if (npc.status != NPCStatus::active)
+        // Only the LIVING AND PRESENT produce knowledge. significant_npcs is
+        // append-only — the dead are retained for forensic and memory references and
+        // their occupation is never cleared — so an unfiltered sum ratcheted upward
+        // with the cumulative death toll and paced the era clock off corpses rather
+        // than off the living scholar corps.
+        //
+        // The test is "not dead, fled or imprisoned", NOT "status == active":
+        // NPCStatus::waiting means "alive and present, chose inaction this tick"
+        // (npc.h), which is where most of a dawn population sits, and excluding it
+        // zeroed knowledge production on every world — no era ever advanced. This sum
+        // is an ANNUAL aggregate over a scholar corps, so a scholar idle on the tick
+        // the year happens to be sampled still did a year's work.
+        if (npc.status == NPCStatus::dead || npc.status == NPCStatus::fled ||
+            npc.status == NPCStatus::imprisoned)
             continue;
         if (npc.occupation == 0)
             continue;

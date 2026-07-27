@@ -1225,7 +1225,6 @@ struct ProductionConfig {
     // then fossil. Provinces with no flows and no fuel are power-poor — a real disadvantage,
     // not a hard rail; recipes needing no power (muscle only) are unaffected.
     float biomass_mwh_per_fuel_unit = 15.0f;  // work/heat per unit biomass burned
-    float electricity_base_price = 30.0f;
 
     // --- Waste / byproducts (conservation: processes do not vanish matter; the
     // share not embodied in the product becomes waste that must be handled) ---

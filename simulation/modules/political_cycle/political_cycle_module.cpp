@@ -5,6 +5,7 @@
 #include <cstring>
 #include <utility>
 
+#include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 
@@ -526,12 +527,10 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
 
         // Sponsor deceased/fled -> proposal fails (valid state, per INTERFACE).
         if (proposal.sponsor_id != 0) {
-            bool sponsor_active = false;
-            for (const auto& npc : state.significant_npcs)
-                if (npc.id == proposal.sponsor_id) {
-                    sponsor_active = (npc.status == NPCStatus::active);
-                    break;
-                }
+            // O(1) through the id index rather than a linear scan of every NPC per
+            // proposal per tick — the same helper ~10 other modules already use.
+            const NPC* sponsor = lookup_npc_by_id(state, static_cast<uint32_t>(proposal.sponsor_id));
+            const bool sponsor_active = sponsor != nullptr && sponsor->status == NPCStatus::active;
             if (!sponsor_active) {
                 proposal.status = LegislativeProposalStatus::failed;
                 continue;
