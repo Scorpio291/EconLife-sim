@@ -639,6 +639,24 @@ struct SubsistenceConfig {
     // that gate annually on the constant (warfare, knowledge, population_aging) and
     // modules that use this field (subsistence, grain_logistics) must agree, or the
     // granary fills on one calendar while armies eat on another.
+    // --- The learned and urban stratum has INERTIA ---
+    // A society's non-farmers are not recomputed from this year's harvest. Scholars,
+    // priests, smiths and townsmen persist through lean decades on stores, patronage,
+    // tribute and sheer institutional momentum — Rome fed its cities from conquered
+    // provinces for centuries — and a scribe does not become a ploughman in a season.
+    //
+    // That persistence is WHY overshoot deepens instead of self-correcting: the
+    // superstructure stays on while the land degrades under it. Without inertia the
+    // stratum evaporated in a single tick (measured: 17% -> 0%), which made every
+    // collapse instantaneous and total, and left no possibility of elite overproduction
+    // (a surplus of non-producers the economy can no longer support).
+    //
+    // Shed rate: the stratum falls toward what food supports over ~a generation when it
+    // cannot be fed. Growth is slower still — institutions take longer to build than to
+    // lose, which is the asymmetry that makes collapses quick and recoveries slow.
+    float specialist_shed_per_year = 0.04f;   // ~25-year timescale downward
+    float specialist_growth_per_year = 0.02f;  // ~50-year timescale upward
+
     // --- The land wears out (the one thing that can lower the ceiling) ---
     // Knowledge only ever RAISES the carrying ceiling, so without this a society can
     // never overshoot its land and history is a one-way ramp. Continuous cropping

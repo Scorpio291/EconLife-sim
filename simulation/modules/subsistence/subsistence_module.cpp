@@ -204,8 +204,26 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float specialist_ceiling_frac = specialist_ceiling(era->economic_regime);
     specialists_people = std::clamp(specialists_people, 0.0f,
                                     static_cast<float>(population) * specialist_ceiling_frac);
-    const float specialist_fraction =
+    const float supported_fraction =
         population > 0 ? specialists_people / static_cast<float>(population) : 0.0f;
+
+    // THE STRATUM HAS INERTIA. What the harvest can support is a TARGET, not this
+    // year's reality. Scholars, priests, smiths and townsmen persist through lean
+    // decades on stores, patronage and tribute, and a scribe does not return to the
+    // plough in a season. The stratum therefore moves toward the supported level on a
+    // generational timescale, shedding faster than it grows — institutions take longer
+    // to build than to lose.
+    //
+    // This is also what lets a society OVERSHOOT: the superstructure stays on while the
+    // land degrades under it, deepening the crisis instead of damping it. Recomputing
+    // the stratum from each year's food made collapse instantaneous and total (measured:
+    // 17% -> 0% in a single tick) and made elite overproduction impossible to express.
+    const float held = cs.specialist_fraction;
+    const float rate = supported_fraction < held ? cfg_.specialist_shed_per_year
+                                                 : cfg_.specialist_growth_per_year;
+    const float per_tick = rate / ticks_per_year;
+    const float specialist_fraction = held + (supported_fraction - held) * per_tick;
+    specialists_people = static_cast<float>(population) * specialist_fraction;
 
     // Actual harvest from the farmers who remain on the land.
     const float farm_labor = (static_cast<float>(population) - specialists_people) * working_fraction;

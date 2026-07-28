@@ -148,9 +148,11 @@ TEST_CASE("subsistence: a surplus dawn province assigns specialist occupations",
     w.hazard_settings.seasonality = 0.0f;  // isolate from episodic harvest failures (M6a)
     w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
 
-    // A handful of resident heads.
+    // Enough resident heads that a stratum of a few percent is expressible as whole
+    // people: with the stratum now a slowly-forming stock rather than this year's food
+    // balance, ten residents times a ~9% share truncates to zero specialists.
     w.npc_indices_by_home_province.resize(1);
-    for (uint32_t i = 0; i < 10; ++i) {
+    for (uint32_t i = 0; i < 40; ++i) {
         NPC n{};
         n.id = 100 + i;
         n.home_province_id = 0;
@@ -158,22 +160,77 @@ TEST_CASE("subsistence: a surplus dawn province assigns specialist occupations",
         w.npc_indices_by_home_province[0].push_back(i);
     }
 
-    DeltaBuffer delta{};
-    mod.execute_province(0, w, delta);
+    // The non-farming stratum is a STOCK with generational inertia, not this year's
+    // food balance, so it has to be given time to form — a society does not raise a
+    // priesthood and a smithy in a single season. Run a century of ticks.
+    for (uint32_t t = 1; t <= 100u * kTicksPerYear; ++t) {
+        w.current_tick = t;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        apply_deltas(w, d);
+    }
 
-    // Every resident gets a livelihood; with surplus, some are Layer-2 specialists.
+    // Inspect the livelihoods the residents actually HOLD, not this tick's deltas: the
+    // module only publishes an occupation when it CHANGES, so once the century has
+    // settled a steady state it correctly emits nothing.
+    INFO("specialist_fraction after a century: "
+         << w.provinces[0].cohort_stats->specialist_fraction);
     int assigned = 0, specialists = 0;
-    for (const auto& nd : delta.npc_deltas) {
-        if (!nd.new_occupation.has_value())
+    for (const auto& npc : w.significant_npcs) {
+        if (npc.occupation == 0)
             continue;
         ++assigned;
-        const OccupationDefinition* o = w.occupation_catalog.by_index(*nd.new_occupation);
+        const OccupationDefinition* o = w.occupation_catalog.by_index(npc.occupation);
         REQUIRE(o != nullptr);
         if (o->layer == 2)
             ++specialists;
     }
-    CHECK(assigned == 10);
-    CHECK(specialists >= 1);
+    CHECK(assigned == 40);     // everyone has a livelihood
+    CHECK(specialists >= 1);   // and the surplus supports a non-farming stratum
+}
+
+TEST_CASE("subsistence: the non-farming stratum forms and sheds on a generational clock",
+          "[subsistence][tier2][inertia]") {
+    // It used to be recomputed from each year's harvest, so it appeared and vanished in
+    // a single tick — which made every collapse instantaneous and total (measured 17%
+    // -> 0%) and made elite overproduction impossible to express. Scholars, priests and
+    // townsmen persist through lean decades on stores, patronage and tribute.
+    SubsistenceModule mod;
+    WorldState w{};
+    w.era_catalog.load_builtin_default();
+    w.occupation_catalog.load_builtin_default();
+    w.technology.current_era = 1;
+    w.hazard_settings.seasonality = 0.0f;
+    w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
+    rebuild_npc_indices(w);
+
+    // The stratum moves per TICK, so years must be stepped as ticks.
+    uint32_t tick = 0;
+    auto run = [&](uint32_t years) {
+        for (uint32_t t = 0; t < years * kTicksPerYear; ++t) {
+            w.current_tick = ++tick;
+            DeltaBuffer d{};
+            mod.execute_province(0, w, d);
+            apply_deltas(w, d);
+        }
+        return w.provinces[0].cohort_stats->specialist_fraction;
+    };
+
+    // It does not appear overnight.
+    const float after_one_year = run(1);
+    CHECK(after_one_year < 0.02f);
+    // Over a century it builds toward what the harvest supports.
+    const float after_century = run(99);
+    CHECK(after_century > after_one_year * 5.0f);
+
+    // Now starve the province: the land cannot feed this many. The stratum falls, but
+    // over decades rather than instantly — which is exactly what lets a society
+    // overshoot instead of self-correcting.
+    w.provinces[0].cohort_stats->total_population = 400000;
+    const float after_shock = run(1);
+    CHECK(after_shock > after_century * 0.5f);  // still standing a year later
+    const float after_decades = run(60);
+    CHECK(after_decades < after_shock);          // but shedding
 }
 
 TEST_CASE("subsistence: a food surplus accrues proto-capital to resident founders",
