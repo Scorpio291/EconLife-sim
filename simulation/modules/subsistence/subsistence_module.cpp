@@ -218,11 +218,23 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // land degrades under it, deepening the crisis instead of damping it. Recomputing
     // the stratum from each year's food made collapse instantaneous and total (measured:
     // 17% -> 0% in a single tick) and made elite overproduction impossible to express.
+    // The stratum is fed from STORES through bad years, not dismissed on one failed
+    // harvest — that is what a granary is for. So the level the society will actually
+    // defend is the better of what this year's harvest supports and what its reserves
+    // can carry it through, scaled by how full the granary is.
+    //
+    // Without this the asymmetric rates below (shedding faster than building, which is
+    // real) act on a target that fluctuates with every harvest, and the noise ratchets
+    // the stratum steadily downward: measured, it fell to 2% where the food balance
+    // supported 14-17%, and the knowledge engine collapsed with it.
+    const float granary_cover =
+        target_store > 0.0f ? std::min(1.0f, cs.food_store / target_store) : 0.0f;
     const float held = cs.specialist_fraction;
-    const float rate = supported_fraction < held ? cfg_.specialist_shed_per_year
-                                                 : cfg_.specialist_growth_per_year;
+    const float defended_fraction = std::max(supported_fraction, held * granary_cover);
+    const float rate = defended_fraction < held ? cfg_.specialist_shed_per_year
+                                                : cfg_.specialist_growth_per_year;
     const float per_tick = rate / ticks_per_year;
-    const float specialist_fraction = held + (supported_fraction - held) * per_tick;
+    const float specialist_fraction = held + (defended_fraction - held) * per_tick;
     specialists_people = static_cast<float>(population) * specialist_fraction;
 
     // Actual harvest from the farmers who remain on the land.
