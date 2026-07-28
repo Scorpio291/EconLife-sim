@@ -164,12 +164,25 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     // so market eras (where surplus is always 1.0) are unchanged. A surplus lifts
     // births toward a cap AND relieves mortality (well-fed survival); a deficit
     // (surplus < 1) raises mortality.
+    // THE WAGE VALVE. Fertility and mortality both answer to how well fed people are,
+    // as power laws in w = consumption/subsistence, so the growth rate is the point
+    // where they cross rather than a number imposed anywhere. A society exactly at
+    // subsistence (w = 1) has both factors at 1 and stops growing on its own; one with
+    // slack grows; one pressing on its land shrinks. This is what pinned real
+    // pre-industrial growth near 0.04%/yr while population tripled.
     const float b_surplus = std::clamp(birth_surplus, 0.0f, 10.0f);
-    const float birth_food_factor = std::clamp(b_surplus, 0.0f, cfg.food_surplus_birth_cap);
+    const float birth_food_factor =
+        std::clamp(std::pow(std::max(b_surplus, 1e-3f), cfg.wage_fertility_elasticity), 0.0f,
+                   cfg.food_surplus_birth_cap);
     const float f_surplus = std::clamp(famine_surplus, 0.0f, 10.0f);
     float famine_mortality_factor;
     if (f_surplus < 1.0f) {
-        famine_mortality_factor = 1.0f + cfg.food_deficit_mortality_strength * (1.0f - f_surplus);
+        // Hunger kills long before outright famine: mortality rises as a power law in
+        // the shortfall, on top of the acute famine term below.
+        famine_mortality_factor =
+            std::pow(std::max(f_surplus, 1e-3f), -cfg.wage_mortality_elasticity) +
+            cfg.food_deficit_mortality_strength * (1.0f - f_surplus) - 1.0f;
+        famine_mortality_factor = std::max(1.0f, famine_mortality_factor);
     } else {
         famine_mortality_factor = std::max(
             cfg.food_mortality_floor, 1.0f - cfg.food_surplus_mortality_relief * (f_surplus - 1.0f));

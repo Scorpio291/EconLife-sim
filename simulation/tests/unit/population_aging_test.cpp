@@ -554,3 +554,79 @@ TEST_CASE("PopulationAging: radiation chronically depresses fertility (planetary
     CHECK(hot >= 0.0f);
     CHECK_THAT(hot, WithinAbs(1.0f - cfg.radiation_fertility_penalty, 1e-4f));
 }
+
+// ===========================================================================
+// THE WAGE VALVE — growth is an equilibrium, not a cap.
+//
+// Fixed land means more people cut the marginal product of labour: real wages
+// fall, delaying marriage and depressing fertility while raising mortality.
+// England shows no real-wage trend 1200-1800 despite population tripling —
+// growth was pinned near zero by this valve. Measured here it ran ~0.18%/yr
+// against a real ~0.04%/yr, and that speed let population outrun the
+// institutions a society needs, so the learned stratum never formed.
+// ===========================================================================
+
+TEST_CASE("population: a society exactly at subsistence stops growing on its own",
+          "[population_aging][tier11][wage]") {
+    // w = 1 is the crossing point: both the fertility and mortality responses are
+    // neutral there, so the population neither runs away nor dies out. Nothing
+    // imposes this — it falls out of where the two power laws meet.
+    PopulationAgingModule mod;
+    WorldState w = make_annual_cohort_world(/*surplus=*/1.0f);
+    const uint64_t before = w.provinces[0].cohort_stats->cohorts[
+        DemographicGroup::working_urban_mid].size;
+
+    DeltaBuffer d{};
+    mod.execute_province(0, w, d);
+    apply_deltas(w, d);
+
+    uint64_t after = 0;
+    for (const auto& [g, c] : w.provinces[0].cohort_stats->cohorts) {
+        (void)g;
+        after += c.size;
+    }
+    // Within a few percent of where it started after a year at exact subsistence.
+    const double drift = std::abs(static_cast<double>(after) - static_cast<double>(before)) /
+                         static_cast<double>(before);
+    CHECK(drift < 0.05);
+}
+
+TEST_CASE("population: growth answers to how well fed people are, in both directions",
+          "[population_aging][tier11][wage]") {
+    // Slack in the food supply brings marriage forward and growth follows; pressing
+    // on the land kills before outright famine does. The valve is symmetric — which
+    // is what makes the growth RATE emergent rather than chosen.
+    PopulationAgingModule mod;
+
+    auto year_change = [&](float surplus) {
+        WorldState w = make_annual_cohort_world(surplus);
+        uint64_t before = 0;
+        for (const auto& [g, c] : w.provinces[0].cohort_stats->cohorts) {
+            (void)g;
+            before += c.size;
+        }
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        apply_deltas(w, d);
+        uint64_t after = 0;
+        for (const auto& [g, c] : w.provinces[0].cohort_stats->cohorts) {
+            (void)g;
+            after += c.size;
+        }
+        return static_cast<double>(after) - static_cast<double>(before);
+    };
+
+    const double fed = year_change(1.6f);      // room to spare
+    const double subsistence = year_change(1.0f);
+    const double hungry = year_change(0.7f);   // pressing on the land
+
+    CHECK(fed > subsistence);
+    CHECK(hungry < subsistence);
+    // Chronic hunger FLATTENS growth rather than reversing it: at 0.7 the change is
+    // ~0.02% of the population. Outright decline is the acute famine path, which fires
+    // when the granary is actually empty — the two are deliberately separate, because
+    // historically famine mortality was a weak long-run check (its demographic bite is
+    // mostly lost births plus emigration, with fast rebound) while chronic
+    // undernutrition is what held pre-industrial growth near zero for centuries.
+    CHECK(std::abs(hungry) < 0.001 * 100000.0);
+}

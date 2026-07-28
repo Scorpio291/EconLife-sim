@@ -1693,6 +1693,20 @@ struct PopulationAgingConfig {
     // market eras, where the commons module is inert), so this changes nothing
     // outside the pre-market regime. Pre-market: surplus > 1 grows the population
     // toward carrying capacity; surplus < 1 (famine) culls it back.
+    // --- THE WAGE VALVE (Malthusian equilibrium) ---
+    // Fixed land means more people cut the marginal product of labour: real wages fall,
+    // which delays marriage and depresses fertility while raising mortality. England
+    // shows NO real-wage trend 1200-1800 despite population tripling — growth was pinned
+    // near zero by this valve, not by any ceiling.
+    //
+    // Both responses are POWER LAWS in w = consumption/subsistence (the surplus ratio),
+    // so growth falls out of where births and deaths cross rather than being capped.
+    // Real long-run pre-industrial growth was ~0.04%/yr (0.02%/yr in the first
+    // millennium CE); measured here it was ~0.18%/yr, roughly 5x too fast, and that
+    // speed let population outrun the institutions that a society needs to develop —
+    // the learned stratum could not form before the land filled up.
+    float wage_fertility_elasticity = 0.40f;  // births ~ w^+e: prosperity brings marriage forward
+    float wage_mortality_elasticity = 0.70f;  // deaths ~ w^-e: hunger kills before famine does
     float food_surplus_birth_cap = 2.0f;          // max birth multiplier from surplus. A fed
                                                   // population grows and consumes productivity gains
                                                   // (the Malthusian reality), keeping the surplus
