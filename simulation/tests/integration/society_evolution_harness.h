@@ -48,6 +48,8 @@ struct SocietySnapshot {
     double mean_surplus = 0.0;         // mean subsistence_surplus_ratio over provinces
     double specialist_fraction = 0.0;  // Layer-2 livelihoods / livelihoods assigned
     double total_capital = 0.0;        // sum of significant-NPC capital (proto-capital)
+    double productive_capital_per_head = 0.0;  // BUILT capacity per person (tools, kilns,
+                                               // cleared land) — the material era gate
     double capital_gini = 0.0;         // inequality of that capital [0,1]
     uint32_t businesses = 0;           // emergent firms
     int era = 0;
@@ -90,6 +92,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         if (!p.cohort_stats)
             continue;
         s.total_population += static_cast<double>(p.cohort_stats->total_population);
+        s.productive_capital_per_head += static_cast<double>(p.cohort_stats->productive_capital);
         s.urban_population += static_cast<double>(p.cohort_stats->urban_population);
         surplus_sum += p.cohort_stats->subsistence_surplus_ratio;
         ++prov_with_cohorts;
@@ -112,6 +115,10 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     }
     s.specialist_fraction = assigned > 0 ? static_cast<double>(specialists) / assigned : 0.0;
     s.capital_gini = gini(std::move(capitals));
+    // Convert the accumulated stock into per-head capacity — the form the era gate
+    // reads, so a larger society needs proportionally more built.
+    if (s.total_population > 0.0)
+        s.productive_capital_per_head /= s.total_population;
     s.businesses = static_cast<uint32_t>(w.npc_businesses.size());
     return s;
 }

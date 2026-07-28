@@ -126,9 +126,10 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
                     s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
                 std::printf(
                     "  era %2d  @ year %5u  (+%4u yrs, knowledge %.0f, +%.2f/yr, pop %.0f, "
-                    "spec %.0f%%, urban %.0f%%, gini %.2f)\n",
+                    "spec %.0f%%, urban %.0f%%, capital/head %.0f, gini %.2f)\n",
                     s.era, s.year, dy, s.knowledge, dy > 0 ? dk / dy : 0.0f, s.total_population,
-                    s.specialist_fraction * 100.0, urban_pct, s.capital_gini);
+                    s.specialist_fraction * 100.0, urban_pct, s.productive_capital_per_head,
+                    s.capital_gini);
                 prev_era = s.era;
                 prev_k = s.knowledge;
                 prev_year = s.year;
@@ -251,6 +252,10 @@ TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
                 return t;
             }();
             const double avg_surplus = counted > 0 ? surplus / counted : 1.0;
+            double capital_stock = 0.0;
+            for (const auto& p : world.provinces)
+                if (p.cohort_stats)
+                    capital_stock += static_cast<double>(p.cohort_stats->productive_capital);
             const float world_hazard = hazard_mortality_from_settings(world.hazard_settings);
             const double scarcity = std::clamp(1.0 - avg_surplus, 0.0, 1.0);
             const double pressure =
@@ -276,11 +281,12 @@ TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
             const double actual = static_cast<double>(world.technology.knowledge_level) - last_level;
             std::printf(
                 "  %5u |  %.3f  | %8u | %8u (out %.1f) | %9.1f | pop %8.0f | pressure %.2f | "
-                "living %3u | keepers-living %2u (out %.1f) | predicted/yr %.4f | "
-                "module/yr %.4f | actual/yr %.4f\n",
+                "living %3u | keepers-living %2u (out %.1f) | capital/head %.1f | "
+                "predicted/yr %.4f | module/yr %.4f | actual/yr %.4f\n",
                 y, avg_surplus, occupied, keepers, keeper_output,
                 static_cast<double>(world.technology.knowledge_level), pop_total, pressure,
-                living_npcs, living_keepers, living_output, predicted, module_says, y == 0 ? 0.0 : actual / 50.0);
+                living_npcs, living_keepers, living_output,
+                pop_total > 0.0 ? capital_stock / pop_total : 0.0, predicted, module_says, y == 0 ? 0.0 : actual / 50.0);
             last_level = static_cast<double>(world.technology.knowledge_level);
         }
         for (uint32_t t = 0; t < 365; ++t)
@@ -376,6 +382,10 @@ TEST_CASE("society observe: knowledge mechanism audit (fast, 20y)",
                 return t;
             }();
             const double avg_surplus = counted > 0 ? surplus / counted : 1.0;
+            double capital_stock = 0.0;
+            for (const auto& p : world.provinces)
+                if (p.cohort_stats)
+                    capital_stock += static_cast<double>(p.cohort_stats->productive_capital);
             const float world_hazard = hazard_mortality_from_settings(world.hazard_settings);
             const double scarcity = std::clamp(1.0 - avg_surplus, 0.0, 1.0);
             const double pressure =
@@ -401,11 +411,12 @@ TEST_CASE("society observe: knowledge mechanism audit (fast, 20y)",
             const double actual = static_cast<double>(world.technology.knowledge_level) - last_level;
             std::printf(
                 "  %5u |  %.3f  | %8u | %8u (out %.1f) | %9.1f | pop %8.0f | pressure %.2f | "
-                "living %3u | keepers-living %2u (out %.1f) | predicted/yr %.4f | "
-                "module/yr %.4f | actual/yr %.4f\n",
+                "living %3u | keepers-living %2u (out %.1f) | capital/head %.1f | "
+                "predicted/yr %.4f | module/yr %.4f | actual/yr %.4f\n",
                 y, avg_surplus, occupied, keepers, keeper_output,
                 static_cast<double>(world.technology.knowledge_level), pop_total, pressure,
-                living_npcs, living_keepers, living_output, predicted, module_says, y == 0 ? 0.0 : actual / 5.0);
+                living_npcs, living_keepers, living_output,
+                pop_total > 0.0 ? capital_stock / pop_total : 0.0, predicted, module_says, y == 0 ? 0.0 : actual / 5.0);
             last_level = static_cast<double>(world.technology.knowledge_level);
         }
         for (uint32_t t = 0; t < 365; ++t)
