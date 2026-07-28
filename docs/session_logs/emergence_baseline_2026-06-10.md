@@ -2041,3 +2041,39 @@ Until at least one of those lands, "rise and fall" is a law with no trigger: cor
 the unit tests, invisible in history. Recorded rather than tuned — making the fall fire
 by weakening the food ceiling or strengthening a shock ARBITRARILY would be the exact
 magic rail the doctrine forbids; the ceiling has to be able to fall for REASONS.
+
+### RISE AND FALL, OBSERVED (earthlike, the Boserup escape)
+
+The land law plus knowledge retention plus technique-dependent sustainability finally
+produce the behaviour the design has been aiming at. Earthlike trace, 500-year samples:
+
+  year |    pop | knowledge | soil
+   500 |  8,929 |        21 | 0.174
+  1000 | 10,601 |        57 | 0.207
+  1500 |  7,499 |         1 | 0.052   <- DARK AGE (knowledge 57 -> 1, 98% lost)
+  2000 | 11,010 |        69 | 0.281   <- recovery
+  2500 | 11,831 |       125 | 0.131
+  3000 |  7,574 |         7 | 0.212   <- DARK AGE AGAIN (125 -> 7)
+  3500 |  9,927 |        58 | 0.168   <- recovery
+  ...
+  5000 | 15,295 |       231 | 0.191
+  8000 | 27,173 |     1,475 | 0.115
+ 11000 | 44,811 |     3,773 | 0.022
+ 11500 | 167,989|    10,590 | 0.009   <- ERA 2. Escaped.
+
+Two full collapses, each losing >90% of accumulated technique, with population crashing
+and rebuilding alongside — then sustained accumulation and escape into the Bronze Age.
+Nothing about that sequence is scripted: it falls out of land degradation, the
+retention law (a society forgets what its surviving learned stratum cannot carry), and
+the Boserup escape (pressure -> innovation -> sustainable technique -> headroom)
+interacting.
+
+Compare the earlier states of this same world: with no soil model it marched to era 8
+by year 1,909; with fixed-share soil it never left the Neolithic in 13,000 years and
+oscillated at bare subsistence. The difference is that sustainability now IMPROVES with
+technique, so the trap has an exit that must be earned.
+
+Note the escape is late (era 2 at 11,500 vs ~6,700 real) and soil ends very degraded
+(0.009) while population explodes on the era-2 food technology — the post-escape
+dynamics need their own look. But the qualitative shape — repeated collapse, partial
+retention, slow net progress — is now emergent rather than absent.
