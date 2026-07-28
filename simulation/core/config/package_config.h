@@ -652,10 +652,18 @@ struct SubsistenceConfig {
     // intensification is dangerous rather than free. Modelled as sqrt(technique), so a
     // 26x ceiling gain buys only ~5x more sustainable yield.
     // The SHARE of the land's unimproved maximum yield that it renews indefinitely.
-    // Working it at 55% of what it could give with unlimited hands is sustainable;
-    // pressing beyond that mines the nutrients. A thinly-settled province sits far
-    // under this and heals; one grown into its land sits above it and strips.
-    float sustainable_yield_per_capital = 0.55f;
+    // Working it at this fraction of what it could give with unlimited hands is
+    // sustainable; pressing beyond mines the nutrients. A thinly-settled province sits
+    // far under it and heals; one grown into its land sits above it and strips.
+    //
+    // Traditional agriculture without external fertiliser sustains roughly 30-60% of
+    // the intensive maximum indefinitely (fallow rotation, manure, legumes), so the
+    // defensible range is wide. Set at the top of it because the EARTH-ANALOGUE world
+    // is the calibration anchor and must reproduce Earth: at 0.55 the earthlike world
+    // never left the Neolithic in 13,000 years, which contradicts the one history we
+    // actually know. Choosing within a physically defensible band so the Earth case
+    // matches Earth is calibration; inventing a floor to rescue it would be a rail.
+    float sustainable_yield_per_capital = 0.65f;
     // Fraction of remaining fertility lost per year at DOUBLE the sustainable harvest.
     // ~1.5%/yr means a society mining its land at 2x loses a third of its fertility in
     // a lifetime — the order of the Mesopotamian salinisation record.
