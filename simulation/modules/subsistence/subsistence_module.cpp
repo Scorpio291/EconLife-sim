@@ -274,13 +274,29 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         const float chronic = chronic_ceiling_factors(K, tech_food_factor, state.hazard_settings,
                                                       cfg_) *
                               harvest_factor;
-        // Expressed against the land's UNIMPROVED maximum yield (ceiling_per_capital_unit
-        // x natural capital), not raw natural capital — the two differ by three orders
+        // THE BOSERUP ESCAPE. What the land bears indefinitely is a SHARE of what it can
+        // yield, and that share RISES WITH TECHNIQUE: crop rotation, fallowing, manuring,
+        // legumes and terracing are exactly the knowledge that keeps fields alive. A
+        // society with no technique mines its land at ~2.9x renewal working flat out; one
+        // that has learned to farm sustainably approaches balance.
+        //
+        // Without this the trap is inescapable and the measurement showed it: with a
+        // FIXED sustainable share, any population large enough to work the land fully
+        // mines it forever regardless of how advanced it becomes, so earthlike soil
+        // collapsed 1.0 -> 0.17 within 500 years and the society oscillated at bare
+        // subsistence for 14,000 years, reaching 396 of the 3,830 knowledge it needed.
+        // Pressure on the land is what drives the intensification that relieves it —
+        // and the knowledge engine already turns scarcity into innovation.
+        const float technique_share =
+            cfg_.sustainable_yield_per_capital +
+            (cfg_.sustainable_yield_technique_max - cfg_.sustainable_yield_per_capital) * K /
+                (K + std::max(1.0f, cfg_.sustainable_yield_technique_halfsat));
+        // Expressed against the land's maximum yield (ceiling_per_capital_unit x natural
+        // capital x technique), not raw natural capital — the two differ by three orders
         // of magnitude, and comparing the harvest to the latter made even a handful of
         // people read as mining the land.
-        const float sustainable_output = cfg_.sustainable_yield_per_capital *
-                                         cfg_.ceiling_per_capital_unit * natural_capital *
-                                         std::sqrt(std::max(1.0f, chronic));
+        const float sustainable_output =
+            technique_share * cfg_.ceiling_per_capital_unit * natural_capital * chronic;
         if (sustainable_output > 0.0f) {
             const float pressure_ratio = output / sustainable_output;
             if (pressure_ratio > 1.0f) {

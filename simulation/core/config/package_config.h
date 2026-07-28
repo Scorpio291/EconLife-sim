@@ -656,15 +656,22 @@ struct SubsistenceConfig {
     // sustainable; pressing beyond mines the nutrients. A thinly-settled province sits
     // far under it and heals; one grown into its land sits above it and strips.
     //
-    // Traditional agriculture without external fertiliser sustains roughly 30-60% of
-    // the intensive maximum indefinitely (fallow rotation, manure, legumes).
-    //
-    // Raised to 0.65 once to try to rescue the earthlike world, which stalls in the
-    // Neolithic; it changed almost nothing (garden 6,386 -> 6,519 years, fertile
-    // deathworld 11,598 -> 11,644, earthlike still stuck) and was reverted. The stall
-    // is NOT a marginal threshold — there is a cliff between bounty 1.0 and 1.2 — so
-    // it wants a mechanism, not a nudge. Recorded so nobody repeats the experiment.
-    float sustainable_yield_per_capital = 0.55f;
+    // The share of the land's maximum yield it renews indefinitely, for a society with
+    // NO agricultural technique: slash-and-burn, continuous cropping, no rotation. A
+    // Neolithic village working its land flat out mines it at ~1/0.35 = 2.9x renewal.
+    float sustainable_yield_per_capital = 0.35f;
+    // What that share rises to once a society knows how to farm sustainably. Crop
+    // rotation, fallowing, manuring, legumes and terracing are precisely the techniques
+    // that raise what land bears indefinitely — this is the Boserup escape: a
+    // population pressing on its land is what drives the intensification that saves it.
+    // Capped below 1.0 because working land at its absolute maximum always costs
+    // something.
+    float sustainable_yield_technique_max = 0.92f;
+    // Accumulated knowledge at which half that gain is realised. Set low relative to
+    // the era thresholds (3,830 to leave the Neolithic) because rotation and manuring
+    // are early, cheap discoveries — a society should learn to keep its fields alive
+    // long before it learns metallurgy.
+    float sustainable_yield_technique_halfsat = 600.0f;
     // Fraction of remaining fertility lost per year at DOUBLE the sustainable harvest.
     // ~1.5%/yr means a society mining its land at 2x loses a third of its fertility in
     // a lifetime — the order of the Mesopotamian salinisation record.
