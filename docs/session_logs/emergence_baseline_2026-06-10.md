@@ -2113,3 +2113,46 @@ Still no ERA-level falls: the collapses observed (knowledge 57 -> 1, 125 -> 7) h
 inside era 1, where there is no lower era to fall to. Era regression will only show once
 a society collapses from era 2+, which needs shocks that bite AFTER the escape —
 conquest destroying works being the obvious candidate.
+
+### CIVILISATIONS NOW RISE AND FALL — twice, but without a ratchet
+
+After the F7 threshold pass, era-level FALLS appear for the first time. Garden:
+
+  RISE era 4 @ 4,605   pop 1,584,825  capital/head 378
+  FALL era 3 @ 4,901   pop 2,218,924  knowledge -67/yr   spec 0%  capital/head 29
+  FALL era 2 @ 4,936   (35 years later)  knowledge -770/yr
+  FALL era 1 @ 5,130   pop   116,897                     capital/head 1
+  RISE era 2 @ 7,494 -> era 3 @ 8,786 -> era 4 @ 9,014
+  FALL era 3/2/1 @ 9,312 / 9,347 / 9,541      <- a SECOND full cycle
+  RISE era 2 @ 11,884
+  final: era 2 at 13,000 (OvershootCrash)
+
+Two complete civilisational cycles: Classical height, total collapse to the Neolithic,
+rebuild, Classical again, collapse again. Earthlike does the same (era 4 @ 8,520, back
+to era 1 by 9,143). The crash signature is textbook OVERSHOOT: at the moment of
+collapse population is at its PEAK and still rising (1.58M -> 2.22M) while knowledge is
+already falling — the society kept growing into land it had ruined. Specialists go to
+0%, cities empty, capital/head falls 378 -> 1.
+
+THE DEFECT: it is a LIMIT CYCLE, not a ratchet. Every cycle rebuilds to the same height
+and falls the same way; all four worlds end at era 2 and none reaches modern. Knowledge
+returns to ~550 each time, below the 750 needed to leave the Neolithic, so each
+civilisation starts from scratch. "Slowly creeping forward" requires each cycle to
+retain more than the last.
+
+WHY: retention is scoped to the CURRENT era's institutions (per_worker_output: elder 0.2
+-> scribe 0.6 -> scholar 1.0). When a society falls back to era 1 it loses its scribes,
+retention collapses to oral levels, and the records go with them. Historically this is
+wrong in a specific way: WRITTEN RECORDS OUTLIVE THE INSTITUTIONS THAT MADE THEM.
+Monasteries preserved classical texts through the European dark ages; clay tablets
+outlasted Sumer. A society that once had writing does not forget as an oral one does.
+
+NEXT MECHANISM (the ratchet): retention should follow the highest institution a society
+has ever ACHIEVED, decaying slowly, rather than snapping back to the current era's
+level. Records persist and can be recovered; that is what makes each cycle start higher
+and turns a limit cycle into slow net progress.
+
+Also note the F7 pass undershot as predicted (era 2 at 3,101 on garden vs a 6,700-year
+Neolithic target) — but that is now entangled with the collapses, so thresholds should
+not be iterated again until the ratchet exists, or the calibration will be fitting to a
+transient.
