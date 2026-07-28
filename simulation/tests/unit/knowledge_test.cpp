@@ -1,7 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <string>
+#include <unistd.h>
 
 #include "core/world_gen/era_catalog.h"
 #include "core/world_state/delta_buffer.h"
@@ -227,21 +231,43 @@ TEST_CASE("knowledge: a leap is deterministic and credited to a LIVING person",
 // advancement speed.
 // ===========================================================================
 
+// A catalog whose era 1 carries BOTH gates, written by the test so the mechanism is
+// proven independently of whatever the shipped eras.csv is calibrated to. The shipped
+// capital thresholds are currently 0 (uncalibrated — a per-head gate set from the
+// measured curve stalled every world, see the session log), and these tests must keep
+// working when they are set.
+namespace {
+struct GatedEras {
+    std::filesystem::path dir;
+    float knowledge_gate = 4000.0f;
+    float capital_gate = 250.0f;
+
+    GatedEras() {
+        dir = std::filesystem::temp_directory_path() /
+              ("econlife_eras_" + std::to_string(::getpid()));
+        std::filesystem::create_directories(dir);
+        std::ofstream f(dir / "eras.csv");
+        f << "era_index,era_key,display_name,start_year,economic_regime,is_default_entry,"
+             "v1_in_scope,knowledge_to_advance,capital_to_advance\n";
+        f << "1,neolithic,Neolithic,-10000,subsistence,0,1," << knowledge_gate << ","
+          << capital_gate << "\n";
+        f << "2,bronze_age,Bronze Age,-3300,barter,0,1,0,0\n";
+    }
+    ~GatedEras() {
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+    }
+};
+}  // namespace
+
 TEST_CASE("knowledge: knowing is not enough — an era needs the capacity to use it",
           "[knowledge][tier1][capital]") {
     KnowledgeModule mod;
-    const EraDefinition* era1 = nullptr;
-    {
-        EraCatalog cat;
-        cat.load_builtin_default();
-        era1 = cat.by_index(1);
-    }
-    REQUIRE(era1 != nullptr);
-    REQUIRE(era1->knowledge_to_advance > 0.0f);
-    REQUIRE(era1->capital_to_advance > 0.0f);
+    GatedEras eras;
 
     auto advanced = [&](float knowledge, float capital_per_head) {
         WorldState w = make_world(/*era=*/1, 50000, 0.12f, knowledge);
+        REQUIRE(w.era_catalog.load_from_directory(eras.dir.string()));
         w.provinces[0].cohort_stats->productive_capital = capital_per_head * 50000.0f;
         DeltaBuffer d{};
         mod.execute(w, d);
@@ -251,33 +277,26 @@ TEST_CASE("knowledge: knowing is not enough — an era needs the capacity to use
         return false;
     };
 
-    const float knows = era1->knowledge_to_advance * 1.5f;
-    const float builds = era1->capital_to_advance * 1.5f;
-
     // All the knowledge in the world and nothing built with it: no advance. This is
     // the flying-car case — the data exists, the capacity does not.
-    CHECK_FALSE(advanced(knows * 100.0f, 0.0f));
+    CHECK_FALSE(advanced(eras.knowledge_gate * 100.0f, 0.0f));
     // Plenty built but the society does not yet know what to do with it: no advance.
-    CHECK_FALSE(advanced(0.0f, builds));
+    CHECK_FALSE(advanced(0.0f, eras.capital_gate * 2.0f));
     // Both: the era turns.
-    CHECK(advanced(knows, builds));
+    CHECK(advanced(eras.knowledge_gate * 1.5f, eras.capital_gate * 2.0f));
 }
 
-TEST_CASE("knowledge: capital is a stock that must be built and maintained",
+TEST_CASE("knowledge: built capacity is counted per head, not as a heap",
           "[knowledge][tier1][capital]") {
-    // The limiter only works because capital cannot spike. It is invested out of the
-    // real surplus and wears out, so a society that stops producing a surplus stops
-    // advancing regardless of how much it knows. (Accumulation itself lives in
-    // subsistence; this pins that the GATE reads a per-head stock, so a bigger
-    // population needs proportionally more built, not the same absolute pile.)
+    // A bigger society needs proportionally more built, so population growth alone
+    // cannot buy an era: the same absolute stock that carries a small society is
+    // spread too thin by a large one.
     KnowledgeModule mod;
-    EraCatalog cat;
-    cat.load_builtin_default();
-    const float need = cat.by_index(1)->capital_to_advance;
-    const float knows = cat.by_index(1)->knowledge_to_advance * 1.5f;
+    GatedEras eras;
 
     auto advanced_with = [&](uint32_t population, float total_capital) {
-        WorldState w = make_world(/*era=*/1, population, 0.12f, knows);
+        WorldState w = make_world(/*era=*/1, population, 0.12f, eras.knowledge_gate * 1.5f);
+        REQUIRE(w.era_catalog.load_from_directory(eras.dir.string()));
         w.provinces[0].cohort_stats->productive_capital = total_capital;
         DeltaBuffer d{};
         mod.execute(w, d);
@@ -287,9 +306,7 @@ TEST_CASE("knowledge: capital is a stock that must be built and maintained",
         return false;
     };
 
-    // The same absolute stock that carries a small society is spread too thin by a
-    // large one: capacity is per head.
-    const float stock = need * 20000.0f * 1.5f;
+    const float stock = eras.capital_gate * 20000.0f * 1.5f;
     CHECK(advanced_with(20000, stock));
     CHECK_FALSE(advanced_with(400000, stock));
 }

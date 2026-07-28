@@ -1959,3 +1959,41 @@ itself (knowledge_productivity_max / halfsat), which is a MECHANISM constant and
 stay defensible in real units — foraging (~0.1 person/km2) to modern agriculture
 (~100+/km2) is ~1000x over 12,000 years, so 26x through a saturating function is not
 obviously wrong and should be argued from land productivity, not fitted to the curve.
+
+### The capital gate is right, but capital PER HEAD cannot pace the climb
+
+Setting the material thresholds from the measured curve (500/1000/1400/1900/2600/
+3400/4100 per head, each just above what a society held at the transition it made on
+knowledge alone) STALLED ALL FOUR WORLDS at era 1 for 13,000 years. Reverted to 0
+(gate present and unit-tested, calibration withdrawn) — a gate no world can pass reads
+as a failed civilisation when it is really an unreachable threshold, which is exactly
+the kind of fake outcome the doctrine forbids.
+
+WHY, and it is structural rather than a bad number. Capital per head PEAKS EARLY AND
+FALLS: 645 at year 20 while surplus was 2.2, down to 321 by the era-2 transition at
+year 1,647. Population growth pushes surplus back toward ~1.1, which cuts investment
+(a share of surplus) while wear continues, so the stock settles at a low Malthusian
+equilibrium. Capital per head is therefore FLAT across the arc — it grew only ~13x
+(321 -> 4,320) while knowledge grew ~600,000x (3,835 -> 2,300,616).
+
+That 4-orders-of-magnitude separation IS the design premise confirmed: knowledge is
+information and spikes; built capacity is matter paid for out of a surplus the
+population keeps eating. But it also means a per-head gate can slow the FIRST era and
+then never bind again, because per-head capacity does not climb era on era — that is
+the Malthusian trap, and escaping it (productivity outrunning population, the
+demographic transition) is not modelled.
+
+TWO PATHS, needs a design call:
+  (a) Gate on TOTAL accumulated capital — civilisation-scale industrial capacity
+      ("can this society build a railway network"). Total DOES grow strongly because
+      population grows: 128M at era 2 -> 24.8B at era 8 on the garden world, ~193x.
+      No new mechanism needed; thresholds set from that curve.
+  (b) Keep per-head and model the escape: productivity growth outrunning population,
+      so capital per head can actually rise across eras. Truer, and it is the real
+      historical mechanism, but it is a demographic-transition milestone of its own.
+
+The mechanism, the stock (cohort_stats->productive_capital, invested at 8% of surplus,
+worn at 3%/yr), the delta plumbing, the era-catalog columns and the tests all stay in
+place; only the shipped thresholds are zeroed pending that decision. The unit tests are
+now self-contained (they write their own gated eras.csv) so they keep proving the gate
+regardless of what the shipped data is calibrated to.
