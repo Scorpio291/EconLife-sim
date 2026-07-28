@@ -310,3 +310,91 @@ TEST_CASE("knowledge: built capacity is counted per head, not as a heap",
     CHECK(advanced_with(20000, stock));
     CHECK_FALSE(advanced_with(400000, stock));
 }
+
+// ===========================================================================
+// RISE AND FALL.
+//
+// Civilisations build grand works and then perish: Rome's aqueducts outlived the
+// engineers who could maintain them, and the Maya cities outlived the surplus
+// that fed their scribes. Advancement is a sawtooth with a ratchet, not a ramp.
+// A society holds only what its learned stratum and institutions can carry, so
+// when population or surplus collapses it forgets — and can lose the era.
+// ===========================================================================
+
+TEST_CASE("knowledge: a society forgets what it can no longer carry",
+          "[knowledge][tier1][collapse]") {
+    KnowledgeModule mod;
+
+    // A large learned stratum sustains what it holds: nothing is forgotten, and the
+    // society still gains.
+    WorldState healthy = make_world(/*era=*/1, 200000, 0.15f, /*knowledge=*/2000.0f);
+    CHECK(produced_knowledge(mod, healthy) > 0.0);
+
+    // The same knowledge, after a collapse: the people are gone, so the technique
+    // goes with them. Net change is NEGATIVE — this is a dark age, not a plateau.
+    WorldState collapsed = make_world(/*era=*/1, 2000, 0.02f, /*knowledge=*/2000.0f);
+    CHECK(produced_knowledge(mod, collapsed) < 0.0);
+}
+
+TEST_CASE("knowledge: writing is the ratchet — literate societies forget less",
+          "[knowledge][tier1][collapse]") {
+    // Identical collapse, different institutions. Era 1 carries knowledge orally
+    // (elders); by era 4 the same people are scholars with records. The literate
+    // society keeps far more of what it knew, which is what lets each cycle of rise
+    // and fall start higher than the last.
+    KnowledgeModule mod;
+    WorldState oral = make_world(/*era=*/1, 5000, 0.05f, /*knowledge=*/20000.0f);
+    WorldState literate = make_world(/*era=*/4, 5000, 0.05f, /*knowledge=*/20000.0f);
+    const double oral_change = produced_knowledge(mod, oral);
+    const double literate_change = produced_knowledge(mod, literate);
+    CHECK(oral_change < 0.0);                 // the oral society is losing it
+    CHECK(literate_change > oral_change);     // the literate one loses less (or gains)
+}
+
+TEST_CASE("knowledge: an era is LOST when the society can no longer carry it",
+          "[knowledge][tier1][collapse]") {
+    // The fall. A society sitting in era 2 whose knowledge has collapsed far below
+    // what era 1 demanded to get there drops back: the works stand, but nobody can
+    // build or maintain them any more.
+    KnowledgeModule mod;
+    EraCatalog cat;
+    cat.load_builtin_default();
+    const float entry_threshold = cat.by_index(1)->knowledge_to_advance;  // to enter era 2
+
+    auto era_change = [&](float knowledge) {
+        WorldState w = make_world(/*era=*/2, 5000, 0.02f, knowledge);
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        for (const auto& td : d.technology_deltas)
+            if (td.new_era.has_value())
+                return static_cast<int>(*td.new_era);
+        return 2;
+    };
+
+    // Comfortably above what it took to get here: the era holds.
+    CHECK(era_change(entry_threshold) == 2);
+    // Collapsed well below it: the era is lost.
+    CHECK(era_change(entry_threshold * 0.5f) == 1);
+}
+
+TEST_CASE("knowledge: a lost era can be climbed again (the ratchet)",
+          "[knowledge][tier1][collapse]") {
+    // Falling back is not the end of history. A society that recovers its population
+    // and surplus rebuilds its learned stratum, accumulates again, and re-enters the
+    // era it lost — which is what "slowly creeping forward" through repeated rise and
+    // fall actually requires.
+    KnowledgeModule mod;
+    EraCatalog cat;
+    cat.load_builtin_default();
+    const float threshold = cat.by_index(1)->knowledge_to_advance;
+
+    // Recovered population, knowledge back above the threshold: it advances again.
+    WorldState recovered = make_world(/*era=*/1, 200000, 0.15f, threshold * 1.1f);
+    DeltaBuffer d{};
+    mod.execute(recovered, d);
+    bool advanced = false;
+    for (const auto& td : d.technology_deltas)
+        if (td.new_era.has_value() && *td.new_era == 2)
+            advanced = true;
+    CHECK(advanced);
+}

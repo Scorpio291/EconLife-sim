@@ -155,8 +155,25 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
                              state.tech_effects_for_era(state.technology.current_era).knowledge_mult);
 
     const float level = state.technology.knowledge_level;
+
+    // WHAT THE SOCIETY CAN CARRY. Knowledge lives in people and, later, in records: a
+    // society holds only what its learned stratum and institutions can sustain, and
+    // forgets the rest. This is how civilisations REGRESS — Rome's aqueducts outlived
+    // the engineers who could maintain them, and the Maya cities outlived the surplus
+    // that fed their scribes. A healthy, growing society sustains far more than it
+    // holds and forgets nothing; only a collapse in population or surplus pushes
+    // holdings above the people left to carry them.
+    //
+    // Writing is the ratchet: the per-worker term rises elder -> scribe -> scholar, so
+    // a literate society keeps far more through a collapse than an oral one, and each
+    // cycle of rise and fall can start higher than the last.
+    const double sustainable = knowledge_workers * static_cast<double>(per_worker_output) *
+                               static_cast<double>(cfg_.knowledge_sustained_per_output_unit);
+    const double unsustainable = std::max(0.0, static_cast<double>(level) - sustainable);
+    const double forgetting = unsustainable * static_cast<double>(cfg_.forgetting_rate_per_year);
+
     const double decay = static_cast<double>(cfg_.decay_per_year) * static_cast<double>(level);
-    const float net = static_cast<float>(production - decay);
+    const float net = static_cast<float>(production - decay - forgetting);
 
     TechnologyDelta td{};
     if (net != 0.0f)
@@ -191,6 +208,24 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
         const uint8_t max_era = state.era_catalog.max_era();
         if (state.technology.current_era < max_era)
             td.new_era = static_cast<uint8_t>(state.technology.current_era + 1);
+    } else if (state.technology.current_era > 1) {
+        // THE FALL. A society that can no longer carry what it took to get here loses
+        // the era: the works stand but nobody can build or maintain them any more.
+        // Compared against the threshold that was needed to ENTER this era, with
+        // hysteresis so a society on the edge does not flap year to year.
+        //
+        // This is what makes the climb a sawtooth rather than a ramp — civilisations
+        // rise, build, overreach or are broken by famine, plague or war, and fall back,
+        // and the next one starts from what survived. Forward-only advancement could
+        // only ever model the first half of that.
+        const EraDefinition* entered_from =
+            state.era_catalog.by_index(static_cast<uint8_t>(state.technology.current_era - 1));
+        if (entered_from != nullptr && entered_from->knowledge_to_advance > 0.0f &&
+            static_cast<double>(level) <
+                static_cast<double>(entered_from->knowledge_to_advance) *
+                    static_cast<double>(cfg_.era_regression_hysteresis)) {
+            td.new_era = static_cast<uint8_t>(state.technology.current_era - 1);
+        }
     }
 
     if (td.knowledge_delta.has_value() || td.new_era.has_value())

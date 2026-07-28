@@ -791,11 +791,15 @@ static void apply_lod2_price_deltas(WorldState& world,
 // ---------------------------------------------------------------------------
 static void apply_technology_deltas(WorldState& world, const std::vector<TechnologyDelta>& deltas) {
     for (const auto& td : deltas) {
-        // Era transition (replacement, irreversible forward-only).
+        // Era transition. NOT forward-only any more: a society that can no longer carry
+        // what it knew loses the era (knowledge_module publishes the regression). Rome
+        // fell; the Maya cities emptied. Advancement is a sawtooth with a ratchet, not
+        // a ramp, so this applies a change in either direction — but only a change of
+        // one step, which is all either path ever publishes.
         if (td.new_era.has_value()) {
-            uint8_t target = *td.new_era;
-            uint8_t current = world.technology.current_era;
-            if (target > current) {
+            const uint8_t target = *td.new_era;
+            const uint8_t current = world.technology.current_era;
+            if (target != current && target >= 1) {
                 world.technology.current_era = target;
                 world.technology.era_started_tick = world.current_tick;
             }

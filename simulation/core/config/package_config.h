@@ -728,13 +728,36 @@ struct KnowledgeConfig {
     // A genius is one person, however brilliant.
     float genius_leap_years = 30.0f;
     float genius_equivalent_workers = 250.0f;  // a great mind's output vs an ordinary keeper
-    // Annual attrition. Civilizational knowledge is CUMULATIVE — embodied in surviving
-    // people, practices and (later) writing, it is essentially never lost on historical
-    // timescales (dark-age regression is a rare exception, out of V1 scope). Zero here:
-    // a transient population dip must NOT erase accumulated knowledge, or a society that
-    // overshoots its food supply would lose its technique and lock into the Malthusian
-    // trap instead of recovering and climbing on. The era thresholds govern the pace.
+    // Flat annual attrition. Zero: knowledge is not lost on a timer. What a society
+    // forgets is what it can no longer CARRY — see the retention model below, which
+    // replaced the old "dark ages are out of scope" assumption.
     float decay_per_year = 0.0f;
+
+    // --- WHAT A SOCIETY CAN CARRY (rise and fall) ---
+    // Knowledge lives in people and, later, in records. A society holds only what its
+    // learned stratum and its institutions can sustain; anything beyond that is
+    // forgotten within a generation or two. This is why civilisations regress: Rome
+    // built aqueducts and the technique to maintain them did not outlive the society
+    // that fed the engineers.
+    //
+    // Sustainable knowledge = knowledge_workers x per-worker output x this constant.
+    // The per-worker term is the institutional multiplier the era catalog already
+    // provides (elder 0.2 oral -> scribe 0.6 writing -> scholar 1.0 formal
+    // scholarship), so WRITING is what makes knowledge stick: a literate society keeps
+    // far more of what it knew through a collapse than an oral one, which is the
+    // ratchet that lets each cycle start higher than the last.
+    //
+    // 200 is set so a dawn society at its Neolithic learned stratum (~95 keepers at
+    // elder output) sustains ~3,800 — right at the era-1 threshold. A healthy, growing
+    // society sits far above what it holds and forgets nothing; only a collapse in
+    // population or surplus pushes holdings above what remains to carry them.
+    float knowledge_sustained_per_output_unit = 200.0f;
+    // How fast the unsustainable excess goes. ~2%/yr is a generation-and-a-half to lose
+    // technique nobody practises any more.
+    float forgetting_rate_per_year = 0.02f;
+    // An era is LOST when knowledge falls this far below what was needed to enter it.
+    // Hysteresis, so a society on the edge does not flap between eras year to year.
+    float era_regression_hysteresis = 0.75f;
 
     // --- Adversity drives invention (Boserup intensification + the Deathworlders
     // premise) ---
