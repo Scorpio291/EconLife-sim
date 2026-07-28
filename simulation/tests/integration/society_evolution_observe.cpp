@@ -14,6 +14,7 @@
 #include <cstdio>
 
 #include "core/world_gen/world_class.h"  // hazard_mortality_from_settings
+#include "modules/knowledge/knowledge_module.h"
 
 #include "tests/integration/society_evolution_harness.h"
 
@@ -202,7 +203,13 @@ TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
         if (y % 50 == 0) {
             uint32_t occupied = 0;
             uint32_t keepers = 0;
+            uint32_t living_keepers = 0;
             double keeper_output = 0.0;
+            double living_output = 0.0;
+            uint32_t living_npcs = 0;
+            for (const auto& npc : world.significant_npcs)
+                if (npc.status != NPCStatus::dead && npc.status != NPCStatus::fled)
+                    ++living_npcs;
             for (const auto& npc : world.significant_npcs) {
                 if (npc.occupation == 0)
                     continue;
@@ -211,6 +218,17 @@ TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
                 if (o != nullptr && o->knowledge_output > 0.0f) {
                     ++keepers;
                     keeper_output += static_cast<double>(o->knowledge_output);
+                    // The module only counts the LIVING. An occupation persists on a
+                    // dead record (significant_npcs is append-only), so a corps that
+                    // is dying without replacement looks intact here and produces
+                    // nothing there.
+                    const bool gone = npc.status == NPCStatus::dead ||
+                                      npc.status == NPCStatus::fled ||
+                                      npc.status == NPCStatus::imprisoned;
+                    if (!gone) {
+                        ++living_keepers;
+                        living_output += static_cast<double>(o->knowledge_output);
+                    }
                 }
             }
             double surplus = 0.0;
@@ -242,13 +260,152 @@ TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
             const double specialist_term = keeper_output * 0.4;
             const double pop_term = 1.5e-6 * pop_total;
             const double predicted = (specialist_term + pop_term) * pressure;
+            // Ask the module itself what it publishes for THIS exact state. If this
+            // agrees with `predicted` but the accumulated level does not, the loss is
+            // downstream (how often the module runs, or how the delta is applied)
+            // rather than in the production formula.
+            double module_says = 0.0;
+            {
+                KnowledgeModule probe;
+                DeltaBuffer scratch{};
+                probe.execute(world, scratch);
+                for (const auto& td : scratch.technology_deltas)
+                    if (td.knowledge_delta.has_value())
+                        module_says += static_cast<double>(*td.knowledge_delta);
+            }
             const double actual = static_cast<double>(world.technology.knowledge_level) - last_level;
             std::printf(
                 "  %5u |  %.3f  | %8u | %8u (out %.1f) | %9.1f | pop %8.0f | pressure %.2f | "
-                "predicted/yr %.4f | actual/yr %.4f\n",
+                "living %3u | keepers-living %2u (out %.1f) | predicted/yr %.4f | "
+                "module/yr %.4f | actual/yr %.4f\n",
                 y, avg_surplus, occupied, keepers, keeper_output,
                 static_cast<double>(world.technology.knowledge_level), pop_total, pressure,
-                predicted, y == 0 ? 0.0 : actual / 50.0);
+                living_npcs, living_keepers, living_output, predicted, module_says, y == 0 ? 0.0 : actual / 50.0);
+            last_level = static_cast<double>(world.technology.knowledge_level);
+        }
+        for (uint32_t t = 0; t < 365; ++t)
+            orch.execute_tick(world, pool);
+    }
+}
+
+TEST_CASE("society observe: knowledge mechanism audit (fast, 20y)",
+          "[.society-knowledge-quick]") {
+    // Calibration/diagnostic companion to the knowledge trace. The trace shows the
+    // RATE; this shows WHERE it comes from, so a stall can be attributed to a
+    // mechanism instead of guessed at. It exists because a filter regression once
+    // zeroed the scholar corps and left every world at era 1 for 13,000 years while
+    // all three test gates stayed green — the rate looked like "slow progress"
+    // rather than "nobody is doing the work".
+    //
+    // Prints, over a short dawn run: the surplus, how many significant NPCs hold a
+    // knowledge-bearing occupation (elder/scribe/scholar), and the split of the
+    // year's knowledge production between the scholar corps and the diffuse
+    // population term.
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 20;
+
+    WorldGeneratorConfig config{};
+    config.seed = 7;
+    config.province_count = 6;
+    config.npc_count = kNpcs;
+    config.starting_era = 1;
+    config.founding_seed_mode = true;
+    config.goods_directory = find_goods_dir_society();
+    config.technology_directory = find_base_game_subdir("technology");
+    config.bounty_scale = archetype_earthlike().bounty;
+    config.hazard_settings = archetype_earthlike().hazard;
+
+    WorldState world = WorldGenerator::generate(config);
+    TickOrchestrator orch;
+    register_base_game_modules(orch);
+    orch.finalize_registration();
+    ThreadPool pool(1);
+
+    double last_level = 0.0;
+    std::printf("\n=== KNOWLEDGE MECHANISM AUDIT (fast, 20y) ===\n");
+    std::printf("  year | surplus | occupied | knowledge-keepers | knowledge\n");
+    for (uint32_t y = 0; y <= kYears; ++y) {
+        if (y % 5 == 0) {
+            uint32_t occupied = 0;
+            uint32_t keepers = 0;
+            uint32_t living_keepers = 0;
+            double keeper_output = 0.0;
+            double living_output = 0.0;
+            uint32_t living_npcs = 0;
+            for (const auto& npc : world.significant_npcs)
+                if (npc.status != NPCStatus::dead && npc.status != NPCStatus::fled)
+                    ++living_npcs;
+            for (const auto& npc : world.significant_npcs) {
+                if (npc.occupation == 0)
+                    continue;
+                ++occupied;
+                const OccupationDefinition* o = world.occupation_catalog.by_index(npc.occupation);
+                if (o != nullptr && o->knowledge_output > 0.0f) {
+                    ++keepers;
+                    keeper_output += static_cast<double>(o->knowledge_output);
+                    // The module only counts the LIVING. An occupation persists on a
+                    // dead record (significant_npcs is append-only), so a corps that
+                    // is dying without replacement looks intact here and produces
+                    // nothing there.
+                    const bool gone = npc.status == NPCStatus::dead ||
+                                      npc.status == NPCStatus::fled ||
+                                      npc.status == NPCStatus::imprisoned;
+                    if (!gone) {
+                        ++living_keepers;
+                        living_output += static_cast<double>(o->knowledge_output);
+                    }
+                }
+            }
+            double surplus = 0.0;
+            int counted = 0;
+            for (const auto& p : world.provinces) {
+                if (p.cohort_stats) {
+                    surplus += static_cast<double>(p.cohort_stats->subsistence_surplus_ratio);
+                    ++counted;
+                }
+            }
+            // Recompute the module's own terms here so the PUBLISHED year-over-year
+            // change can be compared against what the formula says it should be. A
+            // gap between them is a wiring fault; agreement means the rate is a
+            // calibration question.
+            const double pop_total = [&] {
+                double t = 0.0;
+                for (const auto& p : world.provinces)
+                    if (p.cohort_stats)
+                        t += static_cast<double>(p.cohort_stats->total_population);
+                return t;
+            }();
+            const double avg_surplus = counted > 0 ? surplus / counted : 1.0;
+            const float world_hazard = hazard_mortality_from_settings(world.hazard_settings);
+            const double scarcity = std::clamp(1.0 - avg_surplus, 0.0, 1.0);
+            const double pressure =
+                std::min(0.35 + 0.6 * std::max(0.0, static_cast<double>(world_hazard) - 0.45) +
+                             1.4 * scarcity,
+                         3.0);
+            const double specialist_term = keeper_output * 0.4;
+            const double pop_term = 1.5e-6 * pop_total;
+            const double predicted = (specialist_term + pop_term) * pressure;
+            // Ask the module itself what it publishes for THIS exact state. If this
+            // agrees with `predicted` but the accumulated level does not, the loss is
+            // downstream (how often the module runs, or how the delta is applied)
+            // rather than in the production formula.
+            double module_says = 0.0;
+            {
+                KnowledgeModule probe;
+                DeltaBuffer scratch{};
+                probe.execute(world, scratch);
+                for (const auto& td : scratch.technology_deltas)
+                    if (td.knowledge_delta.has_value())
+                        module_says += static_cast<double>(*td.knowledge_delta);
+            }
+            const double actual = static_cast<double>(world.technology.knowledge_level) - last_level;
+            std::printf(
+                "  %5u |  %.3f  | %8u | %8u (out %.1f) | %9.1f | pop %8.0f | pressure %.2f | "
+                "living %3u | keepers-living %2u (out %.1f) | predicted/yr %.4f | "
+                "module/yr %.4f | actual/yr %.4f\n",
+                y, avg_surplus, occupied, keepers, keeper_output,
+                static_cast<double>(world.technology.knowledge_level), pop_total, pressure,
+                living_npcs, living_keepers, living_output, predicted, module_says, y == 0 ? 0.0 : actual / 5.0);
             last_level = static_cast<double>(world.technology.knowledge_level);
         }
         for (uint32_t t = 0; t < 365; ++t)

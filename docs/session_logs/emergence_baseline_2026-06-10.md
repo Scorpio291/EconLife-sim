@@ -1828,3 +1828,56 @@ globally or diluted per province); (2) re-measure; (3) THEN recalibrate
 knowledge_to_advance (builtin + eras.csv in sync, drift guard now covers the field);
 (4) confirm the four spectrum worlds diverge for mechanical reasons — food ceiling,
 mortality, logistics — and not because a dial was tuned to separate them.
+
+---
+
+## 2026-07-27 (later) — FOUND IT: the climb was powered by dead scholars
+
+The ~9x gap in the previous entry is resolved, and the answer changes what F7 has to
+be. Measured with the fast mechanism audit ([.society-knowledge-quick], earthlike
+dawn, 200 NPCs, seed 7):
+
+  year | living NPCs | keepers counted | keepers LIVING | module output/yr
+     5 |         200 |               6 |              6 | 0.348
+    10 |         197 |               6 |              5 | 0.294
+    15 |         189 |               6 |              5 | 0.294
+    20 |         172 |               6 |              4 | 0.240
+
+The module's published production tracks the LIVING keeper count exactly (0.348 for 6,
+0.294 for 5, 0.240 for 4 — each matching (keepers x 0.2 x 0.4 + 1.5e-6 x pop) x 0.68 to
+four decimals). There is no wiring loss and no calibration mystery: the formula is
+right, and the input is shrinking.
+
+THE CAUSE: the tracked NPC layer dies off (~1.4%/yr: 200 -> 172 living in twenty
+years) and is NEVER REPLACED, while the cohort population grows 21,127 -> 126,616.
+Occupations persist on dead records because significant_npcs is append-only, so the
+corps LOOKS intact (6 keepers at every sample) while the living corps drains to zero.
+By year ~300 knowledge production is the diffuse population term alone (~0.05/yr), and
+era 1's 3,830 threshold becomes unreachable.
+
+WHY THE OLD BASELINE "WORKED": before the F3 liveness filter the module summed every
+NPC with a knowledge occupation regardless of status. Those six elder records kept
+producing for 12,000 years after the men died. THAT is what reached Modern @ year
+12,114 in the RC entry — the climb was powered by corpses. The filter is correct (the
+dead do not do research); it exposed a gap that was hidden behind it.
+
+So the stall now has a real cause, but it is a MODELLING GAP, not a world outcome:
+127,000 people exist and none of them can become a scholar, because the simulation
+only ever tracks the original 200 individuals and has no promotion path from the
+cohorts into that layer. Nothing starved and no limit was hit.
+
+TWO GROUNDED FIXES (design call, not a bug fix):
+(a) RECOMMENDED — scale knowledge to the cohort specialist stratum. subsistence already
+    computes a real, conserved specialist share (~14% of population) and the cohorts are
+    where the masses live by architecture. Knowledge then comes from the scholars among
+    the 127k, with tracked NPCs as individual-level flavour. No new machinery, and the
+    engine sits on a stock that grows with the society.
+(b) Wire NPC promotion: on the death of a tracked individual, promote a replacement from
+    the cohorts, holding the tracked layer proportional to population (the lod_system
+    promotion concept). More general, but architectural — it touches every
+    individual-level subsystem, and deserves its own milestone.
+
+F7 REMAINS BLOCKED ON PURPOSE. Thresholds must not move until the knowledge engine runs
+on a stock that grows; tuning the pacing dials against a corps that is dying by
+construction would bake the defect into the calibration permanently — a curve that
+reaches modernity on schedule and means nothing.
