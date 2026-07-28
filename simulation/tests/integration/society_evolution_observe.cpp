@@ -119,15 +119,19 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
         float prev_k = 0.0f;
         uint32_t prev_year = 0;
         for (const auto& s : series) {
-            if (s.era > prev_era) {
+            // EVERY era change, not just advances: a civilisation that rises, falls
+            // back and climbs again is the behaviour under study, and printing only
+            // `era > prev_era` made the falls invisible.
+            if (s.era != prev_era) {
                 const uint32_t dy = s.year - prev_year;
                 const float dk = s.knowledge - prev_k;
                 const double urban_pct =
                     s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
                 std::printf(
-                    "  era %2d  @ year %5u  (+%4u yrs, knowledge %.0f, +%.2f/yr, pop %.0f, "
+                    "  %s era %2d  @ year %5u  (+%4u yrs, knowledge %.0f, %+.2f/yr, pop %.0f, "
                     "spec %.0f%%, urban %.0f%%, capital/head %.0f, gini %.2f)\n",
-                    s.era, s.year, dy, s.knowledge, dy > 0 ? dk / dy : 0.0f, s.total_population,
+                    s.era > prev_era ? "RISE" : "FALL", s.era, s.year, dy, s.knowledge,
+                    dy > 0 ? dk / dy : 0.0f, s.total_population,
                     s.specialist_fraction * 100.0, urban_pct, s.productive_capital_per_head,
                     s.capital_gini);
                 prev_era = s.era;
