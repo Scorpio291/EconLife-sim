@@ -9,7 +9,11 @@
 //   econlife_emergence_tests "[.society-observe]"
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <algorithm>
 #include <cstdio>
+
+#include "core/world_gen/world_class.h"  // hazard_mortality_from_settings
 
 #include "tests/integration/society_evolution_harness.h"
 
@@ -191,6 +195,7 @@ TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
     orch.finalize_registration();
     ThreadPool pool(1);
 
+    double last_level = 0.0;
     std::printf("\n=== WHO PRODUCES KNOWLEDGE (earthlike dawn) ===\n");
     std::printf("  year | surplus | occupied | knowledge-keepers | knowledge\n");
     for (uint32_t y = 0; y <= kYears; ++y) {
@@ -216,9 +221,35 @@ TEST_CASE("society observe: who actually produces knowledge (mechanism audit)",
                     ++counted;
                 }
             }
-            std::printf("  %5u |  %.3f  | %8u | %8u (out %.1f) | %9.1f\n", y,
-                        counted > 0 ? surplus / counted : 0.0, occupied, keepers, keeper_output,
-                        static_cast<double>(world.technology.knowledge_level));
+            // Recompute the module's own terms here so the PUBLISHED year-over-year
+            // change can be compared against what the formula says it should be. A
+            // gap between them is a wiring fault; agreement means the rate is a
+            // calibration question.
+            const double pop_total = [&] {
+                double t = 0.0;
+                for (const auto& p : world.provinces)
+                    if (p.cohort_stats)
+                        t += static_cast<double>(p.cohort_stats->total_population);
+                return t;
+            }();
+            const double avg_surplus = counted > 0 ? surplus / counted : 1.0;
+            const float world_hazard = hazard_mortality_from_settings(world.hazard_settings);
+            const double scarcity = std::clamp(1.0 - avg_surplus, 0.0, 1.0);
+            const double pressure =
+                std::min(0.35 + 0.6 * std::max(0.0, static_cast<double>(world_hazard) - 0.45) +
+                             1.4 * scarcity,
+                         3.0);
+            const double specialist_term = keeper_output * 0.4;
+            const double pop_term = 1.5e-6 * pop_total;
+            const double predicted = (specialist_term + pop_term) * pressure;
+            const double actual = static_cast<double>(world.technology.knowledge_level) - last_level;
+            std::printf(
+                "  %5u |  %.3f  | %8u | %8u (out %.1f) | %9.1f | pop %8.0f | pressure %.2f | "
+                "predicted/yr %.4f | actual/yr %.4f\n",
+                y, avg_surplus, occupied, keepers, keeper_output,
+                static_cast<double>(world.technology.knowledge_level), pop_total, pressure,
+                predicted, y == 0 ? 0.0 : actual / 50.0);
+            last_level = static_cast<double>(world.technology.knowledge_level);
         }
         for (uint32_t t = 0; t < 365; ++t)
             orch.execute_tick(world, pool);
