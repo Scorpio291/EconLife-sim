@@ -1997,3 +1997,47 @@ worn at 3%/yr), the delta plumbing, the era-catalog columns and the tests all st
 place; only the shipped thresholds are zeroed pending that decision. The unit tests are
 now self-contained (they write their own gated eras.csv) so they keep proving the gate
 regardless of what the shipped data is calibrated to.
+
+### Rise and fall: the law is in, but nothing in the world can trigger it yet
+
+Design direction: civilisations rise, build grand works and perish, repeatedly, creeping
+forward. Implemented (see commits): a society carries only what its learned stratum and
+institutions sustain and forgets the excess (~2%/yr); writing is the ratchet (retention
+scales elder 0.2 -> scribe 0.6 -> scholar 1.0), so a literate society keeps far more
+through a collapse; an era is LOST when knowledge falls below what was needed to enter
+it (hysteresis 0.75); apply_deltas no longer refuses backward era transitions. Four
+unit tests pin it, including a dark age going negative and a recovered society
+re-climbing the era it lost.
+
+MEASURED, and this is a NEGATIVE RESULT worth recording: across all four spectrum
+worlds, ZERO falls. Every world rises monotonically to era 8 (garden 1,964; earthlike
+1,909; barren 4,473). The fall mechanism never fires.
+
+WHY: nothing in the current model can durably break a growing society. Population rises
+21,127 -> 5.7M without a single sustained reversal, surplus never stays below 1, so the
+learned stratum only ever grows and sustainable knowledge always exceeds holdings. The
+shocks that exist are survivable by construction:
+  - famine is buffered by the granary and outrun by a food ceiling that only ever RISES
+    (knowledge_productivity_max 26x);
+  - epidemics are mortality blips against a population growing several %/yr;
+  - war kills at levy scale (<=10% of a province) and destroys grain, NOT works;
+  - secession fragments polities but touches neither knowledge nor capital.
+
+The missing ingredient is that the CARRYING CEILING CANNOT FALL. Knowledge raises it;
+nothing lowers it. Rome's soil exhaustion, Maya deforestation and drought, Easter
+Island — the historical collapses are ceiling collapses, and a society that has grown
+to fill its ceiling has no slack when the ceiling drops. Candidate mechanisms, all with
+existing hooks in the world model:
+  1. soil exhaustion under intensive farming (Province.soil_health already exists and is
+     already read by production);
+  2. deforestation as the forest is converted (geography.forest_coverage is already a
+     natural-capital term in subsistence);
+  3. capital destruction on conquest — warfare already has a carry-limited sack with an
+     explicit burn sink, so extending it from grain to works is the same pattern;
+  4. epidemic severity scaling harder with the urban density the climb now produces
+     (urban hits 99% by era 4 — plague in dense cities is the obvious pressure).
+
+Until at least one of those lands, "rise and fall" is a law with no trigger: correct in
+the unit tests, invisible in history. Recorded rather than tuned — making the fall fire
+by weakening the food ceiling or strengthening a shock ARBITRARILY would be the exact
+magic rail the doctrine forbids; the ceiling has to be able to fall for REASONS.
