@@ -236,6 +236,11 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     RegionDelta rd{};
     rd.region_id = prov.region_id;
     rd.subsistence_surplus_replacement = growth_surplus;
+    // Publish the freed stratum itself, not just the food ratio. This is the share of
+    // real people the harvest does not need on the land — the pool that scholarship,
+    // crafts and trade are drawn from. Consumers (knowledge) must scale with the
+    // POPULATION that can be spared, not with a fixed sample of tracked individuals.
+    rd.specialist_fraction_replacement = specialist_fraction;
     rd.food_store_replacement = new_store;
     // Absolute haulable grain surplus (output beyond bare need) — the grain available
     // to move/feed non-farmers, consumed by grain_logistics (the ox-cart, §3.5).
@@ -364,6 +369,7 @@ void SubsistenceModule::execute(const WorldState& state, DeltaBuffer& delta) {
         rd.region_id = state.provinces[i].region_id;
         rd.subsistence_surplus_replacement = 1.0f;  // neutral: "fed"
         rd.grain_surplus_replacement = 0.0f;        // no commons surplus to haul
+        rd.specialist_fraction_replacement = 0.0f;  // the commons stratum is gone
         delta.region_deltas.push_back(rd);
     }
     commons_state_dirty_ = false;

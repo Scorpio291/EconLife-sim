@@ -604,6 +604,17 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         v = 10.0f;
                     cs.subsistence_surplus_ratio = v;
                 }
+                if (d.specialist_fraction_replacement.has_value()) {
+                    // Replacement; recomputed each tick by subsistence from the
+                    // population the harvest does NOT need on the land. A share of
+                    // real people, so it lives in [0, 1] by construction.
+                    float v = *d.specialist_fraction_replacement;
+                    if (!(v >= 0.0f))
+                        v = 0.0f;
+                    if (v > 1.0f)
+                        v = 1.0f;
+                    cs.specialist_fraction = v;
+                }
                 if (d.food_store_replacement.has_value()) {
                     // Replacement; the subsistence module folds the year's net food
                     // into the granary and writes the new (clamped) stock here.

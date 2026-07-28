@@ -256,6 +256,9 @@ struct RegionDelta {
     std::optional<float> flood_modifier_delta;    // additive; conditions.flood_modifier (->1.0)
     std::optional<float>
         subsistence_surplus_replacement;  // replacement; cohort_stats->subsistence_surplus_ratio
+    std::optional<float>
+        specialist_fraction_replacement;  // replacement; cohort_stats->specialist_fraction
+                                          // (share of population freed from farming)
                                           // (commons food production / need this tick)
     std::optional<float>
         food_store_replacement;  // replacement; cohort_stats->food_store (granary stock,

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/rng/deterministic_rng.h"
 #include "core/world_gen/era_catalog.h"
 #include "core/world_gen/occupation_catalog.h"
 #include "core/world_gen/world_class.h"
@@ -29,30 +30,42 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     if (era == nullptr || !regime_active(era->economic_regime))
         return;
 
-    // Dedicated knowledge work: sum over scholar/scribe/elder livelihoods.
-    double specialist_term = 0.0;
-    for (const auto& npc : state.significant_npcs) {
-        // Only the LIVING AND PRESENT produce knowledge. significant_npcs is
-        // append-only — the dead are retained for forensic and memory references and
-        // their occupation is never cleared — so an unfiltered sum ratcheted upward
-        // with the cumulative death toll and paced the era clock off corpses rather
-        // than off the living scholar corps.
-        //
-        // The test is "not dead, fled or imprisoned", NOT "status == active":
-        // NPCStatus::waiting means "alive and present, chose inaction this tick"
-        // (npc.h), which is where most of a dawn population sits, and excluding it
-        // zeroed knowledge production on every world — no era ever advanced. This sum
-        // is an ANNUAL aggregate over a scholar corps, so a scholar idle on the tick
-        // the year happens to be sampled still did a year's work.
-        if (npc.status == NPCStatus::dead || npc.status == NPCStatus::fled ||
-            npc.status == NPCStatus::imprisoned)
-            continue;
-        if (npc.occupation == 0)
-            continue;
-        const OccupationDefinition* o = state.occupation_catalog.by_index(npc.occupation);
-        if (o && o->knowledge_output > 0.0f)
-            specialist_term += static_cast<double>(o->knowledge_output);
+    // WHO ADVANCES A SOCIETY: a SHARE OF THE POPULATION, not a handful of tracked
+    // individuals. The food surplus frees a stratum from the land (subsistence
+    // publishes it as cohort_stats->specialist_fraction — real people, computed as
+    // population minus the farmers the harvest needs), and a few percent of that
+    // stratum are the knowledge-keepers: elders, then scribes, then scholars as the
+    // eras allow. Their number therefore grows with the population and with the
+    // surplus, which is why history accelerates as societies get larger and better fed.
+    //
+    // This replaced a sum over significant_npcs' occupations. That sum was a fixed
+    // ~200-person sample: its members aged and died with nothing to replace them, so
+    // the living corps drained to zero within a century and the climb died with it
+    // (it had only ever "worked" because dead NPCs kept producing — occupations
+    // persist on dead records). A stratum of the living population cannot die out
+    // while the population lives.
+    //
+    // Per-worker output is era-gated by the occupation catalog: the best
+    // knowledge-bearing livelihood the era has unlocked (elder 0.2 at the dawn,
+    // scribe 0.6 with writing, scholar 1.0 with formal scholarship).
+    float per_worker_output = 0.0f;
+    for (uint16_t i = 1;; ++i) {
+        const OccupationDefinition* o = state.occupation_catalog.by_index(i);
+        if (o == nullptr)
+            break;
+        if (o->knowledge_output > 0.0f && o->min_era <= state.technology.current_era)
+            per_worker_output = std::max(per_worker_output, o->knowledge_output);
     }
+
+    double knowledge_workers = 0.0;
+    for (const auto& p : state.provinces) {
+        if (!p.cohort_stats)
+            continue;
+        const double pop = static_cast<double>(p.cohort_stats->total_population);
+        const double freed = static_cast<double>(p.cohort_stats->specialist_fraction);
+        knowledge_workers += pop * freed * static_cast<double>(cfg_.learned_share_of_specialists);
+    }
+    double specialist_term = knowledge_workers * static_cast<double>(per_worker_output);
     specialist_term *= static_cast<double>(cfg_.production_scalar);
 
     // Adversity drives invention (Boserup intensification + the Deathworlders premise):
@@ -88,6 +101,54 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     production *= static_cast<double>(
         state.tech_effects_for_era(state.technology.current_era).knowledge_mult);
 
+    // EXCEPTIONAL INDIVIDUALS — the Socrates/Newton/Einstein term. Ordinary knowledge
+    // work is incremental; rare minds make LEAPS. The chance one arises in a given year
+    // scales with how many people are doing knowledge work (more minds, more chances,
+    // which is why geniuses cluster in large literate societies), and arrives as a
+    // physical first-arrival probability p = 1 - exp(-rate) — never a flat die roll.
+    //
+    // A leap is worth genius_leap_years of the society's ORDINARY output, so it scales
+    // with the civilisation that produced it: a great mind in a small oral culture moves
+    // less absolute knowledge than one in a literate empire, while being equally
+    // era-defining relative to its peers. Seeded by YEAR so the draw is stable at any
+    // tick resolution and reproducible.
+    const uint32_t year = state.current_tick / kTicksPerYear;
+    double leap = 0.0;
+    uint32_t leap_npc_id = 0;
+    if (knowledge_workers > 0.0 && production > 0.0 && cfg_.genius_rate_per_worker_year > 0.0f) {
+        const double rate =
+            static_cast<double>(cfg_.genius_rate_per_worker_year) * knowledge_workers;
+        const double p_leap = 1.0 - std::exp(-rate);
+        DeterministicRNG genius_rng(state.world_seed ^
+                                    (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^
+                                    0x9E17A5ull);
+        if (static_cast<double>(genius_rng.next_float()) < p_leap) {
+            leap = production * static_cast<double>(cfg_.genius_leap_years);
+            // Attribute it to a LIVING tracked individual when there is one — the leap
+            // belongs to a named person, not to an anonymous aggregate. Deterministic
+            // pick: the lowest-id living knowledge-keeper, else the lowest-id living
+            // adult. The leap itself comes from the learned population, so it still
+            // happens when the tracked layer holds nobody suitable.
+            for (const auto& npc : state.significant_npcs) {
+                const bool gone = npc.status == NPCStatus::dead ||
+                                  npc.status == NPCStatus::fled ||
+                                  npc.status == NPCStatus::imprisoned;
+                if (gone)
+                    continue;
+                const OccupationDefinition* o =
+                    npc.occupation != 0 ? state.occupation_catalog.by_index(npc.occupation) : nullptr;
+                const bool keeper = o != nullptr && o->knowledge_output > 0.0f;
+                if (keeper) {
+                    leap_npc_id = npc.id;
+                    break;
+                }
+                if (leap_npc_id == 0)
+                    leap_npc_id = npc.id;  // fallback: any living tracked person
+            }
+        }
+    }
+    production += leap;
+
     const float level = state.technology.knowledge_level;
     const double decay = static_cast<double>(cfg_.decay_per_year) * static_cast<double>(level);
     const float net = static_cast<float>(production - decay);
@@ -106,6 +167,23 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
     if (td.knowledge_delta.has_value() || td.new_era.has_value())
         delta.technology_deltas.push_back(td);
+
+    // Record the leap on the person who made it, so a named individual is visibly
+    // responsible for it in the historical record rather than it appearing as an
+    // unexplained jump in the aggregate.
+    if (leap > 0.0 && leap_npc_id != 0) {
+        NPCDelta nd{};
+        nd.npc_id = leap_npc_id;
+        MemoryEntry m{};
+        m.tick_timestamp = state.current_tick;
+        m.type = MemoryType::event;
+        m.subject_id = leap_npc_id;
+        m.emotional_weight = 1.0f;  // the defining achievement of a life
+        m.decay = 0.0f;             // a discovery is not forgotten
+        m.is_actionable = false;
+        nd.new_memory_entry = m;
+        delta.npc_deltas.push_back(nd);
+    }
 }
 
 }  // namespace econlife

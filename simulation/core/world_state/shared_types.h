@@ -316,6 +316,13 @@ struct RegionCohortStats {
     // per-capita food, capped at total_population), published by grain_logistics —
     // the aggregate medieval town economy (river hubs grow towns; stranded inland
     // stays rural). Transient (recomputed each tick; not persisted).
+    // Share of the population NOT working the land — the stratum the food surplus
+    // frees (published by subsistence, which computes it from population minus the
+    // farmers the harvest needs, ceilinged by the regime). A real located stratum of
+    // people, not a sample: the learned/knowledge-keeping share is drawn from it, so
+    // a society's capacity to advance scales with the people it can spare.
+    float specialist_fraction = 0.0f;
+
     float urban_population = 0.0f;
 
     // Granary: the province's stored food (a conserved, located resource). The

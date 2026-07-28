@@ -669,7 +669,39 @@ struct KnowledgeConfig {
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
     std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
                                                "feudal",      "mercantile", "industrial"};
-    float production_scalar = 0.4f;  // knowledge/year per unit of scholar knowledge_output
+    // Knowledge per year per unit of knowledge-worker output.
+    //
+    // Calibrated against the real Neolithic span. A dawn earthlike society holds
+    // ~21k people at the subsistence regime's 0.15 freed-stratum ceiling, so
+    // knowledge_workers = pop x 0.15 x learned_share(0.03) = pop x 0.0045, and at
+    // elder output 0.2 with pressure 0.68 the annual rate is pop x 6.12e-4 x scalar.
+    // Population roughly doubles across the era (21k -> ~40k), so integrating over
+    // ~6,700 years at an average ~30k people: 3,830 = 6,700 x 18.4 x scalar gives
+    // scalar ~= 0.031.
+    //
+    // It was 0.4 when production came from a fixed sample of ~6 tracked individuals;
+    // the driver is now the learned share of the whole population, which is ~50x
+    // larger and GROWS. History accelerating as populations grow and institutions
+    // improve (elder 0.2 -> scribe 0.6 -> scholar 1.0) is the intended behaviour, not
+    // something the thresholds should have to fake.
+    float production_scalar = 0.030f;
+
+    // Share of the freed (non-farming) stratum who are knowledge-keepers: priests,
+    // elders, scribes, scholars. The rest of the stratum are artisans, builders,
+    // traders, soldiers and servants. A few percent is the historical order for
+    // pre-modern literate/learned classes.
+    float learned_share_of_specialists = 0.03f;
+
+    // --- Exceptional individuals (the Newton/Einstein/Socrates term) ---
+    // Rare minds make discrete LEAPS, not incremental gains. The chance of one arising
+    // scales with the number of people doing knowledge work (more minds, more chances),
+    // and arrives as a physical first-arrival probability 1 - exp(-rate).
+    float genius_rate_per_worker_year = 2.0e-5f;  // per knowledge-worker per year
+    // A leap is worth this many years of the society's ORDINARY knowledge output, so it
+    // scales with the civilisation that produced it: a Newton in a small oral culture
+    // moves less absolute knowledge than one in a literate empire, but both are
+    // era-defining relative to their peers.
+    float genius_leap_years = 30.0f;
     // Annual attrition. Civilizational knowledge is CUMULATIVE — embodied in surviving
     // people, practices and (later) writing, it is essentially never lost on historical
     // timescales (dark-age regression is a rare exception, out of V1 scope). Zero here:
