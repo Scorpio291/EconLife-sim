@@ -2156,3 +2156,27 @@ Also note the F7 pass undershot as predicted (era 2 at 3,101 on garden vs a 6,70
 Neolithic target) — but that is now entangled with the collapses, so thresholds should
 not be iterated again until the ratchet exists, or the calibration will be fitting to a
 transient.
+
+### R1A landed: records slow the fall but cannot survive a 2,400-year dark age
+
+Measured effect of codified knowledge: the fall from era 4 to era 3 now takes 496 years
+(was 296) and forgetting runs at -39/yr (was -67/yr) — the corpus arrests roughly 40% of
+the loss. But the floor is unchanged at ~554 and the peaks are identical (73,426 then
+73,284), so the limit cycle survives.
+
+The arithmetic explains it. Our dark ages last ~2,400 years; at the 1%/yr record loss
+rate that is e^-24, i.e. total annihilation of any corpus. That loss rate is NOT wrong —
+~90% of classical Latin literature was lost over the 400 years 500-900 CE, about
+0.6%/yr — the problem is that our dark ages are six times longer than real ones.
+
+They are that long because the COLLAPSE IS TOO DEEP: population falls 2.1M -> 120K, a
+94% crash, and rebuilding from 120K takes millennia. The western Roman collapse lost
+perhaps 50-75% with the countryside persisting, and the Carolingian revival came
+300-400 years later — which is why monastic copying could carry the corpus across it.
+
+So the ratchet is correctly built and blocked upstream. The fix is the next roadmap
+items, which reduce collapse depth: 2C specialist inertia (the stratum currently
+evaporates 17% -> 0% in ONE TICK, which is what makes the crash instant and total) and
+2A/2B the wage valve and urban graveyard (population overshoots with no braking). Do not
+compensate by making records more durable — that would be curing a symptom of collapse
+depth with a knowledge dial.
