@@ -7,6 +7,7 @@
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
+#include "core/world_state/apply_deltas.h"
 #include "modules/subsistence/subsistence_module.h"
 
 using namespace econlife;
@@ -371,4 +372,69 @@ TEST_CASE("chronic hazards: predators (waning) and atmosphere (planetary) cut fo
                WithinAbs(1.0f - cfg.atmosphere_cap_penalty, 1e-4f));
     CHECK(SubsistenceModule::atmosphere_ceiling_factor(1.0f, cfg) <
           SubsistenceModule::atmosphere_ceiling_factor(0.3f, cfg));
+}
+
+// ===========================================================================
+// THE LAND WEARS OUT — the only channel that can lower the carrying ceiling.
+//
+// Knowledge only ever raises the ceiling, so without this a society can never
+// overshoot its land and history is a one-way ramp: measured across all four
+// spectrum worlds, zero civilisations ever fell. Continuous cropping strips
+// nutrients faster than they return; fallow and lighter pressure rebuild them.
+// Rome's grain provinces, the Maya lowlands and Easter Island are the cases.
+// ===========================================================================
+
+TEST_CASE("soil: worn-out land feeds fewer people", "[subsistence][tier2][soil]") {
+    // The feedback that makes a fall possible at all: fertility multiplies the FARMED
+    // part of natural capital, so degraded land lowers the ceiling. Forage and
+    // fisheries are untouched by tillage, so a ruined field does not empty the woods.
+    Province p = make_province(0, /*ag=*/0.8f, /*population=*/1000);
+    SubsistenceConfig cfg{};
+    const float pristine = SubsistenceModule::natural_capital_of(p, cfg, 1.0f);
+    const float worn = SubsistenceModule::natural_capital_of(p, cfg, 0.4f);
+    const float dead = SubsistenceModule::natural_capital_of(p, cfg, 0.0f);
+    CHECK(worn < pristine);
+    CHECK(dead < worn);
+    // The land is ruined, not the world: forage and fisheries remain.
+    CHECK(dead > 0.0f);
+    CHECK_THAT(dead, WithinAbs(cfg.weight_forest_forage * p.geography.forest_coverage, 1e-4f));
+}
+
+TEST_CASE("soil: a society that mines its land loses fertility, one that lives within it recovers",
+          "[subsistence][tier2][soil]") {
+    // The balance itself, over a run of years. A province packed far beyond what its
+    // land renews strips fertility; the same province left with a small population
+    // rebuilds it. Both directions are the same law with the sign of one comparison.
+    auto run_years = [](uint32_t population, float starting_soil, uint32_t years) {
+        WorldState w{};
+        w.world_seed = 5;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 1;
+        w.hazard_settings.seasonality = 0.0f;  // isolate soil from harvest-failure noise
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, population));
+        w.provinces[0].cohort_stats->soil_health = starting_soil;
+        rebuild_npc_indices(w);
+
+        SubsistenceModule mod;
+        for (uint32_t y = 1; y <= years; ++y) {
+            w.current_tick = y * kTicksPerYear;
+            DeltaBuffer d{};
+            mod.execute_province(0, w, d);
+            apply_deltas(w, d);
+        }
+        return w.provinces[0].cohort_stats->soil_health;
+    };
+
+    // Packed onto the land: fertility falls.
+    const float mined = run_years(/*population=*/400000, /*starting_soil=*/1.0f, /*years=*/60);
+    CHECK(mined < 1.0f);
+
+    // Thinly settled on damaged land: it comes back.
+    const float rested = run_years(/*population=*/200, /*starting_soil=*/0.5f, /*years=*/60);
+    CHECK(rested > 0.5f);
+
+    // And recovery is slower than ruin — collapses are quick, healing is not.
+    const float ruin = 1.0f - mined;
+    const float healing = rested - 0.5f;
+    CHECK(ruin > healing);
 }

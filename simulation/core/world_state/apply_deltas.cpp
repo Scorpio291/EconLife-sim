@@ -615,6 +615,17 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         v = 1.0f;
                     cs.specialist_fraction = v;
                 }
+                if (d.soil_health_delta.has_value()) {
+                    // Additive. Bounded to [0, 1] by DEFINITION — it is a fraction of
+                    // pristine fertility, not a tuning band: land cannot be more than
+                    // untouched or less than dead.
+                    float v = safe_add(cs.soil_health, *d.soil_health_delta);
+                    if (!(v >= 0.0f))
+                        v = 0.0f;
+                    if (v > 1.0f)
+                        v = 1.0f;
+                    cs.soil_health = v;
+                }
                 if (d.productive_capital_delta.has_value()) {
                     // Additive: investment out of surplus minus the year's wear. A
                     // real stock, so it cannot go negative (you cannot un-build past

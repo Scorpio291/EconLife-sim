@@ -639,6 +639,32 @@ struct SubsistenceConfig {
     // that gate annually on the constant (warfare, knowledge, population_aging) and
     // modules that use this field (subsistence, grain_logistics) must agree, or the
     // granary fills on one calendar while armies eat on another.
+    // --- The land wears out (the one thing that can lower the ceiling) ---
+    // Knowledge only ever RAISES the carrying ceiling, so without this a society can
+    // never overshoot its land and history is a one-way ramp. Continuous cropping
+    // strips nutrients faster than they return; fallow and lighter pressure rebuild
+    // them. Every historical collapse of the kind worth simulating — Rome's grain
+    // provinces, the Maya lowlands, Easter Island — is a ceiling collapse.
+    //
+    // The land's SUSTAINABLE yield rises with technique, but SUB-PROPORTIONALLY to what
+    // technique lets you extract: better ploughs and irrigation raise the harvest
+    // faster than they replace nutrients. That gap is soil mining, and it is why
+    // intensification is dangerous rather than free. Modelled as sqrt(technique), so a
+    // 26x ceiling gain buys only ~5x more sustainable yield.
+    // The SHARE of the land's unimproved maximum yield that it renews indefinitely.
+    // Working it at 55% of what it could give with unlimited hands is sustainable;
+    // pressing beyond that mines the nutrients. A thinly-settled province sits far
+    // under this and heals; one grown into its land sits above it and strips.
+    float sustainable_yield_per_capital = 0.55f;
+    // Fraction of remaining fertility lost per year at DOUBLE the sustainable harvest.
+    // ~1.5%/yr means a society mining its land at 2x loses a third of its fertility in
+    // a lifetime — the order of the Mesopotamian salinisation record.
+    float soil_degradation_per_year = 0.015f;
+    // Recovery toward pristine when the land is worked at or under what it renews.
+    // Slower than the damage: nutrients return over decades, which is why collapses
+    // are quick and recoveries are not.
+    float soil_recovery_per_year = 0.004f;
+
     // --- Productive capital: the capacity to USE what is known ---
     // Knowing how to make bronze is not the Bronze Age; having the smelters, the ore
     // trade and the smiths is. A society invests part of its food surplus in tools,

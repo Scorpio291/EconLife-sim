@@ -323,6 +323,14 @@ struct RegionCohortStats {
     // a society's capacity to advance scales with the people it can spare.
     float specialist_fraction = 0.0f;
 
+    // Fertility of the land the commons works, as a fraction of pristine (1.0 = never
+    // worked out). A REAL stock: continuous cropping strips nutrients faster than they
+    // return, fallow and low pressure let them rebuild. This is the one thing that can
+    // make the carrying ceiling FALL — knowledge only ever raises it — and it is why
+    // societies that grow into their land and keep pressing it collapse. Rome's grain
+    // provinces and the Maya lowlands are the cases.
+    float soil_health = 1.0f;
+
     // Productive capital the province has BUILT: tools, ploughs, granaries, kilns,
     // cleared and drained land, workshops, roads. A real accumulated stock, not a
     // signal — it is invested out of the food surplus at a physical rate and wears

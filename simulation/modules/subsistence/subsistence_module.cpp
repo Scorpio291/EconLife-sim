@@ -124,7 +124,7 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float working_fraction = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
 
     // Natural capital the population can draw food from this tick.
-    const float natural_capital = natural_capital_of(prov, cfg_);
+    const float natural_capital = natural_capital_of(prov, cfg_, cs.soil_health);
 
     // Knowledge raises the land's carrying capacity (better technique) — the escape
     // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.
@@ -262,6 +262,36 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         const float investment = surplus_food * cfg_.capital_investment_share;
         const float wear = cs.productive_capital * cfg_.capital_depreciation_per_year;
         rd.productive_capital_delta = investment - wear;
+
+        // THE LAND WEARS OUT. What the land renews indefinitely rises with technique,
+        // but only as its SQUARE ROOT: better ploughs and irrigation raise the harvest
+        // far faster than they replace nutrients, and that gap is soil mining. A
+        // society that grows into its land and keeps pressing strips fertility; one
+        // working at or under what the land renews lets it rebuild, slowly.
+        //
+        // This is the only channel that can lower the carrying ceiling, and so the only
+        // way a society can overshoot and fall rather than climb forever.
+        const float chronic = chronic_ceiling_factors(K, tech_food_factor, state.hazard_settings,
+                                                      cfg_) *
+                              harvest_factor;
+        // Expressed against the land's UNIMPROVED maximum yield (ceiling_per_capital_unit
+        // x natural capital), not raw natural capital — the two differ by three orders
+        // of magnitude, and comparing the harvest to the latter made even a handful of
+        // people read as mining the land.
+        const float sustainable_output = cfg_.sustainable_yield_per_capital *
+                                         cfg_.ceiling_per_capital_unit * natural_capital *
+                                         std::sqrt(std::max(1.0f, chronic));
+        if (sustainable_output > 0.0f) {
+            const float pressure_ratio = output / sustainable_output;
+            if (pressure_ratio > 1.0f) {
+                // Mining the land: lose a share of what fertility remains.
+                rd.soil_health_delta =
+                    -cfg_.soil_degradation_per_year * (pressure_ratio - 1.0f) * cs.soil_health;
+            } else {
+                // Working within its renewal: nutrients return toward pristine.
+                rd.soil_health_delta = cfg_.soil_recovery_per_year * (1.0f - cs.soil_health);
+            }
+        }
     }
     province_delta.region_deltas.push_back(rd);
 

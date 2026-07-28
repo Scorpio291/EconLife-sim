@@ -57,9 +57,16 @@ class SubsistenceModule : public ITickModule {
     // Shared with entry materialization (one law). Pure/static. Defined inline:
     // core/world_gen/premarket_genesis.cpp runs the SAME law, and core must not
     // need module object code to link.
-    static float natural_capital_of(const Province& province, const SubsistenceConfig& cfg) {
-        return cfg.weight_agricultural_productivity * province.agricultural_productivity +
-               cfg.weight_arable_land * province.geography.arable_land_fraction +
+    // `soil_health` is the fraction of pristine fertility the worked land retains
+    // (cohort_stats->soil_health). It scales the FARMED portion of natural capital —
+    // worn-out land grows less — while forage and fisheries are untouched by tillage.
+    // This is the channel through which the carrying ceiling can FALL; without it
+    // knowledge only ever raises it and no society can overshoot its land.
+    static float natural_capital_of(const Province& province, const SubsistenceConfig& cfg,
+                                    float soil_health = 1.0f) {
+        const float soil = std::clamp(soil_health, 0.0f, 1.0f);
+        return soil * (cfg.weight_agricultural_productivity * province.agricultural_productivity +
+                       cfg.weight_arable_land * province.geography.arable_land_fraction) +
                cfg.weight_forest_forage * province.geography.forest_coverage +
                cfg.weight_fisheries * province.fisheries.current_stock;
     }
