@@ -1881,3 +1881,23 @@ F7 REMAINS BLOCKED ON PURPOSE. Thresholds must not move until the knowledge engi
 on a stock that grows; tuning the pacing dials against a corps that is dying by
 construction would bake the defect into the calibration permanently — a curve that
 reaches modernity on schedule and means nothing.
+
+### Quantitative confirmation (300-year run)
+
+The long-horizon audit closes it numerically. From year ~100 onward the published rate
+equals the DIFFUSE POPULATION TERM ALONE (1.5e-6 x pop x pressure 0.68), while a naive
+count of keeper records predicts 0.35-0.49:
+
+  year |    pop | pop-term x pressure | actual/yr | naive predicted/yr
+   100 | 32,546 |              0.0332 |    0.0325 |             0.3596
+   200 | 46,802 |              0.0477 |    0.0442 |             0.4285
+   300 | 55,318 |              0.0564 |    0.0549 |             0.4916
+
+(The few-percent residual is because actual/yr is a 50-year backward average while the
+population grew across the window.) The living scholar corps therefore contributes
+EXACTLY ZERO from about year 100: every elder is dead, and the 6-8 "keepers" a
+status-blind count still sees are corpses holding an occupation field.
+
+Three independent confirmations of the same cause: the living-keeper column, the
+in-place module probe (its output matches the LIVING count to four decimals), and this
+long-horizon rate matching the population term alone.
