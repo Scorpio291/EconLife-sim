@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <memory>
 
@@ -146,75 +147,70 @@ TEST_CASE("knowledge: era gating raises what a knowledge-keeper produces",
     CHECK(scholarship > writing);
 }
 
-TEST_CASE("knowledge: a genius leap is discrete, attributed, and deterministic",
+TEST_CASE("knowledge: a genius is one person, however large the society",
           "[knowledge][tier1][genius]") {
-    // Rare minds make leaps rather than increments. With a large learned population
-    // the per-year arrival probability is high enough to observe, and the leap is
-    // worth genius_leap_years of ordinary output — so a leap year produces far more
-    // than a quiet one, and the same seed and year always give the same outcome.
-    KnowledgeModule mod;
-    double quiet = 0.0;
-    double leap = 0.0;
-    uint32_t leap_year = 0;
-    for (uint32_t year = 1; year <= 40 && leap == 0.0; ++year) {
-        WorldState w = make_world(/*era=*/4, 2000000, 0.20f, 0.0f, /*n_tracked=*/4);
-        w.current_tick = year * 365u;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        double produced = 0.0;
-        for (const auto& td : d.technology_deltas)
-            if (td.knowledge_delta.has_value())
-                produced += static_cast<double>(*td.knowledge_delta);
-        // A leap year also credits a named individual.
-        bool attributed = false;
-        for (const auto& nd : d.npc_deltas)
-            if (nd.new_memory_entry.has_value())
-                attributed = true;
-        if (attributed) {
-            leap = produced;
-            leap_year = year;
-        } else {
-            quiet = produced;
-        }
-    }
-    REQUIRE(quiet > 0.0);
-    REQUIRE(leap > 0.0);       // a leap was observed within 40 years at this scale
-    CHECK(leap > quiet * 5.0);  // discrete jump, not an increment
+    // A leap is bounded by what a MIND can do — genius_equivalent_workers ordinary
+    // keepers for genius_leap_years at this era's per-worker output — so its absolute
+    // size does NOT depend on how many people the civilisation has. That makes a great
+    // mind era-defining in a small scholarly community and a modest share of a vast
+    // one, which is the historically right shape and stops leaps from dominating the
+    // late climb (an earlier form multiplied the society's TOTAL output, so one mind
+    // supplied thirty years of all its knowledge work).
+    KnowledgeConfig quiet_cfg{};
+    quiet_cfg.genius_rate_per_worker_year = 0.0f;  // no leaps: ordinary output only
+    KnowledgeConfig leap_cfg{};
+    leap_cfg.genius_rate_per_worker_year = 1.0f;  // a leap every year, for measurement
+    KnowledgeModule ordinary(quiet_cfg);
+    KnowledgeModule with_genius(leap_cfg);
 
-    // Deterministic: the same seed and year reproduce it exactly.
-    WorldState again = make_world(/*era=*/4, 2000000, 0.20f, 0.0f, /*n_tracked=*/4);
-    again.current_tick = leap_year * 365u;
-    DeltaBuffer d2{};
-    mod.execute(again, d2);
-    double repeat = 0.0;
-    for (const auto& td : d2.technology_deltas)
-        if (td.knowledge_delta.has_value())
-            repeat += static_cast<double>(*td.knowledge_delta);
-    CHECK(repeat == leap);
+    WorldState small = make_world(/*era=*/4, 20000, 0.15f, 0.0f, /*n_tracked=*/4);
+    WorldState vast = make_world(/*era=*/4, 2000000, 0.15f, 0.0f, /*n_tracked=*/4);
+
+    const double small_ordinary = produced_knowledge(ordinary, small);
+    const double vast_ordinary = produced_knowledge(ordinary, vast);
+    const double small_total = produced_knowledge(with_genius, small);
+    const double vast_total = produced_knowledge(with_genius, vast);
+
+    const double small_leap = small_total - small_ordinary;
+    const double vast_leap = vast_total - vast_ordinary;
+    REQUIRE(small_leap > 0.0);
+    REQUIRE(vast_leap > 0.0);
+    // The same person's contribution in both societies.
+    CHECK_THAT(small_leap, Catch::Matchers::WithinRel(vast_leap, 1e-4));
+    // Era-defining among few peers; a modest share among many.
+    CHECK(small_leap > small_ordinary * 5.0);
+    CHECK(vast_leap < vast_ordinary);
 }
 
-TEST_CASE("knowledge: a leap is credited to a LIVING person", "[knowledge][tier1][genius]") {
-    // The leap belongs to a named individual. If the tracked layer holds only the
-    // dead, the discovery still happens (it comes from the learned population) but
-    // no corpse is credited with it.
-    KnowledgeModule mod;
-    bool credited_living = false;
-    bool credited_dead = false;
-    for (uint32_t year = 1; year <= 40; ++year) {
-        WorldState w = make_world(/*era=*/4, 2000000, 0.20f, 0.0f, /*n_tracked=*/4);
-        w.current_tick = year * 365u;
-        w.significant_npcs[0].status = NPCStatus::dead;  // id 1 is gone
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        for (const auto& nd : d.npc_deltas) {
-            if (!nd.new_memory_entry.has_value())
-                continue;
-            if (nd.npc_id == 1u)
-                credited_dead = true;
-            else
-                credited_living = true;
-        }
-    }
-    CHECK(credited_living);
-    CHECK_FALSE(credited_dead);
+TEST_CASE("knowledge: a leap is deterministic and credited to a LIVING person",
+          "[knowledge][tier1][genius]") {
+    KnowledgeConfig cfg{};
+    cfg.genius_rate_per_worker_year = 1.0f;  // certain, so the draw is observable
+    KnowledgeModule mod(cfg);
+
+    WorldState w = make_world(/*era=*/4, 50000, 0.15f, 0.0f, /*n_tracked=*/4);
+    w.significant_npcs[0].status = NPCStatus::dead;  // id 1 is gone
+
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    uint32_t credited = 0;
+    for (const auto& nd : d.npc_deltas)
+        if (nd.new_memory_entry.has_value())
+            credited = nd.npc_id;
+    REQUIRE(credited != 0);       // a named person is on the record
+    CHECK(credited != 1u);        // never a corpse
+
+    // Same seed and year reproduce the same discovery exactly.
+    DeltaBuffer d2{};
+    KnowledgeModule again(cfg);
+    again.execute(w, d2);
+    double first = 0.0;
+    double second = 0.0;
+    for (const auto& td : d.technology_deltas)
+        if (td.knowledge_delta.has_value())
+            first += static_cast<double>(*td.knowledge_delta);
+    for (const auto& td : d2.technology_deltas)
+        if (td.knowledge_delta.has_value())
+            second += static_cast<double>(*td.knowledge_delta);
+    CHECK(first == second);
 }

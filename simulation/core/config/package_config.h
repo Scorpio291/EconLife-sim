@@ -697,11 +697,19 @@ struct KnowledgeConfig {
     // scales with the number of people doing knowledge work (more minds, more chances),
     // and arrives as a physical first-arrival probability 1 - exp(-rate).
     float genius_rate_per_worker_year = 2.0e-5f;  // per knowledge-worker per year
-    // A leap is worth this many years of the society's ORDINARY knowledge output, so it
-    // scales with the civilisation that produced it: a Newton in a small oral culture
-    // moves less absolute knowledge than one in a literate empire, but both are
-    // era-defining relative to their peers.
+    // What a leap is worth, in REAL units: one exceptional mind working for
+    // genius_leap_years, counted as if it were genius_equivalent_workers ordinary
+    // knowledge-keepers. So a leap is bounded by what a PERSON can do, lifted by the
+    // era's institutions (per-worker output rises elder -> scribe -> scholar) and by
+    // the accumulated tech multiplier — never by the size of the whole society.
+    //
+    // The earlier form multiplied the society's TOTAL annual output, which meant a
+    // single mind in a million-person civilisation contributed thirty years of all its
+    // knowledge work, and with ~15,000 knowledge workers the arrival probability
+    // reached ~26%/yr, so leaps supplied ~8x the ordinary rate and dominated the climb.
+    // A genius is one person, however brilliant.
     float genius_leap_years = 30.0f;
+    float genius_equivalent_workers = 250.0f;  // a great mind's output vs an ordinary keeper
     // Annual attrition. Civilizational knowledge is CUMULATIVE — embodied in surviving
     // people, practices and (later) writing, it is essentially never lost on historical
     // timescales (dark-age regression is a rare exception, out of V1 scope). Zero here:

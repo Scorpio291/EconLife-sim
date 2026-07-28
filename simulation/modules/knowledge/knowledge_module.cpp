@@ -107,11 +107,12 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // which is why geniuses cluster in large literate societies), and arrives as a
     // physical first-arrival probability p = 1 - exp(-rate) — never a flat die roll.
     //
-    // A leap is worth genius_leap_years of the society's ORDINARY output, so it scales
-    // with the civilisation that produced it: a great mind in a small oral culture moves
-    // less absolute knowledge than one in a literate empire, while being equally
-    // era-defining relative to its peers. Seeded by YEAR so the draw is stable at any
-    // tick resolution and reproducible.
+    // A leap is ONE MIND's work: genius_equivalent_workers ordinary keepers for
+    // genius_leap_years, at this era's per-worker output. It is therefore lifted by the
+    // era's institutions and by the accumulated tech multiplier, but NOT by the size of
+    // the society — a genius is one person however large the civilisation, so leaps
+    // matter enormously in a small scholarly community and are a smaller share of a
+    // vast one. Seeded by YEAR so the draw is stable at any tick resolution.
     const uint32_t year = state.current_tick / kTicksPerYear;
     double leap = 0.0;
     uint32_t leap_npc_id = 0;
@@ -123,7 +124,10 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                     (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^
                                     0x9E17A5ull);
         if (static_cast<double>(genius_rng.next_float()) < p_leap) {
-            leap = production * static_cast<double>(cfg_.genius_leap_years);
+            leap = static_cast<double>(cfg_.genius_equivalent_workers) *
+                   static_cast<double>(per_worker_output) *
+                   static_cast<double>(cfg_.production_scalar) *
+                   static_cast<double>(cfg_.genius_leap_years) * static_cast<double>(pressure);
             // Attribute it to a LIVING tracked individual when there is one — the leap
             // belongs to a named person, not to an anonymous aggregate. Deterministic
             // pick: the lowest-id living knowledge-keeper, else the lowest-id living
@@ -147,7 +151,8 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
         }
     }
-    production += leap;
+    production += leap * static_cast<double>(
+                             state.tech_effects_for_era(state.technology.current_era).knowledge_mult);
 
     const float level = state.technology.knowledge_level;
     const double decay = static_cast<double>(cfg_.decay_per_year) * static_cast<double>(level);
