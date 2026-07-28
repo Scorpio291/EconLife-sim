@@ -1901,3 +1901,61 @@ status-blind count still sees are corpses holding an occupation field.
 Three independent confirmations of the same cause: the living-keeper column, the
 in-place module probe (its output matches the LIVING count to four decimals), and this
 long-horizon rate matching the population term alone.
+
+---
+
+## 2026-07-28 — the knowledge engine now runs on the population (design ratified)
+
+Ratified design (owner's decision): "a percentage of the population should move a
+society forwards, as long as there is food surplus, and/or pressure to advance. Some
+named npcs can make leaps in knowledge and science, like Newton, Einstein and Socrates."
+Implemented; see the two commits. Mechanism summary:
+
+- subsistence now PUBLISHES the freed stratum (cohort_stats->specialist_fraction:
+  population minus the farmers the harvest needs, ceilinged by regime). Real located
+  people, single owner, replacing a signal that only existed as a local.
+- knowledge draws its workers from that stratum (learned_share_of_specialists = 3%:
+  elders/scribes/scholars; the rest are artisans, builders, traders). The corps
+  therefore scales with the living population and CANNOT die out while the population
+  lives — which is the defect it replaces.
+- Per-worker output stays era-gated by the occupation catalog (elder 0.2 -> scribe 0.6
+  -> scholar 1.0).
+- Boserup path unchanged: with NO freed stratum, pressure alone still advances a
+  society, slower. Surplus and/or pressure, as specified.
+- Exceptional individuals: arrival probability 1 - exp(-rate) with rate proportional to
+  the number of knowledge workers (great minds cluster where minds are many). A leap is
+  ONE MIND's work — genius_equivalent_workers (250) keepers for genius_leap_years (30)
+  at the era's per-worker output — so its absolute size does not depend on the size of
+  the society. Credited to a LIVING named individual via a memory entry.
+
+  (First cut made a leap worth 30 years of the society's TOTAL output; at ~15,000
+  knowledge workers the arrival probability hit ~26%/yr and leaps supplied ~8x the
+  ordinary rate. Newton did not do thirty years of all Europe's science. Bounding it cut
+  late-era rates 5-6x: 402,843/yr -> 49,261/yr at era 7.)
+
+MEASURED (earthlike, [.society-history]): every world now climbs to era 8, and the
+spectrum separates for MECHANICAL reasons — barren deathworld needs 3,935 years to
+leave the Neolithic against earthlike's 1,594, because thin land grows fewer people so
+fewer can be spared from the land. Garden 1,647; fertile deathworld fastest.
+
+REMAINING PACING GAP, and the honest diagnosis. Modern arrives ~1,900 vs the ~12,000
+target, and per-era durations collapse (1,594 / 172 / 37 / 29 / 48 / 14 / 15 years
+against real 6,700 / 2,100 / 650 / 1,050 / 950 / 300 / 250). The cause is NOT the
+knowledge law: it is a POSITIVE FEEDBACK LOOP with too much gain —
+
+  knowledge -> food ceiling (subsistence knowledge_productivity_max = 26x, halfsat
+  35,000) -> population (21,127 -> 2,712,613 on earthlike) -> more freed people ->
+  more knowledge workers -> knowledge
+
+Population rises 128x and the knowledge rate 36,000x across the arc, while real history
+accelerated ~27x. The loop is real (it IS the escape from the Malthusian trap) but its
+gain is unbalanced against the era thresholds, which span only 550x.
+
+NEXT (do NOT tune blind): the per-era rates above are exactly the inputs the RC method
+needs (threshold gap = measured rate x real duration), but because population now grows
+strongly WITHIN an era the fixed point is less stable than in RC, so expect 2-3
+iterations, each a ~10-minute [.society-history] run. The other lever is the loop gain
+itself (knowledge_productivity_max / halfsat), which is a MECHANISM constant and must
+stay defensible in real units — foraging (~0.1 person/km2) to modern agriculture
+(~100+/km2) is ~1000x over 12,000 years, so 26x through a saturating function is not
+obviously wrong and should be argued from land productivity, not fitted to the curve.
