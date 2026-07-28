@@ -752,7 +752,25 @@ struct KnowledgeConfig {
     // pre-modern literate/learned classes.
     float learned_share_of_specialists = 0.03f;
 
-    // --- Exceptional individuals (the Newton/Einstein/Socrates term) ---
+    // --- WRITTEN RECORDS: the ratchet across collapses ---
+    // Tacit knowledge dies with the learned stratum. Records do not. Historically it is
+    // ARTIFACTS that carry a civilisation across its own collapse — monastic copying
+    // after Rome, the Graeco-Arabic translation movement, Chinese imperial archives,
+    // clay tablets outlasting Sumer. Without this the simulation is a limit cycle:
+    // measured, every civilisation rebuilt to the same height and fell the same way
+    // because losing its scribes made it forget like a culture that never had writing.
+    //
+    // Writing exists once the era's best knowledge livelihood is a scribe or better
+    // (occupation knowledge_output at/above this). Elders keep an oral tradition; they
+    // cannot commit it to a durable medium.
+    float writing_output_threshold = 0.5f;
+    // Knowledge a scribe commits to records per year, per unit of their output. Copying
+    // by hand is slow: a scribe produces on the order of one substantial work a year.
+    float codify_rate_per_worker_year = 0.35f;
+    // Annual loss of the written corpus in normal keeping: damp, fire, neglect, reuse of
+    // parchment. ~1%/yr is the order for hand-copied manuscripts in scattered archives;
+    // the catastrophic losses come from sacking, which warfare applies separately.
+    float record_loss_per_year = 0.010f;
     // Rare minds make discrete LEAPS, not incremental gains. The chance of one arising
     // scales with the number of people doing knowledge work (more minds, more chances),
     // and arrives as a physical first-arrival probability 1 - exp(-rate).

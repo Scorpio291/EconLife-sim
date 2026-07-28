@@ -167,8 +167,19 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Writing is the ratchet: the per-worker term rises elder -> scribe -> scholar, so
     // a literate society keeps far more through a collapse than an oral one, and each
     // cycle of rise and fall can start higher than the last.
-    const double sustainable = knowledge_workers * static_cast<double>(per_worker_output) *
-                               static_cast<double>(cfg_.knowledge_sustained_per_output_unit);
+    const double stratum_sustains = knowledge_workers * static_cast<double>(per_worker_output) *
+                                    static_cast<double>(cfg_.knowledge_sustained_per_output_unit);
+
+    // WRITTEN RECORDS. What a society has committed to durable media does not die with
+    // the people who wrote it, so the corpus is a FLOOR under forgetting: a collapse can
+    // scatter the scholars and empty the cities without erasing the books. This is the
+    // ratchet — each cycle of rise and fall starts from what the last one wrote down.
+    double codified = 0.0;
+    for (const auto& p : state.provinces)
+        if (p.cohort_stats)
+            codified += static_cast<double>(p.cohort_stats->codified_knowledge);
+
+    const double sustainable = std::max(stratum_sustains, codified);
     const double unsustainable = std::max(0.0, static_cast<double>(level) - sustainable);
     const double forgetting = unsustainable * static_cast<double>(cfg_.forgetting_rate_per_year);
 
@@ -230,6 +241,49 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
     if (td.knowledge_delta.has_value() || td.new_era.has_value())
         delta.technology_deltas.push_back(td);
+
+    // SCRIBES AT WORK. Once an era has writing, the learned stratum commits part of what
+    // the society knows to records, and the existing corpus decays slowly in keeping.
+    // Copying is bounded by what is actually KNOWN — a scribe cannot write down more
+    // than the civilisation has — and by how many scribes there are to do it.
+    if (per_worker_output >= cfg_.writing_output_threshold) {
+        for (const auto& p : state.provinces) {
+            if (!p.cohort_stats)
+                continue;
+            const double pop = static_cast<double>(p.cohort_stats->total_population);
+            const double freed = static_cast<double>(p.cohort_stats->specialist_fraction);
+            const double local_keepers =
+                pop * freed * static_cast<double>(cfg_.learned_share_of_specialists);
+            const double held = static_cast<double>(p.cohort_stats->codified_knowledge);
+            const double copying =
+                local_keepers * static_cast<double>(per_worker_output) *
+                static_cast<double>(cfg_.codify_rate_per_worker_year);
+            // Cannot record what is not known: the province's corpus tends toward the
+            // society's living knowledge, never past it.
+            const double room = std::max(0.0, static_cast<double>(level) - held);
+            const double added = std::min(copying, room);
+            const double lost = held * static_cast<double>(cfg_.record_loss_per_year);
+            const float net_records = static_cast<float>(added - lost);
+            if (net_records != 0.0f) {
+                RegionDelta rd{};
+                rd.region_id = p.region_id;
+                rd.codified_knowledge_delta = net_records;
+                delta.region_deltas.push_back(rd);
+            }
+        }
+    } else {
+        // No writing: the corpus decays with nobody able to recopy it. An oral culture
+        // holding inherited records loses them.
+        for (const auto& p : state.provinces) {
+            if (!p.cohort_stats || p.cohort_stats->codified_knowledge <= 0.0f)
+                continue;
+            RegionDelta rd{};
+            rd.region_id = p.region_id;
+            rd.codified_knowledge_delta =
+                -p.cohort_stats->codified_knowledge * cfg_.record_loss_per_year;
+            delta.region_deltas.push_back(rd);
+        }
+    }
 
     // Record the leap on the person who made it, so a named individual is visibly
     // responsible for it in the historical record rather than it appearing as an

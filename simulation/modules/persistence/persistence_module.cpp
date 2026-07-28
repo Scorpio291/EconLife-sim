@@ -427,6 +427,14 @@ void write_province(ByteWriter& w, const Province& p) {
         w.write_float(p.cohort_stats->hardiness);
         // v24: granary food store (commons food economy).
         w.write_float(p.cohort_stats->food_store);
+        // v26: the commons stocks that carry a civilisation — the freed stratum, the
+        // capital it has built, the fertility of its land, and its written corpus.
+        // All four are real accumulated state; losing them on load would silently
+        // reset a society's entire material and intellectual inheritance.
+        w.write_float(p.cohort_stats->specialist_fraction);
+        w.write_float(p.cohort_stats->productive_capital);
+        w.write_float(p.cohort_stats->soil_health);
+        w.write_float(p.cohort_stats->codified_knowledge);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1298,6 +1306,15 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
         // v24: granary food store. Older saves default to 0 (no reserves).
         if (schema_ver >= 24u) {
             p.cohort_stats->food_store = r.read_float();
+        }
+        // v26: freed stratum, built capital, soil fertility, written corpus. Older
+        // saves default to 0 for the stocks and 1.0 for soil (pristine, set by the
+        // struct default) — the modules rebuild the derived ones on the next tick.
+        if (schema_ver >= 26u) {
+            p.cohort_stats->specialist_fraction = r.read_float();
+            p.cohort_stats->productive_capital = r.read_float();
+            p.cohort_stats->soil_health = r.read_float();
+            p.cohort_stats->codified_knowledge = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but

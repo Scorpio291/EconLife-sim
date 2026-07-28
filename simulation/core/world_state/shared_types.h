@@ -323,6 +323,17 @@ struct RegionCohortStats {
     // a society's capacity to advance scales with the people it can spare.
     float specialist_fraction = 0.0f;
 
+    // The province's WRITTEN CORPUS: knowledge committed to records that outlive the
+    // people who wrote them. Held per province because dispersion is what actually
+    // preserves knowledge — a single-copy text dies when one archive burns, while a
+    // work in many houses survives. Roughly 90% of classical Latin literature was lost
+    // between 500 and 900 CE; what survived did so by being copied widely.
+    //
+    // This is the RATCHET. Tacit knowledge dies with the learned stratum (see
+    // knowledge_module), but records do not, so each cycle of rise and fall can start
+    // from what the last one wrote down rather than from nothing.
+    float codified_knowledge = 0.0f;
+
     // Fertility of the land the commons works, as a fraction of pristine (1.0 = never
     // worked out). A REAL stock: continuous cropping strips nutrients faster than they
     // return, fallow and low pressure let them rebuild. This is the one thing that can

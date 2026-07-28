@@ -398,3 +398,83 @@ TEST_CASE("knowledge: a lost era can be climbed again (the ratchet)",
             advanced = true;
     CHECK(advanced);
 }
+
+// ===========================================================================
+// WRITTEN RECORDS — the ratchet across collapses.
+//
+// Tacit knowledge dies with the learned stratum; records do not. Historically it
+// is artifacts that carry a civilisation across its own collapse: monastic
+// copying after Rome, the Graeco-Arabic translations, clay tablets outlasting
+// Sumer. Without this the simulation is a limit cycle — measured, every
+// civilisation rebuilt to the same height and fell the same way, because losing
+// its scribes made it forget like a culture that never had writing.
+// ===========================================================================
+
+TEST_CASE("knowledge: a literate society writes its knowledge down",
+          "[knowledge][tier1][records]") {
+    // Era 4 has scholars, so the corpus grows toward what the society knows.
+    KnowledgeModule mod;
+    WorldState w = make_world(/*era=*/4, 200000, 0.15f, /*knowledge=*/5000.0f);
+    DeltaBuffer d{};
+    mod.execute(w, d);
+
+    float recorded = 0.0f;
+    for (const auto& rd : d.region_deltas)
+        if (rd.codified_knowledge_delta.has_value())
+            recorded += *rd.codified_knowledge_delta;
+    CHECK(recorded > 0.0f);
+}
+
+TEST_CASE("knowledge: an oral culture cannot write, and loses inherited records",
+          "[knowledge][tier1][records]") {
+    // Era 1 keeps an oral tradition (elders). A society at the dawn holding
+    // inherited records has nobody able to recopy them, so the corpus decays.
+    KnowledgeModule mod;
+    WorldState w = make_world(/*era=*/1, 200000, 0.15f, /*knowledge=*/5000.0f);
+    w.provinces[0].cohort_stats->codified_knowledge = 1000.0f;
+    DeltaBuffer d{};
+    mod.execute(w, d);
+
+    float change = 0.0f;
+    for (const auto& rd : d.region_deltas)
+        if (rd.codified_knowledge_delta.has_value())
+            change += *rd.codified_knowledge_delta;
+    CHECK(change < 0.0f);
+}
+
+TEST_CASE("knowledge: records are a FLOOR under forgetting — the ratchet",
+          "[knowledge][tier1][records]") {
+    // The same collapsed society, with and without a written corpus. Without
+    // records it forgets catastrophically; with them the books survive the
+    // scholars and the loss is arrested.
+    KnowledgeModule mod;
+
+    WorldState oral = make_world(/*era=*/4, 2000, 0.02f, /*knowledge=*/20000.0f);
+    const double without_records = produced_knowledge(mod, oral);
+
+    WorldState archived = make_world(/*era=*/4, 2000, 0.02f, /*knowledge=*/20000.0f);
+    archived.provinces[0].cohort_stats->codified_knowledge = 20000.0f;
+    const double with_records = produced_knowledge(mod, archived);
+
+    CHECK(without_records < 0.0);          // a dark age
+    CHECK(with_records > without_records);  // the corpus arrests it
+    // With a corpus covering everything the society knew, nothing is forgotten.
+    CHECK(with_records >= 0.0);
+}
+
+TEST_CASE("knowledge: a society cannot write down more than it knows",
+          "[knowledge][tier1][records]") {
+    // Conservation of a sort: the corpus tends toward living knowledge and never
+    // past it, so records cannot manufacture knowledge a civilisation never had.
+    KnowledgeModule mod;
+    WorldState w = make_world(/*era=*/4, 200000, 0.15f, /*knowledge=*/100.0f);
+    w.provinces[0].cohort_stats->codified_knowledge = 100.0f;  // already complete
+    DeltaBuffer d{};
+    mod.execute(w, d);
+
+    float change = 0.0f;
+    for (const auto& rd : d.region_deltas)
+        if (rd.codified_knowledge_delta.has_value())
+            change += *rd.codified_knowledge_delta;
+    CHECK(change <= 0.0f);  // nothing left to copy; only decay
+}

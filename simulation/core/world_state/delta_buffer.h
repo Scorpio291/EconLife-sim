@@ -265,6 +265,9 @@ struct RegionDelta {
     std::optional<float>
         soil_health_delta;  // additive; cohort_stats->soil_health (working the land out,
                             // or letting it recover)
+    std::optional<float>
+        codified_knowledge_delta;  // additive; cohort_stats->codified_knowledge
+                                   // (scribes copying, records decaying or burning)
                                           // (commons food production / need this tick)
     std::optional<float>
         food_store_replacement;  // replacement; cohort_stats->food_store (granary stock,

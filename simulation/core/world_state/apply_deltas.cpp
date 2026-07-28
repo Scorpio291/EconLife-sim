@@ -615,6 +615,13 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         v = 1.0f;
                     cs.specialist_fraction = v;
                 }
+                if (d.codified_knowledge_delta.has_value()) {
+                    // Additive. Floored at 0 — a corpus cannot be less than nothing.
+                    // No upper bound: what a society writes down is limited by what it
+                    // knows and how many scribes it can feed, not by a cap here.
+                    cs.codified_knowledge =
+                        std::max(0.0f, safe_add(cs.codified_knowledge, *d.codified_knowledge_delta));
+                }
                 if (d.soil_health_delta.has_value()) {
                     // Additive. Bounded to [0, 1] by DEFINITION — it is a fraction of
                     // pristine fertility, not a tuning band: land cannot be more than
