@@ -1,11 +1,11 @@
 era_index,era_key,display_name,start_year,economic_regime,is_default_entry,v1_in_scope,knowledge_to_advance,capital_to_advance
-1,neolithic,Neolithic,-10000,subsistence,0,1,3830,0
-2,bronze_age,Bronze Age,-3300,barter,0,1,12740,0
-3,iron_age,Iron Age,-1200,coinage,0,1,19650,0
-4,classical,Classical,-550,money,0,1,49250,0
-5,medieval,Medieval,500,feudal,0,1,253000,0
-6,early_modern,Early Modern,1450,mercantile,0,1,892000,0
-7,industrial,Industrial,1750,industrial,0,1,2117000,0
+1,neolithic,Neolithic,-10000,subsistence,0,1,750,0
+2,bronze_age,Bronze Age,-3300,barter,0,1,36219,0
+3,iron_age,Iron Age,-1200,coinage,0,1,72950,0
+4,classical,Classical,-550,money,0,1,444882,0
+5,medieval,Medieval,500,feudal,0,1,2602388,0
+6,early_modern,Early Modern,1450,mercantile,0,1,13536956,0
+7,industrial,Industrial,1750,industrial,0,1,29194556,0
 8,turn_of_millennium,Turn of the Millennium,2000,modern,1,1,0,0
 9,disruption,Disruption,2007,modern,0,1,0,0
 10,acceleration,Acceleration,2013,modern,0,1,0,0
