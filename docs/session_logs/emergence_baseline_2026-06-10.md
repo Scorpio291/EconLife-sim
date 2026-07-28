@@ -2077,3 +2077,39 @@ Note the escape is late (era 2 at 11,500 vs ~6,700 real) and soil ends very degr
 (0.009) while population explodes on the era-2 food technology — the post-escape
 dynamics need their own look. But the qualitative shape — repeated collapse, partial
 retention, slow net progress — is now emergent rather than absent.
+
+### The spectrum after the land laws — the Earth anchor lands at 11,938
+
+All four worlds now escape the Neolithic and reach the modern era, with UNCHANGED era
+thresholds (the RC calibration was never re-tuned for this):
+
+  GARDEN (bounty 1.80)             modern @  7,337
+  FERTILE DEATHWORLD (1.20)        modern @  8,891
+  BARREN DEATHWORLD (0.40)         modern @ 10,482
+  EARTHLIKE (1.00)                 modern @ 11,938   <- real Earth ~12,000 (0.5% off)
+
+The anchor is essentially exact and was NOT fitted: it fell out of soil degradation,
+knowledge retention and the Boserup escape interacting. Earthlike is the SLOWEST world
+because it has no edge — moderate bounty, moderate hazard — while a garden has slack
+against degradation and a deathworld's hazard drives the adversity term in the
+knowledge engine. An unremarkable world taking the standard twelve millennia is a
+defensible reading.
+
+Note this REVERSES an earlier documented property: gardens used to stagnate ("abundance
+breeds stagnation", era 2 Developing). With land that can be worn out, abundance is
+slack against degradation, so gardens are now fastest. That is mechanically coherent
+but it contradicts the older design note, which should be reconciled deliberately
+rather than left as two conflicting claims in the docs.
+
+REMAINING GAP — per-era distribution, not the total. Earthlike durations against real:
+  Neolithic 11,069 (real 6,700), Bronze 530 (2,100), Iron 123 (650), Classical 85
+  (1,050), Medieval 92 (950), Early-modern 19 (300), Industrial 20 (250).
+The total is right and the shape is wrong: the dawn is too long and everything after it
+collapses to decades. That IS the threshold calibration (F7) and it is now measurable
+against a settled mechanism — which is what was missing every previous time it was
+attempted.
+
+Still no ERA-level falls: the collapses observed (knowledge 57 -> 1, 125 -> 7) happen
+inside era 1, where there is no lower era to fall to. Era regression will only show once
+a society collapses from era 2+, which needs shocks that bite AFTER the escape —
+conquest destroying works being the obvious candidate.
