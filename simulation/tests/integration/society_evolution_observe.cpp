@@ -88,9 +88,10 @@ TEST_CASE("society observe: knowledge/population trace (calibration)",
         if (s.year % 500 == 0) {
             const double urban_pct =
                 s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
-            std::printf("  %5u | %6.0f |  %.3f  | %4.0f%% | %4.0f%% | %9.0f | %2d\n", s.year,
-                        s.total_population, s.mean_surplus, s.specialist_fraction * 100.0, urban_pct,
-                        s.knowledge, s.era);
+            std::printf("  %5u | %6.0f |  %.3f  | %4.0f%% | %4.0f%% | %9.0f | %2d | soil %.3f\n",
+                        s.year, s.total_population, s.mean_surplus,
+                        s.specialist_fraction * 100.0, urban_pct, s.knowledge, s.era,
+                        s.soil_health);
         }
     }
 }

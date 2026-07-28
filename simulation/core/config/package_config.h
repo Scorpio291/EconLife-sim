@@ -657,13 +657,14 @@ struct SubsistenceConfig {
     // far under it and heals; one grown into its land sits above it and strips.
     //
     // Traditional agriculture without external fertiliser sustains roughly 30-60% of
-    // the intensive maximum indefinitely (fallow rotation, manure, legumes), so the
-    // defensible range is wide. Set at the top of it because the EARTH-ANALOGUE world
-    // is the calibration anchor and must reproduce Earth: at 0.55 the earthlike world
-    // never left the Neolithic in 13,000 years, which contradicts the one history we
-    // actually know. Choosing within a physically defensible band so the Earth case
-    // matches Earth is calibration; inventing a floor to rescue it would be a rail.
-    float sustainable_yield_per_capital = 0.65f;
+    // the intensive maximum indefinitely (fallow rotation, manure, legumes).
+    //
+    // Raised to 0.65 once to try to rescue the earthlike world, which stalls in the
+    // Neolithic; it changed almost nothing (garden 6,386 -> 6,519 years, fertile
+    // deathworld 11,598 -> 11,644, earthlike still stuck) and was reverted. The stall
+    // is NOT a marginal threshold — there is a cliff between bounty 1.0 and 1.2 — so
+    // it wants a mechanism, not a nudge. Recorded so nobody repeats the experiment.
+    float sustainable_yield_per_capital = 0.55f;
     // Fraction of remaining fertility lost per year at DOUBLE the sustainable harvest.
     // ~1.5%/yr means a society mining its land at 2x loses a third of its fertility in
     // a lifetime — the order of the Mesopotamian salinisation record.
