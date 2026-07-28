@@ -3,6 +3,7 @@
 
 #include <memory>
 
+#include "core/world_gen/era_catalog.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/knowledge/knowledge_module.h"
@@ -213,4 +214,82 @@ TEST_CASE("knowledge: a leap is deterministic and credited to a LIVING person",
         if (td.knowledge_delta.has_value())
             second += static_cast<double>(*td.knowledge_delta);
     CHECK(first == second);
+}
+
+// ===========================================================================
+// KNOWING AND BUILDING ARE TWO DIFFERENT THINGS.
+//
+// A society advances only when it both knows enough AND has built enough to use
+// what it knows. Knowledge is information: it can spike, and historically does.
+// Productive capital is matter and labour — accumulated out of a real food
+// surplus at a physical rate, and it wears out. This is why enormous modern
+// data output has not produced flying cars, and it is the natural limiter on
+// advancement speed.
+// ===========================================================================
+
+TEST_CASE("knowledge: knowing is not enough — an era needs the capacity to use it",
+          "[knowledge][tier1][capital]") {
+    KnowledgeModule mod;
+    const EraDefinition* era1 = nullptr;
+    {
+        EraCatalog cat;
+        cat.load_builtin_default();
+        era1 = cat.by_index(1);
+    }
+    REQUIRE(era1 != nullptr);
+    REQUIRE(era1->knowledge_to_advance > 0.0f);
+    REQUIRE(era1->capital_to_advance > 0.0f);
+
+    auto advanced = [&](float knowledge, float capital_per_head) {
+        WorldState w = make_world(/*era=*/1, 50000, 0.12f, knowledge);
+        w.provinces[0].cohort_stats->productive_capital = capital_per_head * 50000.0f;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        for (const auto& td : d.technology_deltas)
+            if (td.new_era.has_value())
+                return true;
+        return false;
+    };
+
+    const float knows = era1->knowledge_to_advance * 1.5f;
+    const float builds = era1->capital_to_advance * 1.5f;
+
+    // All the knowledge in the world and nothing built with it: no advance. This is
+    // the flying-car case — the data exists, the capacity does not.
+    CHECK_FALSE(advanced(knows * 100.0f, 0.0f));
+    // Plenty built but the society does not yet know what to do with it: no advance.
+    CHECK_FALSE(advanced(0.0f, builds));
+    // Both: the era turns.
+    CHECK(advanced(knows, builds));
+}
+
+TEST_CASE("knowledge: capital is a stock that must be built and maintained",
+          "[knowledge][tier1][capital]") {
+    // The limiter only works because capital cannot spike. It is invested out of the
+    // real surplus and wears out, so a society that stops producing a surplus stops
+    // advancing regardless of how much it knows. (Accumulation itself lives in
+    // subsistence; this pins that the GATE reads a per-head stock, so a bigger
+    // population needs proportionally more built, not the same absolute pile.)
+    KnowledgeModule mod;
+    EraCatalog cat;
+    cat.load_builtin_default();
+    const float need = cat.by_index(1)->capital_to_advance;
+    const float knows = cat.by_index(1)->knowledge_to_advance * 1.5f;
+
+    auto advanced_with = [&](uint32_t population, float total_capital) {
+        WorldState w = make_world(/*era=*/1, population, 0.12f, knows);
+        w.provinces[0].cohort_stats->productive_capital = total_capital;
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        for (const auto& td : d.technology_deltas)
+            if (td.new_era.has_value())
+                return true;
+        return false;
+    };
+
+    // The same absolute stock that carries a small society is spread too thin by a
+    // large one: capacity is per head.
+    const float stock = need * 20000.0f * 1.5f;
+    CHECK(advanced_with(20000, stock));
+    CHECK_FALSE(advanced_with(400000, stock));
 }

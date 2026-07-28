@@ -323,6 +323,14 @@ struct RegionCohortStats {
     // a society's capacity to advance scales with the people it can spare.
     float specialist_fraction = 0.0f;
 
+    // Productive capital the province has BUILT: tools, ploughs, granaries, kilns,
+    // cleared and drained land, workshops, roads. A real accumulated stock, not a
+    // signal — it is invested out of the food surplus at a physical rate and wears
+    // out every year. This is the difference between knowing something and being
+    // able to do it: knowledge can spike (information is cheap to copy) while the
+    // capacity to USE it can only be built. Era advancement gates on both.
+    float productive_capital = 0.0f;
+
     float urban_population = 0.0f;
 
     // Granary: the province's stored food (a conserved, located resource). The

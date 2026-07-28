@@ -1,18 +1,18 @@
-era_index,era_key,display_name,start_year,economic_regime,is_default_entry,v1_in_scope,knowledge_to_advance
-1,neolithic,Neolithic,-10000,subsistence,0,1,3830
-2,bronze_age,Bronze Age,-3300,barter,0,1,12740
-3,iron_age,Iron Age,-1200,coinage,0,1,19650
-4,classical,Classical,-550,money,0,1,49250
-5,medieval,Medieval,500,feudal,0,1,253000
-6,early_modern,Early Modern,1450,mercantile,0,1,892000
-7,industrial,Industrial,1750,industrial,0,1,2117000
-8,turn_of_millennium,Turn of the Millennium,2000,modern,1,1,0
-9,disruption,Disruption,2007,modern,0,1,0
-10,acceleration,Acceleration,2013,modern,0,1,0
-11,fracture,Fracture,2019,modern,0,1,0
-12,transition,Transition,2024,modern,0,1,0
-13,convergence,Convergence,2035,near_future,0,0,0
-14,reckoning,Reckoning,2050,near_future,0,0,0
-15,synthesis,Synthesis,2075,near_future,0,0,0
-16,expansion,Expansion,2100,space_age,0,0,0
-17,divergence,Divergence,2150,space_age,0,0,0
+era_index,era_key,display_name,start_year,economic_regime,is_default_entry,v1_in_scope,knowledge_to_advance,capital_to_advance
+1,neolithic,Neolithic,-10000,subsistence,0,1,3830,12
+2,bronze_age,Bronze Age,-3300,barter,0,1,12740,40
+3,iron_age,Iron Age,-1200,coinage,0,1,19650,90
+4,classical,Classical,-550,money,0,1,49250,200
+5,medieval,Medieval,500,feudal,0,1,253000,500
+6,early_modern,Early Modern,1450,mercantile,0,1,892000,1200
+7,industrial,Industrial,1750,industrial,0,1,2117000,3000
+8,turn_of_millennium,Turn of the Millennium,2000,modern,1,1,0,0
+9,disruption,Disruption,2007,modern,0,1,0,0
+10,acceleration,Acceleration,2013,modern,0,1,0,0
+11,fracture,Fracture,2019,modern,0,1,0,0
+12,transition,Transition,2024,modern,0,1,0,0
+13,convergence,Convergence,2035,near_future,0,0,0,0
+14,reckoning,Reckoning,2050,near_future,0,0,0,0
+15,synthesis,Synthesis,2075,near_future,0,0,0,0
+16,expansion,Expansion,2100,space_age,0,0,0,0
+17,divergence,Divergence,2150,space_age,0,0,0,0

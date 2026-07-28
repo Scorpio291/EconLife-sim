@@ -86,6 +86,14 @@ struct EraDefinition {
     bool v1_in_scope;              // true if this era is within V1 scope
     float knowledge_to_advance;    // accumulated knowledge needed to advance OUT of this era
                                    //   (0 = not knowledge-gated; advances by other triggers)
+    // Productive capital per head needed to advance OUT of this era: the tools,
+    // buildings, cleared land, kilns, mines and machines a society must actually have
+    // BUILT to use what it knows. Knowing how to make bronze is not the Bronze Age;
+    // having the smelters, the ore trade and the smiths is. Knowledge can spike —
+    // information is cheap to copy — but capital has to be accumulated out of real
+    // surplus at a physical rate and wears out, which is what keeps advancement
+    // honest. 0 = not capital-gated.
+    float capital_to_advance = 0.0f;
 };
 
 // ---------------------------------------------------------------------------

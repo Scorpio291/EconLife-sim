@@ -245,6 +245,24 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // Absolute haulable grain surplus (output beyond bare need) — the grain available
     // to move/feed non-farmers, consumed by grain_logistics (the ox-cart, §3.5).
     rd.grain_surplus_replacement = std::max(0.0f, output - need);
+
+    // PRODUCTIVE CAPITAL — the capacity to use what the society knows. Part of the
+    // real food surplus is spent building rather than eating: tools, ploughs,
+    // granaries, kilns, cleared and drained land, workshops. It wears out every year,
+    // so the stock only grows while the surplus keeps paying for it.
+    //
+    // This is the natural limiter on advancement. Knowledge is information and can
+    // spike; capital is matter and labour, accumulates only as fast as a real surplus
+    // allows, and decays. A society can know far more than it can build — which is why
+    // era advancement gates on BOTH (see knowledge_module).
+    //
+    // Annual cadence, same gate as the granary banking above.
+    if (annual) {
+        const float surplus_food = std::max(0.0f, output - need) * ticks_per_year;
+        const float investment = surplus_food * cfg_.capital_investment_share;
+        const float wear = cs.productive_capital * cfg_.capital_depreciation_per_year;
+        rd.productive_capital_delta = investment - wear;
+    }
     province_delta.region_deltas.push_back(rd);
 
     if (province_idx >= state.npc_indices_by_home_province.size())

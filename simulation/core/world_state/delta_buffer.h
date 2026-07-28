@@ -259,6 +259,9 @@ struct RegionDelta {
     std::optional<float>
         specialist_fraction_replacement;  // replacement; cohort_stats->specialist_fraction
                                           // (share of population freed from farming)
+    std::optional<float>
+        productive_capital_delta;  // additive; cohort_stats->productive_capital
+                                   // (investment out of surplus, minus wear)
                                           // (commons food production / need this tick)
     std::optional<float>
         food_store_replacement;  // replacement; cohort_stats->food_store (granary stock,

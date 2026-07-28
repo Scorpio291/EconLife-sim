@@ -162,9 +162,32 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     if (net != 0.0f)
         td.knowledge_delta = net;
 
-    // Era advancement: once accumulated knowledge clears this era's data-driven
-    // threshold, advance (forward-only; capped at the catalog's last era).
-    if (era->knowledge_to_advance > 0.0f && level >= era->knowledge_to_advance) {
+    // ERA ADVANCEMENT needs TWO things, and they are not the same thing.
+    //
+    // Knowing how to make bronze is not the Bronze Age; having the smelters, the ore
+    // trade and the smiths is. A society advances only when it BOTH knows enough
+    // (accumulated knowledge) AND has built enough to use what it knows (productive
+    // capital per head: tools, kilns, cleared land, workshops). Knowledge is
+    // information — it can spike, and historically does; capital is matter and labour,
+    // accumulated out of a real food surplus at a physical rate, and it wears out.
+    // A society can know far more than it can build, which is exactly why enormous
+    // modern data output has not produced flying cars.
+    //
+    // Both gates are data-driven per era (eras.csv). A zero threshold means that era
+    // is not gated on that axis.
+    double capital_stock = 0.0;
+    for (const auto& p : state.provinces)
+        if (p.cohort_stats)
+            capital_stock += static_cast<double>(p.cohort_stats->productive_capital);
+    const double capital_per_head =
+        total_population > 0.0 ? capital_stock / total_population : 0.0;
+
+    const bool knows_enough =
+        era->knowledge_to_advance <= 0.0f || level >= era->knowledge_to_advance;
+    const bool can_build_it =
+        era->capital_to_advance <= 0.0f || capital_per_head >= era->capital_to_advance;
+    if ((era->knowledge_to_advance > 0.0f || era->capital_to_advance > 0.0f) && knows_enough &&
+        can_build_it) {
         const uint8_t max_era = state.era_catalog.max_era();
         if (state.technology.current_era < max_era)
             td.new_era = static_cast<uint8_t>(state.technology.current_era + 1);

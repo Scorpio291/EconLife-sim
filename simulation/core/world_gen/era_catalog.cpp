@@ -103,6 +103,7 @@ bool EraCatalog::load_csv(const std::string& filepath) {
         e.is_default_entry = parse_bool(f[5]);
         e.v1_in_scope = parse_bool(f[6]);
         e.knowledge_to_advance = f.size() > 7 ? parse_f(f[7], 0.0f) : 0.0f;  // optional column
+        e.capital_to_advance = f.size() > 8 ? parse_f(f[8], 0.0f) : 0.0f;    // optional column
         if (e.index == 0 || e.index > MAX_ERA_CAPACITY)
             continue;  // out-of-range index: skip rather than corrupt the timeline
         loaded.push_back(std::move(e));
@@ -127,25 +128,26 @@ void EraCatalog::load_builtin_default() {
         bool def;
         bool v1;
         float knowledge;
+        float capital;
     };
     static const Row rows[] = {
-        {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 3830.0f},
-        {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 12740.0f},
-        {3, "iron_age", "Iron Age", -1200, "coinage", false, true, 19650.0f},
-        {4, "classical", "Classical", -550, "money", false, true, 49250.0f},
-        {5, "medieval", "Medieval", 500, "feudal", false, true, 253000.0f},
-        {6, "early_modern", "Early Modern", 1450, "mercantile", false, true, 892000.0f},
-        {7, "industrial", "Industrial", 1750, "industrial", false, true, 2117000.0f},
-        {8, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true, 0.0f},
-        {9, "disruption", "Disruption", 2007, "modern", false, true, 0.0f},
-        {10, "acceleration", "Acceleration", 2013, "modern", false, true, 0.0f},
-        {11, "fracture", "Fracture", 2019, "modern", false, true, 0.0f},
-        {12, "transition", "Transition", 2024, "modern", false, true, 0.0f},
-        {13, "convergence", "Convergence", 2035, "near_future", false, false, 0.0f},
-        {14, "reckoning", "Reckoning", 2050, "near_future", false, false, 0.0f},
-        {15, "synthesis", "Synthesis", 2075, "near_future", false, false, 0.0f},
-        {16, "expansion", "Expansion", 2100, "space_age", false, false, 0.0f},
-        {17, "divergence", "Divergence", 2150, "space_age", false, false, 0.0f},
+        {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 3830.0f, 12.0f},
+        {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 12740.0f, 40.0f},
+        {3, "iron_age", "Iron Age", -1200, "coinage", false, true, 19650.0f, 90.0f},
+        {4, "classical", "Classical", -550, "money", false, true, 49250.0f, 200.0f},
+        {5, "medieval", "Medieval", 500, "feudal", false, true, 253000.0f, 500.0f},
+        {6, "early_modern", "Early Modern", 1450, "mercantile", false, true, 892000.0f, 1200.0f},
+        {7, "industrial", "Industrial", 1750, "industrial", false, true, 2117000.0f, 3000.0f},
+        {8, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true, 0.0f, 0.0f},
+        {9, "disruption", "Disruption", 2007, "modern", false, true, 0.0f, 0.0f},
+        {10, "acceleration", "Acceleration", 2013, "modern", false, true, 0.0f, 0.0f},
+        {11, "fracture", "Fracture", 2019, "modern", false, true, 0.0f, 0.0f},
+        {12, "transition", "Transition", 2024, "modern", false, true, 0.0f, 0.0f},
+        {13, "convergence", "Convergence", 2035, "near_future", false, false, 0.0f, 0.0f},
+        {14, "reckoning", "Reckoning", 2050, "near_future", false, false, 0.0f, 0.0f},
+        {15, "synthesis", "Synthesis", 2075, "near_future", false, false, 0.0f, 0.0f},
+        {16, "expansion", "Expansion", 2100, "space_age", false, false, 0.0f, 0.0f},
+        {17, "divergence", "Divergence", 2150, "space_age", false, false, 0.0f, 0.0f},
     };
     eras_.clear();
     for (const auto& r : rows) {
@@ -158,6 +160,7 @@ void EraCatalog::load_builtin_default() {
         e.is_default_entry = r.def;
         e.v1_in_scope = r.v1;
         e.knowledge_to_advance = r.knowledge;
+        e.capital_to_advance = r.capital;
         eras_.push_back(std::move(e));
     }
 }

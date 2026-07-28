@@ -86,6 +86,10 @@ TEST_CASE("EraCatalog loads the base-game CSV matching the builtin default",
         // test stayed green.
         CHECK_THAT(a->knowledge_to_advance,
                    Catch::Matchers::WithinRel(b->knowledge_to_advance, 1e-6f));
+        // The MATERIAL gate is pacing surface too: a society advances only when it can
+        // build what it knows, so the two copies must agree on that as well.
+        CHECK_THAT(a->capital_to_advance,
+                   Catch::Matchers::WithinRel(b->capital_to_advance, 1e-6f));
     }
 }
 

@@ -615,6 +615,13 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         v = 1.0f;
                     cs.specialist_fraction = v;
                 }
+                if (d.productive_capital_delta.has_value()) {
+                    // Additive: investment out of surplus minus the year's wear. A
+                    // real stock, so it cannot go negative (you cannot un-build past
+                    // nothing); the floor is physical, not a behaviour cap.
+                    cs.productive_capital =
+                        std::max(0.0f, safe_add(cs.productive_capital, *d.productive_capital_delta));
+                }
                 if (d.food_store_replacement.has_value()) {
                     // Replacement; the subsistence module folds the year's net food
                     // into the granary and writes the new (clamped) stock here.

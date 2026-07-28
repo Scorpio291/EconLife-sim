@@ -639,6 +639,24 @@ struct SubsistenceConfig {
     // that gate annually on the constant (warfare, knowledge, population_aging) and
     // modules that use this field (subsistence, grain_logistics) must agree, or the
     // granary fills on one calendar while armies eat on another.
+    // --- Productive capital: the capacity to USE what is known ---
+    // Knowing how to make bronze is not the Bronze Age; having the smelters, the ore
+    // trade and the smiths is. A society invests part of its food surplus in tools,
+    // ploughs, granaries, kilns, cleared land and workshops, and that stock wears out.
+    // Unlike knowledge — which is information and can spike — capital accumulates only
+    // at the rate a real surplus allows, which is the natural limiter on how fast a
+    // society can actually advance.
+    //
+    // Investment share: the fraction of the food surplus above subsistence that goes
+    // into building rather than into more mouths or the granary. Pre-modern savings
+    // rates ran a few percent of output; 8% of the SURPLUS (not of total output) is a
+    // defensible order for a society that is feeding itself first.
+    float capital_investment_share = 0.08f;
+    // Annual wear. Pre-modern capital is short-lived: wooden tools, thatch, mud brick,
+    // cleared land reverting to scrub. ~3%/yr implies a ~33-year mean service life,
+    // which is the right order for hand tools and timber structures.
+    float capital_depreciation_per_year = 0.03f;
+
     uint32_t ticks_per_year = kTicksPerYear;  // for converting per-tick rates to annual stocks
 
     // Knowledge -> productivity (the Malthusian escape): accumulated knowledge (from
