@@ -134,7 +134,9 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     //      never met the plague. The stock that makes plague RECUR instead of blip.
     // v28: cohort_stats.asabiya — what a people can do together, forged at frontiers
     //      and decaying in the interior. The second oscillator.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 28);
+    // v29: cohort_stats.wage_reference — what a people is used to eating. Immiseration
+    //      is measured against this, which is what lets a society fall at all.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 29);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

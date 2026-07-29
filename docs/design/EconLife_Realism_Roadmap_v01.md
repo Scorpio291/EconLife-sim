@@ -23,15 +23,37 @@ trajectory — the procedure is sequential and bottom-up, and the reason is docu
 
 ### What is still open
 
-1. **The falls are shallow.** This is the main remaining gap and it is the one the design
-   brief cares most about ("the ability to rise and fail, again and again"). Every trigger
-   exists — PSI, plague recurrence, coal exhaustion, import dependence, asabiya cycling —
-   but measured, PSI peaks near 0.1 and bleeds ~0.05%/yr. Turchin's multiplicative form
-   REQUIRES its three legs to be elevated together, which is correct; with six provinces
-   and no stress propagation between them, that coincidence is too rare. The likely fix is
-   **stress contagion**: a collapsing province dragging down its trade partners, its
-   polity and its neighbours' asabiya. That is a design question rather than a listed
-   item, and it was deliberately not invented here.
+1. **Stress contagion LANDED 2026-07-28 (R5) — and the falls are still shallow, for a
+   deeper reason that is now identified.** Three changes went in, all about scope rather
+   than new forces:
+   - **Stress is the POLITY's, not the province's.** All three legs are computed over
+     polity aggregates and every member reads its state's index. **Peak PSI went from
+     ~0.1 to 1.49** — a fifteenfold rise — and factional deaths from nothing to 0.74%/yr.
+   - **Immiseration is measured against what people are USED TO** (`wage_reference`, a
+     generation-scale average, persisted at v29) rather than against subsistence. This
+     was the binding constraint: a population whose numbers track its food supply is never
+     ABSOLUTELY starving, so the mobilisation term was identically zero for the entire
+     12,000-year climb and the multiplicative index was zero with it. Turchin's variable
+     is the wage against trend; Davies' J-curve says revolutions follow reversals after
+     improvement, not steady poverty.
+   - **Refugees carry a collapse across borders**, conserved, only ever toward better-fed
+     reachable neighbours — so a province whose neighbours are all worse off starves in
+     place, and one that flees makes its neighbours' land carry more mouths.
+
+   **What it did not do: produce era regressions.** The stress is now large but it arrives
+   at the very END of the climb (coal exhaustion plus a population that has caught up),
+   where the run terminates at era 8. During the climb the surplus improves nearly
+   monotonically, so the wage stays at or above its reference and the mobilisation term
+   stays near zero.
+
+   **The reason is now clear, and it is not about stress at all: KNOWLEDGE IS GLOBAL.**
+   `technology.knowledge_level` is a single number for the whole world, so there is no
+   such thing as one civilisation falling while another rises — there is one civilisation
+   with six provinces. Every fall the record actually contains (the Bronze Age collapse,
+   Rome, the Maya, the Khmer) is a REGIONAL civilisation overshooting while others do not.
+   Making knowledge per-polity or per-culture-area, with diffusion between neighbours, is
+   the next real piece of work; the ratchet (R1A/R3E/R3F) and the political map (R3F) are
+   already in place to support it.
 2. **Perpetual legal persons** (Tier 4) — the corporation, the monastery, the guild
    endowment, so capital and archives survive a named owner's death. Needs an ownership
    model the commons arc does not have. See the Tier 4 note.

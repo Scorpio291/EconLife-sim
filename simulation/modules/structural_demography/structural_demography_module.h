@@ -57,27 +57,55 @@ class StructuralDemographyModule : public ITickModule {
 
     // Reads the stratum and the surplus subsistence publishes this tick, and publishes a
     // death fraction population_aging consumes in the same tick — so it must sit between
-    // them, exactly as warfare does.
-    std::vector<std::string_view> runs_after() const override { return {"subsistence"}; }
+    // them, exactly as warfare does. After warfare too, because the political map it
+    // draws is the unit this module measures stress over.
+    std::vector<std::string_view> runs_after() const override {
+        return {"subsistence", "warfare"};
+    }
     std::vector<std::string_view> runs_before() const override { return {"population_aging"}; }
 
-    bool is_province_parallel() const noexcept override { return true; }
+    // GLOBAL, not province-parallel (R5). A polity is one political unit and its stress is
+    // a property of the whole of it, not of each province separately; and refugees move
+    // BETWEEN provinces, which a province-parallel pass cannot express.
+    bool is_province_parallel() const noexcept override { return false; }
 
-    void execute_province(uint32_t province_idx, const WorldState& state,
-                          DeltaBuffer& province_delta) override;
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
     // --- Pure, testable laws ---
 
     bool regime_active(std::string_view regime) const;
 
-    // MASS MOBILISATION POTENTIAL. People who are hungry and young are the ones who
-    // march. `wage` is consumption over subsistence (1.0 = exactly fed), `youth_share`
-    // the fraction of the population not yet of working age. Zero for a well-fed
-    // population however young, and zero for a starving one with no young men.
-    static float mass_mobilisation(float wage, float youth_share) {
-        const float immiseration = std::max(0.0f, 1.0f - std::max(0.0f, wage));
+    // MASS MOBILISATION POTENTIAL. People who are getting poorer and young are the ones
+    // who march. `wage` is consumption over subsistence, `reference` what this people is
+    // USED TO — a generation-scale average — and `youth_share` the fraction not yet of
+    // working age.
+    //
+    // Measured against the REFERENCE rather than against subsistence, and that distinction
+    // decides whether a society can fall at all. A population whose numbers track its food
+    // supply is never absolutely starving: the wage valve sees to that, so against
+    // subsistence this term was exactly zero for an entire 12,000-year climb and the
+    // multiplicative index was zero with it. Turchin's variable is the real wage against
+    // trend, and Davies' J-curve is the standard finding — revolutions follow REVERSALS
+    // after improvement, not steady poverty. A people whose living standards have halved
+    // in fifty years is in exactly the condition that brings a state down, however well
+    // fed it would have looked to its own grandparents.
+    //
+    // Zero for a people getting no worse off however poor, and zero for a collapsing one
+    // with no young men. Pure/static.
+    static float mass_mobilisation(float wage, float reference, float youth_share) {
+        const float ref = std::max(1e-3f, reference);  // divide-by-zero sentinel
+        const float immiseration = std::clamp(1.0f - std::max(0.0f, wage) / ref, 0.0f, 1.0f);
         return immiseration * std::clamp(youth_share, 0.0f, 1.0f);
+    }
+
+    // One year of a people's sense of what is normal catching up with what it is actually
+    // getting. About a generation — which is how long anyone remembers being better off.
+    // Pure/static.
+    static float wage_reference_year(float reference, float wage,
+                                     const StructuralDemographyConfig& cfg) {
+        const float years = std::max(1.0f, cfg.wage_memory_years);
+        const float ref = std::max(1e-3f, reference);
+        return ref + (std::max(0.0f, wage) - ref) / years;
     }
 
     // ELITE MOBILISATION POTENTIAL — the overproduction itself. `held` is the
@@ -111,6 +139,21 @@ class StructuralDemographyModule : public ITickModule {
     // THE POLITICAL STRESS INDEX. Multiplicative: all three at once, or nothing.
     static float political_stress(float mmp, float emp, float sfd) {
         return std::max(0.0f, mmp) * std::max(0.0f, emp) * std::max(0.0f, sfd);
+    }
+
+    // REFUGEES (R5). The share of a province's people who leave in a year, given how far
+    // its food has failed. When the harvest fails, those who can walk do — the Migration
+    // Period, the Sea Peoples, the Irish famine, where roughly an eighth of the country
+    // left over five years.
+    //
+    // Zero for a fed province, rising with the shortfall. The caller applies the further
+    // and more important condition: people only go somewhere BETTER, so a province whose
+    // neighbours are all worse off keeps its people and starves in place. That is the
+    // historically correct reading — the Migration Period happened because there was
+    // somewhere to go. Pure/static.
+    static float flight_fraction(float surplus_ratio, const StructuralDemographyConfig& cfg) {
+        const float shortfall = std::clamp(1.0f - std::max(0.0f, surplus_ratio), 0.0f, 1.0f);
+        return std::max(0.0f, cfg.refugee_flight_rate_per_year) * shortfall;
     }
 
     // Annual death fraction from factional conflict at a given stress. A Poisson

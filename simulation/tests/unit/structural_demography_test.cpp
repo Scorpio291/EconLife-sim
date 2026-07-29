@@ -75,16 +75,49 @@ TEST_CASE("structural_demography: it takes all three at once, or nothing",
                WithinAbs(0.0f, 1e-9f));  // a solvent, trusted state absorbs the rest
 }
 
-TEST_CASE("structural_demography: the hungry and the young are who march",
-          "[structural_demography][psi]") {
-    // Immiseration alone is not mobilisation: it takes people with the years and the
-    // grievance together. A fed population contributes nothing however young it is.
-    CHECK(StructuralDemographyModule::mass_mobilisation(0.6f, 0.4f) >
-          StructuralDemographyModule::mass_mobilisation(0.9f, 0.4f));
-    CHECK(StructuralDemographyModule::mass_mobilisation(0.6f, 0.4f) >
-          StructuralDemographyModule::mass_mobilisation(0.6f, 0.1f));
-    CHECK_THAT(StructuralDemographyModule::mass_mobilisation(1.2f, 0.4f), WithinAbs(0.0f, 1e-9f));
-    CHECK_THAT(StructuralDemographyModule::mass_mobilisation(1.0f, 0.4f), WithinAbs(0.0f, 1e-9f));
+TEST_CASE("structural_demography: what mobilises people is getting POORER, not being poor",
+          "[structural_demography][psi][contagion]") {
+    // Turchin's variable is the real wage against trend, and Davies' J-curve is the
+    // standard finding: revolutions follow REVERSALS after improvement, not steady
+    // poverty. This distinction decides whether a society can fall at all — a population
+    // whose numbers track its food supply is never absolutely starving, so measured
+    // against subsistence this term was exactly zero for an entire 12,000-year climb and
+    // the multiplicative index was zero with it.
+    using SD = StructuralDemographyModule;
+
+    // A poor society that has always been poor is not mobilised. A rich one that has just
+    // halved its living standards is.
+    CHECK_THAT(SD::mass_mobilisation(/*wage=*/0.6f, /*reference=*/0.6f, 0.4f),
+               WithinAbs(0.0f, 1e-9f));
+    // Halved living standards, 40% of the population young: 0.5 x 0.4.
+    CHECK_THAT(SD::mass_mobilisation(/*wage=*/1.2f, /*reference=*/2.4f, 0.4f),
+               WithinAbs(0.2f, 1e-6f));
+
+    // Deeper reversals mobilise more, and it still takes young people to act on it.
+    CHECK(SD::mass_mobilisation(0.6f, 1.2f, 0.4f) > SD::mass_mobilisation(0.9f, 1.2f, 0.4f));
+    CHECK(SD::mass_mobilisation(0.6f, 1.2f, 0.4f) > SD::mass_mobilisation(0.6f, 1.2f, 0.1f));
+    // Getting BETTER off mobilises nobody, however poor in absolute terms.
+    CHECK_THAT(SD::mass_mobilisation(1.4f, 1.2f, 0.4f), WithinAbs(0.0f, 1e-9f));
+}
+
+TEST_CASE("structural_demography: what people expect catches up over a generation",
+          "[structural_demography][psi][contagion]") {
+    // About thirty years — which is how long anybody remembers being better off. Slow
+    // enough that a reversal registers as immiseration for decades, fast enough that a
+    // society which stays poor eventually stops rioting about it.
+    const auto c = cfg();
+    float ref = 2.0f;
+    int years = 0;
+    for (; years < 500; ++years) {
+        ref = StructuralDemographyModule::wage_reference_year(ref, /*wage=*/1.0f, c);
+        if (ref <= 1.1f)
+            break;
+    }
+    INFO("years for expectations to fall from 2.0 toward a wage of 1.0: " << years);
+    CHECK(years > 20);
+    CHECK(years < 200);
+    // And it moves toward the wage from below just as readily.
+    CHECK(StructuralDemographyModule::wage_reference_year(1.0f, 2.0f, c) > 1.0f);
 }
 
 TEST_CASE("structural_demography: elite overproduction is claimants per remaining place",
@@ -140,7 +173,7 @@ TEST_CASE("structural_demography: a society coming apart kills, eats and destabi
     WorldState w = society_coming_apart();
 
     DeltaBuffer d{};
-    mod.execute_province(0, w, d);
+    mod.execute(w, d);
     REQUIRE(d.region_deltas.size() == 1);
     const RegionDelta& rd = d.region_deltas[0];
 
@@ -162,7 +195,7 @@ TEST_CASE("structural_demography: retinues eat from the granary that is actually
                                   /*food_store=*/5.0e6f, /*trust=*/0.2f);
 
     DeltaBuffer d{};
-    mod.execute_province(0, w, d);
+    mod.execute(w, d);
     REQUIRE(d.region_deltas.size() == 1);
     REQUIRE(d.region_deltas[0].food_store_delta.has_value());
     const float drawn = -*d.region_deltas[0].food_store_delta;
@@ -183,7 +216,7 @@ TEST_CASE("structural_demography: a fed, united, solvent society is left alone",
                                   /*food_store=*/1.0e9f, /*trust=*/0.8f);
 
     DeltaBuffer d{};
-    mod.execute_province(0, w, d);
+    mod.execute(w, d);
     REQUIRE(d.region_deltas.size() == 1);
     const RegionDelta& rd = d.region_deltas[0];
     CHECK_THAT(rd.political_stress_replacement.value_or(-1.0f), WithinAbs(0.0f, 1e-9f));
@@ -192,12 +225,126 @@ TEST_CASE("structural_demography: a fed, united, solvent society is left alone",
     CHECK_FALSE(rd.food_store_delta.has_value());
 }
 
+TEST_CASE("structural_demography: stress is a property of the POLITY, not the province",
+          "[structural_demography][psi][contagion]") {
+    // A polity is one political unit. Rome's third-century crisis was not confined to a
+    // province and neither was the late Ming's, so the index is measured over the whole
+    // state: its pooled treasury, its combined stratum, the misery of all its people.
+    //
+    // This is also what makes a collapse deep rather than chronic. Measured per province
+    // in isolation the three legs almost never rose together — the multiplicative form
+    // correctly demands that they do — so structural collapse stayed a bleed of a
+    // twentieth of a percent a year and never ended anything.
+    StructuralDemographyModule mod;
+    WorldState w = stressed_world(/*wage=*/1.4f, /*held=*/0.10f, /*supported=*/0.10f,
+                                  /*food_store=*/1.0e9f, /*trust=*/0.8f);
+    // A second province in the SAME polity, in deep crisis.
+    Province p{};
+    p.id = 1;
+    p.region_id = 1;
+    p.community.institutional_trust = 0.1f;
+    p.conditions.stability_score = 0.4f;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 2000000;  // twice the comfortable one
+    p.cohort_stats->working_age_fraction = 0.6f;
+    p.cohort_stats->subsistence_surplus_ratio = 0.5f;
+    p.cohort_stats->specialist_fraction = 0.18f;
+    p.cohort_stats->supported_specialist_fraction = 0.01f;
+    p.cohort_stats->food_store = 0.0f;
+    p.cohort_stats->polity_id = 0;  // same state
+    w.provinces.push_back(std::move(p));
+
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    REQUIRE(d.region_deltas.size() == 2);
+
+    // The comfortable province is in a failing state, and is therefore itself in trouble
+    // — which is the whole point. A province cannot be serene inside a collapsing empire.
+    REQUIRE(d.region_deltas[0].political_stress_replacement.has_value());
+    REQUIRE(d.region_deltas[1].political_stress_replacement.has_value());
+    CHECK(*d.region_deltas[0].political_stress_replacement > 0.0f);
+    // Both members read the same state-wide stress.
+    CHECK_THAT(*d.region_deltas[0].political_stress_replacement,
+               WithinAbs(*d.region_deltas[1].political_stress_replacement, 1e-6f));
+}
+
+TEST_CASE("structural_demography: refugees leave for somewhere better, conserved",
+          "[structural_demography][psi][contagion]") {
+    // How a collapse crosses a border. When the food fails those who can walk do, and
+    // everywhere they arrive they are more mouths on somebody else's land — whose surplus
+    // falls under the weight, whose stress rises, and which begins exporting in turn.
+    StructuralDemographyModule mod;
+    WorldState w = stressed_world(/*wage=*/0.4f, /*held=*/0.10f, /*supported=*/0.02f,
+                                  /*food_store=*/0.0f, /*trust=*/0.3f);  // province 0: famine
+    Province p{};
+    p.id = 1;
+    p.region_id = 1;
+    p.community.institutional_trust = 0.8f;
+    p.conditions.stability_score = 0.8f;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 1000000;
+    p.cohort_stats->working_age_fraction = 0.6f;
+    p.cohort_stats->subsistence_surplus_ratio = 1.5f;  // fed: somewhere worth walking to
+    p.cohort_stats->food_store = 1.0e9f;
+    p.cohort_stats->polity_id = 1;
+    w.provinces.push_back(std::move(p));
+    // Link them both ways.
+    ProvinceLink a_to_b{};
+    a_to_b.neighbor_h3 = static_cast<H3Index>(0x2);
+    w.provinces[0].links.push_back(a_to_b);
+    w.provinces[0].h3_index = static_cast<H3Index>(0x1);
+    w.provinces[1].h3_index = static_cast<H3Index>(0x2);
+
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    REQUIRE(d.region_deltas.size() == 2);
+    REQUIRE(d.region_deltas[0].refugee_flow_replacement.has_value());
+    REQUIRE(d.region_deltas[1].refugee_flow_replacement.has_value());
+    const float out = *d.region_deltas[0].refugee_flow_replacement;
+    const float in = *d.region_deltas[1].refugee_flow_replacement;
+
+    CHECK(out < 0.0f);  // the starving province empties
+    CHECK(in > 0.0f);   // the fed one receives them
+    // Conserved: nobody is created or destroyed by walking.
+    CHECK_THAT(out + in, WithinAbs(0.0f, 1.0f));
+}
+
+TEST_CASE("structural_demography: with nowhere better to go, a province starves in place",
+          "[structural_demography][psi][contagion]") {
+    // The condition that matters as much as the flight itself. The Migration Period
+    // happened because there WAS somewhere to go; a province whose neighbours are all
+    // worse off keeps its people, and they die where they stand.
+    StructuralDemographyModule mod;
+    WorldState w = stressed_world(/*wage=*/0.4f, /*held=*/0.10f, /*supported=*/0.02f,
+                                  /*food_store=*/0.0f, /*trust=*/0.3f);
+    Province p{};
+    p.id = 1;
+    p.region_id = 1;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 1000000;
+    p.cohort_stats->working_age_fraction = 0.6f;
+    p.cohort_stats->subsistence_surplus_ratio = 0.3f;  // even worse off than here
+    p.cohort_stats->polity_id = 1;
+    w.provinces.push_back(std::move(p));
+    ProvinceLink a_to_b{};
+    a_to_b.neighbor_h3 = static_cast<H3Index>(0x2);
+    w.provinces[0].links.push_back(a_to_b);
+    w.provinces[0].h3_index = static_cast<H3Index>(0x1);
+    w.provinces[1].h3_index = static_cast<H3Index>(0x2);
+
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    REQUIRE(d.region_deltas.size() == 2);
+    CHECK_THAT(d.region_deltas[0].refugee_flow_replacement.value_or(-1.0f),
+               WithinAbs(0.0f, 1e-6f));
+}
+
 TEST_CASE("structural_demography: inert in market eras", "[structural_demography][psi]") {
     StructuralDemographyModule mod;
     WorldState w = society_coming_apart();
     w.technology.current_era = 8;  // modern (market regime)
 
     DeltaBuffer d{};
-    mod.execute_province(0, w, d);
+    mod.execute(w, d);
     CHECK(d.region_deltas.empty());
 }

@@ -6,7 +6,10 @@ reasons that have nothing to do with the weather. Multiplicative in popular immi
 elite overproduction (the gap between the non-farming stratum a society HOLDS and the one
 its harvest SUPPORTS) and fiscal exhaustion — all three at once, or nothing.
 
-## Tier: mid (runs_after subsistence, runs_before population_aging; province-parallel)
+## Tier: mid (runs_after subsistence + warfare, runs_before population_aging; GLOBAL)
+
+GLOBAL, not province-parallel: a polity is one political unit whose stress belongs to the
+whole of it, and refugees move BETWEEN provinces.
 
 ## Critical Rules
 - The stress is not a mood. It kills (published as an independent competing risk applied
@@ -16,6 +19,11 @@ its harvest SUPPORTS) and fiscal exhaustion — all three at once, or nothing.
 - Annual cadence — secular cycles run centuries.
 - Regime-gated to the pre-market arc; `execute()` clears published values once on exit.
 - No RNG. No caps: the PSI is uncapped and the death fraction arrives as 1 - exp(-rate).
+- R5 CONTAGION: stress is computed over POLITY aggregates (peak PSI 0.1 -> 1.49);
+  immiseration is measured against `wage_reference` (what people are used to) rather than
+  subsistence, WITHOUT which the term is identically zero for a whole climb; and refugees
+  flow to better-fed reachable neighbours, conserved, which is how a collapse crosses a
+  border.
 
 ## Key Types
 - StructuralDemographyConfig (core/config/package_config.h)

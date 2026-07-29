@@ -298,6 +298,18 @@ struct RegionDelta {
         import_dependence_replacement;  // replacement; cohort_stats->import_dependence,
                                         // published by subsistence — the share of what a
                                         // province eats that came from somewhere else
+    std::optional<float>
+        wage_reference_replacement;  // replacement; cohort_stats->wage_reference. What
+                                     // people are USED TO eating, a generation-scale
+                                     // average of the real wage. Published by
+                                     // structural_demography; immiseration is measured
+                                     // against this rather than against subsistence.
+    std::optional<float>
+        refugee_flow_replacement;  // replacement; cohort_stats->refugee_flow. Signed net
+                                   // people arriving this year because somewhere else
+                                   // failed; published by structural_demography, applied
+                                   // to the cohorts by population_aging. Conserved across
+                                   // the world.
     std::optional<uint32_t>
         polity_id_replacement;  // replacement; cohort_stats->polity_id, published by
                                 // warfare (the emergent political map, exposed so

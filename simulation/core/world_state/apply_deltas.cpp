@@ -690,6 +690,16 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.import_dependence_replacement;
                     cs.import_dependence = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
                 }
+                if (d.wage_reference_replacement.has_value()) {
+                    // A wage, so strictly positive; NaN falls to exactly-fed.
+                    float v = *d.wage_reference_replacement;
+                    cs.wage_reference = (std::isnan(v) || v <= 0.0f) ? 1.0f : v;
+                }
+                if (d.refugee_flow_replacement.has_value()) {
+                    // Signed by design: negative means the province is emptying. NaN -> 0.
+                    float v = *d.refugee_flow_replacement;
+                    cs.refugee_flow = std::isnan(v) ? 0.0f : v;
+                }
                 if (d.polity_id_replacement.has_value())
                     cs.polity_id = *d.polity_id_replacement;
                 if (d.asabiya_replacement.has_value()) {

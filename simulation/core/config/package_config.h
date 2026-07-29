@@ -1147,6 +1147,37 @@ struct StructuralDemographyConfig {
     // per year at PSI = 1 (stability is [0,1], so this is a large but not instant fall).
     float stability_erosion_at_unit_stress = 0.30f;
 
+    // How long a people's sense of what is normal takes to catch up with what it is
+    // actually getting: about a generation, which is how long anyone remembers being
+    // better off. Immiseration is measured against that reference rather than against
+    // bare subsistence.
+    //
+    // This is what decides whether a society can fall at all. A population whose numbers
+    // track its food is never absolutely starving — measured against subsistence the
+    // mobilisation term was exactly zero for the whole climb, and the multiplicative
+    // index with it. Measured against what people are used to, a society whose ceiling
+    // stops rising while its numbers catch up is immiserated in precisely Turchin's
+    // sense, and in Davies' — revolutions follow reversals after improvement, not steady
+    // poverty.
+    float wage_memory_years = 30.0f;
+
+    // --- REFUGEES (R5): how a collapse crosses a border ------------------------------
+    // The other half of contagion, and the one that moves people rather than signals.
+    // When the food fails, those who can walk do. The Migration Period, the Sea Peoples,
+    // the Irish famine — roughly a million left Ireland out of eight million in five
+    // years, about 2.5% a year at a severe shortfall — and everywhere they arrive they
+    // are more mouths on somebody else's land.
+    //
+    // That is the cascade: a province in famine exports its crisis to its neighbours as
+    // people, their surplus falls under the extra weight, their own stress rises, and
+    // they begin exporting in turn. Nothing models a cascade directly; it is what
+    // conserved flight does on a map.
+    //
+    // People only leave for somewhere better. A province whose neighbours are all worse
+    // off keeps its population and starves in place, which is the historically correct
+    // reading — the Migration Period happened because there WAS somewhere to go.
+    float refugee_flight_rate_per_year = 0.05f;  // share of the population that leaves per
+                                                 // year at a total food shortfall
     // Divide-by-zero sentinel for the competition ratio: when the harvest supports no
     // non-farmers at all, every claimant is a surplus claimant and the intensity of the
     // competition for what remains is enormous. Expressed as a floor on the share of the

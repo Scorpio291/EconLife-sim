@@ -346,6 +346,50 @@ void age_cohorts(std::map<DemographicGroup, PopulationCohort>& cohorts,
     }
 }
 
+// REFUGEES ARRIVE AND LEAVE (R5). structural_demography decides who flees where — it is
+// the only module that can, since flight crosses province borders — and publishes a
+// signed headcount per province, conserved across the world. This applies it to the
+// actual people.
+//
+// Refugees are drawn from and delivered to every cohort in proportion to its size: a
+// famine does not select by station. Deterministic integer arithmetic, canonical group
+// order, and a province can never lose more people than it has.
+void apply_refugee_flow(std::map<DemographicGroup, PopulationCohort>& cohorts, float flow) {
+    if (!(std::fabs(flow) >= 1.0f))
+        return;
+    uint64_t total = 0;
+    for (const auto& [g, c] : cohorts) {
+        (void)g;
+        total += c.size;
+    }
+    if (total == 0)
+        return;
+
+    const bool arriving = flow > 0.0f;
+    auto moving = static_cast<uint64_t>(std::llround(std::fabs(static_cast<double>(flow))));
+    if (!arriving && moving > total)
+        moving = total;  // you cannot send away more people than live here
+
+    uint64_t placed = 0;
+    size_t remaining_cohorts = cohorts.size();
+    for (auto& [g, c] : cohorts) {
+        (void)g;
+        --remaining_cohorts;
+        // The last cohort takes the rounding remainder so the headcount is exact.
+        uint64_t share = remaining_cohorts == 0 ? (moving > placed ? moving - placed : 0u)
+                                                : moving * c.size / total;
+        if (!arriving && share > c.size)
+            share = c.size;
+        if (share == 0)
+            continue;
+        if (arriving)
+            c.size += static_cast<uint32_t>(share);
+        else
+            c.size -= static_cast<uint32_t>(share);
+        placed += share;
+    }
+}
+
 // Annual births (added to youth cohorts) and per-cohort deaths, applied in
 // place to a working copy of the cohort map. Deterministic: integer rounding,
 // canonical group order.
@@ -727,6 +771,12 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // Then everyone has a birthday. Without this the young never grow up and
                 // nobody replaces the workers who die.
                 age_cohorts(next, cfg_);
+
+                // And those whose land has failed walk somewhere else. Conserved across
+                // the world by the publisher: what leaves one province arrives at
+                // another. This is how a collapse crosses a border — the arrivals are
+                // more mouths on land that was already only just feeding itself.
+                apply_refugee_flow(next, cs.refugee_flow);
 
                 // Then people move. A town is people the countryside must both SPARE and
                 // FEED, and those are two separate physical limits: the harvest says how

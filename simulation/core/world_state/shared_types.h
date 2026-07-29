@@ -387,6 +387,34 @@ struct RegionCohortStats {
     // Mediterranean system came down within a generation. Transient (recomputed each tick).
     float import_dependence = 0.0f;
 
+    // What people here are USED TO eating — a slow average of the real wage over living
+    // memory, about a generation. Immiseration is measured against THIS, not against bare
+    // subsistence, and the distinction turns out to decide whether a society can fall at
+    // all.
+    //
+    // A population whose numbers track its food supply is never absolutely starving: the
+    // wage valve sees to that, so measured against subsistence the mobilisation term was
+    // exactly zero for the entire climb and the Political Stress Index with it. But
+    // Turchin's variable is the real wage against trend, and the standard finding — Davies'
+    // J-curve — is that revolutions follow REVERSALS after improvement rather than steady
+    // poverty. A people whose living standards have halved in fifty years is in exactly
+    // the political condition that brings a state down, however well fed it would have
+    // looked to its own grandparents.
+    //
+    // A real slow stock, persisted (schema v29). Published by structural_demography.
+    float wage_reference = 1.0f;
+
+    // Signed net people arriving here this year because somewhere else failed (R5).
+    // Positive means refugees arriving, negative means the province emptying. Conserved
+    // across the world: what leaves one place arrives at another.
+    //
+    // This is how a collapse crosses a border. A province in famine exports its crisis to
+    // its neighbours as people; their surplus falls under the extra mouths, their own
+    // stress rises, and they begin exporting in turn. The Migration Period, the Sea
+    // Peoples, the Irish famine. Published by structural_demography, applied to the
+    // cohorts by population_aging. Transient (recomputed each tick).
+    float refugee_flow = 0.0f;
+
     // Which polity this province currently belongs to (R3F). Emergent and published by
     // warfare, which owns the political map: a province that has never been conquered is
     // its own polity, conquest absorbs whole polities, and hold-failure secedes them back.

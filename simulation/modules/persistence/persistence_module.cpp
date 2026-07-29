@@ -443,6 +443,10 @@ void write_province(ByteWriter& w, const Province& p) {
         // in the interior. A slow stock with its own century-scale history; reloading a
         // world without it would hand every polity the same starting solidarity.
         w.write_float(p.cohort_stats->asabiya);
+        // v29: what people here are USED TO eating. A generation-scale average, and the
+        // thing immiseration is measured against — reloading a world without it would
+        // hand every society the expectations of a people that had never known better.
+        w.write_float(p.cohort_stats->wage_reference);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1334,6 +1338,11 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
         // the right reading — a save from before this existed records no frontier history.
         if (schema_ver >= 28u) {
             p.cohort_stats->asabiya = r.read_float();
+        }
+        // v29: the reference wage. Older saves default to 1.0 (exactly fed), which is the
+        // neutral reading for a save that records no memory of better times.
+        if (schema_ver >= 29u) {
+            p.cohort_stats->wage_reference = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but
