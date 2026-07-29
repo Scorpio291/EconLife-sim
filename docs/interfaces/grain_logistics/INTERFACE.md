@@ -22,8 +22,12 @@ that catchment can sustain. Design: docs/design/EconLife_Medieval_Band_Expansion
 ## Outputs (to DeltaBuffer)
 - `RegionDelta.net_feedable_surplus_replacement` — own surplus + what neighbours
   deliver after the oxen eat their share (conserved: delivered + eaten == exported)
-- `RegionDelta.urban_population_replacement` — net feedable surplus / per-capita
-  food, capped at total_population (the aggregate town economy)
+- `RegionDelta.urban_capacity_replacement` — net feedable surplus / per-capita food,
+  bounded by total_population: the urban CARRYING CAPACITY, i.e. how many townsfolk
+  the catchment could feed. This is a capacity, not a headcount — it is one of the two
+  limits migration steers the town toward (the other is the non-farming stratum the
+  harvest can spare). The town's actual size is `cohort_stats.urban_population`, the
+  sum of the urban cohorts, owned by population_aging.
 - `RegionDelta.food_store_delta` (additive) — REAL grain flows (G4): stored grain
   diffuses down the scarcity gradient along links (a per-year share of the granary-
   fullness gap closes: kin networks, tribute, trade-in-kind), and every haul pays the

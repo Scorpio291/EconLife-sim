@@ -283,8 +283,10 @@ struct RegionDelta {
         net_feedable_surplus_replacement;  // replacement; cohort_stats->net_feedable_surplus,
                                            // published by grain_logistics (ox-cart catchment)
     std::optional<float>
-        urban_population_replacement;  // replacement; cohort_stats->urban_population,
-                                       // published by grain_logistics (catchment town economy)
+        urban_capacity_replacement;  // replacement; cohort_stats->urban_capacity, published by
+                                     // grain_logistics — how many townsfolk the catchment COULD
+                                     // feed. The town's actual size is a real cohort headcount
+                                     // (cohort_stats->urban_population), moved by migration.
     std::optional<float>
         war_death_fraction_replacement;  // replacement; cohort_stats->war_death_fraction
                                          // [0,1], published by warfare (extra annual death

@@ -136,10 +136,12 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
     }
 
     // Publish per province (keyed by region_id, 1:1 with province in world-gen):
-    // the catchment surplus, the urban (non-farm) population it can feed —
-    // net_feedable / per-capita food, capped at the province population (a town can't
-    // hold more townsfolk than there are people; a pure import-fed city approaches it)
-    // — and the conserved grain-flow deltas.
+    // the catchment surplus, the urban CARRYING CAPACITY it supports — net_feedable /
+    // per-capita food, bounded by the province population (a town can't hold more
+    // townsfolk than there are people; a pure import-fed city approaches it) — and the
+    // conserved grain-flow deltas. Capacity is how hard the town pulls people off the
+    // land; the town's actual size is the urban cohort headcount, and it sits below
+    // capacity because towns bury more than they christen (the urban graveyard).
     const float per_capita = cfg_.urban_per_capita_food > 0.0f ? cfg_.urban_per_capita_food : 1.0f;
     for (uint32_t i = 0; i < n; ++i) {
         RegionDelta rd{};
@@ -151,7 +153,7 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
             if (urban > pop)
                 urban = pop;
         }
-        rd.urban_population_replacement = urban;
+        rd.urban_capacity_replacement = urban;
         if (store_delta[i] != 0.0)
             rd.food_store_delta = static_cast<float>(store_delta[i]);
         delta.region_deltas.push_back(rd);

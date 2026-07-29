@@ -630,3 +630,218 @@ TEST_CASE("population: growth answers to how well fed people are, in both direct
     // undernutrition is what held pre-industrial growth near zero for centuries.
     CHECK(std::abs(hungry) < 0.001 * 100000.0);
 }
+
+// ===========================================================================
+// THE URBAN GRAVEYARD — a town is a standing flow, not a stock.
+//
+// Before sanitation, towns buried more people than they christened: the midden
+// sat next to the well and every child met every disease before it was five.
+// London's burials exceeded its baptisms in almost every year of the 17th and
+// 18th centuries, and it doubled anyway — entirely on migrants walking in from
+// the countryside. So a town holds its size only while the land around it has
+// both spare grain and spare people to send, which is why pre-industrial
+// urbanisation sat near a tenth of the population however rich the society got.
+// ===========================================================================
+
+namespace {
+
+// A commons-era province with a town and a countryside, both working-age.
+WorldState make_commons_town_world(uint32_t urban, uint32_t rural) {
+    WorldState w{};
+    w.current_tick = PopulationAgingModule::TICKS_PER_YEAR;  // annual births/deaths fire
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;  // feudal — a commons regime
+    Province p{};
+    p.id = 0;
+    p.conditions.stability_score = 0.9f;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->subsistence_surplus_ratio = 1.0f;  // exactly fed: the valve is neutral
+    p.cohort_stats->food_store = 1000.0f;              // granary stocked: no acute famine
+    // A town is limited by what the countryside can SPARE (the non-farming stratum) and
+    // by what it can FEED (haulage). These cases exercise the haulage limit, so the
+    // stratum is left slack; the stratum limit has its own case below.
+    p.cohort_stats->specialist_fraction = 1.0f;
+    PopulationCohort town{};
+    town.size = urban;
+    PopulationCohort land{};
+    land.size = rural;
+    p.cohort_stats->cohorts[DemographicGroup::working_urban_mid] = town;
+    p.cohort_stats->cohorts[DemographicGroup::working_rural_mid] = land;
+    p.cohort_stats->urban_population = static_cast<float>(urban);
+    p.cohort_stats->total_population = urban + rural;
+    w.provinces.push_back(std::move(p));
+    return w;
+}
+
+uint64_t cohort_size(const WorldState& w, DemographicGroup g) {
+    const auto& c = w.provinces[0].cohort_stats->cohorts;
+    auto it = c.find(g);
+    return it == c.end() ? 0u : it->second.size;
+}
+
+}  // namespace
+
+TEST_CASE("population: a town buries more of its people than the countryside does",
+          "[population_aging][tier11][graveyard]") {
+    // Same province, same year, same everything except where people live. The town
+    // pays a death rate the fields do not, because crowding is its own cause of
+    // death. Every other hazard in the province hits both alike, so the gap is the
+    // graveyard and nothing else.
+    PopulationAgingModule mod;
+    WorldState w = make_commons_town_world(/*urban=*/100000, /*rural=*/100000);
+    w.provinces[0].cohort_stats->urban_capacity = 100000.0f;  // no migration pressure either way
+
+    DeltaBuffer d{};
+    mod.execute_province(0, w, d);
+    apply_deltas(w, d);
+
+    CHECK(cohort_size(w, DemographicGroup::working_urban_mid) <
+          cohort_size(w, DemographicGroup::working_rural_mid));
+}
+
+TEST_CASE("population: crowding is what kills, so a hamlet is not a city",
+          "[population_aging][tier11][graveyard]") {
+    // The penalty rises with the size of the town and saturates — it approaches the
+    // full rate as the town grows and never exceeds it, so nothing caps it.
+    PopulationAgingConfig cfg{};
+    const float hamlet = PopulationAgingModule::urban_crowding_rate(200.0f, 1.0f, cfg);
+    const float town = PopulationAgingModule::urban_crowding_rate(10000.0f, 1.0f, cfg);
+    const float city = PopulationAgingModule::urban_crowding_rate(1000000.0f, 1.0f, cfg);
+
+    CHECK(hamlet < town);
+    CHECK(town < city);
+    CHECK(city < cfg.urban_crowding_death_rate);              // approached, never reached
+    CHECK_THAT(town, WithinAbs(cfg.urban_crowding_death_rate * 0.5f, 1e-6f));  // half-saturation
+    CHECK(hamlet < 0.05f * cfg.urban_crowding_death_rate);    // a village is barely a town
+}
+
+TEST_CASE("population: medicine is what closes the grave",
+          "[population_aging][tier11][graveyard]") {
+    // The urban penalty is released by exactly the technology that ended the plagues —
+    // sewers and germ theory. This is why urbanisation could not break past its
+    // pre-modern tenth until the 19th century, and then did so everywhere at once.
+    PopulationAgingConfig cfg{};
+    const float medieval = PopulationAgingModule::urban_crowding_rate(200000.0f, 1.0f, cfg);
+    const float modern = PopulationAgingModule::urban_crowding_rate(200000.0f, 0.1f, cfg);
+    CHECK(modern < medieval);
+    CHECK_THAT(modern, WithinAbs(medieval * 0.1f, 1e-6f));
+}
+
+TEST_CASE("population: children are born where their parents live",
+          "[population_aging][tier11][graveyard]") {
+    // This used to be a flat half-and-half split, which drove ANY society toward a 50%
+    // urban composition no matter what its land could feed — the town's share was
+    // decided by the split, not by anything in the world. A countryside holding nine
+    // tenths of the working-age population must bear about nine tenths of the children.
+    PopulationAgingModule mod;
+    WorldState w = make_commons_town_world(/*urban=*/10000, /*rural=*/90000);
+    w.provinces[0].cohort_stats->subsistence_surplus_ratio = 1.5f;  // slack: births happen
+    w.provinces[0].cohort_stats->urban_capacity = 10000.0f;         // migration neutral
+
+    DeltaBuffer d{};
+    mod.execute_province(0, w, d);
+    apply_deltas(w, d);
+
+    const double town_born = static_cast<double>(cohort_size(w, DemographicGroup::youth_urban));
+    const double land_born = static_cast<double>(cohort_size(w, DemographicGroup::youth_rural));
+    REQUIRE(town_born + land_born > 0.0);
+    CHECK(land_born > town_born * 5.0);
+    CHECK_THAT(town_born / (town_born + land_born), WithinAbs(0.10, 0.01));
+}
+
+TEST_CASE("population: people walk toward bread, and back when it runs out",
+          "[population_aging][tier11][graveyard]") {
+    // Migration is conserved head for head — the town grows by emptying the
+    // countryside, and empties back onto it when the catchment fails. Nobody is
+    // created or destroyed by moving.
+    PopulationAgingModule mod;
+
+    auto run = [&](float capacity) {
+        WorldState w = make_commons_town_world(/*urban=*/10000, /*rural=*/90000);
+        w.provinces[0].cohort_stats->urban_capacity = capacity;
+        const uint64_t before = cohort_size(w, DemographicGroup::working_urban_mid) +
+                                cohort_size(w, DemographicGroup::working_rural_mid);
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        apply_deltas(w, d);
+        struct R {
+            uint64_t town, land, before;
+        };
+        return R{cohort_size(w, DemographicGroup::working_urban_mid),
+                 cohort_size(w, DemographicGroup::working_rural_mid), before};
+    };
+
+    const auto plenty = run(60000.0f);  // grain for six times the town it has
+    const auto famine = run(0.0f);      // the catchment can feed nobody
+
+    CHECK(plenty.town > 10000u);  // the countryside empties into the town
+    CHECK(plenty.land < 90000u);
+    CHECK(famine.town < 10000u);  // and the town empties back onto the land
+    CHECK(famine.land > plenty.land);
+
+    // Conserved: what the town gained the countryside lost, deaths aside. Deaths take
+    // well under a percent of a cohort in a year, so the headcount is essentially flat.
+    const double moved_total = static_cast<double>(plenty.town + plenty.land);
+    CHECK(moved_total < static_cast<double>(plenty.before) * 1.001);
+    CHECK(moved_total > static_cast<double>(plenty.before) * 0.98);
+}
+
+TEST_CASE("population: a town with no countryside to draw on cannot hold its size",
+          "[population_aging][tier11][graveyard]") {
+    // The whole point of the graveyard: with grain enough to feed everyone and nobody
+    // dying of anything unusual, a town that has nowhere to recruit from still loses
+    // people, and loses them faster than the same town would in a world where crowding
+    // did not kill. Towns are sustained by the countryside, not by themselves.
+    auto run_decade = [](float crowding_rate) {
+        PopulationAgingConfig cfg{};
+        cfg.urban_crowding_death_rate = crowding_rate;
+        PopulationAgingModule mod(cfg);
+        WorldState w = make_commons_town_world(/*urban=*/200000, /*rural=*/0);
+        for (int year = 0; year < 10; ++year) {
+            auto& cs = *w.provinces[0].cohort_stats;
+            cs.urban_capacity = static_cast<float>(cs.total_population);  // grain is never
+                                                                         // the constraint
+            cs.food_store = 1000.0f;
+            DeltaBuffer d{};
+            mod.execute_province(0, w, d);
+            apply_deltas(w, d);
+            w.current_tick += PopulationAgingModule::TICKS_PER_YEAR;
+        }
+        uint64_t urban = 0;
+        for (const auto& [g, c] : w.provinces[0].cohort_stats->cohorts) {
+            if (g == DemographicGroup::youth_urban || g == DemographicGroup::working_urban_low ||
+                g == DemographicGroup::working_urban_mid ||
+                g == DemographicGroup::working_urban_high || g == DemographicGroup::retiree_urban)
+                urban += c.size;
+        }
+        return urban;
+    };
+
+    const uint64_t with_graveyard = run_decade(PopulationAgingConfig{}.urban_crowding_death_rate);
+    const uint64_t without = run_decade(0.0f);
+
+    CHECK(with_graveyard < without);      // crowding is what drains it
+    CHECK(with_graveyard < 200000u);      // and it drains: the town cannot replace itself
+}
+
+TEST_CASE("population: a town cannot be larger than the countryside can spare",
+          "[population_aging][tier11][graveyard]") {
+    // Grain in the granary is not enough on its own. Somebody has to grow it, and every
+    // hand that walks to town is a hand out of the fields — so the harvest itself sets
+    // how many people a society can afford to have doing something other than farming.
+    // With grain to spare but only a twentieth of the population freed from the land,
+    // the town shrinks toward that twentieth rather than filling up.
+    PopulationAgingModule mod;
+    WorldState w = make_commons_town_world(/*urban=*/20000, /*rural=*/80000);
+    w.provinces[0].cohort_stats->urban_capacity = 100000.0f;  // grain for everyone
+    w.provinces[0].cohort_stats->specialist_fraction = 0.05f;  // but only 5% can be spared
+
+    const uint64_t before = cohort_size(w, DemographicGroup::working_urban_mid);
+    DeltaBuffer d{};
+    mod.execute_province(0, w, d);
+    apply_deltas(w, d);
+
+    CHECK(cohort_size(w, DemographicGroup::working_urban_mid) < before);
+    CHECK(cohort_size(w, DemographicGroup::working_rural_mid) > 80000u);
+}

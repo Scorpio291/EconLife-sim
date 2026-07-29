@@ -1705,8 +1705,14 @@ struct PopulationAgingConfig {
     // millennium CE); measured here it was ~0.18%/yr, roughly 5x too fast, and that
     // speed let population outrun the institutions that a society needs to develop —
     // the learned stratum could not form before the land filled up.
+    // The two checks are NOT symmetric, and the asymmetry is the well-measured part of
+    // this: in England the PREVENTIVE check (marriage and fertility answering to the
+    // wage) did most of the regulating, while the POSITIVE check (mortality) was weak —
+    // real wages moved the birth rate far more than they moved the death rate. So
+    // fertility carries the larger exponent. An earlier pass had these the other way
+    // round (0.70 on mortality), which is backwards.
     float wage_fertility_elasticity = 0.40f;  // births ~ w^+e: prosperity brings marriage forward
-    float wage_mortality_elasticity = 0.70f;  // deaths ~ w^-e: hunger kills before famine does
+    float wage_mortality_elasticity = 0.30f;  // deaths ~ w^-e: hunger kills before famine does
     float food_surplus_birth_cap = 2.0f;          // max birth multiplier from surplus. A fed
                                                   // population grows and consumes productivity gains
                                                   // (the Malthusian reality), keeping the surplus
@@ -1786,6 +1792,38 @@ struct PopulationAgingConfig {
     // Radiation chronically depresses FERTILITY (a distinct channel from the
     // background mortality scalar; planetary, never wanes). M6a chronic split.
     float radiation_fertility_penalty = 0.18f;   // birth-rate loss at radiation=1
+
+    // --- THE URBAN GRAVEYARD -------------------------------------------------------
+    // Before sanitation a town was a net consumer of people. Crowding put the midden
+    // next to the well and every child met every disease before it was five; London
+    // buried more than it baptised in almost every year of the 17th and 18th centuries
+    // and still doubled, purely on migrants walking in from the countryside. Pre-modern
+    // urban crude death rates ran ~35-40 per 1000 against ~25-30 rural, on birth rates
+    // of ~30-35 — a natural DECREASE of roughly 5-10 per 1000 per year.
+    //
+    // So a town is a standing flow, not a stock: it holds its size only while the land
+    // has both spare grain (urban_capacity) and spare people to send, and it drains
+    // when either fails. This is why pre-industrial urbanisation sat near 10% however
+    // rich the society got, and why the break-out waited for medicine and sewers — the
+    // penalty is released by the same tech mortality multiplier that ends the plagues.
+    float urban_crowding_death_rate = 0.010f;  // EXTRA deaths per person-year at full crowding,
+                                               // in the same units as base_annual_death_rate
+                                               // (+10/1000: enough on its own to put a large town
+                                               // into natural decrease, which is the historical
+                                               // fact this reproduces)
+    float urban_crowding_halfsat = 10000.0f;   // town size at which HALF the penalty is felt: the
+                                               // scale at which pre-modern towns outgrew their
+                                               // wells and middens. A hamlet is barely worse than
+                                               // the countryside; a city of 100k is nearly all of
+                                               // it. Saturating, so there is no cap — the burden
+                                               // approaches the full rate and never exceeds it.
+    // Migration: people walk toward bread. Each year this fraction of the gap between
+    // what the catchment can feed and who actually lives in the town closes, in whichever
+    // direction the gap points — towns fill when there is surplus grain and empty when
+    // there is not. English towns replaced roughly half their people per generation from
+    // the countryside, so a tenth of the gap per year is a conservative reading of how
+    // mobile pre-modern populations actually were.
+    float urban_migration_rate_per_year = 0.10f;
 };
 
 struct LodSystemConfig {

@@ -459,6 +459,18 @@ static void apply_cohort_stats_deltas(WorldState& world,
         prov.cohort_stats->mean_income = d.mean_income;
         prov.cohort_stats->gini_coefficient = std::clamp(d.gini_coefficient, 0.0f, 1.0f);
         prov.cohort_stats->hardiness = std::clamp(d.hardiness, 0.05f, 5.0f);
+        // The town's size is a headcount of the people in it, not an estimate: derived
+        // from the urban cohorts exactly as total_population is derived from all of
+        // them. Migration and the urban graveyard move those cohorts; this only reads
+        // them, so there is no second writer and nothing to drift out of step.
+        uint64_t urban = 0;
+        for (const auto& [g, c] : d.cohorts) {
+            if (g == DemographicGroup::youth_urban || g == DemographicGroup::working_urban_low ||
+                g == DemographicGroup::working_urban_mid ||
+                g == DemographicGroup::working_urban_high || g == DemographicGroup::retiree_urban)
+                urban += c.size;
+        }
+        prov.cohort_stats->urban_population = static_cast<float>(urban);
     }
 }
 
@@ -662,10 +674,12 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.net_feedable_surplus_replacement;
                     cs.net_feedable_surplus = (v >= 0.0f) ? v : 0.0f;
                 }
-                if (d.urban_population_replacement.has_value()) {
-                    // Replacement; grain_logistics recomputes the catchment town economy.
-                    float v = *d.urban_population_replacement;
-                    cs.urban_population = (v >= 0.0f) ? v : 0.0f;
+                if (d.urban_capacity_replacement.has_value()) {
+                    // Replacement; grain_logistics recomputes what the catchment could
+                    // feed each tick. The town's actual size is not set here — it is the
+                    // urban cohort headcount, moved by migration and mortality.
+                    float v = *d.urban_capacity_replacement;
+                    cs.urban_capacity = (v >= 0.0f) ? v : 0.0f;
                 }
                 if (d.war_death_fraction_replacement.has_value()) {
                     // Replacement; warfare recomputes annually. Physical bounds: an

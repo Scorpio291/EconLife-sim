@@ -128,6 +128,51 @@ increase was consumed by London mortality.
   ox-cart radius (a cart eats its load in ~300-500 km).
 - **Fixes:** 32% urbanisation (should be ~10%); adds a self-limiting mortality sink.
 
+**LANDED 2026-07-28.** Both halves are in, plus two things the measurement forced.
+
+The 32% figure turned out to be a *capacity signal*, not a headcount: grain_logistics
+published "the town the catchment could feed" straight into `urban_population`, and
+nothing in the world was actually located there. That is now split — `urban_capacity`
+is the signal, `urban_population` is the sum of the urban cohorts, and people move
+between the two by a conserved flow. Two rails died on the way:
+
+- Births were split **half urban, half rural** regardless of where anyone lived, which
+  drove every society toward a 50% urban composition no matter what its land could
+  feed. Children are now born where their parents are.
+- **Townsfolk still farmed.** Migration had no cost in the harvest, so with the
+  graveyard in and nothing to stop it, urbanisation ran away to 95%+ on a world with
+  nobody left in the fields. The non-farmers are now the union of the institutional
+  stratum and the town, and the harvest is what is left over.
+
+The town's size is now bounded by two independent physical limits — what the harvest
+can SPARE (the non-farming stratum) and what haulage can FEED in one place — and it
+settles at **3-5%** across the whole spectrum, emergent, with no clamp. A society that
+falls into food deficit de-urbanises on its own, because a catchment with no surplus
+publishes no capacity.
+
+**The soil trap, found on the way.** With the population brake in, earthlike stalled at
+era 1 for 14,000 years with soil health pinned at 0.10-0.20. The cause was a real
+modelling error, not calibration: the sustainable yield was measured against *current*
+natural capital, which already includes soil health, so soil cancelled out of the
+pressure ratio and the land had **no restoring force at all**. Renewal is absolute, not
+proportional — weathering, rainfall and nitrogen fixation are properties of the place,
+not of how depleted the topsoil is. Measured against pristine capacity instead, worn
+land out-renews what a shrunken population takes from it and recovers.
+
+Measured after both (earthlike, seed 7, 14,000 years): soil recovers 1.00 -> 0.90,
+population 21k -> 18M, urbanisation 3-5% throughout, surplus 1.15-1.35 through the
+agrarian phase. The spectrum came back with it: garden reaches era 8 at year 8,852,
+earthlike and fertile-deathworld reach era 6, barren deathworld reaches era 2.
+
+**What is still wrong, and why it is 1B/1C's problem.** Era pacing is now front-loaded
+backwards: era 2 takes 5,500 years (right) but eras 3-8 take ~3,000 between them, the
+last few at 120-160 years each. And every world now only ever RISES — the falls are
+gone. Earthlike parks at era 6 with 18M people at a surplus of 0.755 and knowledge
+slowly decaying: medicine cut mortality, the population ate the gain, and the
+food ceiling saturated. That is Tainter's fixed `B_max` again, on the food side, and it
+is exactly what 1B (energy ghost acres) and 1C (induced innovation) exist to fix. Do
+not chase it with dials.
+
 ### 2C. Specialist stratum as a stock with inertia
 Currently `specialists = population - farmers_needed`, recomputed every tick with no
 memory, so the entire scholar-and-city class evaporates in ONE TICK when food tightens
@@ -196,8 +241,9 @@ erodes.
 1. **1A codified knowledge** — without it every other improvement is erased each cycle.
 2. **2C specialist inertia** — small change, fixes the 0%-in-one-tick discontinuity and
    feeds 2D.
-3. **2A wage valve + 2B urban graveyard** — brings population and urbanisation to
-   historical magnitudes; both are equilibria, not caps.
+3. **2A wage valve + 2B urban graveyard** — DONE 2026-07-28. Brought urbanisation to
+   3-5% (emergent) and uncovered the soil-renewal error that was pinning the whole
+   agrarian phase. See 2B for the measurements.
 4. **1B energy + 1C induced innovation** — the ceiling that rises; without these the
    peak is fixed no matter what else improves.
 5. **2D elite overproduction, Tier 3 texture, Tier 4 transition.**

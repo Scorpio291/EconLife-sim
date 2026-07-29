@@ -312,10 +312,14 @@ struct RegionCohortStats {
     // Published by grain_logistics; the catchment surplus a town/castle can draw on.
     // Transient (recomputed each tick; not persisted).
     float net_feedable_surplus = 0.0f;
-    // URBAN (non-farm) POPULATION the catchment sustains (= net_feedable_surplus /
-    // per-capita food, capped at total_population), published by grain_logistics —
-    // the aggregate medieval town economy (river hubs grow towns; stranded inland
-    // stays rural). Transient (recomputed each tick; not persisted).
+    // URBAN CARRYING CAPACITY: how many townsfolk the catchment could feed
+    // (= net_feedable_surplus / per-capita food, bounded by total_population),
+    // published by grain_logistics — river hubs can grow towns; stranded inland
+    // cannot. This is a CAPACITY, not a headcount: it sets how hard the town pulls
+    // migrants off the land, and the town's actual size (urban_population) sits
+    // BELOW it because towns bury more people than they christen. Transient
+    // (recomputed each tick; not persisted).
+    float urban_capacity = 0.0f;
     // Share of the population NOT working the land — the stratum the food surplus
     // frees (published by subsistence, which computes it from population minus the
     // farmers the harvest needs, ceilinged by the regime). A real located stratum of
@@ -350,6 +354,19 @@ struct RegionCohortStats {
     // capacity to USE it can only be built. Era advancement gates on both.
     float productive_capital = 0.0f;
 
+    // The town's ACTUAL size: sum of the urban cohorts (youth_urban, working_urban_*,
+    // retiree_urban). A real headcount of located people, derived from the cohorts
+    // whenever population_aging republishes them — not a capacity estimate.
+    //
+    // THE URBAN GRAVEYARD. Before sanitation, towns buried more people than they
+    // christened: crowding turned wells into sewers and every child met every disease.
+    // London's burials exceeded its baptisms in almost every year of the 17th and 18th
+    // centuries, yet it grew — entirely on migrants walking in from the countryside.
+    // So a town is a standing flow, not a stock that accumulates: it holds its size
+    // only while the land around it has both spare grain and spare people, and it
+    // empties when either fails. That is why pre-industrial urbanisation sat near 10%
+    // however rich the society got, and why it could only break out once medicine and
+    // sewers closed the grave.
     float urban_population = 0.0f;
 
     // Granary: the province's stored food (a conserved, located resource). The

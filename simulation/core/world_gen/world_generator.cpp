@@ -831,11 +831,20 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
             province.cohort_stats->cohorts[s.group] = c;
         }
         uint32_t pop = 0;
+        uint32_t urban = 0;
         for (const auto& [g, c] : province.cohort_stats->cohorts) {
-            (void)g;
             pop += c.size;
+            if (g == DemographicGroup::youth_urban || g == DemographicGroup::working_urban_low ||
+                g == DemographicGroup::working_urban_mid ||
+                g == DemographicGroup::working_urban_high || g == DemographicGroup::retiree_urban)
+                urban += c.size;
         }
         province.cohort_stats->total_population = pop;
+        // The town's size is the people in it, from the first tick — the same headcount
+        // apply_deltas keeps in step thereafter. A pre-market world starts with these
+        // modern weights and then drains: the countryside is where the food is, and
+        // migration answers to what the catchment can actually feed.
+        province.cohort_stats->urban_population = static_cast<float>(urban);
         province.cohort_stats->mean_income = base_wage;
     }
 

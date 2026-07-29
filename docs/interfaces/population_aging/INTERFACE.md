@@ -30,7 +30,14 @@ Province-parallel: each province's demographic processing is fully independent. 
   - `subsistence_surplus_ratio` — commons food signal (births/famine, Malthusian loop)
   - `food_store` — granary buffer; famine fires only once exhausted
   - `hardiness` — generational adaptation divisor on world-hazard mortality
-  - `urban_population` — crowding driver for the disease-epidemic hazard (M6a)
+  - `urban_population` — the town's actual headcount (sum of the urban cohorts,
+    derived in `apply_cohort_stats_deltas` exactly as `total_population` is). Drives
+    the disease-epidemic hazard (M6a) and the urban graveyard's crowding mortality.
+  - `urban_capacity` — how many townsfolk the catchment could FEED (published by
+    grain_logistics). With `specialist_fraction` — how many the harvest can SPARE —
+    it sets the size migration steers the town toward: `min` of the two, because both
+    are real and independent limits.
+  - `specialist_fraction` — the non-farming stratum (published by subsistence)
   - `war_death_fraction` ([0,1]) — per-province EXTRA annual death fraction from war
     (real units: battle dead / people), published by the `warfare` module in the SAME
     annual tick (warfare declares `runs_before` population_aging, so publication and
@@ -41,6 +48,32 @@ Province-parallel: each province's demographic processing is fully independent. 
     addition of the two hazard RATES, so nothing is double-counted. With no
     environmental deaths a cohort loses precisely the published fraction, and a
     published 1.0 still annihilates it.
+
+### The urban graveyard and land<->town migration (added 2026-07-28)
+
+Before sanitation a town was a net consumer of people: crowding put the midden next to
+the well, and London buried more than it baptised in almost every year of the 17th and
+18th centuries while doubling in size, entirely on migrants walking in from the
+countryside.
+
+- Urban cohorts (`youth_urban`, `working_urban_*`, `retiree_urban`) carry an EXTRA
+  annual death rate, `PopulationAgingModule::urban_crowding_rate(town, medicine, cfg)`.
+  It is ADDITIVE, not a multiplier — crowding is its own cause of death, not an
+  amplification of the rest — and saturates in town size, so it approaches the full
+  rate without ever exceeding it. The era's tech `mortality_mult` releases it:
+  sanitation and germ theory are what actually closed the grave.
+- Births go to `youth_urban`/`youth_rural` in proportion to the WORKING-AGE population
+  in each. (This was a flat 50/50 split, which drove any society toward a 50% urban
+  composition regardless of what its land could feed.)
+- `migrate_land_and_town` moves people between matched rural/urban cohorts, conserved
+  head for head, closing `urban_migration_rate_per_year` of the gap to
+  `min(urban_capacity, total_population * specialist_fraction)` each year — in either
+  direction, so a society whose catchment fails de-urbanises. Retirees do not migrate.
+  Commons regimes only: market-era urbanisation follows wages, which this does not
+  model.
+
+Together with subsistence counting townsfolk as non-farmers, urbanisation self-limits
+at an emergent 3-5% across the world spectrum, with no clamp anywhere.
 
 ### Mortality composition (updated 2026-07-26 — rail retired)
 

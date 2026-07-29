@@ -77,6 +77,25 @@ class PopulationAgingModule : public ITickModule {
     static float radiation_fertility_factor(float radiation_dial,
                                             const PopulationAgingConfig& cfg);
 
+    // THE URBAN GRAVEYARD: the EXTRA annual death hazard rate carried by living in a
+    // town of `town_size` people, added to (not multiplied into) the background rate —
+    // crowding is its own cause of death, the crowd's endemic disease, not an
+    // amplification of everything else. Rises with the size of the town and saturates:
+    // a hamlet is barely worse than the countryside, a city of 100k carries nearly the
+    // whole burden, and the burden approaches the full rate without ever exceeding it,
+    // so nothing here needs a cap.
+    //
+    // `medicine_mortality_mult` is the era's tech mortality multiplier. Sanitation and
+    // germ theory are what actually closed the urban grave, so the same technology that
+    // ends the plagues releases this — which is why urbanisation could not break past
+    // its pre-modern tenth until medicine arrived. Pure/static.
+    static float urban_crowding_rate(float town_size, float medicine_mortality_mult,
+                                     const PopulationAgingConfig& cfg) {
+        const float t = std::max(0.0f, town_size);
+        const float crowding = t / (t + std::max(1.0f, cfg.urban_crowding_halfsat));
+        return cfg.urban_crowding_death_rate * crowding * std::max(0.0f, medicine_mortality_mult);
+    }
+
     // Time calibration constants
     static constexpr uint32_t TICKS_PER_MONTH = 30;
     static constexpr uint32_t TICKS_PER_YEAR = kTicksPerYear;  // canonical (shared_types.h)

@@ -133,6 +133,19 @@ resident significant NPC. No deferred work items; no serialized module state.
   fewer farmers are needed and more hands are freed — no heuristic does that work.
 - Actual output is harvested by the farmers who remain:
   `output = base_ceiling * (1 - exp(-farm_labor / labor_half_saturation))`.
+- TOWNSFOLK DO NOT FARM (2026-07-28). The non-farmers are the UNION of the institutional
+  stratum and the people actually living in the town —
+  `non_farmers = max(specialists_people, cohort_stats.urban_population)`, a set union
+  rather than a bound, since the town is a subset of the stratum whenever the stratum is
+  larger. Before this a town cost the harvest nothing, so migration could pour the whole
+  population into the towns and urbanisation ran away past 95%.
+- SOIL RENEWAL IS ABSOLUTE, NOT PROPORTIONAL (2026-07-28). The sustainable harvest is
+  measured against the land's PRISTINE natural capital (`soil_health = 1`), not its
+  current worn state: weathering, rainfall and nitrogen fixation are properties of the
+  place, not of how depleted the topsoil already is. Measuring against current capital
+  made `soil_health` cancel out of the pressure ratio, leaving the land with no
+  restoring force — earthlike settled at 10-20% of pristine fertility and stayed there
+  for 14,000 years.
 - Every resident head holds a livelihood drawn from Layer 1 or the era-unlocked Layer 2.
 - Proto-capital is conserved across the residents of the province, and the lords are the
   wealthiest residents by `capital` (ties by `NPC.id`).

@@ -140,6 +140,96 @@ bool is_retiree_group(DemographicGroup g) {
     return g == DemographicGroup::retiree_urban || g == DemographicGroup::retiree_rural;
 }
 
+bool is_urban_group(DemographicGroup g) {
+    return g == DemographicGroup::youth_urban || g == DemographicGroup::working_urban_low ||
+           g == DemographicGroup::working_urban_mid || g == DemographicGroup::working_urban_high ||
+           g == DemographicGroup::retiree_urban;
+}
+
+// Land <-> town, matched by income tier so a migrant arrives as the same sort of
+// person they left as. Retirees are absent on purpose: it is the young who walk to
+// town for work, and the old who stay where they are.
+constexpr std::pair<DemographicGroup, DemographicGroup> kMigrationPairs[] = {
+    {DemographicGroup::youth_rural, DemographicGroup::youth_urban},
+    {DemographicGroup::working_rural_low, DemographicGroup::working_urban_low},
+    {DemographicGroup::working_rural_mid, DemographicGroup::working_urban_mid},
+    {DemographicGroup::working_rural_high, DemographicGroup::working_urban_high},
+};
+constexpr size_t kMigrationPairCount = 4;
+
+// MIGRATION — people walk toward bread. `town_the_land_can_hold` is the size the
+// countryside can both spare and feed (the caller takes the binding one of those two
+// limits); the gap between it and who actually lives in the town closes at `rate` per
+// year, in whichever direction it points. A town with grain coming in fills up; a town
+// whose catchment has failed empties back onto the land, which is what a famine did to
+// cities.
+//
+// Conserved head for head: every person added to an urban cohort is removed from the
+// matching rural one and vice versa. Nobody is created or destroyed here — the town's
+// size is this flow meeting the urban graveyard's mortality, and that balance is what
+// holds pre-industrial urbanisation to a few percent (measured 3-5%) with nothing
+// anywhere saying so.
+void migrate_land_and_town(std::map<DemographicGroup, PopulationCohort>& cohorts,
+                           float town_the_land_can_hold, float rate) {
+    if (rate <= 0.0f)
+        return;
+    // Read without inserting: a province that has no such cohort has nobody in it, and
+    // conjuring an empty one would quietly change the province's income distribution.
+    auto held = [&cohorts](DemographicGroup g) -> uint64_t {
+        auto it = cohorts.find(g);
+        return it == cohorts.end() ? 0u : it->second.size;
+    };
+
+    uint64_t town = held(DemographicGroup::retiree_urban);
+    for (const auto& [land, city] : kMigrationPairs) {
+        (void)land;
+        town += held(city);
+    }
+    const double gap = static_cast<double>(town_the_land_can_hold) - static_cast<double>(town);
+    const int64_t signed_movers = std::llround(gap * static_cast<double>(rate));
+    if (signed_movers == 0)
+        return;
+    const bool to_town = signed_movers > 0;
+    uint64_t remaining = static_cast<uint64_t>(to_town ? signed_movers : -signed_movers);
+
+    uint64_t available[kMigrationPairCount] = {};
+    uint64_t pool = 0;
+    for (size_t i = 0; i < kMigrationPairCount; ++i) {
+        available[i] = held(to_town ? kMigrationPairs[i].first : kMigrationPairs[i].second);
+        pool += available[i];
+    }
+    if (pool == 0)
+        return;
+    if (remaining > pool)
+        remaining = pool;  // you cannot move people who are not there
+
+    // Proportional to where the movers actually live, then the rounding remainder is
+    // handed out in canonical group order to whoever still has people to send — so the
+    // headcount that moves is exact even when some cohorts are empty.
+    uint64_t take[kMigrationPairCount] = {};
+    uint64_t allocated = 0;
+    for (size_t i = 0; i < kMigrationPairCount; ++i) {
+        take[i] = remaining * available[i] / pool;
+        allocated += take[i];
+    }
+    for (size_t i = 0; i < kMigrationPairCount && allocated < remaining; ++i) {
+        const uint64_t room = available[i] - take[i];
+        const uint64_t extra = std::min(room, remaining - allocated);
+        take[i] += extra;
+        allocated += extra;
+    }
+
+    for (size_t i = 0; i < kMigrationPairCount; ++i) {
+        if (take[i] == 0)
+            continue;
+        const auto& [land, city] = kMigrationPairs[i];
+        cohorts[to_town ? land : city].size -= static_cast<uint32_t>(take[i]);
+        auto& dst = cohorts[to_town ? city : land];
+        dst.group = to_town ? city : land;  // a cohort created by arrivals knows what it is
+        dst.size += static_cast<uint32_t>(take[i]);
+    }
+}
+
 // Annual births (added to youth cohorts) and per-cohort deaths, applied in
 // place to a working copy of the cohort map. Deterministic: integer rounding,
 // canonical group order.
@@ -153,7 +243,8 @@ bool is_retiree_group(DemographicGroup g) {
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
                            float sick_rate, float addiction_rate, float birth_surplus,
                            float famine_surplus, float hazard_rate_mult, float fertility_mult,
-                           float war_death_fraction, const PopulationAgingConfig& cfg) {
+                           float war_death_fraction, float urban_crowding_rate,
+                           const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
         (void)g;
@@ -196,8 +287,29 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
                        std::clamp(fertility_mult, 0.0f, 1.0f);  // radiation depresses fertility (M6a)
     auto births = static_cast<uint32_t>(
         std::llround(static_cast<double>(total) * static_cast<double>(birth_rate)));
-    cohorts[DemographicGroup::youth_urban].size += births / 2u;
-    cohorts[DemographicGroup::youth_rural].size += births - births / 2u;
+    // Children are born where their parents live. This used to be a flat half-and-half
+    // split, which silently drove ANY society toward a 50% urban composition no matter
+    // what its land could feed — the town's share was decided by the split, not by
+    // anything happening in the world. Splitting by where the working-age population
+    // actually is makes the urban share a consequence of migration and mortality
+    // instead. With no working-age population anywhere, births fall to the land: the
+    // countryside is where people are when there is no town.
+    uint64_t urban_parents = 0, rural_parents = 0;
+    for (const auto& [g, c] : cohorts) {
+        if (g == DemographicGroup::working_urban_low || g == DemographicGroup::working_urban_mid ||
+            g == DemographicGroup::working_urban_high)
+            urban_parents += c.size;
+        else if (g == DemographicGroup::working_rural_low ||
+                 g == DemographicGroup::working_rural_mid ||
+                 g == DemographicGroup::working_rural_high)
+            rural_parents += c.size;
+    }
+    const uint64_t parents = urban_parents + rural_parents;
+    const auto urban_births =
+        parents > 0 ? static_cast<uint32_t>(static_cast<uint64_t>(births) * urban_parents / parents)
+                    : 0u;
+    cohorts[DemographicGroup::youth_urban].size += urban_births;
+    cohorts[DemographicGroup::youth_rural].size += births - urban_births;
 
     // Deaths. Mortality is composed as an annual HAZARD RATE (expected deaths per
     // person-year) — instability, addiction, famine and the world's hazards each scale
@@ -227,6 +339,13 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
         float death_rate = cfg.base_annual_death_rate * mortality_rate_env;
         if (is_retiree_group(g))
             death_rate *= cfg.retiree_mortality_multiplier;  // frailer bodies: a higher rate
+        // THE URBAN GRAVEYARD. Living in a town carries its own hazard, arriving as an
+        // ADDITIVE rate rather than a multiplier because it is a distinct cause of
+        // death — the crowd's endemic disease — not an amplification of the rest. It
+        // does not touch the countryside, and it is what makes a pre-modern town a net
+        // consumer of people that survives only on migrants.
+        if (is_urban_group(g))
+            death_rate += urban_crowding_rate;
         const float p_env = PopulationAgingModule::annual_probability_from_rate(death_rate);
         const float p_death = 1.0f - (1.0f - p_env) * (1.0f - p_war);
         auto deaths = static_cast<uint32_t>(
@@ -420,9 +539,40 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // eras, never released, unlike the conquerable disease/geology shocks).
                 const float fertility_mult =
                     radiation_fertility_factor(state.hazard_settings.radiation, cfg_);
+                // The urban graveyard: crowding is what kills, so the penalty scales with
+                // how big the town actually is — a hamlet is barely worse than the
+                // countryside, a city of 100k carries nearly the whole burden. Saturating
+                // in town size, so the hazard approaches the full rate and never exceeds
+                // it. Sanitation and germ theory are exactly what closed the grave
+                // historically, so the same tech mortality multiplier that ends the
+                // plagues releases this too — which is why urbanisation could only break
+                // past its pre-modern tenth once medicine arrived.
+                const float crowding_rate = urban_crowding_rate(
+                    cs.urban_population,
+                    state.tech_effects_for_era(state.technology.current_era).mortality_mult, cfg_);
+
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       birth_surplus, famine_surplus, hazard_rate_mult,
-                                      fertility_mult, war_deaths, cfg_);
+                                      fertility_mult, war_deaths, crowding_rate, cfg_);
+
+                // Then people move. A town is people the countryside must both SPARE and
+                // FEED, and those are two separate physical limits: the harvest says how
+                // many hands can leave the fields (the non-farming stratum subsistence
+                // publishes), and haulage says how many can be fed once concentrated in
+                // one place (urban_capacity — the oxen eat what they carry). Whichever
+                // binds first is the town the land can hold.
+                //
+                // The gap between that and who lives there closes a little each year, in
+                // whichever direction it points. Conserved head for head — the town grows
+                // by emptying the countryside and empties back onto it when either limit
+                // fails. Commons only: in a market economy people move for wages and
+                // work, which this law does not model.
+                if (commons) {
+                    const float stratum_town =
+                        static_cast<float>(cs.total_population) * cs.specialist_fraction;
+                    migrate_land_and_town(next, std::min(cs.urban_capacity, stratum_town),
+                                          cfg_.urban_migration_rate_per_year);
+                }
 
                 // Hardiness drifts toward the world's hazard level over generations
                 // (adaptation under sustained pressure; softening under ease).

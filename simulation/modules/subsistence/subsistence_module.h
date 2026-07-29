@@ -102,12 +102,27 @@ class SubsistenceModule : public ITickModule {
     // Chronic food multiplier (<= 1.0) from predators preying on herds/draft animals
     // (M6a coupling): scaled by the `predators` dial, strongest early and WANING as
     // accumulated knowledge clears them. 1.0 once cleared / on a predator-free world.
+    // Inline for the same reason as natural_capital_of: chronic_ceiling_factors below
+    // is itself inline and world-gen calls it, so core cannot need module object code.
     static float predator_food_factor(float predators_dial, float knowledge_level,
-                                      const SubsistenceConfig& cfg);
+                                      const SubsistenceConfig& cfg) {
+        const float p = std::clamp(predators_dial, 0.0f, 1.0f);
+        if (p <= 0.0f)
+            return 1.0f;
+        // Predator pressure wanes as technique accumulates (clearance): persistence
+        // 1.0 at the dawn (knowledge 0) -> 0.5 at the half-saturation -> ~0 when advanced.
+        const float halfsat = std::max(1.0f, cfg.predator_clearance_halfsat);
+        const float persistence = halfsat / (halfsat + std::max(0.0f, knowledge_level));
+        return std::max(0.0f, 1.0f - cfg.predator_food_penalty * p * persistence);
+    }
 
     // Chronic carrying-ceiling multiplier (<= 1.0) from a hostile/toxic atmosphere
     // (M6a chronic): scaled by the `atmosphere` dial. Planetary — never wanes.
-    static float atmosphere_ceiling_factor(float atmosphere_dial, const SubsistenceConfig& cfg);
+    // Inline for the same reason as predator_food_factor.
+    static float atmosphere_ceiling_factor(float atmosphere_dial, const SubsistenceConfig& cfg) {
+        const float a = std::clamp(atmosphere_dial, 0.0f, 1.0f);
+        return std::max(0.0f, 1.0f - cfg.atmosphere_cap_penalty * a);
+    }
 
     // The product of every CHRONIC multiplier on the carrying ceiling: accumulated
     // technique (knowledge), climate reliability (seasonality relative to Earth),

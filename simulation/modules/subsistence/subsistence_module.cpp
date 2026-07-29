@@ -43,23 +43,9 @@ float SubsistenceModule::harvest_failure_factor(float seasonality_dial, Determin
     return std::max(0.0f, 1.0f - cfg.seasonality_failure_severity * s);  // a bad harvest year
 }
 
-float SubsistenceModule::predator_food_factor(float predators_dial, float knowledge_level,
-                                              const SubsistenceConfig& cfg) {
-    const float p = std::clamp(predators_dial, 0.0f, 1.0f);
-    if (p <= 0.0f)
-        return 1.0f;
-    // Predator pressure wanes as technique accumulates (clearance): persistence
-    // 1.0 at the dawn (knowledge 0) -> 0.5 at the half-saturation -> ~0 when advanced.
-    const float halfsat = std::max(1.0f, cfg.predator_clearance_halfsat);
-    const float persistence = halfsat / (halfsat + std::max(0.0f, knowledge_level));
-    return std::max(0.0f, 1.0f - cfg.predator_food_penalty * p * persistence);
-}
-
-float SubsistenceModule::atmosphere_ceiling_factor(float atmosphere_dial,
-                                                   const SubsistenceConfig& cfg) {
-    const float a = std::clamp(atmosphere_dial, 0.0f, 1.0f);
-    return std::max(0.0f, 1.0f - cfg.atmosphere_cap_penalty * a);
-}
+// predator_food_factor and atmosphere_ceiling_factor live inline in the header:
+// chronic_ceiling_factors calls both and world-gen calls it, so core must be able
+// to link without module object code.
 
 bool SubsistenceModule::regime_manorial(std::string_view regime) const {
     return regime_in(cfg_.manorial_regimes, regime);
@@ -237,8 +223,18 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float specialist_fraction = held + (defended_fraction - held) * per_tick;
     specialists_people = static_cast<float>(population) * specialist_fraction;
 
-    // Actual harvest from the farmers who remain on the land.
-    const float farm_labor = (static_cast<float>(population) - specialists_people) * working_fraction;
+    // Actual harvest from the farmers who remain on the land. TOWNSFOLK DO NOT FARM:
+    // the people who are not in the fields are the union of the institutional stratum
+    // (scholars, priests, smiths, lords) and whoever actually lives in the town, and
+    // the town is a subset of that stratum whenever the stratum is the larger of the
+    // two — hence the max, which is a set union and not a bound on anything.
+    //
+    // Without this a town was free: migration could pour the whole population into the
+    // towns and the harvest would not notice, so urbanisation ran away to 95%+ on a
+    // world where nobody was left on the land. Now moving people to town costs exactly
+    // what it costs in reality — the hands that would have been reaping.
+    const float non_farmers = std::max(specialists_people, cs.urban_population);
+    const float farm_labor = (static_cast<float>(population) - non_farmers) * working_fraction;
     const float output = base_ceiling * (1.0f - std::exp(-std::max(0.0f, farm_labor) / half));
 
     // Granary: bank the year's net food (after feeding everyone and losing spoilage),
@@ -325,8 +321,23 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         // capital x technique), not raw natural capital — the two differ by three orders
         // of magnitude, and comparing the harvest to the latter made even a handful of
         // people read as mining the land.
+        //
+        // RENEWAL IS ABSOLUTE, NOT PROPORTIONAL. What returns fertility to a field is
+        // weathering of the parent rock, rainfall, and biological nitrogen fixation —
+        // all properties of the PLACE, not of how depleted the topsoil currently is. So
+        // the sustainable harvest is measured against the land's PRISTINE capacity
+        // (soil_health = 1), not its worn-out present state.
+        //
+        // Measured, this is the difference between a world and a wasteland. Scaling the
+        // sustainable yield by current soil health made the pressure ratio
+        // scale-invariant in soil — it cancelled out of both sides — so the land had no
+        // restoring force at all: earthlike settled at 10-20% of pristine fertility and
+        // stayed there for 14,000 years, pinning the population near 10,000 and the
+        // knowledge rate near 0.05/yr. With renewal absolute, worn land out-renews what
+        // a shrunken population can take from it, and the soil climbs back.
+        const float pristine_capital = natural_capital_of(prov, cfg_, /*soil_health=*/1.0f);
         const float sustainable_output =
-            technique_share * cfg_.ceiling_per_capital_unit * natural_capital * chronic;
+            technique_share * cfg_.ceiling_per_capital_unit * pristine_capital * chronic;
         if (sustainable_output > 0.0f) {
             const float pressure_ratio = output / sustainable_output;
             if (pressure_ratio > 1.0f) {
