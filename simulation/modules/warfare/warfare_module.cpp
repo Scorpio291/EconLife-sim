@@ -269,9 +269,24 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // weight. Steppe share classifies the cavalry polities (Genghis).
     std::map<uint32_t, float> polity_levy;
     std::map<uint32_t, float> steppe_levy;
+    // ASABIYA (R3C) — what a people can do together, over and above its numbers. Ibn
+    // Khaldun's observation is why a frontier tribe takes an empire that outnumbers it.
+    //
+    // It multiplies STRENGTH, never the headcount. `levy` stays a count of people,
+    // because it is also what casualties are apportioned over and what a seceding member
+    // takes with it: folding the multiplier into it made a beaten polity lose 12.5% of
+    // its population when only 10% had been mustered — more dead than there were
+    // soldiers. Strength and bodies are different quantities and the model keeps them so.
+    std::vector<float> asabiya_mult(n, 1.0f);
+    std::map<uint32_t, float> polity_strength;
+    for (uint32_t i = 0; i < n; ++i) {
+        if (state.provinces[i].cohort_stats)
+            asabiya_mult[i] = asabiya_strength_mult(state.provinces[i].cohort_stats->asabiya, cfg_);
+    }
     for (uint32_t i = 0; i < n; ++i) {
         const uint32_t pid = polity_of(i);
         polity_levy[pid] += levy[i];
+        polity_strength[pid] += levy[i] * asabiya_mult[i];
         const auto& geo = state.provinces[i].geography;
         if (geo.arable_land_fraction < cfg_.steppe_arable_max &&
             geo.forest_coverage < cfg_.steppe_forest_max)
@@ -384,7 +399,9 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             const float drawn_a = static_cast<float>(
                 std::min(static_cast<double>(store_need_a), polity_store(pid_a)));
             const float fed_a = campaign_fed_factor(rations_a, drawn_a, cfg_);
-            const float S_a = army_a * fed_a * leader_mult[pid_a] * path_fraction;
+            // Soldiers eat as bodies (army_a) and fight as a people (polity_strength):
+            // asabiya makes men fight above their number, not eat below it.
+            const float S_a = polity_strength[pid_a] * fed_a * leader_mult[pid_a] * path_fraction;
 
             // DEFENDER: home mobilization (shorter season, home granaries), plus
             // warm-relation allied neighbours marching without organized supply
@@ -395,7 +412,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             const float drawn_b = static_cast<float>(
                 std::min(static_cast<double>(store_need_b), polity_store(pid_b)));
             const float fed_b = campaign_fed_factor(rations_b, drawn_b, cfg_);
-            float S_b = army_b * fed_b * leader_mult[pid_b];
+            float S_b = polity_strength[pid_b] * fed_b * leader_mult[pid_b];
             for (const auto& blink : state.provinces[b].links) {
                 auto bit = h3_to_idx.find(blink.neighbor_h3);
                 if (bit == h3_to_idx.end())
@@ -406,7 +423,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 if (polity_of(c) == pid_a)
                     continue;  // the attacker's own members never defend its target
                 if (relation(b, c) >= cfg_.ally_threshold)
-                    S_b += levy[c] * cfg_.forage_share;
+                    S_b += levy[c] * asabiya_mult[c] * cfg_.forage_share;
             }
 
             // The decision gate: a rational polity attacks only with a clear edge
@@ -496,16 +513,21 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             if (cfg_.absorb_after_wins > 0 && ++win_counts_[directed] >= cfg_.absorb_after_wins) {
                 win_counts_[directed] = 0;
                 const uint32_t beaten_pid = polity_of(b);
-                float moved = 0.0f;
+                float moved = 0.0f, moved_strength = 0.0f;
                 for (uint32_t p = 0; p < n; ++p) {
                     if (polity_of(p) == beaten_pid) {
                         polity_of_[p] = pid_a;
                         member_since_[p] = year;  // integration (cohesion) starts now
                         moved += levy[p];
+                        moved_strength += levy[p] * asabiya_mult[p];
                     }
                 }
                 polity_levy[pid_a] += moved;
                 polity_levy[beaten_pid] = 0.0f;
+                // The strength aggregate follows the bodies: a conquered people brings
+                // whatever solidarity it had into its conqueror's armies.
+                polity_strength[pid_a] += moved_strength;
+                polity_strength[beaten_pid] = 0.0f;
                 leader_until_.erase(beaten_pid);  // a dissolved polity has no seat
             }
 
@@ -553,8 +575,11 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         // The centre overawes with STRENGTH, not headcount: a living great
         // commander (Alexander) holds what raw numbers could not — and his death
         // is what lets the members go.
+        // Both sides of the hold are strengths: a cohesive member pulls away from a
+        // centre that could hold a softer one of the same size, which is how a frontier
+        // march breaks off an empire it is nominally part of.
         const float rest =
-            std::max(0.0f, polity_levy[pid] - levy[m]) *
+            std::max(0.0f, polity_strength[pid] - levy[m] * asabiya_mult[m]) *
             (leader_mult.count(pid) ? leader_mult[pid] : 1.0f);
         uint32_t years_held = 0;
         auto since = member_since_.find(m);
@@ -571,7 +596,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         const float cohesion =
             1.0f + cfg_.cohesion_gain_max * eff_years /
                        (eff_years + std::max(1.0f, cfg_.cohesion_halfsat_years));
-        if (levy[m] > cfg_.secession_power_ratio * cohesion * rest) {
+        if (levy[m] * asabiya_mult[m] > cfg_.secession_power_ratio * cohesion * rest) {
             polity_of_[m] = m;
             member_since_.erase(m);
             // Store the remaining HEADCOUNT, not `rest` — rest is a strength (the
@@ -582,7 +607,46 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // first secession.
             polity_levy[pid] = std::max(0.0f, polity_levy[pid] - levy[m]);
             polity_levy[m] += levy[m];
+            polity_strength[pid] =
+                std::max(0.0f, polity_strength[pid] - levy[m] * asabiya_mult[m]);
+            polity_strength[m] += levy[m] * asabiya_mult[m];
         }
+    }
+
+    // ASABIYA (R3C): one year of Ibn Khaldun's law, applied AFTER this year's conquests
+    // and secessions, so a province that has just been absorbed into a larger realm
+    // begins softening immediately and one just cut loose begins hardening.
+    //
+    // `frontier` is the share of a province's neighbours under another polity. A people
+    // surrounded by strangers coheres; one deep inside its own realm forgets how. That is
+    // the whole mechanism, and it is why an empire's founders come from its edge and its
+    // successors from someone else's.
+    //
+    // It matters most as a SECOND OSCILLATOR: geography drives it, not the harvest, so it
+    // has its own period and provinces stop rising and falling in unison. Without it the
+    // world moves as one sawtooth.
+    for (uint32_t i = 0; i < n; ++i) {
+        if (!state.provinces[i].cohort_stats)
+            continue;
+        const uint32_t mine = polity_of(i);
+        uint32_t neighbours = 0, strangers = 0;
+        for (const auto& link : state.provinces[i].links) {
+            auto it = h3_to_idx.find(link.neighbor_h3);
+            if (it == h3_to_idx.end() || it->second == i)
+                continue;
+            ++neighbours;
+            if (polity_of(it->second) != mine)
+                ++strangers;
+        }
+        // An isolated province faces nobody, so nothing forges its solidarity and it
+        // softens like any interior. That is the correct reading, not a special case.
+        const float frontier =
+            neighbours > 0 ? static_cast<float>(strangers) / static_cast<float>(neighbours) : 0.0f;
+        RegionDelta ad{};
+        ad.region_id = state.provinces[i].region_id;
+        ad.asabiya_replacement =
+            asabiya_year(state.provinces[i].cohort_stats->asabiya, frontier, cfg_);
+        delta.region_deltas.push_back(ad);
     }
 
     // Reputation economy: a betrayer's relations with ALL its neighbours sour.

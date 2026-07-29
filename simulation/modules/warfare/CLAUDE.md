@@ -32,6 +32,12 @@ population war-dips).
 - Regime-gated to the pre-market arc; modern war is political_cycle's.
 - Deterministic: provinces in index order; ordered pair sets; per-(year,attacker,
   defender) RNG. military_power()/pair_key() are pure/static (unit-tested).
+- ASABIYA (R3C): `cohort_stats->asabiya` is forged at frontiers and decays in the
+  interior (`asabiya_year`), updated here after each year's conquests and secessions.
+  It multiplies **STRENGTH, never the headcount** — `levy` stays a count of people
+  because casualties are apportioned over it and a seceding member takes it with them;
+  a parallel `polity_strength` carries the multiplier. Soldiers eat as bodies and fight
+  as a people. Getting this wrong made a beaten polity bury more men than it mustered.
 
 ## Design
 - docs/design/EconLife_War_and_Diplomacy_v01.md (the full model: treaties, alliances,

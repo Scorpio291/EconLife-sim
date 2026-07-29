@@ -98,9 +98,13 @@ TEST_CASE("warfare: a lopsided war kills in proportion to enemy strength (real u
     mod.execute(w, d);
     apply_deltas(w, d);
 
-    // No granaries: both fight at forage strength. S_a = 10000*0.5, S_b = 400*0.5.
-    const float S_a = 10000.0f * cfg.forage_share;
-    const float S_b = 400.0f * cfg.forage_share;
+    // No granaries: both fight at forage strength. ASABIYA (R3C) scales what a levy
+    // FIGHTS as, never how many bodies it is — the levy is still 10,000 and 400 men, but
+    // each people fights as though it were (1 + weight x asabiya) times that.
+    const float mult = WarfareModule::asabiya_strength_mult(
+        w.provinces[0].cohort_stats->asabiya, cfg);
+    const float S_a = 10000.0f * mult * cfg.forage_share;
+    const float S_b = 400.0f * mult * cfg.forage_share;
     // A's losses come out of its own muster and are nowhere near it.
     const float dead_a_frac = cfg.battle_lethality * S_b / 100000.0f;
     CHECK_THAT(w.provinces[0].cohort_stats->war_death_fraction, WithinRel(dead_a_frac, 0.01f));
@@ -477,7 +481,10 @@ TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone
     DeltaBuffer d{};
     mod.execute(w, d);
     apply_deltas(w, d);
-    const float S_kingdom = (10000.0f + 1000.0f) * cfg.forage_share;
+    // Asabiya scales the fighting strength on both sides; the bodies are unchanged.
+    const float mult = WarfareModule::asabiya_strength_mult(
+        w.provinces[0].cohort_stats->asabiya, cfg);
+    const float S_kingdom = (10000.0f + 1000.0f) * mult * cfg.forage_share;
     const float dead_c_frac = cfg.battle_lethality * S_kingdom / 30000.0f;
     CHECK_THAT(w.provinces[2].cohort_stats->war_death_fraction, WithinRel(dead_c_frac, 0.02f));
     // C's defence kills 150 of the kingdom's men, and they are debited to the
@@ -486,7 +493,7 @@ TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone
     // routed through (which is what produced province-annihilating fractions
     // before the fix). Because levies are proportional to population, the seat
     // and the border member bleed the same fraction of their people.
-    const float S_c_def = 3000.0f * cfg.forage_share;
+    const float S_c_def = 3000.0f * mult * cfg.forage_share;
     const float kingdom_dead = cfg.battle_lethality * S_c_def;
     const float pooled_levy = 10000.0f + 1000.0f;
     const float dead_b_frac = kingdom_dead * (1000.0f / pooled_levy) / 10000.0f;
@@ -672,4 +679,98 @@ TEST_CASE("warfare: the Rome hold — integration needs tenure AND a route for a
     CHECK(run(false, true) == 1);  // fresh: secedes
     CHECK(run(true, true) == 0);   // old + river route: holds
     CHECK(run(true, false) == 1);  // old but unreachable: never integrated, secedes
+}
+
+// ===========================================================================
+// ASABIYA — what a people can do together.
+//
+// Ibn Khaldun's observation, which Turchin turned into a model: solidarity is
+// forged at FRONTIERS, where a group lives against an out-group and must hold
+// together or die, and it decays in the INTERIOR, where safety makes it
+// unnecessary. That is why frontier peoples repeatedly conquer settled empires,
+// and why those empires then soften in the same place their founders came from.
+//
+// Mechanically it is a SECOND OSCILLATOR, driven by geography rather than by the
+// harvest, with its own period. Without it every province rises and falls on the
+// same food cycle and the world moves as one sawtooth.
+// ===========================================================================
+
+TEST_CASE("warfare: solidarity is forged at the frontier and forgotten in the interior",
+          "[warfare][tier1][asabiya]") {
+    const WarfareConfig cfg{};
+    const float start = 0.25f;
+    CHECK(WarfareModule::asabiya_year(start, /*frontier=*/1.0f, cfg) > start);
+    CHECK(WarfareModule::asabiya_year(start, /*frontier=*/0.0f, cfg) < start);
+    // A province half-surrounded by strangers sits between the two.
+    const float mixed = WarfareModule::asabiya_year(start, 0.5f, cfg);
+    CHECK(mixed > WarfareModule::asabiya_year(start, 0.0f, cfg));
+    CHECK(mixed < WarfareModule::asabiya_year(start, 1.0f, cfg));
+}
+
+TEST_CASE("warfare: solidarity is made and lost on the scale of a century",
+          "[warfare][tier1][asabiya]") {
+    // The timescale on which Rome's marches, the Arab conquests and the steppe
+    // confederations actually formed — and on which their descendants lost it, safe
+    // behind their own conquests. Both directions are century-scale, which is what makes
+    // this a slow oscillator against the food cycle rather than noise on top of it.
+    //
+    // (The two happen to come out equal for these endpoints: the growth rate is twice the
+    // decay rate, but growth is logistic and slows near both ends while decay is
+    // exponential. That coincidence is not a claim — do not assert an ordering on it.)
+    const WarfareConfig cfg{};
+    float a = 0.25f;
+    int years_to_cohere = 0;
+    for (int y = 1; y <= 1000; ++y) {
+        a = WarfareModule::asabiya_year(a, 1.0f, cfg);
+        if (a >= 0.75f) {
+            years_to_cohere = y;
+            break;
+        }
+    }
+    INFO("years on a frontier to reach 0.75: " << years_to_cohere);
+    CHECK(years_to_cohere > 50);
+    CHECK(years_to_cohere < 400);
+
+    float b = 0.75f;
+    int years_to_soften = 0;
+    for (int y = 1; y <= 1000; ++y) {
+        b = WarfareModule::asabiya_year(b, 0.0f, cfg);
+        if (b <= 0.25f) {
+            years_to_soften = y;
+            break;
+        }
+    }
+    INFO("years in the interior to fall back to 0.25: " << years_to_soften);
+    CHECK(years_to_soften > 50);
+    CHECK(years_to_soften < 400);
+}
+
+TEST_CASE("warfare: a people with no solidarity cannot develop any",
+          "[warfare][tier1][asabiya]") {
+    // The growth term is logistic, so zero is a fixed point — which is exactly why the
+    // stock is seeded above it rather than at it. This is a property of the law, not an
+    // oversight, and it is the reason the seed exists.
+    const WarfareConfig cfg{};
+    CHECK_THAT(WarfareModule::asabiya_year(0.0f, 1.0f, cfg), WithinAbs(0.0f, 1e-9f));
+    // And a wholly cohesive one cannot exceed itself: the logistic term vanishes at 1.
+    CHECK(WarfareModule::asabiya_year(1.0f, 1.0f, cfg) <= 1.0f);
+    CHECK_THAT(WarfareModule::asabiya_year(1.0f, 1.0f, cfg), WithinAbs(1.0f, 1e-6f));
+}
+
+TEST_CASE("warfare: a cohesive people fights above its numbers",
+          "[warfare][tier1][asabiya]") {
+    // Ibn Khaldun's central claim, and the reason a frontier tribe can take an empire
+    // that outnumbers it several times over.
+    const WarfareConfig cfg{};
+    const float soft = WarfareModule::asabiya_strength_mult(0.1f, cfg);
+    const float hard = WarfareModule::asabiya_strength_mult(0.9f, cfg);
+    CHECK(hard > soft);
+    CHECK(soft >= 1.0f);  // never a penalty: numbers are the floor
+    CHECK_THAT(WarfareModule::asabiya_strength_mult(1.0f, cfg),
+               WithinAbs(1.0f + cfg.asabiya_strength_weight, 1e-6f));
+
+    // The whole point: a small cohesive polity can outfight a larger soft one.
+    const float few_but_united = 1000.0f * hard;
+    const float many_but_soft = 1700.0f * soft;
+    CHECK(WarfareModule::p_attacker_wins(few_but_united, many_but_soft) > 0.5f);
 }

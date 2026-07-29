@@ -132,7 +132,9 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     //      the fertility of its land, and its written corpus.
     // v27: cohort_stats.plague_susceptible_fraction — how much of the population has
     //      never met the plague. The stock that makes plague RECUR instead of blip.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 27);
+    // v28: cohort_stats.asabiya — what a people can do together, forged at frontiers
+    //      and decaying in the interior. The second oscillator.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 28);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

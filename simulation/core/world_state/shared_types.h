@@ -369,6 +369,24 @@ struct RegionCohortStats {
     // sewers closed the grave.
     float urban_population = 0.0f;
 
+    // ASABIYA — the capacity of a people to act together (R3C). Ibn Khaldun's
+    // observation, and the one Turchin turned into a model: solidarity is FORGED AT
+    // FRONTIERS, where a group lives against an out-group and has to hold together or
+    // die, and it DECAYS IN THE INTERIOR, where safety makes it unnecessary. That is why
+    // frontier peoples repeatedly conquer settled empires, and why the empires they
+    // build then soften in the same place their founders came from.
+    //
+    // It is what a polity fights with, over and above headcount, so it flows into
+    // everything warfare already does: who attacks, who wins, what holds together and
+    // what secedes. Mechanically it matters because it is a SECOND OSCILLATOR with its
+    // own period, driven by geography rather than by the harvest — so provinces stop
+    // rising and falling in unison and the world gets a history instead of one global
+    // sawtooth.
+    //
+    // A real slow stock, persisted (schema v28). Seeded above zero because the growth
+    // term is logistic: a people with exactly no solidarity could never develop any.
+    float asabiya = 0.25f;
+
     // The share of the population that has never met the plague and would take it if it
     // came. A REAL STOCK, and the thing that turns one epidemic into a century and a
     // half of suppression.

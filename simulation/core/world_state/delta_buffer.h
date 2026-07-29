@@ -288,6 +288,10 @@ struct RegionDelta {
                                      // feed. The town's actual size is a real cohort headcount
                                      // (cohort_stats->urban_population), moved by migration.
     std::optional<float>
+        asabiya_replacement;  // replacement; cohort_stats->asabiya, published by warfare.
+                              // Forged at frontiers, decaying in the interior — the
+                              // second oscillator that de-synchronises the world.
+    std::optional<float>
         plague_susceptible_replacement;  // replacement; cohort_stats->plague_susceptible_fraction,
                                          // published by population_aging. Drawn down by each
                                          // wave, refilled by population turnover — the stock

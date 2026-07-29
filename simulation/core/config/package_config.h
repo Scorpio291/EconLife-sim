@@ -1164,6 +1164,36 @@ struct WarfareConfig {
     // fragile as the day it was taken; one held for generations is integrated.
     float cohesion_gain_max = 2.0f;        // asymptotic integration advantage (3x total hold)
     float cohesion_halfsat_years = 50.0f;  // ~two generations: the assimilation timescale
+
+    // --- ASABIYA (R3C): what a people fights with besides numbers -------------------
+    // Ibn Khaldun's observation, which Turchin turned into a model: solidarity is forged
+    // at FRONTIERS, where a group lives against an out-group and must hold together or
+    // die, and it decays in the INTERIOR, where safety makes it unnecessary. It is why
+    // frontier peoples repeatedly conquer settled empires — and why those empires then
+    // soften, in the same place their founders came from.
+    //
+    // Logistic at the frontier, exponential decay inside:
+    //     dA/dt = growth * A * (1 - A) * frontier  -  decay * A * (1 - frontier)
+    // where `frontier` is the share of a province's neighbours under another polity. The
+    // logistic form is why a people with NO solidarity can never develop any, and why the
+    // stock is seeded above zero.
+    //
+    // Mechanically this is a SECOND OSCILLATOR, driven by geography rather than by the
+    // harvest, with its own period. Its point is de-synchronisation: without it every
+    // province rises and falls on the same food cycle and the world moves as one
+    // sawtooth. With it, a frontier polity can be ascendant while its neighbour is
+    // collapsing — which is what history looks like.
+    float asabiya_growth_per_year = 0.02f;  // a frontier people cohere over ~a century,
+                                            // which is the timescale on which Rome's
+                                            // marches, the Arab conquests and the steppe
+                                            // confederations actually formed
+    float asabiya_decay_per_year = 0.01f;   // and soften over rather longer, safe behind
+                                            // their own conquests
+    float asabiya_strength_weight = 1.0f;   // levy strength multiplier is (1 + weight * A):
+                                            // a wholly cohesive people fights as though it
+                                            // were twice its number, which is the order of
+                                            // the advantage Ibn Khaldun describes and the
+                                            // record bears out
 };
 
 struct SeasonalAgricultureConfig {

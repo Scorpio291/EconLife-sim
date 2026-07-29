@@ -266,7 +266,24 @@ into births and deaths.
 - **Recurrent plague waves (original note).** England fell 4.8M (1348) -> 2.6M (1351) -> nadir 1.9M in
   1450: recovery took 150-200 years BECAUSE plague recurred. Model waves at 10-20 year
   intervals with declining lethality, not one blip. Wage response lags ~25 years.
-- **Asabiya (collective-action capacity)** generated at contested frontiers, decaying in
+- **Asabiya — LANDED 2026-07-28 (R3C).** `cohort_stats.asabiya` is a real persisted stock
+  (schema v28), updated annually by warfare after that year's conquests and secessions:
+  `dA/dt = growth * A(1-A) * frontier - decay * A * (1-frontier)`, where `frontier` is the
+  share of a province's neighbours under another polity. Logistic up (which is why a
+  people with no solidarity can never develop any, and why the stock is seeded above
+  zero), exponential down. Both directions are century-scale.
+
+  It multiplies **STRENGTH, never the headcount** — and getting that wrong first was
+  instructive. Folding it into `levy` made a beaten polity lose 12.5% of its population
+  when only 10% had been mustered: more dead than there were soldiers. `levy` is also what
+  casualties are apportioned over and what a seceding member takes with it, so warfare now
+  carries a parallel `polity_strength` and the two quantities stay distinct. Soldiers eat
+  as bodies and fight as a people.
+
+  Flows into everything warfare already does: who dares attack, who wins, what holds and
+  what secedes. A cohesive march can break off an empire that could hold a softer province
+  of the same size.
+- **Asabiya (original note)** generated at contested frontiers, decaying in
   the interior: `dA/dt = +h*A(1-A)*frontier - dec*A*(1-frontier)`, polity power ∝ A*N.
   Adds a second oscillator so collapses DE-SYNCHRONISE across provinces instead of one
   global sawtooth. Hooks directly onto warfare's existing cohesion model.

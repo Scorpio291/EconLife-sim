@@ -14,8 +14,9 @@
 // layers — see docs/design/EconLife_War_and_Diplomacy_v01.md. Global (cross-province),
 // dawn-regime-gated; modern war is the political_cycle's domain.
 
-#include <string_view>
+#include <algorithm>
 #include <cstdint>
+#include <string_view>
 #include <map>
 #include <vector>
 
@@ -56,6 +57,34 @@ class WarfareModule : public ITickModule {
     // Lanchester square-law contest: P(attacker wins) = Sa^2 / (Sa^2 + Sb^2).
     // Pure/static for unit testing.
     static float p_attacker_wins(float attacker_strength, float defender_strength);
+
+    // ASABIYA (R3C) — one year of Ibn Khaldun's law.
+    //
+    //     dA/dt = growth * A * (1 - A) * frontier  -  decay * A * (1 - frontier)
+    //
+    // Solidarity is forged where a people lives against an out-group and must hold
+    // together or die, and it decays where safety makes it unnecessary. `frontier` is the
+    // share of a province's neighbours under another polity: 1 means surrounded by
+    // strangers, 0 means deep inside one's own realm.
+    //
+    // Logistic on the way up — which is why a people with no solidarity at all could
+    // never develop any, and why the stock is seeded above zero — and exponential on the
+    // way down, so softening is slower than cohering but never quite complete. Bounded in
+    // [0,1] by the form itself, not by a clamp. Pure/static.
+    static float asabiya_year(float asabiya, float frontier_share, const WarfareConfig& cfg) {
+        const float a = std::clamp(asabiya, 0.0f, 1.0f);
+        const float f = std::clamp(frontier_share, 0.0f, 1.0f);
+        const float growth = std::max(0.0f, cfg.asabiya_growth_per_year) * a * (1.0f - a) * f;
+        const float decay = std::max(0.0f, cfg.asabiya_decay_per_year) * a * (1.0f - f);
+        return std::clamp(a + growth - decay, 0.0f, 1.0f);
+    }
+
+    // What a people fights with besides numbers: a wholly cohesive one fights as though
+    // it were (1 + asabiya_strength_weight) times its size. This is why frontier peoples
+    // conquer settled empires that outnumber them. Pure/static.
+    static float asabiya_strength_mult(float asabiya, const WarfareConfig& cfg) {
+        return 1.0f + std::max(0.0f, cfg.asabiya_strength_weight) * std::clamp(asabiya, 0.0f, 1.0f);
+    }
 
     // How well-fed an army fights: forage covers cfg.forage_share of its rations
     // (off the land); the rest must be DRAWN from the granary. Returns the strength
