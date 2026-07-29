@@ -147,6 +147,130 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
     }
 }
 
+// ===========================================================================
+// THE CLIMB LANDS ON ITS HISTORICAL DATES (F7 gate).
+//
+// Earthlike is the anchor because it is Earth: measuring from the dawn of
+// agriculture, a world with Earth's hazards and Earth's bounty should reach
+// each era at roughly the year that era actually began. This is the one place
+// the whole grounded stack is checked against the record rather than against
+// itself — soil, wage valve, urban graveyard, ghost acres, structural stress
+// and the difficulty of new discoveries all have to be right together for the
+// dates to come out.
+//
+// The tolerance is deliberately loose. The calibration lands within a couple of
+// years on the calibrated seed, and asserting THAT would be fitting the test to
+// one world; what matters is that no mechanism change silently moves an era by
+// a millennium.
+// ===========================================================================
+TEST_CASE("society: the earthlike climb reaches each era near its historical date",
+          "[emergence][integration][society][pacing]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+
+    // First year each era is reached.
+    std::vector<uint32_t> first_year(16, 0);
+    std::vector<bool> seen(16, false);
+    for (const auto& s : series) {
+        const auto e = static_cast<size_t>(s.era);
+        if (e < first_year.size() && !seen[e]) {
+            seen[e] = true;
+            first_year[e] = s.year;
+        }
+    }
+
+    struct Target {
+        int era;
+        const char* name;
+        int start_year;  // as in eras.csv; year = start_year + 10000
+    };
+    const Target targets[] = {
+        {2, "Bronze Age", -3300}, {3, "Iron Age", -1200},    {4, "Classical", -550},
+        {5, "Medieval", 500},     {6, "Early Modern", 1450}, {7, "Industrial", 1750},
+        {8, "Turn of Millennium", 2000},
+    };
+    constexpr int kToleranceYears = 1500;
+
+    for (const auto& t : targets) {
+        INFO(t.name << " (era " << t.era << ")");
+        REQUIRE(seen[static_cast<size_t>(t.era)]);  // an era Earth never reaches is a
+                                                    // failed civilisation, not a late one
+        const int target_year = t.start_year + 10000;
+        const int actual = static_cast<int>(first_year[static_cast<size_t>(t.era)]);
+        INFO("reached year " << actual << ", history says " << target_year);
+        CHECK(std::abs(actual - target_year) < kToleranceYears);
+    }
+
+    // And the eras arrive in order, each strictly after the last.
+    for (size_t e = 3; e <= 8; ++e)
+        CHECK(first_year[e] > first_year[e - 1]);
+}
+
+// F7 — RE-ANCHORING THE ERA THRESHOLDS.
+//
+// The era thresholds are the one calibration surface the grounding doctrine allows:
+// they are pure pacing dials and shape nothing mechanical. This prints the knowledge an
+// EARTHLIKE world actually holds at the year each era historically began, measuring from
+// the dawn of agriculture (era 1 = 10,000 BCE, so `start_year + 10000` is the target).
+//
+// Earthlike is the anchor on purpose: it is Earth. A garden world should then reach each
+// era sooner and a deathworld later or never, which is the spectrum the thresholds exist
+// to express — not something they should be tuned per-world to produce.
+//
+// This is ITERATIVE: the thresholds change the trajectory (era sets the food and
+// mortality multipliers and the specialist ceiling), so re-run after editing eras.csv.
+TEST_CASE("society observe: knowledge at each era's historical year (F7 calibration)",
+          "[.society-threshold-calibration]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+
+    struct Target {
+        int era;
+        const char* name;
+        int start_year;  // as in eras.csv
+    };
+    const Target targets[] = {
+        {2, "Bronze Age", -3300}, {3, "Iron Age", -1200},     {4, "Classical", -550},
+        {5, "Medieval", 500},     {6, "Early Modern", 1450},  {7, "Industrial", 1750},
+        {8, "Turn of Millennium", 2000},
+    };
+
+    std::printf("\n=== EARTHLIKE: knowledge at each era's historical year ===\n");
+    std::printf("  era | %-20s | target year | knowledge held | era actually at\n", "name");
+    for (const auto& t : targets) {
+        const auto target_year = static_cast<uint32_t>(t.start_year + 10000);
+        const SocietySnapshot* at = nullptr;
+        for (const auto& s : series) {
+            if (s.year >= target_year) {
+                at = &s;
+                break;
+            }
+        }
+        if (at == nullptr)
+            continue;
+        std::printf("  %3d | %-20s | %11u | %14.0f | %d\n", t.era, t.name, target_year,
+                    static_cast<double>(at->knowledge), at->era);
+    }
+    // The peak matters as much as the path: a threshold above what the world ever holds
+    // is an era no Earth can reach, which reads as a failed civilisation rather than a
+    // calibration error.
+    float peak = 0.0f;
+    uint32_t peak_year = 0;
+    for (const auto& s : series) {
+        if (s.knowledge > peak) {
+            peak = s.knowledge;
+            peak_year = s.year;
+        }
+    }
+    std::printf("  peak knowledge %.0f at year %u (final %.0f at %u)\n",
+                static_cast<double>(peak), peak_year,
+                static_cast<double>(series.back().knowledge), series.back().year);
+}
+
 TEST_CASE("society observe: transplant — soft vs native people on a harsh world",
           "[.society-transplant]") {
     // Same harsh-but-FERTILE world (high hazard, plenty of food, so the difference is

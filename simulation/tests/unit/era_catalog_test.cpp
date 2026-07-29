@@ -98,3 +98,29 @@ TEST_CASE("EraCatalog rejects missing dir and out-of-range indices", "[era_catal
     CHECK_FALSE(cat.load_from_directory("/no/such/eras/dir"));
     CHECK(cat.empty());
 }
+
+TEST_CASE("EraCatalog: the climb's knowledge thresholds strictly increase",
+          "[era_catalog][tier0][pacing]") {
+    // A society advances by accumulating knowledge, so a later era demanding LESS than
+    // an earlier one means two eras fall on the same instant and the climb skips a step.
+    //
+    // This is not hypothetical. Before ideas were made harder to find, an earthlike
+    // world's knowledge PEAKED mid-climb and then decayed, so the knowledge held at the
+    // Medieval date was lower than at the Classical one — and no set of thresholds could
+    // have placed the eras at their historical dates. The thresholds were not miscalibrated;
+    // the trajectory they were being fitted to was not monotone. This guard makes that
+    // condition a test failure rather than something to rediscover.
+    EraCatalog cat;
+    cat.load_builtin_default();
+    float previous = 0.0f;
+    for (uint8_t i = 1; i <= cat.v1_max_era(); ++i) {
+        const EraDefinition* e = cat.by_index(i);
+        REQUIRE(e != nullptr);
+        if (e->knowledge_to_advance <= 0.0f)
+            continue;  // the modern eras advance on the calendar, not on knowledge
+        INFO("era " << static_cast<int>(i) << " (" << e->key
+                    << ") demands " << e->knowledge_to_advance << " after " << previous);
+        CHECK(e->knowledge_to_advance > previous);
+        previous = e->knowledge_to_advance;
+    }
+}

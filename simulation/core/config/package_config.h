@@ -744,6 +744,41 @@ struct SubsistenceConfig {
 // (via subsistence productivity + era thresholds) lets a society escape the
 // Malthusian trap and move forward. All pre-market; modern tech uses the tech module.
 struct KnowledgeConfig {
+    // --- IDEAS GET HARDER TO FIND (R3A) ---
+    // The natural limiter on how fast a society can advance, and the one thing the
+    // knowledge engine had no version of: production was strictly linear in the number
+    // of people doing knowledge work, with no dependence on how much was already known.
+    //
+    // That is empirically wrong and the evidence is overwhelming. Research productivity
+    // in the United States has fallen by a factor of about 41 since the 1930s while the
+    // number of researchers rose more than twenty-fold: it now takes eighteen times the
+    // research effort to sustain Moore's law that it took in 1971, and the same story
+    // holds for crop yields, for medical progress and for firm-level output. The easy
+    // discoveries are made first, and every one made leaves the next one harder — which
+    // is why enormous modern research effort buys steady rather than explosive progress.
+    // Producing vastly more data than fifty years ago has not given us flying cars.
+    //
+    // Measured here, its absence was structural, not cosmetic. Without it an earthlike
+    // world spent 6,700 years almost flat and then crossed FIVE eras in 1,300 years on a
+    // near-vertical spike, because population and knowledge fed each other with nothing
+    // in between. The knowledge held at each era's historical year was not even monotone
+    // — the Medieval target year held LESS than the Classical one — so no set of era
+    // thresholds could have placed the eras at their real dates. It was not a
+    // calibration problem, and it could not have been fixed by one.
+    //
+    // Jones' semi-endogenous form: dK/dt scales as L / K^beta. Expressed against a
+    // reference stock so the dawn is untouched and the penalty only bites once a society
+    // knows a great deal.
+    float discovery_difficulty_exponent = 1.0f;   // beta: the canonical semi-endogenous
+                                                  // value (Jones 1995). At beta = 1 a
+                                                  // society with a fixed learned stratum
+                                                  // accumulates as sqrt(t) rather than
+                                                  // linearly — steady progress, no spike.
+    float discovery_difficulty_halfsat = 50000.0f;  // the stock at which the next discovery
+                                                    // costs twice what the first did. Below
+                                                    // it the dawn is unaffected; the
+                                                    // measured runaway begins just above.
+
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
     std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
                                                "feudal",      "mercantile", "industrial"};

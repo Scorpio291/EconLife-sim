@@ -14,6 +14,8 @@
 // aggregates one global knowledge figure. See
 // docs/design/EconLife_World_Spectrum_and_Evolution_Plan.md (the knowledge engine).
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -43,6 +45,27 @@ class KnowledgeModule : public ITickModule {
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
     bool regime_active(std::string_view regime) const;
+
+    // IDEAS GET HARDER TO FIND. How much more a discovery costs a society that already
+    // knows `level` than it cost one that knew nothing. Always >= 1, rising without
+    // bound: the easy discoveries are made first and every one made leaves the next
+    // harder. American research productivity has fallen roughly 41-fold since the 1930s
+    // while researcher numbers rose more than twenty-fold — sustaining Moore's law now
+    // takes eighteen times the effort it took in 1971 — and the same holds for crop
+    // yields and for medicine.
+    //
+    // Jones' semi-endogenous form, expressed against a reference stock so the dawn is
+    // untouched: at `level` = halfsat the next discovery costs twice the first, and
+    // beyond it production falls as level^-beta. Nothing is capped; the frontier simply
+    // recedes. Pure/static.
+    static double discovery_difficulty(float level, const KnowledgeConfig& cfg) {
+        const double K = static_cast<double>(std::max(0.0f, level));
+        const double half = static_cast<double>(std::max(1.0f, cfg.discovery_difficulty_halfsat));
+        const double beta = static_cast<double>(std::max(0.0f, cfg.discovery_difficulty_exponent));
+        if (beta <= 0.0)
+            return 1.0;
+        return std::pow(1.0 + K / half, beta);
+    }
 
    private:
     KnowledgeConfig cfg_;

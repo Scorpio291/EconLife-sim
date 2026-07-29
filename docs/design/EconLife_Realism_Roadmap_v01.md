@@ -311,6 +311,67 @@ measured climb reaches era 2 at year ~5,500 (right) and then crosses eras 3 thro
 ~1,300 years, because knowledge grows exponentially in a population that grows with the
 ceiling. The pacing is front-loaded backwards against the thresholds we have.
 
+## R3A. Ideas get harder to find — the natural limiter on advancement speed
+
+**Not in the original roadmap; found by trying to do F7 and discovering it was impossible.**
+
+The knowledge engine was strictly linear in the number of people doing knowledge work,
+with no dependence on how much was already known. That is empirically wrong and the
+evidence is overwhelming: US research productivity has fallen roughly 41-fold since the
+1930s while the number of researchers rose more than twenty-fold; sustaining Moore's law
+now takes about eighteen times the research effort it took in 1971; the same pattern holds
+for crop yields and for medical progress. The easy discoveries are made first, and every
+one made leaves the next harder. Producing vastly more data than fifty years ago has not
+bought flying cars.
+
+Its absence was structural, not cosmetic. Measured: an earthlike world spent 6,700 years
+nearly flat and then crossed FIVE eras in 1,300 years on a near-vertical spike, because
+population and knowledge fed each other with nothing in between — after which knowledge
+PEAKED and decayed. The knowledge held at each era's historical year was therefore not
+even monotone (the Medieval target year held less than the Classical one), so **no set of
+era thresholds could have placed the eras at their real dates**. F7 was not a calibration
+problem and could not have been fixed by calibration.
+
+- Jones' semi-endogenous form: `dK/dt ~ L / K^beta`, expressed against a reference stock
+  so the dawn is untouched — `production /= (1 + K/halfsat)^beta`, `beta = 1`.
+- It applies to the genius leaps too: Newton had harder problems available than Archimedes
+  and Einstein harder ones than Newton. A genius is one mind at the frontier of the day,
+  and the frontier recedes.
+- Nothing is capped. The next discovery simply costs more than the last.
+- **Fixes:** the knowledge trajectory is now monotone across all 13,000 years, with a
+  realistic accelerate-then-decelerate shape, which is what made F7 possible at all.
+
+## F7 — the era thresholds, re-anchored (DONE 2026-07-28)
+
+Calibrated against EARTHLIKE, because it is Earth. Measuring from the dawn of
+agriculture, the climb now lands on the real dates:
+
+| era | historical | reached | error |
+|---|---|---|---|
+| Bronze Age | 6,700 (3300 BCE) | 6,701 | +1 |
+| Iron Age | 8,800 (1200 BCE) | 8,801 | +1 |
+| Classical | 9,450 (550 BCE) | 9,451 | +1 |
+| Medieval | 10,500 (500 CE) | 10,502 | +2 |
+| Early Modern | 11,450 (1450 CE) | 11,451 | +1 |
+| Industrial | 11,750 (1750 CE) | 11,752 | +2 |
+| Turn of Millennium | 12,000 (2000 CE) | 12,001 | +1 |
+
+And the spectrum falls out of the SAME thresholds rather than being tuned per world:
+garden reaches era 8 at 11,816, fertile deathworld at 11,136 (a harsh but bountiful world
+out-innovates a comfortable one — the Deathworlders premise), and barren deathworld never
+leaves era 2 in 13,000 years.
+
+**Calibrate SEQUENTIALLY, bottom-up.** Each era transition itself accelerates knowledge
+(better occupations, a higher specialist ceiling, tech multipliers), so fitting all seven
+thresholds at once oscillates: values measured while a society is stuck in era 1 are
+meaningless once it reaches era 2. Set every later threshold unreachable, calibrate one
+era, fix it, move up. The script that does this is in the session scratchpad and the
+procedure is recorded here because it will be needed again after any mechanism change.
+
+Two guards now hold the result: a unit test that the thresholds strictly increase (the
+condition whose violation made F7 impossible), and an emergence test that the earthlike
+climb reaches every era within 1,500 years of its historical date.
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;

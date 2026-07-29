@@ -156,6 +156,24 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
     const float level = state.technology.knowledge_level;
 
+    // IDEAS GET HARDER TO FIND. Everything above — the stratum's work, the diffuse
+    // population innovation, and the leaps — buys less the more a society already knows,
+    // because the easy discoveries are made first and every one made leaves the next one
+    // harder. American research productivity has fallen roughly 41-fold since the 1930s
+    // while the number of researchers rose more than twenty-fold; sustaining Moore's law
+    // now takes eighteen times the effort it took in 1971. This is why producing vastly
+    // more data than fifty years ago has not bought flying cars: knowledge and the
+    // difficulty of the next step both grow.
+    //
+    // It applies to the leaps too. Newton had harder problems available to him than
+    // Archimedes did, and Einstein harder ones than Newton — a genius is one mind
+    // working at the frontier of the day, and the frontier keeps receding.
+    //
+    // This is the natural limiter on advancement speed, and it is a mechanism, not a
+    // brake: nothing here caps anything, the next discovery simply costs more than the
+    // last. Without it the whole climb happened in a single near-vertical spike.
+    production /= discovery_difficulty(level, cfg_);
+
     // WHAT THE SOCIETY CAN CARRY. Knowledge lives in people and, later, in records: a
     // society holds only what its learned stratum and institutions can sustain, and
     // forgets the rest. This is how civilisations REGRESS — Rome's aqueducts outlived
