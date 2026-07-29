@@ -168,6 +168,10 @@ bool is_retiree_group(DemographicGroup g) {
     return g == DemographicGroup::retiree_urban || g == DemographicGroup::retiree_rural;
 }
 
+bool is_youth_group(DemographicGroup g) {
+    return g == DemographicGroup::youth_urban || g == DemographicGroup::youth_rural;
+}
+
 bool is_urban_group(DemographicGroup g) {
     return g == DemographicGroup::youth_urban || g == DemographicGroup::working_urban_low ||
            g == DemographicGroup::working_urban_mid || g == DemographicGroup::working_urban_high ||
@@ -258,6 +262,90 @@ void migrate_land_and_town(std::map<DemographicGroup, PopulationCohort>& cohorts
     }
 }
 
+// COHORTS AGE. Each year a share of the young reach working age and a share of the
+// workers retire — 1/18 and 1/47, the lengths of a childhood and a working life.
+//
+// This was missing entirely, and it was survivable only while the young died at the same
+// rate as everyone else. The moment child mortality was represented (R4A), the youth
+// cohort became a trap: every birth landed in a bucket with five times the mortality and
+// never left it, so the whole birth stream was consumed and the climb stopped. The age
+// structure has to be real.
+//
+// Conserved head for head: nobody is created or destroyed by having a birthday. Retiring
+// happens before graduating so this year's new workers do not retire in the same year,
+// and graduates are distributed across the income tiers in proportion to the tiers that
+// already exist — a child inherits its parents' station.
+void age_cohorts(std::map<DemographicGroup, PopulationCohort>& cohorts,
+                 const PopulationAgingConfig& cfg) {
+    struct Ladder {
+        DemographicGroup youth;
+        DemographicGroup working[3];
+        DemographicGroup retiree;
+    };
+    static constexpr Ladder kLadders[] = {
+        {DemographicGroup::youth_urban,
+         {DemographicGroup::working_urban_low, DemographicGroup::working_urban_mid,
+          DemographicGroup::working_urban_high},
+         DemographicGroup::retiree_urban},
+        {DemographicGroup::youth_rural,
+         {DemographicGroup::working_rural_low, DemographicGroup::working_rural_mid,
+          DemographicGroup::working_rural_high},
+         DemographicGroup::retiree_rural},
+    };
+    const double youth_years = std::max(1.0, static_cast<double>(cfg.youth_years));
+    const double working_years = std::max(1.0, static_cast<double>(cfg.working_years));
+
+    auto held = [&cohorts](DemographicGroup g) -> uint64_t {
+        auto it = cohorts.find(g);
+        return it == cohorts.end() ? 0u : it->second.size;
+    };
+
+    for (const auto& L : kLadders) {
+        // Retire first: this year's graduates are not also this year's retirees.
+        uint64_t retiring = 0;
+        for (const auto& w : L.working) {
+            const uint64_t size = held(w);
+            if (size == 0)
+                continue;
+            const auto leaving = static_cast<uint64_t>(static_cast<double>(size) / working_years);
+            if (leaving == 0)
+                continue;
+            cohorts[w].size -= static_cast<uint32_t>(leaving);
+            retiring += leaving;
+        }
+        if (retiring > 0) {
+            auto& r = cohorts[L.retiree];
+            r.group = L.retiree;
+            r.size += static_cast<uint32_t>(retiring);
+        }
+
+        // Then graduate, distributed across the tiers that already exist.
+        const uint64_t young = held(L.youth);
+        if (young == 0)
+            continue;
+        const auto graduating = static_cast<uint64_t>(static_cast<double>(young) / youth_years);
+        if (graduating == 0)
+            continue;
+        cohorts[L.youth].size -= static_cast<uint32_t>(graduating);
+
+        uint64_t tier_total = 0;
+        for (const auto& w : L.working)
+            tier_total += held(w);
+        uint64_t placed = 0;
+        for (size_t i = 0; i < 3; ++i) {
+            const uint64_t take =
+                (i + 1 == 3) ? (graduating > placed ? graduating - placed : 0u)
+                             : (tier_total > 0 ? graduating * held(L.working[i]) / tier_total : 0u);
+            if (take == 0)
+                continue;
+            auto& w = cohorts[L.working[i]];
+            w.group = L.working[i];
+            w.size += static_cast<uint32_t>(take);
+            placed += take;
+        }
+    }
+}
+
 // Annual births (added to youth cohorts) and per-cohort deaths, applied in
 // place to a working copy of the cohort map. Deterministic: integer rounding,
 // canonical group order.
@@ -310,9 +398,31 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     // Births: survival scales with stability and healthcare (proxied by the
     // inverse of sick_rate, since HealthcareProfile is not on WorldState).
     float healthcare_proxy = std::clamp(1.0f - sick_rate, 0.0f, 1.0f);
-    float birth_rate = cfg.base_annual_birth_rate * std::clamp(stability, 0.0f, 1.0f) *
-                       healthcare_proxy * birth_food_factor *
-                       std::clamp(fertility_mult, 0.0f, 1.0f);  // radiation depresses fertility (M6a)
+    // THE QUANTITY-QUALITY TRANSITION (R4A). Families target surviving children, not
+    // births, so the birth rate answers to how many of them live. It is neutral at the
+    // pre-modern norm and falls as medicine takes hold — which is what breaks the
+    // Malthusian feedback, and the reason the modern world stopped breeding into every
+    // gain it made instead of staying at subsistence forever.
+    //
+    // Composed the same way the death loop below composes the youth rate, so families are
+    // reading the mortality their children actually face.
+    const float env_for_survival = (1.0f + (1.0f - std::clamp(stability, 0.0f, 1.0f))) *
+                                   (1.0f + std::clamp(addiction_rate, 0.0f, 1.0f)) *
+                                   famine_mortality_factor * hazard_rate_mult;
+    const float youth_rate =
+        cfg.base_annual_death_rate * env_for_survival * cfg.youth_mortality_multiplier;
+    const float survival_factor = PopulationAgingModule::desired_births_factor(
+        PopulationAgingModule::child_survival(youth_rate, cfg), cfg);
+    float desired_rate = cfg.base_annual_birth_rate * std::clamp(stability, 0.0f, 1.0f) *
+                         healthcare_proxy * birth_food_factor * survival_factor *
+                         std::clamp(fertility_mult, 0.0f, 1.0f);  // radiation depresses fertility
+    // Wanting more surviving children does not make a woman able to bear more. The
+    // desired rate approaches what a population can physically produce — the highest
+    // crude birth rates ever recorded sit near 55 per 1000 — and never reaches it, by
+    // the same 1 - exp form mortality uses. At ordinary rates this is indistinguishable
+    // from the desire; it bends only where biology actually bends.
+    const float max_rate = std::max(1e-4f, cfg.max_biological_birth_rate);
+    float birth_rate = max_rate * (1.0f - std::exp(-std::max(0.0f, desired_rate) / max_rate));
     auto births = static_cast<uint32_t>(
         std::llround(static_cast<double>(total) * static_cast<double>(birth_rate)));
     // Children are born where their parents live. This used to be a flat half-and-half
@@ -371,6 +481,12 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
         float death_rate = cfg.base_annual_death_rate * mortality_rate_env;
         if (is_retiree_group(g))
             death_rate *= cfg.retiree_mortality_multiplier;  // frailer bodies: a higher rate
+        // CHILDREN DIED. Roughly half of those born did not reach fifteen, across
+        // societies as different as classical Rome, Tokugawa Japan and Stuart England.
+        // Without this the young die at the same rate as the middle-aged and there is
+        // nothing for medicine to fix — so no demographic transition is available.
+        if (is_youth_group(g))
+            death_rate *= cfg.youth_mortality_multiplier;
         // THE URBAN GRAVEYARD. Living in a town carries its own hazard, arriving as an
         // ADDITIVE rate rather than a multiplier because it is a distinct cause of
         // death — the crowd's endemic disease — not an amplification of the rest. It
@@ -607,6 +723,10 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                       birth_surplus, famine_surplus, hazard_rate_mult,
                                       fertility_mult, war_deaths, faction_deaths, crowding_rate,
                                       cfg_);
+
+                // Then everyone has a birthday. Without this the young never grow up and
+                // nobody replaces the workers who die.
+                age_cohorts(next, cfg_);
 
                 // Then people move. A town is people the countryside must both SPARE and
                 // FEED, and those are two separate physical limits: the harvest says how

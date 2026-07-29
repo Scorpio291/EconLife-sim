@@ -10,10 +10,11 @@ set -e
 cd /home/user/EconLife-sim
 SP=tools/calibration
 INF=1000000000
-# Calibrated so far (era 1 measured at 1218 -> Bronze Age lands at year 6701, target 6700)
-T=(1218 $INF $INF $INF $INF $INF $INF)
+# Start with every threshold unreachable, so era 1 is calibrated against a society that
+# genuinely stays in era 1, and so on up the ladder.
+T=($INF $INF $INF $INF $INF $INF $INF)
 
-for E in 2 3 4 5 6 7; do
+for E in 1 2 3 4 5 6 7; do
     ARGS="${T[@]}"
     python3 tools/calibration/set_thresholds.py $ARGS > /dev/null
     cmake --build build -j6 2>&1 | grep -E " error|Error [0-9]" | head || true

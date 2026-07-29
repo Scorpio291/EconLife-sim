@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "core/config/package_config.h"
@@ -95,6 +97,30 @@ class PopulationAgingModule : public ITickModule {
     // suppresses births. Planetary; never wanes. Scaled by the `radiation` dial.
     static float radiation_fertility_factor(float radiation_dial,
                                             const PopulationAgingConfig& cfg);
+
+    // Chance a child born now reaches fifteen, given the annual death rate the young
+    // actually face. Roughly half did not, before modern medicine. Pure/static.
+    static float child_survival(float youth_annual_death_rate, const PopulationAgingConfig& cfg) {
+        const float rate = std::max(0.0f, youth_annual_death_rate);
+        if (std::isnan(rate))
+            return 1.0f;  // crash sentinel only
+        return std::exp(-rate * std::max(0.0f, cfg.child_survival_years));
+    }
+
+    // THE QUANTITY-QUALITY TRANSITION (R4A, Galor). Families target SURVIVING CHILDREN,
+    // not births: `desired_births = target_surviving / P(survive)`. When half your
+    // children die before fifteen you have many; when almost none do, you have few.
+    //
+    // Exactly 1.0 at the pre-modern survival this model's base birth rate is calibrated
+    // against, above it when a world is harsher than that, and falling as medicine and
+    // sanitation take hold — going from ~0.5 to ~0.9 cuts births by about 44% through
+    // this channel alone. That substitution is what breaks the Malthusian income->births
+    // feedback, and it is why the modern world escaped the trap instead of breeding into
+    // every gain it made. Pure/static.
+    static float desired_births_factor(float survival, const PopulationAgingConfig& cfg) {
+        const float p = std::max(1e-3f, survival);  // divide-by-zero sentinel
+        return std::max(0.0f, cfg.reference_child_survival) / p;
+    }
 
     // THE URBAN GRAVEYARD: the EXTRA annual death hazard rate carried by living in a
     // town of `town_size` people, added to (not multiplied into) the background rate —

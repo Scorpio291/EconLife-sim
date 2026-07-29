@@ -345,7 +345,38 @@ into births and deaths.
 
 ## TIER 4 — the modern transition
 
-- **Quantity-quality fertility transition (Galor).** Once returns to human capital
+- **Quantity-quality fertility transition — LANDED 2026-07-28 (R4A).** Families target
+  SURVIVING children: `desired_births = target_surviving / P(survive to 15)`, neutral at
+  the pre-modern norm and falling ~44% as survival goes 0.5 -> 0.9. Bounded by what a
+  population can physically bear (~55 births per 1000 is the highest ever recorded),
+  approached via `1 - exp` rather than clamped — without that a deathworld drove the
+  factor to 15x and a soft people bred its way out of being culled.
+
+  **It required two prerequisites that turned out to be missing, and both were latent
+  defects rather than new features:**
+
+  - **Children did not die.** The young died at the same rate as the middle-aged, so
+    there was nothing for medicine to fix and no transition was available. Roughly half
+    of all children born did not reach fifteen, across societies as different as
+    classical Rome, Tokugawa Japan and Stuart England. The 5.25x multiplier is DERIVED
+    from that datum under this model's mortality, which also makes the quantity-quality
+    response exactly neutral pre-modern.
+  - **Cohorts did not age.** Births piled into the youth cohorts and stayed there
+    forever while nobody replaced the workers who died. Survivable only while the young
+    died at the same rate as everyone else — the moment child mortality was represented,
+    the youth cohort became a trap that swallowed the entire birth stream and the climb
+    stopped dead. There is now an age ladder (youth 18 years, working 47), conserved.
+  - **And the birth rate was the MODERN one.** 12 per 1000 stood in for a demography
+    whose real components are three times larger; with a real age structure a stationary
+    population needs ~29 per 1000, so 12 collapsed earthlike from 21,127 to 1,200 at a
+    food surplus of 4.6. It is now the pre-modern ~40 per 1000 that every agrarian
+    society actually ran, and the near-zero Malthusian growth EMERGES from real
+    components instead of from the gap between two numbers never meant to be compared.
+
+  Thresholds recalibrated afterward by the documented procedure; earthlike lands on every
+  historical era date within two years again, and the spectrum holds (garden era 8 at
+  12,042, fertile deathworld at 11,196, barren deathworld still Neolithic at 13,000).
+- **Quantity-quality fertility transition (original note, Galor).** Once returns to human capital
   exceed returns to child quantity, families substitute education for fertility,
   breaking the Malthusian income->births feedback. Model DESIRED SURVIVING children:
   `desired_births = target_surviving / P(survive_to_15)`. As survival goes 0.5 -> 0.9,

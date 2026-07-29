@@ -1941,9 +1941,78 @@ struct PopulationAgingConfig {
     // Annual births/deaths (applied to cohort sizes once per year). Birth count
     // scales with healthcare access and stability (survival); deaths scale with
     // instability and addiction, and are higher for retiree cohorts.
-    float base_annual_birth_rate = 0.012f;
+    // Pre-modern crude birth rate: ~40 per 1000 per year, the level every agrarian
+    // society ran at — England, Qing China, Tokugawa Japan — because it took that many
+    // births to hold a population steady when half of children died before fifteen.
+    //
+    // It was 0.012 here, the MODERN rate, and that was survivable only while the model
+    // had no child mortality and no age structure: two modern numbers that happened to
+    // differ by 4 per 1000 stood in for a demography whose real components are three
+    // times larger. With the age ladder in (youth 18 years, working 47) and children
+    // dying at 5.25x the adult rate, a stationary population needs ~29 births per 1000 —
+    // so 12 collapses a society to a twentieth of its size and holds it there, however
+    // much food it has. Measured: earthlike fell 21,127 -> 1,200 at a food surplus of 4.6.
+    //
+    // At 40 the near-zero Malthusian growth now EMERGES from real demographic components
+    // rather than from the gap between two numbers that were never meant to be compared.
+    float base_annual_birth_rate = 0.040f;
     float base_annual_death_rate = 0.008f;
     float retiree_mortality_multiplier = 4.0f;
+    // Children died. Infant and child mortality dominated pre-modern demography in a way
+    // the modern crude rates give no sense of: roughly HALF of all children born did not
+    // reach fifteen, across societies as different as classical Rome, Tokugawa Japan and
+    // Stuart England. A model in which the young die at the same rate as the middle-aged
+    // has no demographic transition available to it, because there is nothing for
+    // medicine to fix.
+    //
+    // The multiplier is DERIVED from the 50% datum, not chosen to produce a curve: at
+    // this model's Earth-normal pre-modern mortality (0.008/yr base, x1.1 for the commons
+    // stability floor) the rate that leaves exactly half of children alive at fifteen is
+    // -ln(0.5)/15 = 0.0462/yr, which is 5.25x the adult rate. Setting it here also makes
+    // the quantity-quality response below exactly neutral for a pre-modern society, so
+    // the only thing it changes is the transition itself.
+    float youth_mortality_multiplier = 5.25f;
+    // --- COHORTS AGE ---------------------------------------------------------------
+    // They did not. Births piled into the youth cohorts and stayed there forever while
+    // nobody replaced the workers who died — which was survivable only while the young
+    // died at the same rate as everyone else. The moment child mortality was represented
+    // it turned the youth cohort into a trap that swallowed the entire birth stream and
+    // the climb stopped. The age structure has to be real for any of it to work, and the
+    // Political Stress Index reads the youth share besides.
+    float youth_years = 18.0f;    // childhood: how long before a cohort reaches working age
+    float working_years = 47.0f;  // 18 to 65 — how long before it retires
+    // --- THE QUANTITY-QUALITY TRANSITION (R4A, Galor) --------------------------------
+    // Families do not target BIRTHS, they target SURVIVING CHILDREN. When half your
+    // children die before fifteen you have many; when almost none do, you have few. That
+    // substitution is what breaks the Malthusian income->births feedback, and it is the
+    // reason the modern world escaped the trap rather than simply breeding into every
+    // gain it made.
+    //
+    //     desired_births = target_surviving / P(survive to 15)
+    //
+    // So the birth rate carries a factor of reference_survival / actual_survival: exactly
+    // 1.0 at the pre-modern norm this model's base rate is calibrated against, and
+    // falling as medicine and sanitation raise survival. Going from ~0.5 to ~0.9 cuts
+    // births ~44% from this channel alone.
+    //
+    // This is the single mechanism the research flagged as highest-value for the
+    // measured defect that population keeps rising straight into a collapse.
+    float reference_child_survival = 0.5f;  // ~half of children reached fifteen before
+                                            // modern medicine — the norm the base birth
+                                            // rate is calibrated against
+    float child_survival_years = 15.0f;     // the horizon families were actually betting on
+    // What a population can physically produce, however many children it wants. Wanting
+    // fifteen surviving children does not make a woman able to bear thirty: the highest
+    // crude birth rates ever recorded — Hutterite communities, Niger in the 1960s — sit
+    // near 55 per 1000 per year, and that is with every woman marrying young and bearing
+    // continuously until she cannot.
+    //
+    // The desired rate APPROACHES this and never reaches it, via the same physical form
+    // mortality uses: birth = max * (1 - exp(-desired / max)). Not a cap — at low desired
+    // rates it is indistinguishable from the desire itself, and it bends only where
+    // biology actually bends. Without it a deathworld drove the survival factor to 15x
+    // and a soft people bred its way out of being culled.
+    float max_biological_birth_rate = 0.055f;
     // Significant-NPC natural death: NPCs past natural_lifespan_years face an
     // annual death roll scaled up as health falls. Age advances 1 year per year.
     float natural_lifespan_years = 80.0f;

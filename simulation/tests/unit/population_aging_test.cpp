@@ -226,11 +226,20 @@ TEST_CASE("PopulationAging: Earth-normal mortality survives the rate reform unch
     const float p_ret = PopulationAgingModule::annual_probability_from_rate(retiree_rate);
     CHECK((retiree_rate - p_ret) / retiree_rate < 0.02f);
 
-    // End to end on an Earth-normal, exactly-fed province of 100,000:
-    //   births = round(100000 * 0.012 * 0.9 * 1.0 * (1 - 0.18*0.20 radiation)) = 1041
-    //   deaths = round(cohort * p) on each cohort (the newborn youth cohorts included)
-    //   was: 100000 + 1041 - 880 - 5 - 5 = 100,151
-    //   now: 100000 + 1041 - 876 - 5 - 5 = 100,155   (+0.004% population)
+    // End to end on an Earth-normal, exactly-fed province of 100,000. The figure moved
+    // when CHILD MORTALITY arrived (R4A): roughly half of children born did not reach
+    // fifteen before modern medicine, and the newborns this year are exposed to that rate
+    // in the same year they are born.
+    //
+    // The quantity-quality response is deliberately NEUTRAL here — the youth multiplier
+    // is derived so that Earth-normal pre-modern survival is exactly the 0.5 the birth
+    // rate is calibrated against — so the difference is the children who now die and the
+    // PRE-MODERN birth rate that replaces them. Both are the mechanism working:
+    //   was (modern rates, no child mortality, no age ladder):  100,151
+    //   now (40 births per 1000, children dying at 5.25x):      101,581
+    // A pre-modern society is not near-stationary year to year; it is a high-birth,
+    // high-death demography whose NET is near zero over the long run, which is what the
+    // multi-millennium runs actually show.
     PopulationAgingModule module;
     WorldState w = make_annual_cohort_world(/*surplus=*/1.0f);  // exactly fed: neutral food
     REQUIRE_THAT(hazard_mortality_from_settings(w.hazard_settings), WithinAbs(1.0f, 1e-6f));
@@ -238,8 +247,44 @@ TEST_CASE("PopulationAging: Earth-normal mortality survives the rate reform unch
     module.execute_province(0, w, d);
     REQUIRE(d.cohort_stats_deltas.size() == 1);
     const uint32_t after = d.cohort_stats_deltas[0].total_population;
-    CHECK(after >= 100150u);  // the pre-reform figure was 100,151 — the baseline is intact
-    CHECK(after <= 100160u);
+    CHECK(after >= 101500u);
+    CHECK(after <= 101650u);
+}
+
+TEST_CASE("PopulationAging: half of children do not reach fifteen, until medicine",
+          "[population_aging][tier11][transition]") {
+    // The datum the youth multiplier is derived from, and the thing that makes a
+    // demographic transition possible at all: with the young dying at the same rate as
+    // the middle-aged there is nothing for medicine to fix.
+    constexpr PopulationAgingConfig cfg{};
+    const float premodern_youth_rate = cfg.base_annual_death_rate * 1.1f *
+                                       cfg.youth_mortality_multiplier;
+    const float survival = PopulationAgingModule::child_survival(premodern_youth_rate, cfg);
+    CHECK_THAT(survival, WithinAbs(0.5f, 0.02f));  // ~half, as the record has it
+
+    // Medicine cuts the rate; survival rises toward one.
+    const float modern = PopulationAgingModule::child_survival(premodern_youth_rate * 0.1f, cfg);
+    CHECK(modern > 0.9f);
+    CHECK(modern < 1.0f);
+}
+
+TEST_CASE("PopulationAging: families target surviving children, so births fall as they live",
+          "[population_aging][tier11][transition]") {
+    // Galor's quantity-quality substitution, and the single mechanism the research
+    // flagged as the highest-value fix for a population that keeps rising into a
+    // collapse. Neutral at the pre-modern norm, falling sharply as survival improves.
+    constexpr PopulationAgingConfig cfg{};
+    CHECK_THAT(PopulationAgingModule::desired_births_factor(cfg.reference_child_survival, cfg),
+               WithinAbs(1.0f, 1e-4f));
+
+    const float modern = PopulationAgingModule::desired_births_factor(0.9f, cfg);
+    CHECK(modern < 1.0f);
+    // 0.5 -> 0.9 survival cuts desired births by about 44% through this channel alone.
+    CHECK_THAT(1.0f - modern, WithinAbs(0.44f, 0.02f));
+
+    // And a world harsher than the norm has MORE children, which is the same law read
+    // the other way and why high-mortality societies had high fertility.
+    CHECK(PopulationAgingModule::desired_births_factor(0.3f, cfg) > 1.0f);
 }
 
 TEST_CASE("PopulationAging: subsistence surplus drives the Malthusian loop",
@@ -631,13 +676,24 @@ TEST_CASE("population: growth answers to how well fed people are, in both direct
 
     CHECK(fed > subsistence);
     CHECK(hungry < subsistence);
-    // Chronic hunger FLATTENS growth rather than reversing it: at 0.7 the change is
-    // ~0.02% of the population. Outright decline is the acute famine path, which fires
-    // when the granary is actually empty — the two are deliberately separate, because
-    // historically famine mortality was a weak long-run check (its demographic bite is
-    // mostly lost births plus emigration, with fast rebound) while chronic
-    // undernutrition is what held pre-industrial growth near zero for centuries.
-    CHECK(std::abs(hungry) < 0.001 * 100000.0);
+    // Chronic hunger SLOWS growth rather than reversing it. Outright decline is the
+    // acute famine path, which fires when the granary is actually empty — the two are
+    // deliberately separate, because historically famine mortality was a weak long-run
+    // check (its demographic bite is mostly lost births plus emigration, with fast
+    // rebound) while chronic undernutrition is what held pre-industrial growth near zero
+    // for centuries.
+    //
+    // The single-year numbers are large in both directions now that births run at the
+    // pre-modern 40 per 1000 rather than the modern 12: a pre-modern demography is
+    // high-birth and high-death, and it is the NET over centuries that is near zero. So
+    // the claim to test is the ORDERING, not a small absolute change.
+    // This fixture exercises the PREVENTIVE check alone — the granary is not empty, so
+    // the mortality valve is neutral and only fertility answers. That is the right
+    // channel to be dominant: in England real wages moved the birth rate far more than
+    // they moved the death rate. At w = 0.7 the fertility elasticity of 0.4 gives
+    // 0.7^0.4 = 0.87, so about 13% fewer births — which is what shows up here.
+    CHECK(hungry > 0.0);               // still growing, just more slowly
+    CHECK(hungry < 0.95 * subsistence);  // hunger has taken a real bite out of it
 }
 
 // ===========================================================================
@@ -789,11 +845,13 @@ TEST_CASE("population: people walk toward bread, and back when it runs out",
     CHECK(famine.town < 10000u);  // and the town empties back onto the land
     CHECK(famine.land > plenty.land);
 
-    // Conserved: what the town gained the countryside lost, deaths aside. Deaths take
-    // well under a percent of a cohort in a year, so the headcount is essentially flat.
+    // Conserved: what the town gained the countryside lost. The two working cohorts also
+    // shed people to RETIREMENT now that cohorts age (about a forty-seventh a year), and
+    // to deaths, so the pair does not stay exactly flat — but nothing leaves via
+    // migration that does not arrive.
     const double moved_total = static_cast<double>(plenty.town + plenty.land);
     CHECK(moved_total < static_cast<double>(plenty.before) * 1.001);
-    CHECK(moved_total > static_cast<double>(plenty.before) * 0.98);
+    CHECK(moved_total > static_cast<double>(plenty.before) * 0.95);
 }
 
 TEST_CASE("population: a town with no countryside to draw on cannot hold its size",
@@ -852,7 +910,17 @@ TEST_CASE("population: a town cannot be larger than the countryside can spare",
     apply_deltas(w, d);
 
     CHECK(cohort_size(w, DemographicGroup::working_urban_mid) < before);
-    CHECK(cohort_size(w, DemographicGroup::working_rural_mid) > 80000u);
+    // The countryside receives them. It is also shedding retirees now that cohorts age,
+    // so the comparison is against a control with no migration pressure rather than
+    // against the starting headcount.
+    WorldState control = make_commons_town_world(/*urban=*/20000, /*rural=*/80000);
+    control.provinces[0].cohort_stats->urban_capacity = 20000.0f;   // town already at
+    control.provinces[0].cohort_stats->specialist_fraction = 0.20f;  // both limits
+    DeltaBuffer cd{};
+    mod.execute_province(0, control, cd);
+    apply_deltas(control, cd);
+    CHECK(cohort_size(w, DemographicGroup::working_rural_mid) >
+          cohort_size(control, DemographicGroup::working_rural_mid));
 }
 
 // ===========================================================================
