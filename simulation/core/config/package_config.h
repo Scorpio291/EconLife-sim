@@ -824,6 +824,28 @@ struct KnowledgeConfig {
     // parchment. ~1%/yr is the order for hand-copied manuscripts in scattered archives;
     // the catastrophic losses come from sacking, which warfare applies separately.
     float record_loss_per_year = 0.010f;
+
+    // --- THE PRESS (R3E): what makes the ratchet permanent ---------------------------
+    // A scribe copies about one substantial work a year. A press runs off hundreds. All
+    // of Europe held fewer than 30,000 manuscript books in 1450 and somewhere between 8
+    // and 12 million printed ones by 1500 — a rise of more than two orders of magnitude
+    // in fifty years — and cities that acquired a press grew about 35 percentage points
+    // faster over the following century than comparable cities that did not.
+    //
+    // This is what ends the possibility of a dark age. Roughly 90% of classical Latin
+    // literature was lost between 500 and 900 CE because every copy was a hand-made
+    // object in a named building that could burn. A work in ten thousand houses cannot be
+    // lost by any event smaller than the end of the civilisation itself.
+    //
+    // The gate is accumulated knowledge, not an era number, so a world that develops
+    // differently still gets the press at the right point in ITS own development. It
+    // saturates rather than switching: presses spread, they do not appear everywhere at
+    // once. Threshold set near where an earthlike world stands around its Early Modern
+    // era, which is when it actually happened.
+    float printing_knowledge_halfsat = 900000.0f;
+    // How much faster a press copies than a hand. Two orders of magnitude, from the
+    // manuscript-to-print book counts above.
+    float printing_copy_multiplier = 100.0f;
     // Rare minds make discrete LEAPS, not incremental gains. The chance of one arising
     // scales with the number of people doing knowledge work (more minds, more chances),
     // and arrives as a physical first-arrival probability 1 - exp(-rate).

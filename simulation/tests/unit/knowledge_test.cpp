@@ -478,3 +478,62 @@ TEST_CASE("knowledge: a society cannot write down more than it knows",
             change += *rd.codified_knowledge_delta;
     CHECK(change <= 0.0f);  // nothing left to copy; only decay
 }
+
+// ===========================================================================
+// THE PRESS — what makes the ratchet permanent.
+//
+// A scribe copies about one substantial work a year; a press runs off
+// hundreds. All of Europe held fewer than 30,000 manuscript books in 1450 and
+// somewhere between 8 and 12 million printed ones by 1500 — more than two
+// orders of magnitude in fifty years.
+//
+// This is what ends the possibility of a dark age. Roughly 90% of classical
+// Latin literature was lost between 500 and 900 CE because every copy was a
+// hand-made object in a named building that could burn. A work in ten
+// thousand houses cannot be lost by anything short of the end of the
+// civilisation itself.
+// ===========================================================================
+
+TEST_CASE("knowledge: a manuscript culture copies by hand", "[knowledge][tier2][printing]") {
+    // Below the threshold nothing changes: a society that has not invented movable type
+    // copies at exactly the rate a scribe can write.
+    const KnowledgeConfig cfg{};
+    CHECK_THAT(KnowledgeModule::printing_copy_mult(0.0f, cfg),
+               Catch::Matchers::WithinAbs(1.0, 1e-9));
+    CHECK(KnowledgeModule::printing_copy_mult(cfg.printing_knowledge_halfsat * 0.01f, cfg) < 2.0);
+}
+
+TEST_CASE("knowledge: the press multiplies copying by orders of magnitude",
+          "[knowledge][tier2][printing]") {
+    const KnowledgeConfig cfg{};
+    const double early = KnowledgeModule::printing_copy_mult(cfg.printing_knowledge_halfsat, cfg);
+    const double late =
+        KnowledgeModule::printing_copy_mult(50.0f * cfg.printing_knowledge_halfsat, cfg);
+
+    // Half-saturation: half the gain realised.
+    CHECK_THAT(early, Catch::Matchers::WithinRel(
+                          1.0 + (static_cast<double>(cfg.printing_copy_multiplier) - 1.0) * 0.5,
+                          1e-4));
+    CHECK(late > 0.9 * static_cast<double>(cfg.printing_copy_multiplier));
+    // Saturating: approached, never exceeded. Presses spread; they do not appear
+    // everywhere at once, and there is no year in which printing is switched on.
+    CHECK(late < static_cast<double>(cfg.printing_copy_multiplier));
+}
+
+TEST_CASE("knowledge: printing is gated on what a society knows, not on a date",
+          "[knowledge][tier2][printing]") {
+    // The gate is accumulated knowledge, so a world that develops faster or slower than
+    // Earth still gets the press at the right point in ITS OWN development rather than
+    // at a calendar year that means nothing to it.
+    const KnowledgeConfig cfg{};
+    const double backward = KnowledgeModule::printing_copy_mult(1000.0f, cfg);
+    const double advanced = KnowledgeModule::printing_copy_mult(5000000.0f, cfg);
+    // The saturating form has a tail, so a Neolithic society at a nine-hundredth of the
+    // threshold still reads about 11% faster rather than exactly 1.0 — a hundredfold
+    // gain makes even a sliver of adoption visible. Harmless: the corpus is separately
+    // bounded by what the society actually knows, so a faster scribe with nothing new to
+    // write down copies nothing.
+    CHECK(backward < 1.2);
+    CHECK(advanced > 10.0);
+    CHECK(advanced > 50.0 * backward);
+}

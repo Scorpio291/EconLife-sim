@@ -67,6 +67,27 @@ class KnowledgeModule : public ITickModule {
         return std::pow(1.0 + K / half, beta);
     }
 
+    // THE PRESS (R3E). How many times faster a society copies than it did by hand.
+    //
+    // A scribe produces about one substantial work a year; a press runs off hundreds. All
+    // of Europe held fewer than 30,000 manuscript books in 1450 and 8-12 million printed
+    // ones by 1500. This is what ends the possibility of a dark age: roughly 90% of
+    // classical Latin literature was lost between 500 and 900 CE because every copy was a
+    // hand-made object in a named building that could burn, and a work in ten thousand
+    // houses cannot be lost by anything short of the end of the civilisation.
+    //
+    // Gated on accumulated knowledge rather than on an era number, so a world that
+    // develops differently still gets the press at the right point in ITS development;
+    // and saturating rather than switching, because presses spread. Returns 1.0 for a
+    // society that has not got there — a manuscript culture is unchanged. Pure/static.
+    static double printing_copy_mult(float level, const KnowledgeConfig& cfg) {
+        const double K = static_cast<double>(std::max(0.0f, level));
+        const double half = static_cast<double>(std::max(1.0f, cfg.printing_knowledge_halfsat));
+        const double adoption = K / (K + half);
+        const double gain = static_cast<double>(std::max(1.0f, cfg.printing_copy_multiplier)) - 1.0;
+        return 1.0 + gain * adoption;
+    }
+
    private:
     KnowledgeConfig cfg_;
 };

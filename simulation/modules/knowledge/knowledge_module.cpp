@@ -273,9 +273,13 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             const double local_keepers =
                 pop * freed * static_cast<double>(cfg_.learned_share_of_specialists);
             const double held = static_cast<double>(p.cohort_stats->codified_knowledge);
+            // THE PRESS (R3E). The same keepers, copying orders of magnitude faster
+            // once movable type exists — which is what turns the corpus from a floor a
+            // dark age can erode into one it cannot.
             const double copying =
                 local_keepers * static_cast<double>(per_worker_output) *
-                static_cast<double>(cfg_.codify_rate_per_worker_year);
+                static_cast<double>(cfg_.codify_rate_per_worker_year) *
+                printing_copy_mult(level, cfg_);
             // Cannot record what is not known: the province's corpus tends toward the
             // society's living knowledge, never past it.
             const double room = std::max(0.0, static_cast<double>(level) - held);

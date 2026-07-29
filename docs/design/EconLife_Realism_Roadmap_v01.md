@@ -308,7 +308,19 @@ into births and deaths.
   than sailing it 1,400). Carrying capacity = own land + imports; when a route fails,
   famine scales with `import_dependence`. The Late Bronze Age collapse was a small-world
   network cascade — severing Ugarit cut Cyprus's tin and copper.
-- **Printing.** Europe held <30,000 books before 1450 and 8-12 million by 1500; print
+- **Printing — LANDED 2026-07-28 (R3E).** `printing_copy_mult` multiplies the rate at
+  which the learned stratum commits knowledge to records, saturating in accumulated
+  knowledge toward a hundredfold gain. Gated on what a society KNOWS rather than on a
+  calendar year or an era number, so a world that develops faster or slower than Earth
+  still gets the press at the right point in its own development; and saturating rather
+  than switching, because presses spread — there is no year in which printing turns on.
+
+  This is what ends the possibility of a dark age. Roughly 90% of classical Latin
+  literature was lost between 500 and 900 CE because every copy was a hand-made object in
+  a named building that could burn; a work in ten thousand houses cannot be lost by
+  anything short of the end of the civilisation. The corpus is the floor under forgetting
+  (R1A), and printing is what puts that floor out of reach.
+- **Printing (original note).** Europe held <30,000 books before 1450 and 8-12 million by 1500; print
   cities grew ~35pp faster 1500-1600. Multiplies `K_codified` copy count by two orders
   of magnitude — this is what makes the ratchet permanent.
 - **Polycentrism.** Innovation survives if ANY polity in a connected culture-area
