@@ -288,6 +288,17 @@ struct RegionDelta {
                                      // feed. The town's actual size is a real cohort headcount
                                      // (cohort_stats->urban_population), moved by migration.
     std::optional<float>
+        grain_import_rate_replacement;  // replacement; cohort_stats->grain_import_rate.
+                                        // SIGNED net grain flow per tick into this
+                                        // province's granary, published by grain_logistics
+                                        // — the same conserved diffusion as
+                                        // food_store_delta, exposed so the food balance
+                                        // can see what arrives from elsewhere.
+    std::optional<float>
+        import_dependence_replacement;  // replacement; cohort_stats->import_dependence,
+                                        // published by subsistence — the share of what a
+                                        // province eats that came from somewhere else
+    std::optional<float>
         asabiya_replacement;  // replacement; cohort_stats->asabiya, published by warfare.
                               // Forged at frontiers, decaying in the interior — the
                               // second oscillator that de-synchronises the world.

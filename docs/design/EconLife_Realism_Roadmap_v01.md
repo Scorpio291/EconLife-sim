@@ -287,7 +287,23 @@ into births and deaths.
   the interior: `dA/dt = +h*A(1-A)*frontier - dec*A*(1-frontier)`, polity power ∝ A*N.
   Adds a second oscillator so collapses DE-SYNCHRONISE across provinces instead of one
   global sawtooth. Hooks directly onto warfare's existing cohesion model.
-- **Trade-network fragility.** Sea transport decoupled cities from their hinterland
+- **Trade-network fragility — LANDED 2026-07-28 (R3D).** A province's food balance is now
+  its own harvest PLUS what actually arrives: `effective_output = output +
+  grain_import_rate`, signed, so an exporter loses exactly what it sent and an importer
+  gains exactly what came. `import_dependence` is published alongside it.
+
+  The flow used is the REAL conserved diffusion grain_logistics already performs (stored
+  grain down the scarcity gradient, draft teams eating the difference), NOT the catchment
+  capacity signal — which is a view of the same surplus and would have counted it twice.
+  A first attempt using the capacity signal did exactly that, and also broke on tick 0
+  (before grain_logistics has run) by reporting every province in deficit. The signed
+  real flow has neither problem and degrades correctly to zero for an isolated province
+  or a world without haulage.
+
+  The cascade is not modelled directly; it is what happens when a province whose
+  neighbours fed it loses the neighbours. Measured: a dependent province's surplus falls
+  by exactly its import dependence when the route fails.
+- **Trade-network fragility (original note).** Sea transport decoupled cities from their hinterland
   (Egypt shipped ~130kt of grain a year to Rome; moving grain 70 miles by road cost more
   than sailing it 1,400). Carrying capacity = own land + imports; when a route fails,
   famine scales with `import_dependence`. The Late Bronze Age collapse was a small-world

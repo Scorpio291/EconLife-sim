@@ -26,6 +26,10 @@ can be fed from (consumed by feudal genesis in M3).
   (grain_trade_rate_per_year of the granary-fullness gap closes per year), emitted as
   additive food_store_delta with the transit loss eaten by the teams (conserved sink).
   The catchment signals are views; the diffusion is the flow on the actual granaries.
+- R3D: that same diffusion is also published as `cohort_stats->grain_import_rate` (signed
+  per tick), which subsistence adds to a province's own harvest. Use THIS, never
+  net_feedable_surplus, for anything that feeds people — the catchment signal is a view of
+  the same surplus and counting both would create grain.
 
 ## Key Types
 - GrainLogisticsConfig (core/config/package_config.h)

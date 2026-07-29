@@ -495,3 +495,106 @@ TEST_CASE("soil: a society that mines its land loses fertility, one that lives w
     const float healing = rested - 0.5f;
     CHECK(ruin > healing);
 }
+
+// ===========================================================================
+// A PROVINCE EATS WHAT ARRIVES, NOT ONLY WHAT IT GROWS (R3D).
+//
+// Sea and river transport decoupled cities from their own hinterland. Egypt
+// shipped on the order of 130,000 tonnes of grain a year to Rome, and moving
+// grain 70 miles by road cost more than sailing it 1,400. That is a bargain
+// with a bill attached: a province fed from elsewhere prospers beyond its own
+// land right up until the route fails, and then starves in proportion to how
+// far beyond it had grown.
+//
+// The Late Bronze Age collapse is the case — severing Ugarit cut Cyprus off
+// from tin and copper, and the whole eastern Mediterranean system came down
+// within a generation. Nothing models a cascade directly; it is what happens
+// when a province whose neighbours fed it loses the neighbours.
+// ===========================================================================
+
+TEST_CASE("subsistence: a province fed from elsewhere reads better fed than its own land",
+          "[subsistence][tier2][trade]") {
+    SubsistenceModule mod;
+    auto surplus_with_import = [&](float import_rate) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;  // feudal — a commons regime
+        w.hazard_settings.seasonality = 0.0f;  // isolate from harvest-failure draws
+        w.provinces.push_back(make_province(0, /*ag=*/0.3f, /*population=*/20000));
+        w.provinces[0].cohort_stats->grain_import_rate = import_rate;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        REQUIRE(d.region_deltas[0].subsistence_surplus_replacement.has_value());
+        return *d.region_deltas[0].subsistence_surplus_replacement;
+    };
+
+    const float alone = surplus_with_import(0.0f);
+    const float fed = surplus_with_import(5000.0f);
+    const float draining = surplus_with_import(-2000.0f);
+
+    CHECK(fed > alone);      // grain arriving feeds people
+    CHECK(draining < alone);  // and grain leaving does not
+}
+
+TEST_CASE("subsistence: when the route fails, the dependence is what starves you",
+          "[subsistence][tier2][trade]") {
+    // The whole mechanism. Two provinces with identical land and identical
+    // populations: one has been living on its own harvest, the other on imports. Cut
+    // both off and only the second falls — by exactly the share it had been importing.
+    SubsistenceModule mod;
+    auto run = [&](float import_rate, float* dependence_out) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.3f, /*population=*/20000));
+        w.provinces[0].cohort_stats->grain_import_rate = import_rate;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        if (dependence_out != nullptr) {
+            REQUIRE(d.region_deltas[0].import_dependence_replacement.has_value());
+            *dependence_out = *d.region_deltas[0].import_dependence_replacement;
+        }
+        return *d.region_deltas[0].subsistence_surplus_replacement;
+    };
+
+    float dependence = 0.0f;
+    const float while_supplied = run(5000.0f, &dependence);
+    const float after_the_route_fails = run(0.0f, nullptr);
+
+    CHECK(dependence > 0.0f);
+    CHECK(dependence < 1.0f);
+    CHECK(after_the_route_fails < while_supplied);
+    // The fall is the dependence: what it loses is exactly the share that was arriving.
+    CHECK_THAT(1.0f - after_the_route_fails / while_supplied,
+               Catch::Matchers::WithinAbs(dependence, 0.01f));
+}
+
+TEST_CASE("subsistence: a province with no neighbours is unaffected by any of this",
+          "[subsistence][tier2][trade]") {
+    // The fallback that matters: no haulage, no grain_logistics, or simply nobody
+    // within reach means a zero flow, and the province lives on its own harvest exactly
+    // as before. Nothing about the trade law can quietly change an isolated society.
+    SubsistenceModule mod;
+    WorldState w{};
+    w.current_tick = kTicksPerYear;
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 5;
+    w.hazard_settings.seasonality = 0.0f;
+    w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/1000));
+    // grain_import_rate defaults to 0 — no route, no flow.
+    DeltaBuffer d{};
+    mod.execute_province(0, w, d);
+    REQUIRE(d.region_deltas.size() == 1);
+    REQUIRE(d.region_deltas[0].import_dependence_replacement.has_value());
+    CHECK_THAT(*d.region_deltas[0].import_dependence_replacement,
+               Catch::Matchers::WithinAbs(0.0f, 1e-9f));
+    CHECK(*d.region_deltas[0].subsistence_surplus_replacement > 1.0f);
+}

@@ -242,9 +242,41 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float farm_labor = (static_cast<float>(population) - non_farmers) * working_fraction;
     const float output = base_ceiling * (1.0f - std::exp(-std::max(0.0f, farm_labor) / half));
 
+    // WHAT THE PROVINCE ACTUALLY EATS (R3D). A province is not limited to its own
+    // harvest. Sea and river transport decoupled cities from their hinterland — Egypt
+    // shipped on the order of 130,000 tonnes of grain a year to Rome, and moving grain 70
+    // miles by road cost more than sailing it 1,400 — so what a place can feed is its own
+    // land PLUS what the catchment delivers.
+    //
+    // grain_logistics allocates every province's exportable surplus across {itself + its
+    // reachable neighbours}, conserved, with the draft teams eating the difference; the
+    // result is `net_feedable_surplus`. So a province eats what it never put in the
+    // haulage pool (min(output, need)) plus whatever the pool sent it. For an isolated
+    // province the two are identical and nothing changes.
+    //
+    // This is the bargain with a bill attached. A province fed from elsewhere prospers
+    // beyond its own land right up until the route fails, and then starves in proportion
+    // to how far beyond it had grown. The Late Bronze Age collapse is the case: severing
+    // Ugarit cut Cyprus off from tin and copper and the whole eastern Mediterranean system
+    // came down within a generation. Nothing models the cascade directly — it is what
+    // happens when a province whose neighbours fed it loses the neighbours.
+    //
+    // The flow used here is the REAL conserved one — stored grain diffusing down the
+    // scarcity gradient, with the draft teams eating the difference — not the catchment
+    // capacity signal, which is a view of the same surplus and would count it twice. It
+    // is signed: an exporter loses exactly what it sent, an importer gains exactly what
+    // arrived, and a province with no neighbours or no haulage sees zero and is unchanged.
+    //
+    // One tick behind, because grain_logistics runs after this module and consumes the
+    // surplus published here. On a fresh world it is zero, which is the correct reading.
+    const float effective_output = std::max(0.0f, output + cs.grain_import_rate);
+    const float imported = std::max(0.0f, cs.grain_import_rate);
+    const float import_dependence =
+        effective_output > 0.0f ? imported / effective_output : 0.0f;
+
     // Granary: bank the year's net food (after feeding everyone and losing spoilage),
     // or draw it down, once per year. A conserved, capped per-province stock.
-    const float net_per_tick = output - need - spoilage;
+    const float net_per_tick = effective_output - need - spoilage;
     float new_store = cs.food_store;
     // Use the sanitized tpy from above: cfg_.ticks_per_year is guarded against 0
     // twice earlier in this function, and dividing by the raw field here was
@@ -262,11 +294,12 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float full_upkeep =
         cfg_.granary_spoilage_rate * cfg_.granary_reserve_years * need;  // per tick, at full store
     const float growth_surplus =
-        need > 0.0f ? output / (need + full_upkeep) : 1.0f;
+        need > 0.0f ? effective_output / (need + full_upkeep) : 1.0f;
 
     RegionDelta rd{};
     rd.region_id = prov.region_id;
     rd.subsistence_surplus_replacement = growth_surplus;
+    rd.import_dependence_replacement = import_dependence;
     // Publish the freed stratum itself, not just the food ratio. This is the share of
     // real people the harvest does not need on the land — the pool that scholarship,
     // crafts and trade are drawn from. Consumers (knowledge) must scale with the

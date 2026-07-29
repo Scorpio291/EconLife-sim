@@ -681,6 +681,15 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.urban_capacity_replacement;
                     cs.urban_capacity = (v >= 0.0f) ? v : 0.0f;
                 }
+                if (d.grain_import_rate_replacement.has_value()) {
+                    // Signed by design: a net exporter reads negative. NaN -> 0.
+                    float v = *d.grain_import_rate_replacement;
+                    cs.grain_import_rate = std::isnan(v) ? 0.0f : v;
+                }
+                if (d.import_dependence_replacement.has_value()) {
+                    float v = *d.import_dependence_replacement;
+                    cs.import_dependence = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
+                }
                 if (d.asabiya_replacement.has_value()) {
                     // A capacity in [0,1] by construction (logistic growth, exponential
                     // decay). NaN falls to the seed rather than to zero: the growth term

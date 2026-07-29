@@ -154,8 +154,17 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
                 urban = pop;
         }
         rd.urban_capacity_replacement = urban;
-        if (store_delta[i] != 0.0)
+        if (store_delta[i] != 0.0) {
             rd.food_store_delta = static_cast<float>(store_delta[i]);
+            // The same flow, published as a SIGNED RATE so the food balance can see it
+            // (R3D). This is the real conserved transfer — stored grain moving down the
+            // scarcity gradient with the draft teams eating the difference — not a second
+            // accounting of the catchment signal above. A province fed by its neighbours
+            // can support more people than its own land, right up until the route fails.
+            rd.grain_import_rate_replacement = static_cast<float>(store_delta[i]);
+        } else {
+            rd.grain_import_rate_replacement = 0.0f;
+        }
         delta.region_deltas.push_back(rd);
     }
 }

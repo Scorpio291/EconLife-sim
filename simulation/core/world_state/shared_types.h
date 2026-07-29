@@ -369,6 +369,24 @@ struct RegionCohortStats {
     // sewers closed the grave.
     float urban_population = 0.0f;
 
+    // Signed net grain flowing into this province's granary per tick, published by
+    // grain_logistics: the same conserved diffusion as the food_store delta, exposed so
+    // the food balance can see it. Positive means fed from elsewhere, negative means
+    // feeding elsewhere. Transient (recomputed each tick).
+    float grain_import_rate = 0.0f;
+
+    // How much of what this province eats came from somewhere else (R3D). Sea and river
+    // transport decoupled cities from their own hinterland — Egypt shipped on the order of
+    // 130,000 tonnes of grain a year to Rome, and moving grain 70 miles by road cost more
+    // than sailing it 1,400 — and that is a bargain with a bill attached. A province fed
+    // by its neighbours prospers beyond its own land right up until the route fails, and
+    // then starves in proportion to how far beyond it had grown.
+    //
+    // The Late Bronze Age collapse is the case: a small-world trade network in which
+    // severing Ugarit cut Cyprus off from tin and copper, and the whole eastern
+    // Mediterranean system came down within a generation. Transient (recomputed each tick).
+    float import_dependence = 0.0f;
+
     // ASABIYA — the capacity of a people to act together (R3C). Ibn Khaldun's
     // observation, and the one Turchin turned into a model: solidarity is FORGED AT
     // FRONTIERS, where a group lives against an out-group and has to hold together or
