@@ -52,6 +52,13 @@ struct SocietySnapshot {
                                                // cleared land) — the material era gate
     double soil_health = 0.0;  // mean fertility of the worked land [0,1] — the only
                                // channel that can lower the carrying ceiling
+    double ghost_land = 0.0;   // mean ghost-acre fraction: the land coal is standing in
+                               // for — the only channel that can RAISE it without limit
+    double coal_burned = 0.0;  // tonnes/yr drawn from the province seams
+    double coal_remaining = 0.0;  // tonnes still in the ground (the finite escape)
+    double political_stress = 0.0;  // mean PSI: how close the society is to coming apart
+                                    // for reasons that are nothing to do with the weather
+    double faction_deaths = 0.0;    // mean annual death fraction from factional conflict
     double capital_gini = 0.0;         // inequality of that capital [0,1]
     uint32_t businesses = 0;           // emergent firms
     int era = 0;
@@ -97,10 +104,22 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.productive_capital_per_head += static_cast<double>(p.cohort_stats->productive_capital);
         s.soil_health += static_cast<double>(p.cohort_stats->soil_health);
         s.urban_population += static_cast<double>(p.cohort_stats->urban_population);
+        s.ghost_land += static_cast<double>(p.cohort_stats->ghost_land_fraction);
+        s.political_stress += static_cast<double>(p.cohort_stats->political_stress);
+        s.faction_deaths += static_cast<double>(p.cohort_stats->faction_death_fraction);
+        s.coal_burned += static_cast<double>(p.cohort_stats->coal_burned_per_year);
+        for (const auto& dep : p.deposits)
+            if (dep.type == ResourceType::Coal)
+                s.coal_remaining += static_cast<double>(dep.quantity_remaining);
         surplus_sum += p.cohort_stats->subsistence_surplus_ratio;
         ++prov_with_cohorts;
     }
     s.mean_surplus = prov_with_cohorts > 0 ? surplus_sum / prov_with_cohorts : 0.0;
+    if (prov_with_cohorts > 0) {
+        s.ghost_land /= prov_with_cohorts;
+        s.political_stress /= prov_with_cohorts;
+        s.faction_deaths /= prov_with_cohorts;
+    }
     s.extinct = s.total_population <= 0.0;
 
     int assigned = 0, specialists = 0;

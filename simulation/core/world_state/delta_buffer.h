@@ -288,6 +288,27 @@ struct RegionDelta {
                                      // feed. The town's actual size is a real cohort headcount
                                      // (cohort_stats->urban_population), moved by migration.
     std::optional<float>
+        supported_specialist_fraction_replacement;  // replacement; published by subsistence —
+                                                    // the stratum THIS harvest supports, before
+                                                    // the generational inertia on the held one
+    std::optional<float>
+        political_stress_replacement;  // replacement; cohort_stats->political_stress,
+                                       // published by structural_demography (the PSI)
+    std::optional<float>
+        faction_death_fraction_replacement;  // replacement; cohort_stats->faction_death_fraction
+                                             // [0,1], published by structural_demography (extra
+                                             // annual death fraction from factional conflict;
+                                             // consumed by population_aging as an independent
+                                             // competing risk, separate from war)
+    std::optional<float>
+        ghost_land_fraction_replacement;  // replacement; cohort_stats->ghost_land_fraction,
+                                          // published by energy_base (coal as extra acres)
+    std::optional<float>
+        coal_burned_replacement;  // replacement; cohort_stats->coal_burned_per_year,
+                                  // published by energy_base. The matching DEPOSIT
+                                  // drawdown rides on deposit_deltas — this is the
+                                  // observable, that is the conserved flow.
+    std::optional<float>
         war_death_fraction_replacement;  // replacement; cohort_stats->war_death_fraction
                                          // [0,1], published by warfare (extra annual death
                                          // fraction; consumed by population_aging)

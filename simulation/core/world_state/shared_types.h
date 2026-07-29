@@ -369,6 +369,44 @@ struct RegionCohortStats {
     // sewers closed the grave.
     float urban_population = 0.0f;
 
+    // The non-farming stratum THIS YEAR'S HARVEST can support, before the generational
+    // inertia that makes `specialist_fraction` lag it (R2C). Published by subsistence
+    // alongside the held stratum, because the GAP between the two is what structural
+    // demography measures: the people in it were raised to expect a place the land no
+    // longer provides. Transient (recomputed each tick).
+    float supported_specialist_fraction = 0.0f;
+
+    // POLITICAL STRESS INDEX (R2D): Turchin's structural-demographic measure of how
+    // close a society is to coming apart for reasons that have nothing to do with the
+    // weather. Multiplicative in popular immiseration, elite overproduction and fiscal
+    // exhaustion — all three must be elevated at once, which is why most bad years are
+    // just bad years. Published by structural_demography; transient.
+    float political_stress = 0.0f;
+    // Extra annual death fraction from FACTIONAL CONFLICT — surplus claimants and their
+    // retinues fighting each other. Real units (dead / population), consumed by
+    // population_aging as an independent competing risk exactly like war_death_fraction,
+    // from which it is deliberately separate: one is a war between polities, this is a
+    // polity coming apart from the inside. Published by structural_demography.
+    float faction_death_fraction = 0.0f;
+
+    // GHOST ACRES (R1B): the extra land, as a fraction of the province's own surface,
+    // that burning coal stands in for this year. An organic economy is bounded by
+    // photosynthesis on finite acres — food, fodder, firewood and charcoal all compete
+    // for the same ground — and coal breaks that bound by substituting a stock for the
+    // flow. England and Wales drew 4.3M acre-equivalents from coal in 1750 and 48.1M by
+    // 1850, more than their entire ~37M-acre land surface.
+    //
+    // This is the only channel that can raise the carrying ceiling without limit, and so
+    // the only escape from a fixed peak height. It is also temporary by construction:
+    // the coal is a finite located deposit, so a society that industrialises is spending
+    // something, and when the seam is worked out the ceiling falls back to what the sun
+    // puts on its fields. Published by energy_base; transient (recomputed each tick).
+    float ghost_land_fraction = 0.0f;
+    // Tonnes of coal the province actually raised and burned in the last year — the flow
+    // behind the ghost acres, and exactly what came out of its deposits. Published by
+    // energy_base; transient.
+    float coal_burned_per_year = 0.0f;
+
     // Granary: the province's stored food (a conserved, located resource). The
     // commons food economy banks each year's production surplus here, up to a finite
     // capacity, and draws it down in deficit years — so a bad harvest doesn't

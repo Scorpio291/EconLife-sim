@@ -22,6 +22,8 @@ add_subdirectory(labor_market)
 add_subdirectory(seasonal_agriculture)
 add_subdirectory(subsistence)
 add_subdirectory(grain_logistics)
+add_subdirectory(energy_base)
+add_subdirectory(structural_demography)
 add_subdirectory(warfare)
 add_subdirectory(knowledge)
 
@@ -107,6 +109,8 @@ target_link_libraries(econlife_modules PUBLIC
     econlife_seasonal_agriculture
     econlife_subsistence
     econlife_grain_logistics
+    econlife_energy_base
+    econlife_structural_demography
     econlife_warfare
     econlife_knowledge
     econlife_price_engine

@@ -1,0 +1,7 @@
+add_library(econlife_structural_demography STATIC
+    structural_demography_module.cpp
+)
+target_link_libraries(econlife_structural_demography PUBLIC econlife_core)
+
+econlife_set_warnings(econlife_structural_demography)
+econlife_maybe_werror(econlife_structural_demography)

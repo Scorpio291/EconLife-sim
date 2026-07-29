@@ -14,6 +14,8 @@ add_executable(econlife_unit_tests
     subsistence_test.cpp
     warfare_test.cpp
     grain_logistics_test.cpp
+    energy_base_test.cpp
+    structural_demography_test.cpp
     knowledge_test.cpp
     labor_market_test.cpp
     price_engine_test.cpp

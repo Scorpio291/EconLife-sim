@@ -23,6 +23,8 @@
 #include "modules/real_estate/real_estate_module.h"
 #include "modules/seasonal_agriculture/seasonal_agriculture_module.h"
 #include "modules/knowledge/knowledge_module.h"
+#include "modules/energy_base/energy_base_module.h"
+#include "modules/structural_demography/structural_demography_module.h"
 #include "modules/grain_logistics/grain_logistics_module.h"
 #include "modules/warfare/warfare_module.h"
 #include "modules/subsistence/subsistence_module.h"
@@ -99,6 +101,9 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
     orchestrator.register_module(std::make_unique<SubsistenceModule>(config.subsistence));
     orchestrator.register_module(
         std::make_unique<GrainLogisticsModule>(config.grain_logistics, config.subsistence));
+    orchestrator.register_module(std::make_unique<EnergyBaseModule>(config.energy_base));
+    orchestrator.register_module(
+        std::make_unique<StructuralDemographyModule>(config.structural_demography));
     orchestrator.register_module(
         std::make_unique<WarfareModule>(config.warfare, config.grain_logistics));
     orchestrator.register_module(std::make_unique<KnowledgeModule>(config.knowledge));

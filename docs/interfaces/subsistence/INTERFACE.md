@@ -131,6 +131,10 @@ resident significant NPC. No deferred work items; no serialized module state.
   `specialists = population - farmers_needed` bounded to
   `[0, population * specialist_ceiling(regime)]`. Rising knowledge lifts the ceiling, so
   fewer farmers are needed and more hands are freed — no heuristic does that work.
+- The stratum is published TWICE: `specialist_fraction` (what the society holds, with
+  generational inertia) and `supported_specialist_fraction` (what this year's harvest can
+  pay for). The GAP between them is elite overproduction, which `structural_demography`
+  consumes — people raised to expect a place the land no longer provides.
 - Actual output is harvested by the farmers who remain:
   `output = base_ceiling * (1 - exp(-farm_labor / labor_half_saturation))`.
 - TOWNSFOLK DO NOT FARM (2026-07-28). The non-farmers are the UNION of the institutional

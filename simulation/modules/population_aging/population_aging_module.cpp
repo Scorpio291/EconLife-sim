@@ -243,8 +243,8 @@ void migrate_land_and_town(std::map<DemographicGroup, PopulationCohort>& cohorts
 void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts, float stability,
                            float sick_rate, float addiction_rate, float birth_surplus,
                            float famine_surplus, float hazard_rate_mult, float fertility_mult,
-                           float war_death_fraction, float urban_crowding_rate,
-                           const PopulationAgingConfig& cfg) {
+                           float war_death_fraction, float faction_death_fraction,
+                           float urban_crowding_rate, const PopulationAgingConfig& cfg) {
     uint64_t total = 0;
     for (const auto& [g, c] : cohorts) {
         (void)g;
@@ -333,6 +333,10 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     const float p_war = std::clamp(war_death_fraction, 0.0f, 1.0f);  // domain sentinel: it is
                                                                      // published as a fraction;
                                                                      // warfare owns its size
+    // Factional conflict (R2D) is a THIRD independent competing risk, composed the same
+    // way. Kept separate from war on purpose: one is a polity fighting a neighbour, the
+    // other is a polity coming apart from the inside, and a society can be doing both.
+    const float p_faction = std::clamp(faction_death_fraction, 0.0f, 1.0f);
     for (auto& [g, c] : cohorts) {
         if (c.size == 0)
             continue;
@@ -347,7 +351,7 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
         if (is_urban_group(g))
             death_rate += urban_crowding_rate;
         const float p_env = PopulationAgingModule::annual_probability_from_rate(death_rate);
-        const float p_death = 1.0f - (1.0f - p_env) * (1.0f - p_war);
+        const float p_death = 1.0f - (1.0f - p_env) * (1.0f - p_war) * (1.0f - p_faction);
         auto deaths = static_cast<uint32_t>(
             std::llround(static_cast<double>(c.size) * static_cast<double>(p_death)));
         // A cohort cannot lose more people than it has (the remaining physical bound).
@@ -524,6 +528,11 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // not a multiplier — war kills a fraction of people, it does not
                 // scale background mortality.
                 const float war_deaths = annual ? cs.war_death_fraction : 0.0f;
+                // Factional conflict from structural stress (R2D). Published by
+                // structural_demography in this same annual tick (it declares
+                // runs_before population_aging), so publication and consumption never
+                // straddle a tick. 0 in a society that is not coming apart.
+                const float faction_deaths = annual ? cs.faction_death_fraction : 0.0f;
 
                 // Fertility tracks the long-run food signal the subsistence module writes
                 // (output vs need + reserve upkeep): population grows only when the land
@@ -553,7 +562,8 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
 
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       birth_surplus, famine_surplus, hazard_rate_mult,
-                                      fertility_mult, war_deaths, crowding_rate, cfg_);
+                                      fertility_mult, war_deaths, faction_deaths, crowding_rate,
+                                      cfg_);
 
                 // Then people move. A town is people the countryside must both SPARE and
                 // FEED, and those are two separate physical limits: the harvest says how

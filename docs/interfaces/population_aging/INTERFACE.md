@@ -38,6 +38,12 @@ Province-parallel: each province's demographic processing is fully independent. 
     it sets the size migration steers the town toward: `min` of the two, because both
     are real and independent limits.
   - `specialist_fraction` — the non-farming stratum (published by subsistence)
+  - `faction_death_fraction` ([0,1]) — per-province EXTRA annual death fraction from
+    FACTIONAL CONFLICT (R2D), published by `structural_demography` in the same annual
+    tick (it declares `runs_before` population_aging). Composed as a THIRD independent
+    competing risk alongside war: `p = 1 - (1-p_env)(1-p_war)(1-p_faction)`. Deliberately
+    separate from war — one is a polity fighting a neighbour, the other is a polity
+    coming apart inside, and a society can be doing both at once.
   - `war_death_fraction` ([0,1]) — per-province EXTRA annual death fraction from war
     (real units: battle dead / people), published by the `warfare` module in the SAME
     annual tick (warfare declares `runs_before` population_aging, so publication and

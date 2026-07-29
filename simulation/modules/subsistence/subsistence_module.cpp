@@ -109,8 +109,13 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // Working-age fraction of the population is available to labour on the land.
     const float working_fraction = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
 
-    // Natural capital the population can draw food from this tick.
-    const float natural_capital = natural_capital_of(prov, cfg_, cs.soil_health);
+    // Natural capital the population can draw food from this tick, INCLUDING the ghost
+    // acres coal is standing in for (energy_base). An organic economy is bounded by
+    // photosynthesis on finite acres; coal substitutes a stock for that flow, and that
+    // is the only term here that can keep rising — hence the only escape from a
+    // carrying ceiling that otherwise saturates and fixes the height of every peak.
+    const float natural_capital =
+        natural_capital_of(prov, cfg_, cs.soil_health, cs.ghost_land_fraction);
 
     // Knowledge raises the land's carrying capacity (better technique) — the escape
     // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.
@@ -267,6 +272,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // crafts and trade are drawn from. Consumers (knowledge) must scale with the
     // POPULATION that can be spared, not with a fixed sample of tracked individuals.
     rd.specialist_fraction_replacement = specialist_fraction;
+    // Publish what THIS harvest supports as well as what the society is actually
+    // holding. The gap between them is elite overproduction (R2D): people raised to
+    // expect a place above the plough that the land no longer provides.
+    rd.supported_specialist_fraction_replacement = supported_fraction;
     rd.food_store_replacement = new_store;
     // Absolute haulable grain surplus (output beyond bare need) — the grain available
     // to move/feed non-farmers, consumed by grain_logistics (the ox-cart, §3.5).
@@ -335,7 +344,14 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         // stayed there for 14,000 years, pinning the population near 10,000 and the
         // knowledge rate near 0.05/yr. With renewal absolute, worn land out-renews what
         // a shrunken population can take from it, and the soil climbs back.
-        const float pristine_capital = natural_capital_of(prov, cfg_, /*soil_health=*/1.0f);
+        // The ghost acres belong in this base too. Work done by coal is work the soil
+        // did not have to do, so a society running its economy on a burning stock is
+        // pressing proportionally less on its fields — which is exactly why industrial
+        // agriculture stopped being limited by soil exhaustion. Both sides of the ratio
+        // then carry the same ghost term, so as coal comes to dominate the pressure on
+        // the land tends to balance rather than to ruin.
+        const float pristine_capital =
+            natural_capital_of(prov, cfg_, /*soil_health=*/1.0f, cs.ghost_land_fraction);
         const float sustainable_output =
             technique_share * cfg_.ceiling_per_capital_unit * pristine_capital * chronic;
         if (sustainable_output > 0.0f) {
@@ -475,6 +491,7 @@ void SubsistenceModule::execute(const WorldState& state, DeltaBuffer& delta) {
         rd.subsistence_surplus_replacement = 1.0f;  // neutral: "fed"
         rd.grain_surplus_replacement = 0.0f;        // no commons surplus to haul
         rd.specialist_fraction_replacement = 0.0f;  // the commons stratum is gone
+        rd.supported_specialist_fraction_replacement = 0.0f;
         delta.region_deltas.push_back(rd);
     }
     commons_state_dirty_ = false;

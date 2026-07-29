@@ -62,13 +62,22 @@ class SubsistenceModule : public ITickModule {
     // worn-out land grows less — while forage and fisheries are untouched by tillage.
     // This is the channel through which the carrying ceiling can FALL; without it
     // knowledge only ever raises it and no society can overshoot its land.
+    // `ghost_land` (cohort_stats->ghost_land_fraction, published by energy_base) is the
+    // extra land, as a fraction of the province's own surface, that burning coal stands
+    // in for this year. It enters at the same weight as arable land because that is
+    // literally what it substitutes for: the acres an organic economy had to spend on
+    // firewood, charcoal and fodder, released to grow food instead. Unlike soil health
+    // it is NOT scaled by wear — a ghost acre is a stock being spent, not a field being
+    // worked — and it is the only term here that can rise without bound, which is why
+    // it is the only escape from a fixed carrying ceiling.
     static float natural_capital_of(const Province& province, const SubsistenceConfig& cfg,
-                                    float soil_health = 1.0f) {
+                                    float soil_health = 1.0f, float ghost_land = 0.0f) {
         const float soil = std::clamp(soil_health, 0.0f, 1.0f);
         return soil * (cfg.weight_agricultural_productivity * province.agricultural_productivity +
                        cfg.weight_arable_land * province.geography.arable_land_fraction) +
                cfg.weight_forest_forage * province.geography.forest_coverage +
-               cfg.weight_fisheries * province.fisheries.current_stock;
+               cfg.weight_fisheries * province.fisheries.current_stock +
+               cfg.weight_arable_land * std::max(0.0f, ghost_land);
     }
 
     // Food the province's natural capital yields when worked by `labor` people.

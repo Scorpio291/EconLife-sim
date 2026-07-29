@@ -681,6 +681,31 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.urban_capacity_replacement;
                     cs.urban_capacity = (v >= 0.0f) ? v : 0.0f;
                 }
+                if (d.supported_specialist_fraction_replacement.has_value()) {
+                    float v = *d.supported_specialist_fraction_replacement;
+                    cs.supported_specialist_fraction = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
+                }
+                if (d.political_stress_replacement.has_value()) {
+                    // Replacement; structural_demography recomputes the PSI each year.
+                    // Uncapped above by design — the death rate it drives arrives as
+                    // 1 - exp(-rate), which is where the bound physically belongs.
+                    float v = *d.political_stress_replacement;
+                    cs.political_stress = (std::isnan(v) || v < 0.0f) ? 0.0f : v;
+                }
+                if (d.faction_death_fraction_replacement.has_value()) {
+                    // A fraction of people: you cannot lose more than everyone. NaN -> 0.
+                    float v = *d.faction_death_fraction_replacement;
+                    cs.faction_death_fraction = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
+                }
+                if (d.ghost_land_fraction_replacement.has_value()) {
+                    // Replacement; energy_base recomputes the year's coal burn each tick.
+                    float v = *d.ghost_land_fraction_replacement;
+                    cs.ghost_land_fraction = (v >= 0.0f) ? v : 0.0f;
+                }
+                if (d.coal_burned_replacement.has_value()) {
+                    float v = *d.coal_burned_replacement;
+                    cs.coal_burned_per_year = (v >= 0.0f) ? v : 0.0f;
+                }
                 if (d.war_death_fraction_replacement.has_value()) {
                     // Replacement; warfare recomputes annually. Physical bounds: an
                     // extra death fraction lies in [0, 1] (you cannot lose more than

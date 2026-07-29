@@ -896,6 +896,163 @@ struct GrainLogisticsConfig {
     float grain_trade_rate_per_year = 0.1f;
 };
 
+// Energy Base (R1B/R1C) — GHOST ACRES: the escape from the organic economy.
+//
+// An organic economy is bounded by photosynthesis on finite acres. Everything — food,
+// fodder for the draft animals, firewood, charcoal for iron, wool, timber — competes
+// for the same land, so raising any one of them costs another. Coal breaks that bound
+// by substituting a STOCK for the flow: burning it does the work that would otherwise
+// have needed woodland, and so releases acres that never existed. England and Wales
+// drew 4.3M acre-equivalents from coal in 1750, 11.2M in 1800 and 48.1M by 1850 —
+// more than the ~37M acres of the entire land surface.
+//
+// This is the mechanism the model was missing, and its absence was structural rather
+// than cosmetic: with a fixed land base the carrying ceiling saturates, so Tainter's
+// B(C) = B_max(1 - exp(-gamma*C)) has a FIXED B_max and every rise necessarily peaks
+// at the same height. Ghost acres are what lets the ceiling itself rise.
+//
+// It is also why the escape is not permanent. The stock is finite and located: a
+// society that industrialises is SPENDING something, and when the coal under it runs
+// out the ceiling falls back to what the sun puts on its fields. Rise and fall.
+struct EnergyBaseConfig {
+    // Active across the whole pre-market arc, like subsistence and grain_logistics.
+    // Coal only actually matters at the top of it (technique and capital gate it), but
+    // there is nothing to gate it OUT of — a Neolithic society simply cannot mine.
+    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
+                                               "feudal",      "mercantile", "industrial"};
+
+    // --- What a tonne of coal is worth in land ---
+    // Read straight off Wrigley's own acre-equivalent series against English coal
+    // output: 4.3M acres for ~5M tonnes in 1750, 11.2M for ~15M in 1800, 48.1M for ~60M
+    // in 1850. That is a consistent ~0.8 acres of sustained-yield woodland per tonne
+    // across a century of it.
+    //
+    // (Measured at 2.0 first, from the half-remembered rule that coppice yields ~2
+    // tonnes of wood per acre-year at about half coal's energy density. It is 2.5x too
+    // generous, and it does not reproduce Wrigley's own numbers — the series above is
+    // the primary figure and this is derived from it.)
+    float woodland_acres_per_tonne_coal = 0.8f;
+    // Acres a pre-industrial economy needed per person, all uses together — food,
+    // fodder, fuel, timber, wool. England and Wales: ~37M acres of land surface for a
+    // population of ~9M in 1800, so ~4 acres a head.
+    //
+    // The ghost acres are measured against THIS fixed per-head standard rather than
+    // against the province's own surface, deliberately, for two reasons. Province areas
+    // here are sized for the simulation and carry populations no real county of that
+    // size could, so dividing by them would report a land multiple in the tens. And per
+    // head is the dimension the historical figures are given in and the one that
+    // transfers: England drew ~0.7 ghost acres a head in 1750, 1.24 in 1800 and 2.64 by
+    // 1850, so the index runs 0.17 -> 0.30 -> 0.64 over the century in which coal
+    // remade the country.
+    float preindustrial_acres_per_head = 4.1f;
+    // A seeded coal deposit stands for a COALFIELD, not a heap. World-gen sizes the
+    // richest at 3000 abstract units, and a great coalfield — Yorkshire and
+    // Nottinghamshire, the one that actually carried an industrial revolution — held on
+    // the order of 2e10 recoverable tonnes. That fixes the bridge at ~6.7e6 tonnes per
+    // unit. A unit conversion, not a behaviour dial: it is chosen so that the biggest
+    // thing world-gen can seed is the biggest thing the historical record contains.
+    //
+    // (Measured at 1e6 first, which is what you get by reading "coalfield" as a billion
+    // tonnes rather than twenty. Under that reading an earthlike world's whole endowment
+    // was 46 tonnes a head against Britain's ~900 cumulative, and the industrial phase
+    // lasted 500 years before the seams ran dry.)
+    float tonnes_per_deposit_unit = 6.7e6f;
+
+    // --- What a province can RAISE ---
+    // Knowing how to sink, drain, ventilate and fire a deep pit is technique. Saturating
+    // in accumulated knowledge: outcrop coal was picked off hillsides for centuries
+    // before anybody could work a drowned seam, so this rises slowly. Half effect at
+    // this much knowledge — placed at the scale of the late pre-industrial eras, which
+    // is where deep mining actually appears.
+    //
+    // NOTE — productive capital is deliberately NOT a factor here. Pits, pumps and
+    // headgear are obviously capital, but `productive_capital` has no unit that converts
+    // to tonnes of coal, and any coefficient bridging them would be a number chosen to
+    // make the curve come out. What CAN be defended is that you must know how to mine,
+    // it must pay, and the seam must be there. Wiring capital in properly needs the
+    // capital stock denominated in something real first; noted, not faked.
+    float mining_technique_halfsat = 500000.0f;
+
+    // --- What a province WANTS ---
+    // Annual coal demand per head at FULL adoption, in tonnes. England and Wales in
+    // 1850: about 60M tonnes raised for a population of ~18M, so ~3.3 tonnes a head —
+    // and rising steeply after that.
+    //
+    // (Measured at 0.8 first, which is the pre-industrial figure for TOTAL energy use
+    // from all sources — ~18 GJ a head at ~29 GJ a tonne. That is the wrong quantity to
+    // use as the ceiling on coal demand: it describes the economy coal replaces, not the
+    // one it builds, and it held the ghost acres under 0.4 of the land base where the
+    // historical record has them passing 1.0.)
+    float tonnes_per_head_per_year = 3.3f;
+
+    // --- INDUCED INNOVATION (R1C): why the same knowledge industrialises one place ---
+    // Britain burned coal because its wage/fuel price ratio made the machines pay;
+    // identical knowledge sat unused where labour was cheap and fuel dear. The wage here
+    // is the real one already in the model — consumption over subsistence, the same w
+    // the Malthusian valve runs on — and the fuel price is what the seam under the
+    // province actually costs to work (grade, depth, access).
+    //
+    // Adoption saturates in that ratio rather than switching at a threshold: there is no
+    // moment when a society decides to industrialise, only techniques that gradually pay.
+    float adoption_ratio_halfsat = 2.0f;
+    // Divide-by-zero sentinel for the pithead cost of an unworkable seam. Not a bound on
+    // any outcome.
+    float min_seam_workability = 0.01f;
+};
+
+// Structural Demography (R2D) — THE ENDOGENOUS FALL.
+//
+// Societies do not only come apart because the harvest failed. Turchin's
+// structural-demographic theory: as population grows it depresses the real wage while
+// inflating the incomes of those at the top, so the number of people raised to expect
+// a place above the plough grows faster than the places that exist. Surplus claimants
+// turn on each other, the retinues they raise have to be fed by somebody, and the
+// fiscal base erodes underneath. Secular cycles of 200-300 years, running largely
+// independently of whether the granary is full.
+//
+// The Political Stress Index is MULTIPLICATIVE in its three terms, which is the
+// theory's sharpest and most falsifiable claim: all three must be elevated at once. A
+// miserable population under a united elite and a solvent state does not bring the
+// state down; nor does a fractured elite over a contented one. That is why most bad
+// years are just bad years, and why the ones that are not are catastrophic.
+//
+// The stratum whose overproduction this measures is the non-farming stratum subsistence
+// already tracks — scholars, priests, smiths, lords, townsmen — not aristocrats
+// specifically. What matters is the GAP between the stratum a society holds (which has
+// generational inertia, R2C) and the one this year's harvest can support: the people in
+// that gap have been raised to a place the land no longer provides.
+struct StructuralDemographyConfig {
+    // The pre-market arc, like subsistence and the rest of the commons machinery.
+    std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
+                                               "feudal",      "mercantile", "industrial"};
+
+    // Deaths per person-year at PSI = 1. Internal conflict at full structural stress is
+    // of the order of the worst civil wars: the Taiping rebellion killed on the order of
+    // 20M out of ~400M over 14 years, roughly 0.4% of the population a year, and the
+    // Thirty Years' War killed a comparable share of Germany annually. PSI reaches 1
+    // only when misery, elite surplus and fiscal exhaustion are ALL near their maxima,
+    // so this is the rate for the very worst of it.
+    float conflict_death_rate_at_unit_stress = 0.005f;
+
+    // Every claimant without a place raises followers, and armed followers eat like
+    // soldiers rather than like peasants. This is the EXTRA draw on the granary, over
+    // and above what those same people were already eating as part of the population —
+    // conserved, and the reason factional politics is expensive rather than free.
+    float followers_per_surplus_claimant = 4.0f;  // a retinue: the household in arms
+    float retinue_ration_mult = 2.0f;             // campaign consumption vs civilian, as warfare
+
+    // Structural stress erodes the ability of anyone to govern. Stability points lost
+    // per year at PSI = 1 (stability is [0,1], so this is a large but not instant fall).
+    float stability_erosion_at_unit_stress = 0.30f;
+
+    // Divide-by-zero sentinel for the competition ratio: when the harvest supports no
+    // non-farmers at all, every claimant is a surplus claimant and the intensity of the
+    // competition for what remains is enormous. Expressed as a floor on the share of the
+    // population that counts as "places", NOT a bound on any outcome — the resulting
+    // death rate still arrives as 1 - exp(-rate).
+    float min_positions_fraction = 0.005f;
+};
+
 // Warfare (M6c foundation): war between province-polities (chiefdoms/lords at the dawn).
 // NOT scripted raids — a stronger polity attacks a weaker, REACHABLE neighbour when the
 // power balance favours it (the EV decision; treaties/alliances/backstabbing/empires +
@@ -1915,6 +2072,8 @@ struct PackageConfig {
     SubsistenceConfig subsistence;
     KnowledgeConfig knowledge;
     GrainLogisticsConfig grain_logistics;
+    EnergyBaseConfig energy_base;
+    StructuralDemographyConfig structural_demography;
     WarfareConfig warfare;
     RealEstateConfig real_estate;
     FinancialDistributionConfig financial_distribution;

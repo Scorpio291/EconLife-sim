@@ -100,6 +100,44 @@ dear. This supplies the TRIGGER that turns knowledge into an era transition.
 - **Hooks:** recipes already carry labour and energy intensity; price_engine has wages.
 - **Fixes:** why the same knowledge industrialises one province and not another.
 
+**1B AND 1C LANDED 2026-07-28** as a new `energy_base` module (interface spec:
+docs/interfaces/energy_base/INTERFACE.md). Coal is now a real, conserved, located,
+finite escape: the best seam in a province is worked, every tonne burned comes out of
+that named deposit as a `DepositDelta`, and the ghost acres it buys enter the carrying
+ceiling at the same weight as arable land — because that is literally what they
+substitute for. Adoption is Allen's ratio (the real wage against what the seam costs to
+work), so knowing how to burn coal is not enough; it has to pay.
+
+Three constants were wrong on the first pass and each was corrected against the primary
+series rather than nudged:
+- **acres per tonne 2.0 → 0.8.** Read off Wrigley's own acre-equivalents against English
+  output (4.3M acres for ~5M tonnes in 1750, 48.1M for ~60M in 1850), not from the
+  half-remembered coppice-yield rule, which is 2.5x too generous and does not reproduce
+  his numbers.
+- **tonnes per head 0.8 → 3.3.** 0.8 is the PRE-industrial figure for total energy from
+  all sources; it describes the economy coal replaces, not the one it builds, and it
+  held the ghost acres under 0.4 of the land base where the record has them passing 1.0.
+  England 1850: ~60M tonnes for ~18M people.
+- **tonnes per deposit unit 1e6 → 6.7e6.** A seeded deposit is a COALFIELD; the one that
+  actually carried an industrial revolution (Yorkshire/Notts) held ~2e10 recoverable
+  tonnes, and world-gen's richest seeding is 3000 units.
+
+Measured (earthlike, seed 7): the coal age opens around year 8,000 and the seams are
+empty by ~9,200 — a ~1,200-year industrial phase, with the ghost index peaking near 1.0
+in the province that actually has coal, matching England 1850.
+
+**It did not break the stall, and the reason is worth recording.** This earthlike world's
+entire coal endowment is 835 deposit units (~5.6e9 tonnes) against a peak population of
+18M — about 310 tonnes a head cumulatively, against Britain's ~900 — and only one
+province in six has any. So the WORLD ceiling rises by a few percent even while the coal
+province's own doubles. The stall at era 6 is therefore not an energy problem: knowledge
+production is proportional to population, population to the food ceiling, and the era-7
+threshold sits just above where that lands. That is F7 (threshold recalibration), which
+was blocked on 1A/1B and is now unblocked.
+
+What is still missing is the FALL. Every world now only ever rises. The endogenous
+social trigger for collapse is 2D (elite overproduction / PSI), and it is next.
+
 ---
 
 ## TIER 2 — make the cycle itself realistic
@@ -196,6 +234,24 @@ erodes.
 - **Hooks:** we already compute gini, urban share, cohort age structure, institutional
   trust, and government budget.
 
+**LANDED 2026-07-28** as the `structural_demography` module (interface spec:
+docs/interfaces/structural_demography/INTERFACE.md). Every ingredient was already in the
+model and nothing joined them; what was missing was the observation that the GAP between
+the stratum a society HOLDS (which has generational inertia, R2C) and the one its harvest
+SUPPORTS is itself a destabilising force. Subsistence now publishes both.
+
+    mmp = max(0, 1 - w) * youth_share
+    emp = max(0, held - supported) / max(sentinel, supported)
+    sfd = (1 - granary_cover) * (1 - institutional_trust)
+    PSI = mmp * emp * sfd
+    p_faction = 1 - exp(-PSI * conflict_death_rate_at_unit_stress)
+
+Nothing here is a mood. The stress KILLS (a third independent competing risk in the
+cohort mortality composition, kept separate from war because a society can be doing
+both), EATS (retinue rations drawn from the granary, counting only the extra over the
+ordinary ration, so nothing is consumed twice) and ERODES STABILITY, which feeds back
+into births and deaths.
+
 ---
 
 ## TIER 3 — texture and de-synchronisation
@@ -244,12 +300,16 @@ erodes.
 3. **2A wage valve + 2B urban graveyard** — DONE 2026-07-28. Brought urbanisation to
    3-5% (emergent) and uncovered the soil-renewal error that was pinning the whole
    agrarian phase. See 2B for the measurements.
-4. **1B energy + 1C induced innovation** — the ceiling that rises; without these the
-   peak is fixed no matter what else improves.
+4. **1B energy + 1C induced innovation** — DONE 2026-07-28 as the `energy_base` module.
+   The ceiling can now rise, and the rise is finite because the stock is. See 1B.
 5. **2D elite overproduction, Tier 3 texture, Tier 4 transition.**
 
 Do NOT iterate era thresholds again until 1A and 1B land: the calibration would be
 fitting to a transient that these mechanisms are about to change.
+**Both have now landed (2026-07-28), so F7 is unblocked** — and it is needed: the
+measured climb reaches era 2 at year ~5,500 (right) and then crosses eras 3 through 8 in
+~1,300 years, because knowledge grows exponentially in a population that grows with the
+ceiling. The pacing is front-loaded backwards against the thresholds we have.
 
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
