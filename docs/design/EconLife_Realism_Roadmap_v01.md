@@ -323,7 +323,21 @@ into births and deaths.
 - **Printing (original note).** Europe held <30,000 books before 1450 and 8-12 million by 1500; print
   cities grew ~35pp faster 1500-1600. Multiplies `K_codified` copy count by two orders
   of magnitude — this is what makes the ratchet permanent.
-- **Polycentrism.** Innovation survives if ANY polity in a connected culture-area
+- **Polycentrism — LANDED 2026-07-28 (R3F). TIER 3 COMPLETE.** Warfare's emergent
+  political map is now exposed as `cohort_stats.polity_id`, and the written corpus decays
+  more slowly the more INDEPENDENT jurisdictions hold it:
+  `loss / (1 + weight * (shelters - 1))`.
+
+  An idea suppressed or burned in one polity survives in the next — Tyndale printed in
+  Antwerp, Galileo circulated in the Netherlands, Descartes published in Amsterdam — and
+  the reason Europe's scientific revolution could not be stopped is that nobody was in a
+  position to stop it everywhere at once. A unified empire offers no such refuge.
+
+  So conquest now has a real cost, and it lands where it hurts most: an empire that
+  absorbs its neighbours gains their levies and loses their refuges, and the loss falls on
+  the one stock that lets a civilisation start its next cycle above the last. China's
+  unified cycling against Europe's escape is emergent from that, not a dial.
+- **Polycentrism (original note).** Innovation survives if ANY polity in a connected culture-area
   shelters it, so conquest/absorption acquires a growth COST and China's unified cycling
   vs Europe's escape becomes emergent rather than a dial.
 

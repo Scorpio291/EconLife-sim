@@ -387,6 +387,18 @@ struct RegionCohortStats {
     // Mediterranean system came down within a generation. Transient (recomputed each tick).
     float import_dependence = 0.0f;
 
+    // Which polity this province currently belongs to (R3F). Emergent and published by
+    // warfare, which owns the political map: a province that has never been conquered is
+    // its own polity, conquest absorbs whole polities, and hold-failure secedes them back.
+    //
+    // Exposed here because POLITICAL FRAGMENTATION IS AN INPUT TO SURVIVAL, not just a
+    // military fact. An idea suppressed or burned in one jurisdiction survives in the
+    // next: Tyndale printed in Antwerp, Galileo circulated in the Netherlands, and the
+    // reason Europe's scientific revolution could not be stopped is that there was nobody
+    // in a position to stop it everywhere at once. A unified empire has no such refuge.
+    // Transient (recomputed each tick).
+    uint32_t polity_id = 0;
+
     // ASABIYA — the capacity of a people to act together (R3C). Ibn Khaldun's
     // observation, and the one Turchin turned into a model: solidarity is FORGED AT
     // FRONTIERS, where a group lives against an out-group and has to hold together or

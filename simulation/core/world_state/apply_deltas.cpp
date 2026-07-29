@@ -690,6 +690,8 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.import_dependence_replacement;
                     cs.import_dependence = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
                 }
+                if (d.polity_id_replacement.has_value())
+                    cs.polity_id = *d.polity_id_replacement;
                 if (d.asabiya_replacement.has_value()) {
                     // A capacity in [0,1] by construction (logistic growth, exponential
                     // decay). NaN falls to the seed rather than to zero: the growth term

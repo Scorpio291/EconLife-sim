@@ -537,3 +537,58 @@ TEST_CASE("knowledge: printing is gated on what a society knows, not on a date",
     CHECK(advanced > 10.0);
     CHECK(advanced > 50.0 * backward);
 }
+
+// ===========================================================================
+// POLYCENTRISM — why a fragmented world keeps what a unified one loses.
+//
+// Innovation survives if ANY polity in a connected culture-area shelters it.
+// Tyndale printed in Antwerp, Galileo circulated in the Netherlands,
+// Descartes published in Amsterdam. The reason Europe's scientific revolution
+// could not be stopped is that nobody was in a position to stop it everywhere
+// at once — and the standing explanation for why China cycled through
+// unification and collapse while Europe escaped.
+//
+// So conquest acquires a real cost here: an empire that absorbs its
+// neighbours gains their levies and loses their refuges, and the loss lands
+// on the one stock that lets a civilisation start its next cycle above the
+// last.
+// ===========================================================================
+
+TEST_CASE("knowledge: a single empire preserves no better than a single kingdom",
+          "[knowledge][tier2][polycentrism]") {
+    const KnowledgeConfig cfg{};
+    CHECK_THAT(KnowledgeModule::shelter_loss_divisor(0, cfg),
+               Catch::Matchers::WithinAbs(1.0, 1e-9));
+    CHECK_THAT(KnowledgeModule::shelter_loss_divisor(1, cfg),
+               Catch::Matchers::WithinAbs(1.0, 1e-9));
+}
+
+TEST_CASE("knowledge: every extra jurisdiction is another place the books survive",
+          "[knowledge][tier2][polycentrism]") {
+    const KnowledgeConfig cfg{};
+    const double two = KnowledgeModule::shelter_loss_divisor(2, cfg);
+    const double six = KnowledgeModule::shelter_loss_divisor(6, cfg);
+    CHECK(two > 1.0);
+    CHECK(six > two);
+    // Six independent shelters lose their records several times more slowly than one.
+    CHECK(six > 3.0);
+    // Linear in the number of refuges, not saturating: each is a genuinely separate
+    // place an idea can outlive its suppression, and there is no point at which one
+    // more stops helping.
+    CHECK_THAT(six - two, Catch::Matchers::WithinRel(
+                              4.0 * static_cast<double>(cfg.record_loss_shelter_weight), 1e-6));
+}
+
+TEST_CASE("knowledge: conquest costs a civilisation its refuges",
+          "[knowledge][tier2][polycentrism]") {
+    // The point of the whole mechanism. A world of six polities that is conquered into
+    // one keeps its armies and loses its libraries — and the libraries are what let the
+    // next cycle start above the last.
+    const KnowledgeConfig cfg{};
+    const double fragmented_loss =
+        static_cast<double>(cfg.record_loss_per_year) / KnowledgeModule::shelter_loss_divisor(6, cfg);
+    const double unified_loss =
+        static_cast<double>(cfg.record_loss_per_year) / KnowledgeModule::shelter_loss_divisor(1, cfg);
+    CHECK(unified_loss > fragmented_loss);
+    CHECK(unified_loss > 3.0 * fragmented_loss);
+}

@@ -825,6 +825,23 @@ struct KnowledgeConfig {
     // the catastrophic losses come from sacking, which warfare applies separately.
     float record_loss_per_year = 0.010f;
 
+    // --- POLYCENTRISM (R3F): why a fragmented world keeps what a unified one loses ---
+    // Innovation survives if ANY polity in a connected culture-area shelters it. Tyndale
+    // printed in Antwerp, Galileo circulated in the Netherlands, Descartes published in
+    // Amsterdam — and the reason Europe's scientific revolution could not be stopped is
+    // that nobody was in a position to stop it everywhere at once. A unified empire
+    // offers no such refuge, which is the standing explanation for why China cycled
+    // through unification and collapse while Europe escaped.
+    //
+    // So the written corpus is lost more slowly the more INDEPENDENT jurisdictions hold
+    // it. Conquest thereby acquires a real cost: an empire that absorbs its neighbours
+    // gains their levies and loses their refuges, and the loss lands on the one stock
+    // that lets a civilisation start its next cycle above the last.
+    //
+    // Effective loss rate = record_loss_per_year / (1 + weight * (shelters - 1)).
+    // At one polity nothing changes; at six the corpus decays several times slower.
+    float record_loss_shelter_weight = 0.5f;
+
     // --- THE PRESS (R3E): what makes the ratchet permanent ---------------------------
     // A scribe copies about one substantial work a year. A press runs off hundreds. All
     // of Europe held fewer than 30,000 manuscript books in 1450 and somewhere between 8

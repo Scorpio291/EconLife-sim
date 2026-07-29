@@ -298,6 +298,11 @@ struct RegionDelta {
         import_dependence_replacement;  // replacement; cohort_stats->import_dependence,
                                         // published by subsistence — the share of what a
                                         // province eats that came from somewhere else
+    std::optional<uint32_t>
+        polity_id_replacement;  // replacement; cohort_stats->polity_id, published by
+                                // warfare (the emergent political map, exposed so
+                                // knowledge can see how many independent jurisdictions
+                                // shelter the written corpus — R3F).
     std::optional<float>
         asabiya_replacement;  // replacement; cohort_stats->asabiya, published by warfare.
                               // Forged at frontiers, decaying in the interior — the

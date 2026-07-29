@@ -265,6 +265,21 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Copying is bounded by what is actually KNOWN — a scribe cannot write down more
     // than the civilisation has — and by how many scribes there are to do it.
     if (per_worker_output >= cfg_.writing_output_threshold) {
+        // POLYCENTRISM (R3F). Count the INDEPENDENT jurisdictions that actually hold
+        // records. An idea burned or suppressed in one survives in the next, so a
+        // fragmented culture-area keeps what a unified one loses — and an empire that
+        // absorbs its neighbours gains their levies and loses their refuges.
+        std::vector<uint32_t> sheltering;
+        for (const auto& p : state.provinces) {
+            if (!p.cohort_stats || p.cohort_stats->codified_knowledge <= 0.0f)
+                continue;
+            const uint32_t pid = p.cohort_stats->polity_id;
+            if (std::find(sheltering.begin(), sheltering.end(), pid) == sheltering.end())
+                sheltering.push_back(pid);
+        }
+        const double shelter_divisor =
+            shelter_loss_divisor(static_cast<uint32_t>(sheltering.size()), cfg_);
+
         for (const auto& p : state.provinces) {
             if (!p.cohort_stats)
                 continue;
@@ -284,7 +299,8 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // society's living knowledge, never past it.
             const double room = std::max(0.0, static_cast<double>(level) - held);
             const double added = std::min(copying, room);
-            const double lost = held * static_cast<double>(cfg_.record_loss_per_year);
+            const double lost =
+                held * static_cast<double>(cfg_.record_loss_per_year) / shelter_divisor;
             const float net_records = static_cast<float>(added - lost);
             if (net_records != 0.0f) {
                 RegionDelta rd{};

@@ -88,6 +88,22 @@ class KnowledgeModule : public ITickModule {
         return 1.0 + gain * adoption;
     }
 
+    // POLYCENTRISM (R3F). How much more slowly a written corpus is lost when it sits in
+    // `shelters` independent jurisdictions rather than one.
+    //
+    // An idea suppressed or burned in one polity survives in the next. Tyndale printed in
+    // Antwerp, Galileo circulated in the Netherlands, Descartes published in Amsterdam;
+    // the reason Europe's scientific revolution could not be stopped is that nobody could
+    // stop it everywhere at once. A unified empire offers no refuge — which is why
+    // conquest, in this model, costs a civilisation the very stock that lets its next
+    // cycle start above the last. Returns 1.0 for a single polity. Pure/static.
+    static double shelter_loss_divisor(uint32_t shelters, const KnowledgeConfig& cfg) {
+        if (shelters <= 1)
+            return 1.0;
+        return 1.0 + static_cast<double>(std::max(0.0f, cfg.record_loss_shelter_weight)) *
+                         static_cast<double>(shelters - 1);
+    }
+
    private:
     KnowledgeConfig cfg_;
 };

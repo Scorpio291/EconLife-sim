@@ -646,6 +646,10 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         ad.region_id = state.provinces[i].region_id;
         ad.asabiya_replacement =
             asabiya_year(state.provinces[i].cohort_stats->asabiya, frontier, cfg_);
+        // The political map itself, exposed (R3F): how many independent jurisdictions a
+        // world contains is what decides whether an idea suppressed in one survives in
+        // another.
+        ad.polity_id_replacement = mine;
         delta.region_deltas.push_back(ad);
     }
 
