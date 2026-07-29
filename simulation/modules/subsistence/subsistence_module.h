@@ -96,6 +96,34 @@ class SubsistenceModule : public ITickModule {
         return ceiling * saturation;
     }
 
+    // WHY ANYONE BOTHERS BUILDING (R4B). The annual hazard that what a province builds is
+    // taken or destroyed rather than kept, composed from real located facts the model
+    // already tracks: whether people believe their property is safe, whether the polity
+    // is coming apart, and whether armies are actually taking things.
+    //
+    // Nobody clears land or raises a mill that pays back over thirty years if a warlord,
+    // a faction or a tax-farmer will have it in five. This is North and Weingast's
+    // credible commitment, and one of the standard explanations for why societies that
+    // knew how to build never did. Pure/static.
+    static float expropriation_hazard(float institutional_trust, float political_stress,
+                                      float war_death_fraction, const SubsistenceConfig& cfg) {
+        const float distrust = 1.0f - std::clamp(institutional_trust, 0.0f, 1.0f);
+        return cfg.seizure_rate_from_distrust * distrust +
+               cfg.seizure_rate_from_faction * std::max(0.0f, political_stress) +
+               cfg.seizure_rate_from_war * std::clamp(war_death_fraction, 0.0f, 1.0f);
+    }
+
+    // The share of its surplus a society actually commits to building, given what it
+    // expects to keep: `s * exp(-hazard * horizon)`, where the horizon is how long a
+    // piece of capital must survive to be worth raising (its service life, 1 /
+    // depreciation). At a hazard of 1%/yr a society builds about 72% of what it wanted
+    // to; at 5%/yr, under a fifth. Pure/static.
+    static float effective_investment_share(float hazard, const SubsistenceConfig& cfg) {
+        const float depreciation = std::max(1e-4f, cfg.capital_depreciation_per_year);
+        const float horizon = 1.0f / depreciation;
+        return cfg.capital_investment_share * std::exp(-std::max(0.0f, hazard) * horizon);
+    }
+
     // produced / needed for `population` people. 1.0 = exactly fed.
     static float surplus_ratio(float output, uint32_t population, const SubsistenceConfig& cfg);
 

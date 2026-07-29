@@ -598,3 +598,60 @@ TEST_CASE("subsistence: a province with no neighbours is unaffected by any of th
                Catch::Matchers::WithinAbs(0.0f, 1e-9f));
     CHECK(*d.region_deltas[0].subsistence_surplus_replacement > 1.0f);
 }
+
+// ===========================================================================
+// WHY ANYONE BOTHERS BUILDING (R4B).
+//
+// Nobody clears land, digs a canal or raises a mill that pays back over
+// thirty years if a warlord, a faction or a tax-farmer will have it in five.
+// Credible commitment against confiscation is what North and Weingast
+// identified as the precondition for sustained investment, and it is one of
+// the standard explanations for why societies that knew perfectly well how to
+// build never did.
+//
+//     s_eff = s * exp(-expropriation_hazard * horizon)
+// ===========================================================================
+
+TEST_CASE("subsistence: a society that expects to keep what it builds, builds",
+          "[subsistence][tier2][property]") {
+    const SubsistenceConfig cfg{};
+    const float secure = SubsistenceModule::expropriation_hazard(
+        /*trust=*/1.0f, /*psi=*/0.0f, /*war=*/0.0f, cfg);
+    CHECK_THAT(secure, Catch::Matchers::WithinAbs(0.0f, 1e-9f));
+    // With nothing to fear, the whole intended share is committed.
+    CHECK_THAT(SubsistenceModule::effective_investment_share(secure, cfg),
+               Catch::Matchers::WithinRel(cfg.capital_investment_share, 1e-4f));
+}
+
+TEST_CASE("subsistence: distrust, faction and war each suppress building",
+          "[subsistence][tier2][property]") {
+    const SubsistenceConfig cfg{};
+    const float base = SubsistenceModule::expropriation_hazard(1.0f, 0.0f, 0.0f, cfg);
+    CHECK(SubsistenceModule::expropriation_hazard(0.0f, 0.0f, 0.0f, cfg) > base);  // nobody
+                                                                                   // trusts
+    CHECK(SubsistenceModule::expropriation_hazard(1.0f, 0.5f, 0.0f, cfg) > base);  // factions
+    CHECK(SubsistenceModule::expropriation_hazard(1.0f, 0.0f, 0.02f, cfg) > base);  // armies
+
+    // And each shows up as less actually built.
+    const float calm = SubsistenceModule::effective_investment_share(base, cfg);
+    const float lawless = SubsistenceModule::effective_investment_share(
+        SubsistenceModule::expropriation_hazard(0.0f, 0.4f, 0.02f, cfg), cfg);
+    CHECK(lawless < calm);
+    CHECK(lawless > 0.0f);  // even a bandit kingdom builds something
+}
+
+TEST_CASE("subsistence: the difference between accumulating and merely surviving",
+          "[subsistence][tier2][property]") {
+    // The magnitudes that matter. At a 1%/yr chance of losing it, a society commits
+    // about 72% of what it wanted to; at 5%/yr, under a fifth. Nothing about the harvest
+    // has changed in either case — this is entirely about what people expect to keep.
+    const SubsistenceConfig cfg{};
+    const float mild = SubsistenceModule::effective_investment_share(0.01f, cfg);
+    const float severe = SubsistenceModule::effective_investment_share(0.05f, cfg);
+    CHECK_THAT(mild / cfg.capital_investment_share, Catch::Matchers::WithinAbs(0.72f, 0.02f));
+    CHECK_THAT(severe / cfg.capital_investment_share, Catch::Matchers::WithinAbs(0.19f, 0.02f));
+    CHECK(severe < mild);
+    // Saturating toward zero, never negative: an arbitrarily lawless place still cannot
+    // build LESS than nothing.
+    CHECK(SubsistenceModule::effective_investment_share(10.0f, cfg) >= 0.0f);
+}

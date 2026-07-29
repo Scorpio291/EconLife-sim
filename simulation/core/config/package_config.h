@@ -712,6 +712,34 @@ struct SubsistenceConfig {
     // rates ran a few percent of output; 8% of the SURPLUS (not of total output) is a
     // defensible order for a society that is feeding itself first.
     float capital_investment_share = 0.08f;
+    // --- WHY ANYONE BOTHERS BUILDING (R4B) -------------------------------------------
+    // The investment share above is what a society would put into building IF it expected
+    // to keep what it built. Nobody clears land, digs a canal or raises a mill that pays
+    // back over thirty years if a warlord, a faction or a tax-farmer will have it in five.
+    // Credible commitment against confiscation is the thing North and Weingast identified
+    // as the precondition for sustained investment, and it is one of the standard
+    // explanations for why societies that knew perfectly well how to build never did.
+    //
+    //     s_eff = s * exp(-expropriation_hazard * horizon)
+    //
+    // The horizon is how long a piece of capital must survive to be worth raising — its
+    // service life, 1 / depreciation, about 33 years here. The hazard is composed from
+    // things the model already tracks as real located facts, not from a governance dial:
+    // whether people believe their property is safe, whether the polity is coming apart,
+    // and whether armies are actually taking things.
+    //
+    // At a hazard of 1%/yr a society invests about 72% of what it wanted to; at 5%/yr,
+    // under a fifth. That gap is the difference between a civilisation that accumulates
+    // and one that merely survives.
+    float seizure_rate_from_distrust = 0.020f;  // annual hazard at zero institutional trust:
+                                                // no protection from anybody, everything is
+                                                // held at someone else's pleasure
+    float seizure_rate_from_faction = 0.050f;   // per unit of Political Stress Index — a
+                                                // polity coming apart from the inside is
+                                                // exactly when things get taken
+    float seizure_rate_from_war = 2.0f;         // per unit of annual war death fraction: an
+                                                // army that is killing a percent of you this
+                                                // year is also burning your granaries
     // Annual wear. Pre-modern capital is short-lived: wooden tools, thatch, mud brick,
     // cleared land reverting to scrub. ~3%/yr implies a ~33-year mean service life,
     // which is the right order for hand tools and timber structures.

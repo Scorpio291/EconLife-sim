@@ -382,7 +382,27 @@ into births and deaths.
   `desired_births = target_surviving / P(survive_to_15)`. As survival goes 0.5 -> 0.9,
   births fall ~44% from that channel alone. Flagged by the research as the single
   highest-value fix for "population still rising at collapse".
-- **Institutions that outlive people.** Perpetual legal persons (corporation, monastery,
+- **Institutions that outlive people — PARTLY LANDED 2026-07-28 (R4B). ROADMAP COMPLETE
+  as specified.** The fixed 8%/yr surplus->capital rate is now DERIVED, exactly as the
+  roadmap asked: `s_eff = s * exp(-expropriation_hazard * horizon)`, where the horizon is
+  how long capital must survive to be worth raising (its service life, 1/depreciation,
+  ~33 years).
+
+  The hazard is composed from things the model already tracks as real located facts, not
+  from a governance dial: institutional trust (whether people believe their property is
+  safe), the Political Stress Index (a polity coming apart is exactly when things get
+  taken), and the war death fraction (an army killing a percent of you this year is also
+  burning your granaries). At 1%/yr a society builds ~72% of what it wanted to; at 5%/yr,
+  under a fifth — the difference between a civilisation that accumulates and one that
+  merely survives.
+
+  **STILL OPEN:** perpetual LEGAL PERSONS as such — the corporation, the monastery, the
+  guild endowment — so that capital and archives survive a specific owner's death rather
+  than being dispersed at every generation. That needs an ownership model the commons arc
+  does not have (proto-capital is per-resident and dies with them), so it is a real piece
+  of remaining work rather than something folded in here. What IS modelled is the
+  credible-commitment half: the security that makes long-horizon investment rational.
+- **Institutions that outlive people (original note).** Perpetual legal persons (corporation, monastery,
   guild endowment) so capital and archives survive an owner's death; credible commitment
   against confiscation lengthening investment horizons. Our fixed 8%/yr surplus->capital
   rate should be DERIVED: `s_eff = s * exp(-expropriation_hazard * horizon)`.

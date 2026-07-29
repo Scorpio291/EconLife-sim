@@ -327,7 +327,16 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // Annual cadence, same gate as the granary banking above.
     if (annual) {
         const float surplus_food = std::max(0.0f, output - need) * ticks_per_year;
-        const float investment = surplus_food * cfg_.capital_investment_share;
+        // WHY ANYONE BOTHERS BUILDING (R4B). A society commits its surplus to building
+        // only in proportion to what it expects to still own when the building pays back
+        // — thirty-odd years out, for a mill or a cleared field. A province where nobody
+        // trusts anybody, or where the polity is coming apart, or where armies are
+        // taking things, does not accumulate however large its harvest is. That is the
+        // difference between a civilisation that builds and one that merely survives.
+        const float hazard =
+            expropriation_hazard(prov.community.institutional_trust, cs.political_stress,
+                                 cs.war_death_fraction, cfg_);
+        const float investment = surplus_food * effective_investment_share(hazard, cfg_);
         const float wear = cs.productive_capital * cfg_.capital_depreciation_per_year;
         rd.productive_capital_delta = investment - wear;
 
