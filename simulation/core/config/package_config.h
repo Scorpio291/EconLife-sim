@@ -1972,6 +1972,29 @@ struct PopulationAgingConfig {
     float epidemic_density_weight = 2.0f;   // urban crowding multiplies the outbreak rate
     float epidemic_severity = 1.2f;         // mortality-multiplier bump at disease=1, rural
 
+    // --- PLAGUE COMES BACK (R3B) ---------------------------------------------------
+    // The Black Death was not one blip. England fell 4.8M (1348) -> 2.6M (1351) and kept
+    // falling to a nadir of 1.9M around 1450, a HUNDRED YEARS later, because plague
+    // returned in 1361, 1369, 1375, 1390, 1400 and on into the 17th century. Each wave
+    // was milder than the last because it found fewer people who had never had it, and
+    // each interval was long enough for a new generation of susceptibles to be born.
+    //
+    // Neither the interval nor the declining lethality is modelled directly. Both fall
+    // out of one real stock — `plague_susceptible_fraction` — drawn down by outbreaks and
+    // refilled by population turnover. A wave into a fully susceptible population is
+    // catastrophic; the same wave twenty years later is a bad year.
+    float epidemic_attack_rate = 0.70f;  // share of the SUSCEPTIBLE an outbreak reaches.
+                                         // The Black Death infected the large majority of
+                                         // those it met; survivors carry resistance.
+    float epidemic_susceptible_recovery_per_year = 0.03f;  // population turnover: at a
+                                                           // pre-modern life expectancy of
+                                                           // ~35 years, about a thirtieth of
+                                                           // the population is replaced
+                                                           // annually, and the replacements
+                                                           // have never met the disease.
+                                                           // This is what sets the ~15-30
+                                                           // year recurrence interval.
+
     // --- Geology disasters (M6a): the second episodic hazard. Quakes / great storms /
     // wildfires scaled by the world's `geology` dial — a mortality spike, NOT density-
     // dependent (a quake hits everyone). Conserved; pre-market gate (engineering blunts

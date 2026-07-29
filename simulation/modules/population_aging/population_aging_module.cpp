@@ -58,12 +58,24 @@ bool PopulationAgingModule::is_annual_tick(uint32_t current_tick) {
     return (current_tick % TICKS_PER_YEAR) == 0;
 }
 
-float PopulationAgingModule::epidemic_mortality_factor(float disease_dial, float urban_fraction,
-                                                       DeterministicRNG& rng,
-                                                       const PopulationAgingConfig& cfg) {
+PopulationAgingModule::PlagueYear PopulationAgingModule::plague_year(
+    float disease_dial, float urban_fraction, float susceptible, DeterministicRNG& rng,
+    const PopulationAgingConfig& cfg) {
+    PlagueYear out;
+    out.susceptible_after = std::clamp(susceptible, 0.0f, 1.0f);
     const float d = std::clamp(disease_dial, 0.0f, 1.0f);
+
+    // Population turnover refills the susceptible pool: the people born since the last
+    // wave have never met the disease. At a pre-modern life expectancy of ~35 years that
+    // is roughly a thirtieth of the population a year, which is what sets the recurrence
+    // interval — long enough for a new generation, short enough that plague returned to
+    // England six times in the fifty years after 1348.
+    out.susceptible_after +=
+        (1.0f - out.susceptible_after) * std::max(0.0f, cfg.epidemic_susceptible_recovery_per_year);
+    out.susceptible_after = std::clamp(out.susceptible_after, 0.0f, 1.0f);
     if (d <= 0.0f)
-        return 1.0f;
+        return out;
+
     const float density = std::clamp(urban_fraction, 0.0f, 1.0f);
     // Outbreak hazard rate rises with the world's disease load AND crowding (towns
     // are disease vectors — so disease brakes urbanization). The annual probability
@@ -71,9 +83,25 @@ float PopulationAgingModule::epidemic_mortality_factor(float disease_dial, float
     const float rate = cfg.epidemic_base_rate * d * (1.0f + cfg.epidemic_density_weight * density);
     const float p = 1.0f - std::exp(-std::max(0.0f, rate));
     if (rng.next_float() >= p)
-        return 1.0f;  // no outbreak this year
-    // Outbreak: a mortality spike scaled by the disease load and the crowding.
-    return 1.0f + cfg.epidemic_severity * d * (1.0f + density);
+        return out;  // no outbreak this year
+    out.outbreak = true;
+
+    // A wave reaches a share of the people who have never had it, and kills in
+    // proportion to how many that is. The FIRST wave into a wholly susceptible
+    // population is catastrophic; the same wave twenty years later, when most of the
+    // survivors carry resistance and only the young are new, is a bad year. Nothing
+    // states the declining lethality — it is the stock being drawn down.
+    const float reached = std::max(0.0f, cfg.epidemic_attack_rate) * out.susceptible_after;
+    out.mortality_factor = 1.0f + cfg.epidemic_severity * d * (1.0f + density) * reached;
+    out.susceptible_after = std::clamp(out.susceptible_after - reached, 0.0f, 1.0f);
+    return out;
+}
+
+float PopulationAgingModule::epidemic_mortality_factor(float disease_dial, float urban_fraction,
+                                                       DeterministicRNG& rng,
+                                                       const PopulationAgingConfig& cfg) {
+    // A wholly susceptible population — the severity of a first wave.
+    return plague_year(disease_dial, urban_fraction, 1.0f, rng, cfg).mortality_factor;
 }
 
 float PopulationAgingModule::disaster_mortality_factor(float geology_dial, DeterministicRNG& rng,
@@ -408,6 +436,11 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
         if (pop > 0) {
             std::map<DemographicGroup, PopulationCohort> next = cs.cohorts;
             float new_hardiness = cs.hardiness;  // preserved unless the annual drift updates it
+            // The plague stock: drawn down by a wave, refilled by turnover. Declared out
+            // here so it can be published with the cohorts it acted on; only touched in a
+            // year the annual block runs, so a monthly tick never resets it.
+            float plague_susceptible_next = cs.plague_susceptible_fraction;
+            bool plague_published = false;
 
             if (monthly) {
                 for (auto& [g, c] : next) {
@@ -509,8 +542,18 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                                               0x9E3779B97F4A7C15ull) ^
                                              (static_cast<uint64_t>(province.id) << 17) ^
                                              0xED1DEC1Cull);
-                    hazard_rate_mult *= epidemic_mortality_factor(state.hazard_settings.disease,
-                                                                  urban_frac, epi_rng, cfg_);
+                    // PLAGUE COMES BACK. The wave's severity scales with how many people
+                    // have never met the disease, and that stock is drawn down here and
+                    // refilled by turnover — so the recurrence interval and the declining
+                    // lethality emerge rather than being written anywhere. England kept
+                    // losing people until 1450, a century after the Black Death, because
+                    // plague returned six times in the first fifty years.
+                    const PlagueYear plague =
+                        plague_year(state.hazard_settings.disease, urban_frac,
+                                    cs.plague_susceptible_fraction, epi_rng, cfg_);
+                    hazard_rate_mult *= plague.mortality_factor;
+                    plague_susceptible_next = plague.susceptible_after;
+                    plague_published = true;
                     // Geology disasters (quakes/storms/wildfires) — a separate episodic
                     // spike scaled by the geology dial (not density). Independent RNG.
                     DeterministicRNG geo_rng(state.world_seed ^
@@ -607,6 +650,16 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
             cd.hardiness = new_hardiness;
             cd.cohorts = std::move(next);
             province_delta.cohort_stats_deltas.push_back(std::move(cd));
+
+            // The plague stock goes out with the cohorts it acted on: drawn down by this
+            // year's wave, refilled by turnover. Only published in a year the annual
+            // block actually ran, so a monthly tick never resets it.
+            if (plague_published) {
+                RegionDelta pd{};
+                pd.region_id = province_idx;
+                pd.plague_susceptible_replacement = plague_susceptible_next;
+                province_delta.region_deltas.push_back(pd);
+            }
         }
     }
 

@@ -130,7 +130,9 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // v26: cohort_stats specialist_fraction, productive_capital, soil_health and
     //      codified_knowledge — the freed stratum, the capital a society has built,
     //      the fertility of its land, and its written corpus.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 26);
+    // v27: cohort_stats.plague_susceptible_fraction — how much of the population has
+    //      never met the plague. The stock that makes plague RECUR instead of blip.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 27);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

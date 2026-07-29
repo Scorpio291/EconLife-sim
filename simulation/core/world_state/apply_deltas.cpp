@@ -681,6 +681,13 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.urban_capacity_replacement;
                     cs.urban_capacity = (v >= 0.0f) ? v : 0.0f;
                 }
+                if (d.plague_susceptible_replacement.has_value()) {
+                    // A share of the population: physically in [0,1]. NaN -> fully
+                    // susceptible, which is the safe default for a stock nobody has
+                    // touched (it is what a fresh world starts with).
+                    float v = *d.plague_susceptible_replacement;
+                    cs.plague_susceptible_fraction = std::isnan(v) ? 1.0f : std::clamp(v, 0.0f, 1.0f);
+                }
                 if (d.supported_specialist_fraction_replacement.has_value()) {
                     float v = *d.supported_specialist_fraction_replacement;
                     cs.supported_specialist_fraction = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);

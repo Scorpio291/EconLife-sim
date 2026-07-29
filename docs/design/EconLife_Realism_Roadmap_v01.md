@@ -256,7 +256,14 @@ into births and deaths.
 
 ## TIER 3 — texture and de-synchronisation
 
-- **Recurrent plague waves.** England fell 4.8M (1348) -> 2.6M (1351) -> nadir 1.9M in
+- **Recurrent plague waves — LANDED 2026-07-28 (R3B).** `plague_susceptible_fraction` is
+  now a real persisted stock (schema v27). A wave reaches `attack_rate x susceptible` and
+  kills in proportion; survivors carry resistance so the stock falls by what was reached;
+  turnover (~1/30 a year at a pre-modern life expectancy of ~35) refills it. **Neither the
+  recurrence interval nor the declining lethality is written anywhere** — both fall out of
+  that one stock. Measured: shifts the earthlike climb by ~40 years, well inside the
+  pacing gate, so the historical dates survive. The wage-response lag is not modelled.
+- **Recurrent plague waves (original note).** England fell 4.8M (1348) -> 2.6M (1351) -> nadir 1.9M in
   1450: recovery took 150-200 years BECAUSE plague recurred. Model waves at 10-20 year
   intervals with declining lethality, not one blip. Wage response lags ~25 years.
 - **Asabiya (collective-action capacity)** generated at contested frontiers, decaying in

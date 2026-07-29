@@ -40,11 +40,30 @@ class PopulationAgingModule : public ITickModule {
     // a WorldState field, so age is the sole driver.)
     static float compute_natural_death_probability(float age, float lifespan, float base_prob);
 
-    // Episodic disease mortality multiplier (>= 1.0) for one province-year (M6a, the
-    // first world-classification hazard brought in distinctly). With probability
-    // rising in the world's `disease` dial and urban crowding, an outbreak strikes a
-    // mortality spike; otherwise 1.0. Pure given the RNG. (Disease is a pre-market
-    // population check; medicine releases it in the modern era.)
+    // One province-year of plague (M6a, extended by R3B into recurrent waves).
+    //
+    // An outbreak arrives with a probability rising in the world's `disease` dial and in
+    // urban crowding, and its severity scales with how much of the population has never
+    // met the disease. That last part is what makes plague RECUR rather than blip:
+    // England fell 4.8M (1348) -> 2.6M (1351) and kept falling to 1.9M by 1450, because
+    // plague came back in 1361, 1369, 1375, 1390, 1400 and beyond — each wave milder
+    // because it found fewer susceptibles, each interval long enough for a new generation
+    // of them to be born.
+    //
+    // Neither the recurrence interval nor the declining lethality is written anywhere:
+    // both fall out of `susceptible` being drawn down here and refilled by population
+    // turnover. Pure given the RNG. (Disease is a pre-market population check; medicine
+    // releases it in the modern era.)
+    struct PlagueYear {
+        float mortality_factor = 1.0f;    // >= 1.0; multiplies the annual death RATE
+        float susceptible_after = 1.0f;   // the stock after this year's wave and turnover
+        bool outbreak = false;            // whether a wave struck at all
+    };
+    static PlagueYear plague_year(float disease_dial, float urban_fraction, float susceptible,
+                                  DeterministicRNG& rng, const PopulationAgingConfig& cfg);
+
+    // Severity-only view of the above, kept for callers that do not track the stock
+    // (equivalent to a fully susceptible population).
     static float epidemic_mortality_factor(float disease_dial, float urban_fraction,
                                            DeterministicRNG& rng, const PopulationAgingConfig& cfg);
 

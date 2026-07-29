@@ -30,6 +30,8 @@ Province-parallel: each province's demographic processing is fully independent. 
   - `subsistence_surplus_ratio` — commons food signal (births/famine, Malthusian loop)
   - `food_store` — granary buffer; famine fires only once exhausted
   - `hardiness` — generational adaptation divisor on world-hazard mortality
+  - `plague_susceptible_fraction` — how much of the population has never met the plague.
+    Owned by this module; drawn down by each wave and refilled by turnover.
   - `urban_population` — the town's actual headcount (sum of the urban cohorts,
     derived in `apply_cohort_stats_deltas` exactly as `total_population` is). Drives
     the disease-epidemic hazard (M6a) and the urban graveyard's crowding mortality.
@@ -54,6 +56,30 @@ Province-parallel: each province's demographic processing is fully independent. 
     addition of the two hazard RATES, so nothing is double-counted. With no
     environmental deaths a cohort loses precisely the published fraction, and a
     published 1.0 still annihilates it.
+
+### Plague comes back (R3B, added 2026-07-28)
+
+The Black Death was not one blip. England fell 4.8M (1348) -> 2.6M (1351) and KEPT
+falling, to a nadir of 1.9M around 1450 — a century later — because plague returned in
+1361, 1369, 1375, 1390, 1400 and on into the 17th century. Each wave was milder than the
+last because it found fewer people who had never had it, and each interval was long enough
+for a new generation of susceptibles to be born.
+
+`cohort_stats.plague_susceptible_fraction` is that stock (persisted, schema v27):
+
+- `PopulationAgingModule::plague_year(disease, urban_fraction, susceptible, rng, cfg)`
+  returns the year's mortality multiplier, the stock afterwards, and whether a wave
+  struck. Pure given the RNG.
+- Outbreak arrival is unchanged: `1 - exp(-rate)` on a hazard rising in the world's
+  disease dial and in crowding.
+- A wave REACHES `attack_rate * susceptible` of the population and kills in proportion;
+  survivors carry resistance, so the stock falls by exactly what was reached.
+- Between waves the stock refills at `epidemic_susceptible_recovery_per_year` — population
+  turnover, ~1/30 a year at a pre-modern life expectancy of ~35.
+
+**Neither the recurrence interval nor the declining lethality is written anywhere.** Both
+fall out of one stock being drawn down and refilled. `epidemic_mortality_factor` remains
+as the severity-only view (a fully susceptible population, i.e. a first wave).
 
 ### The urban graveyard and land<->town migration (added 2026-07-28)
 

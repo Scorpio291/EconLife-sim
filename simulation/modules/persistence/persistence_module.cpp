@@ -435,6 +435,10 @@ void write_province(ByteWriter& w, const Province& p) {
         w.write_float(p.cohort_stats->productive_capital);
         w.write_float(p.cohort_stats->soil_health);
         w.write_float(p.cohort_stats->codified_knowledge);
+        // v27: how much of the population has never met the plague. A real stock — it is
+        // what makes plague RECUR rather than blip, and reloading a society into a clean
+        // slate would hand it back a first wave its history says it already survived.
+        w.write_float(p.cohort_stats->plague_susceptible_fraction);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1315,6 +1319,12 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
             p.cohort_stats->productive_capital = r.read_float();
             p.cohort_stats->soil_health = r.read_float();
             p.cohort_stats->codified_knowledge = r.read_float();
+        }
+        // v27: plague susceptibility. Older saves default to 1.0 (the struct default:
+        // fully susceptible), which is the right reading — a save from before this
+        // existed carries no record of a population having met the disease.
+        if (schema_ver >= 27u) {
+            p.cohort_stats->plague_susceptible_fraction = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but

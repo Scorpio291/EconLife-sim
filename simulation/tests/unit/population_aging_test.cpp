@@ -491,8 +491,17 @@ TEST_CASE("PopulationAging: disease epidemics — episodic, scaled by disease di
     CHECK(high_density > high_disease);  // crowded towns are disease vectors
 
     // When an outbreak strikes, the mortality spike is the deterministic formula
-    // 1 + severity * disease * (1 + density).
-    const float expected = 1.0f + cfg.epidemic_severity * 1.0f * (1.0f + 1.0f);  // disease=1, density=1
+    // 1 + severity * disease * (1 + density) * reached, where `reached` is the share of
+    // the population the wave actually infects: attack_rate x susceptible. This helper
+    // reports a FIRST wave (susceptible = 1.0), so reached == attack_rate.
+    //
+    // UPDATED for R3B (recurrent waves). The spike used to be independent of how many
+    // people had ever met the disease, which made every plague identical and made the
+    // Black Death a single blip — where the record shows England still losing people a
+    // century later, because plague came back to a population that had partly lost its
+    // resistance to a new generation.
+    const float expected =
+        1.0f + cfg.epidemic_severity * 1.0f * (1.0f + 1.0f) * cfg.epidemic_attack_rate;
     bool saw_outbreak = false;
     for (uint32_t s = 0; s < 500 && !saw_outbreak; ++s) {
         DeterministicRNG rng(s);
@@ -844,4 +853,96 @@ TEST_CASE("population: a town cannot be larger than the countryside can spare",
 
     CHECK(cohort_size(w, DemographicGroup::working_urban_mid) < before);
     CHECK(cohort_size(w, DemographicGroup::working_rural_mid) > 80000u);
+}
+
+// ===========================================================================
+// PLAGUE COMES BACK — one blip is not what the record shows.
+//
+// England fell from 4.8M in 1348 to 2.6M by 1351 and then KEPT FALLING, to a
+// nadir of 1.9M around 1450 — a hundred years after the Black Death. Recovery
+// took that long not because one plague was so severe but because plague
+// returned: 1361, 1369, 1375, 1390, 1400, and on into the 17th century.
+//
+// Each wave was milder than the last because it found fewer people who had
+// never had it, and each interval was long enough for a new generation of
+// susceptibles to be born. Neither the interval nor the declining lethality is
+// written anywhere here — both fall out of one stock being drawn down and
+// refilled.
+// ===========================================================================
+
+TEST_CASE("population: the second wave is milder because it finds fewer susceptibles",
+          "[population_aging][tier11][plague]") {
+    // The whole mechanism in one comparison. Same disease, same crowding, same roll —
+    // only the share of people who have never met it differs.
+    PopulationAgingConfig cfg{};
+    auto severity_at = [&](float susceptible) {
+        DeterministicRNG rng(1);
+        // Find a seed that actually produces an outbreak, then compare severities.
+        for (int seed = 1; seed < 500; ++seed) {
+            DeterministicRNG r(static_cast<uint64_t>(seed));
+            auto y = PopulationAgingModule::plague_year(/*disease=*/1.0f, /*urban=*/0.2f,
+                                                        susceptible, r, cfg);
+            if (y.outbreak)
+                return y.mortality_factor;
+        }
+        return 1.0f;
+    };
+    const float first_wave = severity_at(1.0f);   // nobody has had it
+    const float later_wave = severity_at(0.35f);  // most survivors carry resistance
+
+    CHECK(first_wave > 1.0f);
+    CHECK(later_wave > 1.0f);
+    CHECK(later_wave < first_wave);
+}
+
+TEST_CASE("population: a wave spends the susceptibles it reaches",
+          "[population_aging][tier11][plague]") {
+    // Survivors of an infection do not take it again, so the stock falls by exactly what
+    // the wave reached. This is the drawdown that makes the NEXT wave milder.
+    PopulationAgingConfig cfg{};
+    for (int seed = 1; seed < 500; ++seed) {
+        DeterministicRNG rng(static_cast<uint64_t>(seed));
+        auto y = PopulationAgingModule::plague_year(1.0f, 0.2f, /*susceptible=*/1.0f, rng, cfg);
+        if (!y.outbreak)
+            continue;
+        CHECK(y.susceptible_after < 1.0f);
+        CHECK_THAT(y.susceptible_after, WithinAbs(1.0f - cfg.epidemic_attack_rate, 1e-4f));
+        return;
+    }
+    FAIL("no outbreak in 500 draws at disease = 1.0");
+}
+
+TEST_CASE("population: a new generation restores what the plague took",
+          "[population_aging][tier11][plague]") {
+    // The recurrence interval is not a number anywhere — it is how long it takes a
+    // population to replace itself. At a pre-modern life expectancy of ~35 years, about a
+    // thirtieth of the population is new each year, and the new have never met the
+    // disease. That is why plague returned to England six times in fifty years.
+    PopulationAgingConfig cfg{};
+    float susceptible = 0.30f;  // just after a heavy wave
+    int years_to_two_thirds = 0;
+    for (int year = 1; year <= 200; ++year) {
+        DeterministicRNG rng(0xD15EA5Eull);  // a seed that yields no outbreak: turnover only
+        auto y = PopulationAgingModule::plague_year(/*disease=*/0.0f, 0.0f, susceptible, rng, cfg);
+        susceptible = y.susceptible_after;
+        if (susceptible >= 0.667f) {
+            years_to_two_thirds = year;
+            break;
+        }
+    }
+    INFO("years for susceptibility to climb 0.30 -> 0.67: " << years_to_two_thirds);
+    CHECK(years_to_two_thirds > 10);   // a generation, not a season
+    CHECK(years_to_two_thirds < 60);   // but within a human lifetime, so plague DOES return
+}
+
+TEST_CASE("population: on a disease-free world plague never comes",
+          "[population_aging][tier11][plague]") {
+    // The world spectrum still governs: a world with no disease load has no waves at all,
+    // and its susceptible stock simply stays full.
+    PopulationAgingConfig cfg{};
+    DeterministicRNG rng(7);
+    auto y = PopulationAgingModule::plague_year(/*disease=*/0.0f, 0.5f, 1.0f, rng, cfg);
+    CHECK_FALSE(y.outbreak);
+    CHECK_THAT(y.mortality_factor, WithinAbs(1.0f, 1e-9f));
+    CHECK_THAT(y.susceptible_after, WithinAbs(1.0f, 1e-9f));
 }

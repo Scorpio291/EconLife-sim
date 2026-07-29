@@ -369,6 +369,23 @@ struct RegionCohortStats {
     // sewers closed the grave.
     float urban_population = 0.0f;
 
+    // The share of the population that has never met the plague and would take it if it
+    // came. A REAL STOCK, and the thing that turns one epidemic into a century and a
+    // half of suppression.
+    //
+    // England fell from 4.8M in 1348 to 2.6M by 1351 and then kept falling, reaching its
+    // nadir of 1.9M around 1450 — a hundred years AFTER the Black Death. Recovery took
+    // that long not because one plague was so severe but because plague came back: 1361,
+    // 1369, 1375, 1390, 1400, and on into the 17th century. Each wave was less lethal
+    // than the last because it found fewer people who had never had it, and each
+    // interval was long enough for a new generation of susceptibles to be born.
+    //
+    // So the recurrence interval and the declining lethality are not modelled directly —
+    // they fall out of one stock being drawn down by outbreaks and refilled by
+    // population turnover. Persisted (schema v27): losing it on load would hand a
+    // society a clean slate its history says it should not have.
+    float plague_susceptible_fraction = 1.0f;
+
     // The non-farming stratum THIS YEAR'S HARVEST can support, before the generational
     // inertia that makes `specialist_fraction` lag it (R2C). Published by subsistence
     // alongside the held stratum, because the GAP between the two is what structural
