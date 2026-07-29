@@ -1,10 +1,43 @@
 # EconLife — Realism Roadmap (research-backed)
 
-**Status:** research synthesis, 2026-07-28. Not yet implemented.
+**Status: ALL TIERS IMPLEMENTED, 2026-07-28.** Each item below carries its own LANDED
+note with what was measured, what was wrong on the first attempt, and why. The original
+research text is kept beneath each note so the reasoning that motivated it stays visible.
+
 **Purpose:** identify the mechanisms needed to move the simulation from "civilisations
 cycle at a fixed height forever" to something that reproduces real history, WITHOUT
 adding caps, floors or guiderails. Every item below is a mechanism with state, a rule,
 and a measured defect it addresses.
+
+## Where it stands
+
+An earthlike world now reaches every historical era within two years of its real date,
+from mechanism alone, and the world spectrum falls out of the SAME era thresholds rather
+than being tuned per world (garden reaches era 8 at year 12,042; fertile deathworld at
+11,196; barren deathworld is still Neolithic after 13,000 years).
+
+Two guards hold that: the thresholds must strictly increase, and the earthlike climb must
+land within 1,500 years of every historical date (`[pacing]`, in `ctest -L emergence`).
+Recalibrate with `tools/calibration/` after ANY change that moves the knowledge or food
+trajectory — the procedure is sequential and bottom-up, and the reason is documented there.
+
+### What is still open
+
+1. **The falls are shallow.** This is the main remaining gap and it is the one the design
+   brief cares most about ("the ability to rise and fail, again and again"). Every trigger
+   exists — PSI, plague recurrence, coal exhaustion, import dependence, asabiya cycling —
+   but measured, PSI peaks near 0.1 and bleeds ~0.05%/yr. Turchin's multiplicative form
+   REQUIRES its three legs to be elevated together, which is correct; with six provinces
+   and no stress propagation between them, that coincidence is too rare. The likely fix is
+   **stress contagion**: a collapsing province dragging down its trade partners, its
+   polity and its neighbours' asabiya. That is a design question rather than a listed
+   item, and it was deliberately not invented here.
+2. **Perpetual legal persons** (Tier 4) — the corporation, the monastery, the guild
+   endowment, so capital and archives survive a named owner's death. Needs an ownership
+   model the commons arc does not have. See the Tier 4 note.
+3. **Coal endowment is small relative to the population scale** — ~310 tonnes a head
+   cumulatively against Britain's ~900, and only one province in six has any. The
+   mechanism is right; world-gen's seeding is what limits it.
 
 ---
 
