@@ -67,7 +67,9 @@ void EnergyBaseModule::execute_province(uint32_t province_idx, const WorldState&
     // --- What the province can RAISE ------------------------------------------------
     // Knowing how to sink, drain, ventilate and fire a deep pit is technique, and a poor
     // stranded seam yields less for the same effort than a rich shallow one.
-    const float technique = mining_technique(state.technology.knowledge_level, cfg_);
+    // The technique THIS province commands (R6): a region that has lost its engineers
+    // cannot work a drowned seam, whatever is known elsewhere.
+    const float technique = mining_technique(cs.knowledge_level, cfg_);
 
     // --- What the province WANTS (R1C: induced innovation) --------------------------
     // Fuel demand per head, times the share of it that coal actually pays to supply.

@@ -136,7 +136,9 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     //      and decaying in the interior. The second oscillator.
     // v29: cohort_stats.wage_reference — what a people is used to eating. Immiseration
     //      is measured against this, which is what lets a society fall at all.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 29);
+    // v30: cohort_stats.knowledge_level — what each PROVINCE knows. Knowledge is no
+    //      longer one global number, which is what lets a region fall while others rise.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 30);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

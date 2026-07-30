@@ -1,5 +1,44 @@
 # Module: knowledge
 
+## KNOWLEDGE IS HELD SOMEWHERE (R6, 2026-07-28) — read this first
+
+Knowledge used to be ONE GLOBAL NUMBER. It is now a per-province stock
+(`cohort_stats.knowledge_level`, persisted at schema v30), and
+`technology.knowledge_level` is the MAXIMUM over provinces — the frontier, which is what
+an era is dated by in the first place. Anything below that describes the global stock
+should be read as describing each province's own.
+
+**Why:** the single figure was the deepest reason no civilisation could ever fall. With
+one number for the whole world there is no such thing as one society collapsing while
+another rises — there is one society with six provinces, and the only trajectory available
+to it is the world's. Every fall the record actually contains is regional: Mycenaean Greece
+lost literacy for four centuries while Egypt and Assyria carried on writing; the Maya
+lowlands emptied while the highlands did not; Rome's west fell and its east did not.
+
+What changed concretely:
+- **Production, forgetting and decay are per province**, against ITS stratum and ITS
+  archives. A region that empties loses what it knew even while its neighbours still know
+  it. Adversity/scarcity is the province's own, so a place pressing on its land
+  intensifies while its comfortable neighbour does not.
+- **A genius leap happens in ONE PLACE** — the province with the most knowledge workers,
+  deterministically — and reaches the others only by diffusion, as Newton's work reached
+  the continent. It still carries the era's institutions and the local adversity.
+- **KNOWLEDGE DIFFUSES ALONG LINKS AND IS NOT CONSERVED.** A province learns
+  `knowledge_diffusion_rate_per_year` of the gap from each better-informed neighbour, and
+  the neighbour forgets nothing — copying a text leaves the original. This is what lets a
+  dark region relearn rather than restart: Greek mathematics returned to Europe through
+  Arabic. It is also why catching up is faster than leading, since ideas get harder to
+  find against what a place already knows.
+- **The carrying ceiling (subsistence) and mining technique (energy_base) use LOCAL
+  knowledge.** A province whose engineers have scattered farms like one whose engineers
+  have scattered, and cannot work a drowned seam, whatever is known next door.
+- **Codification is bounded by what the province itself knows** — a scribe cannot copy a
+  book that has not reached his city — while the press, once invented anywhere, is
+  available to all.
+- `RegionDelta.province_knowledge_delta` (additive) is the per-province channel;
+  `TechnologyDelta.knowledge_delta` is now the step that moves the world's figure to the
+  frontier.
+
 ## Purpose
 The engine that lets a pre-market society move *forward*. Surplus frees a few livelihoods
 into knowledge-keepers (elder -> scribe -> scholar: occupations with `knowledge_output > 0`),

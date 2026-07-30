@@ -121,7 +121,11 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.
     // Saturating (diminishing returns) so the ceiling tends toward a realistic limit
     // rather than exploding at high knowledge (which would crash the surplus).
-    const float K = state.technology.knowledge_level;
+    // WHAT THIS PLACE KNOWS (R6), not the world's frontier. A province whose scholars
+    // have scattered farms like a province whose scholars have scattered, however much
+    // the civilisation next door still knows — which is what makes a regional collapse
+    // regional. It relearns by diffusion, not by decree.
+    const float K = cs.knowledge_level;
     const float knowledge_factor =
         1.0f + cfg_.knowledge_productivity_max * K /
                    (K + std::max(1.0f, cfg_.knowledge_productivity_halfsat));

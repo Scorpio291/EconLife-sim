@@ -299,6 +299,13 @@ struct RegionDelta {
                                         // published by subsistence — the share of what a
                                         // province eats that came from somewhere else
     std::optional<float>
+        province_knowledge_delta;  // ADDITIVE; cohort_stats->knowledge_level. What this
+                                   // place knows, as distinct from the world's frontier.
+                                   // Published by knowledge: production, forgetting, decay
+                                   // and diffusion from better-informed neighbours.
+                                   // Knowledge is NOT conserved — learning from a
+                                   // neighbour does not make the neighbour forget.
+    std::optional<float>
         wage_reference_replacement;  // replacement; cohort_stats->wage_reference. What
                                      // people are USED TO eating, a generation-scale
                                      // average of the real wage. Published by

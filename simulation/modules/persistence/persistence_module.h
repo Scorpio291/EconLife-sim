@@ -182,7 +182,7 @@ class PersistenceModule : public ITickModule {
     //           v24 saves still load: (a) and (b) are version-gated and default
     //           to NoAccess / 0.5, and a missing module block leaves the module
     //           at its defaults.
-    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 29;
+    static constexpr uint32_t CURRENT_SCHEMA_VERSION = 30;
     // Oldest save this build will load. Raised from 7 to 24 because the era
     // byte was re-based twice (modern era 1 -> 5 -> 8) and the SECOND re-base
     // landed inside schema v23 without a version bump. v23 saves therefore

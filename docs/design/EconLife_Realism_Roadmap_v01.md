@@ -46,6 +46,9 @@ trajectory — the procedure is sequential and bottom-up, and the reason is docu
    monotonically, so the wage stays at or above its reference and the mobilisation term
    stays near zero.
 
+   **R6 LANDED 2026-07-28 — knowledge is now per province.** See below; this paragraph
+   records the diagnosis that led there.
+
    **The reason is now clear, and it is not about stress at all: KNOWLEDGE IS GLOBAL.**
    `technology.knowledge_level` is a single number for the whole world, so there is no
    such thing as one civilisation falling while another rises — there is one civilisation
@@ -543,6 +546,52 @@ procedure is recorded here because it will be needed again after any mechanism c
 Two guards now hold the result: a unit test that the thresholds strictly increase (the
 condition whose violation made F7 impossible), and an emergence test that the earthlike
 climb reaches every era within 1,500 years of its historical date.
+
+## R6. Knowledge is held somewhere (LANDED 2026-07-28)
+
+Knowledge was a single global number, and that was the deepest reason no civilisation could
+ever fall. With one figure for the whole world there is no such thing as one society
+collapsing while another rises: there is one society with six provinces, and the only
+trajectory available to it is the world's. Every fall the record contains is REGIONAL —
+Mycenaean Greece lost literacy for four centuries while Egypt and Assyria carried on
+writing; the Maya lowlands emptied while the highlands did not; Rome's west fell and its
+east did not.
+
+- `cohort_stats.knowledge_level` per province, persisted (schema v30). Production,
+  forgetting and decay are local, against the province's own stratum and archives.
+  Adversity is local too, so a place pressing on its land intensifies while its neighbour
+  does not.
+- `technology.knowledge_level` is the MAXIMUM over provinces: the frontier, which is what
+  an era is dated by anyway. The Bronze Age is dated by whoever had bronze.
+- **Diffusion, and knowledge is NOT conserved.** A province learns a hundredth of the gap
+  a year from each better-informed neighbour, and the neighbour forgets nothing — copying
+  a text leaves the original. This is what lets a dark region relearn rather than restart
+  (Greek mathematics returned through Arabic), and why catching up is faster than leading,
+  since ideas get harder to find against what a place already knows.
+- The carrying ceiling and mining technique use LOCAL knowledge, so a region that loses
+  its engineers really does farm and mine worse.
+- A genius leap happens in ONE PLACE and spreads only by contact.
+
+**One defect caught in the rewrite:** the adversity factor was accidentally dropped from
+the genius term, which let a single mind out-produce a two-million-person society. A genius
+works under the same necessity as everybody else — which is why hard times produce hard
+thinking.
+
+Thresholds recalibrated afterward (each province now accumulates roughly a sixth of what
+the shared pool did). Earthlike lands on every historical era date **within one year**:
+Bronze 6,689/6,700 · Iron 8,801/8,800 · Classical 9,451/9,450 · Medieval 10,501/10,500 ·
+Early Modern 11,451/11,450 · Industrial 11,750/11,750 · Turn of Millennium 12,001/12,000.
+The spectrum holds: garden era 8 at 11,952, fertile deathworld at 11,066, barren deathworld
+never leaves era 1.
+
+**What it does not yet do:** the four observed seeds still show no era REGRESSION. The
+capability is now present — a province can lose what it knew while its neighbours keep it,
+and the ceiling and mining follow — but a regional collapse deep enough to pull the world's
+frontier down has not been observed. The frontier is the max, so it falls only when the
+LEADING province falls, which the diffusion actively prevents. Whether that is right (the
+species does not forget what any one civilisation forgets) or whether era should be
+per-polity rather than global is the next question, and it is a design question rather than
+a defect.
 
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-

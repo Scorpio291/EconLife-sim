@@ -49,13 +49,15 @@ WorldState coal_world(float knowledge, float surplus, uint32_t population, float
     w.world_seed = 1;
     w.era_catalog.load_builtin_default();
     w.technology.current_era = 6;  // industrial — a commons regime
-    w.technology.knowledge_level = knowledge;
+    w.technology.knowledge_level = knowledge;  // the world's frontier
     Province p{};
     p.id = 0;
     p.region_id = 0;
     p.geography.area_km2 = 1800.0f;
     p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.cohort_stats->total_population = population;
+    // R6: mining technique is what THIS province commands, not what the world knows.
+    p.cohort_stats->knowledge_level = knowledge;
     p.cohort_stats->subsistence_surplus_ratio = surplus;
     p.cohort_stats->productive_capital = 1.0e6f;
     if (quantity > 0.0f)

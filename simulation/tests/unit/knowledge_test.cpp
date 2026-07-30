@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "core/world_gen/era_catalog.h"
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/knowledge/knowledge_module.h"
@@ -35,6 +36,9 @@ WorldState make_world(uint8_t era, uint32_t population, float specialist_fractio
     p.id = 0;
     p.region_id = 0;
     p.cohort_stats = std::make_unique<RegionCohortStats>();
+    // R6: knowledge is held per PROVINCE now; the world's figure is the frontier over
+    // them. A single-province fixture is the frontier, so the two agree here.
+    p.cohort_stats->knowledge_level = knowledge_level;
     p.cohort_stats->total_population = population;
     p.cohort_stats->specialist_fraction = specialist_fraction;
     p.cohort_stats->subsistence_surplus_ratio = 1.2f;  // fed, with a margin
@@ -50,13 +54,17 @@ WorldState make_world(uint8_t era, uint32_t population, float specialist_fractio
     return w;
 }
 
+// What the PROVINCES gained this year. R6 made knowledge a per-province stock and the
+// world's figure the maximum over them, so the technology delta is now a step toward the
+// frontier rather than the production itself — summing the province deltas is what these
+// tests have always meant by "produced".
 double produced_knowledge(KnowledgeModule& mod, const WorldState& w) {
     DeltaBuffer d{};
     mod.execute(w, d);
     double total = 0.0;
-    for (const auto& td : d.technology_deltas)
-        if (td.knowledge_delta.has_value())
-            total += static_cast<double>(*td.knowledge_delta);
+    for (const auto& rd : d.region_deltas)
+        if (rd.province_knowledge_delta.has_value())
+            total += static_cast<double>(*rd.province_knowledge_delta);
     return total;
 }
 }  // namespace
@@ -591,4 +599,142 @@ TEST_CASE("knowledge: conquest costs a civilisation its refuges",
         static_cast<double>(cfg.record_loss_per_year) / KnowledgeModule::shelter_loss_divisor(1, cfg);
     CHECK(unified_loss > fragmented_loss);
     CHECK(unified_loss > 3.0 * fragmented_loss);
+}
+
+// ===========================================================================
+// KNOWLEDGE IS HELD SOMEWHERE (R6).
+//
+// It was a single global number, and that was the deepest reason no
+// civilisation could ever fall. With one figure for the whole world there is no
+// such thing as one society collapsing while another rises: there is one
+// society with six provinces, and the only trajectory available to it is the
+// world's.
+//
+// Every fall the record actually contains is REGIONAL. Mycenaean Greece lost
+// literacy for four centuries while Egypt and Assyria carried on writing; the
+// Maya lowlands emptied while the highlands did not; Rome's west fell and its
+// east did not.
+//
+// Knowledge is also NOT CONSERVED, unlike grain: a province learns from its
+// neighbour without the neighbour forgetting, because copying a text leaves the
+// original. That is what lets a dark region relearn instead of starting from
+// nothing — Greek mathematics came back to Europe through Arabic translation.
+// ===========================================================================
+
+namespace {
+
+// Two provinces, optionally linked, with whatever each of them knows.
+WorldState two_province_world(float knowledge_a, float knowledge_b, bool linked,
+                              uint32_t population = 100000) {
+    WorldState w{};
+    w.current_tick = 365;
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.occupation_catalog.load_builtin_default();
+    w.technology.current_era = 4;
+    w.technology.knowledge_level = std::max(knowledge_a, knowledge_b);
+    for (int i = 0; i < 2; ++i) {
+        Province p{};
+        p.id = static_cast<uint32_t>(i);
+        p.region_id = static_cast<uint32_t>(i);
+        p.h3_index = static_cast<H3Index>(i + 1);
+        p.cohort_stats = std::make_unique<RegionCohortStats>();
+        p.cohort_stats->total_population = population;
+        p.cohort_stats->specialist_fraction = 0.05f;
+        p.cohort_stats->subsistence_surplus_ratio = 1.2f;
+        p.cohort_stats->knowledge_level = i == 0 ? knowledge_a : knowledge_b;
+        w.provinces.push_back(std::move(p));
+    }
+    if (linked) {
+        ProvinceLink a{};
+        a.neighbor_h3 = static_cast<H3Index>(2);
+        w.provinces[0].links.push_back(a);
+        ProvinceLink b{};
+        b.neighbor_h3 = static_cast<H3Index>(1);
+        w.provinces[1].links.push_back(b);
+    }
+    return w;
+}
+
+float province_knowledge_gain(const DeltaBuffer& d, uint32_t region_id) {
+    float total = 0.0f;
+    for (const auto& rd : d.region_deltas)
+        if (rd.region_id == region_id && rd.province_knowledge_delta.has_value())
+            total += *rd.province_knowledge_delta;
+    return total;
+}
+
+}  // namespace
+
+TEST_CASE("knowledge: a province that has lost its scholars does not know what its neighbour does",
+          "[knowledge][tier1][regional]") {
+    // The point of the whole change. An ignorant province surrounded by learned ones is a
+    // possible state of the world now, and it is what a regional dark age IS.
+    KnowledgeModule mod;
+    WorldState w = two_province_world(/*a=*/0.0f, /*b=*/50000.0f, /*linked=*/false);
+    DeltaBuffer d{};
+    mod.execute(w, d);
+    apply_deltas(w, d);
+
+    CHECK(w.provinces[0].cohort_stats->knowledge_level <
+          w.provinces[1].cohort_stats->knowledge_level);
+    // And the world's figure is the FRONTIER — what the best of them knows, which is what
+    // an era is dated by. The Bronze Age is dated by whoever had bronze.
+    CHECK_THAT(w.technology.knowledge_level,
+               Catch::Matchers::WithinRel(w.provinces[1].cohort_stats->knowledge_level, 1e-4f));
+}
+
+TEST_CASE("knowledge: a dark region relearns from a neighbour that still knows",
+          "[knowledge][tier1][regional]") {
+    // Greek mathematics and medicine came back to western Europe through Arabic
+    // translation, centuries after the western libraries had gone. A linked province
+    // catches up; an unlinked one does not.
+    KnowledgeModule mod;
+    auto gain_of_ignorant = [&](bool linked) {
+        WorldState w = two_province_world(/*a=*/0.0f, /*b=*/100000.0f, linked);
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        return province_knowledge_gain(d, 0);
+    };
+    const float isolated = gain_of_ignorant(false);
+    const float in_contact = gain_of_ignorant(true);
+
+    CHECK(in_contact > isolated);
+    // The gap is the diffusion: a hundredth of what its neighbour knows beyond it.
+    CHECK(in_contact - isolated > 500.0f);
+}
+
+TEST_CASE("knowledge: learning from a neighbour costs the neighbour nothing",
+          "[knowledge][tier1][regional]") {
+    // Knowledge is NOT conserved, unlike grain. Copying a text leaves the original, so
+    // the learned province loses nothing by being learned from — which is why the fall of
+    // one civilisation is survivable for the species.
+    KnowledgeModule mod;
+    WorldState linked = two_province_world(/*a=*/0.0f, /*b=*/100000.0f, /*linked=*/true);
+    WorldState alone = two_province_world(/*a=*/0.0f, /*b=*/100000.0f, /*linked=*/false);
+
+    DeltaBuffer dl{};
+    mod.execute(linked, dl);
+    DeltaBuffer da{};
+    mod.execute(alone, da);
+
+    // The teacher gains exactly as much either way.
+    CHECK_THAT(province_knowledge_gain(dl, 1),
+               Catch::Matchers::WithinRel(province_knowledge_gain(da, 1), 1e-4f));
+    // While the student gains more for being in contact.
+    CHECK(province_knowledge_gain(dl, 0) > province_knowledge_gain(da, 0));
+}
+
+TEST_CASE("knowledge: catching up is easier than leading",
+          "[knowledge][tier1][regional]") {
+    // Ideas get harder to find against what a place ALREADY knows, so a province at the
+    // frontier finds the going harder than one still catching up. This is why late
+    // developers converge quickly and why the leader's advantage narrows.
+    KnowledgeModule mod;
+    WorldState w = two_province_world(/*a=*/1000.0f, /*b=*/2000000.0f, /*linked=*/false);
+    DeltaBuffer d{};
+    mod.execute(w, d);
+
+    // Identical populations and strata; only what they already know differs.
+    CHECK(province_knowledge_gain(d, 0) > province_knowledge_gain(d, 1));
 }

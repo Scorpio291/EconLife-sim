@@ -57,82 +57,119 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             per_worker_output = std::max(per_worker_output, o->knowledge_output);
     }
 
-    double knowledge_workers = 0.0;
-    for (const auto& p : state.provinces) {
-        if (!p.cohort_stats)
-            continue;
-        const double pop = static_cast<double>(p.cohort_stats->total_population);
-        const double freed = static_cast<double>(p.cohort_stats->specialist_fraction);
-        knowledge_workers += pop * freed * static_cast<double>(cfg_.learned_share_of_specialists);
-    }
-    double specialist_term = knowledge_workers * static_cast<double>(per_worker_output);
-    specialist_term *= static_cast<double>(cfg_.production_scalar);
-
-    // Adversity drives invention (Boserup intensification + the Deathworlders premise):
-    // under pressure the WHOLE population innovates, not just a thin elite. Pressure
-    // rises with the world's hazard (a hard world forges capability) and with food
-    // scarcity (a population pressing on its supply intensifies — necessity is the
-    // mother of invention). This scales with total population (more minds) and gives a
-    // grounded escape from the Malthusian wall, and makes harsher worlds out-innovate
-    // comfortable gardens.
+    // ------------------------------------------------------------------------------
+    // KNOWLEDGE IS HELD SOMEWHERE (R6). Every province accumulates, forgets and learns
+    // on its own, and the world's `knowledge_level` is the MAXIMUM over them: the
+    // frontier, which is what an era is dated by in the first place — the Bronze Age is
+    // dated by whoever had bronze.
+    //
+    // It was one global number, and that was the deepest reason no civilisation could
+    // ever fall. With a single figure for the whole world there is no such thing as one
+    // society collapsing while another rises: there is one society with six provinces,
+    // and the only trajectory available to it is the world's. Every fall the record
+    // actually contains is REGIONAL — Mycenaean Greece lost literacy for four centuries
+    // while Egypt and Assyria carried on writing, the Maya lowlands emptied while the
+    // highlands did not, Rome's west fell and its east did not.
+    // ------------------------------------------------------------------------------
+    const uint32_t n = static_cast<uint32_t>(state.provinces.size());
     double total_population = 0.0;
-    double weighted_surplus = 0.0;
-    for (const auto& p : state.provinces) {
-        if (!p.cohort_stats)
-            continue;
-        const double pop = static_cast<double>(p.cohort_stats->total_population);
-        total_population += pop;
-        weighted_surplus += pop * static_cast<double>(p.cohort_stats->subsistence_surplus_ratio);
-    }
-    const double avg_surplus = total_population > 0.0 ? weighted_surplus / total_population : 1.0;
-    const float world_hazard = hazard_mortality_from_settings(state.hazard_settings);
-    const float scarcity = std::clamp(1.0f - static_cast<float>(avg_surplus), 0.0f, 1.0f);
-    const float pressure = std::clamp(
-        cfg_.adversity_base +
-            cfg_.adversity_hazard_weight * std::max(0.0f, world_hazard - cfg_.adversity_garden_hazard) +
-            cfg_.adversity_scarcity_weight * scarcity,
-        0.0f, cfg_.adversity_pressure_cap);
-    const double population_term =
-        static_cast<double>(cfg_.population_innovation_rate) * total_population;
+    for (const auto& p : state.provinces)
+        if (p.cohort_stats)
+            total_population += static_cast<double>(p.cohort_stats->total_population);
 
-    // Total: dedicated work + diffuse population innovation, both lifted by pressure and
-    // compounded by the tech tree (writing/printing/scientific-method "learning to learn").
-    double production = (specialist_term + population_term) * static_cast<double>(pressure);
-    production *= static_cast<double>(
-        state.tech_effects_for_era(state.technology.current_era).knowledge_mult);
+    const float world_hazard = hazard_mortality_from_settings(state.hazard_settings);
+    const float knowledge_mult =
+        state.tech_effects_for_era(state.technology.current_era).knowledge_mult;
+
+    // Who produces knowledge HERE, and how much each of them is worth.
+    std::vector<double> keepers(n, 0.0);
+    std::vector<double> produced(n, 0.0);
+    std::vector<float> pressure_of(n, 1.0f);
+    double most_keepers = 0.0;
+    uint32_t leap_province = 0;
+    for (uint32_t i = 0; i < n; ++i) {
+        const auto& prov = state.provinces[i];
+        if (!prov.cohort_stats)
+            continue;
+        const RegionCohortStats& cs = *prov.cohort_stats;
+        const double pop = static_cast<double>(cs.total_population);
+        const double freed = static_cast<double>(cs.specialist_fraction);
+        keepers[i] = pop * freed * static_cast<double>(cfg_.learned_share_of_specialists);
+        if (keepers[i] > most_keepers) {
+            most_keepers = keepers[i];
+            leap_province = i;
+        }
+
+        // Adversity drives invention (Boserup intensification + the Deathworlders
+        // premise): under pressure the WHOLE population innovates, not just a thin elite.
+        // Scarcity is the PROVINCE's own now — a place pressing on its own land
+        // intensifies, and its comfortable neighbour does not.
+        const float scarcity =
+            std::clamp(1.0f - cs.subsistence_surplus_ratio, 0.0f, 1.0f);
+        const float pressure = std::clamp(
+            cfg_.adversity_base +
+                cfg_.adversity_hazard_weight *
+                    std::max(0.0f, world_hazard - cfg_.adversity_garden_hazard) +
+                cfg_.adversity_scarcity_weight * scarcity,
+            0.0f, cfg_.adversity_pressure_cap);
+        pressure_of[i] = pressure;
+
+        const double specialist_term = keepers[i] * static_cast<double>(per_worker_output) *
+                                       static_cast<double>(cfg_.production_scalar);
+        const double population_term =
+            static_cast<double>(cfg_.population_innovation_rate) * pop;
+        produced[i] = (specialist_term + population_term) * static_cast<double>(pressure) *
+                      static_cast<double>(knowledge_mult);
+
+        // IDEAS GET HARDER TO FIND, against what THIS place already knows. The easy
+        // discoveries are made first and every one made leaves the next harder: American
+        // research productivity has fallen roughly 41-fold since the 1930s while
+        // researcher numbers rose more than twentyfold. A province at the frontier finds
+        // the going harder than one still catching up — which is exactly why catching up
+        // is faster than leading.
+        produced[i] /= discovery_difficulty(cs.knowledge_level, cfg_);
+    }
 
     // EXCEPTIONAL INDIVIDUALS — the Socrates/Newton/Einstein term. Ordinary knowledge
-    // work is incremental; rare minds make LEAPS. The chance one arises in a given year
-    // scales with how many people are doing knowledge work (more minds, more chances,
-    // which is why geniuses cluster in large literate societies), and arrives as a
-    // physical first-arrival probability p = 1 - exp(-rate) — never a flat die roll.
+    // work is incremental; rare minds make LEAPS. The chance one arises scales with how
+    // many people are doing knowledge work anywhere (more minds, more chances, which is
+    // why geniuses cluster in large literate societies), and arrives as a physical
+    // first-arrival probability p = 1 - exp(-rate) rather than a flat die roll.
     //
-    // A leap is ONE MIND's work: genius_equivalent_workers ordinary keepers for
-    // genius_leap_years, at this era's per-worker output. It is therefore lifted by the
-    // era's institutions and by the accumulated tech multiplier, but NOT by the size of
-    // the society — a genius is one person however large the civilisation, so leaps
-    // matter enormously in a small scholarly community and are a smaller share of a
-    // vast one. Seeded by YEAR so the draw is stable at any tick resolution.
+    // A leap is ONE MIND's work and it happens in ONE PLACE — the province with the most
+    // knowledge workers, deterministically — so it lifts that province's knowledge and
+    // reaches its neighbours only by diffusion, as Newton's work reached the continent.
     const uint32_t year = state.current_tick / kTicksPerYear;
-    double leap = 0.0;
+    double world_keepers = 0.0;
+    for (uint32_t i = 0; i < n; ++i)
+        world_keepers += keepers[i];
     uint32_t leap_npc_id = 0;
-    if (knowledge_workers > 0.0 && production > 0.0 && cfg_.genius_rate_per_worker_year > 0.0f) {
+    if (world_keepers > 0.0 && cfg_.genius_rate_per_worker_year > 0.0f && n > 0) {
         const double rate =
-            static_cast<double>(cfg_.genius_rate_per_worker_year) * knowledge_workers;
+            static_cast<double>(cfg_.genius_rate_per_worker_year) * world_keepers;
         const double p_leap = 1.0 - std::exp(-rate);
         DeterministicRNG genius_rng(state.world_seed ^
                                     (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^
                                     0x9E17A5ull);
         if (static_cast<double>(genius_rng.next_float()) < p_leap) {
-            leap = static_cast<double>(cfg_.genius_equivalent_workers) *
-                   static_cast<double>(per_worker_output) *
-                   static_cast<double>(cfg_.production_scalar) *
-                   static_cast<double>(cfg_.genius_leap_years) * static_cast<double>(pressure);
+            const auto* host = state.provinces[leap_province].cohort_stats.get();
+            // Under the same necessity as everybody else: a mind works on the problems
+            // its world is pressing on it, which is why hard times produce hard thinking.
+            double leap = static_cast<double>(cfg_.genius_equivalent_workers) *
+                          static_cast<double>(per_worker_output) *
+                          static_cast<double>(cfg_.production_scalar) *
+                          static_cast<double>(cfg_.genius_leap_years) *
+                          static_cast<double>(pressure_of[leap_province]) *
+                          static_cast<double>(knowledge_mult);
+            // The frontier recedes for geniuses too: Newton had harder problems available
+            // than Archimedes, and Einstein harder ones than Newton.
+            if (host != nullptr)
+                leap /= discovery_difficulty(host->knowledge_level, cfg_);
+            produced[leap_province] += leap;
+
             // Attribute it to a LIVING tracked individual when there is one — the leap
             // belongs to a named person, not to an anonymous aggregate. Deterministic
-            // pick: the lowest-id living knowledge-keeper, else the lowest-id living
-            // adult. The leap itself comes from the learned population, so it still
-            // happens when the tracked layer holds nobody suitable.
+            // pick: the lowest-id living knowledge-keeper, else the lowest-id living adult.
             for (const auto& npc : state.significant_npcs) {
                 const bool gone = npc.status == NPCStatus::dead ||
                                   npc.status == NPCStatus::fled ||
@@ -141,8 +178,7 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     continue;
                 const OccupationDefinition* o =
                     npc.occupation != 0 ? state.occupation_catalog.by_index(npc.occupation) : nullptr;
-                const bool keeper = o != nullptr && o->knowledge_output > 0.0f;
-                if (keeper) {
+                if (o != nullptr && o->knowledge_output > 0.0f) {
                     leap_npc_id = npc.id;
                     break;
                 }
@@ -151,62 +187,85 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             }
         }
     }
-    production += leap * static_cast<double>(
-                             state.tech_effects_for_era(state.technology.current_era).knowledge_mult);
+
+    // WHAT EACH PLACE CAN CARRY. Knowledge lives in people and, later, in records: a
+    // province holds only what its own learned stratum and its own archives can sustain,
+    // and forgets the rest. This is how a region REGRESSES while its neighbours do not —
+    // Rome's aqueducts outlived the engineers who could maintain them.
+    //
+    // Both the stratum and the corpus are LOCAL now. A province that empties loses what
+    // it knew even if the world still knows it, and gets it back only by learning again
+    // from somebody who still does.
+    std::vector<double> net(n, 0.0);
+    for (uint32_t i = 0; i < n; ++i) {
+        const auto& prov = state.provinces[i];
+        if (!prov.cohort_stats)
+            continue;
+        const RegionCohortStats& cs = *prov.cohort_stats;
+        const double local = static_cast<double>(cs.knowledge_level);
+        const double stratum_sustains = keepers[i] * static_cast<double>(per_worker_output) *
+                                        static_cast<double>(cfg_.knowledge_sustained_per_output_unit);
+        const double codified = static_cast<double>(cs.codified_knowledge);
+        const double sustainable = std::max(stratum_sustains, codified);
+        const double unsustainable = std::max(0.0, local - sustainable);
+        const double forgetting =
+            unsustainable * static_cast<double>(cfg_.forgetting_rate_per_year);
+        const double decay = static_cast<double>(cfg_.decay_per_year) * local;
+        net[i] = produced[i] - decay - forgetting;
+    }
+
+    // KNOWLEDGE TRAVELS, AND IS NOT CONSERVED (R6). A province learns from any
+    // better-informed neighbour it can reach, and the neighbour forgets nothing —
+    // copying a text leaves the original. This is what lets a dark region relearn
+    // rather than start from nothing: Greek mathematics came back to western Europe
+    // through Arabic translation, centuries after the western libraries had gone.
+    if (cfg_.knowledge_diffusion_rate_per_year > 0.0f && n > 1) {
+        const auto h3_to_idx = build_h3_to_province_index(state.provinces);
+        const double rate = static_cast<double>(cfg_.knowledge_diffusion_rate_per_year);
+        for (uint32_t i = 0; i < n; ++i) {
+            const auto& prov = state.provinces[i];
+            if (!prov.cohort_stats)
+                continue;
+            const double mine = static_cast<double>(prov.cohort_stats->knowledge_level);
+            for (const auto& link : prov.links) {
+                auto it = h3_to_idx.find(link.neighbor_h3);
+                if (it == h3_to_idx.end() || it->second == i)
+                    continue;
+                const auto& other = state.provinces[it->second];
+                if (!other.cohort_stats)
+                    continue;
+                const double theirs = static_cast<double>(other.cohort_stats->knowledge_level);
+                if (theirs > mine)
+                    net[i] += (theirs - mine) * rate;  // learning, not transfer
+            }
+        }
+    }
+
+    // Publish what each place now knows, and set the world's frontier to the best of them.
+    double frontier = 0.0;
+    for (uint32_t i = 0; i < n; ++i) {
+        const auto& prov = state.provinces[i];
+        if (!prov.cohort_stats)
+            continue;
+        if (net[i] != 0.0) {
+            RegionDelta rd{};
+            rd.region_id = prov.region_id;
+            rd.province_knowledge_delta = static_cast<float>(net[i]);
+            delta.region_deltas.push_back(rd);
+        }
+        frontier = std::max(frontier,
+                            std::max(0.0, static_cast<double>(prov.cohort_stats->knowledge_level) +
+                                              net[i]));
+    }
 
     const float level = state.technology.knowledge_level;
 
-    // IDEAS GET HARDER TO FIND. Everything above — the stratum's work, the diffuse
-    // population innovation, and the leaps — buys less the more a society already knows,
-    // because the easy discoveries are made first and every one made leaves the next one
-    // harder. American research productivity has fallen roughly 41-fold since the 1930s
-    // while the number of researchers rose more than twenty-fold; sustaining Moore's law
-    // now takes eighteen times the effort it took in 1971. This is why producing vastly
-    // more data than fifty years ago has not bought flying cars: knowledge and the
-    // difficulty of the next step both grow.
-    //
-    // It applies to the leaps too. Newton had harder problems available to him than
-    // Archimedes did, and Einstein harder ones than Newton — a genius is one mind
-    // working at the frontier of the day, and the frontier keeps receding.
-    //
-    // This is the natural limiter on advancement speed, and it is a mechanism, not a
-    // brake: nothing here caps anything, the next discovery simply costs more than the
-    // last. Without it the whole climb happened in a single near-vertical spike.
-    production /= discovery_difficulty(level, cfg_);
-
-    // WHAT THE SOCIETY CAN CARRY. Knowledge lives in people and, later, in records: a
-    // society holds only what its learned stratum and institutions can sustain, and
-    // forgets the rest. This is how civilisations REGRESS — Rome's aqueducts outlived
-    // the engineers who could maintain them, and the Maya cities outlived the surplus
-    // that fed their scribes. A healthy, growing society sustains far more than it
-    // holds and forgets nothing; only a collapse in population or surplus pushes
-    // holdings above the people left to carry them.
-    //
-    // Writing is the ratchet: the per-worker term rises elder -> scribe -> scholar, so
-    // a literate society keeps far more through a collapse than an oral one, and each
-    // cycle of rise and fall can start higher than the last.
-    const double stratum_sustains = knowledge_workers * static_cast<double>(per_worker_output) *
-                                    static_cast<double>(cfg_.knowledge_sustained_per_output_unit);
-
-    // WRITTEN RECORDS. What a society has committed to durable media does not die with
-    // the people who wrote it, so the corpus is a FLOOR under forgetting: a collapse can
-    // scatter the scholars and empty the cities without erasing the books. This is the
-    // ratchet — each cycle of rise and fall starts from what the last one wrote down.
-    double codified = 0.0;
-    for (const auto& p : state.provinces)
-        if (p.cohort_stats)
-            codified += static_cast<double>(p.cohort_stats->codified_knowledge);
-
-    const double sustainable = std::max(stratum_sustains, codified);
-    const double unsustainable = std::max(0.0, static_cast<double>(level) - sustainable);
-    const double forgetting = unsustainable * static_cast<double>(cfg_.forgetting_rate_per_year);
-
-    const double decay = static_cast<double>(cfg_.decay_per_year) * static_cast<double>(level);
-    const float net = static_cast<float>(production - decay - forgetting);
-
     TechnologyDelta td{};
-    if (net != 0.0f)
-        td.knowledge_delta = net;
+    // The world's figure is the frontier — the most any single society knows. Emitted as
+    // the additive step that reaches it, because that is the channel available.
+    const auto frontier_step = static_cast<float>(frontier - static_cast<double>(level));
+    if (frontier_step != 0.0f)
+        td.knowledge_delta = frontier_step;
 
     // ERA ADVANCEMENT needs TWO things, and they are not the same thing.
     //
@@ -229,7 +288,7 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
         total_population > 0.0 ? capital_stock / total_population : 0.0;
 
     const bool knows_enough =
-        era->knowledge_to_advance <= 0.0f || level >= era->knowledge_to_advance;
+        era->knowledge_to_advance <= 0.0f || frontier >= static_cast<double>(era->knowledge_to_advance);
     const bool can_build_it =
         era->capital_to_advance <= 0.0f || capital_per_head >= era->capital_to_advance;
     if ((era->knowledge_to_advance > 0.0f || era->capital_to_advance > 0.0f) && knows_enough &&
@@ -250,9 +309,8 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
         const EraDefinition* entered_from =
             state.era_catalog.by_index(static_cast<uint8_t>(state.technology.current_era - 1));
         if (entered_from != nullptr && entered_from->knowledge_to_advance > 0.0f &&
-            static_cast<double>(level) <
-                static_cast<double>(entered_from->knowledge_to_advance) *
-                    static_cast<double>(cfg_.era_regression_hysteresis)) {
+            frontier < static_cast<double>(entered_from->knowledge_to_advance) *
+                           static_cast<double>(cfg_.era_regression_hysteresis)) {
             td.new_era = static_cast<uint8_t>(state.technology.current_era - 1);
         }
     }
@@ -294,10 +352,12 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             const double copying =
                 local_keepers * static_cast<double>(per_worker_output) *
                 static_cast<double>(cfg_.codify_rate_per_worker_year) *
-                printing_copy_mult(level, cfg_);
-            // Cannot record what is not known: the province's corpus tends toward the
-            // society's living knowledge, never past it.
-            const double room = std::max(0.0, static_cast<double>(level) - held);
+                printing_copy_mult(static_cast<float>(frontier), cfg_);
+            // Cannot record what is not known HERE: a province's corpus tends toward its
+            // own living knowledge, never past it. A scribe cannot copy a book that has
+            // not reached his city.
+            const double room =
+                std::max(0.0, static_cast<double>(p.cohort_stats->knowledge_level) - held);
             const double added = std::min(copying, room);
             const double lost =
                 held * static_cast<double>(cfg_.record_loss_per_year) / shelter_divisor;
@@ -326,7 +386,7 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Record the leap on the person who made it, so a named individual is visibly
     // responsible for it in the historical record rather than it appearing as an
     // unexplained jump in the aggregate.
-    if (leap > 0.0 && leap_npc_id != 0) {
+    if (leap_npc_id != 0) {
         NPCDelta nd{};
         nd.npc_id = leap_npc_id;
         MemoryEntry m{};

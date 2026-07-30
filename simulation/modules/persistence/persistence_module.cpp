@@ -447,6 +447,10 @@ void write_province(ByteWriter& w, const Province& p) {
         // thing immiseration is measured against — reloading a world without it would
         // hand every society the expectations of a people that had never known better.
         w.write_float(p.cohort_stats->wage_reference);
+        // v30: WHAT THIS PLACE KNOWS. Knowledge is held per province now, and the world's
+        // figure is the frontier over them; losing the local stocks on load would give
+        // every region the leader's learning and erase every regional dark age.
+        w.write_float(p.cohort_stats->knowledge_level);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1343,6 +1347,12 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
         // neutral reading for a save that records no memory of better times.
         if (schema_ver >= 29u) {
             p.cohort_stats->wage_reference = r.read_float();
+        }
+        // v30: per-province knowledge. Older saves default to 0; the next tick's diffusion
+        // pulls each province back toward whatever its neighbours know, which is the right
+        // recovery for a save that recorded only a global figure.
+        if (schema_ver >= 30u) {
+            p.cohort_stats->knowledge_level = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but

@@ -690,6 +690,11 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.import_dependence_replacement;
                     cs.import_dependence = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
                 }
+                if (d.province_knowledge_delta.has_value()) {
+                    // Additive; floored at zero. A society cannot know less than nothing.
+                    cs.knowledge_level =
+                        std::max(0.0f, safe_add(cs.knowledge_level, *d.province_knowledge_delta));
+                }
                 if (d.wage_reference_replacement.has_value()) {
                     // A wage, so strictly positive; NaN falls to exactly-fed.
                     float v = *d.wage_reference_replacement;

@@ -853,6 +853,21 @@ struct KnowledgeConfig {
     // the catastrophic losses come from sacking, which warfare applies separately.
     float record_loss_per_year = 0.010f;
 
+    // --- KNOWLEDGE TRAVELS (R6) -------------------------------------------------------
+    // Ideas are light. They move with traders, pilgrims, envoys, captured scribes and
+    // stolen books, so a province learns from any better-informed neighbour it can reach —
+    // and crucially WITHOUT that neighbour forgetting anything, because knowledge is not
+    // conserved the way grain is. Copying a text leaves the original.
+    //
+    // This is what lets a dark region relearn instead of starting from nothing: Greek
+    // mathematics and medicine returned to western Europe through Arabic translation
+    // centuries after the western libraries had gone. It is also why the fall of one
+    // civilisation is survivable for the species — somebody else still knows.
+    //
+    // A hundredth of the gap a year per link: slow enough that a genuine dark age is
+    // centuries long, fast enough that the knowledge does come back.
+    float knowledge_diffusion_rate_per_year = 0.01f;
+
     // --- POLYCENTRISM (R3F): why a fragmented world keeps what a unified one loses ---
     // Innovation survives if ANY polity in a connected culture-area shelters it. Tyndale
     // printed in Antwerp, Galileo circulated in the Netherlands, Descartes published in

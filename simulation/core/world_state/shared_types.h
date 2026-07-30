@@ -387,6 +387,27 @@ struct RegionCohortStats {
     // Mediterranean system came down within a generation. Transient (recomputed each tick).
     float import_dependence = 0.0f;
 
+    // WHAT THIS PLACE KNOWS (R6). Accumulated practical knowledge held HERE — technique,
+    // geometry, the calendar, letters, metallurgy — as distinct from the frontier of what
+    // anyone in the world has achieved.
+    //
+    // Knowledge was a single global number, and that turned out to be the deepest reason
+    // no civilisation could ever fall. With one number for the whole world there is no
+    // such thing as one society collapsing while another rises: there is one society with
+    // six provinces, and the only trajectory available to it is the world's. But every
+    // fall the record actually contains is REGIONAL — Mycenaean Greece lost literacy for
+    // four centuries while Egypt and Assyria carried on writing; the Maya lowlands emptied
+    // while the highlands did not; Rome's west fell and its east did not.
+    //
+    // Knowledge is NOT CONSERVED, unlike grain: a province learns from its neighbour
+    // without the neighbour forgetting. So it diffuses along the same links that carry
+    // trade and administration, which is how a dark region relearns — Greek texts came
+    // back to Europe through Arabic.
+    //
+    // A real stock, persisted (schema v30). `technology.knowledge_level` is now the MAXIMUM
+    // over provinces: the frontier, which is what an era is dated by in the first place.
+    float knowledge_level = 0.0f;
+
     // What people here are USED TO eating — a slow average of the real wage over living
     // memory, about a generation. Immiseration is measured against THIS, not against bare
     // subsistence, and the distinction turns out to decide whether a society can fall at
