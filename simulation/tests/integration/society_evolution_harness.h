@@ -56,6 +56,13 @@ struct SocietySnapshot {
                                // for — the only channel that can RAISE it without limit
     double coal_burned = 0.0;  // tonnes/yr drawn from the province seams
     double coal_remaining = 0.0;  // tonnes still in the ground (the finite escape)
+    // R6: knowledge is held per province now, so the SPREAD across them is the thing to
+    // watch. A world where every province tracks the frontier is one civilisation with
+    // six provinces; a world where they diverge has regions that can fall independently,
+    // which is what the record actually contains.
+    double knowledge_leader = 0.0;    // the frontier — what the best-informed place knows
+    double knowledge_laggard = 0.0;   // what the worst-informed place knows
+    double knowledge_mean = 0.0;
     double political_stress = 0.0;  // mean PSI: how close the society is to coming apart
                                     // for reasons that are nothing to do with the weather
     double faction_deaths = 0.0;    // mean annual death fraction from factional conflict
@@ -105,6 +112,10 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.soil_health += static_cast<double>(p.cohort_stats->soil_health);
         s.urban_population += static_cast<double>(p.cohort_stats->urban_population);
         s.ghost_land += static_cast<double>(p.cohort_stats->ghost_land_fraction);
+        const double k = static_cast<double>(p.cohort_stats->knowledge_level);
+        s.knowledge_leader = std::max(s.knowledge_leader, k);
+        s.knowledge_laggard = prov_with_cohorts == 0 ? k : std::min(s.knowledge_laggard, k);
+        s.knowledge_mean += k;
         s.political_stress += static_cast<double>(p.cohort_stats->political_stress);
         s.faction_deaths += static_cast<double>(p.cohort_stats->faction_death_fraction);
         s.coal_burned += static_cast<double>(p.cohort_stats->coal_burned_per_year);
@@ -116,6 +127,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
     }
     s.mean_surplus = prov_with_cohorts > 0 ? surplus_sum / prov_with_cohorts : 0.0;
     if (prov_with_cohorts > 0) {
+        s.knowledge_mean /= prov_with_cohorts;
         s.ghost_land /= prov_with_cohorts;
         s.political_stress /= prov_with_cohorts;
         s.faction_deaths /= prov_with_cohorts;

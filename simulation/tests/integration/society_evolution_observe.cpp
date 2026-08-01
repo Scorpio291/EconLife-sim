@@ -208,6 +208,68 @@ TEST_CASE("society: the earthlike climb reaches each era near its historical dat
         CHECK(first_year[e] > first_year[e - 1]);
 }
 
+// ===========================================================================
+// DO REGIONS ACTUALLY FALL? (R6 measurement)
+//
+// R6 made knowledge a per-province stock so that one region can lose what it
+// knew while its neighbours keep theirs — the shape every real collapse has.
+// The era trace showed no regressions afterward, but the era is the FRONTIER
+// (a maximum), so it only moves when the LEADING province falls. That leaves an
+// open question the era trace cannot answer: do individual regions fall?
+//
+// This prints the spread. If the laggard tracks the leader, the world is still
+// one civilisation with six provinces and R6 bought nothing behaviourally. If
+// they diverge — and especially if a province's knowledge goes DOWN in absolute
+// terms while the frontier rises — then regional rise and fall is real and the
+// only thing missing is that the era, being a maximum, does not show it.
+// ===========================================================================
+TEST_CASE("society observe: does any REGION lose what it knew? (R6)",
+          "[.society-regional-falls]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+
+    std::printf("\n=== EARTHLIKE: knowledge spread across provinces ===\n");
+    std::printf("  year | leader        | laggard       | mean          | ratio | era\n");
+    for (const auto& s : series) {
+        if (s.year % 1000 != 0)
+            continue;
+        const double ratio =
+            s.knowledge_leader > 0.0 ? s.knowledge_laggard / s.knowledge_leader : 1.0;
+        std::printf("  %5u | %13.0f | %13.0f | %13.0f | %.3f | %2d\n", s.year,
+                    s.knowledge_leader, s.knowledge_laggard, s.knowledge_mean, ratio, s.era);
+    }
+
+    // The question the era trace cannot answer: did any province's own knowledge fall,
+    // in absolute terms, over a sustained stretch — a regional dark age?
+    double worst_drawdown = 0.0;   // deepest peak-to-trough fall in the LAGGARD
+    double laggard_peak = 0.0;
+    uint32_t drawdown_year = 0;
+    for (const auto& s : series) {
+        laggard_peak = std::max(laggard_peak, s.knowledge_laggard);
+        if (laggard_peak > 0.0) {
+            const double drawdown = 1.0 - s.knowledge_laggard / laggard_peak;
+            if (drawdown > worst_drawdown) {
+                worst_drawdown = drawdown;
+                drawdown_year = s.year;
+            }
+        }
+    }
+    std::printf("\n  deepest regional drawdown: %.1f%% of its own peak, at year %u\n",
+                worst_drawdown * 100.0, drawdown_year);
+    const auto& last = series.back();
+    std::printf("  final spread: leader %.0f, laggard %.0f (laggard holds %.1f%% of the "
+                "frontier)\n",
+                last.knowledge_leader, last.knowledge_laggard,
+                last.knowledge_leader > 0.0
+                    ? 100.0 * last.knowledge_laggard / last.knowledge_leader
+                    : 100.0);
+    std::printf("  If the ratio stays near 1.00 the world is still ONE civilisation with "
+                "six provinces:\n  diffusion is holding them together and nothing regional "
+                "can fall.\n");
+}
+
 // F7 — RE-ANCHORING THE ERA THRESHOLDS.
 //
 // The era thresholds are the one calibration surface the grounding doctrine allows:
