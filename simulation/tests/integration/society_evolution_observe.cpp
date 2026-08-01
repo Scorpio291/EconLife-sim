@@ -294,6 +294,98 @@ TEST_CASE("society observe: does any REGION lose what it knew? (R6)",
                 "can fall.\n");
 }
 
+// ===========================================================================
+// IS ANY SHOCK BIG ENOUGH TO BREAK ONE REGION? (the open question, measured)
+//
+// Regional falls do not happen during the climb. The capability is present —
+// knowledge is per province, and a province that loses its stratum can no
+// longer absorb what its neighbours know — but nothing ever drives a province
+// down far enough to scatter that stratum in the first place.
+//
+// The stabilising couplings are each individually correct: grain diffuses to
+// whoever is short, refugees leave for wherever is better, knowledge diffuses
+// from whoever knows more. The destabilising ones all exist. So the question
+// is a magnitude question, and it is answerable: over a whole climb, how bad
+// did it EVER get for the worst-hit single province, on each channel?
+//
+// World means hide precisely this. A mean surplus of 1.5 says nothing about
+// the province sitting at 0.4.
+// ===========================================================================
+TEST_CASE("society observe: how bad does it ever get for ONE province?",
+          "[.society-worst-province]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    struct Run {
+        const char* label;
+        WorldArchetype arch;
+    };
+    const Run runs[] = {{"EARTHLIKE", archetype_earthlike()},
+                        {"DEATHWORLD (barren)", archetype_deathworld()}};
+
+    for (const auto& r : runs) {
+        auto series = run_society_years(7, kNpcs, kYears, r.arch, /*founding_hardiness=*/0.0f,
+                                        /*fast_forward=*/true);
+        // Skip the founding transient: what matters is what a BUILT society suffers.
+        constexpr uint32_t kDawnEnds = 1000;
+        double worst_surplus = 1e9, worst_soil = 1e9, worst_spec = 1e9;
+        double worst_war = 0.0, worst_faction = 0.0, worst_psi = 0.0;
+        uint32_t worst_surplus_year = 0, worst_war_year = 0;
+        int hungry_years = 0, war_years = 0;
+        for (const auto& s : series) {
+            if (s.year < kDawnEnds)
+                continue;
+            if (s.worst_province_surplus < worst_surplus) {
+                worst_surplus = s.worst_province_surplus;
+                worst_surplus_year = s.year;
+            }
+            worst_soil = std::min(worst_soil, s.worst_province_soil);
+            worst_spec = std::min(worst_spec, s.min_province_specialists);
+            if (s.max_war_deaths > worst_war) {
+                worst_war = s.max_war_deaths;
+                worst_war_year = s.year;
+            }
+            worst_faction = std::max(worst_faction, s.max_faction_deaths);
+            worst_psi = std::max(worst_psi, s.political_stress);
+            if (s.worst_province_surplus < 1.0)
+                ++hungry_years;
+            if (s.max_war_deaths > 0.0)
+                ++war_years;
+        }
+        std::printf("\n=== %s: the worst any ONE province ever had it (after year %u) ===\n",
+                    r.label, kDawnEnds);
+        std::printf("  food:      worst surplus %.3f (year %u); %d years with some province "
+                    "under 1.0\n",
+                    worst_surplus, worst_surplus_year, hungry_years);
+        std::printf("  soil:      worst %.3f of pristine\n", worst_soil);
+        std::printf("  stratum:   smallest non-farming share %.4f  (scattering is what makes a "
+                    "fall stick)\n",
+                    worst_spec);
+        std::printf("  war:       worst annual death fraction %.4f (year %u); %d years with any "
+                    "war at all\n",
+                    worst_war, worst_war_year, war_years);
+        std::printf("  faction:   worst annual death fraction %.4f\n", worst_faction);
+        std::printf("  PSI:       peak %.3f\n", worst_psi);
+
+        // THE POLITICAL MAP OVER TIME. War needs somebody to fight, asabiya needs a
+        // frontier to be forged at, and polycentrism needs more than one place for a book
+        // to survive in. A world that unifies loses all three at once — and Earth never
+        // unified, which is the whole reason its history has more than one civilisation
+        // in it.
+        std::printf("  polities:  ");
+        for (const auto& s2 : series) {
+            const bool early = s2.year <= 2000 && s2.year % 250 == 0;
+            const bool late = s2.year > 2000 && s2.year % 2000 == 0;
+            if (early || late)
+                std::printf("y%u:%d ", s2.year, s2.polity_count);
+        }
+        std::printf("\n");
+    }
+    std::printf("\n  A region breaks when its stratum scatters. If the smallest stratum any\n"
+                "  province ever holds stays comfortably above zero, no shock in this model\n"
+                "  is big enough to break one — and that is a magnitude question about\n"
+                "  shocks that already exist, not a missing mechanism.\n");
+}
+
 // F7 — RE-ANCHORING THE ERA THRESHOLDS.
 //
 // The era thresholds are the one calibration surface the grounding doctrine allows:

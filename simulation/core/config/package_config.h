@@ -1297,6 +1297,30 @@ struct WarfareConfig {
     float cohesion_gain_max = 2.0f;        // asymptotic integration advantage (3x total hold)
     float cohesion_halfsat_years = 50.0f;  // ~two generations: the assimilation timescale
 
+    // --- A STATE IN CRISIS CANNOT HOLD WHAT A HEALTHY ONE COULD (R7) -----------------
+    // Structural stress killed people, ate grain and eroded stability, but it did not
+    // loosen anybody's grip on their empire — so once a polity had absorbed its
+    // neighbours it held them forever.
+    //
+    // Measured, that was the single fact behind everything that would not happen: an
+    // earthlike world starts with five polities, holds for 1,250 years, unifies
+    // permanently around year 1,500, and never fragments again in the remaining 11,250.
+    // With one polity there is nobody left to fight (22 war years in 12,000, all before
+    // unification), no frontier for asabiya to be forged at, one shelter for the written
+    // corpus, and a single pooled treasury carrying every province — so no shock can
+    // break one region while its neighbours prosper.
+    //
+    // It is also the exact counterfactual to real history. Rome's third-century crisis
+    // nearly fragmented the empire and the Gallic and Palmyrene empires actually did
+    // break away; the Han fell apart, the Caliphate fell apart, and Europe never unified
+    // at all — which is the standing explanation for why it escaped. Empires come apart
+    // from the inside, and the inside is exactly what the Political Stress Index measures.
+    //
+    // So the centre's ability to overawe a member is divided by 1 + weight * PSI. At the
+    // measured peak stress of ~1.6 a weight of 1 halves the grip, which is the order of
+    // thing that turns a crisis into a secession.
+    float psi_hold_weight = 1.0f;
+
     // --- ASABIYA (R3C): what a people fights with besides numbers -------------------
     // Ibn Khaldun's observation, which Turchin turned into a model: solidarity is forged
     // at FRONTIERS, where a group lives against an out-group and must hold together or

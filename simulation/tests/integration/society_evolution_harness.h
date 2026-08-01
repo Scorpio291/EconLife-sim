@@ -63,6 +63,19 @@ struct SocietySnapshot {
     double knowledge_leader = 0.0;    // the frontier — what the best-informed place knows
     double knowledge_laggard = 0.0;   // what the worst-informed place knows
     double knowledge_mean = 0.0;
+    // THE WORST ANY SINGLE PROVINCE HAD IT THIS YEAR. The means above hide exactly the
+    // thing under study: whether a shock can break ONE region while its neighbours
+    // prosper. A world-mean surplus of 1.5 tells you nothing about the province at 0.4.
+    double worst_province_surplus = 0.0;   // min over provinces
+    double worst_province_soil = 0.0;      // min over provinces
+    double max_war_deaths = 0.0;           // max over provinces (battle dead / people)
+    double max_faction_deaths = 0.0;       // max over provinces (civil conflict)
+    double min_province_specialists = 0.0;  // min stratum: what a scattered region looks like
+    // How many INDEPENDENT polities the world contains. Everything political keys off
+    // this: war needs somebody to fight, asabiya needs a frontier to be forged at, and
+    // polycentrism needs more than one place for a book to survive in. A world that
+    // unifies has none of them.
+    int polity_count = 0;
     double political_stress = 0.0;  // mean PSI: how close the society is to coming apart
                                     // for reasons that are nothing to do with the weather
     double faction_deaths = 0.0;    // mean annual death fraction from factional conflict
@@ -112,6 +125,22 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.soil_health += static_cast<double>(p.cohort_stats->soil_health);
         s.urban_population += static_cast<double>(p.cohort_stats->urban_population);
         s.ghost_land += static_cast<double>(p.cohort_stats->ghost_land_fraction);
+        const double surplus_here = static_cast<double>(p.cohort_stats->subsistence_surplus_ratio);
+        const double soil_here = static_cast<double>(p.cohort_stats->soil_health);
+        const double spec_here = static_cast<double>(p.cohort_stats->specialist_fraction);
+        if (prov_with_cohorts == 0) {
+            s.worst_province_surplus = surplus_here;
+            s.worst_province_soil = soil_here;
+            s.min_province_specialists = spec_here;
+        } else {
+            s.worst_province_surplus = std::min(s.worst_province_surplus, surplus_here);
+            s.worst_province_soil = std::min(s.worst_province_soil, soil_here);
+            s.min_province_specialists = std::min(s.min_province_specialists, spec_here);
+        }
+        s.max_war_deaths =
+            std::max(s.max_war_deaths, static_cast<double>(p.cohort_stats->war_death_fraction));
+        s.max_faction_deaths = std::max(
+            s.max_faction_deaths, static_cast<double>(p.cohort_stats->faction_death_fraction));
         const double k = static_cast<double>(p.cohort_stats->knowledge_level);
         s.knowledge_leader = std::max(s.knowledge_leader, k);
         s.knowledge_laggard = prov_with_cohorts == 0 ? k : std::min(s.knowledge_laggard, k);
@@ -124,6 +153,17 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
                 s.coal_remaining += static_cast<double>(dep.quantity_remaining);
         surplus_sum += p.cohort_stats->subsistence_surplus_ratio;
         ++prov_with_cohorts;
+    }
+    {
+        std::vector<uint32_t> seen;
+        for (const auto& p : w.provinces) {
+            if (!p.cohort_stats)
+                continue;
+            const uint32_t pid = p.cohort_stats->polity_id;
+            if (std::find(seen.begin(), seen.end(), pid) == seen.end())
+                seen.push_back(pid);
+        }
+        s.polity_count = static_cast<int>(seen.size());
     }
     s.mean_surplus = prov_with_cohorts > 0 ? surplus_sum / prov_with_cohorts : 0.0;
     if (prov_with_cohorts > 0) {

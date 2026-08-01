@@ -93,6 +93,49 @@ trajectory — the procedure is sequential and bottom-up, and the reason is docu
    existing shocks, and it should be answered with measurement rather than another
    mechanism.
 
+   **R7 + THE MEASUREMENT THAT FOUND THE REAL ANSWER (2026-07-30).** Rather than add
+   another mechanism, I measured how bad it ever gets for the WORST-HIT single province
+   over a whole climb (`[.society-worst-province]`). World means hide exactly this: a mean
+   surplus of 1.5 says nothing about the province sitting at 0.4.
+
+   Earthlike, after the founding transient: worst provincial surplus 0.498, worst soil
+   0.369, smallest stratum 0.59%, worst annual war death fraction 0.100, peak PSI 1.586.
+   So the shocks ARE large. But only **22 years of war in 12,000**, and they all cluster
+   before year 1,500.
+
+   **The polity count explains everything.** The world starts with 5 polities, holds for
+   1,250 years, unifies permanently around year 1,500, and NEVER FRAGMENTS AGAIN in the
+   remaining 11,250 years. With one polity there is nobody to fight, no frontier for
+   asabiya to be forged at, one shelter for the corpus, and a single pooled treasury
+   carrying every province — so no shock can break one region while its neighbours
+   prosper. It is the precise counterfactual to real history: Rome's third-century crisis
+   nearly fragmented the empire and the Gallic and Palmyrene empires did break away, the
+   Han fell apart, the Caliphate fell apart, and Europe never unified at all.
+
+   **R7 supplies the missing coupling:** the centre's ability to overawe a member is
+   divided by `1 + weight * PSI`. Empires come apart from the inside, and the inside is
+   what the index measures. It is correct and cheap — and currently INERT, because PSI is
+   zero for the whole climb.
+
+   **So the chain bottoms out one step earlier than any of this.** No immiseration -> no
+   stress -> no fragmentation -> no war -> no shocks -> no regional falls. And there is no
+   immiseration because **the carrying ceiling rises smoothly and monotonically for the
+   entire climb**, so the wage never falls. Knowledge accumulates every year and diffusion
+   smooths it across provinces, so the ceiling never plateaus — while Turchin's secular
+   cycles require a roughly CONSTANT carrying capacity within a cycle, with population
+   oscillating around it. Ours has a capacity that outruns population indefinitely.
+
+   Tried and reverted: making fertility answer to expectations rather than to this year's
+   harvest, so births lag conditions and overshoot. Demographically sound, equilibrium-
+   neutral, and it bought almost nothing (peak PSI 1.59 -> 1.85, no behavioural change)
+   while introducing a fragile cross-module dependency. Recorded in the code at the site.
+
+   **The next real piece is therefore about the CEILING, not about stress:** either
+   knowledge advancing in bursts with plateaus rather than continuously, or the ceiling
+   being capital-limited (capital wears out and must be rebuilt) rather than
+   knowledge-limited. Both are structural, both are large, and neither should be attempted
+   without deciding which is truer to the intent first.
+
 2. **Perpetual legal persons** (Tier 4) — the corporation, the monastery, the guild
    endowment, so capital and archives survive a named owner's death. Needs an ownership
    model the commons arc does not have. See the Tier 4 note.

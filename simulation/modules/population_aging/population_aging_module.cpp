@@ -744,6 +744,16 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // only once the granary itself is exhausted (a real reserve buffer), so a
                 // population at its ceiling holds steady instead of either starving or
                 // breeding into collapse.
+                // TRIED AND REVERTED (2026-07-30): making fertility answer to
+                // `wage_reference` — what people EXPECT, formed over years — rather than
+                // to this year's harvest. Family formation genuinely does lag conditions,
+                // and the lag is what produces the overshoot a secular cycle is made of.
+                //
+                // It bought almost nothing (peak PSI 1.59 -> 1.85, no behavioural change,
+                // still no fragmentation) and cost a fragile cross-module dependency:
+                // fertility would be silently pinned at the reference default wherever
+                // structural_demography had not run, which is exactly the failure mode
+                // the grain catchment signal had. Not worth it for the measured gain.
                 const float birth_surplus = cs.subsistence_surplus_ratio;
                 const float famine_surplus =
                     (commons && cs.food_store <= 0.0f) ? cs.subsistence_surplus_ratio : 1.0f;

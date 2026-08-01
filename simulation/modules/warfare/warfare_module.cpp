@@ -578,9 +578,24 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         // Both sides of the hold are strengths: a cohesive member pulls away from a
         // centre that could hold a softer one of the same size, which is how a frontier
         // march breaks off an empire it is nominally part of.
-        const float rest =
-            std::max(0.0f, polity_strength[pid] - levy[m] * asabiya_mult[m]) *
-            (leader_mult.count(pid) ? leader_mult[pid] : 1.0f);
+        float rest = std::max(0.0f, polity_strength[pid] - levy[m] * asabiya_mult[m]) *
+                     (leader_mult.count(pid) ? leader_mult[pid] : 1.0f);
+        // A STATE IN CRISIS CANNOT HOLD WHAT A HEALTHY ONE COULD (R7). Structural stress
+        // is what an empire comes apart FROM: Rome's third-century crisis nearly
+        // fragmented it and the Gallic and Palmyrene empires actually did break away.
+        // Without this the stress killed people and ate grain but never loosened anyone's
+        // grip, so a polity that had absorbed its neighbours held them forever — measured,
+        // an earthlike world unified around year 1,500 and never fragmented again in the
+        // remaining 11,250 years, which left nobody to fight, no frontier for asabiya, one
+        // shelter for the corpus, and one treasury carrying everybody.
+        //
+        // PSI is published per province with its POLITY's value, so the member's own copy
+        // is its state's stress. One tick stale (structural_demography runs after this),
+        // which is nothing on a variable that moves over centuries.
+        if (state.provinces[m].cohort_stats != nullptr) {
+            const float psi = std::max(0.0f, state.provinces[m].cohort_stats->political_stress);
+            rest /= 1.0f + std::max(0.0f, cfg_.psi_hold_weight) * psi;
+        }
         uint32_t years_held = 0;
         auto since = member_since_.find(m);
         if (since != member_since_.end() && year > since->second)
