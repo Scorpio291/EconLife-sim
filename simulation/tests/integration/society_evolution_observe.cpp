@@ -243,21 +243,45 @@ TEST_CASE("society observe: does any REGION lose what it knew? (R6)",
 
     // The question the era trace cannot answer: did any province's own knowledge fall,
     // in absolute terms, over a sustained stretch — a regional dark age?
-    double worst_drawdown = 0.0;   // deepest peak-to-trough fall in the LAGGARD
+    //
+    // Reported separately for the DAWN and the CLIMB, because they mean different things.
+    // A drawdown in the first centuries is the founding transient settling (the seeded
+    // urban composition draining, the stratum forming); one during the climb is a region
+    // that had built something and lost it, which is the thing actually under study.
+    constexpr uint32_t kDawnEnds = 1000;
+    double worst_dawn = 0.0, worst_climb = 0.0;
+    uint32_t dawn_year = 0, climb_year = 0;
+    int episodes = 0;  // distinct climb-era drawdowns past a tenth
+    bool in_episode = false;
     double laggard_peak = 0.0;
-    uint32_t drawdown_year = 0;
     for (const auto& s : series) {
         laggard_peak = std::max(laggard_peak, s.knowledge_laggard);
-        if (laggard_peak > 0.0) {
-            const double drawdown = 1.0 - s.knowledge_laggard / laggard_peak;
-            if (drawdown > worst_drawdown) {
-                worst_drawdown = drawdown;
-                drawdown_year = s.year;
+        if (laggard_peak <= 0.0)
+            continue;
+        const double drawdown = 1.0 - s.knowledge_laggard / laggard_peak;
+        if (s.year < kDawnEnds) {
+            if (drawdown > worst_dawn) {
+                worst_dawn = drawdown;
+                dawn_year = s.year;
             }
+            continue;
+        }
+        if (drawdown > worst_climb) {
+            worst_climb = drawdown;
+            climb_year = s.year;
+        }
+        if (drawdown > 0.10 && !in_episode) {
+            in_episode = true;
+            ++episodes;
+        } else if (drawdown <= 0.02) {
+            in_episode = false;  // recovered: the next fall is a new episode
         }
     }
-    std::printf("\n  deepest regional drawdown: %.1f%% of its own peak, at year %u\n",
-                worst_drawdown * 100.0, drawdown_year);
+    std::printf("\n  dawn transient (before year %u): %.1f%% drawdown at year %u\n", kDawnEnds,
+                worst_dawn * 100.0, dawn_year);
+    std::printf("  DURING THE CLIMB:  deepest %.1f%% at year %u, in %d distinct episodes "
+                "past a tenth\n",
+                worst_climb * 100.0, climb_year, episodes);
     const auto& last = series.back();
     std::printf("  final spread: leader %.0f, laggard %.0f (laggard holds %.1f%% of the "
                 "frontier)\n",

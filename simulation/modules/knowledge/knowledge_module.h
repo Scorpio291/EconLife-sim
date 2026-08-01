@@ -104,6 +104,21 @@ class KnowledgeModule : public ITickModule {
                          static_cast<double>(shelters - 1);
     }
 
+    // How much of what a neighbour knows a province can actually take in, given the share
+    // of its people free to be scholars. Zero for a region whose learned stratum has
+    // scattered, approaching one for a society with a substantial literate class.
+    //
+    // Ideas travel with traders, envoys and scribes and arrive as texts and techniques
+    // that need people trained to use them — so a dark age is not a shortage of knowledge
+    // in the world, it is a shortage of anyone able to receive it. Greek mathematics sat
+    // intact in Byzantium and Baghdad the entire time western Europe could not read it.
+    // Pure/static.
+    static double absorptive_capacity(float specialist_fraction, const KnowledgeConfig& cfg) {
+        const double spec = static_cast<double>(std::max(0.0f, specialist_fraction));
+        const double half = static_cast<double>(std::max(1e-4f, cfg.knowledge_absorption_halfsat));
+        return spec / (spec + half);
+    }
+
    private:
     KnowledgeConfig cfg_;
 };

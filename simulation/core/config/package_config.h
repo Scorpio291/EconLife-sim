@@ -867,6 +867,25 @@ struct KnowledgeConfig {
     // A hundredth of the gap a year per link: slow enough that a genuine dark age is
     // centuries long, fast enough that the knowledge does come back.
     float knowledge_diffusion_rate_per_year = 0.01f;
+    // BUT SOMEBODY HAS TO BE ABLE TO READ IT. Diffusion requires a receiver: ideas travel
+    // with traders, envoys and scribes, and arrive as texts and techniques that need
+    // people trained to use them. A region whose learned stratum has scattered absorbs
+    // nothing, however close its neighbours and however much they know.
+    //
+    // This is the actual shape of a dark age, and it is why one can last centuries beside
+    // a flourishing neighbour. Greek mathematics and medicine sat intact in Byzantium and
+    // Baghdad the entire time western Europe could not read them; what was missing was
+    // never the knowledge, it was anyone able to receive it. The recovery came exactly
+    // when a literate class existed again to translate.
+    //
+    // Measured, its absence was the reason regional falls did not happen: with diffusion
+    // unconditional, a collapsing province was topped straight back up by its neighbours,
+    // and the deepest drawdown any region ever suffered was 8.6% of its own peak.
+    //
+    // Saturating in the receiver's non-farming share — the people free to be scholars.
+    // Half absorption at 2%, because a small literate remnant is enough to transmit: the
+    // monasteries that kept copying were never more than a sliver of the population.
+    float knowledge_absorption_halfsat = 0.02f;
 
     // --- POLYCENTRISM (R3F): why a fragmented world keeps what a unified one loses ---
     // Innovation survives if ANY polity in a connected culture-area shelters it. Tyndale

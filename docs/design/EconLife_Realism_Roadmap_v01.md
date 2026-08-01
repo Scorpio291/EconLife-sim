@@ -57,6 +57,42 @@ trajectory — the procedure is sequential and bottom-up, and the reason is docu
    Making knowledge per-polity or per-culture-area, with diffusion between neighbours, is
    the next real piece of work; the ratchet (R1A/R3E/R3F) and the political map (R3F) are
    already in place to support it.
+   **R6 FOLLOW-UP, measured 2026-07-30: absorptive capacity, and what it did and did not
+   buy.** The era trace could not answer whether REGIONS fall, because the era is the
+   frontier — a maximum — so it only moves when the LEADING province does. Measuring the
+   spread across provinces directly (`[.society-regional-falls]`) gave the answer:
+
+   - Provinces genuinely diverge: the laggard holds 68-93% of the frontier throughout, so
+     the world is no longer one civilisation with six provinces.
+   - But the deepest regional drawdown was **8.6%** — nothing ever went backwards. The
+     cause was that diffusion was UNCONDITIONAL: a collapsing province was topped straight
+     back up by its neighbours.
+   - Diffusion now requires a receiver. `absorptive_capacity` gates it on the receiving
+     province's learned stratum, because a dark age is not a shortage of knowledge in the
+     world but a shortage of anyone able to receive it — Greek mathematics sat intact in
+     Byzantium and Baghdad the whole time western Europe could not read it. That took the
+     deepest drawdown to **39.7%**: a real regional dark age.
+
+   **And it still does not produce regional falls DURING THE CLIMB.** The 39.7% is the
+   dawn transient; measured separately, the climb shows a deepest drawdown of 8.5% in ZERO
+   episodes past a tenth. The absorption gate is right and it makes a fall STICK once one
+   happens — it does not cause one.
+
+   Nothing causes one, and the reason is now visible in the couplings rather than in any
+   single mechanism. The stabilising ones are strong and all correct individually: grain
+   diffuses to whoever is short (R3D), refugees leave for wherever is better (R5),
+   knowledge diffuses from whoever knows more (R6). Together they mean no province's
+   conditions can diverge far enough from its neighbours' to scatter its stratum while the
+   world as a whole is rising. The destabilising mechanisms all exist but are calibrated
+   mild, and PSI's multiplicative form correctly refuses to fire unless all three legs go
+   at once.
+
+   So the open question is no longer "which mechanism is missing" but **"is any local
+   catastrophe in this model big enough to break a region while its neighbours prosper?"**
+   — a lost war, a plague wave, a soil collapse. That is a calibration question about the
+   existing shocks, and it should be answered with measurement rather than another
+   mechanism.
+
 2. **Perpetual legal persons** (Tier 4) — the corporation, the monastery, the guild
    endowment, so capital and archives survive a named owner's death. Needs an ownership
    model the commons arc does not have. See the Tier 4 note.

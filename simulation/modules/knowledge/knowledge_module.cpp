@@ -227,6 +227,13 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             if (!prov.cohort_stats)
                 continue;
             const double mine = static_cast<double>(prov.cohort_stats->knowledge_level);
+            // Somebody has to be able to read it. A region whose learned stratum has
+            // scattered absorbs nothing, however close its neighbours and however much
+            // they know — which is what a dark age actually is.
+            const double absorb =
+                absorptive_capacity(prov.cohort_stats->specialist_fraction, cfg_);
+            if (absorb <= 0.0)
+                continue;
             for (const auto& link : prov.links) {
                 auto it = h3_to_idx.find(link.neighbor_h3);
                 if (it == h3_to_idx.end() || it->second == i)
@@ -236,7 +243,7 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     continue;
                 const double theirs = static_cast<double>(other.cohort_stats->knowledge_level);
                 if (theirs > mine)
-                    net[i] += (theirs - mine) * rate;  // learning, not transfer
+                    net[i] += (theirs - mine) * rate * absorb;  // learning, not transfer
             }
         }
     }

@@ -738,3 +738,81 @@ TEST_CASE("knowledge: catching up is easier than leading",
     // Identical populations and strata; only what they already know differs.
     CHECK(province_knowledge_gain(d, 0) > province_knowledge_gain(d, 1));
 }
+
+// ===========================================================================
+// SOMEBODY HAS TO BE ABLE TO READ IT.
+//
+// A dark age is not a shortage of knowledge in the world. Greek mathematics
+// and medicine sat intact in Byzantium and Baghdad the entire time western
+// Europe could not read them; what was missing was anyone able to receive it,
+// and the recovery came exactly when a literate class existed again to
+// translate.
+//
+// So diffusion needs a receiver. Measured, its absence was why regional falls
+// did not happen: with diffusion unconditional, a collapsing province was
+// topped straight back up by its neighbours and the deepest drawdown any
+// region ever suffered was 8.6% of its own peak. Gating it on the receiving
+// province's learned stratum took that to 39.7%.
+// ===========================================================================
+
+TEST_CASE("knowledge: a region with no scholars cannot receive what its neighbours know",
+          "[knowledge][tier1][absorption]") {
+    const KnowledgeConfig cfg{};
+    // A province whose learned stratum has scattered absorbs essentially nothing.
+    CHECK_THAT(KnowledgeModule::absorptive_capacity(0.0f, cfg),
+               Catch::Matchers::WithinAbs(0.0, 1e-9));
+    CHECK(KnowledgeModule::absorptive_capacity(0.001f, cfg) < 0.06);
+
+    // A small literate remnant is enough to transmit — the monasteries that kept copying
+    // were never more than a sliver of the population.
+    CHECK_THAT(KnowledgeModule::absorptive_capacity(cfg.knowledge_absorption_halfsat, cfg),
+               Catch::Matchers::WithinAbs(0.5, 1e-6));
+    CHECK(KnowledgeModule::absorptive_capacity(0.10f, cfg) > 0.8);
+
+    // Saturating: more scholars always help, and it never exceeds taking in everything
+    // on offer.
+    CHECK(KnowledgeModule::absorptive_capacity(0.30f, cfg) >
+          KnowledgeModule::absorptive_capacity(0.10f, cfg));
+    CHECK(KnowledgeModule::absorptive_capacity(1.0f, cfg) < 1.0);
+}
+
+TEST_CASE("knowledge: a dark region beside a learned one stays dark until it can read",
+          "[knowledge][tier1][absorption]") {
+    // The whole mechanism end to end. Two linked provinces, one knowing a great deal and
+    // one knowing nothing; the ignorant one learns only in proportion to the stratum it
+    // has to learn WITH.
+    auto learned_by = [](float receiver_specialists) {
+        KnowledgeModule mod;
+        WorldState w = make_world(/*era=*/4, /*population=*/50000, /*spec=*/0.10f,
+                                  /*knowledge=*/0.0f);
+        // The neighbour: knows a great deal, and is reachable.
+        Province p{};
+        p.id = 1;
+        p.region_id = 1;
+        p.h3_index = static_cast<H3Index>(0x2);
+        p.cohort_stats = std::make_unique<RegionCohortStats>();
+        p.cohort_stats->total_population = 50000;
+        p.cohort_stats->specialist_fraction = 0.10f;
+        p.cohort_stats->subsistence_surplus_ratio = 1.2f;
+        p.cohort_stats->knowledge_level = 100000.0f;
+        w.provinces.push_back(std::move(p));
+        w.provinces[0].h3_index = static_cast<H3Index>(0x1);
+        w.provinces[0].cohort_stats->specialist_fraction = receiver_specialists;
+        ProvinceLink to_neighbour{};
+        to_neighbour.neighbor_h3 = static_cast<H3Index>(0x2);
+        w.provinces[0].links.push_back(to_neighbour);
+
+        DeltaBuffer d{};
+        mod.execute(w, d);
+        for (const auto& rd : d.region_deltas)
+            if (rd.region_id == 0 && rd.province_knowledge_delta.has_value())
+                return static_cast<double>(*rd.province_knowledge_delta);
+        return 0.0;
+    };
+
+    const double literate = learned_by(0.10f);   // has a scholarly class
+    const double scattered = learned_by(0.001f);  // its scholars are gone
+
+    CHECK(literate > 0.0);
+    CHECK(scattered < literate * 0.2);  // the knowledge is right there and unreachable
+}
