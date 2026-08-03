@@ -130,11 +130,46 @@ trajectory — the procedure is sequential and bottom-up, and the reason is docu
    neutral, and it bought almost nothing (peak PSI 1.59 -> 1.85, no behavioural change)
    while introducing a fragile cross-module dependency. Recorded in the code at the site.
 
-   **The next real piece is therefore about the CEILING, not about stress:** either
-   knowledge advancing in bursts with plateaus rather than continuously, or the ceiling
-   being capital-limited (capital wears out and must be rebuilt) rather than
-   knowledge-limited. Both are structural, both are large, and neither should be attempted
-   without deciding which is truer to the intent first.
+   **RESOLVED 2026-07-30 by R9 + R10 — and the falls now happen.** The prompt was: why
+   not both, and look at Europe vs Africa vs the Americas, or British industrialisation
+   against Russia and China. That is the right frame, and it named an axis the model did
+   not have.
+
+   **R9 — knowing is not having.** The ceiling rose with knowledge ALONE, so the model
+   could not express the most conspicuous fact about 1800: Qing China and Britain did not
+   differ much in what they knew. China had the books, the embassies and the engineers;
+   Russia sent students to Britain for decades. What differed was the capital stock to
+   deploy any of it. The ceiling now rises with knowledge TIMES how much a place has built
+   the means to use — a society that knows everything and has built nothing farms like the
+   dawn. It also gives the ceiling the one thing it never had: a way DOWN that needs
+   nobody to forget, because capital wears out at ~3%/yr and is rebuilt only out of a real
+   surplus. Hungry years went from 199 to 914 immediately.
+
+   **R10 — imperial overstretch.** Chasing why the world still would not fragment turned
+   up an arithmetic impossibility: the hold problem assumed the centre could bring its
+   WHOLE army against one rebellious province, so a member holding 1/N had to out-muscle
+   0.8 x cohesion x (N-1)/N. For N >= 3 that is unreachable at ANY cohesion — not
+   unlikely, impossible. An empire has to garrison everywhere at once, so the force
+   available against one member is what is left after holding the rest. (Force projection
+   at the grain-haulage rate was tried first and broke the Alexander arc: soldiers and
+   orders travel where wagons of grain cannot.)
+
+   **Measured together, earthlike now rises AND falls.** Dates hold — Iron, Classical and
+   Medieval land exactly on their historical years, the rest within a year — and through
+   the industrial transition:
+
+   | | polities | population | capital/head | urban | gini |
+   |---|---|---|---|---|---|
+   | era 6 @ 11,451 | 1 (empire) | 2,248,187 | 622 | 8% | 0.42 |
+   | era 7 @ 11,751 | — | **1,255,846** | **34** | **0%** | 0.50 |
+   | era 8 @ 12,001 | 6 (shattered) | 3,325,826 | 46 | 1% | 0.57 |
+
+   The population halves, the capital stock is wiped out, the towns empty, inequality
+   jumps, the empire fragments from one polity into six, PSI peaks at 3.68 (was 1.27) and
+   war returns (58 war years, up from 22) — and then it recovers to era 8. Knowledge is
+   retained throughout, which is the ratchet working: the material civilisation and the
+   political order fall while what is known creeps forward. That is the shape the brief
+   asked for.
 
 2. **Perpetual legal persons** (Tier 4) — the corporation, the monastery, the guild
    endowment, so capital and archives survive a named owner's death. Needs an ownership

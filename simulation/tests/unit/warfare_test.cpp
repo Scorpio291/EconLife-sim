@@ -774,3 +774,37 @@ TEST_CASE("warfare: a cohesive people fights above its numbers",
     const float many_but_soft = 1700.0f * soft;
     CHECK(WarfareModule::p_attacker_wins(few_but_united, many_but_soft) > 0.5f);
 }
+
+// ===========================================================================
+// IMPERIAL OVERSTRETCH (R10).
+//
+// An empire cannot bring its whole army against one rebellious province: it
+// has to hold all of them at once, so the force available against any single
+// member is what is left after garrisoning the rest.
+//
+// Without this, secession was ARITHMETICALLY IMPOSSIBLE for any polity of
+// three or more evenly-sized provinces, at any cohesion — a member holds 1/N
+// of the strength and had to out-muscle 0.8 x cohesion x (N-1)/N of it. That
+// is why an earthlike world unified permanently around year 1,500 and never
+// fragmented again in 11,250 years.
+// ===========================================================================
+
+TEST_CASE("warfare: an empire cannot concentrate its whole army on one province",
+          "[warfare][tier2][overstretch]") {
+    // The arithmetic that made this necessary, stated as a test so it cannot come back.
+    // A member of an evenly-sized polity holds 1/N; against the UNDIVIDED rest it must
+    // exceed ratio x cohesion x (N-1)/N, which for N >= 3 no member can ever reach.
+    const WarfareConfig cfg{};
+    for (int n : {3, 4, 6}) {
+        const float member = 1.0f / static_cast<float>(n);
+        const float rest = static_cast<float>(n - 1) / static_cast<float>(n);
+        INFO("polity of " << n << " provinces");
+        // Undivided: impossible even at the lowest possible cohesion of 1.
+        CHECK(member <= cfg.secession_power_ratio * 1.0f * rest);
+        // Divided among the members it must hold: reachable for a fresh conquest.
+        const float projected = rest / static_cast<float>(n - 1);
+        CHECK(member > cfg.secession_power_ratio * 1.0f * projected);
+        // And still impossible once generations of integration have accrued.
+        CHECK(member <= cfg.secession_power_ratio * (1.0f + cfg.cohesion_gain_max) * projected);
+    }
+}

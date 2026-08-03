@@ -611,7 +611,33 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         const float cohesion =
             1.0f + cfg_.cohesion_gain_max * eff_years /
                        (eff_years + std::max(1.0f, cfg_.cohesion_halfsat_years));
-        if (levy[m] * asabiya_mult[m] > cfg_.secession_power_ratio * cohesion * rest) {
+
+        // IMPERIAL OVERSTRETCH (R10). An empire cannot bring its whole army against one
+        // rebellious province: it has to hold all of them at once, so the force actually
+        // available against any single member is what is left after garrisoning the rest.
+        // The bigger the empire, the thinner that is everywhere — which is why empires
+        // fray at their edges rather than shattering at the centre.
+        //
+        // Without this, secession was ARITHMETICALLY IMPOSSIBLE for any polity of three or
+        // more evenly-sized provinces, at ANY cohesion: a member holds 1/N of the strength
+        // and had to out-muscle 0.8 x cohesion x (N-1)/N of it, which for N >= 3 exceeds
+        // anything a member can ever hold. Measured, that is exactly why an earthlike
+        // world unified permanently around year 1,500 and never fragmented again in the
+        // remaining 11,250 years — leaving nobody to fight, no frontier for asabiya to be
+        // forged at, one shelter for the written corpus, and one treasury carrying every
+        // province. Europe never unified; here it could not do otherwise.
+        //
+        // Dividing by the number of members held restores the right shape: a fresh
+        // conquest in a large empire can break away, while a province with generations of
+        // integration and a good road cannot (cohesion carries that). A two-province
+        // polity is unaffected — there is only one member to hold, so the whole army is
+        // available, which is what lets the Alexander arc still work.
+        uint32_t members_held = 0;
+        for (uint32_t q = 0; q < n; ++q)
+            if (q != pid && polity_of(q) == pid)
+                ++members_held;
+        const float projected = rest / static_cast<float>(std::max(1u, members_held));
+        if (levy[m] * asabiya_mult[m] > cfg_.secession_power_ratio * cohesion * projected) {
             polity_of_[m] = m;
             member_since_.erase(m);
             // Store the remaining HEADCOUNT, not `rest` — rest is a strength (the

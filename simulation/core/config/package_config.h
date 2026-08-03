@@ -761,6 +761,34 @@ struct SubsistenceConfig {
     float knowledge_productivity_max = 26.0f;
     float knowledge_productivity_halfsat = 35000.0f;
 
+    // --- KNOWING IS NOT HAVING (R9) --------------------------------------------------
+    // The boost above was applied to knowledge ALONE, so the model could not express the
+    // most conspicuous fact about the industrial era: in 1800 Qing China and Britain did
+    // not differ much in what they KNEW. China had the books, the embassies and the
+    // engineers, and Russia sent students to Britain for decades. What differed was the
+    // capital stock to deploy any of it — the pits, the pumps, the furnaces, the rails,
+    // the cleared and drained land. The same is true across the whole record: peoples in
+    // the same period advance at wildly different speeds because applying a technique
+    // costs matter and labour, not just understanding.
+    //
+    // So the ceiling now rises with knowledge TIMES how much of it a place has actually
+    // built the means to use. A society that knows everything and has built nothing farms
+    // like the dawn; one at the frontier of both gets the full boost.
+    //
+    // It also gives the ceiling something it never had: a way DOWN that does not require
+    // forgetting. Capital wears out at ~3%/yr and is only rebuilt out of a real surplus
+    // (and only where people expect to keep what they build — R4B). A population that
+    // outruns its capital stock loses the ability to use what it still knows, the ceiling
+    // falls under it, and the wage falls with it. That is the stall Turchin's secular
+    // cycles need and the one thing the smooth monotone climb never had.
+    //
+    // The half-saturation is a model-internal scale bridge, like tonnes_per_deposit_unit:
+    // capital-per-head is denominated in this model's own food units, so it is set from
+    // the measured stock of an ESTABLISHED agrarian province here (~1,000/head through
+    // the middle eras) rather than from an outside figure. Half the known technique is
+    // applied at that stock.
+    float capital_utilisation_halfsat = 1000.0f;
+
     // Seasonality (climate swing) reduces food reliability — lean seasons cut the
     // harvest. Applied RELATIVE to Earth's seasonality, so an earthlike world is
     // neutral; harsher swings penalize food, gentler ones help. (Gravity does NOT

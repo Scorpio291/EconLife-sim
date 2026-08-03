@@ -126,8 +126,22 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // the civilisation next door still knows — which is what makes a regional collapse
     // regional. It relearns by diffusion, not by decree.
     const float K = cs.knowledge_level;
+    // KNOWING IS NOT HAVING (R9). Knowledge only raises the harvest as far as the province
+    // has built the means to apply it. In 1800 Qing China and Britain did not differ much
+    // in what they knew; what differed was the pits, the furnaces, the rails and the
+    // drained fields. A place that knows everything and has built nothing farms like the
+    // dawn — which is why peoples in the same period advance at such different speeds.
+    //
+    // This is also the only way the ceiling can fall WITHOUT anybody forgetting: capital
+    // wears out and is rebuilt only out of a real surplus, so a population that outruns
+    // its capital loses the use of what it still knows.
+    const float capital_per_head =
+        population > 0 ? std::max(0.0f, cs.productive_capital) / static_cast<float>(population)
+                       : 0.0f;
+    const float applied = capital_per_head /
+                          (capital_per_head + std::max(1.0f, cfg_.capital_utilisation_halfsat));
     const float knowledge_factor =
-        1.0f + cfg_.knowledge_productivity_max * K /
+        1.0f + cfg_.knowledge_productivity_max * applied * K /
                    (K + std::max(1.0f, cfg_.knowledge_productivity_halfsat));
     // Food techs (plough/irrigation/heavy-plough/watermill) raise the carrying ceiling.
     const float tech_food_factor =

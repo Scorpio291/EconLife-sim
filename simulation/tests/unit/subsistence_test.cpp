@@ -655,3 +655,75 @@ TEST_CASE("subsistence: the difference between accumulating and merely surviving
     // build LESS than nothing.
     CHECK(SubsistenceModule::effective_investment_share(10.0f, cfg) >= 0.0f);
 }
+
+// ===========================================================================
+// KNOWING IS NOT HAVING (R9).
+//
+// In 1800 Qing China and Britain did not differ much in what they KNEW. China
+// had the books, the embassies and the engineers; Russia sent students to
+// Britain for decades. What differed was the capital stock to deploy any of
+// it — the pits, the pumps, the furnaces, the rails, the drained fields.
+// Peoples in the same period advance at wildly different speeds because
+// applying a technique costs matter and labour, not just understanding.
+//
+// It is also the only way the carrying ceiling can fall without anybody
+// forgetting: capital wears out and is rebuilt only out of a real surplus.
+// ===========================================================================
+
+TEST_CASE("subsistence: a society that knows everything and has built nothing",
+          "[subsistence][tier2][applied]") {
+    // The China-in-1800 case. Same knowledge, no capital: it farms like the dawn.
+    SubsistenceModule mod;
+    auto surplus_with = [&](float knowledge, float capital_per_head) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.6f, /*population=*/50000));
+        w.provinces[0].cohort_stats->knowledge_level = knowledge;
+        w.provinces[0].cohort_stats->productive_capital = capital_per_head * 50000.0f;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        return *d.region_deltas[0].subsistence_surplus_replacement;
+    };
+
+    const float ignorant = surplus_with(/*knowledge=*/0.0f, /*capital=*/1000.0f);
+    const float knows_but_has_not = surplus_with(500000.0f, 0.0f);
+    const float knows_and_has = surplus_with(500000.0f, 1000.0f);
+
+    CHECK(knows_and_has > knows_but_has_not);
+    // Knowing without building is worth almost nothing above knowing nothing.
+    CHECK_THAT(knows_but_has_not, Catch::Matchers::WithinRel(ignorant, 0.35f));
+    CHECK(knows_and_has > 1.5f * knows_but_has_not);
+}
+
+TEST_CASE("subsistence: the ceiling can fall without anybody forgetting",
+          "[subsistence][tier2][applied]") {
+    // The mechanism a secular cycle needs. Capital wears out at ~3%/yr and is rebuilt
+    // only out of a real surplus, so a population that outruns its capital stock loses
+    // the USE of what it still knows. Knowledge is unchanged in both cases here.
+    SubsistenceModule mod;
+    auto surplus_at_capital = [&](float capital_per_head) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.6f, /*population=*/50000));
+        w.provinces[0].cohort_stats->knowledge_level = 500000.0f;  // unchanged throughout
+        w.provinces[0].cohort_stats->productive_capital = capital_per_head * 50000.0f;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        return *d.region_deltas[0].subsistence_surplus_replacement;
+    };
+
+    const float built = surplus_at_capital(2000.0f);
+    const float worn = surplus_at_capital(200.0f);
+    CHECK(worn < built);
+    CHECK(worn < 0.6f * built);  // losing the tools really does cost the harvest
+}
