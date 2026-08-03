@@ -386,6 +386,91 @@ TEST_CASE("society observe: how bad does it ever get for ONE province?",
                 "  shocks that already exist, not a missing mechanism.\n");
 }
 
+// ===========================================================================
+// AGAIN AND AGAIN? (the brief, measured)
+//
+// The design brief asks for "the ability to rise and fail, again and again,
+// slowly creeping forward". One fall is not "again and again", so this counts
+// them: every episode where a world loses a fifth or more of its population
+// from a running peak, with the year, the depth, and how long it took to get
+// back.
+//
+// It also reports what happened to KNOWLEDGE across each one, because that is
+// the difference between a cycle and a ratchet. If knowledge is retained
+// through a population collapse, the civilisation is creeping forward while
+// the society falls — which is the shape asked for. If it is lost with the
+// people, each cycle starts over and nothing accumulates.
+// ===========================================================================
+TEST_CASE("society observe: how many times does it fall? (the brief)",
+          "[.society-cycles]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    struct Run {
+        const char* label;
+        WorldArchetype arch;
+    };
+    const Run runs[] = {{"GARDEN", archetype_garden()},
+                        {"EARTHLIKE", archetype_earthlike()},
+                        {"FERTILE DEATHWORLD", archetype_fertile_deathworld()}};
+
+    for (const auto& r : runs) {
+        auto series = run_society_years(7, kNpcs, kYears, r.arch, /*founding_hardiness=*/0.0f,
+                                        /*fast_forward=*/true);
+        std::printf("\n=== %s: population collapses of 20%% or more ===\n", r.label);
+
+        constexpr double kFallThreshold = 0.20;
+        double peak = 0.0, trough = 0.0, peak_knowledge = 0.0;
+        uint32_t peak_year = 0;
+        bool falling = false;
+        int episodes = 0;
+        for (const auto& s : series) {
+            const double pop = s.total_population;
+            if (!falling) {
+                if (pop >= peak) {
+                    peak = pop;
+                    peak_year = s.year;
+                    peak_knowledge = static_cast<double>(s.knowledge);
+                    continue;
+                }
+                if (peak > 0.0 && (1.0 - pop / peak) >= kFallThreshold) {
+                    falling = true;
+                    trough = pop;
+                }
+            } else {
+                trough = std::min(trough, pop);
+                if (pop >= peak) {
+                    // Recovered to the old peak: the episode is over.
+                    ++episodes;
+                    std::printf("  fall %d: peaked %.0f at year %u, bottomed %.0f (-%.0f%%), "
+                                "back by year %u (%u yrs); knowledge %.0f -> %.0f\n",
+                                episodes, peak, peak_year, trough, 100.0 * (1.0 - trough / peak),
+                                s.year, s.year - peak_year, peak_knowledge,
+                                static_cast<double>(s.knowledge));
+                    falling = false;
+                    peak = pop;
+                    peak_year = s.year;
+                    peak_knowledge = static_cast<double>(s.knowledge);
+                }
+            }
+        }
+        if (falling) {
+            ++episodes;
+            const auto& last = series.back();
+            std::printf("  fall %d: peaked %.0f at year %u, bottomed %.0f (-%.0f%%), STILL DOWN "
+                        "at year %u; knowledge %.0f -> %.0f\n",
+                        episodes, peak, peak_year, trough, 100.0 * (1.0 - trough / peak),
+                        last.year, peak_knowledge, static_cast<double>(last.knowledge));
+        }
+        if (episodes == 0)
+            std::printf("  none — this world only ever rose.\n");
+        else
+            std::printf("  %d collapse%s over %u years.\n", episodes, episodes == 1 ? "" : "s",
+                        kYears);
+    }
+    std::printf("\n  Knowledge holding up across a population collapse is the ratchet: the\n"
+                "  society falls while the civilisation keeps what it learned.\n");
+}
+
 // F7 — RE-ANCHORING THE ERA THRESHOLDS.
 //
 // The era thresholds are the one calibration surface the grounding doctrine allows:

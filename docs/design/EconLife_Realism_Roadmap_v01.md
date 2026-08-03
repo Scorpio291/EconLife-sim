@@ -166,10 +166,28 @@ trajectory — the procedure is sequential and bottom-up, and the reason is docu
 
    The population halves, the capital stock is wiped out, the towns empty, inequality
    jumps, the empire fragments from one polity into six, PSI peaks at 3.68 (was 1.27) and
-   war returns (58 war years, up from 22) — and then it recovers to era 8. Knowledge is
-   retained throughout, which is the ratchet working: the material civilisation and the
-   political order fall while what is known creeps forward. That is the shape the brief
-   asked for.
+   war returns (58 war years, up from 22) — and then it recovers to era 8.
+
+   **AND IT HAPPENS MORE THAN ONCE** (`[.society-cycles]`, which counts every episode
+   where a world loses a fifth or more of its population from a running peak). Each world
+   shows a founding correction — the world-gen population settling onto what the land can
+   actually feed, over the first few thousand years — and then TWO genuine civilisational
+   collapses in the late climb:
+
+   | earthlike | population | knowledge across it |
+   |---|---|---|
+   | fall, yr 10,774 -> 11,810 (1,036 yrs) | 3,096,854 -> 1,250,568 (**-60%**) | 106,111 -> **468,354** |
+   | fall, yr 11,901 -> | 8,342,400 -> 3,325,826 (**-60%**) | 583,492 -> **695,528** |
+
+   Garden: -80% and -83%, recovering in 591 and 567 years. Fertile deathworld: -40% and
+   -71%. Depths of 40-83% are the right register (the Black Death took ~50%, the Maya
+   lowlands ~90%) and so are the recovery times.
+
+   **Knowledge RISES through every one of them** — 4.4x across a 60% population collapse
+   in the earthlike case. That is the ratchet and the cycle running together, which is
+   exactly what the brief asked for: rise and fail, again and again, slowly creeping
+   forward. The society falls; the civilisation keeps what it learned and goes on
+   learning.
 
 2. **Perpetual legal persons** (Tier 4) — the corporation, the monastery, the guild
    endowment, so capital and archives survive a named owner's death. Needs an ownership
