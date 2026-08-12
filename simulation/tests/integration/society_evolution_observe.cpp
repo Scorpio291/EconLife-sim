@@ -471,6 +471,45 @@ TEST_CASE("society observe: how many times does it fall? (the brief)",
                 "  society falls while the civilisation keeps what it learned.\n");
 }
 
+// ===========================================================================
+// DOES IT ACTUALLY INDUSTRIALISE? (improvement hunt)
+//
+// Reaching "era 8" on a knowledge threshold is not the same as having an
+// industrial economy. The test of that is how many people the land still
+// needs: an English farmer fed about 3 people in 1800 and about 7 by 1900,
+// and the share of the workforce in agriculture fell from roughly 35% in 1800
+// to 22% by 1851 and 9% by 1900.
+//
+// This prints the COHORT non-farming share (not the tracked-NPC sample the
+// other observations use) alongside urbanisation and capital per head, so the
+// question "did the economy change shape, or only the era label" is answerable.
+// ===========================================================================
+TEST_CASE("society observe: does the economy actually industrialise?",
+          "[.society-industrialise]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+
+    std::printf("\n=== EARTHLIKE: the shape of the economy, by era ===\n");
+    std::printf("  era | year  | non-farming | SUPPORTED | urban | capital/head | pop        |"
+                " surplus\n");
+    int prev_era = 0;
+    for (const auto& s : series) {
+        if (s.era == prev_era)
+            continue;
+        prev_era = s.era;
+        const double urban_pct =
+            s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
+        std::printf("  %3d | %5u | %10.1f%% | %8.1f%% | %4.1f%% | %12.0f | %10.0f | %.3f\n",
+                    s.era, s.year, s.cohort_specialist_share * 100.0, s.supported_share * 100.0,
+                    urban_pct, s.productive_capital_per_head, s.total_population, s.mean_surplus);
+    }
+    std::printf("\n  For reference: England had ~35%% of its workforce in agriculture in 1800,\n"
+                "  22%% by 1851 and 9%% by 1900 — so a NON-FARMING share of 65%%, 78%%, 91%%.\n"
+                "  Urbanisation went from ~20%% to 54%% to 77%% over the same century.\n");
+}
+
 // F7 — RE-ANCHORING THE ERA THRESHOLDS.
 //
 // The era thresholds are the one calibration surface the grounding doctrine allows:

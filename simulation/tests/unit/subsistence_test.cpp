@@ -472,7 +472,13 @@ TEST_CASE("soil: a society that mines its land loses fertility, one that lives w
         w.provinces[0].cohort_stats->soil_health = starting_soil;
         rebuild_npc_indices(w);
 
-        SubsistenceModule mod;
+        // Unmechanised, so this exercises the SOIL law alone. With capital accumulating,
+        // machine leverage (R11) lets even a thinly settled province work its land at
+        // full stretch and strip it — which is a real effect and exactly what industrial
+        // agriculture does, but it is not what this test is about.
+        SubsistenceConfig no_capital{};
+        no_capital.capital_investment_share = 0.0f;
+        SubsistenceModule mod(no_capital);
         for (uint32_t y = 1; y <= years; ++y) {
             w.current_tick = y * kTicksPerYear;
             DeltaBuffer d{};
@@ -649,8 +655,16 @@ TEST_CASE("subsistence: the difference between accumulating and merely surviving
     const float mild = SubsistenceModule::effective_investment_share(0.01f, cfg);
     const float severe = SubsistenceModule::effective_investment_share(0.05f, cfg);
     CHECK_THAT(mild / cfg.capital_investment_share, Catch::Matchers::WithinAbs(0.72f, 0.02f));
-    CHECK_THAT(severe / cfg.capital_investment_share, Catch::Matchers::WithinAbs(0.19f, 0.02f));
     CHECK(severe < mild);
+    // Under real threat the HORIZON shortens rather than the building stopping: people
+    // build what pays back before the danger arrives, so the term saturates at exp(-1).
+    // A society in permanent danger still manages about a third of what it wanted.
+    // (Was a fixed 33-year horizon, which left 0.2% of intended investment at the peak
+    // stress this model reaches and erased the capital stock across a crisis.)
+    CHECK_THAT(severe / cfg.capital_investment_share, Catch::Matchers::WithinAbs(0.368f, 0.02f));
+    CHECK_THAT(SubsistenceModule::effective_investment_share(1.0f, cfg) /
+                   cfg.capital_investment_share,
+               Catch::Matchers::WithinAbs(0.368f, 0.02f));  // saturated, not zero
     // Saturating toward zero, never negative: an arbitrarily lawless place still cannot
     // build LESS than nothing.
     CHECK(SubsistenceModule::effective_investment_share(10.0f, cfg) >= 0.0f);

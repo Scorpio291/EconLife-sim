@@ -76,6 +76,12 @@ struct SocietySnapshot {
     // polycentrism needs more than one place for a book to survive in. A world that
     // unifies has none of them.
     int polity_count = 0;
+    // The non-farming share of the POPULATION (the cohort field subsistence publishes),
+    // as distinct from `specialist_fraction` above, which is a share of the tracked-NPC
+    // sample's assigned livelihoods. This is the one that says whether the economy has
+    // actually changed shape.
+    double cohort_specialist_share = 0.0;
+    double supported_share = 0.0;  // what THIS harvest could free, before the inertia lag
     double political_stress = 0.0;  // mean PSI: how close the society is to coming apart
                                     // for reasons that are nothing to do with the weather
     double faction_deaths = 0.0;    // mean annual death fraction from factional conflict
@@ -141,6 +147,11 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
             std::max(s.max_war_deaths, static_cast<double>(p.cohort_stats->war_death_fraction));
         s.max_faction_deaths = std::max(
             s.max_faction_deaths, static_cast<double>(p.cohort_stats->faction_death_fraction));
+        s.cohort_specialist_share += static_cast<double>(p.cohort_stats->specialist_fraction) *
+                                     static_cast<double>(p.cohort_stats->total_population);
+        s.supported_share +=
+            static_cast<double>(p.cohort_stats->supported_specialist_fraction) *
+            static_cast<double>(p.cohort_stats->total_population);
         const double k = static_cast<double>(p.cohort_stats->knowledge_level);
         s.knowledge_leader = std::max(s.knowledge_leader, k);
         s.knowledge_laggard = prov_with_cohorts == 0 ? k : std::min(s.knowledge_laggard, k);
@@ -166,6 +177,10 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.polity_count = static_cast<int>(seen.size());
     }
     s.mean_surplus = prov_with_cohorts > 0 ? surplus_sum / prov_with_cohorts : 0.0;
+    if (s.total_population > 0.0) {
+        s.cohort_specialist_share /= s.total_population;  // population-weighted
+        s.supported_share /= s.total_population;
+    }
     if (prov_with_cohorts > 0) {
         s.knowledge_mean /= prov_with_cohorts;
         s.ghost_land /= prov_with_cohorts;

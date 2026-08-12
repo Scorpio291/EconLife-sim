@@ -120,8 +120,24 @@ class SubsistenceModule : public ITickModule {
     // to; at 5%/yr, under a fifth. Pure/static.
     static float effective_investment_share(float hazard, const SubsistenceConfig& cfg) {
         const float depreciation = std::max(1e-4f, cfg.capital_depreciation_per_year);
-        const float horizon = 1.0f / depreciation;
-        return cfg.capital_investment_share * std::exp(-std::max(0.0f, hazard) * horizon);
+        const float service_life = 1.0f / depreciation;
+        const float h = std::max(0.0f, hazard);
+        // THE HORIZON ITSELF SHORTENS UNDER THREAT. People under threat do not stop
+        // building — they build what pays back before the danger arrives. A plough, a
+        // granary repair and a fence return within a couple of seasons; only the canal
+        // and the terrace need a lifetime. So the horizon actually used is the shorter of
+        // the service life and the time a place expects to be left alone.
+        //
+        // Measured, the fixed 33-year horizon was too brutal to be right: at the peak
+        // stress this model reaches (PSI 3.68 -> hazard 0.18) it left investment at 0.2%
+        // of intended, and three centuries of that against 3%/yr wear erased the capital
+        // stock entirely — capital per head fell from 622 to 34 across the industrial
+        // crisis, which is not what happened to Rome or to anywhere else. With the
+        // horizon shortening, the term saturates at exp(-1): a society in permanent
+        // danger still manages about a third of what it wanted to build, and it gets
+        // there physically rather than by a floor being imposed.
+        const float horizon = h > 0.0f ? std::min(service_life, 1.0f / h) : service_life;
+        return cfg.capital_investment_share * std::exp(-h * horizon);
     }
 
     // produced / needed for `population` people. 1.0 = exactly fed.

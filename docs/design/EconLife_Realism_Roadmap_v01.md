@@ -21,6 +21,61 @@ land within 1,500 years of every historical date (`[pacing]`, in `ctest -L emerg
 Recalibrate with `tools/calibration/` after ANY change that moves the knowledge or food
 trajectory — the procedure is sequential and bottom-up, and the reason is documented there.
 
+### THE LARGEST REMAINING GAP: the economy never industrialises (measured 2026-07-30)
+
+Reaching "era 8" on a knowledge threshold is not the same as having an industrial
+economy. Measured (`[.society-industrialise]`), at era 8 — nominally the year 2000 —
+an earthlike world still has **92% of its people farming and 0.8% in towns**. England had
+22% in agriculture by 1851 and 9% by 1900, with urbanisation at 54% and 77%. The model
+reaches the era label while staying Neolithic in shape, and this is a larger gap than the
+collapse depth that occupied the preceding work.
+
+Two upstream defects pin it, both now identified precisely by printing the HELD stratum
+against the SUPPORTED one:
+
+| era | held | supported | regime ceiling |
+|---|---|---|---|
+| 2 barter | 4.6% | **15.0%** | 0.15 |
+| 3 coinage | 5.7% | **15.0%** | 0.18 |
+| 4 money | 6.2% | **18.0%** | 0.22 |
+| 5 feudal | 7.0% | **22.0%** | 0.27 |
+| 6 mercantile | 7.9% | **23.3%** | 0.35 |
+
+1. **The per-regime specialist ceiling is a RAIL and it binds.** `supported` sits exactly
+   on `specialist_ceiling_{subsistence,coinage,money}` = 0.15/0.18/0.22 — a hard
+   `std::clamp` capping the non-farming share by era regardless of what the food balance
+   says. That is a behaviour-shaping cap on finite values, which the grounding doctrine
+   forbids. The thing it stands in for is real (you cannot coordinate a large non-farming
+   population without institutions and a way to move food to them), but it should be a
+   COST expressed through grain logistics and urban capacity, not a wall. Removing it is
+   a doctrine fix with large behavioural consequences and needs recalibration.
+2. **The held stratum never converges on the supported one** — 7.9% against 23.3% after
+   millennia. The asymmetric shed/growth inertia is still ratcheting downward against a
+   noisy target, despite the granary-defence fix. Worth a focused look; tripling the
+   non-farming share would move urbanisation with it.
+
+Two improvements landed in the same pass, both correct and both currently INERT because
+they sit downstream of the above:
+
+- **R11 — machines replace hands.** Capital gated how much knowledge a place could USE
+  (R9) but never did the other and more famous thing. An American farmer fed ~3 people in
+  1800 and ~150 by 2000, almost none of it from working harder. Leverage now multiplies
+  the labour a farmer supplies, so the same harvest needs fewer of them; output stays
+  bounded by the land, so it frees hands rather than conjuring food. Inert at present
+  because capital per head never gets high enough (48-58 at eras 7-8).
+- **The investment horizon shortens under threat.** The fixed 33-year horizon left
+  investment at 0.2% of intended at this model's peak stress, and three centuries of that
+  against 3%/yr wear erased the capital stock (capital/head 622 -> 34 across the
+  industrial crisis), which is not what happened to Rome or anywhere else. People under
+  threat build what pays back before the danger arrives, so the horizon used is the
+  shorter of the service life and the time a place expects to be left alone. The term now
+  saturates at exp(-1) — about a third of intended investment — reached physically rather
+  than by a floor.
+
+A side effect worth keeping: with machine leverage in, a THINLY SETTLED but mechanised
+province can strip its soil, which is exactly what industrial agriculture does. The soil
+test now runs unmechanised so it exercises the soil law alone.
+
 ### What is still open
 
 1. **Stress contagion LANDED 2026-07-28 (R5) — and the falls are still shallow, for a

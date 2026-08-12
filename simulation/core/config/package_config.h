@@ -789,6 +789,34 @@ struct SubsistenceConfig {
     // applied at that stock.
     float capital_utilisation_halfsat = 1000.0f;
 
+    // --- MACHINES REPLACE HANDS (R11) -------------------------------------------------
+    // Capital gated how much of its knowledge a place could USE (R9), but nothing in the
+    // model let capital do the other and more famous thing: replace labour. That is what
+    // "labour-saving" means, and it is the whole shape of the industrial transition.
+    //
+    // An American farmer fed about 3 people in 1800, 7 by 1900 and 150 by 2000 — roughly
+    // a fiftyfold rise in output per farmer, almost none of it from working harder. The
+    // English workforce in agriculture fell from ~35% in 1800 to 22% by 1851 and 9% by
+    // 1900, and every one of those people went somewhere else: into the towns, the
+    // factories, the schools and the offices.
+    //
+    // Measured, its absence was the largest remaining gap between this model and the
+    // record — larger than the collapse depth I had been chasing. At "era 8", nominally
+    // the year 2000, the simulated economy still had 92% of its people farming and 0.6%
+    // of them in towns. It reached the era on a knowledge threshold while staying
+    // Neolithic in shape.
+    //
+    // Leverage multiplies the labour a farmer supplies, so the same harvest needs fewer
+    // of them and the rest are freed. Output is still bounded by the land's ceiling, so
+    // this frees hands rather than conjuring food — which is exactly what mechanisation
+    // did.
+    float machine_leverage_max = 50.0f;      // output per farmer, 1800 -> 2000
+    float machine_leverage_halfsat = 3000.0f;  // capital per head at half the gain: set well
+                                               // above the ~1,000 an established AGRARIAN
+                                               // province holds here, so the leverage is a
+                                               // property of industrial capital rather than
+                                               // of having a plough
+
     // Seasonality (climate swing) reduces food reliability — lean seasons cut the
     // harvest. Applied RELATIVE to Earth's seasonality, so an earthlike world is
     // neutral; harsher swings penalize food, gentler ones help. (Gravity does NOT

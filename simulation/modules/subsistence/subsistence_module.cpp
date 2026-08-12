@@ -107,7 +107,7 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         return;
 
     // Working-age fraction of the population is available to labour on the land.
-    const float working_fraction = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
+    const float working_age = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
 
     // Natural capital the population can draw food from this tick, INCLUDING the ghost
     // acres coal is standing in for (energy_base). An organic economy is bounded by
@@ -140,6 +140,24 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
                        : 0.0f;
     const float applied = capital_per_head /
                           (capital_per_head + std::max(1.0f, cfg_.capital_utilisation_halfsat));
+
+    // MACHINES REPLACE HANDS (R11). Capital gated how much of its knowledge a place could
+    // use; it did not let capital do the other and more famous thing. An American farmer
+    // fed about 3 people in 1800 and 150 by 2000, almost none of it from working harder,
+    // and every hand that freed went into a town, a factory, a school or an office.
+    //
+    // Leverage multiplies the labour one farmer supplies, so the same harvest needs fewer
+    // of them. Output is still bounded by the land's ceiling, so this FREES HANDS rather
+    // than conjuring food — which is what labour-saving means.
+    //
+    // Keyed to capital per HEAD rather than per farmer on purpose: per farmer would feed
+    // back on itself (fewer farmers -> more capital each -> fewer farmers still), and the
+    // stock is a property of the province, not of who happens to be working it.
+    const float machine_leverage =
+        1.0f + cfg_.machine_leverage_max * capital_per_head /
+                   (capital_per_head + std::max(1.0f, cfg_.machine_leverage_halfsat));
+    // What one person's labour is worth on the land, machines included.
+    const float working_fraction = working_age * machine_leverage;
     const float knowledge_factor =
         1.0f + cfg_.knowledge_productivity_max * applied * K /
                    (K + std::max(1.0f, cfg_.knowledge_productivity_halfsat));
