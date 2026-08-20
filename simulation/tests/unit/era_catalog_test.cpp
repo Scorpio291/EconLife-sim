@@ -17,6 +17,12 @@ std::string find_eras_dir() {
         "../packages/base_game/eras",
         "../../packages/base_game/eras",
         "../../../packages/base_game/eras",
+        // ctest runs this binary from build/simulation/tests/unit, which is four levels
+        // below the repo root — one deeper than the list used to reach. The test then
+        // failed on its own no-self-skip guard everywhere except a run started from the
+        // root, which is why it passes by hand and fails under ctest.
+        "../../../../packages/base_game/eras",
+        "../../../../../packages/base_game/eras",
     };
     for (const auto* c : candidates) {
         if (fs::exists(fs::path(c) / "eras.csv"))

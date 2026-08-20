@@ -131,13 +131,13 @@ void EraCatalog::load_builtin_default() {
         float capital;
     };
     static const Row rows[] = {
-        {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 153.0f, 0.0f},
-        {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 2802.0f, 0.0f},
-        {3, "iron_age", "Iron Age", -1200, "coinage", false, true, 6249.0f, 0.0f},
-        {4, "classical", "Classical", -550, "money", false, true, 47825.0f, 0.0f},
-        {5, "medieval", "Medieval", 500, "feudal", false, true, 224042.0f, 0.0f},
-        {6, "early_modern", "Early Modern", 1450, "mercantile", false, true, 440004.0f, 0.0f},
-        {7, "industrial", "Industrial", 1750, "industrial", false, true, 695040.0f, 0.0f},
+        {1, "neolithic", "Neolithic", -10000, "subsistence", false, true, 6472.0f, 0.0f},
+        {2, "bronze_age", "Bronze Age", -3300, "barter", false, true, 61599.0f, 0.0f},
+        {3, "iron_age", "Iron Age", -1200, "coinage", false, true, 76447.0f, 0.0f},
+        {4, "classical", "Classical", -550, "money", false, true, 208024.0f, 0.0f},
+        {5, "medieval", "Medieval", 500, "feudal", false, true, 575002.0f, 0.0f},
+        {6, "early_modern", "Early Modern", 1450, "mercantile", false, true, 1249431.0f, 0.0f},
+        {7, "industrial", "Industrial", 1750, "industrial", false, true, 1674792.0f, 0.0f},
         {8, "turn_of_millennium", "Turn of the Millennium", 2000, "modern", true, true, 0.0f, 0.0f},
         {9, "disruption", "Disruption", 2007, "modern", false, true, 0.0f, 0.0f},
         {10, "acceleration", "Acceleration", 2013, "modern", false, true, 0.0f, 0.0f},

@@ -116,6 +116,9 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // carrying ceiling that otherwise saturates and fixes the height of every peak.
     const float natural_capital =
         natural_capital_of(prov, cfg_, cs.soil_health, cs.ghost_land_fraction);
+    // How much ground there is to cover, as opposed to how much it yields. Sets the
+    // labour saturation below; fertility and wear belong to the ceiling, not here.
+    const float workable_extent = workable_extent_of(prov, cfg_, cs.ghost_land_fraction);
 
     // Knowledge raises the land's carrying capacity (better technique) — the escape
     // from the Malthusian trap. knowledge_level is accumulated by the knowledge module.
@@ -153,9 +156,18 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // Keyed to capital per HEAD rather than per farmer on purpose: per farmer would feed
     // back on itself (fewer farmers -> more capital each -> fewer farmers still), and the
     // stock is a property of the province, not of who happens to be working it.
+    // A machine is knowledge AND capital, and it needs BOTH. Gated on the same
+    // knowledge saturation the ceiling uses, so a Bronze Age province with granaries,
+    // cleared land and good tools gets a strong back and not a tractor.
+    //
+    // (Measured without the knowledge gate: era 2 — the Bronze Age, year 287 — came out
+    // with 75% of its people off the land and 58% of them in towns, because generic
+    // capital alone was conferring ninefold labour leverage.)
+    const float knows_machines = K / (K + std::max(1.0f, cfg_.knowledge_productivity_halfsat));
+    const float has_machines =
+        capital_per_head / (capital_per_head + std::max(1.0f, cfg_.machine_leverage_halfsat));
     const float machine_leverage =
-        1.0f + cfg_.machine_leverage_max * capital_per_head /
-                   (capital_per_head + std::max(1.0f, cfg_.machine_leverage_halfsat));
+        1.0f + cfg_.machine_leverage_max * knows_machines * has_machines;
     // What one person's labour is worth on the land, machines included.
     const float working_fraction = working_age * machine_leverage;
     const float knowledge_factor =
@@ -195,7 +207,12 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float base_ceiling = cfg_.ceiling_per_capital_unit * natural_capital * knowledge_factor *
                                seasonality_factor * tech_food_factor * harvest_factor *
                                predator_factor * atmosphere_factor;
-    const float half = cfg_.labor_half_saturation > 0.0f ? cfg_.labor_half_saturation : 1.0f;
+    // Half-saturation scales with the EXTENT: enough hands to work all the ground. A
+    // flat constant put every province deep in the saturated region where marginal
+    // labour is worth nothing, and the food balance then read almost the whole
+    // workforce as spare. Scaling it by the YIELD instead cancelled land quality out of
+    // per-worker output entirely (see subsistence_output).
+    const float half = std::max(1.0f, cfg_.labor_half_saturation_per_extent * workable_extent);
     const float need = static_cast<float>(population) * cfg_.per_capita_food_per_tick;  // per tick
     const float ticks_per_year =
         cfg_.ticks_per_year > 0 ? static_cast<float>(cfg_.ticks_per_year) : 365.0f;
@@ -224,13 +241,32 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         labor_needed = -half * std::log(1.0f - desired_output / base_ceiling);
     }
     const float farmers_needed = labor_needed / std::max(working_fraction, 0.01f);
-    float specialists_people = static_cast<float>(population) - farmers_needed;
-    // Ceiling rises along the pre-market arc (commons -> barter -> coinage -> money ->
-    // feudal -> mercantile -> industrial): money/markets, then guilds/trade/finance and
-    // the factory system, let a larger non-farming share be sustained.
-    const float specialist_ceiling_frac = specialist_ceiling(era->economic_regime);
-    specialists_people = std::clamp(specialists_people, 0.0f,
-                                    static_cast<float>(population) * specialist_ceiling_frac);
+    float specialists_people = std::max(0.0f, static_cast<float>(population) - farmers_needed);
+
+    // WHAT CAN BE SPARED IS NOT WHAT CAN BE PROVISIONED (R12). Two independent physical
+    // limits, and the smaller binds. The harvest says how many hands can leave the land;
+    // haulage says how many mouths the surplus can actually REACH once they are off it.
+    // A non-farmer has to be fed by somebody else's field, and the grain has to get to
+    // him — which is the ox law grain_logistics already computes as `urban_capacity`
+    // (net feedable surplus / per-capita food, after the draft teams have eaten).
+    //
+    // THIS REPLACES A RAIL. It was `clamp(specialists, 0, population * ceiling(regime))`
+    // — a per-era constant (0.15 subsistence, 0.18 coinage, 0.22 money, 0.45 industrial)
+    // deciding the shape of the economy by fiat. Measured, it BOUND AT EVERY ERA: the
+    // supported share sat exactly on 15.0%, 18.0%, 22.0% while the food balance would
+    // have freed far more, and the model reached "era 8" with 92% of its people still
+    // farming. That is a behaviour-shaping cap on finite values, which the grounding
+    // doctrine forbids outright.
+    //
+    // What the constant stood in for was real — you cannot coordinate a large non-farming
+    // population without a way to move food to it — but the real version is a COST that
+    // rises with distance and falls with roads and rivers, not a wall that moves when an
+    // era ticks over. It is one tick stale (grain_logistics runs after this module), which
+    // is nothing on a stock that moves over decades, and it degrades correctly: a province
+    // with no haulage and no neighbours is limited to what it can carry itself.
+    const float provisionable = std::max(0.0f, cs.urban_capacity);
+    if (cs.urban_capacity > 0.0f || cs.net_feedable_surplus > 0.0f)
+        specialists_people = std::min(specialists_people, provisionable);
     const float supported_fraction =
         population > 0 ? specialists_people / static_cast<float>(population) : 0.0f;
 
@@ -254,14 +290,44 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // real) act on a target that fluctuates with every harvest, and the noise ratchets
     // the stratum steadily downward: measured, it fell to 2% where the food balance
     // supported 14-17%, and the knowledge engine collapsed with it.
-    const float granary_cover =
-        target_store > 0.0f ? std::min(1.0f, cs.food_store / target_store) : 0.0f;
+    // Annual cadence for every STOCK this module evolves: the granary, the soil, the
+    // capital and the stratum. A per-tick rate is only correct if every tick runs.
+    const bool annual = state.current_tick > 0 && state.current_tick % tpy == 0;
+
+    // THE GRANARY FEEDS THE STRATUM; IT DOES NOT SCALE IT. What stored food buys is the
+    // ability to carry people the current harvest cannot: a granary holding N
+    // person-years can keep an extra share of the population off the land for a year.
+    // So the level a society will defend is what THIS harvest supports PLUS what the
+    // stores can carry on top of it.
+    //
+    // This was `max(supported, held * granary_cover)`, and that multiplication was a
+    // slow ratchet nobody could see. `target_store` scales with population, so ANY
+    // population growth dilutes the granary and holds cover permanently below 1 — at
+    // 0.5%/yr growth, cover settles near 0.98. That made `defended` a couple of percent
+    // BELOW `held` every single tick, so the faster shed rate applied forever and the
+    // stratum equilibrated far under what the land could support. Measured: 7.9% held
+    // against 23.3% supported, after millennia to converge.
+    const float store_person_years =
+        static_cast<float>(population) * cfg_.per_capita_food_per_tick * ticks_per_year;
+    const float extra_from_stores =
+        store_person_years > 0.0f ? cs.food_store / store_person_years : 0.0f;
     const float held = cs.specialist_fraction;
-    const float defended_fraction = std::max(supported_fraction, held * granary_cover);
+    // A share of the population, so it cannot exceed all of them — a domain bound on a
+    // fraction, not a limit on the mechanism.
+    const float defended_fraction =
+        std::min(1.0f, supported_fraction + std::max(0.0f, extra_from_stores));
     const float rate = defended_fraction < held ? cfg_.specialist_shed_per_year
                                                 : cfg_.specialist_growth_per_year;
-    const float per_tick = rate / ticks_per_year;
-    const float specialist_fraction = held + (defended_fraction - held) * per_tick;
+    // ANNUAL, like the granary, the soil and the capital stock — not a per-tick nibble.
+    //
+    // It was `rate / ticks_per_year` applied every tick, which is correct only if every
+    // tick actually runs. It silently was not: the history harness fast-forwards at one
+    // orchestrator step per year, so a per-tick rate advanced 365 times more slowly there
+    // than in a real game, and the stratum crawled. Every measurement of it this session
+    // was taken under that regime. A per-tick rate under a per-year stride is a silent
+    // 365x error and it looks exactly like a slow mechanism.
+    const float specialist_fraction =
+        annual ? held + (defended_fraction - held) * rate : held;
     specialists_people = static_cast<float>(population) * specialist_fraction;
 
     // Actual harvest from the farmers who remain on the land. TOWNSFOLK DO NOT FARM:
@@ -317,20 +383,48 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // Use the sanitized tpy from above: cfg_.ticks_per_year is guarded against 0
     // twice earlier in this function, and dividing by the raw field here was
     // modulo-by-zero UB for exactly the input those guards anticipate.
-    const bool annual = state.current_tick > 0 && state.current_tick % tpy == 0;
+    // `annual` is hoisted above the stratum inertia, which needs it.
     if (annual)
         new_store = std::clamp(cs.food_store + net_per_tick * ticks_per_year, 0.0f, target_store);
 
-    // The long-run food signal that paces population growth: output relative to what a
-    // sustainable society must produce — feed everyone AND replace the grain that spoils
-    // out of a full reserve. At output == need + full upkeep this reads 1.0, so the
-    // population settles at its sustainable ceiling, LEAVING the upkeep as a permanent
-    // surplus that frees the specialist class. Above it the population can grow; below,
-    // it eases off. (Starvation is handled separately, gated on the granary running dry.)
+    // The long-run food signal that paces population growth: what the land can yield
+    // relative to what a sustainable society must produce — feed everyone AND replace
+    // the grain that spoils out of a full reserve. At full upkeep this reads 1.0, so the
+    // population settles at its sustainable ceiling. Above it the population can grow;
+    // below, it eases off. (Starvation is handled separately, gated on the granary
+    // running dry, and that uses the food actually harvested.)
+    //
+    // MEASURED AT THE LABOUR THE SOCIETY COULD FIELD, NOT THE LABOUR LEFT OVER AFTER THE
+    // STRATUM WAS SUBTRACTED. This is the one thing in this function that must not be
+    // read off `output`, and the reason is that `labor_needed` above is SOLVED to make
+    // `output` equal `need + granary_demand` — which at a full store is `need +
+    // full_upkeep`, the denominator here. Dividing one by the other returned 1.0 by
+    // construction, at every level of abundance, forever: the demography could never see
+    // a rich world, so the population never grew into its land, so labour stayed spare,
+    // so the assignment freed still more specialists. Measured under that ring, a dawn
+    // world sat at 7,000-13,000 people for six and a half millennia with 47-64% of them
+    // off the land — a Neolithic society of scholars — and by the industrial era 97% of
+    // people were not farming because nobody had ever needed to.
+    //
+    // The question fertility answers is whether the land can feed another mouth, not
+    // whether this year's labour allocation does. A society that goes hungry puts its
+    // scribes back in the fields; the stratum is what it can afford to keep OUT of them,
+    // and it is therefore downstream of the food position, not the definition of it. So
+    // the signal is the harvest the whole workforce would bring in, plus what the
+    // catchment delivers, against sustainable need — and the two claimants on a surplus,
+    // mouths and hands, then race for it on their own timescales. Mouths win at the dawn,
+    // which is why nothing happens for ten thousand years.
     const float full_upkeep =
         cfg_.granary_spoilage_rate * cfg_.granary_reserve_years * need;  // per tick, at full store
+    // Signed, exactly as `effective_output` is: grain that leaves is grain this province
+    // cannot feed anyone with, and a place living beyond its own land must read worse
+    // when the route reverses. Floored at zero as a quantity of food, not as a rule.
+    const float potential_output = std::max(
+        0.0f,
+        base_ceiling * (1.0f - std::exp(-std::max(0.0f, total_labor) / half)) +
+            cs.grain_import_rate);
     const float growth_surplus =
-        need > 0.0f ? effective_output / (need + full_upkeep) : 1.0f;
+        need > 0.0f ? potential_output / (need + full_upkeep) : 1.0f;
 
     RegionDelta rd{};
     rd.region_id = prov.region_id;

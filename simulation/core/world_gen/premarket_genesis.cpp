@@ -43,6 +43,7 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
         const float wf =
             p.cohort_stats->working_age_fraction > 0.0f ? p.cohort_stats->working_age_fraction : 0.6f;
         const float nc = SubsistenceModule::natural_capital_of(p, sub);
+        const float extent = SubsistenceModule::workable_extent_of(p, sub);
         // The SAME chronic ceiling the runtime law applies: technique, climate,
         // era food tech, predators, atmosphere. Applying only food_mult (as this
         // did) overestimated what the land can feed — ~8-9% on a default Earth
@@ -52,7 +53,8 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
         const float chronic = SubsistenceModule::chronic_ceiling_factors(
             world.technology.knowledge_level, food_mult, world.hazard_settings, sub);
         const float output =
-            SubsistenceModule::subsistence_output(nc, static_cast<float>(pop[i]) * wf, sub) *
+            SubsistenceModule::subsistence_output(nc, extent, static_cast<float>(pop[i]) * wf,
+                                                  sub) *
             chronic;
         const float need = static_cast<float>(pop[i]) * sub.per_capita_food_per_tick;
         surplus[i] = std::max(0.0f, output - need);

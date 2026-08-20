@@ -35,6 +35,29 @@ Mechanisms first, calibration second, rails never:
   (LOD, batching, cadence, hop caps) and document each scaleback as such — never
   by silently replacing the mechanism with a rail.
 
+**HOW TO CATCH ONE: docs/design/EconLife_No_Rails_Rule.md.** Read it before adding
+any limit or constant. The principle above has been in force since 2026-07-03 and
+three rails were still written and survived for months, because a rail looks exactly
+like modelling. The short version:
+- **Name the thing that stops it.** If the answer is "the constant", it is a rail.
+  "It rises with the era/tier/level" is a schedule of outcomes with the mechanism
+  left out — and it was the form of every rail found here.
+- **Print the limit next to the value it limits.** A quantity sitting exactly on
+  its bound is a rail doing the deciding. That is how all three were found.
+- **Work the arithmetic at the extremes.** One "rare" threshold was arithmetically
+  unreachable — never, not rare.
+- **Ask what the constant is proportional to, and check the ratio.** A flat number
+  applied at another magnitude decides the outcome by accident; and the WRONG
+  proportionality can divide a real effect out entirely (fertility cancelled from
+  the marginal product of labour because ceiling and half-saturation both carried it).
+- **Ask who wrote the numerator and who wrote the denominator.** If one module writes
+  both, the signal is reporting its own decision back to itself. The population-growth
+  signal read 1.0 by construction for exactly this reason.
+- **Expect removing a rail to expose a defect.** That is the point; the exposure is
+  progress, not regression.
+- **A per-tick rate is only correct if every tick runs.** Evolve stocks on a stated
+  cadence or scale by elapsed time — never assume the caller's stride.
+
 ## Module Interface Contract
 Every module in simulation/modules/ has a corresponding interface spec
 in docs/interfaces/[module]/INTERFACE.md. Read the interface spec before

@@ -80,18 +80,47 @@ class SubsistenceModule : public ITickModule {
                cfg.weight_arable_land * std::max(0.0f, ghost_land);
     }
 
-    // Food the province's natural capital yields when worked by `labor` people.
-    // Rises with labour toward a ceiling (carrying capacity) set by natural
-    // capital — diminishing returns, so fixed land caps the head count it feeds.
+    // GROUND AND WATER THERE IS TO WORK, as opposed to how much it yields. The areal
+    // and stock terms of natural capital with the FERTILITY term removed, because
+    // fertility is a quality and the others are quantities.
+    //
+    // This is the denominator of the labour saturation below, and the distinction is
+    // the whole point: how many hands it takes to work a place is set by how much
+    // ground there is — you plough, weed and harvest by the acre — while how much
+    // those hands bring in is set by how good that ground is. Soil health does not
+    // enter: exhausted fields are still fields, and still cost the same labour to
+    // work, which is precisely why a society mining its soil has to run to stand
+    // still. Pure/static.
+    static float workable_extent_of(const Province& province, const SubsistenceConfig& cfg,
+                                    float ghost_land = 0.0f) {
+        return cfg.weight_arable_land * province.geography.arable_land_fraction +
+               cfg.weight_forest_forage * province.geography.forest_coverage +
+               cfg.weight_fisheries * province.fisheries.current_stock +
+               cfg.weight_arable_land * std::max(0.0f, ghost_land);
+    }
+
+    // Food the province yields when `labor` people work it. `natural_capital` is what
+    // the place can yield (extent x quality); `workable_extent` is how much ground
+    // there is to cover. Rises with labour toward the carrying ceiling — diminishing
+    // returns, so fixed land caps the head count it feeds.
     // Inline for the same reason as natural_capital_of.
-    static float subsistence_output(float natural_capital, float labor,
+    static float subsistence_output(float natural_capital, float workable_extent, float labor,
                                     const SubsistenceConfig& cfg) {
         if (natural_capital <= 0.0f || labor <= 0.0f)
             return 0.0f;
         const float ceiling = cfg.ceiling_per_capital_unit * natural_capital;
         // Diminishing returns on labour: output -> ceiling as labour grows. At
-        // labor == labor_half_saturation, output is ~63% (1 - 1/e) of the ceiling.
-        const float half = cfg.labor_half_saturation > 0.0f ? cfg.labor_half_saturation : 1.0f;
+        // labor == half-saturation, output is ~63% (1 - 1/e) of the ceiling.
+        //
+        // The half-saturation scales with the EXTENT, not with the yield. Twice the
+        // ground needs twice the hands before the next pair stops mattering; twice the
+        // fertility does not — the same hands walk the same fields and carry more home.
+        // Scaling it by the yield instead made per-worker output at low density
+        // identical on a river valley and on scrubland, since ceiling and half-
+        // saturation then rose together and their ratio — which is what a thinly
+        // settled band actually lives on — cancelled the quality out entirely.
+        const float half =
+            std::max(1.0f, cfg.labor_half_saturation_per_extent * workable_extent);
         const float saturation = 1.0f - std::exp(-labor / half);
         return ceiling * saturation;
     }

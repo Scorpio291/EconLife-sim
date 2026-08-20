@@ -548,8 +548,44 @@ struct SubsistenceConfig {
     // capacity_per_unit * (weighted natural capital). Output approaches this ceiling
     // as labour grows (diminishing returns), so fixed land caps how many it feeds.
     float ceiling_per_capital_unit = 4000.0f;
-    // Labour at which output reaches ~63% of the natural-capital ceiling (1 - 1/e).
-    float labor_half_saturation = 1500.0f;
+    // Labour at which output reaches ~63% of the carrying ceiling (1 - 1/e), PER UNIT
+    // OF WORKABLE EXTENT — the ground and water there is to cover, NOT the yield it
+    // gives (SubsistenceModule::workable_extent_of). Hands are spent by the acre.
+    //
+    // It was a FLAT 1,500 workers while provinces hold 15,000 to 3,000,000 people, so
+    // every province sat deep in the saturated region where marginal labour is worth
+    // nothing and the food balance read almost the entire workforce as spare. The
+    // per-regime specialist ceiling was silently compensating for that; removing the
+    // rail exposed it, which is what removing a rail is for. A constant that does not
+    // scale with the thing it bounds is a rail in another dress.
+    //
+    // Scaling it by natural capital instead fixed the scale but broke the physics: the
+    // ceiling and the half-saturation then both carried fertility, so their ratio — the
+    // per-worker yield a thinly settled band lives on — was identical on a river valley
+    // and on scrubland. Extent is the correct denominator.
+    //
+    // 8,000 is what fixes the scale, and it is derived from the state of the world at
+    // the dawn rather than fitted. Below the knee of the curve a worker brings in
+    // (ceiling_per_capital_unit / this) x (natural capital / workable extent) — the
+    // marginal product of a pair of hands. A worker must feed 1 / working_age_fraction
+    // = ~1.67 people just to break even, and the provinces people actually settle at
+    // world-gen carry natural capital ~3.9x their extent — fertile ground on a compact
+    // worked area, which is exactly the property that makes a place worth settling — so
+    // this constant sets the dawn margin where the dawn actually happens:
+    //
+    //     4000 / 8000 x 3.9 = 1.95 people fed per worker = ~15% above break-even
+    //
+    // Calibrated against the settled provinces rather than the median one on purpose. At
+    // the median (ratio ~2.9) a worker feeds 1.45 and the place cannot hold a permanent
+    // population at all until technique raises the ceiling, which is the correct reading:
+    // agriculture began in a handful of favoured valleys and spread to marginal ground
+    // only once it had improved enough to pay there.
+    //
+    // Fifteen percent is what the dawn should be. It is enough to grow slowly and to
+    // bank against a bad year; it is not enough to keep many off the land, which is why
+    // nothing happens for a very long time and why every gain after that has to come
+    // from technique raising the ceiling.
+    float labor_half_saturation_per_extent = 8000.0f;
 
     // Proto-capital: the food surplus *above* subsistence is stored (grain, herds,
     // tools) and controlled by the province's resident heads/founders — the origin

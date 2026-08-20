@@ -14,13 +14,23 @@ using namespace econlife;
 using Catch::Matchers::WithinAbs;
 
 namespace {
-// A province with the given natural capital and a working population.
-Province make_province(uint32_t idx, float ag, uint32_t population) {
+// A province with the given natural capital and a working population. `arable` is the
+// share of the province that is actually worked, and it is SEPARATE from fertility on
+// purpose: fertility sets what an acre yields, arable sets how many acres the hands
+// have to cover, and their RATIO is what a pair of hands is worth (see
+// SubsistenceModule::subsistence_output).
+//
+// It defaulted to `ag` — a place exactly as extensive as it is good — which is not what
+// the generator makes and not what people settle. World-gen puts arable at 0.15-0.75
+// (mean ~0.35) largely independently of fertility, so the default here is a worked core
+// of that size: fertile ground the hands can actually cover, which is the property that
+// makes a valley worth farming in the first place.
+Province make_province(uint32_t idx, float ag, uint32_t population, float arable = 0.30f) {
     Province p{};
     p.id = idx;
     p.region_id = idx;
     p.agricultural_productivity = ag;
-    p.geography.arable_land_fraction = ag;
+    p.geography.arable_land_fraction = arable;
     p.geography.forest_coverage = 0.2f;
     p.fisheries.current_stock = 0.0f;
     p.cohort_stats = std::make_unique<RegionCohortStats>();
@@ -33,19 +43,44 @@ Province make_province(uint32_t idx, float ag, uint32_t population) {
 TEST_CASE("subsistence_output: zero without land or labour, rises toward a ceiling",
           "[subsistence][tier1]") {
     SubsistenceConfig cfg{};
-    CHECK(SubsistenceModule::subsistence_output(0.0f, 1000.0f, cfg) == 0.0f);  // no land
-    CHECK(SubsistenceModule::subsistence_output(1.0f, 0.0f, cfg) == 0.0f);     // no labour
+    CHECK(SubsistenceModule::subsistence_output(0.0f, 1.0f, 1000.0f, cfg) == 0.0f);  // no land
+    CHECK(SubsistenceModule::subsistence_output(1.0f, 1.0f, 0.0f, cfg) == 0.0f);     // no labour
 
     // Monotonic in labour, and bounded by the natural-capital ceiling.
-    float low = SubsistenceModule::subsistence_output(1.0f, 500.0f, cfg);
-    float high = SubsistenceModule::subsistence_output(1.0f, 5000.0f, cfg);
+    float low = SubsistenceModule::subsistence_output(1.0f, 1.0f, 500.0f, cfg);
+    float high = SubsistenceModule::subsistence_output(1.0f, 1.0f, 500000.0f, cfg);
     CHECK(high > low);
     CHECK(high <= cfg.ceiling_per_capital_unit * 1.0f + 0.01f);
 
     // More natural capital -> proportionally more food at the same labour.
-    float poor = SubsistenceModule::subsistence_output(0.5f, 2000.0f, cfg);
-    float rich = SubsistenceModule::subsistence_output(1.0f, 2000.0f, cfg);
+    float poor = SubsistenceModule::subsistence_output(0.5f, 1.0f, 2000.0f, cfg);
+    float rich = SubsistenceModule::subsistence_output(1.0f, 1.0f, 2000.0f, cfg);
     CHECK(rich > poor);
+}
+
+TEST_CASE("subsistence_output: hands are spent by the acre, harvest is taken by the quality",
+          "[subsistence][tier1][no-rails]") {
+    // The two arguments are not interchangeable and the difference is physical.
+    SubsistenceConfig cfg{};
+    constexpr float kBand = 400.0f;  // a thin population, far below saturation
+
+    // SAME ground, better soil: the same hands walk the same fields and carry more
+    // home. A band on a river valley eats better than one on scrubland.
+    const float scrub = SubsistenceModule::subsistence_output(0.4f, 1.0f, kBand, cfg);
+    const float valley = SubsistenceModule::subsistence_output(1.2f, 1.0f, kBand, cfg);
+    CHECK(valley > scrub * 2.5f);
+
+    // SAME total yield spread over more ground: more walking for the same harvest, so
+    // a thin population brings in less. This is why extensive land is not free.
+    const float compact = SubsistenceModule::subsistence_output(1.0f, 0.5f, kBand, cfg);
+    const float spread = SubsistenceModule::subsistence_output(1.0f, 2.0f, kBand, cfg);
+    CHECK(spread < compact);
+
+    // And at saturation the ground stops mattering: enough hands work all of it, and
+    // what is left is the ceiling, which is the yield.
+    constexpr float kCrowd = 500000.0f;
+    CHECK_THAT(SubsistenceModule::subsistence_output(1.0f, 0.5f, kCrowd, cfg),
+               WithinAbs(SubsistenceModule::subsistence_output(1.0f, 2.0f, kCrowd, cfg), 1.0f));
 }
 
 TEST_CASE("surplus_ratio: produced over needed; trivially fed with no population",
@@ -104,6 +139,10 @@ TEST_CASE("execute_province produces a surplus at the dawn and is inert in the m
         w.era_catalog.load_builtin_default();
         w.technology.current_era = era;
         w.hazard_settings.seasonality = 0.0f;  // isolate from episodic harvest failures (M6a)
+        // A river valley: good soil on a worked core 600 pairs of hands can actually
+        // cover. A thin population spread over a whole province of the same fertility
+        // would NOT be above subsistence — it cannot reach most of its land — and that
+        // is the production law working, not a fixture being generous.
         w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/1000));
         return w;
     };
@@ -334,7 +373,10 @@ TEST_CASE("manorialism: lordship is EMERGENT — the wealthiest resident collect
     p.id = 0;
     p.region_id = 0;
     p.agricultural_productivity = 0.9f;
-    p.geography.arable_land_fraction = 0.9f;
+    // Good soil on a worked core the hands can cover — see make_province. At arable 0.9
+    // the same fertility is spread over three times the ground and 600 workers cannot
+    // reach enough of it to raise a tithe at all.
+    p.geography.arable_land_fraction = 0.3f;
     p.geography.forest_coverage = 0.2f;
     p.cohort_stats = std::make_unique<RegionCohortStats>();
     p.cohort_stats->total_population = 1000;
@@ -740,4 +782,165 @@ TEST_CASE("subsistence: the ceiling can fall without anybody forgetting",
     const float worn = surplus_at_capital(200.0f);
     CHECK(worn < built);
     CHECK(worn < 0.6f * built);  // losing the tools really does cost the harvest
+}
+
+// ===========================================================================
+// THE NO-RAILS RULE, ENFORCED (docs/design/EconLife_No_Rails_Rule.md)
+//
+// The per-regime specialist ceiling was a rail: a per-era constant deciding the
+// shape of the economy by fiat. It bound at EVERY era — the supported share sat
+// exactly on 0.15, 0.18, 0.22 — and the model reached "era 8" with 92% of its
+// people still farming. Nothing failed; the economy simply never industrialised.
+//
+// It is gone, replaced by the physical constraint it stood in for: a non-farmer
+// has to be fed by somebody else's field and the grain has to reach him, which
+// is the ox law grain_logistics already computes. These tests exist so it cannot
+// come back, and so the replacement stays a mechanism rather than a number.
+// ===========================================================================
+
+TEST_CASE("no rails: what a province can spare is not decided by its era",
+          "[subsistence][tier2][no-rails]") {
+    // Two provinces identical in every physical respect, in different ERAS. The era
+    // label alone must not change how many people the land can spare — only the things
+    // an era is a proxy for (knowledge, capital, haulage) may do that, and those are
+    // held equal here.
+    SubsistenceModule mod;
+    auto supported_in_era = [&](uint8_t era) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = era;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/4000));
+        auto& cs = *w.provinces[0].cohort_stats;
+        cs.knowledge_level = 20000.0f;      // held equal
+        cs.productive_capital = 4.0e6f;     // held equal (1,000/head)
+        cs.urban_capacity = 2000.0f;        // held equal: haulage is the real limit
+        cs.net_feedable_surplus = 2000.0f;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        REQUIRE(d.region_deltas[0].supported_specialist_fraction_replacement.has_value());
+        return *d.region_deltas[0].supported_specialist_fraction_replacement;
+    };
+
+    // Barter (2), money (4) and industrial (7) all used to carry different hard
+    // ceilings — 0.15, 0.22, 0.45. With the same physics they must now agree.
+    const float barter = supported_in_era(2);
+    const float money = supported_in_era(4);
+    const float industrial = supported_in_era(7);
+    CHECK_THAT(barter, Catch::Matchers::WithinRel(money, 1e-4f));
+    CHECK_THAT(money, Catch::Matchers::WithinRel(industrial, 1e-4f));
+}
+
+TEST_CASE("no rails: the growth signal is not the specialist solve reported back",
+          "[subsistence][tier2][no-rails]") {
+    // THE CLOSED RING. `labor_needed` is solved so the harvest equals need + granary
+    // upkeep, and the population-growth signal used to be measured on that same harvest
+    // divided by that same need + upkeep — so it read ~1.0 by construction however rich
+    // the land was. The demography could never see abundance, the population never grew
+    // into its land, labour stayed spare, and the assignment freed still more
+    // specialists. A signal whose numerator and denominator are both written by the
+    // module reading it is a rail with no constant in it.
+    //
+    // So: make the land better and nothing else. The growth signal MUST move.
+    SubsistenceModule mod;
+    auto growth_signal_on = [&](float ag, float arable) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 1;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, ag, /*population=*/4000, arable));
+        auto& cs = *w.provinces[0].cohort_stats;
+        // Generous haulage, so the stratum is free to absorb every scrap of the extra
+        // food. That is precisely the case the old form could not distinguish.
+        cs.urban_capacity = 4000.0f;
+        cs.net_feedable_surplus = 4000.0f;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        REQUIRE(d.region_deltas[0].subsistence_surplus_replacement.has_value());
+        return *d.region_deltas[0].subsistence_surplus_replacement;
+    };
+
+    const float poor = growth_signal_on(0.35f, 0.25f);
+    const float good = growth_signal_on(0.90f, 0.25f);
+    // Nearly three times the fertility on the same worked ground. A population on the
+    // better land can grow and one on the worse cannot, and the signal has to say so.
+    CHECK(good > poor * 1.5f);
+    // And the poor province must still be able to report hardship rather than being
+    // held at the neutral reading by the arithmetic.
+    CHECK(poor < 1.0f);
+}
+
+TEST_CASE("no rails: the stratum is limited by haulage, and haulage is a mechanism",
+          "[subsistence][tier2][no-rails]") {
+    // The replacement has to actually bind, and it has to respond to the world rather
+    // than to a schedule: a province whose neighbours can send it more grain can spare
+    // more of its own people, in the same era with the same land.
+    SubsistenceModule mod;
+    auto supported_with_haulage = [&](float capacity) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/4000));
+        auto& cs = *w.provinces[0].cohort_stats;
+        cs.knowledge_level = 20000.0f;
+        cs.productive_capital = 4.0e6f;
+        cs.urban_capacity = capacity;
+        cs.net_feedable_surplus = capacity;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        return *d.region_deltas[0].supported_specialist_fraction_replacement;
+    };
+
+    const float poor_routes = supported_with_haulage(200.0f);   // 5% of the population
+    const float good_routes = supported_with_haulage(1600.0f);  // 40%
+    CHECK(good_routes > poor_routes);
+    CHECK(poor_routes > 0.0f);
+    // And it is the HAULAGE that binds, not a constant: the share tracks the capacity.
+    CHECK_THAT(poor_routes, Catch::Matchers::WithinRel(0.05f, 0.02f));
+}
+
+TEST_CASE("no rails: stocks evolve on a stated cadence, not per tick",
+          "[subsistence][tier2][no-rails]") {
+    // A per-tick rate is only correct if every tick runs. The stratum inertia was
+    // `rate / ticks_per_year` applied per tick, and the history harness fast-forwards at
+    // one step per year — so it advanced 365x too slowly there, and every measurement of
+    // it was taken under that regime. It looked exactly like a slow mechanism.
+    //
+    // The stratum now moves ONLY on the annual tick, like the granary, the soil and the
+    // capital. This asserts that: a mid-year tick must not move it at all.
+    SubsistenceModule mod;
+    auto held_after = [&](uint32_t tick) {
+        WorldState w{};
+        w.current_tick = tick;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/4000));
+        auto& cs = *w.provinces[0].cohort_stats;
+        cs.knowledge_level = 20000.0f;
+        cs.productive_capital = 4.0e6f;
+        cs.urban_capacity = 2000.0f;
+        cs.net_feedable_surplus = 2000.0f;
+        cs.specialist_fraction = 0.05f;  // well below what this harvest supports
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        return *d.region_deltas[0].specialist_fraction_replacement;
+    };
+
+    const float mid_year = held_after(kTicksPerYear + 7);  // not year-aligned
+    const float year_end = held_after(kTicksPerYear);      // year-aligned
+    CHECK_THAT(mid_year, Catch::Matchers::WithinAbs(0.05f, 1e-6f));  // unchanged off-cadence
+    CHECK(year_end > 0.05f);                                         // moves once a year
 }

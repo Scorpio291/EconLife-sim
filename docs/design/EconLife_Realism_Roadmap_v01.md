@@ -780,6 +780,95 @@ species does not forget what any one civilisation forgets) or whether era should
 per-polity rather than global is the next question, and it is a design question rather than
 a defect.
 
+## R12. The rail came out and four things were behind it (LANDED 2026-08-20)
+
+The per-regime specialist ceiling — `clamp(specialists, 0, population x
+{0.15 subsistence, 0.18 coinage, 0.22 money, ... 0.45 industrial})` — was a
+behaviour-shaping cap on a finite quantity, which the grounding doctrine forbids
+outright. Measured, it **bound at every era**: the supported share sat exactly on
+15.0%, 18.0%, 22.0% for the whole climb, and the model reached era 8 with 92% of its
+people still farming. It is gone, replaced by the physical constraint it stood in
+for — a non-farmer must be fed from somebody else's field and the grain has to reach
+him, which is the ox law `grain_logistics` already computes as `urban_capacity`. The
+stratum is now `min(what the harvest can spare, what haulage can provision)`: two real
+limits, the smaller binding.
+
+Removing it exposed four defects it had been holding down. That is what removing a rail
+is for, and each one is a distinct failure mode now written into
+`docs/design/EconLife_No_Rails_Rule.md` with the test that catches it.
+
+**1. The granary scaled the stratum instead of feeding it.** The level a society would
+defend was `max(supported, held x granary_cover)`. Because `target_store` scales with
+population, any growth holds cover below 1 permanently, so `defended < held` every tick
+and the stratum ratcheted down forever — 7.9% held against 23.3% supported after
+millennia. What stored grain actually buys is the ability to carry people *this*
+harvest cannot, so it is now `supported + food_store / (population x annual need)`: an
+additive number of person-years, not a multiplier on the stock it is supposed to
+protect.
+
+**2. A per-tick rate in a harness that runs one tick per year.** The stratum inertia was
+`rate / ticks_per_year` applied per tick while the history harness fast-forwards
+annually, so it advanced 365x too slowly there — and every measurement of it taken
+before this was taken under that regime. It looked exactly like a slow mechanism. All
+four stocks this module evolves (granary, soil, capital, stratum) now move on one
+stated annual cadence.
+
+**3. The labour saturation was scaled against the wrong quantity.** `labor_half_saturation`
+was a flat 1,500 workers while provinces hold 15,000 to 3,000,000 people, so every
+province sat deep in the saturated region where marginal labour is worth nothing and
+the food balance read almost the entire workforce as spare — which is precisely what
+the specialist ceiling had been compensating for.
+
+Making it proportional to natural capital fixed the scale and broke the physics: the
+carrying ceiling and the half-saturation then *both* carried soil fertility, so their
+ratio — the marginal product of a pair of hands, which is what a thinly settled
+population lives on — came out identical on a river valley and on scrubland. Land
+quality had been silently divided out. Hands are spent by the acre and harvest is taken
+by the quality, so production now separates the two: `natural_capital_of` (extent x
+quality) sets the ceiling and the new `workable_extent_of` (the areal and stock terms,
+unscaled by soil wear — exhausted fields are still fields and still cost the same
+labour) sets the saturation.
+
+**4. The growth signal was the specialist solve reported back to itself.** `labor_needed`
+is solved so the harvest equals `need + granary_demand`; at a full store that is
+`need + full_upkeep`, which was also the denominator of the population-growth signal.
+The signal therefore read ~1.0 **by construction**, at every level of abundance,
+forever. The demography could never see a rich world, so the population never grew into
+its land, so labour stayed spare, so the assignment freed still more specialists — a
+closed ring with no external quantity in it. Measured under it, a dawn world sat at
+7,000-13,000 people for six and a half millennia with 47-64% of them off the land, and
+reached the industrial era with 97% not farming because nobody had ever needed to.
+
+The question fertility answers is whether the land can feed another mouth, not whether
+this year's labour allocation does — a society that goes hungry puts its scribes back
+in the fields. So the signal is now measured on the harvest the **whole workforce**
+would bring in, against sustainable need. Actual output, which drives the granary, the
+soil pressure and starvation, is unchanged and still farmer-only. With the ring broken
+the dawn population grows instead of freezing.
+
+**Enforcement.** Five `[no-rails]` unit tests, each asserting a shape rather than a
+number: what a province can spare does not depend on its era label; haulage binds and
+responds to the world; stocks move only on their stated cadence (a mid-year tick must
+not shift the stratum); hands are spent by the acre and harvest taken by the quality
+(and at saturation the ground stops mattering); and the growth signal moves when the
+land alone is made better, with the stratum free to absorb every scrap of the
+difference.
+
+**Still open — the dawn keeps too many people off the land.** With the ring broken and
+the constant re-derived against the provinces people actually settle, the earthlike
+dawn runs a surplus of 1.6-2.0 and spares 30% of its population, against a historical
+5-15%. The arithmetic is tight and worth stating: below the knee of the production
+curve the sparable share is `1 - 1/S`, so a society with surplus S **necessarily** has
+that share spare. History ran at S ~= 1.02-1.05 because population pressed hard on
+land; here population grows at 0.016%/yr while the knowledge-driven ceiling outruns it,
+so S climbs instead of being eaten. Two candidate causes, neither yet measured:
+mortality that does not relax with abundance (`food_surplus_mortality_relief` 0.15,
+floor 0.5, against a fertility elasticity of 0.40), and an urban share of 30-45% at the
+dawn, which puts the urban-graveyard penalty on nearly half the population and may be
+the brake. This is the next link in the chain, not a regression from the railed
+version — under the rail the same slack existed and was simply not visible.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;
