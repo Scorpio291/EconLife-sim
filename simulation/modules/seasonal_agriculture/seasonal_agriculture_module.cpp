@@ -236,7 +236,22 @@ void SeasonalAgricultureModule::process_fisheries(uint32_t province_idx, const P
     // (an annual figure) was decorative.
     const float ticks_per_year = static_cast<float>(cfg_.ticks_per_year);
     const float r_per_tick = fish.intrinsic_growth_rate / ticks_per_year;
-    const float effort_per_tick = cfg_.fishing_effort / ticks_per_year;
+    // THE PRESSURE COMES FROM THE PEOPLE. Where a commons economy is fishing this water
+    // (subsistence publishes the headcount), the effort is theirs: a first-arrival rate
+    // in the number of boats, so it rises with the fishers and approaches taking the
+    // whole stock in a year without reaching it. Where nobody is — a market province, or
+    // nobody living there at all — the market fleet constant applies.
+    //
+    // It was the constant everywhere, so a province emptied by plague landed exactly what
+    // a crowded one did and the stock could not answer the population living off it. A
+    // fish population and a human population are two populations interacting; modelling
+    // one of them as a number is the same free lunch a static forest was.
+    float annual_effort = cfg_.fishing_effort;
+    if (province.cohort_stats && province.cohort_stats->commons_fishers > 0.0f) {
+        annual_effort = 1.0f - std::exp(-std::max(0.0f, cfg_.fisher_catchability) *
+                                        province.cohort_stats->commons_fishers);
+    }
+    const float effort_per_tick = annual_effort / ticks_per_year;
 
     // Unit check, modal WorldGen inshore province: K = 0.5, r = 0.40/yr,
     // fishing_effort F = 0.15/yr, fishing_catch_to_tonnes = 5000 t.

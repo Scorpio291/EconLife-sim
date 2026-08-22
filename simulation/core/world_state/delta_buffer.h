@@ -266,6 +266,12 @@ struct RegionDelta {
         soil_health_delta;  // additive; cohort_stats->soil_health (working the land out,
                             // or letting it recover)
     std::optional<float>
+        forest_health_delta;  // additive; cohort_stats->forest_health (hunting and cutting
+                              // faster than the wood grows back, or letting it return)
+    std::optional<float>
+        topsoil_delta;  // additive; cohort_stats->topsoil (ground eroded off exposed,
+                        // over-worked land, against the geological rate it re-forms at)
+    std::optional<float>
         codified_knowledge_delta;  // additive; cohort_stats->codified_knowledge
                                    // (scribes copying, records decaying or burning)
                                           // (commons food production / need this tick)
@@ -282,6 +288,9 @@ struct RegionDelta {
     std::optional<float>
         net_feedable_surplus_replacement;  // replacement; cohort_stats->net_feedable_surplus,
                                            // published by grain_logistics (ox-cart catchment)
+    std::optional<float>
+        commons_fishers_replacement;  // replacement; cohort_stats->commons_fishers — the
+                                      // people working the water, published by subsistence
     std::optional<float>
         urban_capacity_replacement;  // replacement; cohort_stats->urban_capacity, published by
                                      // grain_logistics — how many townsfolk the catchment COULD

@@ -320,6 +320,16 @@ struct RegionCohortStats {
     // BELOW it because towns bury more people than they christen. Transient
     // (recomputed each tick; not persisted).
     float urban_capacity = 0.0f;
+
+    // How many people in this province actually work the water, published by subsistence
+    // (the share of the food base the fishery supplies, applied to the workforce) and
+    // consumed by seasonal_agriculture as the EFFORT behind the Schaefer harvest.
+    //
+    // The fleet was a constant annual harvest fraction, unrelated to how many people were
+    // fishing or whether anybody lived there at all — so a province could be emptied by
+    // plague and land the same catch. Fish are a population interacting with a
+    // population; the pressure has to come from the people.
+    float commons_fishers = 0.0f;
     // Share of the population NOT working the land — the stratum the food surplus
     // frees (published by subsistence, which computes it from population minus the
     // farmers the harvest needs, ceilinged by the regime). A real located stratum of
@@ -345,6 +355,33 @@ struct RegionCohortStats {
     // societies that grow into their land and keep pressing it collapse. Rome's grain
     // provinces and the Maya lowlands are the cases.
     float soil_health = 1.0f;
+
+    // Standing wild biomass — the forest and the game in it — as a fraction of what the
+    // province's climate carries (1.0 = never hunted or cut). The counterpart of
+    // soil_health for the food nobody planted, and a REAL stock for the same reason:
+    // forage and game renew at a rate the forest sets, and a population taking more than
+    // that eats into the stock itself. Deer and aurochs breed slowly, nut trees take
+    // decades, and the standing timber a society burns and builds with is centuries of
+    // growth. Pleistocene overkill and the deforestation of Attica, Rome and Song China
+    // are the cases; the model's forest was a constant that fed people for free forever.
+    //
+    // Applied to geography.forest_coverage, which stays the PRISTINE endowment (exactly
+    // as agricultural_productivity is pristine and soil_health is the fraction retained).
+    float forest_health = 1.0f;
+
+    // THE SOIL ITSELF, as a fraction of the pristine profile — as distinct from
+    // soil_health, which is the fertility held IN it. Spending a field's nutrients and
+    // losing the field are different losses on different clocks: nutrients come back in a
+    // fallow generation, topsoil forms at roughly a centimetre every two to four
+    // centuries. So this is the ceiling soil_health can recover to, and it is why
+    // desertification is the one thing a society does to its land that does not undo.
+    //
+    // Ground is lost when it is worked past what it renews AND the wild cover that held
+    // it is gone: roots bind soil, canopy breaks the rain, litter stops the wind. The
+    // American plains lost inches of topsoil in a decade once the sod was busted, and
+    // the Mediterranean karst, the Loess Plateau and deforested Iceland are still bare
+    // centuries later.
+    float topsoil = 1.0f;
 
     // Productive capital the province has BUILT: tools, ploughs, granaries, kilns,
     // cleared and drained land, workshops, roads. A real accumulated stock, not a

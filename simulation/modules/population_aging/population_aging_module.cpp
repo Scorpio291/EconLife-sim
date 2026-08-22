@@ -635,17 +635,28 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                             era->economic_regime == "mercantile" ||
                             era->economic_regime == "industrial");
 
-                // Pre-market demographics are FOOD-driven, not politics-driven. A dawn
-                // society has no modern institutions, and its intrinsic growth was ~zero
-                // (Malthusian stagnation: high fertility balanced by high mortality) —
-                // population moved only with the harvest. So commons demographics use a
-                // FIXED baseline (the birth==death point), letting the food/reserve
-                // signal alone govern growth; otherwise the modern stability proxy leaks
-                // a permanent intrinsic growth that overshoots the food ceiling and traps
-                // the society at bare subsistence.
-                float eff_stability = province.conditions.stability_score;
-                if (commons)
-                    eff_stability = cfg_.commons_stability_floor;
+                // Pre-market demographics are FOOD-driven, not politics-driven: a dawn
+                // society has no modern institutions, and the political stability score is
+                // a proxy built for one — measured, it reads 0.11-0.22 on a perfectly
+                // healthy Neolithic world, which would crush it. So the political channel
+                // is NEUTRAL in the commons and food, disease, predators and the weather
+                // are left to do the whole job, which is what actually moved a dawn
+                // population.
+                //
+                // THIS WAS A RAIL AND IT DECIDED THE ECONOMY. It used to substitute a
+                // constant, `commons_stability_floor` = 0.76, whose own comment said what
+                // it was for: "set a little below the carrying ceiling so a fed population
+                // stabilises JUST below the maximum the land can feed... Higher => less
+                // surplus." Stability multiplies births and divides into mortality, so
+                // that single number fixed the surplus at which births meet deaths — 1.45,
+                // measured — and below the knee of the production curve the sparable share
+                // is exactly 1 - 1/S, so it fixed the size of the non-farming class too.
+                // The population could not press on its land because a constant would not
+                // let it. What the number stood in for was real (the dawn was lethal), and
+                // the real version is mortality in real units — see
+                // base_annual_death_rate, which had been carrying a MODERN crude death
+                // rate while medicine multiplied it further down.
+                const float eff_stability = commons ? 1.0f : province.conditions.stability_score;
 
                 // The world's hazard pressure (disease/predators/radiation/atmosphere/
                 // geology/gravity-falls), Earth-normalized.

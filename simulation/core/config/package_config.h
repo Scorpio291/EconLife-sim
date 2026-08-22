@@ -587,6 +587,91 @@ struct SubsistenceConfig {
     // from technique raising the ceiling.
     float labor_half_saturation_per_extent = 8000.0f;
 
+    // --- WHAT CAN BE SPARED IS NOT WHAT CAN BE TAKEN ---------------------------------
+    // A person leaves the land only if somebody else's harvest reaches them, and that
+    // means somebody had to be able to CLAIM it — to know the crop existed, find it,
+    // measure it and enforce a share. The harvest says how many hands the fields can do
+    // without; haulage says how many mouths the grain can reach; this says how much of
+    // that grain anyone can actually get their hands on.
+    //
+    // Without it the model asserted that anyone the fields did not need became a
+    // specialist, which is the one thing subsistence economies never did: a Neolithic
+    // village that could feed itself with two thirds of its people did not have a third
+    // of them making pots, it had underemployed farmers. Measured, that assertion put
+    // 45-60% of a Neolithic population off the land.
+    //
+    // Two channels, and the second is why states happened. Reciprocity moves food among
+    // people who know one another and fails beyond that; records move it among strangers
+    // and get better without limit. The earliest writing anywhere — Uruk IV, ~3300 BCE —
+    // is ration lists and grain accounts, and that is not a coincidence: writing is the
+    // technology of extraction, and it is why the first cities and the first tax
+    // registers appear together.
+
+    // How many people can hold food obligations to one another face to face. Dunbar's
+    // ~150 stable relationships, loosely: a village that knows itself can feed its elder
+    // and its smith on nothing but who-owes-whom, and a region of twenty thousand cannot.
+    // Real unit: people.
+    float kin_obligation_scale = 250.0f;
+    // Records per head at which the record-keeping channel reaches half of what it ever
+    // will (codified_knowledge / population). Anchored on the early literate states: with
+    // scribes and grain tallies, Uruk, Old Kingdom Egypt and Shang China moved on the
+    // order of a tenth to a fifth of the harvest, which is exactly the non-farming share
+    // they carried.
+    float claim_records_halfsat = 0.30f;
+
+    // --- THE WILD STOCK ANSWERS BACK -------------------------------------------------
+    // Wild food is TAKEN, not grown. The forest's forage and the game in it renew at a
+    // rate the forest sets, and a population taking more than that renewal eats into the
+    // standing stock — fewer deer, fewer nut trees, thinner woods — which lowers next
+    // year's take. This is the same shape as soil mining, applied to the food nobody
+    // planted, and it is what makes a forager population self-limiting.
+    //
+    // Modelled because a static forest fed people for free forever: measured, coverage
+    // sat at exactly 0.2822 for four thousand years while the population that lived off
+    // it doubled.
+
+    // The share of a wild food base that renews each year — what can be taken forever.
+    // Low, and that is the point: hunter-gatherers ran at 0.01-0.1 persons/km2 against
+    // early farming's 5-20, because a forest's edible production is a small fraction of
+    // its standing biomass and the large game in it breeds slowly. A society working
+    // within this leaves the woods as it found them; one above it is eating the herd.
+    float forage_sustainable_share = 0.30f;
+    // How fast the standing stock falls when it is over-taken, per year at double the
+    // renewal rate. Game goes first and fast — the North American megafauna went inside a
+    // few centuries of arrival, and the Mediterranean was deforested within classical
+    // antiquity — so this is quicker than soil.
+    float forage_depletion_per_year = 0.030f;
+    // And how fast the woods come back when they are left alone: a cleared temperate
+    // forest returns to closed canopy in 50-150 years, so ~1.5%/yr of the remaining gap.
+    // Slower than it was lost, which is why deforestation reads as permanent inside one
+    // human life and is not.
+    float forage_recovery_per_year = 0.015f;
+
+    // --- DESERTIFICATION -------------------------------------------------------------
+    // Losing a field's fertility and losing the field are different things. The first is
+    // a nutrient budget and comes back in a fallow generation; the second is the ground
+    // physically leaving, down the rivers or into the air, and it does not.
+    //
+    // It takes both drivers together, which is exactly what the record shows. Working
+    // land past what it renews leaves it bare between crops; stripping the wild cover
+    // takes away the roots, canopy and litter that would have held it anyway. Do one and
+    // the land wears; do both and it goes. The American plains lost several inches of
+    // topsoil in under a decade after the sod was busted and the drought came; the
+    // Mediterranean hills, the Loess Plateau and Iceland were deforested and grazed and
+    // are bare centuries later.
+
+    // Annual share of the remaining soil profile lost at unit over-pressure on land whose
+    // wild cover is intact. Accelerated erosion on bare cropland runs 10-100 t/ha/yr
+    // against soil formation near 1; a 30 cm profile is on the order of 4,000 t/ha, so
+    // 1.2%/yr is the middle of that range and a Dust Bowl is the top of it with the
+    // cover-loss multiplier applied.
+    float soil_erosion_per_year = 0.012f;
+    // And the geological rate it comes back at: roughly a centimetre of topsoil every
+    // two to four centuries, so a full profile is several millennia. Not zero — the point
+    // is that it is far too slow to matter to the society that caused it, which is why
+    // this is the one thing a civilisation does to its land that outlives it.
+    float topsoil_formation_per_year = 0.0002f;
+
     // Proto-capital: the food surplus *above* subsistence is stored (grain, herds,
     // tools) and controlled by the province's resident heads/founders — the origin
     // of capital and inequality. Each tick a pool of proto_capital_rate * (surplus
@@ -1482,7 +1567,20 @@ struct SeasonalAgricultureConfig {
     // including slow-growing Offshore cod at r = 0.25/yr — so the baseline world
     // is sustainable as claimed above, and equilibrium landings F·K(1 − F/r) come
     // to 75–98% of the Schaefer MSY (r·K/4) across r = 0.25–0.60.
+    // The fleet a MARKET economy puts to sea: an annual harvest fraction standing in for
+    // vessels, gear and crews the commons arc does not model. In pre-market eras it is
+    // superseded by the people who actually fish — cohort_stats.commons_fishers, published
+    // by subsistence — because a constant effort meant a province emptied by plague landed
+    // the same catch as one crowded to its limit, and the stock could not answer the
+    // population living off it.
     float fishing_effort = 0.15f;             // ANNUAL fraction of stock harvested
+    // Annual harvest fraction one fisher accounts for, as a first-arrival rate: the effort
+    // is 1 - exp(-catchability x fishers), so it rises with the boats and approaches
+    // taking the whole stock in a year without ever reaching it. Set against the fleet
+    // constant above — the ~2,000 people a fishing province of this scale puts on the
+    // water land about the 15% the market fleet does — so the two arcs meet rather than
+    // step, and a fishery is over-fished by crowding rather than by a number.
+    float fisher_catchability = 8.0e-5f;
                                               // (module converts to per-tick)
     float fishing_catch_to_tonnes = 5000.0f;  // normalized-stock → fish_wild tonnes
 };
@@ -2165,7 +2263,39 @@ struct PopulationAgingConfig {
     // At 40 the near-zero Malthusian growth now EMERGES from real demographic components
     // rather than from the gap between two numbers that were never meant to be compared.
     float base_annual_birth_rate = 0.040f;
-    float base_annual_death_rate = 0.008f;
+    // THE PRE-MEDICAL ADULT DEATH RATE, in real units: deaths per person-year for a
+    // working-age adult in a society with no medicine. Everything else in the mortality
+    // chain multiplies this — the youth and retiree multipliers, the world's hazards,
+    // hunger, the urban graveyard — and, crucially, so does the tech tree's
+    // `mortality_mult`, which is how herbal medicine, aqueducts, sewers, inoculation,
+    // germ theory, vaccination and modern sanitation cut it (a factor of 0.215 from era 1
+    // to era 8 on the base-game tree). So this constant is the value BEFORE any of that.
+    //
+    // It was 0.008 — Earth's crude death rate in the 2020s, i.e. the value at the END of
+    // that chain, used as the value at its start, with medicine then multiplying it down
+    // to 0.0017. It gave a Neolithic crude death rate of 22 per 1000 against a real
+    // 35-40, and left the dawn so gentle that population growth had to be suppressed by a
+    // political constant (`commons_stability_floor`) instead — a modern figure standing in
+    // for an ancient one, propped up by a rail.
+    //
+    // It must be the rate for a population that is NOT HUNGRY, because hunger is applied
+    // separately (famine_mortality_factor, which multiplies this up as the food signal
+    // falls below 1). The 35-40 per 1000 that pre-industrial societies actually recorded
+    // is the rate of populations pressing on their food supply — feeding that number in
+    // here counts malnutrition twice and then holds the population so far below its land
+    // that the surplus, and with it the whole non-farming class, is set by the mortality
+    // constant rather than by the harvest.
+    //
+    // The well-fed pre-medical benchmark is the one this slot wants: the British peerage
+    // of 1550-1750, who had medicine no better than anyone else's and food much better,
+    // buried adults at roughly 1.3-1.5% a year. 0.014/yr is that, and with the rest of
+    // the ladder it lands both ends of the record:
+    //   dawn   0.014 x (0.40 youth x 3.30 + 0.55 working + 0.05 retiree x 4) = 29/1000
+    //   modern the same x 0.215 (the medicine chain)                         =  6/1000
+    // against a real 35-40/1000 pre-industrial (the hungry majority, which the famine
+    // term supplies) and 7.6/1000 today. The fall between them is medicine doing the
+    // work, which is what a demographic transition is.
+    float base_annual_death_rate = 0.014f;
     float retiree_mortality_multiplier = 4.0f;
     // Children died. Infant and child mortality dominated pre-modern demography in a way
     // the modern crude rates give no sense of: roughly HALF of all children born did not
@@ -2174,13 +2304,19 @@ struct PopulationAgingConfig {
     // has no demographic transition available to it, because there is nothing for
     // medicine to fix.
     //
-    // The multiplier is DERIVED from the 50% datum, not chosen to produce a curve: at
-    // this model's Earth-normal pre-modern mortality (0.008/yr base, x1.1 for the commons
-    // stability floor) the rate that leaves exactly half of children alive at fifteen is
-    // -ln(0.5)/15 = 0.0462/yr, which is 5.25x the adult rate. Setting it here also makes
-    // the quantity-quality response below exactly neutral for a pre-modern society, so
-    // the only thing it changes is the transition itself.
-    float youth_mortality_multiplier = 5.25f;
+    // The multiplier is DERIVED from the 50% datum, not chosen to produce a curve: the
+    // rate that leaves exactly half of children alive at fifteen is -ln(0.5)/15 =
+    // 0.0462/yr, so the multiplier is whatever carries the pre-medical adult rate to it.
+    // At a base of 0.014/yr that is 3.30. Setting it this way also makes the
+    // quantity-quality response below exactly neutral for a pre-modern society, so the
+    // only thing it changes is the transition itself.
+    //
+    // It was 5.25, because the base rate it was divided into was a MODERN one (0.008).
+    // The product — the rate children actually died at — is unchanged; what changed is
+    // how much of pre-modern death is childhood-specific and how much everybody carries.
+    // Loading nearly all of it onto the young was what made the dawn survivable enough to
+    // need a rail holding its population down.
+    float youth_mortality_multiplier = 3.30f;
     // --- COHORTS AGE ---------------------------------------------------------------
     // They did not. Births piled into the youth cohorts and stayed there forever while
     // nobody replaced the workers who died — which was survivable only while the young
@@ -2271,15 +2407,15 @@ struct PopulationAgingConfig {
                                                   // and the world's hazards, not food, dominate
                                                   // pre-modern mortality)
     float food_mortality_floor = 0.5f;            // mortality never falls below this fraction
-    // Pre-market (commons) demographic balance point — the Malthusian PREVENTIVE CHECK.
-    // A dawn society's births/deaths track the harvest, not the modern political
-    // "stability" proxy; commons demographics use this fixed value as the birth/death
-    // balance instead. It is set a little below the carrying ceiling so a fed population
-    // stabilises JUST below the maximum the land can feed (historically, preventive
-    // checks held populations short of absolute starvation) — that gap is the real,
-    // grounded surplus that frees a standing specialist class. Higher => population
-    // pushes closer to the ceiling (less surplus); lower => more headroom.
-    float commons_stability_floor = 0.76f;
+    // REMOVED (2026-08-22): `commons_stability_floor`, a constant substituted for the
+    // political stability score in pre-market eras. It multiplied births and divided into
+    // mortality, so it alone fixed the surplus at which births met deaths (1.45,
+    // measured) — and below the knee of the production curve the sparable share is
+    // exactly 1 - 1/S, so it fixed the size of the non-farming class with it. Its own
+    // comment said as much: "Higher => population pushes closer to the ceiling (less
+    // surplus)." A dial that sets the answer is a rail however honestly it is labelled.
+    // The political channel is now simply neutral in the commons and real mortality does
+    // the work; see base_annual_death_rate above.
     // Generational hardiness: a population's adaptation (cohort_stats.hardiness) drifts
     // toward the world's hazard level by this fraction per year — slow, generational
     // (5%/yr, so the maladaptation transient after a transplant lasts decades).

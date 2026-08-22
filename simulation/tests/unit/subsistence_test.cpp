@@ -876,6 +876,208 @@ TEST_CASE("no rails: the growth signal is not the specialist solve reported back
     CHECK(poor < 1.0f);
 }
 
+// ===========================================================================
+// THE PEOPLE AND THE PLACE THEY LIVE OFF (2026-08-22).
+//
+// Every population eats its environment and the environment answers. The
+// forest was a constant that fed people free forever — measured, coverage sat
+// at exactly 0.2822 for four thousand years while the population living off it
+// doubled. These tests exist so no stock in this module can go back to being a
+// number.
+// ===========================================================================
+
+TEST_CASE("ecology: taking more wild food than the woods make eats the woods",
+          "[subsistence][tier2][no-rails][ecology]") {
+    SubsistenceModule mod;
+    auto forest_delta_at = [&](uint32_t population) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 1;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, population));
+        w.provinces[0].geography.forest_coverage = 0.6f;  // a wooded province
+        w.provinces[0].cohort_stats->forest_health = 0.7f;  // part cut, so both ways show
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        REQUIRE(d.region_deltas[0].forest_health_delta.has_value());
+        return *d.region_deltas[0].forest_health_delta;
+    };
+
+    // A band takes less than the woods renew: the forest closes back over.
+    CHECK(forest_delta_at(200) > 0.0f);
+    // A large population living off the same woods eats into them.
+    const float pressed = forest_delta_at(40000);
+    CHECK(pressed < 0.0f);
+    // And harder still, harder — it responds to the pressure, it is not a switch.
+    CHECK(forest_delta_at(80000) < pressed);
+}
+
+TEST_CASE("ecology: the fishing pressure comes from the people fishing",
+          "[subsistence][tier2][no-rails][ecology]") {
+    // The fleet was a constant annual harvest fraction, so a province emptied by plague
+    // landed exactly what a crowded one did. Fish are a population; the pressure on them
+    // has to be a population too.
+    SubsistenceModule mod;
+    auto fishers_for = [&](uint32_t population, float stock) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 1;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, population));
+        w.provinces[0].fisheries.current_stock = stock;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        REQUIRE(d.region_deltas[0].commons_fishers_replacement.has_value());
+        return *d.region_deltas[0].commons_fishers_replacement;
+    };
+
+    // A handful of people put a handful of boats out — the effort answers the headcount
+    // all the way down, so an emptied province stops fishing instead of landing a
+    // constant catch.
+    CHECK(fishers_for(20, 0.5f) < 20.0f);
+    // Twice the people on the same water, twice the boats.
+    const float small = fishers_for(2000, 0.5f);
+    const float large = fishers_for(4000, 0.5f);
+    CHECK(small > 0.0f);
+    CHECK_THAT(large / small, Catch::Matchers::WithinRel(2.0f, 0.05f));
+    // And a province whose fishery is a bigger part of its living puts more people on it.
+    CHECK(fishers_for(2000, 0.9f) > fishers_for(2000, 0.2f));
+}
+
+TEST_CASE("ecology: a cut-over wood yields less but is no smaller",
+          "[subsistence][tier2][no-rails][ecology]") {
+    // Quality belongs to the ceiling and extent to the labour saturation. Hunting out a
+    // wood lowers what it gives; it does not shrink the ground, and modelling it as if it
+    // did would make a stripped forest EASIER to work.
+    SubsistenceConfig cfg{};
+    Province p{};
+    p.agricultural_productivity = 0.8f;
+    p.geography.arable_land_fraction = 0.3f;
+    p.geography.forest_coverage = 0.6f;
+    const float climax = SubsistenceModule::natural_capital_of(p, cfg, 1.0f, 0.0f, 1.0f);
+    const float stripped = SubsistenceModule::natural_capital_of(p, cfg, 1.0f, 0.0f, 0.0f);
+    CHECK(stripped < climax);
+    CHECK_THAT(SubsistenceModule::workable_extent_of(p, cfg),
+               Catch::Matchers::WithinRel(SubsistenceModule::workable_extent_of(p, cfg), 1e-6f));
+    // The wild share of the food base falls with the stock, which is what makes a
+    // forager economy self-limiting.
+    CHECK(SubsistenceModule::wild_share_of(p, cfg, 0.2f, stripped) <
+          SubsistenceModule::wild_share_of(p, cfg, 1.0f, climax));
+}
+
+TEST_CASE("ecology: desertification needs both the ploughing and the clearance",
+          "[subsistence][tier2][no-rails][ecology]") {
+    // The Dust Bowl took the sod-busting AND the drought; the Mediterranean hills took
+    // the deforestation AND the goats. Land worked within its renewal keeps a crop on it;
+    // intact woods hold soil through a bad year. It is the two together that strip a
+    // profile, so neither alone may do it.
+    SubsistenceModule mod;
+    auto topsoil_delta = [&](uint32_t population, float forest_health) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 1;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, population));
+        w.provinces[0].cohort_stats->forest_health = forest_health;
+        w.provinces[0].cohort_stats->topsoil = 1.0f;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        return d.region_deltas[0].topsoil_delta.value_or(0.0f);
+    };
+
+    // Cleared woods, but nobody working the land past its renewal: the ground stays.
+    CHECK(topsoil_delta(300, 0.0f) >= 0.0f);
+    // Land worked hard under intact cover: it wears, but the profile holds.
+    const float wooded = topsoil_delta(80000, 1.0f);
+    // Both at once: the ground goes.
+    const float bare = topsoil_delta(80000, 0.0f);
+    CHECK(bare < 0.0f);
+    CHECK(bare < wooded);
+    // And it goes substantially faster with the cover gone, which is the whole claim.
+    // Not exactly twice: stripped woods also feed the province less, so it works its
+    // fields differently — the two stocks are coupled, which is the point.
+    if (wooded < 0.0f)
+        CHECK(bare < wooded * 1.5f);
+}
+
+TEST_CASE("no rails: sparable is not spared — somebody has to be able to claim it",
+          "[subsistence][tier2][no-rails]") {
+    // A non-farmer eats grain somebody else grew and gave up, so somebody had to be able
+    // to find it, measure it and enforce a share. Without this the model asserted that
+    // anyone the fields did not need became a specialist, which is the one thing a
+    // subsistence economy never did — it had underemployed farmers.
+    SubsistenceConfig cfg{};
+
+    // A village that knows itself can feed its elder on who-owes-whom alone.
+    const float village = SubsistenceModule::claim_reach(120, 0.0f, cfg);
+    CHECK(village > 0.5f);
+    // The same reciprocity across twenty thousand strangers reaches almost nobody...
+    const float region = SubsistenceModule::claim_reach(20000, 0.0f, cfg);
+    CHECK(region < 0.05f);
+    CHECK(region > 0.0f);
+    // ...until somebody writes the harvest down. This is why the earliest writing
+    // anywhere is grain accounts, and why cities and tax registers appear together.
+    const float literate = SubsistenceModule::claim_reach(20000, /*codified=*/20000.0f, cfg);
+    CHECK(literate > region * 5.0f);
+    // It approaches total market integration and never reaches it — no cap involved.
+    CHECK(SubsistenceModule::claim_reach(20000, 1.0e9f, cfg) < 1.0f);
+    CHECK(SubsistenceModule::claim_reach(20000, 1.0e9f, cfg) > 0.99f);
+}
+
+TEST_CASE("no rails: a granary carries the stratum it has, it does not fund a bigger one",
+          "[subsistence][tier2][no-rails]") {
+    // Stored grain buys a society the ability to keep its scribes through one failed
+    // harvest. It cannot lift the stratum ABOVE what is already held, because a reserve
+    // is famine insurance and famine is what it is for — drawn down in bad years,
+    // refilled in good ones, contributing nothing on average.
+    //
+    // It used to read `supported + food_store / annual_need`, adding PERSON-YEARS OF
+    // STORE to a FRACTION OF PEOPLE. A full granary holds years of food for everybody, so
+    // that expression pinned the target at 1.0 and every society in the model was being
+    // told to put its whole population off the land.
+    SubsistenceModule mod;
+    auto defended_with_store = [&](float store, float held) {
+        WorldState w{};
+        w.current_tick = kTicksPerYear;
+        w.world_seed = 1;
+        w.era_catalog.load_builtin_default();
+        w.technology.current_era = 5;
+        w.hazard_settings.seasonality = 0.0f;
+        w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/4000));
+        auto& cs = *w.provinces[0].cohort_stats;
+        cs.knowledge_level = 20000.0f;
+        cs.productive_capital = 4.0e6f;
+        cs.codified_knowledge = 8000.0f;
+        cs.urban_capacity = 40.0f;  // a thin harvest: supports far less than is held
+        cs.net_feedable_surplus = 40.0f;
+        cs.specialist_fraction = held;
+        cs.food_store = store;
+        DeltaBuffer d{};
+        mod.execute_province(0, w, d);
+        REQUIRE(d.region_deltas.size() == 1);
+        REQUIRE(d.region_deltas[0].specialist_fraction_replacement.has_value());
+        return *d.region_deltas[0].specialist_fraction_replacement;
+    };
+
+    constexpr float kHeld = 0.10f;
+    // Empty stores and a bad year: the stratum sheds.
+    CHECK(defended_with_store(0.0f, kHeld) < kHeld);
+    // Full stores: it is carried instead — the granary doing exactly its job.
+    const float carried = defended_with_store(4.0e6f, kHeld);
+    CHECK_THAT(carried, Catch::Matchers::WithinAbs(kHeld, 1e-4f));
+    // But never lifted past what is held, however much grain is banked.
+    CHECK(defended_with_store(1.0e9f, kHeld) <= kHeld + 1e-4f);
+}
+
 TEST_CASE("no rails: the stratum is limited by haulage, and haulage is a mechanism",
           "[subsistence][tier2][no-rails]") {
     // The replacement has to actually bind, and it has to respond to the world rather
@@ -893,6 +1095,10 @@ TEST_CASE("no rails: the stratum is limited by haulage, and haulage is a mechani
         auto& cs = *w.provinces[0].cohort_stats;
         cs.knowledge_level = 20000.0f;
         cs.productive_capital = 4.0e6f;
+        // A feudal province keeps records — tallies, rent rolls, a Domesday. Without them
+        // the claim reach is what binds and haulage never gets to, which is the correct
+        // reading of a pre-literate society but not the thing under test here.
+        cs.codified_knowledge = 8000.0f;  // 2.0 per head
         cs.urban_capacity = capacity;
         cs.net_feedable_surplus = capacity;
         DeltaBuffer d{};
@@ -905,8 +1111,10 @@ TEST_CASE("no rails: the stratum is limited by haulage, and haulage is a mechani
     const float good_routes = supported_with_haulage(1600.0f);  // 40%
     CHECK(good_routes > poor_routes);
     CHECK(poor_routes > 0.0f);
-    // And it is the HAULAGE that binds, not a constant: the share tracks the capacity.
-    CHECK_THAT(poor_routes, Catch::Matchers::WithinRel(0.05f, 0.02f));
+    // And it is the HAULAGE that binds, not a constant: the share tracks the capacity
+    // PROPORTIONALLY. Eight times the routes, eight times the stratum — which no cap can
+    // do, and which is the whole difference between a mechanism and a number.
+    CHECK_THAT(good_routes / poor_routes, Catch::Matchers::WithinRel(8.0f, 0.02f));
 }
 
 TEST_CASE("no rails: stocks evolve on a stated cadence, not per tick",
@@ -930,6 +1138,7 @@ TEST_CASE("no rails: stocks evolve on a stated cadence, not per tick",
         auto& cs = *w.provinces[0].cohort_stats;
         cs.knowledge_level = 20000.0f;
         cs.productive_capital = 4.0e6f;
+        cs.codified_knowledge = 8000.0f;  // a literate province: claims are enforceable
         cs.urban_capacity = 2000.0f;
         cs.net_feedable_surplus = 2000.0f;
         cs.specialist_fraction = 0.05f;  // well below what this harvest supports

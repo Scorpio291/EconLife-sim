@@ -114,8 +114,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // photosynthesis on finite acres; coal substitutes a stock for that flow, and that
     // is the only term here that can keep rising — hence the only escape from a
     // carrying ceiling that otherwise saturates and fixes the height of every peak.
-    const float natural_capital =
-        natural_capital_of(prov, cfg_, cs.soil_health, cs.ghost_land_fraction);
+    const float natural_capital = natural_capital_of(prov, cfg_, cs.soil_health,
+                                                     cs.ghost_land_fraction, cs.forest_health);
     // How much ground there is to cover, as opposed to how much it yields. Sets the
     // labour saturation below; fertility and wear belong to the ceiling, not here.
     const float workable_extent = workable_extent_of(prov, cfg_, cs.ghost_land_fraction);
@@ -267,6 +267,27 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float provisionable = std::max(0.0f, cs.urban_capacity);
     if (cs.urban_capacity > 0.0f || cs.net_feedable_surplus > 0.0f)
         specialists_people = std::min(specialists_people, provisionable);
+
+    // AND WHAT CAN BE SPARED IS NOT WHAT CAN BE TAKEN. A non-farmer eats grain somebody
+    // else grew and gave up, so somebody had to be able to CLAIM it — to know the crop
+    // existed, find it, measure it and enforce a share. That is a third physical limit,
+    // and unlike the first two it is not a ceiling on the pool but a share OF it: the
+    // stratum is fed out of the part of the surplus that can actually be got at, and the
+    // rest simply stays in the households that grew it, eaten by the people who grew it.
+    //
+    // The model asserted the opposite — that anyone the fields did not need became a
+    // specialist — which is the one thing a subsistence economy never did. A Neolithic
+    // village that could feed itself with two thirds of its people did not have a third
+    // of them making pots; it had underemployed farmers, which is Lewis's unlimited
+    // supply of labour and what every development economist since has found in a peasant
+    // economy. Measured under that assertion, a dawn world put 45-60% of its people off
+    // the land, and it was the deepest reason the model could not produce a Neolithic.
+    //
+    // This is also the mechanism behind the fact that the surplus theory of state
+    // formation gets backwards: societies did not build states because they had a
+    // surplus, they could keep a surplus because they built the apparatus to claim one.
+    const float reach = claim_reach(population, cs.codified_knowledge, cfg_);
+    specialists_people *= reach;
     const float supported_fraction =
         population > 0 ? specialists_people / static_cast<float>(population) : 0.0f;
 
@@ -307,15 +328,30 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // BELOW `held` every single tick, so the faster shed rate applied forever and the
     // stratum equilibrated far under what the land could support. Measured: 7.9% held
     // against 23.3% supported, after millennia to converge.
+    //
+    // A GRANARY CARRIES THE STRATUM IT HAS; IT DOES NOT FUND A BIGGER ONE. What the store
+    // buys is that one failed harvest does not send the scribes back to the plough — it
+    // covers the GAP between what the society already keeps and what this year's fields
+    // support, for as long as there is grain to cover it with. It never lifts the level
+    // above what is already held, because a reserve is famine insurance and famine is
+    // what it is for: drawn down in bad years, refilled in good ones, contributing
+    // nothing on average. The society is already charged for keeping it — that is
+    // `granary_demand` above, and that standing production cost is the permanent wedge
+    // which frees a stratum in the first place.
+    //
+    // It was `supported + food_store / annual_need`, adding PERSON-YEARS OF STORE to a
+    // FRACTION OF PEOPLE. A full granary holds `granary_reserve_years` of food for
+    // everybody, so that expression read 2.0 and the target pinned at 1.0 — every
+    // society in the model was being told to put its entire population off the land, and
+    // the stratum crept upward year after year toward it no matter what else was true.
+    // A quantity sitting exactly on its bound, again, and units are how it was found.
     const float store_person_years =
         static_cast<float>(population) * cfg_.per_capita_food_per_tick * ticks_per_year;
-    const float extra_from_stores =
-        store_person_years > 0.0f ? cs.food_store / store_person_years : 0.0f;
+    const float store_cover =
+        store_person_years > 0.0f ? std::max(0.0f, cs.food_store) / store_person_years : 0.0f;
     const float held = cs.specialist_fraction;
-    // A share of the population, so it cannot exceed all of them — a domain bound on a
-    // fraction, not a limit on the mechanism.
-    const float defended_fraction =
-        std::min(1.0f, supported_fraction + std::max(0.0f, extra_from_stores));
+    const float shortfall = std::max(0.0f, held - supported_fraction);
+    const float defended_fraction = supported_fraction + std::min(shortfall, store_cover);
     const float rate = defended_fraction < held ? cfg_.specialist_shed_per_year
                                                 : cfg_.specialist_growth_per_year;
     // ANNUAL, like the granary, the soil and the capital stock — not a per-tick nibble.
@@ -430,6 +466,17 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     rd.region_id = prov.region_id;
     rd.subsistence_surplus_replacement = growth_surplus;
     rd.import_dependence_replacement = import_dependence;
+    // WHO WORKS THE WATER. The fishery's share of the food base, applied to the hands
+    // actually producing food — the people whose living is the fish. seasonal_agriculture
+    // turns this into the effort behind the Schaefer harvest, so a fishery is pressed by
+    // the population living off it rather than by a constant: empty the province and the
+    // stock recovers, crowd it and the stock goes. Fish are a population too.
+    const float fishery_share =
+        natural_capital > 0.0f
+            ? cfg_.weight_fisheries * prov.fisheries.current_stock / natural_capital
+            : 0.0f;
+    rd.commons_fishers_replacement =
+        std::max(0.0f, static_cast<float>(population) - non_farmers) * working_age * fishery_share;
     // Publish the freed stratum itself, not just the food ratio. This is the share of
     // real people the harvest does not need on the land — the pool that scholarship,
     // crafts and trade are drawn from. Consumers (knowledge) must scale with the
@@ -522,8 +569,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         // agriculture stopped being limited by soil exhaustion. Both sides of the ratio
         // then carry the same ghost term, so as coal comes to dominate the pressure on
         // the land tends to balance rather than to ruin.
-        const float pristine_capital =
-            natural_capital_of(prov, cfg_, /*soil_health=*/1.0f, cs.ghost_land_fraction);
+        const float pristine_capital = natural_capital_of(
+            prov, cfg_, /*soil_health=*/1.0f, cs.ghost_land_fraction, /*forest_health=*/1.0f);
         const float sustainable_output =
             technique_share * cfg_.ceiling_per_capital_unit * pristine_capital * chronic;
         if (sustainable_output > 0.0f) {
@@ -533,8 +580,71 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
                 rd.soil_health_delta =
                     -cfg_.soil_degradation_per_year * (pressure_ratio - 1.0f) * cs.soil_health;
             } else {
-                // Working within its renewal: nutrients return toward pristine.
-                rd.soil_health_delta = cfg_.soil_recovery_per_year * (1.0f - cs.soil_health);
+                // Working within its renewal: nutrients return — but only up to the
+                // ground that is still there. Fertility is held IN the soil, so a
+                // province that has lost its profile recovers to what it has left, not to
+                // what it once had. Without this ceiling, erosion below would be undone
+                // in a generation by a nutrient cycle, and desertification would be a dip
+                // rather than the thing that outlives the civilisation that caused it.
+                rd.soil_health_delta =
+                    cfg_.soil_recovery_per_year * std::max(0.0f, cs.topsoil - cs.soil_health);
+            }
+
+            // DESERTIFICATION. The ground itself leaves when it is worked past what it
+            // renews AND the wild cover that would have held it is gone. Both drivers,
+            // multiplied, because that is what the record shows: ploughing within the
+            // land's renewal keeps a crop on it, and intact woods and grass hold soil
+            // through a bad year even where farming is hard. It took the sod-busting AND
+            // the drought to make a Dust Bowl; the Mediterranean hills needed the
+            // deforestation AND the goats.
+            //
+            // Unlike the nutrient cycle above this is a loss of the profile, so it is
+            // measured against a formation rate that is geological — a centimetre every
+            // few centuries — and it is therefore, on any human timescale, permanent.
+            const float over_pressure = std::max(0.0f, pressure_ratio - 1.0f);
+            const float cover_lost = 1.0f - std::clamp(cs.forest_health, 0.0f, 1.0f);
+            const float erosion =
+                cfg_.soil_erosion_per_year * over_pressure * (1.0f + cover_lost) * cs.topsoil;
+            const float formation = cfg_.topsoil_formation_per_year * (1.0f - cs.topsoil);
+            const float net = formation - erosion;
+            if (net != 0.0f)
+                rd.topsoil_delta = net;
+        }
+
+        // AND THE WILD STOCK ANSWERS BACK. The same law, applied to the food nobody
+        // planted. A share of every harvest is TAKEN rather than grown — the forage and
+        // the game the woods carry — and the woods renew only a fraction of their
+        // standing biomass each year. Take more than that and there is less next year:
+        // fewer deer, fewer nut trees, thinner cover.
+        //
+        // This is the second thing that can lower a carrying ceiling, and unlike soil it
+        // is what limits a society BEFORE it farms — which is why hunter-gatherers ran at
+        // a hundredth of agricultural densities and why the first thing a growing
+        // population does is stop foraging and start planting. The forest was a constant
+        // that fed people for free forever: measured, coverage sat at exactly 0.2822 for
+        // four thousand years while the population living off it doubled.
+        //
+        // The renewal is ABSOLUTE, measured against the PRISTINE woods, for the same
+        // reason the soil's is: what regrows a forest is sunlight and rain on a given
+        // area, not how much of it is left. Scaling renewal by the present stock would
+        // cancel it out of both sides and leave the woods with no restoring force at all.
+        const float wild_take = output * wild_share_of(prov, cfg_, cs.forest_health,
+                                                       natural_capital) * ticks_per_year;
+        const float pristine_wild =
+            cfg_.weight_forest_forage * prov.geography.forest_coverage +
+            cfg_.weight_fisheries * prov.fisheries.current_stock;
+        const float wild_renewal = cfg_.forage_sustainable_share * cfg_.ceiling_per_capital_unit *
+                                   pristine_wild * chronic * ticks_per_year;
+        if (wild_renewal > 0.0f) {
+            const float forage_pressure = wild_take / wild_renewal;
+            if (forage_pressure > 1.0f) {
+                // Eating the herd: the standing stock falls by a share of what is left.
+                rd.forest_health_delta =
+                    -cfg_.forage_depletion_per_year * (forage_pressure - 1.0f) * cs.forest_health;
+            } else {
+                // Taking less than the woods make: they close back over, slowly.
+                rd.forest_health_delta =
+                    cfg_.forage_recovery_per_year * (1.0f - cs.forest_health);
             }
         }
     }

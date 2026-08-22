@@ -451,6 +451,12 @@ void write_province(ByteWriter& w, const Province& p) {
         // figure is the frontier over them; losing the local stocks on load would give
         // every region the leader's learning and erase every regional dark age.
         w.write_float(p.cohort_stats->knowledge_level);
+        // v31: the standing wild biomass and the soil profile under it. Real stocks
+        // with a centuries-long history: reloading a world without it would hand a
+        // civilisation back the forests it had already cut and the herds it had hunted
+        // out, and with them a carrying ceiling it no longer had.
+        w.write_float(p.cohort_stats->forest_health);
+        w.write_float(p.cohort_stats->topsoil);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1353,6 +1359,12 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
         // recovery for a save that recorded only a global figure.
         if (schema_ver >= 30u) {
             p.cohort_stats->knowledge_level = r.read_float();
+        }
+        // v31: standing wild biomass. Older saves default to 1.0 (climax, the struct
+        // default) — a save from before this existed carries no record of clearance.
+        if (schema_ver >= 31u) {
+            p.cohort_stats->forest_health = r.read_float();
+            p.cohort_stats->topsoil = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but

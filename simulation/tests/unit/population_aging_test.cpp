@@ -212,19 +212,24 @@ TEST_CASE("PopulationAging: Earth-normal mortality survives the rate reform unch
     // maladaptation multiplier is exactly 1.0 and the composed rate is unchanged. Only
     // the rate -> probability conversion differs, and at Earth-normal rates that is a
     // sub-percent effect:
-    //     rate = base_annual_death_rate 0.008 * (1 + (1 - stability 0.9)) = 0.0088/yr
-    //     was (rate used directly AS a probability): p = 0.008800
-    //     now  p = 1 - exp(-0.0088)                  = 0.0087614   (-0.45% relative)
+    //     rate = base_annual_death_rate 0.014 * (1 + (1 - stability 0.9)) = 0.0154/yr
+    //     was (rate used directly AS a probability): p = 0.015400
+    //     now  p = 1 - exp(-0.0154)                  = 0.0152820   (-0.77% relative)
+    //
+    // The base rate is the PRE-MEDICAL adult figure (0.014/yr, the well-fed pre-modern
+    // benchmark) rather than the modern crude rate it used to carry; medicine multiplies
+    // it down from there. So the gap below is a little wider than it was, for the same
+    // reason it is a gap at all: a bigger rate bends further under 1 - exp(-r).
     constexpr PopulationAgingConfig cfg{};
     const float rate = cfg.base_annual_death_rate * 1.1f;
     const float p = PopulationAgingModule::annual_probability_from_rate(rate);
-    CHECK_THAT(p, WithinAbs(0.0087614f, 1e-6f));
-    CHECK(p < rate);                    // the rate form is very slightly gentler
-    CHECK((rate - p) / rate < 0.005f);  // by under 0.5% of deaths
-    // Retirees take the same rate x4; still under 2%.
+    CHECK_THAT(p, WithinAbs(0.0152820f, 1e-6f));
+    CHECK(p < rate);                   // the rate form is very slightly gentler
+    CHECK((rate - p) / rate < 0.01f);  // by under 1% of deaths
+    // Retirees take the same rate x4; still under 4%.
     const float retiree_rate = rate * cfg.retiree_mortality_multiplier;
     const float p_ret = PopulationAgingModule::annual_probability_from_rate(retiree_rate);
-    CHECK((retiree_rate - p_ret) / retiree_rate < 0.02f);
+    CHECK((retiree_rate - p_ret) / retiree_rate < 0.04f);
 
     // End to end on an Earth-normal, exactly-fed province of 100,000. The figure moved
     // when CHILD MORTALITY arrived (R4A): roughly half of children born did not reach
@@ -240,6 +245,12 @@ TEST_CASE("PopulationAging: Earth-normal mortality survives the rate reform unch
     // A pre-modern society is not near-stationary year to year; it is a high-birth,
     // high-death demography whose NET is near zero over the long run, which is what the
     // multi-millennium runs actually show.
+    //
+    // Moved again when the base rate was grounded (0.008, a MODERN crude rate, -> 0.014,
+    // the pre-medical adult figure) and the constant that stood in for commons political
+    // stability was removed. Both push the same way: more of the dying happens, and less
+    // of it is loaded onto the children, so the net at an exactly-fed province is smaller
+    // and nearer the near-zero growth a Malthusian society actually runs at.
     PopulationAgingModule module;
     WorldState w = make_annual_cohort_world(/*surplus=*/1.0f);  // exactly fed: neutral food
     REQUIRE_THAT(hazard_mortality_from_settings(w.hazard_settings), WithinAbs(1.0f, 1e-6f));
@@ -247,8 +258,8 @@ TEST_CASE("PopulationAging: Earth-normal mortality survives the rate reform unch
     module.execute_province(0, w, d);
     REQUIRE(d.cohort_stats_deltas.size() == 1);
     const uint32_t after = d.cohort_stats_deltas[0].total_population;
-    CHECK(after >= 101500u);
-    CHECK(after <= 101650u);
+    CHECK(after >= 100950u);
+    CHECK(after <= 101150u);
 }
 
 TEST_CASE("PopulationAging: half of children do not reach fifteen, until medicine",
@@ -256,9 +267,14 @@ TEST_CASE("PopulationAging: half of children do not reach fifteen, until medicin
     // The datum the youth multiplier is derived from, and the thing that makes a
     // demographic transition possible at all: with the young dying at the same rate as
     // the middle-aged there is nothing for medicine to fix.
+    //
+    // No stability factor: the political channel is NEUTRAL in the commons now (the
+    // constant that used to stand in for it set the whole economy's surplus and is gone),
+    // so the pre-medical rate a child faces is the base rate times the youth multiplier
+    // and nothing else — which is exactly what that multiplier is derived from.
     constexpr PopulationAgingConfig cfg{};
-    const float premodern_youth_rate = cfg.base_annual_death_rate * 1.1f *
-                                       cfg.youth_mortality_multiplier;
+    const float premodern_youth_rate =
+        cfg.base_annual_death_rate * cfg.youth_mortality_multiplier;
     const float survival = PopulationAgingModule::child_survival(premodern_youth_rate, cfg);
     CHECK_THAT(survival, WithinAbs(0.5f, 0.02f));  // ~half, as the record has it
 

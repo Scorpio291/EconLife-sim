@@ -71,13 +71,34 @@ class SubsistenceModule : public ITickModule {
     // worked — and it is the only term here that can rise without bound, which is why
     // it is the only escape from a fixed carrying ceiling.
     static float natural_capital_of(const Province& province, const SubsistenceConfig& cfg,
-                                    float soil_health = 1.0f, float ghost_land = 0.0f) {
+                                    float soil_health = 1.0f, float ghost_land = 0.0f,
+                                    float forest_health = 1.0f) {
         const float soil = std::clamp(soil_health, 0.0f, 1.0f);
+        // The forest is a STOCK, not an endowment. geography.forest_coverage is what the
+        // climate carries; forest_health is how much of it is standing after the hunting
+        // and the cutting — exactly the relationship agricultural_productivity has with
+        // soil_health. Fisheries are already a stock (Schaefer, seasonal_agriculture), so
+        // current_stock carries its own depletion.
+        const float wild = std::clamp(forest_health, 0.0f, 1.0f);
         return soil * (cfg.weight_agricultural_productivity * province.agricultural_productivity +
                        cfg.weight_arable_land * province.geography.arable_land_fraction) +
-               cfg.weight_forest_forage * province.geography.forest_coverage +
+               wild * cfg.weight_forest_forage * province.geography.forest_coverage +
                cfg.weight_fisheries * province.fisheries.current_stock +
                cfg.weight_arable_land * std::max(0.0f, ghost_land);
+    }
+
+    // What a forage economy takes out of the wild in a year, as a share of the whole
+    // harvest: the forest's and the fishery's contribution to the food base. Wild food
+    // is taken, not grown, so this is the part of the harvest that comes out of a
+    // standing stock rather than off a field. Pure/static.
+    static float wild_share_of(const Province& province, const SubsistenceConfig& cfg,
+                               float forest_health, float natural_capital) {
+        if (natural_capital <= 0.0f)
+            return 0.0f;
+        const float wild = std::clamp(forest_health, 0.0f, 1.0f) *
+                               cfg.weight_forest_forage * province.geography.forest_coverage +
+                           cfg.weight_fisheries * province.fisheries.current_stock;
+        return std::min(1.0f, wild / natural_capital);
     }
 
     // GROUND AND WATER THERE IS TO WORK, as opposed to how much it yields. The areal
@@ -93,6 +114,11 @@ class SubsistenceModule : public ITickModule {
     // still. Pure/static.
     static float workable_extent_of(const Province& province, const SubsistenceConfig& cfg,
                                     float ghost_land = 0.0f) {
+        // Wild-stock health does NOT enter here, and neither does soil wear: cutting a
+        // forest or working out a field does not shrink the ground, it lowers what the
+        // ground gives. Quality belongs to the ceiling and extent to the saturation, and
+        // putting the stock in both would make a hunted-out wood EASIER to work — the
+        // same cancellation that once divided land quality out of the harvest entirely.
         return cfg.weight_arable_land * province.geography.arable_land_fraction +
                cfg.weight_forest_forage * province.geography.forest_coverage +
                cfg.weight_fisheries * province.fisheries.current_stock +
@@ -123,6 +149,30 @@ class SubsistenceModule : public ITickModule {
             std::max(1.0f, cfg.labor_half_saturation_per_extent * workable_extent);
         const float saturation = 1.0f - std::exp(-labor / half);
         return ceiling * saturation;
+    }
+
+    // HOW MUCH OF SOMEBODY ELSE'S HARVEST CAN ACTUALLY BE GOT AT, in [0,1). Two channels
+    // that compose as independent reaches — what reciprocity does not move, records may.
+    //
+    // Reciprocity works among people who can know one another and fails past that, so its
+    // reach falls as the population grows: a village feeds its elder on who-owes-whom, a
+    // region of twenty thousand cannot. Records work among strangers and get better
+    // without limit — the earliest writing anywhere is grain accounts, because writing is
+    // the technology of extraction, which is why the first cities and the first tax
+    // registers appear together.
+    //
+    // Zero records and a large population gives a reach near zero, which is the correct
+    // reading of a pre-literate society: not that it had no surplus, but that nobody
+    // could take it. Pure/static.
+    static float claim_reach(uint32_t population, float codified_knowledge,
+                             const SubsistenceConfig& cfg) {
+        const float pop = static_cast<float>(population);
+        const float kin_scale = std::max(1.0f, cfg.kin_obligation_scale);
+        const float kin = kin_scale / (kin_scale + std::max(0.0f, pop));
+        const float per_head = pop > 0.0f ? std::max(0.0f, codified_knowledge) / pop : 0.0f;
+        const float half = std::max(1e-6f, cfg.claim_records_halfsat);
+        const float records = per_head / (per_head + half);
+        return kin + (1.0f - kin) * records;
     }
 
     // WHY ANYONE BOTHERS BUILDING (R4B). The annual hazard that what a province builds is

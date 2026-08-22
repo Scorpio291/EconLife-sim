@@ -856,3 +856,35 @@ TEST_CASE("society observe: knowledge mechanism audit (fast, 20y)",
             orch.execute_tick(world, pool);
     }
 }
+
+TEST_CASE("society observe: why is the dawn population not pressing on its land?",
+          "[.society-ecology]") {
+    // The chain under test: a surplus should feed more mouths, more mouths should press
+    // harder on the land and the wild stocks, and that pressure should pull the surplus
+    // back down. If the surplus stays high while the population barely moves, either the
+    // demography is not answering the food signal or something else is killing people.
+    // This prints both sides so the answer is not a guess.
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 4000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+    std::printf("\n=== EARTHLIKE: the population and the environment it lives off ===\n");
+    std::printf("  year |    pop |  growth | surplus | spec%% | urban%% | soil  | topsoil | forest | fish  |"
+                " records/head\n");
+    for (size_t i = 0; i < series.size(); ++i) {
+        const auto& s = series[i];
+        if (s.year % 250 != 0)
+            continue;
+        double growth = 0.0;
+        if (i >= 250 && series[i - 250].total_population > 0.0)
+            growth = 100.0 * (std::pow(s.total_population / series[i - 250].total_population,
+                                       1.0 / 250.0) - 1.0);
+        const double urban_pct =
+            s.total_population > 0.0 ? 100.0 * s.urban_population / s.total_population : 0.0;
+        std::printf("  %5u | %6.0f | %+6.3f%% |  %.3f  | %4.0f%% | %5.0f%% | %.3f |  %.4f | %.4f |"
+                    " %.3f | %.5f\n",
+                    s.year, s.total_population, growth, s.mean_surplus,
+                    s.cohort_specialist_share * 100.0, urban_pct, s.soil_health, s.topsoil,
+                    s.forest, s.fish_stock, s.records_per_head);
+    }
+}

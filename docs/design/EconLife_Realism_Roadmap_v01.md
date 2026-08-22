@@ -869,6 +869,96 @@ the brake. This is the next link in the chain, not a regression from the railed
 version — under the rail the same slack existed and was simply not visible.
 
 
+## R13. The population presses on its land, and the land answers (LANDED 2026-08-22)
+
+R12 left one thing open: the dawn spared 30% of its people against a historical 5-15%,
+because the population never grew into its land. Chasing that down found the cause, and
+the cause was four more rails and one inert world.
+
+**The population could not grow, because a constant would not let it.**
+`commons_stability_floor` = 0.76 was substituted for the political stability score in
+pre-market eras. Stability multiplies births and divides into mortality, so that single
+number fixed the surplus at which births met deaths — 1.45, measured — and below the knee
+of the production curve the sparable share is exactly `1 - 1/S`, so it fixed the size of
+the non-farming class with it. Its own comment said so: *"Higher => population pushes
+closer to the ceiling (less surplus)."* The political channel is now neutral in the
+commons and real mortality does the work.
+
+**The mortality it stood in for was the right number from the wrong end of the chain.**
+`base_annual_death_rate` held 0.008 — Earth's crude death rate in the 2020s — while the
+tech tree's medicine multiplier (herbal medicine, aqueducts, sewers, inoculation, germ
+theory, vaccination, modern sanitation: x0.215 over the arc) then cut it *further*, to
+0.0017. Every figure in the comment was real; it simply sat before the modifiers instead
+of after them. It is now the pre-medical adult rate for a population that is NOT hungry
+(hunger is applied separately, and feeding the observed 35-40/1000 in here counts
+malnutrition twice) — 0.014/yr, the British peerage of 1550-1750, with the youth
+multiplier re-derived so half of children still fail to reach fifteen. Both ends of the
+record now land: 29 per 1000 at the dawn, 6 per 1000 modern, with medicine doing the fall
+between them.
+
+**The granary was adding person-years to a fraction.** The stratum's defended level read
+`supported_fraction + food_store / annual_need` — a share of people plus years of grain.
+A full reserve holds `granary_reserve_years` of food for everybody, so the second term
+read 2.0, the target pinned at 1.0, and every society in the model was being told to put
+its entire population off the land. It had survived a rewrite of the very line it was on.
+A granary carries the stratum it HAS through a bad year and never funds a bigger one, so
+it now covers the gap between what is held and what this year supports, bounded by both.
+
+**And what can be spared is not what can be taken.** The model asserted that anyone the
+fields did not need became a specialist. That is the one thing a subsistence economy never
+did: a village that could feed itself with two thirds of its people had underemployed
+farmers, not potters. A non-farmer eats grain somebody else grew and gave up, so somebody
+had to be able to find it, measure it and enforce a share — and that reach has two real
+channels. Reciprocity moves food among people who can know one another and collapses
+beyond that (`kin_obligation_scale`, Dunbar); records move it among strangers and improve
+without limit. The earliest writing anywhere, Uruk IV, is ration lists and grain accounts,
+which is not a coincidence: writing is the technology of extraction, and it is why the
+first cities and the first tax registers appear together. This also gets the surplus theory
+of state formation the right way round — societies did not build states because they had a
+surplus; they could keep a surplus once they built the apparatus to claim one.
+
+**The environment was a set of constants that fed people for free.**
+`geography.forest_coverage` sat at exactly 0.2822 for four thousand years while the
+population living off it doubled, and `fishing_effort` was an annual harvest fraction
+unrelated to whether anybody lived there — a province emptied by plague landed the same
+catch. Now:
+
+- **The wild stock is a stock.** `cohort_stats.forest_health` is the standing forage and
+  game as a share of what the climate carries, drawn down when the take exceeds what the
+  woods renew and closing back over at forest-regrowth rates. It is the counterpart of
+  `soil_health`, and it is what makes a forager economy self-limiting — the reason
+  hunter-gatherers ran at 0.01-0.1 persons/km2 against early farming's 5-20.
+- **The fishery is pressed by the fishers.** Subsistence publishes `commons_fishers` (the
+  fishery's share of the food base applied to the food-producing workforce) and
+  seasonal_agriculture turns it into the effort behind its Schaefer harvest, as a
+  first-arrival rate in the boats. Two populations interacting, instead of one of them
+  being a number.
+- **DESERTIFICATION.** Losing a field's fertility and losing the field are different
+  things on different clocks. `cohort_stats.topsoil` is the soil profile itself, and it is
+  the ceiling `soil_health` can recover to — you cannot restore fertility to ground that
+  has gone. It erodes when the land is worked past what it renews AND the wild cover that
+  held it is gone, multiplied, because it takes both: the Dust Bowl needed the sod-busting
+  and the drought, the Mediterranean hills needed the deforestation and the goats. It
+  re-forms at a centimetre every two to four centuries, which is to say never, on the
+  timescale of the society that caused it.
+
+**Measured, the earthlike dawn is now a Malthusian one.** The founding population of
+21,127 overshoots, strips a quarter of its topsoil and half its woods inside 250 years,
+and crashes to 4,569 — a 79% fall. The forest closes back over within fifteen centuries;
+the topsoil is still 12% short of pristine four thousand years later and creeping back
+geologically. The non-farming share runs 2-13% against a historical 5-15%, rising with the
+surplus and falling as the population outgrows what reciprocity can reach. Population
+growth runs at hundredths of a percent a year, which is the Neolithic. Era thresholds
+recalibrated; earthlike still lands every historical era date and the pacing gate passes.
+
+**Six new `[no-rails]`/`[ecology]` tests**, each asserting a shape rather than a number:
+over-taking wild food eats the woods and responds to the pressure; a cut-over wood yields
+less but is no smaller; desertification needs both drivers and neither alone will do it;
+fishing pressure scales with the fishers; the claim reach is village-scale without writing
+and approaches total integration with it, never reaching it; and a granary carries the
+stratum it has without ever lifting it.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;

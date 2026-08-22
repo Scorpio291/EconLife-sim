@@ -645,6 +645,31 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                         v = 1.0f;
                     cs.soil_health = v;
                 }
+                if (d.forest_health_delta.has_value()) {
+                    // Additive. Bounded to [0, 1] by DEFINITION — a fraction of the wild
+                    // biomass the climate carries: a forest cannot be more than climax or
+                    // less than cleared.
+                    float v = safe_add(cs.forest_health, *d.forest_health_delta);
+                    if (!(v >= 0.0f))
+                        v = 0.0f;
+                    if (v > 1.0f)
+                        v = 1.0f;
+                    cs.forest_health = v;
+                }
+                if (d.topsoil_delta.has_value()) {
+                    // Additive. Bounded to [0, 1] by DEFINITION — a fraction of the
+                    // pristine soil profile. Fertility cannot exceed the ground holding
+                    // it, so soil_health follows it down: soil that has blown away takes
+                    // its nutrients with it.
+                    float v = safe_add(cs.topsoil, *d.topsoil_delta);
+                    if (!(v >= 0.0f))
+                        v = 0.0f;
+                    if (v > 1.0f)
+                        v = 1.0f;
+                    cs.topsoil = v;
+                    if (cs.soil_health > v)
+                        cs.soil_health = v;
+                }
                 if (d.productive_capital_delta.has_value()) {
                     // Additive: investment out of surplus minus the year's wear. A
                     // real stock, so it cannot go negative (you cannot un-build past
@@ -673,6 +698,11 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     // Replacement; grain_logistics recomputes the catchment surplus each tick.
                     float v = *d.net_feedable_surplus_replacement;
                     cs.net_feedable_surplus = (v >= 0.0f) ? v : 0.0f;
+                }
+                if (d.commons_fishers_replacement.has_value()) {
+                    // Replacement; subsistence recomputes who works the water each tick.
+                    float v = *d.commons_fishers_replacement;
+                    cs.commons_fishers = (v >= 0.0f && !std::isnan(v)) ? v : 0.0f;
                 }
                 if (d.urban_capacity_replacement.has_value()) {
                     // Replacement; grain_logistics recomputes what the catchment could

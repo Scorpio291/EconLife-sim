@@ -26,6 +26,14 @@ the answer is "the constant":
 - *"It rises with the era / tier / level."* — a schedule of outcomes with the
   mechanism left out. This is the most dangerous form because it looks like
   modelling, and it was the form of every rail found here.
+- *"Higher gives more of X, lower gives less."* — **a comment that explains which
+  way to turn a number to get an outcome has just confessed.** `commons_stability_floor`
+  documented itself as "set a little below the carrying ceiling so a fed population
+  stabilises JUST below the maximum the land can feed... Higher => less surplus," and
+  that is precisely what it did: it fixed the surplus at which births met deaths, and
+  with it the size of the non-farming class, for the whole pre-market arc. **Read every
+  constant's comment as evidence against it.** A mechanism's comment says what the
+  thing IS; a rail's says what it is FOR.
 - *"It's an absolute number."* — **if a limit does not scale with the thing it
   bounds, it is a rail in another dress.** `labor_half_saturation` was a flat 1,500
   workers while provinces held 15,000 to 3,000,000 people, so every province sat
@@ -55,7 +63,7 @@ the answer is "the constant":
 | a per-era schedule | the quantity the era is a proxy for | eras are labels; knowledge, capital and haulage are things |
 | a fixed share | a stock with an inflow and an outflow | stocks can fall, which is where falls come from |
 
-### The five ways a rail hides, all found here
+### The eight ways a rail hides, all found here
 
 1. **It binds silently.** The per-regime specialist ceiling sat exactly on 15.0%,
    18.0%, 22.0% at every era for the whole climb. Nothing failed; the economy
@@ -91,7 +99,29 @@ the answer is "the constant":
    no external quantity in it. **For every signal, ask which module last wrote the
    numerator and which wrote the denominator. If it is the same one, the signal is
    reporting its own decision back to itself.**
-5. **It is arithmetically unreachable.** Secession required a member holding 1/N
+5. **It is a static endowment that something consumes.** A quantity that is eaten,
+   burned, hunted, cut or mined and never goes down is a rail wearing the costume of
+   a fact about the world. `geography.forest_coverage` fed a commons economy forever:
+   measured, it sat at exactly 0.2822 for four thousand years while the population
+   living off it doubled. **Anything consumed must be a stock with an inflow and an
+   outflow**, and if it has no outflow the model is asserting a free lunch.
+6. **The constant is the right real number from the wrong end of the chain.**
+   `base_annual_death_rate` held 0.008 — Earth's crude death rate in the 2020s — and
+   the tech tree's medicine multiplier then cut it *further*, to 0.0017. Every figure
+   in the comment was real and sourced; it simply sat before the things that modify
+   it instead of after them, giving a Neolithic that buried 22 per 1000 against a
+   real 35-40 and was so gentle its population had to be held down by a separate
+   rail. **Ask where in the causal chain the constant sits: is this the value before
+   the modifiers, or after them?** A sourced number in the wrong slot is still wrong.
+7. **The units do not match across an addition.** The granary's contribution to the
+   non-farming stratum was `supported_fraction + food_store / annual_need` — a
+   FRACTION OF PEOPLE plus PERSON-YEARS OF GRAIN. A full reserve holds years of food
+   for everybody, so the second term read 2.0, the target pinned at 1.0, and every
+   society in the model was quietly being told to put its entire population off the
+   land. It had survived a rewrite of the very line it was on. **Check the units on
+   every addition and every comparison**; a dimension error looks exactly like a
+   generous mechanism.
+8. **It is arithmetically unreachable.** Secession required a member holding 1/N
    to out-muscle `0.8 x cohesion x (N-1)/N`, impossible for N >= 3 at any cohesion.
    It read as "rare"; it was "never". **Work the arithmetic of every threshold at
    the extremes before believing a mechanism is merely inactive.**

@@ -138,7 +138,11 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     //      is measured against this, which is what lets a society fall at all.
     // v30: cohort_stats.knowledge_level — what each PROVINCE knows. Knowledge is no
     //      longer one global number, which is what lets a region fall while others rise.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 30);
+    // v31: cohort_stats.forest_health and cohort_stats.topsoil — the standing wild
+    //      biomass a commons eats out of, and the soil profile under it. Real stocks with
+    //      century-to-millennium histories; reloading without them would hand a
+    //      civilisation back forests it had cut and ground it had lost.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 31);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
