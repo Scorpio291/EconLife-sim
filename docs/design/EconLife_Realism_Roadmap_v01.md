@@ -980,6 +980,75 @@ and approaches total integration with it, never reaching it; and a granary carri
 stratum it has without ever lifting it.
 
 
+## R14. Era-gated technology — the rail is confirmed, and it is blocked on the knowledge scale (ATTEMPTED 2026-08-22)
+
+**The rail.** `technology_catalog.cpp`, `aggregate_effects`:
+
+```cpp
+for (const auto& n : nodes_)
+    if (n.era_available <= era) { e.knowledge_mult *= …; e.food_mult *= …; e.mortality_mult *= …; }
+```
+
+Every technology a society holds is decided by the era integer alone. It is handed the
+plough, the aqueduct, inoculation and germ theory the moment the era advances, regardless
+of what it knows, what it has built, or whether it ever researched anything — the "it
+rises with the era/tier/level" form the no-rails rule names as the most dangerous. Two
+consequences, both measured:
+
+- **A step at every era boundary.** Earthlike surplus goes 1.58 -> 3.95 and population
+  growth 0.037%/yr -> 0.154%/yr across the era 1 -> 2 transition, with nothing in the
+  world changed but an integer. The era-1 tree alone multiplies the carrying ceiling by
+  ~3.0, so it is also the largest single term in the dawn food balance.
+- **No two provinces can ever differ in technique.** The era is global, so Britain and
+  Qing China are the same society by construction — which is exactly the case the R9
+  "knowing is not having" work exists to express, and it cannot be expressed while this
+  stands.
+
+**The replacement, built and reverted.** A technique needs both knowing it and having the
+means, each as a saturating share rather than a switch, with a node bounded by its least
+penetrated prerequisite: `effect = 1 + (mult - 1) x knows x has x prereqs`, resolved per
+province, published annually on `cohort_stats.tech_{food,mortality,knowledge}_mult`. It
+worked, and the behaviour was better in exactly the ways predicted: the era boundary
+became a ramp (1.88 -> 2.10 instead of 1.58 -> 3.95), and the fertile deathworld began to
+rise and fall repeatedly — era 5, collapse to 4, back to 5, collapse to 4, to 3, then 4, 5,
+6, with population swinging 1.6M -> 56k -> 1.5M -> 58k. That is the secular cycling the
+brief has asked for from the beginning and the model had never produced.
+
+**Why it is reverted.** The knowledge axis has no anchor, and this change needs one.
+
+1. Anchoring a technique's cost on the era knowledge thresholds is the obvious move and it
+   is forbidden by our own rule: those are the model's ONE pure pacing dial — "they label
+   a trajectory, they do not shape it" — and feeding them back into a mechanism makes them
+   load-bearing. It also breaks the calibration in practice, because the thresholds then
+   determine the technique costs that determine the knowledge rate that determines the
+   thresholds. Measured: era 1 calibrated to 66 and era 2 to 131,911, a two-thousand-fold
+   climb in two millennia, and the earthlike world stopped reaching era 7.
+2. Anchoring it on the node's own authored `difficulty` is correct in principle — no
+   feedback, and "each further unit of difficulty nearly doubles the knowledge a society
+   must hold" is Jones applied across the tree rather than along it. But it needs a unit
+   bridge from difficulty to accumulated knowledge, and there is nothing to bridge TO: the
+   knowledge scale floats. `discovery_difficulty_halfsat` (35,000), the era thresholds and
+   the new scale constant all live on one axis that only the calibration pins, and the
+   calibration pins it differently depending on how much of the tree is reachable. Set the
+   bridge high and no technique is ever reachable (the world tops out near 5,000 knowledge
+   and stays Neolithic); set it low and the tree's own knowledge multipliers — a compound
+   ~117x across writing, the alphabet, the university, the press and the method — run away,
+   crossing every era inside a few centuries and producing a non-monotonic threshold ladder.
+
+**What unblocks it.** The era thresholds should stop being the calibrated quantity. Fix
+them as authored content on a stated scale, and calibrate the knowledge PRODUCTION RATE
+instead — one dial rather than seven. Then the knowledge axis has a fixed meaning, a
+technique's cost can be authored against it without feedback, and the shape of the climb
+becomes an emergent prediction rather than a seven-point fit.
+
+That is a change to what the `[pacing]` gate means — it currently asserts all seven
+historical dates, and with one dial only one date can be targeted — so it is a design
+decision rather than a fix, and it is the prerequisite for this work.
+
+The attempt is kept at `wip-per-province-technique.patch` (session scratchpad) with its
+five `[no-rails]` adoption tests, all of which passed.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;
