@@ -942,6 +942,27 @@ catch. Now:
   re-forms at a centimetre every two to four centuries, which is to say never, on the
   timescale of the society that caused it.
 
+**One more found by asking what the fish stock does over the whole climb.** It did
+nothing: it sat at exactly its carrying capacity, to three decimals, from year 6,000 to
+the industrial era while the population living off it went from 7,500 to three million.
+A quantity resting precisely on its bound, which is what that always means. The seasonal
+closure asked whether TODAY fell in the closed season — `tick_of_year / ticks_per_year <
+seasonal_closure` — which is right only if every tick runs. Any caller that samples the
+year at one point samples the same point every year, and the history harness fast-forwards
+on year-aligned ticks, so `tick_of_year` was always 0 and every fishery in the dawn was
+closed for thirteen thousand years. It is now an open-FRACTION multiplier: the same annual
+landings, and stride-free. (The Schaefer equilibrium `N* = K(1 - F/r)` carries the stride
+in both terms and it cancels, so a coarse stride gets the right fishery, just later — an
+explicit LOD scaleback, documented at the site.) The same pass stopped a stale
+`commons_fishers` standing in for a live one once subsistence goes inert in market eras.
+
+With that fixed the fishery reads as it should: essentially untouched through the dawn
+(a few hundred fishers take less than it renews, so it recovers to just under carrying
+capacity), then turning over at the Bronze Age transition and falling monotonically to
+55% of capacity by the industrial era, and still falling. It declines far more gently than
+the forest — 45% against a near-total collapse — which is the right ordering: fish breed
+in a season and a forest takes a century.
+
 **Measured, the earthlike dawn is now a Malthusian one.** The founding population of
 21,127 overshoots, strips a quarter of its topsoil and half its woods inside 250 years,
 and crashes to 4,569 — a 79% fall. The forest closes back over within fifteen centuries;

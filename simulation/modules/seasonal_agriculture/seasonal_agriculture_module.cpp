@@ -17,6 +17,7 @@
 #include "core/good_id_hash.h"
 #include "core/world_state/apply_deltas.h"  // lookup_good_id
 #include "core/world_state/delta_buffer.h"
+#include "core/world_gen/era_catalog.h"
 #include "core/world_state/world_state.h"
 
 // Mathematical constant - defined outside namespace to avoid MSVC issues.
@@ -246,8 +247,15 @@ void SeasonalAgricultureModule::process_fisheries(uint32_t province_idx, const P
     // a crowded one did and the stock could not answer the population living off it. A
     // fish population and a human population are two populations interacting; modelling
     // one of them as a number is the same free lunch a static forest was.
+    //
+    // Only while a commons economy is actually fishing this water. Past that the
+    // subsistence module goes inert and stops publishing, so the last figure it wrote
+    // would otherwise sit there forever — a stale reading standing in for a live one,
+    // which is the same free lunch as a constant with extra steps.
+    const EraDefinition* era_def = state.era_catalog.by_index(state.technology.current_era);
+    const bool commons = era_def && is_premarket_regime(era_def->economic_regime);
     float annual_effort = cfg_.fishing_effort;
-    if (province.cohort_stats && province.cohort_stats->commons_fishers > 0.0f) {
+    if (commons && province.cohort_stats && province.cohort_stats->commons_fishers > 0.0f) {
         annual_effort = 1.0f - std::exp(-std::max(0.0f, cfg_.fisher_catchability) *
                                         province.cohort_stats->commons_fishers);
     }
@@ -268,15 +276,33 @@ void SeasonalAgricultureModule::process_fisheries(uint32_t province_idx, const P
     // seed is a world_gen + spec change, out of scope for this module.
 
     // Seasonal closure: no fishing during the closed fraction of the year (ice,
-    // spawning). Stock still grows; it just isn't harvested — so a closure also
-    // reduces the annual landings below F x N (an ice-locked fishery lands less).
-    const uint32_t tick_of_year = state.current_tick % cfg_.ticks_per_year;
-    const float year_frac = static_cast<float>(tick_of_year) / ticks_per_year;
-    const bool closed = year_frac < fish.seasonal_closure;
+    // spawning). The stock still grows; it just isn't harvested — so a closure reduces
+    // the annual landings below F x N (an ice-locked fishery lands less), which is
+    // exactly what an open FRACTION of the year means.
+    //
+    // It used to ask whether TODAY fell in the closed season — `tick_of_year /
+    // ticks_per_year < seasonal_closure`. That is right only if every tick runs. Any
+    // caller that samples the year at one point samples the same point every year, and
+    // the history harness fast-forwards on year-aligned ticks, so tick_of_year was always
+    // 0 and every fishery in it was closed for thirteen thousand years. Measured: the
+    // stock sat at exactly its carrying capacity, to three decimals, from year 6,000 to
+    // the industrial era while the population living off it went from 7,500 to three
+    // million — a quantity resting precisely on its bound, which is what that always
+    // means.
+    //
+    // As an open-fraction multiplier it is the same annual landings, stride-free.
+    const float open_fraction = 1.0f - std::clamp(fish.seasonal_closure, 0.0f, 1.0f);
 
     // Logistic growth replenishes the stock; effort harvests a fraction of it.
+    //
+    // Both are per-tick rates, so a caller running fewer ticks per year approaches the
+    // equilibrium more slowly. The EQUILIBRIUM itself is stride-free — N* = K(1 - F/r)
+    // carries the stride in both terms and it cancels — so a coarse history stride gets
+    // the right fishery, just later. That is an explicit level-of-detail scaleback, not a
+    // silent one: a stock crash that takes a decade in play takes centuries in
+    // fast-forward history-gen, which is inside the resolution that arc is run at.
     const float growth = r_per_tick * N * (1.0f - (K > 0.0f ? N / K : 0.0f));
-    const float harvest = closed ? 0.0f : effort_per_tick * N;
+    const float harvest = effort_per_tick * open_fraction * N;
 
     // Update stock (growth − harvest), applied/clamped to [0, K] on apply.
     const float stock_delta = growth - harvest;

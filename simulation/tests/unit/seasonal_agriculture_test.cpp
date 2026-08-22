@@ -913,6 +913,48 @@ TEST_CASE("fisheries: a stocked coastal province lands a catch and updates stock
     REQUIRE(delta.fisheries_deltas[0].province_id == province_id);
 }
 
+TEST_CASE("fisheries: a closed season is a share of the year, not a question about today",
+          "[seasonal_agriculture][tier2][fisheries][no-rails]") {
+    // A per-tick mechanism that asks "does TODAY fall in the closed season" is only
+    // correct if every tick runs. Any caller sampling the year at one point samples the
+    // SAME point every year, and the history harness fast-forwards on year-aligned ticks
+    // — so tick_of_year was always 0, every fishery in it was closed for thirteen
+    // thousand years, and the stock sat at exactly its carrying capacity to three
+    // decimals while the population living off it went from 7,500 to three million.
+    //
+    // As an open-FRACTION multiplier the annual landings are the same and the answer no
+    // longer depends on which day the caller happens to land on.
+    auto landed_on_tick = [](uint32_t tick) {
+        constexpr uint32_t province_id = 0;
+        auto state = make_test_world_state(100);
+        state.current_tick = tick;
+        auto prov = make_test_province(province_id);
+        prov.fisheries.access_type = FishingAccessType::Inshore;
+        prov.fisheries.carrying_capacity = 1.0f;
+        prov.fisheries.current_stock = 0.85f;
+        prov.fisheries.intrinsic_growth_rate = 0.4f;
+        prov.fisheries.seasonal_closure = 0.25f;  // a quarter of the year under ice
+        state.provinces.push_back(std::move(prov));
+        SeasonalAgricultureModule module;
+        DeltaBuffer delta{};
+        module.execute_province(province_id, state, delta);
+        return summarize_supply(delta, "fish_wild", province_id).total_supply;
+    };
+
+    // Every year-aligned tick — exactly what a coarse history stride lands on.
+    const float at_year_start = landed_on_tick(0);
+    const float a_year_later = landed_on_tick(kTicksPerYear);
+    // And a day that the old form would have called open.
+    const float midsummer = landed_on_tick(kTicksPerYear / 2);
+
+    CHECK(at_year_start > 0.0f);  // it used to be exactly zero, forever
+    CHECK_THAT(a_year_later, Catch::Matchers::WithinRel(at_year_start, 1e-5f));
+    CHECK_THAT(midsummer, Catch::Matchers::WithinRel(at_year_start, 1e-5f));
+    // And the closure still costs the fishery its quarter of the year's landings.
+    const float open_all_year = 1.0f / 365.0f * 0.15f * 0.85f * 5000.0f * 365.0f / 365.0f;
+    CHECK_THAT(at_year_start, Catch::Matchers::WithinRel(open_all_year * 0.75f, 0.01f));
+}
+
 TEST_CASE("fisheries: landlocked province lands no catch",
           "[seasonal_agriculture][tier2][fisheries]") {
     constexpr uint32_t province_id = 0;
