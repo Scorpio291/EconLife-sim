@@ -908,7 +908,13 @@ struct SubsistenceConfig {
     // the measured stock of an ESTABLISHED agrarian province here (~1,000/head through
     // the middle eras) rather than from an outside figure. Half the known technique is
     // applied at that stock.
-    float capital_utilisation_halfsat = 1000.0f;
+    float capital_utilisation_halfsat = 2.05e8f;  // PER UNIT OF WORKABLE EXTENT (was
+                                              // 1,000 per head; the headcount
+                                              // denominator collapsed after a die-off
+                                              // and flew this gate open). ~a mature
+                                              // pre-industrial province: 80,000 people
+                                              // at ~1,000 built per head, on ~0.39 of
+                                              // workable ground.
 
     // --- MACHINES REPLACE HANDS (R11) -------------------------------------------------
     // Capital gated how much of its knowledge a place could USE (R9), but nothing in the
@@ -932,7 +938,28 @@ struct SubsistenceConfig {
     // this frees hands rather than conjuring food — which is exactly what mechanisation
     // did.
     float machine_leverage_max = 50.0f;      // output per farmer, 1800 -> 2000
-    float machine_leverage_halfsat = 3000.0f;  // capital per head at half the gain: set well
+    // MECHANISED FARMING IS AN INDUSTRIAL TECHNIQUE, and the knowledge gate on it has to
+    // say so. It borrowed `knowledge_productivity_halfsat`, which is the gate on technique
+    // raising the carrying ceiling generally — a much lower bar — so on the content
+    // knowledge axis a Bronze Age society read as 80% "knowing machines" and a fiftyfold
+    // labour leverage was one capital-per-head spike away.
+    //
+    // That spike arrives for free after any die-off: capital per head is a ratio whose
+    // DENOMINATOR collapses, so a province that loses nine tenths of its people reads as
+    // ten times better equipped. Measured, that closed a loop that made the model
+    // uninhabitable — crash, capital/head spikes, leverage fires, potential output jumps
+    // tenfold, the food signal reads 8.5, fertility pins at the biological cap, the
+    // population overshoots and crashes again. A Bronze Age society whose population
+    // halved does not get tractors.
+    //
+    // Set at the accumulated learning an INDUSTRIAL society holds (the era 6 rung of the
+    // content ladder), so nothing before it gets meaningful leverage however the ratio
+    // behaves. Regenerated with the ladder by set_content_exponent.py.
+    float machine_leverage_knowledge_halfsat = 34196.0f;
+    float machine_leverage_halfsat = 6.2e8f;  // PER UNIT OF WORKABLE EXTENT, same reason and
+                                          // same reference: three times the built stock
+                                          // of a mature pre-industrial province before
+                                          // the land counts as half mechanised.
                                                // above the ~1,000 an established AGRARIAN
                                                // province holds here, so the leverage is a
                                                // property of industrial capital rather than
@@ -1046,6 +1073,25 @@ struct TechnologyAdoptionConfig {
     // And how far the previous era's main path must slip before the era is lost. Below 1
     // so a society on the edge does not flap year to year.
     float era_fall_hysteresis = 0.60f;
+
+    // A TECHNIQUE TAKEN UP DOES NOT VANISH WHEN THE CAPITAL DIPS. Penetration is computed
+    // from what a province knows and has built, and built capital is a flow-maintained
+    // stock that falls fast when investment stops — but the fields are still cleared, the
+    // terraces still cut, the ploughs still in the barn, and the people still know how to
+    // use them. So the effects move toward what knowing-and-having currently supports on a
+    // generational clock rather than tracking it year to year.
+    //
+    // This is what closes a positive feedback that made the model uninhabitable. Political
+    // stress raises the expropriation hazard, which stops investment, which drains capital,
+    // which — once capital gates technique — REMOVED TECHNOLOGY, which lowered the food
+    // ceiling, which raised stress again. Measured: a stress spike at year 7,700 took the
+    // food surplus from 1.37 to 0.68 and the non-farming share from 11% to 1% inside a
+    // century, and the population fell 90%. Techniques are not lost at the speed of a
+    // treasury.
+    //
+    // ~40 years: a technique spreads through a society, or is lost from it, over a
+    // generation or two, which is what the historical record of both looks like.
+    float technique_inertia_per_year = 0.025f;
 
     // Difficulty at or below which a technique costs no accumulated knowledge: what a
     // society has by being one. Difficulty 1.0 is "months of one person's effort" — fire,
@@ -1285,7 +1331,7 @@ struct KnowledgeConfig {
     // Anchored on one date, the Bronze Age at 3300 BCE, because a clock needs setting
     // once. Where the other six land is then the model's own answer, and a world that
     // takes longer or less is not failing at anything.
-    float knowledge_rate = 0.0983978393f;
+    float knowledge_rate = 0.15f;
     float adversity_base = 0.35f;               // drive with no special pressure (idle curiosity)
     float adversity_hazard_weight = 0.6f;       // drive from the world's hazard above a gentle one
     float adversity_scarcity_weight = 1.4f;     // drive from food scarcity (Malthusian pressure)

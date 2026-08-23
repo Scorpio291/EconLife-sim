@@ -103,6 +103,7 @@ struct SocietySnapshot {
     double records_per_head = 0.0;      // codified knowledge per person — the apparatus that
                                         // can find and enforce a claim on someone else's crop
     double topsoil = 0.0;               // mean soil profile remaining: what erosion took
+    double food_store_years = 0.0;      // mean granary, in years of the whole population's food
     double fish_capacity = 0.0;         // mean fishery carrying capacity (the stock's K)
     double fishers = 0.0;               // total people working the water
 };
@@ -147,6 +148,10 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.ghost_land += static_cast<double>(p.cohort_stats->ghost_land_fraction);
         s.forest += static_cast<double>(p.cohort_stats->forest_health);
         s.topsoil += static_cast<double>(p.cohort_stats->topsoil);
+        if (p.cohort_stats->total_population > 0)
+            s.food_store_years += static_cast<double>(p.cohort_stats->food_store) /
+                                  (static_cast<double>(p.cohort_stats->total_population) *
+                                   static_cast<double>(kTicksPerYear));
         s.fish_capacity += static_cast<double>(p.fisheries.carrying_capacity);
         s.fishers += static_cast<double>(p.cohort_stats->commons_fishers);
         s.fish_stock += static_cast<double>(p.fisheries.current_stock);
@@ -242,6 +247,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.plague_susceptible /= static_cast<double>(w.provinces.size());
         s.records_per_head /= static_cast<double>(w.provinces.size());
         s.topsoil /= static_cast<double>(w.provinces.size());
+        s.food_store_years /= static_cast<double>(w.provinces.size());
         s.fish_capacity /= static_cast<double>(w.provinces.size());
     s.businesses = static_cast<uint32_t>(w.npc_businesses.size());
     return s;

@@ -142,7 +142,11 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     //      biomass a commons eats out of, and the soil profile under it. Real stocks with
     //      century-to-millennium histories; reloading without them would hand a
     //      civilisation back forests it had cut and ground it had lost.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 31);
+    // v32: cohort_stats.tech_{food,mortality,knowledge}_mult — what a province can
+    //      actually DO. These carry generational inertia now (a technique is not lost at
+    //      the speed of a treasury), so they are accumulated state rather than a value
+    //      recomputed from scratch each tick.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 32);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

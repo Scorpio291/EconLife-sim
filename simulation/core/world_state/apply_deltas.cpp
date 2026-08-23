@@ -709,6 +709,10 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.net_feedable_surplus_replacement;
                     cs.net_feedable_surplus = (v >= 0.0f) ? v : 0.0f;
                 }
+                if (d.granary_cover_years_replacement.has_value()) {
+                    float v = *d.granary_cover_years_replacement;
+                    cs.granary_cover_years = (v >= 0.0f && !std::isnan(v)) ? v : 0.0f;
+                }
                 if (d.commons_fishers_replacement.has_value()) {
                     // Replacement; subsistence recomputes who works the water each tick.
                     float v = *d.commons_fishers_replacement;

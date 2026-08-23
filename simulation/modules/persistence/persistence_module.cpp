@@ -457,6 +457,12 @@ void write_province(ByteWriter& w, const Province& p) {
         // out, and with them a carrying ceiling it no longer had.
         w.write_float(p.cohort_stats->forest_health);
         w.write_float(p.cohort_stats->topsoil);
+        // v32: what a province can actually DO. These carry generational inertia now, so
+        // they are accumulated state rather than a value recomputed from scratch each
+        // tick; reloading without them would hand a society back technique it had lost.
+        w.write_float(p.cohort_stats->tech_food_mult);
+        w.write_float(p.cohort_stats->tech_mortality_mult);
+        w.write_float(p.cohort_stats->tech_knowledge_mult);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1365,6 +1371,14 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
         if (schema_ver >= 31u) {
             p.cohort_stats->forest_health = r.read_float();
             p.cohort_stats->topsoil = r.read_float();
+        }
+        // v32: the technique a province actually holds. Older saves default to neutral and
+        // climb back toward what they know and have over a generation, which is the right
+        // recovery for a save that recorded no such stock.
+        if (schema_ver >= 32u) {
+            p.cohort_stats->tech_food_mult = r.read_float();
+            p.cohort_stats->tech_mortality_mult = r.read_float();
+            p.cohort_stats->tech_knowledge_mult = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but

@@ -138,11 +138,22 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // This is also the only way the ceiling can fall WITHOUT anybody forgetting: capital
     // wears out and is rebuilt only out of a real surplus, so a population that outruns
     // its capital loses the use of what it still knows.
-    const float capital_per_head =
-        population > 0 ? std::max(0.0f, cs.productive_capital) / static_cast<float>(population)
-                       : 0.0f;
-    const float applied = capital_per_head /
-                          (capital_per_head + std::max(1.0f, cfg_.capital_utilisation_halfsat));
+    // MEASURED AGAINST THE LAND, NOT THE HEADCOUNT. A mill serves a valley; drains, walls,
+    // terraces and cleared fields are fixed to the ground and do not become more useful
+    // because fewer people are left to use them.
+    //
+    // Capital per HEAD is a ratio whose denominator can collapse, and it did: a province
+    // that lost nine tenths of its people read as ten times better equipped, so the
+    // knowing-and-having gate flew open, the carrying ceiling jumped eightfold, the food
+    // signal read 8.5, fertility pinned at the biological cap, and the population
+    // overshot and crashed again. Measured, that ran a 90% boom-and-bust every seven
+    // hundred years and the climb never left the Iron Age. Per unit of workable ground
+    // the same die-off leaves the province exactly as equipped as it was, which is what a
+    // silent mill actually is.
+    const float capital_per_land =
+        workable_extent > 0.0f ? std::max(0.0f, cs.productive_capital) / workable_extent : 0.0f;
+    const float applied = capital_per_land /
+                          (capital_per_land + std::max(1.0f, cfg_.capital_utilisation_halfsat));
 
     // MACHINES REPLACE HANDS (R11). Capital gated how much of its knowledge a place could
     // use; it did not let capital do the other and more famous thing. An American farmer
@@ -163,9 +174,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // (Measured without the knowledge gate: era 2 — the Bronze Age, year 287 — came out
     // with 75% of its people off the land and 58% of them in towns, because generic
     // capital alone was conferring ninefold labour leverage.)
-    const float knows_machines = K / (K + std::max(1.0f, cfg_.knowledge_productivity_halfsat));
+    const float knows_machines =
+        K / (K + std::max(1.0f, cfg_.machine_leverage_knowledge_halfsat));
     const float has_machines =
-        capital_per_head / (capital_per_head + std::max(1.0f, cfg_.machine_leverage_halfsat));
+        capital_per_land / (capital_per_land + std::max(1.0f, cfg_.machine_leverage_halfsat));
     const float machine_leverage =
         1.0f + cfg_.machine_leverage_max * knows_machines * has_machines;
     // What one person's labour is worth on the land, machines included.
@@ -469,6 +481,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     rd.region_id = prov.region_id;
     rd.subsistence_surplus_replacement = growth_surplus;
     rd.import_dependence_replacement = import_dependence;
+    // What the granary can cover, in years of everybody's food. Computed above for the
+    // stratum it carries through lean years; published because hunger is what the store
+    // CANNOT cover, and the demography needs that rather than a full-or-empty flag.
+    rd.granary_cover_years_replacement = store_cover;
     // WHO WORKS THE WATER. The fishery's share of the food base, applied to the hands
     // actually producing food — the people whose living is the fish. seasonal_agriculture
     // turns this into the effort behind the Schaefer harvest, so a fishery is pressed by

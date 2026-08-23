@@ -768,8 +768,24 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // structural_demography had not run, which is exactly the failure mode
                 // the grain catchment signal had. Not worth it for the measured gain.
                 const float birth_surplus = cs.subsistence_surplus_ratio;
-                const float famine_surplus =
-                    (commons && cs.food_store <= 0.0f) ? cs.subsistence_surplus_ratio : 1.0f;
+                // A GRANARY PROTECTS IN PROPORTION TO WHAT IS IN IT. What a population
+                // actually goes hungry on is the shortfall the store cannot cover, so a
+                // full store makes a bad year invisible, a half-empty one halves it, and
+                // an empty one leaves the harvest to speak for itself.
+                //
+                // It used to be a switch: no hunger at all while any grain remained, then
+                // the full deficit the moment the store hit zero. That is a buffer with a
+                // hard edge, and it is what turned an ordinary Malthusian approach into a
+                // collapse. Measured: a society drifting down from a surplus of 2.0 to
+                // 0.98 over two centuries drained its store to nothing and then lost
+                // fifteen percent of its people a decade, over and over, instead of
+                // settling at its ceiling.
+                float famine_surplus = 1.0f;
+                if (commons) {
+                    const float ratio = cs.subsistence_surplus_ratio;
+                    const float cover = std::clamp(cs.granary_cover_years, 0.0f, 1.0f);
+                    famine_surplus = ratio + (1.0f - ratio) * cover;
+                }
                 // Radiation chronically depresses fertility (planetary — applies in all
                 // eras, never released, unlike the conquerable disease/geology shocks).
                 const float fertility_mult =

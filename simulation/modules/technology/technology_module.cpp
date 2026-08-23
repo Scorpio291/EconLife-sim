@@ -85,11 +85,21 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
         const float capital_per_head = pop > 0.0f ? cs.productive_capital / pop : 0.0f;
         const EraTechEffects e = state.technology_catalog->effects_for(
             cs.knowledge_level, capital_per_head, state.era_catalog, adoption_cfg_);
+        // Toward what knowing-and-having supports, on a generational clock — not to it.
+        // See TechnologyAdoptionConfig::technique_inertia_per_year: capital is a
+        // flow-maintained stock and falls fast when investment stops, but the cleared
+        // fields and the ploughs in the barn do not, and neither does knowing how to use
+        // them. Without this, a political-stress spike removed a society's technology
+        // inside a century and took the food ceiling down with it.
+        const float rate = std::clamp(adoption_cfg_.technique_inertia_per_year, 0.0f, 1.0f);
+        auto toward = [rate](float held, float target) {
+            return held + (target - held) * rate;
+        };
         RegionDelta rd{};
         rd.region_id = p.region_id;
-        rd.tech_food_mult_replacement = e.food_mult;
-        rd.tech_mortality_mult_replacement = e.mortality_mult;
-        rd.tech_knowledge_mult_replacement = e.knowledge_mult;
+        rd.tech_food_mult_replacement = toward(cs.tech_food_mult, e.food_mult);
+        rd.tech_mortality_mult_replacement = toward(cs.tech_mortality_mult, e.mortality_mult);
+        rd.tech_knowledge_mult_replacement = toward(cs.tech_knowledge_mult, e.knowledge_mult);
         delta.region_deltas.push_back(rd);
 
         best_spokes = std::max(best_spokes,

@@ -35,7 +35,9 @@ s = re.sub(r'float difficulty_knowledge_exponent = [0-9.eE+-]+f;',
 for name, val in [("sustainable_yield_technique_halfsat", round(T[0] * 1.2)),
                   ("knowledge_productivity_halfsat", round(T[1] * 1.4)),
                   ("discovery_difficulty_halfsat", round(T[1] * 2.4)),
-                  ("printing_knowledge_halfsat", round(T[4] * 2.2))]:
+                  ("printing_knowledge_halfsat", round(T[4] * 2.2)),
+                  # mechanised farming is an industrial technique: gate it at the era-6 rung
+                  ("machine_leverage_knowledge_halfsat", round(T[5]))]:
     s = re.sub(r'float %s = [0-9.eE+-]+f;' % name, 'float %s = %d.0f;' % (name, val), s, count=1)
 p.write_text(s)
 

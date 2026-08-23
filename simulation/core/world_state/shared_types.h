@@ -330,6 +330,11 @@ struct RegionCohortStats {
     // plague and land the same catch. Fish are a population interacting with a
     // population; the pressure has to come from the people.
     float commons_fishers = 0.0f;
+
+    // HOW MANY YEARS OF FOOD THE GRANARY HOLDS for everybody here, published by
+    // subsistence (which computes it anyway for the stratum it carries through lean
+    // years). What hunger a population actually feels is what the store cannot cover.
+    float granary_cover_years = 0.0f;
     // Share of the population NOT working the land — the stratum the food surplus
     // frees (published by subsistence, which computes it from population minus the
     // farmers the harvest needs, ceilinged by the regime). A real located stratum of

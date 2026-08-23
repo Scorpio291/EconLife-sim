@@ -980,3 +980,25 @@ TEST_CASE("rate calibration: year each era is reached on earthlike", "[.rate-cal
         std::printf("ERA %zu YEAR %d\n", e, seen[e] ? static_cast<int>(first[e]) : -1);
 }
 
+// Fine-resolution look at the limit cycle: what actually kills the population, and what
+// the ceiling is doing while it happens.
+TEST_CASE("society observe: inside the cycle", "[.society-cycle-detail]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+    std::printf("\n  year |    pop |  d%%/yr | surplus | spec%% | soil  | topsl | forest |"
+                " store/yr | plague | war    | faction | PSI    | era\n");
+    for (size_t i = 1; i < series.size(); ++i) {
+        const auto& s = series[i];
+        if (s.year < 6400 || s.year > 9200 || s.year % 50 != 0) continue;
+        const double prev = series[i - 1].total_population;
+        const double g = prev > 0 ? 100.0 * (s.total_population / prev - 1.0) : 0.0;
+        std::printf("  %5u | %6.0f | %+6.2f | %7.3f | %4.0f%% | %.3f | %.3f | %.4f |"
+                    " %8.2f | %.3f | %.4f | %.4f | %.4f | %2d\n",
+                    s.year, s.total_population, g, s.mean_surplus,
+                    s.cohort_specialist_share * 100.0, s.soil_health, s.topsoil, s.forest,
+                    s.food_store_years, s.plague_susceptible, s.max_war_deaths,
+                    s.max_faction_deaths, s.political_stress, s.era);
+    }
+}

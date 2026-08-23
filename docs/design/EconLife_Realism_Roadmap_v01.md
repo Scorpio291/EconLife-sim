@@ -1183,6 +1183,70 @@ crash. The wheel did not cause it and does not cure it; it is R15's open item an
 next thing to work on.
 
 
+## R17. The limit cycle was a ratio with a collapsing denominator (LANDED 2026-08-23)
+
+Earthlike is the grounding case: it should land near year 12,000. It was instead running a
+90% boom-and-bust every seven hundred years and never leaving the Iron Age. Four defects,
+and the last is the one that mattered.
+
+**Capital per HEAD is a ratio whose denominator collapses.** It gated two things — how much
+of its knowledge a province can apply (R9) and how far machines replace hands (R11) — and
+after a die-off it lies in the most damaging possible direction: a province that loses nine
+tenths of its people reads as *ten times better equipped*. Measured, that closed a loop that
+made the model uninhabitable:
+
+> crash → capital/head spikes → the knowing-and-having gate flies open → the carrying
+> ceiling jumps eightfold → the food signal reads 8.5 → fertility pins at the biological
+> cap → the population overshoots → crash
+
+A mill serves a valley, not a headcount. Drains, walls, terraces, roads and cleared fields
+are fixed to the ground and do not become more useful because fewer people are left to use
+them. Both gates now measure capital against **workable extent**, where the same die-off
+leaves a province exactly as equipped as it was — which is what a silent mill actually is.
+This is the same correction the labour saturation needed in R12, in a different place: ask
+what the denominator is, and whether it can collapse.
+
+**Three more found on the way there.**
+
+*Mechanised farming borrowed the wrong knowledge gate.* `machine_leverage` used
+`knowledge_productivity_halfsat` — the bar for technique raising the ceiling generally —
+so on the content knowledge axis a Bronze Age society read as 80% "knowing machines", and a
+fiftyfold labour leverage was one capital spike away. It now has its own gate set at the
+industrial rung of the content ladder. A Bronze Age society whose population halved does not
+get tractors.
+
+*A technique is not lost at the speed of a treasury.* Making capital load-bearing for
+technique created a second positive feedback: political stress raises the expropriation
+hazard, which stops investment, which drains capital, which REMOVED TECHNOLOGY, which
+lowered the ceiling, which raised stress. A stress spike took the surplus from 1.37 to 0.68
+and the non-farming share from 11% to 1% inside a century. Technique effects now move toward
+what knowing-and-having supports on a generational clock (~40 years): the fields are still
+cleared and the ploughs still in the barn.
+
+*A granary with a hard edge.* Famine mortality was off entirely while any grain remained and
+then arrived at full strength the moment the store hit zero. A store protects in proportion
+to what is in it, so a full store makes a bad year invisible, a half-empty one halves it,
+and an empty one leaves the harvest to speak for itself.
+
+**Measured result: the cycle is gone.** The earthlike dawn now falls to a floor of ~2,600
+and holds it for six thousand years without a single crash, the surplus rises smoothly from
+1.26 to 2.16, soil recovers from 0.89 to 0.99, and the non-farming share climbs 4% to 16%.
+That is a Malthusian dawn rather than a sawtooth.
+
+**Where the climb stands.** Bronze Age 7,259 · Iron Age 7,571 · Classical 8,014 · Medieval
+11,430, against history's 6,700 / 8,800 / 9,450 / 10,500 — all four within about 1,500 years
+from a single dial. It then stalls: Early Modern and beyond are not reached inside 13,000
+years.
+
+**And the clock response has gone bimodal**, which is the next thing to understand. Between
+rates the era-2 date jumps discontinuously (7,259 at 0.15, 1,980 at 1.0, and *later* at
+values between), which is the signature of a bootstrap threshold: building capital needs a
+surplus and the surplus needs applied capital, so a society either gets over the hump or
+does not. That is plausible as take-off dynamics and fatal as a calibration surface.
+Lowering the Jones exponent (beta 1.0 -> 0.5) was tried and made it worse, so the brake is
+not the lever.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;
