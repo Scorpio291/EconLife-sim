@@ -96,9 +96,26 @@ struct TechnologyNode {
     // A society that pours everything into its side branches becomes formidable at what
     // it does and stays where it is, which is a real thing societies do.
     //
-    // Optional trailing CSV column ("main"/"side"); absent means side, so nothing becomes
-    // a required technique by accident.
+    // Optional trailing CSV column ("main"/"side"/"hub"); absent means side, so nothing
+    // becomes a required technique by accident.
     bool main_path = false;
+
+    // THE HUB OF THE WHEEL — the founding package, what a people arrives with rather than
+    // works out: fire, foraging lore, cordage, flint, the bow, oral tradition, burial
+    // rites, the first pots and cloth. On the trunk of its spoke and drawn as such, but
+    // never counted toward advancing an era, because a threshold the starting position
+    // already satisfies is not a threshold. Measured with the founding package inside the
+    // measure, era 1 was 40% met before a society had learned anything and the Neolithic
+    // ended in eight hundred years however slowly it learned.
+    bool hub = false;
+
+    // WHICH SPOKE OF THE WHEEL. Five, and each runs the whole way from the hearth to the
+    // reactor: energy, materials, life, knowledge, society. A society advances when it
+    // has worked out the main line of MOST of them — so it may neglect a spoke and still
+    // move on, which is the only way the model can hold a Song China (deep in knowledge,
+    // thin in institutions) and a Britain (the reverse) as different kinds of society
+    // rather than as one society at different speeds.
+    std::string spoke;
 };
 
 // Aggregated tech-tree effects active at a given era (product over available nodes).

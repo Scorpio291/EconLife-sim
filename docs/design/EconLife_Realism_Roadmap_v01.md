@@ -1130,6 +1130,59 @@ behavioural problem downstream of an architecture that is finally the right shap
 than a defect in that architecture.
 
 
+## R16. The wheel: five spokes, a hub, and four of five to turn an era (LANDED 2026-08-23)
+
+R15 made the era a set of techniques. This makes it a WHEEL, and expands the main path from
+58 nodes to 173.
+
+**Five spokes, each running the whole way from the hearth to the reactor:** energy,
+materials, life, knowledge, society. Every era authors a main line in every spoke — 4 to 5
+techniques each — so a society always has five things it could be working on and must
+choose. Filling that in meant authoring the eras where a spoke had nothing: era 1 and era 6
+had no energy content at all, era 7 no society content, and eras 3-4 barely any energy.
+Thirty-five nodes were written for those gaps (the hearth, the bow drill, banked embers,
+draught animals, the forge hearth, the hypocaust, the horse gin, peat cutting, the Savery
+pump, limited liability, trade unions, the factory acts, compulsory schooling and the rest).
+
+**The hub.** Thirty nodes cost nothing to know — fire-making, foraging lore, cordage, flint
+knapping, hafting, the bow, oral tradition, burial rites, the first pots and cloth. These
+are unarguably on the trunk (there is no civilisation without fire) but they are not things
+a society RESEARCHES; they are what a people arrives with. So they sit at the centre of the
+wheel, drawn on their spokes, and excluded from the advancement measure.
+
+That exclusion fixes a real defect rather than tidying a diagram. With the founding package
+inside the measure, era 1's main path was 40% satisfied before a society had learned a
+single thing, and the Neolithic ended in eight hundred years no matter how slowly it
+learned. The signature was the clock bisection returning the same year for every value of
+the dial — the advancement was not knowledge-limited at all.
+
+**Four of five spokes to advance.** Not all five, which produces only well-rounded societies
+and makes any single neglected spoke a hard stop. Not the mean, which lets brilliant
+engineering with no institutions carry a society through — the thing several sessions of
+work went into making impossible. Four of five is the shape the record has: Song China deep
+in knowledge and thin in institutions, Britain rather the reverse, and both advanced. It is
+also the first time the model can hold those as different KINDS of society rather than one
+society at two speeds.
+
+**The tree now:** 502 nodes — 173 main, 299 side, 30 hub. Materials 151, life 81, knowledge
+80, society 65, energy 43 across eras 1-7. Every prerequisite resolves, nothing depends on a
+later era, no cycles.
+
+**And the `[pacing]` gate stopped asserting a distance.** It required earthlike to reach era
+4 or better. That is grading the ascent, which is the one thing the gate exists not to do —
+the same reading fails a world that is simply slow. Liveness is now the only distance claim
+it makes: a world must leave the Neolithic. Shape (order, no skips, nothing free, a long
+dawn) and divergence between world classes carry the rest.
+
+**Still open, and unchanged by this work:** the earthlike climb stalls in eras 3-4. Bronze
+Age at 6,655 (anchored), Iron Age at 7,215, Classical at 11,153, and then a violent
+Malthusian limit cycle — population swinging between 46,000 and 460,000, surplus between
+0.78 and 8.49, knowledge cycling rather than accumulating. The cycle is: crash, then a small
+population sitting on a high technique ceiling, then explosive growth, then overshoot, then
+crash. The wheel did not cause it and does not cure it; it is R15's open item and it is the
+next thing to work on.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;

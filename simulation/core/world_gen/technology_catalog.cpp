@@ -105,8 +105,12 @@ bool TechnologyCatalog::load_nodes_csv(const std::string& filepath) {
             node.mortality_mult = parse_mult(fields[14], 1.0f);
         // Main path or side path (optional trailing column). Absent => side, so a tree
         // that predates the column cannot accidentally gate an era on every node in it.
-        if (fields.size() > 15)
+        if (fields.size() > 15) {
             node.main_path = (fields[15] == "main" || fields[15] == "1");
+            node.hub = (fields[15] == "hub");
+        }
+        if (fields.size() > 16)
+            node.spoke = fields[16];
 
         node_index_[node.node_key] = nodes_.size();
         nodes_.push_back(std::move(node));
@@ -287,20 +291,45 @@ float TechnologyCatalog::knowledge_required(uint8_t era_available, float difficu
 
 bool TechnologyCatalog::has_main_path(uint8_t era) const {
     for (const auto& n : nodes_)
-        if (n.era_available == era && n.main_path)
+        if (n.era_available == era && n.main_path && !n.hub)
             return true;
     return false;
 }
 
+std::vector<std::string> TechnologyCatalog::spokes_in(uint8_t era) const {
+    std::vector<std::string> out;
+    for (const auto& n : nodes_) {
+        if (n.era_available != era || !n.main_path || n.hub || n.spoke.empty())
+            continue;
+        if (std::find(out.begin(), out.end(), n.spoke) == out.end())
+            out.push_back(n.spoke);
+    }
+    std::sort(out.begin(), out.end());  // fixed order: this feeds a count, not a display
+    return out;
+}
+
+uint32_t TechnologyCatalog::spokes_worked(uint8_t era, float knowledge, float capital_per_head,
+                                          const EraCatalog& eras,
+                                          const TechnologyAdoptionConfig& cfg, float share) const {
+    uint32_t worked = 0;
+    for (const auto& spoke : spokes_in(era))
+        if (main_path_progress(era, knowledge, capital_per_head, eras, cfg, spoke) >= share)
+            ++worked;
+    return worked;
+}
+
 float TechnologyCatalog::main_path_progress(uint8_t era, float knowledge,
                                             float capital_per_head, const EraCatalog& eras,
-                                            const TechnologyAdoptionConfig& cfg) const {
+                                            const TechnologyAdoptionConfig& cfg,
+                                            const std::string& spoke) const {
     const double K = static_cast<double>(std::max(0.0f, knowledge));
     const double c = static_cast<double>(std::max(0.0f, capital_per_head));
     double sum = 0.0;
     uint32_t count = 0;
     for (const auto& n : nodes_) {
-        if (n.era_available != era || !n.main_path)
+        if (n.era_available != era || !n.main_path || n.hub)
+            continue;
+        if (!spoke.empty() && n.spoke != spoke)
             continue;
         const double k_req = static_cast<double>(knowledge_required(n.era_available, n.difficulty,
                                                                     eras));
@@ -313,7 +342,7 @@ float TechnologyCatalog::main_path_progress(uint8_t era, float knowledge,
         ++count;
     }
     if (count == 0)
-        return 1.0f;  // an era with no main path does not hold anybody back
+        return 1.0f;  // a spoke this era authors nothing for does not hold anybody back
     return static_cast<float>(sum / static_cast<double>(count));
 }
 

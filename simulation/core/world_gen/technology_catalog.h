@@ -104,17 +104,34 @@ class TechnologyCatalog {
     // real historical dates rather than a spine of techniques to work out.
     bool has_main_path(uint8_t era) const;
 
-    // HOW FAR THROUGH AN ERA'S MAIN PATH a society has got, in [0,1] — the mean adoption
-    // of the era's spine techniques. This is what advances an era: not a knowledge number
-    // and not a calendar, but whether the society has actually worked out the things the
-    // era is made of. Side paths are excluded on purpose; they are depth, and a society
-    // may take as many or as few of them as it likes without being held back or hurried.
+    // HOW FAR THROUGH ONE SPOKE'S MAIN LINE a society has got in this era, in [0,1] — the
+    // mean adoption of that spoke's spine techniques. Pass an empty spoke for the era's
+    // whole main path across all spokes.
+    //
+    // Side paths are excluded on purpose: they are depth, and a society may take as many
+    // or as few of them as it likes without being held back or hurried. So is the hub —
+    // the founding package a people arrives with, which would otherwise satisfy a
+    // threshold before anything had been learned.
     //
     // Because adoption already carries BOTH knowing and having, this subsumes the two
     // separate era gates it replaces: knowing how to make bronze is not the Bronze Age,
     // having the smelters is, and a node needs both before it counts.
     float main_path_progress(uint8_t era, float knowledge, float capital_per_head,
-                             const EraCatalog& eras, const TechnologyAdoptionConfig& cfg) const;
+                             const EraCatalog& eras, const TechnologyAdoptionConfig& cfg,
+                             const std::string& spoke = std::string()) const;
+
+    // The spokes this era actually has a main line in, in a fixed order. An era that
+    // authors nothing for a spoke cannot hold a society to it.
+    std::vector<std::string> spokes_in(uint8_t era) const;
+
+    // HOW MANY SPOKES a society has worked the main line of, at or past `share`. An era
+    // advances on MOST of them rather than all: a society may neglect one and still move
+    // on, which is what lets the model hold a Song China (deep in knowledge, thin in
+    // institutions) and a Britain (the reverse) as different kinds of society rather than
+    // one society at two speeds.
+    uint32_t spokes_worked(uint8_t era, float knowledge, float capital_per_head,
+                           const EraCatalog& eras, const TechnologyAdoptionConfig& cfg,
+                           float share) const;
 
     // What a technique costs a society to take up: the learning its era represents, so a
     // society entering an era is half-way into that era's techniques. Anchored on the era

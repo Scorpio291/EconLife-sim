@@ -127,13 +127,23 @@ Do not merge code that regresses benchmarks without explicit approval.
 - Floating-point accumulations use canonical sort order (good_id asc,
   province_id asc) to prevent IEEE 754 non-associativity drift
 
-## The Technology Tree Drives the Climb
-467 nodes in `packages/base_game/technology/technology_nodes.csv`, each marked `main` or
-`side`. An era advances when a society has worked out enough of that era's MAIN PATH
-(`TechnologyAdoptionConfig::era_advance_main_share`), where a node counts only to the
-degree the society both KNOWS it (accumulated knowledge vs the node's cost) and HAS the
-means (built capital per head). Side paths are depth — never required, paying in bonuses
-and later prerequisites.
+## The Technology Wheel Drives the Climb
+502 nodes in `packages/base_game/technology/technology_nodes.csv`, on five spokes that each
+run the whole way from the hearth to the reactor: **energy, materials, life, knowledge,
+society**. Every node is `main`, `side` or `hub`.
+
+- **main** — a spoke's spine in one era. An era turns when a society has worked out
+  `era_advance_main_share` of the main line in `era_advance_spokes_required` of the five
+  spokes (four of five), where a node counts only to the degree the society both KNOWS it
+  (accumulated learning vs the node's cost) and HAS the means (built capital per head).
+  Four of five is deliberate: a society may neglect a spoke and still advance, which is the
+  only way the model can hold a Song China and a Britain as different kinds of society.
+- **side** — depth. Never required, never a toll; pays in bonuses, unlocks and later
+  prerequisites.
+- **hub** — the founding package a people arrives with (fire, foraging, cordage, flint, the
+  bow, oral tradition). On the trunk, NEVER in the advancement measure: a threshold the
+  starting position already satisfies is not a threshold, and with the hub inside it era 1
+  was 40% met before anything was learned.
 
 - **Knowledge is measured in technique-equivalents**, defined by the tree's own content.
   The era ladder in `eras.csv` is the running total of node weights and is NEVER fitted;

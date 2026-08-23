@@ -810,7 +810,7 @@ struct SubsistenceConfig {
     // the era thresholds (3,830 to leave the Neolithic) because rotation and manuring
     // are early, cheap discoveries — a society should learn to keep its fields alive
     // long before it learns metallurgy.
-    float sustainable_yield_technique_halfsat = 88.0f;  // RESCALED to the content knowledge axis: the knowledge a society holds as it leaves the Neolithic
+    float sustainable_yield_technique_halfsat = 110.0f;  // RESCALED to the content knowledge axis: the knowledge a society holds as it leaves the Neolithic
     // Fraction of remaining fertility lost per year at DOUBLE the sustainable harvest.
     // ~1.5%/yr means a society mining its land at 2x loses a third of its fertility in
     // a lifetime — the order of the Mesopotamian salinisation record.
@@ -880,7 +880,7 @@ struct SubsistenceConfig {
     // max = total multiplier headroom; halfsat = knowledge at half the boost. 0 max
     // disables the coupling.
     float knowledge_productivity_max = 26.0f;
-    float knowledge_productivity_halfsat = 406.0f;  // RESCALED to the content knowledge axis: early Iron Age learning
+    float knowledge_productivity_halfsat = 449.0f;  // RESCALED to the content knowledge axis: early Iron Age learning
 
     // --- KNOWING IS NOT HAVING (R9) --------------------------------------------------
     // The boost above was applied to knowledge ALONE, so the model could not express the
@@ -1028,13 +1028,21 @@ struct TechnologyAdoptionConfig {
     // This replaced two fitted numbers per era (knowledge_to_advance, capital_to_advance)
     // whose values were chosen so that one world hit seven historical dates. An era is a
     // set of techniques, and how long a society takes over them is its own business.
-    // 0.75 — three quarters of the era's spine actually worked out. At a half it was
-    // nearly met by what the era STARTS with: four of the Neolithic's ten main techniques
-    // are the package a founding people already has (difficulty at or below the free
-    // floor), so a society crossed the line with almost nothing earned and left the
-    // Neolithic in eight hundred years no matter how slowly it learned. A threshold that
-    // the starting position already half satisfies is not a threshold.
+    // How much of ONE SPOKE's main line in an era counts as having worked that spoke out.
+    // At a half it was nearly met by what the era STARTS with, before the founding
+    // package was moved to the hub and out of the measure entirely.
     float era_advance_main_share = 0.75f;
+    // And how many of the era's five spokes — energy, materials, life, knowledge, society
+    // — must be worked out before the era turns. FOUR OF FIVE, so a society may neglect
+    // one and still move on.
+    //
+    // That slack is the whole point of a wheel rather than a list. Requiring all five
+    // produces only well-rounded societies and makes any single neglected spoke a hard
+    // stop; averaging across them lets brilliant engineering with no institutions carry a
+    // society, which is the thing we spent this session making impossible. Four of five
+    // is the shape the record actually has: Song China ran deep in knowledge and thin in
+    // institutions, Britain rather the reverse, and both advanced.
+    uint32_t era_advance_spokes_required = 4;
     // And how far the previous era's main path must slip before the era is lost. Below 1
     // so a society on the edge does not flap year to year.
     float era_fall_hysteresis = 0.60f;
@@ -1078,7 +1086,7 @@ struct KnowledgeConfig {
                                                   // society with a fixed learned stratum
                                                   // accumulates as sqrt(t) rather than
                                                   // linearly — steady progress, no spike.
-    float discovery_difficulty_halfsat = 696.0f;  // RESCALED to the content knowledge axis: mid Iron Age learning  // the stock at which the next discovery
+    float discovery_difficulty_halfsat = 770.0f;  // RESCALED to the content knowledge axis: mid Iron Age learning  // the stock at which the next discovery
                                                     // costs twice what the first did. Below
                                                     // it the dawn is unaffected; the
                                                     // measured runaway begins just above.
@@ -1197,7 +1205,7 @@ struct KnowledgeConfig {
     // saturates rather than switching: presses spread, they do not appear everywhere at
     // once. Threshold set near where an earthlike world stands around its Early Modern
     // era, which is when it actually happened.
-    float printing_knowledge_halfsat = 22994.0f;  // RESCALED to the content knowledge axis: Early Modern learning, which is when the press actually spread
+    float printing_knowledge_halfsat = 23540.0f;  // RESCALED to the content knowledge axis: Early Modern learning, which is when the press actually spread
     // How much faster a press copies than a hand. Two orders of magnitude, from the
     // manuscript-to-print book counts above.
     float printing_copy_multiplier = 100.0f;
@@ -1277,7 +1285,7 @@ struct KnowledgeConfig {
     // Anchored on one date, the Bronze Age at 3300 BCE, because a clock needs setting
     // once. Where the other six land is then the model's own answer, and a world that
     // takes longer or less is not failing at anything.
-    float knowledge_rate = 0.0772691787f;
+    float knowledge_rate = 0.0983978393f;
     float adversity_base = 0.35f;               // drive with no special pressure (idle curiosity)
     float adversity_hazard_weight = 0.6f;       // drive from the world's hazard above a gentle one
     float adversity_scarcity_weight = 1.4f;     // drive from food scarcity (Malthusian pressure)

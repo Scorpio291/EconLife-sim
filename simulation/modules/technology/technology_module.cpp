@@ -73,8 +73,9 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
         return;
 
     const uint8_t era = state.technology.current_era;
-    float best_progress = 0.0f;   // this era's main path, at the province furthest through it
-    float best_previous = 0.0f;   // and the era it entered from, for the fall
+    const float advance_at = std::clamp(adoption_cfg_.era_advance_main_share, 0.0f, 1.0f);
+    uint32_t best_spokes = 0;   // spokes of this era worked out, at the furthest province
+    float best_previous = 0.0f;  // and the era it entered from, for the fall
 
     for (const auto& p : state.provinces) {
         if (!p.cohort_stats)
@@ -91,10 +92,10 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
         rd.tech_knowledge_mult_replacement = e.knowledge_mult;
         delta.region_deltas.push_back(rd);
 
-        best_progress = std::max(best_progress,
-                                 state.technology_catalog->main_path_progress(
-                                     era, cs.knowledge_level, capital_per_head,
-                                     state.era_catalog, adoption_cfg_));
+        best_spokes = std::max(best_spokes,
+                               state.technology_catalog->spokes_worked(
+                                   era, cs.knowledge_level, capital_per_head,
+                                   state.era_catalog, adoption_cfg_, advance_at));
         if (era >= 2)
             best_previous = std::max(best_previous,
                                      state.technology_catalog->main_path_progress(
@@ -113,14 +114,30 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
     // properly, and there is no correct date for either — the model has no business
     // grading a fast or a slow ascent as success or failure.
     const uint8_t max_era = state.era_catalog.max_era();
-    const float advance_at = std::clamp(adoption_cfg_.era_advance_main_share, 0.0f, 1.0f);
     // Only where the content actually declares a spine. The modern band has real
     // historical dates and no main path authored, and it keeps the calendar-and-score
     // transition in check_era_transition — an era with no main path must not advance the
     // instant it is entered just because the mean of an empty set is vacuous.
     if (!state.technology_catalog->has_main_path(era))
         return;
-    if (era < max_era && best_progress >= advance_at) {
+
+    // AN ERA IS A WHEEL OF FIVE SPOKES — energy, materials, life, knowledge, society —
+    // and it turns when a society has worked out the main line of MOST of them. Not all
+    // five: a society may neglect one and still move on, which is the only way the model
+    // can hold a Song China and a Britain as different kinds of society rather than one
+    // society at two speeds. Not an average either, which would let brilliant engineering
+    // with no institutions carry a society through.
+    //
+    // The era is the FRONTIER, so it is the province furthest round the wheel that
+    // decides, exactly as the knowledge frontier is a maximum.
+    //
+    // How long that takes is not a target. A society that runs its main lines early and
+    // one that spends two thousand years deepening its side branches are both playing
+    // properly, and the model has no business grading either.
+    const auto spokes_here =
+        static_cast<uint32_t>(state.technology_catalog->spokes_in(era).size());
+    const uint32_t needed = std::min(adoption_cfg_.era_advance_spokes_required, spokes_here);
+    if (era < max_era && spokes_here > 0 && best_spokes >= needed) {
         TechnologyDelta td{};
         td.new_era = static_cast<uint8_t>(era + 1);
         delta.technology_deltas.push_back(td);
