@@ -127,6 +127,25 @@ Do not merge code that regresses benchmarks without explicit approval.
 - Floating-point accumulations use canonical sort order (good_id asc,
   province_id asc) to prevent IEEE 754 non-associativity drift
 
+## The Technology Tree Drives the Climb
+467 nodes in `packages/base_game/technology/technology_nodes.csv`, each marked `main` or
+`side`. An era advances when a society has worked out enough of that era's MAIN PATH
+(`TechnologyAdoptionConfig::era_advance_main_share`), where a node counts only to the
+degree the society both KNOWS it (accumulated knowledge vs the node's cost) and HAS the
+means (built capital per head). Side paths are depth — never required, paying in bonuses
+and later prerequisites.
+
+- **Knowledge is measured in technique-equivalents**, defined by the tree's own content.
+  The era ladder in `eras.csv` is the running total of node weights and is NEVER fitted;
+  regenerate it with `tools/calibration/set_content_exponent.py`. A unit test asserts
+  eras.csv against the tree.
+- **There is exactly one fitted number in the climb**: `KnowledgeConfig::knowledge_rate`,
+  the clock. See `tools/calibration/README.md`.
+- **Node effects compose by saturation, not multiplication.** Techniques overlap; a
+  product of many small bonuses explodes (measured: x9,557 on food).
+- **Do not grade the speed of an ascent.** Different worlds take different times and none
+  of them is failing. The `[pacing]` gate asserts shape, not dates.
+
 ## Data-Driven Content
 Goods, recipes, and facility types are loaded from CSV files in
 packages/base_game/. Keyed by string identifiers (not integer enums).

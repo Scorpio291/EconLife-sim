@@ -268,56 +268,13 @@ struct GatedEras {
 };
 }  // namespace
 
-TEST_CASE("knowledge: knowing is not enough — an era needs the capacity to use it",
-          "[knowledge][tier1][capital]") {
-    KnowledgeModule mod;
-    GatedEras eras;
-
-    auto advanced = [&](float knowledge, float capital_per_head) {
-        WorldState w = make_world(/*era=*/1, 50000, 0.12f, knowledge);
-        REQUIRE(w.era_catalog.load_from_directory(eras.dir.string()));
-        w.provinces[0].cohort_stats->productive_capital = capital_per_head * 50000.0f;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        for (const auto& td : d.technology_deltas)
-            if (td.new_era.has_value())
-                return true;
-        return false;
-    };
-
-    // All the knowledge in the world and nothing built with it: no advance. This is
-    // the flying-car case — the data exists, the capacity does not.
-    CHECK_FALSE(advanced(eras.knowledge_gate * 100.0f, 0.0f));
-    // Plenty built but the society does not yet know what to do with it: no advance.
-    CHECK_FALSE(advanced(0.0f, eras.capital_gate * 2.0f));
-    // Both: the era turns.
-    CHECK(advanced(eras.knowledge_gate * 1.5f, eras.capital_gate * 2.0f));
-}
-
-TEST_CASE("knowledge: built capacity is counted per head, not as a heap",
-          "[knowledge][tier1][capital]") {
-    // A bigger society needs proportionally more built, so population growth alone
-    // cannot buy an era: the same absolute stock that carries a small society is
-    // spread too thin by a large one.
-    KnowledgeModule mod;
-    GatedEras eras;
-
-    auto advanced_with = [&](uint32_t population, float total_capital) {
-        WorldState w = make_world(/*era=*/1, population, 0.12f, eras.knowledge_gate * 1.5f);
-        REQUIRE(w.era_catalog.load_from_directory(eras.dir.string()));
-        w.provinces[0].cohort_stats->productive_capital = total_capital;
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        for (const auto& td : d.technology_deltas)
-            if (td.new_era.has_value())
-                return true;
-        return false;
-    };
-
-    const float stock = eras.capital_gate * 20000.0f * 1.5f;
-    CHECK(advanced_with(20000, stock));
-    CHECK_FALSE(advanced_with(400000, stock));
-}
+// ERA ADVANCEMENT MOVED (2026-08-23). "Knowing is not enough — an era needs the capacity
+// to use it" and "built capacity is counted per head, not as a heap" were tests of this
+// module's era rule, which was two fitted thresholds per era (knowledge_to_advance and
+// capital_to_advance). An era is a SET OF TECHNIQUES now: a society moves on when it has
+// worked out enough of that era's main path, and a technique counts only when the society
+// both knows it and has built for it — so both behaviours are preserved and both are
+// tested where they now live, in technology_catalog_test.cpp under [era-advance].
 
 // ===========================================================================
 // RISE AND FALL.
@@ -359,53 +316,10 @@ TEST_CASE("knowledge: writing is the ratchet — literate societies forget less"
     CHECK(literate_change > oral_change);     // the literate one loses less (or gains)
 }
 
-TEST_CASE("knowledge: an era is LOST when the society can no longer carry it",
-          "[knowledge][tier1][collapse]") {
-    // The fall. A society sitting in era 2 whose knowledge has collapsed far below
-    // what era 1 demanded to get there drops back: the works stand, but nobody can
-    // build or maintain them any more.
-    KnowledgeModule mod;
-    EraCatalog cat;
-    cat.load_builtin_default();
-    const float entry_threshold = cat.by_index(1)->knowledge_to_advance;  // to enter era 2
-
-    auto era_change = [&](float knowledge) {
-        WorldState w = make_world(/*era=*/2, 5000, 0.02f, knowledge);
-        DeltaBuffer d{};
-        mod.execute(w, d);
-        for (const auto& td : d.technology_deltas)
-            if (td.new_era.has_value())
-                return static_cast<int>(*td.new_era);
-        return 2;
-    };
-
-    // Comfortably above what it took to get here: the era holds.
-    CHECK(era_change(entry_threshold) == 2);
-    // Collapsed well below it: the era is lost.
-    CHECK(era_change(entry_threshold * 0.5f) == 1);
-}
-
-TEST_CASE("knowledge: a lost era can be climbed again (the ratchet)",
-          "[knowledge][tier1][collapse]") {
-    // Falling back is not the end of history. A society that recovers its population
-    // and surplus rebuilds its learned stratum, accumulates again, and re-enters the
-    // era it lost — which is what "slowly creeping forward" through repeated rise and
-    // fall actually requires.
-    KnowledgeModule mod;
-    EraCatalog cat;
-    cat.load_builtin_default();
-    const float threshold = cat.by_index(1)->knowledge_to_advance;
-
-    // Recovered population, knowledge back above the threshold: it advances again.
-    WorldState recovered = make_world(/*era=*/1, 200000, 0.15f, threshold * 1.1f);
-    DeltaBuffer d{};
-    mod.execute(recovered, d);
-    bool advanced = false;
-    for (const auto& td : d.technology_deltas)
-        if (td.new_era.has_value() && *td.new_era == 2)
-            advanced = true;
-    CHECK(advanced);
-}
+// THE FALL MOVED TOO (2026-08-23). "An era is LOST when the society can no longer carry
+// it" and "a lost era can be climbed again (the ratchet)" now live in
+// technology_catalog_test.cpp under [era-advance]: a society loses an era when it can no
+// longer carry the MAIN PATH of the one it came from, and climbs back when it can again.
 
 // ===========================================================================
 // WRITTEN RECORDS — the ratchet across collapses.
@@ -533,9 +447,16 @@ TEST_CASE("knowledge: printing is gated on what a society knows, not on a date",
     // The gate is accumulated knowledge, so a world that develops faster or slower than
     // Earth still gets the press at the right point in ITS OWN development rather than
     // at a calendar year that means nothing to it.
+    //
+    // The absolute figures moved when the knowledge axis was given a meaning — it is
+    // measured in technique-equivalents now, defined by the tech tree's own content —
+    // so these are expressed against the half-saturation rather than as bare numbers,
+    // which is what they were always about.
     const KnowledgeConfig cfg{};
-    const double backward = KnowledgeModule::printing_copy_mult(1000.0f, cfg);
-    const double advanced = KnowledgeModule::printing_copy_mult(5000000.0f, cfg);
+    const double backward = KnowledgeModule::printing_copy_mult(
+        cfg.printing_knowledge_halfsat / 900.0f, cfg);
+    const double advanced =
+        KnowledgeModule::printing_copy_mult(cfg.printing_knowledge_halfsat * 5.5f, cfg);
     // The saturating form has a tail, so a Neolithic society at a nine-hundredth of the
     // threshold still reads about 11% faster rather than exactly 1.0 — a hundredfold
     // gain makes even a sliver of adoption visible. Harmless: the corpus is separately

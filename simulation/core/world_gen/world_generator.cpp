@@ -469,6 +469,33 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     for (uint8_t era = 1; era <= world.era_catalog.max_era(); ++era)
         world.tech_effects_by_era.push_back(tech_catalog.aggregate_effects(era));
 
+    // The tree itself, so the technology module can resolve it against what each PROVINCE
+    // knows and has built rather than against the era integer.
+    world.technology_catalog = std::make_shared<const TechnologyCatalog>(tech_catalog);
+
+    // A WORLD THAT STARTS IN AN ERA KNOWS WHAT THAT ERA KNOWS. Knowledge was seeded
+    // nowhere, so every world began at zero — harmless while technique came from the era
+    // number, and a silent stripping of a medieval start's entire technology the moment
+    // it came from knowledge instead. A society founded in 500 CE did not have to
+    // rediscover the plough.
+    //
+    // Seeded at the threshold that REACHES the starting era (what a society must know to
+    // be there), with the written corpus alongside it — a literate era has its books —
+    // and left at zero for a dawn start, which genuinely knows nothing.
+    if (config.starting_era >= 2) {
+        const EraDefinition* prev = world.era_catalog.by_index(
+            static_cast<uint8_t>(config.starting_era - 1));
+        const float seeded = prev ? std::max(0.0f, prev->knowledge_to_advance) : 0.0f;
+        world.technology.knowledge_level = std::max(world.technology.knowledge_level, seeded);
+        for (auto& p : world.provinces) {
+            if (!p.cohort_stats)
+                continue;
+            p.cohort_stats->knowledge_level = std::max(p.cohort_stats->knowledge_level, seeded);
+            p.cohort_stats->codified_knowledge =
+                std::max(p.cohort_stats->codified_knowledge, seeded);
+        }
+    }
+
     // M7 — pre-market entry materialization. A fresh medieval-band start ("start in
     // 500 CE") spins the town economy up from the SAME laws the climb runs on:
     // workshops where the ox-cart catchment feeds a town (earned; a subsistence-

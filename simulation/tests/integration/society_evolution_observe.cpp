@@ -15,6 +15,7 @@
 
 #include "core/world_gen/world_class.h"  // hazard_mortality_from_settings
 #include "modules/knowledge/knowledge_module.h"
+#include "core/world_gen/technology_catalog.h"
 
 #include "tests/integration/society_evolution_harness.h"
 
@@ -163,14 +164,28 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
 // one world; what matters is that no mechanism change silently moves an era by
 // a millennium.
 // ===========================================================================
-TEST_CASE("society: the earthlike climb reaches each era near its historical date",
+TEST_CASE("society: the climb is a climb — eras arrive in order, none skipped, none free",
           "[emergence][integration][society][pacing]") {
+    // WHAT THIS GATE STOPPED ASSERTING, AND WHY.
+    //
+    // It used to require earthlike to hit all seven historical era dates within 1,500
+    // years. That could only ever pass because seven `knowledge_to_advance` numbers had
+    // been fitted to make it pass — so it tested the calibration, not the model, and the
+    // fit made the era thresholds (the one thing the grounding doctrine permits as a pure
+    // pacing dial) into the definition of the knowledge unit itself.
+    //
+    // An era is now a SET OF TECHNIQUES: a society moves on when it has worked out enough
+    // of that era's main path, which carries both knowing it and having built for it. How
+    // long it takes over that is its own business. A world that runs its main line early
+    // and one that spends three thousand years deepening its side branches are both
+    // playing properly, and neither is a failure — so this asserts the SHAPE of a climb
+    // and nothing about its speed.
     constexpr uint32_t kNpcs = 200;
     constexpr uint32_t kYears = 13000;
     auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
                                     /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+    REQUIRE(series.size() > 1);
 
-    // First year each era is reached.
     std::vector<uint32_t> first_year(16, 0);
     std::vector<bool> seen(16, false);
     for (const auto& s : series) {
@@ -180,32 +195,74 @@ TEST_CASE("society: the earthlike climb reaches each era near its historical dat
             first_year[e] = s.year;
         }
     }
+    std::printf("\n=== earthlike: year each era was reached (a prediction, not a target) ===\n");
+    for (size_t e = 1; e <= 8; ++e)
+        std::printf("  era %zu: %s\n", e,
+                    seen[e] ? (std::to_string(first_year[e]) + " yrs").c_str() : "not reached");
 
-    struct Target {
-        int era;
-        const char* name;
-        int start_year;  // as in eras.csv; year = start_year + 10000
-    };
-    const Target targets[] = {
-        {2, "Bronze Age", -3300}, {3, "Iron Age", -1200},    {4, "Classical", -550},
-        {5, "Medieval", 500},     {6, "Early Modern", 1450}, {7, "Industrial", 1750},
-        {8, "Turn of Millennium", 2000},
-    };
-    constexpr int kToleranceYears = 1500;
+    // It gets somewhere. A world that never leaves the Neolithic in thirteen thousand
+    // years is not a slow society, it is a broken model.
+    REQUIRE(seen[2]);
+    const int reached = static_cast<int>(series.back().era);
+    INFO("final era " << reached);
+    CHECK(reached >= 4);
 
-    for (const auto& t : targets) {
-        INFO(t.name << " (era " << t.era << ")");
-        REQUIRE(seen[static_cast<size_t>(t.era)]);  // an era Earth never reaches is a
-                                                    // failed civilisation, not a late one
-        const int target_year = t.start_year + 10000;
-        const int actual = static_cast<int>(first_year[static_cast<size_t>(t.era)]);
-        INFO("reached year " << actual << ", history says " << target_year);
-        CHECK(std::abs(actual - target_year) < kToleranceYears);
+    // NOTHING IS SKIPPED. Every era up to the one reached was actually lived through —
+    // a society cannot arrive at the Iron Age without having been in the Bronze Age.
+    for (int e = 2; e <= reached; ++e) {
+        INFO("era " << e);
+        CHECK(seen[static_cast<size_t>(e)]);
     }
 
-    // And the eras arrive in order, each strictly after the last.
-    for (size_t e = 3; e <= 8; ++e)
-        CHECK(first_year[e] > first_year[e - 1]);
+    // AND THEY ARRIVE IN ORDER, each strictly after the last.
+    for (int e = 3; e <= reached; ++e)
+        CHECK(first_year[static_cast<size_t>(e)] > first_year[static_cast<size_t>(e - 1)]);
+
+    // NO ERA IS FREE. Each takes real time to work through, so nothing advances the
+    // moment it is entered — which is what an unearned era gate looks like.
+    for (int e = 3; e <= reached; ++e) {
+        const int span = static_cast<int>(first_year[static_cast<size_t>(e)]) -
+                         static_cast<int>(first_year[static_cast<size_t>(e - 1)]);
+        INFO("era " << (e - 1) << " lasted " << span << " years");
+        CHECK(span >= 10);
+    }
+
+    // And the dawn is long. Working out farming, herding, pottery, weaving, settlement
+    // and the ard is the work of millennia however fast a world moves afterwards.
+    CHECK(first_year[2] > 300u);
+}
+
+TEST_CASE("society: different worlds ascend at different speeds, and that is the point",
+          "[emergence][integration][society][pacing]") {
+    // The corollary of not grading the speed: worlds must actually DIFFER. If a garden
+    // and a deathworld climb on the same schedule then something is still dragging every
+    // world through the eras regardless of what it earned, which is what the fitted
+    // thresholds did.
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    struct Run {
+        const char* name;
+        WorldArchetype arch;
+    };
+    const Run runs[] = {
+        {"GARDEN", archetype_garden()},
+        {"EARTHLIKE", archetype_earthlike()},
+        {"FERTILE DEATHWORLD", archetype_fertile_deathworld()},
+    };
+    std::printf("\n=== how far each world got in %u years ===\n", kYears);
+    std::vector<int> finals;
+    for (const auto& r : runs) {
+        auto series = run_society_years(7, kNpcs, kYears, r.arch, 0.0f, /*fast_forward=*/true);
+        REQUIRE(!series.empty());
+        const int era = static_cast<int>(series.back().era);
+        finals.push_back(era);
+        std::printf("  %-20s era %d, population %.0f\n", r.name, era,
+                    series.back().total_population);
+    }
+    // Not all the same. A model in which the world's bounty and hazards make no
+    // difference to how far a society gets is not modelling anything.
+    const bool all_equal = finals[0] == finals[1] && finals[1] == finals[2];
+    CHECK_FALSE(all_equal);
 }
 
 // ===========================================================================
@@ -888,3 +945,29 @@ TEST_CASE("society observe: why is the dawn population not pressing on its land?
                     s.forest, s.fish_stock, s.fish_capacity, s.fishers, s.era);
     }
 }
+
+// Rate calibration probe. The era ladder is CONTENT now (the running total of the tech
+// tree's own weights — TechnologyCatalog::derive_era_thresholds), so the only fitted
+// quantity left is the RATE knowledge accumulates at, KnowledgeConfig::production_scalar.
+// One dial instead of seven, and a rate decides nothing about the shape of the climb —
+// which means the dates the other eras land on are a PREDICTION rather than a fit.
+//
+// tools/calibration/calib_rate.sh bisects on this output.
+TEST_CASE("rate calibration: year each era is reached on earthlike", "[.rate-calibration]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+    std::vector<uint32_t> first(16, 0);
+    std::vector<bool> seen(16, false);
+    for (const auto& s : series) {
+        const auto e = static_cast<size_t>(s.era);
+        if (e < first.size() && !seen[e]) {
+            seen[e] = true;
+            first[e] = s.year;
+        }
+    }
+    for (size_t e = 2; e <= 8; ++e)
+        std::printf("ERA %zu YEAR %d\n", e, seen[e] ? static_cast<int>(first[e]) : -1);
+}
+

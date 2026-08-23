@@ -810,7 +810,7 @@ struct SubsistenceConfig {
     // the era thresholds (3,830 to leave the Neolithic) because rotation and manuring
     // are early, cheap discoveries — a society should learn to keep its fields alive
     // long before it learns metallurgy.
-    float sustainable_yield_technique_halfsat = 600.0f;
+    float sustainable_yield_technique_halfsat = 88.0f;  // RESCALED to the content knowledge axis: the knowledge a society holds as it leaves the Neolithic
     // Fraction of remaining fertility lost per year at DOUBLE the sustainable harvest.
     // ~1.5%/yr means a society mining its land at 2x loses a third of its fertility in
     // a lifetime — the order of the Mesopotamian salinisation record.
@@ -880,7 +880,7 @@ struct SubsistenceConfig {
     // max = total multiplier headroom; halfsat = knowledge at half the boost. 0 max
     // disables the coupling.
     float knowledge_productivity_max = 26.0f;
-    float knowledge_productivity_halfsat = 35000.0f;
+    float knowledge_productivity_halfsat = 406.0f;  // RESCALED to the content knowledge axis: early Iron Age learning
 
     // --- KNOWING IS NOT HAVING (R9) --------------------------------------------------
     // The boost above was applied to knowledge ALONE, so the model could not express the
@@ -948,6 +948,105 @@ struct SubsistenceConfig {
 // Knowledge engine: scholars/scribes turn surplus into accumulated knowledge, which
 // (via subsistence productivity + era thresholds) lets a society escape the
 // Malthusian trap and move forward. All pre-market; modern tech uses the tech module.
+// ---------------------------------------------------------------------------
+// TechnologyAdoptionConfig — WHAT A PLACE CAN ACTUALLY DO (2026-08-22).
+//
+// A technique needs both knowing it and having the means to use it, and each is a
+// saturating share rather than a switch, because techniques spread. This replaced era
+// gating: `era_available <= current_era` handed a society every technology of an era the
+// moment an integer ticked over, which is the "it rises with the era" form the no-rails
+// rule names as the most dangerous, and it made two provinces in the same era identical
+// by construction. See TechnologyCatalog::effects_for.
+// ---------------------------------------------------------------------------
+struct TechnologyAdoptionConfig {
+    // HOW MUCH LEARNING A TECHNIQUE REPRESENTS, relative to the simplest thing in the
+    // tree. Ideas get harder to find, so each further unit of authored difficulty
+    // multiplies the learning it stands for by exp(this) — about twice per two units.
+    //
+    // This is the ONE constant on the knowledge axis, and everything else on that axis is
+    // derived from it plus the tree's own content: the era thresholds are the running
+    // total of the weights up to each era, and a technique's adoption cost is the
+    // threshold of the era it belongs to. That is what makes the axis mean something. It
+    // used to mean nothing: the thresholds were fitted to hit historical dates, so the
+    // unit floated with the calibration, and any constant expressed in it floated too.
+    // 1.6 — each unit of difficulty stands for about five times the learning of the one
+    // below it, so each era's tree is roughly five times everything before it. Steep, and
+    // that is the finding: at 0.7 (about twice per era) the model's eras shrank by ~4.5x
+    // each while history's shrink by ~1.7x, so the whole post-Neolithic climb collapsed
+    // into a single millennium. The tree's own knowledge multipliers compound to ~117x
+    // across writing, the alphabet, the university, the press and the method, and the
+    // ladder has to be steep enough to stand up to that.
+    //
+    // It is also what Jones' numbers say: American research productivity has fallen
+    // roughly 41-fold since the 1930s while researcher numbers rose more than twenty-fold,
+    // which is ~800x more effort per discovery in ninety years. Ideas get harder to find
+    // very fast.
+    float difficulty_knowledge_exponent = 1.10f;
+
+    // HOW TECHNIQUES COMPOSE, and it is not by multiplication.
+    //
+    // A better sickle, a threshing sledge, a heavier plough and a three-field rotation all
+    // raise what an acre yields, and they all address the SAME acre — so the second
+    // labour-saving device saves less than the first, and the tenth very little. Composing
+    // them as independent multipliers says the opposite, and says it geometrically:
+    // measured on the authored tree, the pre-modern nodes multiplied food by 9,557x and
+    // scholarly output by 44,758x, and a world of six provinces reached 239 million people.
+    //
+    // So each adopted node contributes its raw gain to a BUDGET, and the effect saturates
+    // in that budget toward a bound that is a fact about the world rather than about the
+    // tree: 1 + max x (1 - exp(-budget / max)). For small budgets it is indistinguishable
+    // from multiplying; it bends only where reality bends. It is also robust to a modded
+    // tree — adding a hundred nodes deepens a society without breaking the planet.
+
+    // What all the food technique in the world is worth on one acre. Cereal yields rose
+    // roughly tenfold from Neolithic to modern intensive farming, and the model handles
+    // the fossil-fuelled part of that separately as ghost acres, so the bound here is the
+    // organic one.
+    float food_gain_max = 12.0f;
+    // What technique is worth to scholarship: writing, the alphabet, paper, the press,
+    // the journal and the method between them raise what one learned person produces by
+    // orders of magnitude, but not without limit.
+    float knowledge_gain_max = 200.0f;
+    // And how far medicine can take mortality down. Crude death rates fell from ~35 per
+    // 1000 to ~7.6 across the transition, a factor near five, so a reduction bounded at
+    // 0.84 (a sixfold cut) leaves room for the model's own hazards without allowing an
+    // immortal society.
+    float mortality_reduction_max = 0.84f;
+
+    // Built capital PER HEAD at which a technique of difficulty 1 above the free floor is
+    // half adopted, rising in proportion to difficulty beyond it. An ox-plough is a
+    // morning's work; a sewer system is a city's annual output; a vaccine programme is a
+    // laboratory, a supply chain and a state. Real unit: units of productive_capital per
+    // person, the same stock subsistence invests out of the food surplus.
+    float capital_per_difficulty = 40.0f;
+
+    // How much of an era's MAIN PATH a society must have worked out to move past it. The
+    // mean adoption of the era's spine techniques, so it carries both knowing and having.
+    // Side paths are excluded: they are depth and specialisation, and a society may take
+    // as many or as few as it likes without being held back or hurried.
+    //
+    // This replaced two fitted numbers per era (knowledge_to_advance, capital_to_advance)
+    // whose values were chosen so that one world hit seven historical dates. An era is a
+    // set of techniques, and how long a society takes over them is its own business.
+    // 0.75 — three quarters of the era's spine actually worked out. At a half it was
+    // nearly met by what the era STARTS with: four of the Neolithic's ten main techniques
+    // are the package a founding people already has (difficulty at or below the free
+    // floor), so a society crossed the line with almost nothing earned and left the
+    // Neolithic in eight hundred years no matter how slowly it learned. A threshold that
+    // the starting position already half satisfies is not a threshold.
+    float era_advance_main_share = 0.75f;
+    // And how far the previous era's main path must slip before the era is lost. Below 1
+    // so a society on the edge does not flap year to year.
+    float era_fall_hysteresis = 0.60f;
+
+    // Difficulty at or below which a technique costs no accumulated knowledge: what a
+    // society has by being one. Difficulty 1.0 is "months of one person's effort" — fire,
+    // foraging, weaving, the first agriculture — and era 1 is the Neolithic, so the
+    // Neolithic package is where the model STARTS rather than what it earns.
+    float difficulty_free_below = 1.0f;
+};
+
+
 struct KnowledgeConfig {
     // --- IDEAS GET HARDER TO FIND (R3A) ---
     // The natural limiter on how fast a society can advance, and the one thing the
@@ -979,7 +1078,7 @@ struct KnowledgeConfig {
                                                   // society with a fixed learned stratum
                                                   // accumulates as sqrt(t) rather than
                                                   // linearly — steady progress, no spike.
-    float discovery_difficulty_halfsat = 50000.0f;  // the stock at which the next discovery
+    float discovery_difficulty_halfsat = 696.0f;  // RESCALED to the content knowledge axis: mid Iron Age learning  // the stock at which the next discovery
                                                     // costs twice what the first did. Below
                                                     // it the dawn is unaffected; the
                                                     // measured runaway begins just above.
@@ -1098,7 +1197,7 @@ struct KnowledgeConfig {
     // saturates rather than switching: presses spread, they do not appear everywhere at
     // once. Threshold set near where an earthlike world stands around its Early Modern
     // era, which is when it actually happened.
-    float printing_knowledge_halfsat = 900000.0f;
+    float printing_knowledge_halfsat = 22994.0f;  // RESCALED to the content knowledge axis: Early Modern learning, which is when the press actually spread
     // How much faster a press copies than a hand. Two orders of magnitude, from the
     // manuscript-to-print book counts above.
     float printing_copy_multiplier = 100.0f;
@@ -1160,6 +1259,25 @@ struct KnowledgeConfig {
     // (scarcity itself spurs the intensification that lifts the ceiling), and (b) harsh
     // worlds out-innovate comfortable gardens, making the World-Class spectrum matter.
     float population_innovation_rate = 1.5e-6f;  // knowledge/yr per person at unit pressure
+
+    // THE CLOCK. The one fitted number in the knowledge engine, and the only one left in
+    // the whole climb: how fast a society accumulates learning, in the technique-
+    // equivalent units the tech tree's own content defines. It scales BOTH channels —
+    // what the learned stratum works out and what everybody else works out by doing —
+    // because their RATIO is a modelling choice about where discovery comes from, while
+    // their common scale is just the clock.
+    //
+    // It replaced seven fitted era thresholds. Those decided the shape of the climb as
+    // well as its speed, and worse, they were the definition of the knowledge unit, so
+    // every constant expressed in that unit floated with the fit. A rate decides nothing
+    // but the clock: slow it and every era takes longer in the same proportion, so the
+    // SHAPE — which era is long, which is short, how the climb accelerates — is a
+    // prediction of the model rather than something fitted in.
+    //
+    // Anchored on one date, the Bronze Age at 3300 BCE, because a clock needs setting
+    // once. Where the other six land is then the model's own answer, and a world that
+    // takes longer or less is not failing at anything.
+    float knowledge_rate = 0.0772691787f;
     float adversity_base = 0.35f;               // drive with no special pressure (idle curiosity)
     float adversity_hazard_weight = 0.6f;       // drive from the world's hazard above a gentle one
     float adversity_scarcity_weight = 1.4f;     // drive from food scarcity (Malthusian pressure)

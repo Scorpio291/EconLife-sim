@@ -670,6 +670,16 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     if (cs.soil_health > v)
                         cs.soil_health = v;
                 }
+                // Replacements: the technology module resolves the tree against this
+                // province's knowledge and capital. Non-finite or negative is not a
+                // multiplier; fall back to neutral.
+                auto sane_mult = [](float v) { return (std::isfinite(v) && v >= 0.0f) ? v : 1.0f; };
+                if (d.tech_food_mult_replacement.has_value())
+                    cs.tech_food_mult = sane_mult(*d.tech_food_mult_replacement);
+                if (d.tech_mortality_mult_replacement.has_value())
+                    cs.tech_mortality_mult = sane_mult(*d.tech_mortality_mult_replacement);
+                if (d.tech_knowledge_mult_replacement.has_value())
+                    cs.tech_knowledge_mult = sane_mult(*d.tech_knowledge_mult_replacement);
                 if (d.productive_capital_delta.has_value()) {
                     // Additive: investment out of surplus minus the year's wear. A
                     // real stock, so it cannot go negative (you cannot un-build past

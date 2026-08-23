@@ -174,8 +174,11 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         1.0f + cfg_.knowledge_productivity_max * applied * K /
                    (K + std::max(1.0f, cfg_.knowledge_productivity_halfsat));
     // Food techs (plough/irrigation/heavy-plough/watermill) raise the carrying ceiling.
-    const float tech_food_factor =
-        state.tech_effects_for_era(state.technology.current_era).food_mult;
+    // Ploughs, irrigation, heavy ploughs, watermills — what THIS province has, resolved
+    // by the technology module from what it knows and what it has built. It used to be
+    // the era's whole tree switched on by an integer, which is why the era 1 -> 2
+    // boundary raised the food surplus from 1.58 to 3.95 in one step.
+    const float tech_food_factor = cs.tech_food_mult;
     // Seasonality (relative to Earth) cuts food reliability via lean seasons; gravity
     // does NOT affect the harvest. Earthlike seasonality is neutral.
     const float seasonality_factor = std::clamp(

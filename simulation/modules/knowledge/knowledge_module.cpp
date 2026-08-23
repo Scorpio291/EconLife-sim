@@ -78,8 +78,10 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             total_population += static_cast<double>(p.cohort_stats->total_population);
 
     const float world_hazard = hazard_mortality_from_settings(state.hazard_settings);
-    const float knowledge_mult =
-        state.tech_effects_for_era(state.technology.current_era).knowledge_mult;
+    // Writing, the press, the scientific method — each province's own, resolved by the
+    // technology module from what it knows and has built. It used to be the era's whole
+    // tree switched on by an integer, so a region that had lost its scribes still had the
+    // press, and no two provinces could compound knowledge at different rates.
 
     // Who produces knowledge HERE, and how much each of them is worth.
     std::vector<double> keepers(n, 0.0);
@@ -119,7 +121,8 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
         const double population_term =
             static_cast<double>(cfg_.population_innovation_rate) * pop;
         produced[i] = (specialist_term + population_term) * static_cast<double>(pressure) *
-                      static_cast<double>(knowledge_mult);
+                      static_cast<double>(cs.tech_knowledge_mult) *
+                      static_cast<double>(cfg_.knowledge_rate);
 
         // IDEAS GET HARDER TO FIND, against what THIS place already knows. The easy
         // discoveries are made first and every one made leaves the next harder: American
@@ -160,7 +163,8 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
                           static_cast<double>(cfg_.production_scalar) *
                           static_cast<double>(cfg_.genius_leap_years) *
                           static_cast<double>(pressure_of[leap_province]) *
-                          static_cast<double>(knowledge_mult);
+                          static_cast<double>(host ? host->tech_knowledge_mult : 1.0f) *
+                          static_cast<double>(cfg_.knowledge_rate);
             // The frontier recedes for geniuses too: Newton had harder problems available
             // than Archimedes, and Einstein harder ones than Newton.
             if (host != nullptr)
@@ -274,53 +278,16 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
     if (frontier_step != 0.0f)
         td.knowledge_delta = frontier_step;
 
-    // ERA ADVANCEMENT needs TWO things, and they are not the same thing.
+    // ERA ADVANCEMENT LIVES IN THE TECHNOLOGY MODULE NOW, and it is driven by the tech
+    // tree: a society moves past an era when it has actually worked out that era's MAIN
+    // PATH — the techniques the era is made of — rather than when a knowledge number
+    // crosses a threshold fitted to make Earth hit historical dates.
     //
-    // Knowing how to make bronze is not the Bronze Age; having the smelters, the ore
-    // trade and the smiths is. A society advances only when it BOTH knows enough
-    // (accumulated knowledge) AND has built enough to use what it knows (productive
-    // capital per head: tools, kilns, cleared land, workshops). Knowledge is
-    // information — it can spike, and historically does; capital is matter and labour,
-    // accumulated out of a real food surplus at a physical rate, and it wears out.
-    // A society can know far more than it can build, which is exactly why enormous
-    // modern data output has not produced flying cars.
-    //
-    // Both gates are data-driven per era (eras.csv). A zero threshold means that era
-    // is not gated on that axis.
-    double capital_stock = 0.0;
-    for (const auto& p : state.provinces)
-        if (p.cohort_stats)
-            capital_stock += static_cast<double>(p.cohort_stats->productive_capital);
-    const double capital_per_head =
-        total_population > 0.0 ? capital_stock / total_population : 0.0;
-
-    const bool knows_enough =
-        era->knowledge_to_advance <= 0.0f || frontier >= static_cast<double>(era->knowledge_to_advance);
-    const bool can_build_it =
-        era->capital_to_advance <= 0.0f || capital_per_head >= era->capital_to_advance;
-    if ((era->knowledge_to_advance > 0.0f || era->capital_to_advance > 0.0f) && knows_enough &&
-        can_build_it) {
-        const uint8_t max_era = state.era_catalog.max_era();
-        if (state.technology.current_era < max_era)
-            td.new_era = static_cast<uint8_t>(state.technology.current_era + 1);
-    } else if (state.technology.current_era > 1) {
-        // THE FALL. A society that can no longer carry what it took to get here loses
-        // the era: the works stand but nobody can build or maintain them any more.
-        // Compared against the threshold that was needed to ENTER this era, with
-        // hysteresis so a society on the edge does not flap year to year.
-        //
-        // This is what makes the climb a sawtooth rather than a ramp — civilisations
-        // rise, build, overreach or are broken by famine, plague or war, and fall back,
-        // and the next one starts from what survived. Forward-only advancement could
-        // only ever model the first half of that.
-        const EraDefinition* entered_from =
-            state.era_catalog.by_index(static_cast<uint8_t>(state.technology.current_era - 1));
-        if (entered_from != nullptr && entered_from->knowledge_to_advance > 0.0f &&
-            frontier < static_cast<double>(entered_from->knowledge_to_advance) *
-                           static_cast<double>(cfg_.era_regression_hysteresis)) {
-            td.new_era = static_cast<uint8_t>(state.technology.current_era - 1);
-        }
-    }
+    // The two gates that used to be here (knowledge_to_advance and capital_to_advance)
+    // are subsumed by that, because a technique's adoption already carries both: knowing
+    // how to make bronze is not the Bronze Age, having the smelters is, and a node counts
+    // only when a society both knows it and has built for it. What this module still
+    // owns is the knowledge stock itself and the frontier over provinces.
 
     if (td.knowledge_delta.has_value() || td.new_era.has_value())
         delta.technology_deltas.push_back(td);

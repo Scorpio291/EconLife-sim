@@ -51,6 +51,10 @@ class TechnologyModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // Resolve the tree against each province's own knowledge and built capital, annually.
+    // See the definition for why this replaced era-number gating.
+    void publish_province_technique(const WorldState& state, DeltaBuffer& delta);
+
     // Initialize from WorldState on first tick (lazy init like ProductionModule).
     void init_from_world_state(const WorldState& state);
 
@@ -63,6 +67,9 @@ class TechnologyModule : public ITickModule {
     const TechnologyCatalog& catalog() const { return catalog_; }
 
    private:
+    // What it takes to know a technique and to have the means to use it.
+    TechnologyAdoptionConfig adoption_cfg_{};
+
     TechnologyConfig config_;
     TechnologyCatalog catalog_;
     bool initialized_ = false;

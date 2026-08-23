@@ -89,6 +89,16 @@ struct TechnologyNode {
     float knowledge_mult = 1.0f;  // scholar knowledge production
     float food_mult = 1.0f;       // subsistence carrying ceiling
     float mortality_mult = 1.0f;  // cohort mortality (e.g. medicine < 1.0)
+
+    // MAIN PATH OR SIDE PATH. The main path is the spine of an era — the techniques that
+    // define it and that a society must work out to move past it; the side paths are
+    // depth and specialisation, which pay in bonuses and unlocks but are never required.
+    // A society that pours everything into its side branches becomes formidable at what
+    // it does and stays where it is, which is a real thing societies do.
+    //
+    // Optional trailing CSV column ("main"/"side"); absent means side, so nothing becomes
+    // a required technique by accident.
+    bool main_path = false;
 };
 
 // Aggregated tech-tree effects active at a given era (product over available nodes).

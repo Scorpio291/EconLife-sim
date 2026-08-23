@@ -696,8 +696,10 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // rate, before the rate->probability conversion, so (unlike under the old
                 // band, which medicine was applied AFTER and could therefore push the
                 // result below the supposed minimum anyway) there is no ordering subtlety.
-                hazard_rate_mult *=
-                    state.tech_effects_for_era(state.technology.current_era).mortality_mult;
+                // What THIS province's medicine is, not what its era's tree contains:
+                // herbals, aqueducts, sewers, inoculation, germ theory, vaccination, each
+                // to the degree the place knows it and has built for it.
+                hazard_rate_mult *= cs.tech_mortality_mult;
 
                 // Disease epidemics (M6a): an episodic mortality spike in the pre-market
                 // (commons) arc, scaled by the world's disease dial and urban crowding —
@@ -782,7 +784,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // past its pre-modern tenth once medicine arrived.
                 const float crowding_rate = urban_crowding_rate(
                     cs.urban_population,
-                    state.tech_effects_for_era(state.technology.current_era).mortality_mult, cfg_);
+                    cs.tech_mortality_mult, cfg_);
 
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       birth_surplus, famine_surplus, hazard_rate_mult,

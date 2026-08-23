@@ -271,6 +271,11 @@ struct RegionDelta {
     std::optional<float>
         topsoil_delta;  // additive; cohort_stats->topsoil (ground eroded off exposed,
                         // over-worked land, against the geological rate it re-forms at)
+    // Replacements; cohort_stats->tech_*_mult — what this province can actually do,
+    // recomputed from what it knows and what it has built (technology module).
+    std::optional<float> tech_food_mult_replacement;
+    std::optional<float> tech_mortality_mult_replacement;
+    std::optional<float> tech_knowledge_mult_replacement;
     std::optional<float>
         codified_knowledge_delta;  // additive; cohort_stats->codified_knowledge
                                    // (scribes copying, records decaying or burning)

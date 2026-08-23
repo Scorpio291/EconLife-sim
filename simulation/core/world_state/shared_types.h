@@ -383,6 +383,18 @@ struct RegionCohortStats {
     // centuries later.
     float topsoil = 1.0f;
 
+    // WHAT THIS PLACE CAN ACTUALLY DO — the technology tree's effects resolved against
+    // what this province knows and what it has built, published annually by the
+    // technology module. Neutral (1.0) for a society that has neither.
+    //
+    // These used to be one global figure per ERA, so a society was handed the plough, the
+    // aqueduct and germ theory the moment an integer ticked over, and no two provinces
+    // could differ in technique — Britain and Qing China were the same society by
+    // construction. See TechnologyCatalog::effects_for.
+    float tech_food_mult = 1.0f;       // carrying ceiling: ploughs, irrigation, watermills
+    float tech_mortality_mult = 1.0f;  // medicine: herbals, aqueducts, sewers, germ theory
+    float tech_knowledge_mult = 1.0f;  // scholarship: writing, the press, the method
+
     // Productive capital the province has BUILT: tools, ploughs, granaries, kilns,
     // cleared and drained land, workshops, roads. A real accumulated stock, not a
     // signal — it is invested out of the food surplus at a physical rate and wears

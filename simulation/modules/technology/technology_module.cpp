@@ -45,6 +45,94 @@ void TechnologyModule::execute(const WorldState& state, DeltaBuffer& delta) {
 
     // 4. Check for era transition.
     check_era_transition(state, delta);
+
+    // 5. Resolve what each PROVINCE can actually do.
+    publish_province_technique(state, delta);
+}
+
+// WHAT A PLACE CAN ACTUALLY DO. The tree resolved against what this province knows and
+// what it has built, published for the modules that consume technique: subsistence (the
+// carrying ceiling), population_aging (medicine) and knowledge (scholarship).
+//
+// It used to be one global figure per ERA — every node with `era_available <= era`
+// switched on at once — so a society was handed the plough, the aqueduct, inoculation and
+// germ theory the moment an integer ticked over, regardless of what it knew or had built.
+// Measured, the era 1 -> 2 boundary raised the food surplus from 1.58 to 3.95 in a single
+// step with nothing in the world having changed, and no two provinces could ever differ in
+// technique because the era is global. Knowing and having are now separate, local and
+// saturating, which is what lets one region industrialise while its neighbour does not.
+//
+// ANNUAL. Knowledge and capital are stocks that move over decades, the tree is ~250 nodes,
+// and this is the only reason to walk it — so it is resolved once a year per province
+// rather than every tick. An explicit cadence, not an assumption about the caller's.
+void TechnologyModule::publish_province_technique(const WorldState& state, DeltaBuffer& delta) {
+    if (!state.technology_catalog)
+        return;  // no tree loaded (piecemeal unit worlds): neutral, which is correct
+    const uint32_t tpy = kTicksPerYear > 0 ? kTicksPerYear : 365u;
+    if (state.current_tick % tpy != 0)
+        return;
+
+    const uint8_t era = state.technology.current_era;
+    float best_progress = 0.0f;   // this era's main path, at the province furthest through it
+    float best_previous = 0.0f;   // and the era it entered from, for the fall
+
+    for (const auto& p : state.provinces) {
+        if (!p.cohort_stats)
+            continue;
+        const auto& cs = *p.cohort_stats;
+        const float pop = static_cast<float>(cs.total_population);
+        const float capital_per_head = pop > 0.0f ? cs.productive_capital / pop : 0.0f;
+        const EraTechEffects e = state.technology_catalog->effects_for(
+            cs.knowledge_level, capital_per_head, state.era_catalog, adoption_cfg_);
+        RegionDelta rd{};
+        rd.region_id = p.region_id;
+        rd.tech_food_mult_replacement = e.food_mult;
+        rd.tech_mortality_mult_replacement = e.mortality_mult;
+        rd.tech_knowledge_mult_replacement = e.knowledge_mult;
+        delta.region_deltas.push_back(rd);
+
+        best_progress = std::max(best_progress,
+                                 state.technology_catalog->main_path_progress(
+                                     era, cs.knowledge_level, capital_per_head,
+                                     state.era_catalog, adoption_cfg_));
+        if (era >= 2)
+            best_previous = std::max(best_previous,
+                                     state.technology_catalog->main_path_progress(
+                                         static_cast<uint8_t>(era - 1), cs.knowledge_level,
+                                         capital_per_head, state.era_catalog, adoption_cfg_));
+    }
+
+    // AN ERA IS A SET OF TECHNIQUES, NOT A NUMBER. A society moves on when it has worked
+    // out the spine of the age it is in — the main path — and it falls back when it can
+    // no longer carry the one it came from. The era is the FRONTIER, so it is the
+    // province furthest through that path which decides, exactly as the knowledge
+    // frontier is a maximum.
+    //
+    // How long that takes is not a target. A society that runs its main line early and
+    // one that spends two thousand years deepening its side branches are both playing
+    // properly, and there is no correct date for either — the model has no business
+    // grading a fast or a slow ascent as success or failure.
+    const uint8_t max_era = state.era_catalog.max_era();
+    const float advance_at = std::clamp(adoption_cfg_.era_advance_main_share, 0.0f, 1.0f);
+    // Only where the content actually declares a spine. The modern band has real
+    // historical dates and no main path authored, and it keeps the calendar-and-score
+    // transition in check_era_transition — an era with no main path must not advance the
+    // instant it is entered just because the mean of an empty set is vacuous.
+    if (!state.technology_catalog->has_main_path(era))
+        return;
+    if (era < max_era && best_progress >= advance_at) {
+        TechnologyDelta td{};
+        td.new_era = static_cast<uint8_t>(era + 1);
+        delta.technology_deltas.push_back(td);
+    } else if (era >= 2 &&
+               best_previous < advance_at * std::max(0.0f, adoption_cfg_.era_fall_hysteresis)) {
+        // THE FALL. The works stand but nobody can build or maintain them any more —
+        // which is what makes the climb a sawtooth rather than a ramp. Hysteresis so a
+        // society on the edge does not flap from year to year.
+        TechnologyDelta td{};
+        td.new_era = static_cast<uint8_t>(era - 1);
+        delta.technology_deltas.push_back(td);
+    }
 }
 
 // ===========================================================================
@@ -166,23 +254,21 @@ float TechnologyModule::compute_era_transition_score(const WorldState& state,
 }
 
 void TechnologyModule::check_era_transition(const WorldState& state, DeltaBuffer& delta) {
-    uint8_t current_era = state.technology.current_era;
+    const uint8_t current_era = state.technology.current_era;
     // The timeline length is data-driven: cap advancement at the catalog's last era.
     uint8_t max_era = state.era_catalog.max_era();
     if (max_era == 0 || current_era >= max_era)
         return;
 
-    // Ownership split between the two advancement paths, decided by the data:
-    // an era with knowledge_to_advance > 0 is KNOWLEDGE-gated and belongs to
-    // knowledge_module (the pre-modern climb, where each world advances at the
-    // pace its own food/knowledge economy earns — that is what makes a garden
-    // world stall in the Bronze Age and a fertile one race ahead). Only eras
-    // with no knowledge gate (the modern band, which has real historical dates)
-    // advance on the calendar + technology score computed here. Without this
-    // split a calendar-sufficient gate would drag every world through the
-    // pre-modern eras on a fixed schedule regardless of what it had earned.
-    const EraDefinition* current_def = state.era_catalog.by_index(current_era);
-    if (current_def != nullptr && current_def->knowledge_to_advance > 0.0f)
+    // Ownership split between the two advancement paths, decided by the CONTENT: an era
+    // with a MAIN PATH authored in the tech tree advances by working that path out (see
+    // publish_province_technique), which is the whole pre-modern climb — and that is what
+    // makes a garden world stall in the Bronze Age while a fertile one races ahead, at
+    // whatever pace each earns. Only the modern band, which has real historical dates and
+    // no authored spine, advances on the calendar + technology score computed here.
+    // Without this split a calendar-sufficient gate would drag every world through the
+    // pre-modern eras on a fixed schedule regardless of what it had worked out.
+    if (state.technology_catalog && state.technology_catalog->has_main_path(current_era))
         return;
 
     uint8_t target_era = current_era + 1;

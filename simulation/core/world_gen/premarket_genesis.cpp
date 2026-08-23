@@ -30,7 +30,23 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
     // The SAME laws the climb runs on (runtime defaults — one law, two resolutions).
     const SubsistenceConfig sub{};
     const GrainLogisticsConfig grain{};
-    const float food_mult = world.tech_effects_for_era(era).food_mult;
+    // WHAT THIS WORLD CAN ACTUALLY DO at the moment it is founded, resolved from the
+    // knowledge and capital its starting era gave it — not from the era integer, which
+    // would hand a medieval start the whole medieval tree whether or not it had the means.
+    // The technology module recomputes this per province on the first annual tick; this
+    // is the same law applied once, at genesis, before there is a tick to run.
+    auto food_mult_for = [&world, era](const Province& p) -> float {
+        if (!world.technology_catalog)
+            return world.tech_effects_for_era(era).food_mult;
+        if (!p.cohort_stats)
+            return 1.0f;
+        const float pop_here = static_cast<float>(p.cohort_stats->total_population);
+        const float cph = pop_here > 0.0f ? p.cohort_stats->productive_capital / pop_here : 0.0f;
+        return world.technology_catalog
+            ->effects_for(p.cohort_stats->knowledge_level, cph, world.era_catalog,
+                          TechnologyAdoptionConfig{})
+            .food_mult;
+    };
 
     // 1. Each province's earned grain surplus (subsistence law).
     std::vector<float> surplus(n, 0.0f);
@@ -51,7 +67,7 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
         // first real harvest could not support. Episodic harvest failure is left
         // out on purpose: it is a per-year draw and genesis has no year.
         const float chronic = SubsistenceModule::chronic_ceiling_factors(
-            world.technology.knowledge_level, food_mult, world.hazard_settings, sub);
+            world.technology.knowledge_level, food_mult_for(p), world.hazard_settings, sub);
         const float output =
             SubsistenceModule::subsistence_output(nc, extent, static_cast<float>(pop[i]) * wf,
                                                   sub) *

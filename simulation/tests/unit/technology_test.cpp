@@ -4,8 +4,15 @@
 // technology_catalog_test.cpp; here we exercise execute().
 
 #include <catch2/catch_test_macros.hpp>
+
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <string>
+#include <unistd.h>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "core/world_gen/technology_catalog.h"
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
@@ -134,15 +141,35 @@ TEST_CASE("Technology: modern era advances at the catalog's scheduled year",
     CHECK(advanced);
 }
 
-TEST_CASE("Technology: knowledge-gated pre-modern eras are not advanced by the calendar",
+TEST_CASE("Technology: eras with a main path are not advanced by the calendar",
           "[technology][tier1][era]") {
-    // Era 1 (neolithic) has knowledge_to_advance > 0, so the pre-modern climb is
-    // knowledge_module's to pace — each world advances on what it earned. If the
-    // calendar could advance it, every world would be dragged through the
-    // pre-modern eras on a fixed historical schedule and the World-Class
-    // spectrum (garden stalls in the Bronze Age, fertile races ahead) would die.
+    // Era 1 (neolithic) has a MAIN PATH in the tech tree, so the pre-modern climb is
+    // paced by working that path out — each world advances on what it earned. If the
+    // calendar could advance it, every world would be dragged through the pre-modern
+    // eras on a fixed historical schedule and the World-Class spectrum (garden stalls
+    // in the Bronze Age, fertile races ahead) would die.
+    //
+    // The ownership test used to be `knowledge_to_advance > 0` — a fitted number. It is
+    // now the presence of authored content, which is what it always meant.
     WorldState w = make_world_with_tech(1, 0);
     w.technology.base_year = -10000;  // the Neolithic opens at 10000 BCE
+    {
+        namespace fs = std::filesystem;
+        const auto dir = fs::temp_directory_path() / ("econlife_mainpath_" + std::to_string(::getpid()));
+        fs::create_directories(dir);
+        const auto path = dir / "nodes.csv";
+        std::ofstream f(path);
+        f << "node_key,domain,display_name,era_available,difficulty,patentable,prerequisites,"
+             "outcome_type,key_technology_node,unlocks_recipe,unlocks_facility_type,is_baseline,"
+             "knowledge_mult,food_mult,mortality_mult,path\n";
+        f << "spine,agri,Spine,1,1.9,0,,product_unlock,,,,0,1,1,1,main\n";
+        f.close();
+        auto cat = std::make_shared<TechnologyCatalog>();
+        REQUIRE(cat->load_nodes_csv(path.string()));
+        w.technology_catalog = cat;
+        std::error_code ec;
+        fs::remove_all(dir, ec);
+    }
 
     // Run well past era 2's scheduled year (-3300): 7000 years of ticks.
     w.current_tick = 7000u * 365u;

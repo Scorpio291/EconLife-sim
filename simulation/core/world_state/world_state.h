@@ -21,6 +21,7 @@
 #include "core/world_gen/occupation_catalog.h"         // OccupationCatalog (livelihood vocabulary)
 #include "core/world_gen/world_class.h"                 // WorldHazardSettings (the world's hazards)
 #include "core/world_gen/goods_catalog.h"              // GoodsCatalog (unique_ptr member)
+#include "core/world_gen/technology_catalog.h"        // TechnologyCatalog (what a PLACE can do)
 #include "geography.h"                                 // Nation, Province, Region
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
 #include "modules/production/production_types.h"       // Facility, Recipe
@@ -89,15 +90,28 @@ struct WorldState {
     // Populated at world-gen; source of truth for what occupations exist.
     OccupationCatalog occupation_catalog;
 
+    // The technology tree itself, so runtime modules can ask what a PLACE can do rather
+    // than what its era number entitles it to. Populated at world-gen from
+    // packages/base_game/technology/. Null in unit tests that build WorldState
+    // piecemeal — consumers fall back to neutral multipliers, which is the correct
+    // reading of "no tree loaded".
+    std::shared_ptr<const TechnologyCatalog> technology_catalog;
+
     // The world's physical hazards (gravity, disease, predators, radiation,
     // seasonality, geology, atmosphere) — set at world-gen, read by modules that
     // apply per-setting effects (mortality, food reliability). Drives the Deathworld
     // Class. Defaults to Earth (~Class 12).
     WorldHazardSettings hazard_settings;
 
-    // Per-era aggregated tech-tree effects (index = era-1), computed at world-gen
-    // from the technology catalog. As the world advances eras, more nodes' effects
-    // apply. Read by the knowledge/subsistence/population modules. Empty => neutral.
+    // Per-era aggregated tech-tree effects (index = era-1), computed at world-gen.
+    //
+    // CONTENT REFERENCE AND WORLD-GEN SEEDING ONLY. This is what an era's tree contains,
+    // NOT what a society can do — that is per province and lives on
+    // cohort_stats.tech_{food,mortality,knowledge}_mult, published by the technology
+    // module from what each place knows and has built. Gating behaviour on this was the
+    // largest rail in the model: it handed every society an era's whole tree the moment
+    // an integer ticked over, and made two provinces in the same era identical by
+    // construction. Empty => neutral.
     std::vector<EraTechEffects> tech_effects_by_era;
     EraTechEffects tech_effects_for_era(uint8_t era) const {
         if (era >= 1 && era <= tech_effects_by_era.size())
