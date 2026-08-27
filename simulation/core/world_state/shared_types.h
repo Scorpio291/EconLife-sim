@@ -335,6 +335,40 @@ struct RegionCohortStats {
     // subsistence (which computes it anyway for the stratum it carries through lean
     // years). What hunger a population actually feels is what the store cannot cover.
     float granary_cover_years = 0.0f;
+
+    // --- WHAT THESE PEOPLE ARE ------------------------------------------------------
+    // A population is not an undifferentiated headcount. What it can do — how much work
+    // it can get through, how fast it works things out — depends on the condition of the
+    // people in it, and that condition is a STOCK with a long memory, not a reading of
+    // this year's harvest.
+    //
+    // These exist so the rates that depend on them stop being free constants. Each is
+    // measurable in the historical record, which is the test: a number nobody could ever
+    // have measured is a rail.
+    //
+    // They are also what makes a fall LAST. A famine stunts the children who live through
+    // it for the rest of their lives, closes the schools, and kills the masters who would
+    // have trained the next generation. The headcount comes back in fifty years; the
+    // capability takes three generations, which is why leaving a dark age is slow.
+
+    // Adult stature as a fraction of what this people would reach fed well — the standard
+    // anthropometric measure of a population's nutritional history, read off skeletons and
+    // conscription records. Set by what a cohort ate while GROWING, so it lags the harvest
+    // by a generation and cannot be undone for anyone already grown. European heights fell
+    // roughly 2cm through early industrialisation and took a century to recover.
+    float nutrition = 1.0f;
+
+    // The share of the year a person is fit to work: 1.0 is never ill, 0.9 is thirty-six
+    // days a year lost. Endemic disease, crowding, bad water and hunger take it down;
+    // sanitation and medicine give it back. This is the difference between a workforce and
+    // a headcount.
+    float health = 1.0f;
+
+    // Mean years of learning per adult — schooling where there is schooling, apprenticeship
+    // and tutelage where there is not. Measurable: signature rates on registers, age
+    // heaping, guild indentures. It is built by people whose time the surplus can spare
+    // for teaching, and it decays as the taught generation dies without passing it on.
+    float schooling = 0.0f;
     // Share of the population NOT working the land — the stratum the food surplus
     // frees (published by subsistence, which computes it from population minus the
     // farmers the harvest needs, ceilinged by the regime). A real located stratum of

@@ -568,6 +568,9 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
     if (province_idx >= state.provinces.size())
         return;
 
+    // What these people ARE — nutrition, health and schooling, on their own long clocks.
+    advance_capability(province_idx, state, province_delta);
+
     const auto& province = state.provinces[province_idx];
 
     // --- Significant-NPC aging (annual) ----------------------------------------
@@ -930,6 +933,86 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
 
     // Only push the delta if at least one field was set.
     province_delta.region_deltas.push_back(rdelta);
+}
+
+// WHAT THESE PEOPLE ARE (2026-08-23). Three stocks with long memories, each measurable in
+// the record, each fed by flows the model already computes.
+//
+// This exists so that the rates depending on them stop being free constants. It is also
+// what makes a fall LAST: a famine stunts the children who live through it for the rest of
+// their lives, hunger and illness compound, the schools close and the masters die without
+// apprentices. The headcount comes back in fifty years; stature takes a generation and
+// schooling takes three, which is why leaving a dark age is slow and why anything can
+// ratchet across one at all.
+// PROVINCE-PARALLEL, like the rest of this module. It has to be: the orchestrator
+// dispatches parallel modules through execute_province and never calls execute(), so a
+// pass hung off execute() is dead code that compiles, links, runs never, and reads as
+// working until somebody prints the stock it was supposed to move.
+void PopulationAgingModule::advance_capability(uint32_t province_idx, const WorldState& state,
+                                               DeltaBuffer& delta) {
+    const uint32_t tpy = kTicksPerYear > 0 ? kTicksPerYear : 365u;
+    if (state.current_tick == 0 || state.current_tick % tpy != 0)
+        return;  // annual, like every other stock in the model
+    if (province_idx >= state.provinces.size())
+        return;
+    const auto& c = capability_cfg_;
+    {
+        const auto& prov = state.provinces[province_idx];
+        if (!prov.cohort_stats)
+            return;
+        const auto& cs = *prov.cohort_stats;
+        RegionDelta rd{};
+        rd.region_id = prov.region_id;
+
+        // NUTRITION. Stature is set while growing, so the standing population's is a
+        // quarter-century average of how well its children ate. A society exactly at
+        // subsistence sits at the floor; one with a real surplus approaches its potential.
+        const float fed = std::max(0.0f, cs.subsistence_surplus_ratio);
+        const float target_stature =
+            std::clamp(c.stature_floor_at_subsistence +
+                           (1.0f - c.stature_floor_at_subsistence) * (fed - 1.0f),
+                       0.5f, 1.0f);
+        const float stature =
+            cs.nutrition + (target_stature - cs.nutrition) * std::clamp(c.stature_adjust_per_year,
+                                                                        0.0f, 1.0f);
+        rd.nutrition_replacement = stature;
+
+        // HEALTH — the share of the year a person is fit to work. Endemic disease and
+        // crowding take it; sanitation and medicine (the province's own technique) give it
+        // back; and hunger compounds with both, which is why famine kills far more people
+        // than starve.
+        const float shortfall = std::max(0.0f, 1.0f - stature);
+        const float disease = std::clamp(state.hazard_settings.disease, 0.0f, 2.0f);
+        const float sanitation = std::clamp(cs.tech_mortality_mult, 0.05f, 1.0f);
+        const float lost = c.days_lost_share_at_unit_disease * disease * sanitation +
+                           c.days_lost_per_stature_shortfall * shortfall +
+                           std::clamp(cs.sick_rate, 0.0f, 1.0f) * 0.5f;
+        const float target_health = std::clamp(1.0f - lost, 0.05f, 1.0f);
+        rd.health_replacement =
+            cs.health + (target_health - cs.health) * std::clamp(c.health_adjust_per_year, 0.0f,
+                                                                 1.0f);
+
+        // SCHOOLING — mean years of learning per adult. Built by the share of the learned
+        // stratum whose time is spared for teaching, and lost as the taught generation
+        // dies. A society with no surplus to free anybody has no teachers and forgets how
+        // to read within a few generations, which is what a dark age is.
+        const double pop = static_cast<double>(cs.total_population);
+        if (pop > 0.0) {
+            const double learned = pop * static_cast<double>(std::max(0.0f, cs.specialist_fraction)) *
+                                   static_cast<double>(std::max(0.0f, c.teaching_share_of_learned));
+            const double pupil_years = learned * static_cast<double>(c.pupil_years_per_teacher_year);
+            const double gained = pupil_years / pop;  // years of learning added per adult
+            const double lost_years = static_cast<double>(cs.schooling) *
+                                      static_cast<double>(c.schooling_turnover_per_year);
+            // Saturating: a society cannot school everybody past what schooling is.
+            const double room = std::max(0.0, 1.0 - static_cast<double>(cs.schooling) /
+                                                        std::max(1.0f, c.schooling_years_saturation));
+            rd.schooling_replacement =
+                static_cast<float>(std::max(0.0, static_cast<double>(cs.schooling) +
+                                                     gained * room - lost_years));
+        }
+        delta.region_deltas.push_back(rd);
+    }
 }
 
 void PopulationAgingModule::execute(const WorldState& state, DeltaBuffer& delta) {

@@ -145,7 +145,16 @@ class PopulationAgingModule : public ITickModule {
     static constexpr uint32_t TICKS_PER_MONTH = 30;
     static constexpr uint32_t TICKS_PER_YEAR = kTicksPerYear;  // canonical (shared_types.h)
 
+    // WHAT THESE PEOPLE ARE. Nutrition, health and schooling evolved from real flows —
+    // what the children ate, what the water and the crowding did, whose time the surplus
+    // could spare for teaching. Annual; see the definition for why each moves at the speed
+    // it does.
+    void advance_capability(uint32_t province_idx, const WorldState& state,
+                            DeltaBuffer& delta);
+
    private:
+    HumanCapabilityConfig capability_cfg_{};
+
     PopulationAgingConfig cfg_;
 };
 

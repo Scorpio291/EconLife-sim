@@ -1103,6 +1103,69 @@ struct TechnologyAdoptionConfig {
 };
 
 
+// ---------------------------------------------------------------------------
+// HumanCapabilityConfig — WHAT A PEOPLE IS, and how fast it changes (2026-08-23).
+//
+// Every constant here is a real measurement or a real timescale, because that is the
+// whole point: the rates that used to be free (how fast a society learns, how much work
+// it can get through) now come OUT of these, and a stock nobody could have measured would
+// just move the arbitrariness one layer down.
+// ---------------------------------------------------------------------------
+struct HumanCapabilityConfig {
+    // --- Nutrition: adult stature as a fraction of potential -------------------------
+    // Set while GROWING, so a population's stature reflects what it ate as children and
+    // cannot be undone for anyone already adult. The stock therefore follows the food
+    // signal on a generational lag rather than tracking it.
+    //
+    // 1/25 per year: the cohorts alive at any moment were children over roughly the last
+    // quarter-century, so that is how long it takes the standing population to reflect a
+    // change in the harvest.
+    float stature_adjust_per_year = 0.04f;
+    // How far below potential a population goes when it is chronically at bare
+    // subsistence. Well-fed and badly-fed European populations differed by 10-12cm in the
+    // 18th and 19th centuries, on a mean near 170 — so about 0.93 of potential at the
+    // bottom, and famine years take it lower still.
+    float stature_floor_at_subsistence = 0.90f;
+    // A standard-deviation height deficit costs roughly a tenth of adult productivity —
+    // the anthropometric-economics figure. Expressed here as how much of the shortfall
+    // from potential comes off the work a person can do.
+    float work_lost_per_stature_shortfall = 1.0f;
+
+    // --- Health: days fit to work ----------------------------------------------------
+    // A pre-modern adult lost something like a month a year to illness and injury before
+    // sanitation and medicine; the crowded and badly-watered lost far more. This is the
+    // baseline share of the year lost at unit disease burden with no sanitation.
+    float days_lost_share_at_unit_disease = 0.14f;   // ~51 days
+    // Hunger and illness compound: an underfed population is ill more often and recovers
+    // more slowly, which is the largest single reason famine mortality exceeds starvation.
+    float days_lost_per_stature_shortfall = 0.8f;
+    // Health follows its causes within a few years, unlike stature which is set in
+    // childhood — a clean water supply shows up in a decade, not a generation.
+    float health_adjust_per_year = 0.15f;
+
+    // --- Schooling: mean years of learning per adult ----------------------------------
+    // What one teacher can carry: a schoolmaster or a master with apprentices brings on
+    // this many pupil-years a year. A village school of thirty and a workshop of four are
+    // the two ends of it; twelve is the order across the pre-modern range.
+    float pupil_years_per_teacher_year = 12.0f;
+    // The share of the learned stratum who teach rather than only practise. Most of a
+    // society's literate people are doing something else with their literacy.
+    float teaching_share_of_learned = 0.25f;
+    // And it leaves with the people who hold it. At a ~40-year adult working life the
+    // stock turns over at about 2.5% a year, so a generation that teaches nobody loses it.
+    float schooling_turnover_per_year = 0.025f;
+    // What an ordinary literate pre-modern adult carries: enough to read, write and keep
+    // accounts. Schooling enters the knowledge engine RELATIVE to this, so the term is
+    // dimensionless — a people with twice the learning works things out twice as fast, and
+    // a people with none works nothing out. Without the reference the stock entered in
+    // YEARS and multiplied production by thirty.
+    float reference_schooling_years = 4.0f;
+
+    // The most any pre-modern population reached: near-universal basic literacy and a few
+    // years of it. Prussia and New England in the 18th century are the high-water marks.
+    float schooling_years_saturation = 8.0f;
+};
+
 struct KnowledgeConfig {
     // --- IDEAS GET HARDER TO FIND (R3A) ---
     // The natural limiter on how fast a society can advance, and the one thing the
@@ -1316,24 +1379,15 @@ struct KnowledgeConfig {
     // worlds out-innovate comfortable gardens, making the World-Class spectrum matter.
     float population_innovation_rate = 1.5e-6f;  // knowledge/yr per person at unit pressure
 
-    // THE CLOCK. The one fitted number in the knowledge engine, and the only one left in
-    // the whole climb: how fast a society accumulates learning, in the technique-
-    // equivalent units the tech tree's own content defines. It scales BOTH channels —
-    // what the learned stratum works out and what everybody else works out by doing —
-    // because their RATIO is a modelling choice about where discovery comes from, while
-    // their common scale is just the clock.
+    // REMOVED (2026-08-23): `knowledge_rate`, the clock — the one fitted number left in
+    // the climb. It was bisected against a historical date, which is steering toward a
+    // desired result: it made the Bronze Age land on 3300 BCE by construction rather than
+    // as a consequence, and it had been fitted under a broken integration stride besides.
     //
-    // It replaced seven fitted era thresholds. Those decided the shape of the climb as
-    // well as its speed, and worse, they were the definition of the knowledge unit, so
-    // every constant expressed in that unit floated with the fit. A rate decides nothing
-    // but the clock: slow it and every era takes longer in the same proportion, so the
-    // SHAPE — which era is long, which is short, how the climb accelerates — is a
-    // prediction of the model rather than something fitted in.
-    //
-    // Anchored on one date, the Bronze Age at 3300 BCE, because a clock needs setting
-    // once. Where the other six land is then the model's own answer, and a world that
-    // takes longer or less is not failing at anything.
-    float knowledge_rate = 0.15f;
+    // How fast a society works things out now comes out of WHAT ITS PEOPLE ARE — mean
+    // years of learning per adult times the share of the year they are fit to work, both
+    // stocks with long memories, both measurable in the record. See
+    // RegionCohortStats::schooling and ::health, and HumanCapabilityConfig.
     float adversity_base = 0.35f;               // drive with no special pressure (idle curiosity)
     float adversity_hazard_weight = 0.6f;       // drive from the world's hazard above a gentle one
     float adversity_scarcity_weight = 1.4f;     // drive from food scarcity (Malthusian pressure)

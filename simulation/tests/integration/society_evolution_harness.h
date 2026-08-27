@@ -106,7 +106,10 @@ struct SocietySnapshot {
     double food_store_years = 0.0;      // mean granary, in years of the whole population's food
     double capital_per_land = 0.0;      // built stock per unit of workable ground — the gate on
                                         // applying what a society knows
-    double tech_food = 1.0;             // technique the province actually holds, food channel
+    double tech_food = 0.0;             // technique the province actually holds, food channel
+    double nutrition = 0.0;             // adult stature as a fraction of potential
+    double health = 0.0;                // share of the year a person is fit to work
+    double schooling = 0.0;             // mean years of learning per adult
     double fish_capacity = 0.0;         // mean fishery carrying capacity (the stock's K)
     double fishers = 0.0;               // total people working the water
 };
@@ -153,6 +156,9 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.topsoil += static_cast<double>(p.cohort_stats->topsoil);
         if (p.cohort_stats->total_population > 0)
             s.tech_food += static_cast<double>(p.cohort_stats->tech_food_mult);
+        s.nutrition += static_cast<double>(p.cohort_stats->nutrition);
+        s.health += static_cast<double>(p.cohort_stats->health);
+        s.schooling += static_cast<double>(p.cohort_stats->schooling);
         s.food_store_years += static_cast<double>(p.cohort_stats->food_store) /
                                   (static_cast<double>(p.cohort_stats->total_population) *
                                    static_cast<double>(kTicksPerYear));
@@ -253,6 +259,9 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.topsoil /= static_cast<double>(w.provinces.size());
         s.food_store_years /= static_cast<double>(w.provinces.size());
         s.tech_food /= static_cast<double>(w.provinces.size());
+        s.nutrition /= static_cast<double>(w.provinces.size());
+        s.health /= static_cast<double>(w.provinces.size());
+        s.schooling /= static_cast<double>(w.provinces.size());
         s.fish_capacity /= static_cast<double>(w.provinces.size());
     s.businesses = static_cast<uint32_t>(w.npc_businesses.size());
     return s;

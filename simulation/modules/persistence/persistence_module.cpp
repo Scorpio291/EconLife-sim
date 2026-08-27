@@ -463,6 +463,12 @@ void write_province(ByteWriter& w, const Province& p) {
         w.write_float(p.cohort_stats->tech_food_mult);
         w.write_float(p.cohort_stats->tech_mortality_mult);
         w.write_float(p.cohort_stats->tech_knowledge_mult);
+        // v33: WHAT THESE PEOPLE ARE. Nutrition is set in childhood and takes a generation
+        // to move, schooling three; reloading a world without them would hand a society
+        // back the stature and the literacy it had lost, which is the whole point of them.
+        w.write_float(p.cohort_stats->nutrition);
+        w.write_float(p.cohort_stats->health);
+        w.write_float(p.cohort_stats->schooling);
         // v16: background-population cohorts + derived aggregates
         // (population_aging). Read gated on schema_ver >= 16.
         w.write_float(p.cohort_stats->mean_income);
@@ -1379,6 +1385,13 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
             p.cohort_stats->tech_food_mult = r.read_float();
             p.cohort_stats->tech_mortality_mult = r.read_float();
             p.cohort_stats->tech_knowledge_mult = r.read_float();
+        }
+        // v33: nutrition, health and schooling. Older saves default to a well-fed, healthy,
+        // unschooled people — which is what a world with no record of its own condition is.
+        if (schema_ver >= 33u) {
+            p.cohort_stats->nutrition = r.read_float();
+            p.cohort_stats->health = r.read_float();
+            p.cohort_stats->schooling = r.read_float();
         }
         // v16: background-population cohorts + aggregates. v7..v15 saves lack
         // these; cohorts stay empty (population_aging re-seeds nothing, but

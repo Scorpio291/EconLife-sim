@@ -1088,3 +1088,19 @@ TEST_CASE("society observe: the spread across seeds", "[.society-seeds]") {
                     worst * 100.0, k_draw * 100.0, falls);
     }
 }
+
+// WHAT A PEOPLE IS, over the whole climb. Nutrition, health and schooling are stocks with
+// long memories, and the rates that used to be fitted constants now come out of them.
+TEST_CASE("society observe: what these people are", "[.society-people]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(), 0.0f, true);
+    std::printf("\n  year |    pop | surplus | spec%% | stature | fit-days | schooling |"
+                " knowledge | era\n");
+    for (const auto& s : series) {
+        if (s.year % 500 != 0) continue;
+        std::printf("  %5u | %6.0f | %7.3f | %4.0f%% |   %.3f |    %.3f | %9.2f | %9.0f | %2d\n",
+                    s.year, s.total_population, s.mean_surplus, s.cohort_specialist_share * 100.0,
+                    s.nutrition, s.health, s.schooling, static_cast<double>(s.knowledge), s.era);
+    }
+}

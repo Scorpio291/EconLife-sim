@@ -709,6 +709,16 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.net_feedable_surplus_replacement;
                     cs.net_feedable_surplus = (v >= 0.0f) ? v : 0.0f;
                 }
+                auto sane01 = [](float v) { return std::isfinite(v) ? std::clamp(v, 0.0f, 1.0f)
+                                                                    : 1.0f; };
+                if (d.nutrition_replacement.has_value())
+                    cs.nutrition = sane01(*d.nutrition_replacement);
+                if (d.health_replacement.has_value())
+                    cs.health = sane01(*d.health_replacement);
+                if (d.schooling_replacement.has_value()) {
+                    const float v = *d.schooling_replacement;
+                    cs.schooling = (std::isfinite(v) && v >= 0.0f) ? v : 0.0f;
+                }
                 if (d.granary_cover_years_replacement.has_value()) {
                     float v = *d.granary_cover_years_replacement;
                     cs.granary_cover_years = (v >= 0.0f && !std::isnan(v)) ? v : 0.0f;

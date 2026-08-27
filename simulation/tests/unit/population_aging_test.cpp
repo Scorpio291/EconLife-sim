@@ -6,6 +6,7 @@
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
+#include "modules/knowledge/knowledge_module.h"
 #include "modules/population_aging/population_aging_module.h"
 
 using namespace econlife;
@@ -1030,3 +1031,111 @@ TEST_CASE("population: on a disease-free world plague never comes",
     CHECK_THAT(y.mortality_factor, WithinAbs(1.0f, 1e-9f));
     CHECK_THAT(y.susceptible_after, WithinAbs(1.0f, 1e-9f));
 }
+
+// ===========================================================================
+// WHAT THESE PEOPLE ARE (2026-08-23).
+//
+// A population is not an undifferentiated headcount. Nutrition, health and
+// schooling are stocks with long memories, each measurable in the record, and
+// the rates that used to be free constants now come out of them. These tests
+// assert the shapes that make them worth having — above all that a fall LASTS.
+// ===========================================================================
+
+namespace {
+WorldState make_capability_world(float surplus, float specialists, float schooling,
+                                 float nutrition) {
+    WorldState w{};
+    w.current_tick = kTicksPerYear;
+    w.world_seed = 1;
+    w.era_catalog.load_builtin_default();
+    w.technology.current_era = 1;
+    Province p{};
+    p.id = 0;
+    p.region_id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->total_population = 20000;
+    p.cohort_stats->subsistence_surplus_ratio = surplus;
+    p.cohort_stats->specialist_fraction = specialists;
+    p.cohort_stats->schooling = schooling;
+    p.cohort_stats->nutrition = nutrition;
+    p.cohort_stats->health = 0.9f;
+    w.provinces.push_back(std::move(p));
+    return w;
+}
+struct Cap { float nutrition, health, schooling; };
+Cap advance_one_year(WorldState& w) {
+    PopulationAgingModule mod;
+    DeltaBuffer d{};
+    mod.execute_province(0, w, d);
+    Cap out{w.provinces[0].cohort_stats->nutrition, w.provinces[0].cohort_stats->health,
+            w.provinces[0].cohort_stats->schooling};
+    for (const auto& rd : d.region_deltas) {
+        if (rd.nutrition_replacement) out.nutrition = *rd.nutrition_replacement;
+        if (rd.health_replacement) out.health = *rd.health_replacement;
+        if (rd.schooling_replacement) out.schooling = *rd.schooling_replacement;
+    }
+    return out;
+}
+}  // namespace
+
+TEST_CASE("people: stature answers the harvest, but slowly", "[population_aging][capability]") {
+    // Adult stature is set while GROWING, so it reflects a quarter-century of harvests and
+    // cannot be undone for anyone already grown. A good year does not make a tall people.
+    WorldState fed = make_capability_world(2.0f, 0.10f, 3.0f, 0.90f);
+    WorldState hungry = make_capability_world(0.7f, 0.10f, 3.0f, 0.98f);
+    const float up = advance_one_year(fed).nutrition;
+    const float down = advance_one_year(hungry).nutrition;
+    CHECK(up > 0.90f);   // a fed people grows toward its potential
+    CHECK(down < 0.98f);  // a hungry one falls away from it
+    // And neither moves far in one year: this is a generational stock.
+    CHECK(up < 0.95f);
+    CHECK(down > 0.94f);
+}
+
+TEST_CASE("people: hunger and illness compound", "[population_aging][capability]") {
+    // The largest single reason famine mortality exceeds outright starvation: an underfed
+    // population is ill more often and recovers more slowly.
+    WorldState well_fed = make_capability_world(1.5f, 0.10f, 3.0f, 1.00f);
+    WorldState stunted = make_capability_world(1.5f, 0.10f, 3.0f, 0.85f);
+    CHECK(advance_one_year(stunted).health < advance_one_year(well_fed).health);
+}
+
+TEST_CASE("people: a fall closes the schools, and they are slow to reopen",
+          "[population_aging][capability]") {
+    // THE POINT OF THE WHOLE THING. Schooling is built by people whose time the surplus can
+    // spare for teaching, and it leaves with the generation that held it. A society that
+    // loses its freed stratum stops teaching, and its learning drains away — which is why
+    // the headcount comes back in fifty years and the capability takes three generations,
+    // and why leaving a dark age is slow.
+    WorldState teaching = make_capability_world(1.5f, 0.15f, 2.0f, 0.95f);
+    WorldState collapsed = make_capability_world(0.8f, 0.00f, 2.0f, 0.95f);
+    CHECK(advance_one_year(teaching).schooling > 2.0f);   // teachers build it
+    CHECK(advance_one_year(collapsed).schooling < 2.0f);  // nobody left to teach: it drains
+
+    // And it drains far more slowly than it took to lose the stratum — a generation's
+    // learning does not evaporate in a year.
+    CHECK(advance_one_year(collapsed).schooling > 1.9f);
+}
+
+TEST_CASE("people: an unschooled society works nothing out", "[population_aging][capability]") {
+    // Research speed is not a constant any more. It comes out of what the people carry, so
+    // a society with no learning produces no knowledge however many mouths it has — which
+    // is the correct reading of a people that has lost its scribes.
+    KnowledgeModule km;
+    auto produced_with = [&km](float schooling) {
+        WorldState w = make_capability_world(1.5f, 0.15f, schooling, 0.95f);
+        w.occupation_catalog.load_builtin_default();
+        w.provinces[0].cohort_stats->knowledge_level = 50.0f;
+        DeltaBuffer d{};
+        km.execute(w, d);
+        float k = 0.0f;
+        for (const auto& rd : d.region_deltas)
+            if (rd.province_knowledge_delta) k += *rd.province_knowledge_delta;
+        return k;
+    };
+    const float none = produced_with(0.0f);
+    const float some = produced_with(4.0f);
+    CHECK_THAT(none, Catch::Matchers::WithinAbs(0.0f, 1e-6f));
+    CHECK(some > 0.0f);
+}
+

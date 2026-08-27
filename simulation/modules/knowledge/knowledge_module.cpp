@@ -120,9 +120,23 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                        static_cast<double>(cfg_.production_scalar);
         const double population_term =
             static_cast<double>(cfg_.population_innovation_rate) * pop;
+        // WHAT THESE PEOPLE ARE, not a fitted clock. How fast a society works things out
+        // depends on how much learning its people carry and how many days a year they are
+        // fit to use it — both real, both measurable, both stocks with long memories.
+        //
+        // `knowledge_rate` was the one fitted number left in the climb, bisected against a
+        // historical date. That is steering toward a desired result: it made the Bronze
+        // Age land on 3300 BCE by construction rather than as a consequence, and it was
+        // fitted under a broken integration stride besides. It is gone. A society learns
+        // faster because its people are schooled and well, and slower because they are
+        // not — which is also why two worlds with different harvest histories now diverge
+        // in research speed and not merely in timing.
+        const double capability =
+            static_cast<double>(std::max(0.0f, cs.schooling)) /
+            static_cast<double>(std::max(0.1f, capability_cfg_.reference_schooling_years)) *
+            static_cast<double>(std::clamp(cs.health, 0.0f, 1.0f));
         produced[i] = (specialist_term + population_term) * static_cast<double>(pressure) *
-                      static_cast<double>(cs.tech_knowledge_mult) *
-                      static_cast<double>(cfg_.knowledge_rate);
+                      static_cast<double>(cs.tech_knowledge_mult) * capability;
 
         // IDEAS GET HARDER TO FIND, against what THIS place already knows. The easy
         // discoveries are made first and every one made leaves the next harder: American
@@ -164,7 +178,11 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
                           static_cast<double>(cfg_.genius_leap_years) *
                           static_cast<double>(pressure_of[leap_province]) *
                           static_cast<double>(host ? host->tech_knowledge_mult : 1.0f) *
-                          static_cast<double>(cfg_.knowledge_rate);
+                          (host ? static_cast<double>(std::max(0.0f, host->schooling)) /
+                                      static_cast<double>(std::max(
+                                          0.1f, capability_cfg_.reference_schooling_years)) *
+                                      static_cast<double>(std::clamp(host->health, 0.0f, 1.0f))
+                                : 0.0);
             // The frontier recedes for geniuses too: Newton had harder problems available
             // than Archimedes, and Einstein harder ones than Newton.
             if (host != nullptr)

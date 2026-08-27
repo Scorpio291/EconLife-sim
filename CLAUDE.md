@@ -163,6 +163,21 @@ society**. Every node is `main`, `side` or `hub`.
 - **Do not grade the speed of an ascent.** Different worlds take different times and none
   of them is failing. The `[pacing]` gate asserts shape, not dates.
 
+## What a Population IS
+A population is not a headcount. Three stocks on `RegionCohortStats` carry its condition,
+each measurable in the historical record and each fed by real flows:
+`nutrition` (adult stature as a fraction of potential, set in childhood, moves on a
+25-year lag), `health` (share of the year fit to work), `schooling` (mean years of learning
+per adult, built by teachers the surplus can spare, lost with the generation that held it).
+
+- **Research speed and work capacity DERIVE from these.** Knowledge production is
+  schooling/reference x health; effective labour is working-age x fitness x a stunting
+  penalty. There is no fitted clock — `knowledge_rate` and `calib_rate.sh` are gone.
+- **This is what makes a fall last.** The headcount returns in fifty years; stature takes a
+  generation and schooling three. Nothing else in the model has that memory.
+- A stock nobody could have measured is a rail one layer down. If you add one, say what
+  instrument would read it.
+
 ## Data-Driven Content
 Goods, recipes, and facility types are loaded from CSV files in
 packages/base_game/. Keyed by string identifiers (not integer enums).

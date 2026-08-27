@@ -42,6 +42,14 @@ WorldState make_world(uint8_t era, uint32_t population, float specialist_fractio
     p.cohort_stats->total_population = population;
     p.cohort_stats->specialist_fraction = specialist_fraction;
     p.cohort_stats->subsistence_surplus_ratio = 1.2f;  // fed, with a margin
+    // WHAT THESE PEOPLE ARE. Knowledge production comes out of schooling and health now
+    // rather than a fitted clock, so a fixture has to say what its people carry. These are
+    // an ordinary literate pre-modern population: a couple of years of learning per adult
+    // and most of the year fit to work. A fixture left at the struct defaults has NO
+    // schooling and correctly produces nothing.
+    p.cohort_stats->schooling = 2.0f;
+    p.cohort_stats->health = 0.9f;
+    p.cohort_stats->nutrition = 0.97f;
     w.provinces.push_back(std::move(p));
 
     const OccupationDefinition* scholar = w.occupation_catalog.find("scholar");

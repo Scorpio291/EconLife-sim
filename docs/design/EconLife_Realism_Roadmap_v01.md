@@ -1348,6 +1348,61 @@ still falling, so the late stage of a collapse is not food-driven at all: it is 
 structure, hollowed out by the famine, carrying the fall a generation past its cause.
 
 
+## R21. What these people are (LANDED 2026-08-23)
+
+A population was an undifferentiated headcount, and the rates that ought to depend on its
+condition were free constants instead. Three stocks now carry it, each measurable in the
+historical record — which is the test, because a stock nobody could ever have measured just
+moves the arbitrariness one layer down.
+
+| stock | unit | measured by | fed by |
+|---|---|---|---|
+| `nutrition` | adult stature as a fraction of potential | skeletal series, conscription records | childhood food, on a 25-year lag |
+| `health` | share of the year fit to work | days lost to illness | disease, crowding, sanitation, hunger |
+| `schooling` | mean years of learning per adult | signature rates, age heaping, guild indentures | teachers the surplus can spare |
+
+**The last fitted number in the climb is gone.** `KnowledgeConfig::knowledge_rate` — "the
+clock" — was bisected against a historical date so the Bronze Age would land on 3300 BCE.
+That is steering toward a desired result: it made the answer true by construction rather
+than as a consequence, and it had been fitted under a broken integration stride besides, so
+it was steering toward an artefact. How fast a society works things out now comes out of
+what its people carry: mean years of learning per adult (relative to the four an ordinary
+literate pre-modern adult has) times the share of the year they are fit to use it.
+`calib_rate.sh` is deleted with it, and nothing in the climb is calibrated any more.
+
+**And a workforce is not a headcount.** Effective labour is now working-age share times
+fitness times a stunting penalty — a standard-deviation height deficit costing about a tenth
+of adult productivity, one of the better-measured facts in economic history.
+
+**Why this matters beyond tidiness: a fall now LASTS.** Measured over the dawn, schooling
+builds from 0 to 4.5 years and stature recovers from 0.906 to 0.964 of potential — and in a
+collapse schooling goes to **0.00** while stature falls to 0.85. The headcount returns in
+fifty years; stature takes a generation and schooling three, because the teachers are dead
+and their pupils were never taught. That is the mechanism a ratchet needs to bite on, and
+the model had nothing like it.
+
+**Two bugs found in the building, both worth naming.**
+
+*A pass hung off `execute()` in a province-parallel module is dead code.* The orchestrator
+dispatches parallel modules through `execute_province` and never calls `execute()`, so the
+capability pass compiled, linked, ran never, and read as working — until the stock it was
+supposed to move was printed and had not moved.
+
+*A stock entering in YEARS where the term it replaced was dimensionless.* Schooling
+multiplied knowledge production directly, so a people with 4.8 years of learning produced
+thirty times what the old constant did and the whole climb raced and shattered. It enters
+relative to `reference_schooling_years` now, and the term is dimensionless.
+
+**Where it stands.** The dawn is right: a long Neolithic to about year 3,500 with schooling
+building 0 to 4 and stature recovering, then the climb. After that the same violent
+instability as before — era swinging 5, 1, 5, 1, 5, 4, 3 with population between 34,000 and
+1.5 million. The capability system neither caused it nor cures it; it is R18's open item.
+
+Also cleared: `max_specialist_fraction` and the seven `specialist_ceiling_*` constants, the
+rail R12 replaced months ago, along with a unit test that was still asserting the schedule
+they encoded.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;

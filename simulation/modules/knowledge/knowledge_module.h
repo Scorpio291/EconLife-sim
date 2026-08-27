@@ -121,6 +121,8 @@ class KnowledgeModule : public ITickModule {
 
    private:
     KnowledgeConfig cfg_;
+    // What these people are: schooling enters relative to reference_schooling_years.
+    HumanCapabilityConfig capability_cfg_{};
 };
 
 }  // namespace econlife

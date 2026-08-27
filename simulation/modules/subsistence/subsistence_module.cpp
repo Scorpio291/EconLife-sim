@@ -80,7 +80,14 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         return;
 
     // Working-age fraction of the population is available to labour on the land.
-    const float working_age = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
+    // A WORKFORCE, NOT A HEADCOUNT. Of the people of working age, the ones who are fit
+    // this year do the work, and a population stunted by a hungry childhood does less of
+    // it per head — a standard-deviation height deficit costs about a tenth of adult
+    // productivity, which is one of the better-measured facts in economic history.
+    const float working_age_raw = cs.working_age_fraction > 0.0f ? cs.working_age_fraction : 0.6f;
+    const float fit = std::clamp(cs.health, 0.05f, 1.0f);
+    const float stunting = std::clamp(1.0f - cs.nutrition, 0.0f, 0.5f);
+    const float working_age = working_age_raw * fit * std::max(0.3f, 1.0f - stunting);
 
     // Natural capital the population can draw food from this tick, INCLUDING the ghost
     // acres coal is standing in for (energy_base). An organic economy is bounded by

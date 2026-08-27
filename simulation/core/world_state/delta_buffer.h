@@ -293,6 +293,10 @@ struct RegionDelta {
     std::optional<float>
         net_feedable_surplus_replacement;  // replacement; cohort_stats->net_feedable_surplus,
                                            // published by grain_logistics (ox-cart catchment)
+    // What these people are: nutrition, health and schooling (population_aging).
+    std::optional<float> nutrition_replacement;
+    std::optional<float> health_replacement;
+    std::optional<float> schooling_replacement;
     std::optional<float>
         granary_cover_years_replacement;  // replacement; cohort_stats->granary_cover_years
     std::optional<float>
