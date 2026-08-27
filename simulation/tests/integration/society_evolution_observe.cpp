@@ -983,23 +983,37 @@ TEST_CASE("rate calibration: year each era is reached on earthlike", "[.rate-cal
 // Fine-resolution look at the limit cycle: what actually kills the population, and what
 // the ceiling is doing while it happens.
 TEST_CASE("society observe: inside the cycle", "[.society-cycle-detail]") {
+    // ANATOMY OF ONE FALL. Everything that could be causal, at 25-year resolution, so the
+    // ORDER of events is readable. What moves first is the cause; what follows is not.
     constexpr uint32_t kNpcs = 200;
-    constexpr uint32_t kYears = 13000;
-    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
-                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
-    std::printf("\n  year |    pop |  d%%/yr | surplus | spec%% | soil  | topsl | forest |"
-                " store/yr | plague | war    | faction | PSI    | era\n");
-    for (size_t i = 1; i < series.size(); ++i) {
-        const auto& s = series[i];
-        if (s.year < 6400 || s.year > 9200 || s.year % 50 != 0) continue;
-        const double prev = series[i - 1].total_population;
+    constexpr uint32_t kYears = 6000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(), 0.0f, true);
+
+    // Find the deepest fall and print the window around its onset.
+    double run_max = 0; size_t worst_i = 0; double worst = 0;
+    for (size_t i = 0; i < series.size(); ++i) {
+        run_max = std::max(run_max, series[i].total_population);
+        const double d = run_max > 0 ? 1.0 - series[i].total_population / run_max : 0.0;
+        if (d > worst) { worst = d; worst_i = i; }
+    }
+    const int lo = std::max(0, static_cast<int>(worst_i) - 900);
+    const int hi = std::min<int>(static_cast<int>(series.size()) - 1,
+                                 static_cast<int>(worst_i) + 200);
+    std::printf("\n  deepest fall %.0f%% bottoming at year %u\n", worst * 100.0,
+                series[worst_i].year);
+    std::printf("  year |    pop |  d%%/yr | surplus | spec%% | statr | fit  | school |"
+                " techF | cap/hd | store | PSI    | fact   | war    | era\n");
+    for (int i = lo; i <= hi; ++i) {
+        const auto& s = series[static_cast<size_t>(i)];
+        if (s.year % 25 != 0) continue;
+        const double prev = series[static_cast<size_t>(std::max(0, i - 1))].total_population;
         const double g = prev > 0 ? 100.0 * (s.total_population / prev - 1.0) : 0.0;
-        std::printf("  %5u | %6.0f | %+6.2f | %7.3f | %4.0f%% | %.3f | %.3f | %.4f |"
-                    " %8.2f | %.3f | %.4f | %.4f | %.4f | %2d\n",
+        std::printf("  %5u | %6.0f | %+6.2f | %7.3f | %4.0f%% | %.3f | %.2f | %6.2f |"
+                    " %5.2f | %6.0f | %5.2f | %.4f | %.4f | %.4f | %2d\n",
                     s.year, s.total_population, g, s.mean_surplus,
-                    s.cohort_specialist_share * 100.0, s.soil_health, s.topsoil, s.forest,
-                    s.food_store_years, s.plague_susceptible, s.max_war_deaths,
-                    s.max_faction_deaths, s.political_stress, s.era);
+                    s.cohort_specialist_share * 100.0, s.nutrition, s.health, s.schooling,
+                    s.tech_food, s.productive_capital_per_head, s.food_store_years,
+                    s.political_stress, s.max_faction_deaths, s.max_war_deaths, s.era);
     }
 }
 

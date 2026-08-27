@@ -1403,6 +1403,60 @@ rail R12 replaced months ago, along with a unit test that was still asserting th
 they encoded.
 
 
+## R22. Anatomy of a fall, and the claim that survives it (PARTIAL 2026-08-23)
+
+Traced one collapse at 25-year resolution to read the ORDER of events, because every
+single-constant fix before this had been a guess. The order is unambiguous:
+
+| year | pop | surplus | spec% | schooling | techF | store | PSI |
+|---|---|---|---|---|---|---|---|
+| 4,300 | 60,831 | 5.30 | 32% | 4.45 | 4.48 | 2.32 | 0.00 |
+| 4,600 | 1,092,142 | 1.65 | 33% | 4.49 | 5.08 | 0.41 | 0.08 |
+| 4,700 | 1,333,785 | **0.94** | **5%** | 2.73 | 4.84 | 0.01 | **0.70** |
+| 4,900 | 94,051 | 0.69 | **0%** | **0.05** | 3.21 | 0.00 | 0.00 |
+| 5,100 | 25,865 | 0.92 | 0% | **0.00** | 2.39 | 0.46 | 0.00 |
+
+An 18-fold boom in three centuries, then the harvest dips below one and **the entire
+non-farming stratum is dismissed at once** — because the sparable share is `1 - 1/S` and S
+has crossed one. Schooling, technique and the carrying ceiling go with it, which deepens
+the famine that started it. Every cycle wiped the civilisation back to the Neolithic, which
+is precisely why nothing could ratchet.
+
+**That is backwards, and famously so.** A lord takes his tithe whether or not the harvest
+was good, and in a famine the stratum is what is PROTECTED — Bengal in 1943 and Ireland in
+1845 both exported food while people starved. The claimants eat first and the growers bear
+the shortfall. It is why institutions, records and technique survive falls that kill a
+third of a population.
+
+So the stratum now has a floor: the claim still reaches its share of THIS year's grain and
+feeds the people it reaches, bounded by the stratum already held so it can only ever slow a
+collapse rather than cause one. The province sheds through the existing inertia at the speed
+a society really loses its institutions, instead of dismissing them in one bad harvest.
+
+**What it bought, and what it did not.** In the sampled trace the specialist share now
+floors at 13-19% instead of 0%, schooling holds at 4.7-5.3 years through collapses instead
+of draining to nothing, and knowledge oscillates around a rising trend. All five seeds now
+reach era 5 (seed 42 previously never left the Neolithic), and earthlike reaches era 6.
+
+But the headline metric is unmoved: **the knowledge drawdown is still 81-96% across seeds**,
+and the population amplitude is still 98-99%. The sampled trace read better than the truth —
+the deepest dips fall between samples. The instability is NOT fixed.
+
+**Two failed attempts recorded so they are not repeated.** Bounding the claim by "what
+leaves the growers at subsistence" self-amplifies: fewer growers means a smaller subsistence
+bound means more claimable, and the specialist share ran to 97%. And a preventive check on
+fertility (R18) pins the world rather than damping it, because this population is not
+crowded against its ceiling in the first place.
+
+**Where the amplitude actually comes from**, from the anatomy above: at the trough the
+surplus reads 4.7-5.3 because technique (`tech_food` ~5) multiplies a linear-regime harvest
+that a small population has entirely to itself. The society then grows at +1.3%/yr for three
+centuries — within the biological bound, and not absurd against colonial-American rates —
+until saturation catches it. The fall that follows is famine mortality plus age-structure
+momentum carrying it a generation past its cause. That is the next thing to work, and it is
+about the ceiling and the age ladder rather than about fertility.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;

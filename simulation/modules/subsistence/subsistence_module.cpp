@@ -259,9 +259,6 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // era ticks over. It is one tick stale (grain_logistics runs after this module), which
     // is nothing on a stock that moves over decades, and it degrades correctly: a province
     // with no haulage and no neighbours is limited to what it can carry itself.
-    const float provisionable = std::max(0.0f, cs.urban_capacity);
-    if (cs.urban_capacity > 0.0f || cs.net_feedable_surplus > 0.0f)
-        specialists_people = std::min(specialists_people, provisionable);
 
     // AND WHAT CAN BE SPARED IS NOT WHAT CAN BE TAKEN. A non-farmer eats grain somebody
     // else grew and gave up, so somebody had to be able to CLAIM it — to know the crop
@@ -283,6 +280,46 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // surplus, they could keep a surplus because they built the apparatus to claim one.
     const float reach = claim_reach(population, cs.codified_knowledge, cfg_);
     specialists_people *= reach;
+
+    // WHAT CAN BE SPARED IS NOT WHAT CAN BE PROVISIONED. Two independent physical limits
+    // and the smaller binds: the harvest says how many hands can leave the land, haulage
+    // says how many mouths the grain can reach once they have.
+    const float provisionable = std::max(0.0f, cs.urban_capacity);
+    if (cs.urban_capacity > 0.0f || cs.net_feedable_surplus > 0.0f)
+        specialists_people = std::min(specialists_people, provisionable);
+
+    // AND A CLAIM IS STILL TAKEN IN A BAD YEAR. Everything above is a residual of the
+    // SURPLUS, so it supports nobody at all once the harvest dips below what the province
+    // eats: the sparable share is 1 - 1/S and S has crossed one. The first bad year
+    // therefore dismissed every scribe, priest and smith at once, and the schooling, the
+    // technique and the carrying ceiling went with them — deepening the famine that
+    // started it. Measured: at surplus 0.94 a society held ZERO specialists, its schooling
+    // drained from 4.5 years to nothing across four centuries, its food technique halved,
+    // and it lost 98% of its people. Every cycle wiped the civilisation back to the
+    // Neolithic, which is why nothing could ever ratchet.
+    //
+    // That is backwards, and famously so. A lord takes his tithe whether or not the
+    // harvest was good, and in a famine the stratum is precisely what is PROTECTED —
+    // Bengal in 1943 and Ireland in 1845 both exported food while people starved. The
+    // claimants eat first and the growers bear the shortfall. It is why institutions,
+    // records and technique survive falls that kill a third of a population.
+    //
+    // So a floor: the claim still reaches its share of THIS year's grain, and feeds the
+    // people it reaches. Bounded by the stratum already held, so it can only ever slow a
+    // collapse rather than cause one — the province sheds its stratum through the inertia
+    // below at the speed a society really loses its institutions, instead of dismissing
+    // them in a single bad harvest.
+    const float per_capita = std::max(1e-6f, cfg_.per_capita_food_per_tick);
+    const float held_off_land =
+        std::max(cs.specialist_fraction * static_cast<float>(population), cs.urban_population);
+    const float harvest_labor =
+        std::max(0.0f, static_cast<float>(population) - held_off_land) * working_fraction;
+    const float harvest_now =
+        base_ceiling * (1.0f - std::exp(-std::max(0.0f, harvest_labor) / half));
+    const float claim_feeds = reach * harvest_now / per_capita;
+    specialists_people = std::max(specialists_people, std::min(claim_feeds, held_off_land));
+    specialists_people = std::clamp(specialists_people, 0.0f, static_cast<float>(population));
+
     const float supported_fraction =
         population > 0 ? specialists_people / static_cast<float>(population) : 0.0f;
 

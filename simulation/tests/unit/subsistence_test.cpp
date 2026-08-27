@@ -1018,12 +1018,17 @@ TEST_CASE("no rails: a granary carries the stratum it has, it does not fund a bi
         w.era_catalog.load_builtin_default();
         w.technology.current_era = 5;
         w.hazard_settings.seasonality = 0.0f;
-        w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/4000));
+        // A GENUINELY bad year, not merely a badly connected one. The fixture used to
+        // starve the haulage alone (urban_capacity 40) on good land, but a stratum sitting
+        // among the fields it eats from needs no haulage, and the claim on the harvest
+        // rightly keeps it fed. To test shedding, the HARVEST has to fail: poor ground and
+        // more mouths than it can feed.
+        w.provinces.push_back(make_province(0, /*ag=*/0.05f, /*population=*/60000));
         auto& cs = *w.provinces[0].cohort_stats;
         cs.knowledge_level = 20000.0f;
         cs.productive_capital = 4.0e6f;
         cs.codified_knowledge = 8000.0f;
-        cs.urban_capacity = 40.0f;  // a thin harvest: supports far less than is held
+        cs.urban_capacity = 40.0f;
         cs.net_feedable_surplus = 40.0f;
         cs.specialist_fraction = held;
         cs.food_store = store;
