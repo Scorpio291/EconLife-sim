@@ -261,10 +261,23 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
 // Boot a dawn (era 1, founding-seed) world shaped by `arch` (the world-spectrum
 // dial: Bounty + World-Class hazard) and run it `years` in-game years,
 // capturing one SocietySnapshot per year (plus the t=0 snapshot).
+// HOW MANY ORCHESTRATOR STEPS PER IN-GAME YEAR the history arc is integrated at.
+//
+// This is a real dial on the ANSWER, not just on the cost. Annual-gated stocks (the
+// granary, the soil, the stratum, the era) fire once a year at any stride, but everything
+// with a PER-TICK rate — fisheries biology, the deferred queue, migration, epidemics —
+// advances once per step, so at one step per year it runs at a 365th of its proper speed.
+// And a strongly nonlinear system integrated in one-year jumps overshoots the way a coarse
+// Euler step always does, which looks exactly like a boom-and-bust the model does not
+// actually contain.
+//
+// 1 is the old fast-forward. 365 is the real game. Anything between is a level-of-detail
+// choice, and it must be an explicit one.
 inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t npc_count,
                                                       uint32_t years, const WorldArchetype& arch,
                                                       float founding_hardiness = 0.0f,
-                                                      bool fast_forward = false) {
+                                                      bool fast_forward = false,
+                                                      uint32_t steps_per_year = 0) {
     WorldGeneratorConfig config{};
     config.seed = seed;
     config.province_count = 6;
@@ -300,17 +313,36 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     std::vector<SocietySnapshot> series;
     series.reserve(years + 1);
     series.push_back(capture_society(world, 0));
+    // Resolve the stride. `fast_forward` now means the history stride, not one step.
+    //
+    // IT WAS ONE STEP PER YEAR AND THAT BROKE THE RATCHET. Measured over 9,000 years at
+    // otherwise identical settings, the world's knowledge fell as much as 68% below its
+    // running maximum at one step per year and 1% at four or more — because the corpus is
+    // recopied and diffused per TICK while it is forgotten per YEAR, so a 365x
+    // under-sample starves the copying and a civilisation forgets what it knew at every
+    // collapse. Every knowledge measurement taken under the old stride was measuring the
+    // integration, not the model.
+    //
+    // Twelve is the explicit level-of-detail choice: the drawdown is already at its
+    // fine-stride value by four, twelve costs about a second per thousand years, and the
+    // annual gates still fire exactly once a year. Not a free lunch and not silent — a
+    // caller wanting the real game passes 365.
+    constexpr uint32_t kHistoryStride = 12u;
+    const uint32_t stride = steps_per_year > 0 ? std::min(steps_per_year, 365u)
+                                               : (fast_forward ? kHistoryStride : 365u);
     for (uint32_t y = 0; y < years; ++y) {
-        if (fast_forward) {
-            // Coarse history stride: one orchestrator step per year, landed on a
-            // year-aligned tick so the annual dynamics (knowledge, births/deaths,
-            // era advance) fire. ~365x fewer ticks. Per-day effects under-count —
-            // fine for pre-market history-gen (no deferred work at the dawn).
-            world.current_tick = (y + 1) * 365u;
-            orch.execute_tick(world, pool);
-        } else {
+        if (stride >= 365u) {
             for (uint32_t t = 0; t < 365; ++t)
                 orch.execute_tick(world, pool);
+        } else {
+            // Sub-annual stride: spread `stride` steps across the year and land the LAST
+            // one on the year-aligned tick, so the annual gates (knowledge, births and
+            // deaths, era advance, the granary) fire exactly once a year at any stride
+            // while the per-tick mechanisms get `stride` bites instead of one.
+            for (uint32_t k = 1; k <= stride; ++k) {
+                world.current_tick = y * 365u + (k * 365u) / stride;
+                orch.execute_tick(world, pool);
+            }
         }
         series.push_back(capture_society(world, y + 1));
         if (!is_commons_era(world.technology.current_era))

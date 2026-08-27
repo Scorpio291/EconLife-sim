@@ -1288,6 +1288,66 @@ regression, and the long-run trend reaching era 8 near year 12,000. We currently
 at 30% rather than 94%, and what keeps a remnant of the learned stratum alive through it.
 
 
+## R19. The history arc was integrated at one step per year (LANDED 2026-08-23)
+
+The dawn arc ran at ONE orchestrator step per in-game year — a 365x under-sample — and it
+was corrupting the thing the whole brief depends on.
+
+**The knowledge ratchet was an integration artefact.** Measured over 9,000 years at
+otherwise identical settings, the world's knowledge fell to 68% below its running maximum
+at one step per year, and to 1% at four steps or more:
+
+| steps/yr | worst population fall | knowledge drawdown | era reached |
+|---|---|---|---|
+| 1 | 95% | **68%** | 3 |
+| 4 | 84% | **1%** | 4 |
+| 12 | 78% | **1%** | 4 |
+| 52 | 83% | **1%** | 4 |
+
+The corpus is recopied and diffused per TICK while it is forgotten per YEAR, so starving
+the copying by 365x makes a civilisation forget what it knew at every collapse. Every
+knowledge measurement taken this session before this was measuring the integration rather
+than the model — including the era pacing and the clock it was fitted against.
+
+The history stride is now **12 steps per year**, an explicit level-of-detail choice
+documented at the site: the drawdown is already at its fine-stride value by four, twelve
+costs about a second per thousand years, and the annual gates still fire exactly once a
+year. A caller wanting the real game passes 365.
+
+**And the population swings are NOT a stride artefact** — 78-95% at every stride — so they
+are a property of the model and have to be worked as one.
+
+## R20. What the seeds actually do (MEASURED 2026-08-23)
+
+At the new stride, over 13,000 years, earthlike:
+
+| seed | Bronze | Iron | Classical | end era | end pop | knowledge | worst fall | K-drawdown | falls >20% |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 7,426 | 7,778 | — | 3 | 262,073 | 893 | 96% | 75% | 6 |
+| 7 | 7,383 | 7,679 | 8,187 | 3 | 61,930 | 896 | 96% | 85% | 4 |
+| 42 | — | — | — | **1** | 2,020 | 12 | 88% | 12% | 1 |
+| 1000 | 6,307 | 6,784 | 7,442 | 3 | 179,533 | 2,322 | 96% | 91% | 5 |
+| 2024 | 10,584 | 11,376 | 12,010 | 3 | 861,498 | 2,419 | 96% | 65% | 2 |
+
+Two things are working. **Seeds genuinely diverge**: seed 42 never leaves the Neolithic at
+all, seed 1000 reaches the Bronze Age four thousand years before seed 2024, and end
+populations span 2,020 to 861,498. And there are now **four to six falls per world** rather
+than one — the repeated rise and fall the brief asks for.
+
+Two things are not. The falls are **96% deep** against a target of 20-40%, and because they
+are that deep the learned stratum goes to zero and the knowledge drawdown returns (65-91%
+over the full span, even though it is 1% over the first 9,000 years). The ratchet failure is
+downstream of the amplitude, which is the same conclusion R18 reached and now has the seed
+spread behind it.
+
+**Where the relief goes missing.** In the saturated regime a falling population raises its
+own surplus — the Malthusian restoring force. In the LINEAR regime output is proportional to
+labour, so surplus is independent of population and that restoring force vanishes exactly
+when it is most needed. Measured at the trough, surplus reads 5.3 while the population is
+still falling, so the late stage of a collapse is not food-driven at all: it is the age
+structure, hollowed out by the famine, carrying the fall a generation past its cause.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;

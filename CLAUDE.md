@@ -102,6 +102,13 @@ agriculture) and is grounding the criminal economy likewise. See
 docs/session_logs/emergence_baseline_2026-06-10.md for the running history; that log,
 not this paragraph, is the source of truth for current loop status.
 
+**Integration stride.** The history arc runs at 12 orchestrator steps per in-game year, not
+one. Annual gates fire once a year at any stride, but per-TICK mechanisms (corpus recopying,
+knowledge diffusion, fisheries biology, the deferred queue) advance per step — so at one step
+per year they ran at a 365th of their proper speed, and the knowledge ratchet broke entirely
+(68% drawdown at stride 1, 1% at stride 4+). Any measurement of a per-tick mechanism taken at
+a coarse stride is measuring the integration, not the model.
+
 Test gates:
 - Fast per-commit gate:  ctest -LE emergence   (excludes the slow behavioral runs)
 - Behavioral suite:      ctest -L emergence    (multi-year orchestrated runs; ~tens of seconds)

@@ -1022,3 +1022,69 @@ TEST_CASE("society observe: the bootstrap", "[.society-bootstrap]") {
                     s.food_store_years, s.era);
     }
 }
+
+// IS THE BOOM-AND-BUST PHYSICS OR ARITHMETIC? The dawn arc is integrated at one
+// orchestrator step per year — a 365x under-sample — and a strongly nonlinear system
+// stepped in one-year jumps overshoots the way a coarse Euler step always does. If the
+// swings shrink as the stride gets finer, they were never in the model.
+TEST_CASE("society observe: does the cycle survive a finer stride?", "[.society-stride]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 9000;
+    std::printf("\n  steps/yr |    peak |  trough | worst fall | end pop | end era | knowledge"
+                " | K-drawdown\n");
+    for (uint32_t stride : {1u, 4u, 12u, 52u}) {
+        auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(), 0.0f, false,
+                                        stride);
+        double peak = 0, trough = 1e18, worst = 0, run_max = 0;
+        double k_max = 0, k_draw = 0;
+        for (const auto& s : series) {
+            peak = std::max(peak, s.total_population);
+            if (s.total_population > 0) trough = std::min(trough, s.total_population);
+            run_max = std::max(run_max, s.total_population);
+            if (run_max > 0)
+                worst = std::max(worst, 1.0 - s.total_population / run_max);
+            k_max = std::max(k_max, static_cast<double>(s.knowledge));
+            if (k_max > 0)
+                k_draw = std::max(k_draw, 1.0 - static_cast<double>(s.knowledge) / k_max);
+        }
+        const auto& last = series.back();
+        std::printf("  %8u | %7.0f | %7.0f | %9.0f%% | %7.0f | %7d | %9.0f | %9.0f%%\n",
+                    stride, peak, trough, worst * 100.0, last.total_population, last.era,
+                    static_cast<double>(last.knowledge), k_draw * 100.0);
+    }
+}
+
+// DO DIFFERENT WORLDS HAVE DIFFERENT HISTORIES? A model whose every seed tells the same
+// story is not simulating anything; it is replaying one. This reports the spread.
+TEST_CASE("society observe: the spread across seeds", "[.society-seeds]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    std::printf("\n   seed | era2 | era3 | era4 | era5 | end era | end pop | knowledge |"
+                " peak pop | worst fall | K-drawdown | falls>20%%\n");
+    for (uint64_t seed : {1ull, 7ull, 42ull, 1000ull, 2024ull}) {
+        auto series = run_society_years(seed, kNpcs, kYears, archetype_earthlike(), 0.0f, true);
+        std::vector<int> first(9, -1);
+        double peak = 0, run_max = 0, worst = 0, k_max = 0, k_draw = 0;
+        int falls = 0;
+        bool in_fall = false;
+        for (const auto& s : series) {
+            const auto e = static_cast<size_t>(s.era);
+            if (e < first.size() && first[e] < 0) first[e] = static_cast<int>(s.year);
+            peak = std::max(peak, s.total_population);
+            run_max = std::max(run_max, s.total_population);
+            const double draw = run_max > 0 ? 1.0 - s.total_population / run_max : 0.0;
+            worst = std::max(worst, draw);
+            if (draw > 0.20 && !in_fall) { falls++; in_fall = true; }
+            if (draw < 0.05) in_fall = false;
+            k_max = std::max(k_max, static_cast<double>(s.knowledge));
+            if (k_max > 0)
+                k_draw = std::max(k_draw, 1.0 - static_cast<double>(s.knowledge) / k_max);
+        }
+        const auto& last = series.back();
+        std::printf("  %5llu | %4d | %4d | %4d | %4d | %7d | %7.0f | %9.0f | %8.0f | %9.0f%% |"
+                    " %9.0f%% | %8d\n",
+                    (unsigned long long)seed, first[2], first[3], first[4], first[5], last.era,
+                    last.total_population, static_cast<double>(last.knowledge), peak,
+                    worst * 100.0, k_draw * 100.0, falls);
+    }
+}
