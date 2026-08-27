@@ -1002,3 +1002,23 @@ TEST_CASE("society observe: inside the cycle", "[.society-cycle-detail]") {
                     s.max_faction_deaths, s.political_stress, s.era);
     }
 }
+
+// Is the climb held up by a bootstrap threshold? Capital gates how much of its knowledge a
+// society can apply; building capital needs a surplus; the surplus needs applied capital.
+// If that is a hump rather than a slope, a society either gets over it or sits below it
+// forever — which would explain both the stall and the total absence of secular cycles.
+TEST_CASE("society observe: the bootstrap", "[.society-bootstrap]") {
+    constexpr uint32_t kNpcs = 200;
+    constexpr uint32_t kYears = 13000;
+    auto series = run_society_years(7, kNpcs, kYears, archetype_earthlike(),
+                                    /*founding_hardiness=*/0.0f, /*fast_forward=*/true);
+    std::printf("\n  year |    pop | surplus | spec%% | knowledge |  cap/head | tech-food |"
+                " store | era\n");
+    for (const auto& s : series) {
+        if (s.year % 500 != 0) continue;
+        std::printf("  %5u | %6.0f | %7.3f | %4.0f%% | %9.0f | %9.0f | %9.3f | %5.2f | %2d\n",
+                    s.year, s.total_population, s.mean_surplus, s.cohort_specialist_share * 100.0,
+                    static_cast<double>(s.knowledge), s.productive_capital_per_head, s.tech_food,
+                    s.food_store_years, s.era);
+    }
+}

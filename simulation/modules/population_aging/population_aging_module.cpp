@@ -425,6 +425,20 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
     const float birth_food_factor =
         std::clamp(std::pow(std::max(b_surplus, 1e-3f), cfg.wage_fertility_elasticity), 0.0f,
                    cfg.food_surplus_birth_cap);
+    // TRIED AND REVERTED (2026-08-23): a preventive check — scaling the fertility above
+    // replacement by the headroom left under the ceiling, 1 - 1/S, which is the logistic
+    // and is what the European marriage pattern actually did.
+    //
+    // It pinned the world. Population sat at 1,900 for ten thousand years and knowledge
+    // crawled to 47, because this population is NOT crowded against its food ceiling in
+    // the first place: it equilibrates where non-food mortality balances fertility, at a
+    // surplus of 1.2 to 2.0, with the land barely worked. Damping fertility there does not
+    // damp a cycle, it just moves the balance point and empties the world.
+    //
+    // Which is the finding worth keeping: the deep falls are NOT demographic overshoot
+    // against a fixed ceiling. They are the ceiling itself moving — technique, stores and
+    // political stress — so the lever is there, not here.
+
     const float f_surplus = std::clamp(famine_surplus, 0.0f, 10.0f);
     float famine_mortality_factor;
     if (f_surplus < 1.0f) {

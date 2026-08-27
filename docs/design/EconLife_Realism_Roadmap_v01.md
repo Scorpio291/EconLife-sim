@@ -1247,6 +1247,47 @@ Lowering the Jones exponent (beta 1.0 -> 0.5) was tried and made it worse, so th
 not the lever.
 
 
+## R18. What the falls actually are (MEASURED 2026-08-23)
+
+The brief is a world that rises and falls and creeps forward. R17 removed a cycle that was
+too violent to allow any accumulation; the question is what shape should replace it, and
+this is the measurement that answers it.
+
+**The falls are not demographic overshoot.** A preventive check was built and reverted:
+scaling the fertility above replacement by the headroom under the ceiling, `1 - 1/S`, which
+is the logistic and is what the European marriage pattern actually did. It pinned the world
+— population at 1,900 for ten thousand years, knowledge crawling to 47 — because this
+population is not crowded against its food ceiling at all. It equilibrates where NON-FOOD
+mortality balances fertility, at a surplus of 1.2 to 2.0, with the land barely worked.
+Damping fertility there does not damp a cycle; it moves the balance point and empties the
+world.
+
+So the deep falls come from the CEILING MOVING, not from the population running into a
+fixed one — technique, stores and political stress. That is Turchin's structural-demographic
+mechanism rather than a Malthusian one, and it means the lever is on the ceiling side.
+
+**And the ratchet is broken, which matters more than the amplitude.** Measured over 13,000
+years, knowledge oscillates rather than accumulates: 2,058 → 3,521 → 1,943 → 854 → 1,888 →
+3,294 → 4,940 → 6,727 → 2,361 → 4,776 → 2,540. A civilisation that loses two thirds of what
+it knew at every collapse can never creep forward, and the climb stalls at the Medieval era
+for exactly that reason.
+
+The corpus floor is built correctly (`sustainable = max(stratum_sustains, codified)`) and it
+is not the defect. What breaks it is the DEPTH of the falls: at 94% population loss the
+learned stratum goes to zero for centuries, nobody recopies, and the corpus decays at 1%/yr
+until there is nothing left — 500 years of that leaves 0.7%. Real dark ages lost ~90% of
+classical Latin literature over four centuries and left the rest; the difference is that
+somebody was still copying.
+
+**So the target shape, stated so it can be tested:** secular cycles of 20-40% amplitude on a
+200-300 year period, knowledge rising monotonically THROUGH the falls, occasional era
+regression, and the long-run trend reaching era 8 near year 12,000. We currently have
+94% falls, a knowledge sawtooth, and a stall at era 5.
+
+**The next lever is the ceiling, not the demography.** Specifically: what makes a fall stop
+at 30% rather than 94%, and what keeps a remnant of the learned stratum alive through it.
+
+
 ## Sources
 Turchin & Korotayev demographic-fiscal model (arXiv 1504.04688); Turchin, Structural-
 Demographic Analysis / PSI (PLOS ONE 2023); Tainter, The Collapse of Complex Societies;

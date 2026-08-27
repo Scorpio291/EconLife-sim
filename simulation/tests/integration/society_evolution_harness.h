@@ -104,6 +104,9 @@ struct SocietySnapshot {
                                         // can find and enforce a claim on someone else's crop
     double topsoil = 0.0;               // mean soil profile remaining: what erosion took
     double food_store_years = 0.0;      // mean granary, in years of the whole population's food
+    double capital_per_land = 0.0;      // built stock per unit of workable ground — the gate on
+                                        // applying what a society knows
+    double tech_food = 1.0;             // technique the province actually holds, food channel
     double fish_capacity = 0.0;         // mean fishery carrying capacity (the stock's K)
     double fishers = 0.0;               // total people working the water
 };
@@ -149,7 +152,8 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.forest += static_cast<double>(p.cohort_stats->forest_health);
         s.topsoil += static_cast<double>(p.cohort_stats->topsoil);
         if (p.cohort_stats->total_population > 0)
-            s.food_store_years += static_cast<double>(p.cohort_stats->food_store) /
+            s.tech_food += static_cast<double>(p.cohort_stats->tech_food_mult);
+        s.food_store_years += static_cast<double>(p.cohort_stats->food_store) /
                                   (static_cast<double>(p.cohort_stats->total_population) *
                                    static_cast<double>(kTicksPerYear));
         s.fish_capacity += static_cast<double>(p.fisheries.carrying_capacity);
@@ -248,6 +252,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.records_per_head /= static_cast<double>(w.provinces.size());
         s.topsoil /= static_cast<double>(w.provinces.size());
         s.food_store_years /= static_cast<double>(w.provinces.size());
+        s.tech_food /= static_cast<double>(w.provinces.size());
         s.fish_capacity /= static_cast<double>(w.provinces.size());
     s.businesses = static_cast<uint32_t>(w.npc_businesses.size());
     return s;
