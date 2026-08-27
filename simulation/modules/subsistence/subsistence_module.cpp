@@ -20,13 +20,6 @@ float SubsistenceModule::surplus_ratio(float output, uint32_t population,
     return output / need;
 }
 
-uint32_t SubsistenceModule::specialist_count(uint32_t residents, float surplus,
-                                             const SubsistenceConfig& cfg) {
-    if (residents == 0 || surplus <= 1.0f)
-        return 0;
-    float freed = std::min(surplus - 1.0f, std::max(0.0f, cfg.max_specialist_fraction));
-    return static_cast<uint32_t>(static_cast<float>(residents) * freed);
-}
 
 bool SubsistenceModule::regime_active(std::string_view regime) const {
     return regime_in(cfg_.active_regimes, regime);
@@ -66,26 +59,6 @@ float SubsistenceModule::proto_share_for(bool is_lord, uint32_t lords_count,
     return is_lord ? peasant_base + lord_bonus : peasant_base;
 }
 
-float SubsistenceModule::specialist_ceiling(std::string_view regime) const {
-    // The non-farming share a regime can sustain rises as the economy monetizes
-    // (coinage/money) and then institutionalizes production (feudal guilds/towns ->
-    // mercantile trade & finance -> industrial factory/wage labour).
-    if (regime == "subsistence")
-        return cfg_.specialist_ceiling_subsistence;
-    if (regime == "barter")
-        return cfg_.specialist_ceiling_barter;
-    if (regime == "coinage")
-        return cfg_.specialist_ceiling_coinage;
-    if (regime == "money")
-        return cfg_.specialist_ceiling_money;
-    if (regime == "feudal")
-        return cfg_.specialist_ceiling_feudal;
-    if (regime == "mercantile")
-        return cfg_.specialist_ceiling_mercantile;
-    if (regime == "industrial")
-        return cfg_.specialist_ceiling_industrial;
-    return cfg_.max_specialist_fraction;  // fallback for any other active regime
-}
 
 void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {

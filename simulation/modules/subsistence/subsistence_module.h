@@ -286,16 +286,6 @@ class SubsistenceModule : public ITickModule {
                atmosphere_ceiling_factor(hazards.atmosphere, cfg);
     }
 
-    // Non-farming share the regime can sustain (rises along the pre-market arc:
-    // subsistence <= barter < coinage < money < feudal < mercantile < industrial;
-    // other regimes -> max_specialist_fraction).
-    float specialist_ceiling(std::string_view regime) const;
-
-    // How many of `residents` a surplus can free into Layer-2 specialists.
-    // 0 when surplus <= 1; rises with surplus toward max_specialist_fraction.
-    static uint32_t specialist_count(uint32_t residents, float surplus,
-                                     const SubsistenceConfig& cfg);
-
     // Is `regime` a stratified (manorial) regime? (regime ∈ cfg.manorial_regimes)
     bool regime_manorial(std::string_view regime) const;
 

@@ -672,6 +672,18 @@ struct SubsistenceConfig {
     // this is the one thing a civilisation does to its land that outlives it.
     float topsoil_formation_per_year = 0.0002f;
 
+    // REMOVED (2026-08-23): `max_specialist_fraction` and the seven `specialist_ceiling_*`
+    // per-regime constants (0.15 subsistence / 0.15 barter / 0.18 coinage / 0.22 money /
+    // 0.27 feudal / 0.35 mercantile / 0.45 industrial). This was the rail R12 replaced —
+    // a per-era constant deciding the shape of the economy by fiat, which measured BOUND
+    // AT EVERY ERA. The mechanism that replaced it is
+    // min(what the harvest can spare, what haulage can provision) x what can be CLAIMED.
+    //
+    // The constants outlived the code that used them by months, and a unit test went on
+    // asserting the schedule they encoded ("specialist ceiling rises across the pre-market
+    // arc") long after nothing in the simulation read them. A dead rail with a live test
+    // guarding it is how a rail comes back.
+
     // Proto-capital: the food surplus *above* subsistence is stored (grain, herds,
     // tools) and controlled by the province's resident heads/founders — the origin
     // of capital and inequality. Each tick a pool of proto_capital_rate * (surplus
@@ -715,25 +727,15 @@ struct SubsistenceConfig {
     // actual specialist share is GROUNDED in the food balance below; this is the hard
     // upper bound that keeps the knowledge climb at a believable pace and the population
     // tracking the carrying ceiling (most hands stay on the land).
-    float max_specialist_fraction = 0.15f;
 
     // Specialist ceiling rises as the economy MONETIZES, then as production
     // INSTITUTIONALIZES. Money and markets move surplus past barter's double-
     // coincidence limit; guilds/towns, long-distance trade and finance, and finally
     // the factory system each sustain a larger non-farming (specialist/urban) share.
     // A society climbs commons -> barter -> coinage -> money -> feudal (guild/manor)
-    // -> mercantile (proto-capitalist) -> industrial (factory/wage labour). Selected
-    // by the era's economic_regime; an unlisted regime falls back to
-    // max_specialist_fraction. (The actual share is GROUNDED in the food balance
-    // below — this is only the upper bound; the carrying ceiling must rise via
-    // knowledge/tech to actually free this many hands.)
-    float specialist_ceiling_subsistence = 0.15f;
-    float specialist_ceiling_barter = 0.15f;
-    float specialist_ceiling_coinage = 0.18f;
-    float specialist_ceiling_money = 0.22f;
-    float specialist_ceiling_feudal = 0.27f;      // medieval towns, guilds, clergy/nobility
-    float specialist_ceiling_mercantile = 0.35f;  // workshops, shipping, early finance
-    float specialist_ceiling_industrial = 0.45f;  // factory system, wage labour, urbanization
+    // -> mercantile (proto-capitalist) -> industrial (factory/wage labour), selected by
+    // the era's economic_regime. The non-farming share is GROUNDED in the food balance
+    // below and in what can be hauled and claimed — there is no per-regime ceiling.
 
     // --- Granary food economy (grounded specialization + reserves) ---
     // Specialists (incl. knowledge-keepers) are NOT funded by a heuristic surplus or a

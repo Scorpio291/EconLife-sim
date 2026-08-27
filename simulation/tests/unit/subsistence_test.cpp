@@ -106,29 +106,6 @@ TEST_CASE("regime gate: active across the dawn commons arc, inert in market eras
     CHECK_FALSE(mod.regime_active("modern"));
 }
 
-TEST_CASE("specialist ceiling rises across the pre-market arc", "[subsistence][tier1]") {
-    SubsistenceModule mod;
-    const float sub = mod.specialist_ceiling("subsistence");
-    const float bar = mod.specialist_ceiling("barter");
-    const float coin = mod.specialist_ceiling("coinage");
-    const float money = mod.specialist_ceiling("money");
-    const float feudal = mod.specialist_ceiling("feudal");
-    const float mercantile = mod.specialist_ceiling("mercantile");
-    const float industrial = mod.specialist_ceiling("industrial");
-    // Money/markets, then guilds/trade/finance and the factory system, each sustain a
-    // larger non-farming share: commons <= barter < coinage < money < feudal <
-    // mercantile < industrial.
-    CHECK(sub <= bar);
-    CHECK(bar < coin);
-    CHECK(coin < money);
-    CHECK(money < feudal);
-    CHECK(feudal < mercantile);
-    CHECK(mercantile < industrial);
-    // An unlisted regime falls back to the generic cap (no crash, sane default).
-    SubsistenceConfig cfg{};
-    CHECK_THAT(mod.specialist_ceiling("unknown_regime"),
-               WithinAbs(cfg.max_specialist_fraction, 0.0001f));
-}
 
 TEST_CASE("execute_province produces a surplus at the dawn and is inert in the modern era",
           "[subsistence][tier1]") {
@@ -165,17 +142,6 @@ TEST_CASE("execute_province produces a surplus at the dawn and is inert in the m
     }
 }
 
-TEST_CASE("subsistence: surplus frees a share of livelihoods into specialists",
-          "[subsistence][tier1]") {
-    SubsistenceConfig cfg{};
-    cfg.max_specialist_fraction = 0.5f;
-    // No surplus -> everyone works the land.
-    CHECK(SubsistenceModule::specialist_count(100, 1.0f, cfg) == 0);
-    CHECK(SubsistenceModule::specialist_count(100, 0.7f, cfg) == 0);
-    // Surplus frees a share, capped by max_specialist_fraction.
-    CHECK(SubsistenceModule::specialist_count(100, 1.2f, cfg) == 20);
-    CHECK(SubsistenceModule::specialist_count(100, 3.0f, cfg) == 50);  // capped at 50%
-}
 
 TEST_CASE("subsistence: a surplus dawn province assigns specialist occupations",
           "[subsistence][tier1]") {
