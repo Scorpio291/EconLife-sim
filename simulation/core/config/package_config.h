@@ -325,6 +325,12 @@ struct InvestigatorEngineConfig {
 };
 
 struct NpcBusinessConfig {
+    // How long the player has to answer the quarterly owner decision before it
+    // takes its default course. A fortnight: long enough to be a real window at
+    // one tick per day, short enough that a firm is not left undecided for a
+    // season while its margin moves.
+    uint32_t owner_decision_window_ticks = 14;
+
     float cash_critical_months = 2.0f;
     float cash_comfortable_months = 3.0f;
     float cash_surplus_months = 5.0f;

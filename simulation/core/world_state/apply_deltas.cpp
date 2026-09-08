@@ -897,7 +897,16 @@ static void apply_currency_deltas(WorldState& world, const std::vector<CurrencyD
 // apply_append_deltas — calendar entries, scene cards, obligations
 // ---------------------------------------------------------------------------
 static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
+    // Calendar identity, same two-pass rule as scene cards: advance the
+    // allocator past every explicit id in this batch, then fill in the ones
+    // that asked to be allocated.
+    for (const auto& entry : delta.new_calendar_entries) {
+        if (entry.id != 0 && entry.id >= world.next_calendar_entry_id)
+            world.next_calendar_entry_id = entry.id + 1;
+    }
     for (auto& entry : delta.new_calendar_entries) {
+        if (entry.id == 0)
+            entry.id = world.next_calendar_entry_id++;
         world.calendar.push_back(std::move(entry));
     }
     // Scene-card identity. Two passes so an auto-assigned id can never collide
@@ -1082,6 +1091,25 @@ static void apply_retired_scene_cards(WorldState& world, const std::vector<uint3
 }
 
 // ---------------------------------------------------------------------------
+// apply_retired_calendar_entries — erase entries the calendar has finished with.
+// The calendar was append-only: an entry that elapsed stayed in the vector for
+// the rest of the game, so every module that walks the calendar walked a list
+// that only ever grew, and a missed deadline re-fired its consequence on every
+// subsequent tick.
+// ---------------------------------------------------------------------------
+static void apply_retired_calendar_entries(WorldState& world,
+                                           const std::vector<uint32_t>& retired_ids) {
+    if (retired_ids.empty())
+        return;
+    world.calendar.erase(std::remove_if(world.calendar.begin(), world.calendar.end(),
+                                        [&](const CalendarEntry& e) {
+                                            return std::find(retired_ids.begin(), retired_ids.end(),
+                                                             e.id) != retired_ids.end();
+                                        }),
+                         world.calendar.end());
+}
+
+// ---------------------------------------------------------------------------
 // apply_calendar_commit_deltas
 // ---------------------------------------------------------------------------
 static void apply_calendar_commit_deltas(WorldState& world,
@@ -1141,6 +1169,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_append_deltas(world, delta);
     apply_scene_card_choice_deltas(world, delta.scene_card_choice_deltas);
     apply_retired_scene_cards(world, delta.retired_scene_card_ids);
+    apply_retired_calendar_entries(world, delta.retired_calendar_entry_ids);
     apply_calendar_commit_deltas(world, delta.calendar_commit_deltas);
 
     // Route cross-province deltas into WorldState's CrossProvinceDeltaBuffer
@@ -1262,6 +1291,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_businesses.clear();
     delta.scene_card_choice_deltas.clear();
     delta.retired_scene_card_ids.clear();
+    delta.retired_calendar_entry_ids.clear();
     delta.calendar_commit_deltas.clear();
     delta.new_legal_case_seeds.clear();
     delta.new_racket_seeds.clear();

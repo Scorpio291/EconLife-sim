@@ -154,3 +154,60 @@ TEST_CASE("player_loop: lifespan projection tracks the age it describes", "[play
     const PlayerRun r = run(cfg);
     REQUIRE(r.last().age > r.first().age);
 }
+
+// ---------------------------------------------------------------------------
+// RATCHET 4 — the calendar is an external constraint, not a notepad.
+//
+// Audit baseline: zero entries across 365 ticks. The only creators of
+// CalendarEntry in the whole codebase were two player-action handlers, so
+// nothing in the world ever asked for the player's time.
+// ---------------------------------------------------------------------------
+TEST_CASE("player_loop: the world puts obligations on the player's calendar", "[player_loop]") {
+    const PlayerRun& r = standard_session();
+    INFO("calendar entries created " << r.calendar_entries_created << ", of which world-created "
+                                     << r.calendar_entries_world_created);
+    REQUIRE(r.calendar_entries_created > 0);
+    // The scripted player never schedules anything themselves, so every entry
+    // that exists was raised by the simulation.
+    REQUIRE(r.calendar_entries_world_created > 0);
+}
+
+TEST_CASE("player_loop: the calendar does not accumulate dead appointments", "[player_loop]") {
+    // Entries were never removed: the calendar only ever grew, and every module
+    // that walks it walked a list of mostly elapsed appointments.
+    const PlayerRun& r = standard_session();
+    std::size_t peak = 0;
+    for (const auto& s : r.series)
+        peak = std::max(peak, s.calendar_entries);
+    INFO("peak live calendar entries " << peak << " over " << r.series.size() << " ticks, from "
+                                       << r.calendar_entries_created << " created");
+    REQUIRE(r.calendar_entries_created > peak);  // entries retire
+    REQUIRE(peak < 20);
+}
+
+// ---------------------------------------------------------------------------
+// RATCHET 5 — a decision the player makes changes the simulation.
+//
+// The quarterly owner decision is skipped for player-owned businesses in
+// execute_province() because the call belongs to the owner. Nothing asked, so
+// a player-owned firm never decided anything at all.
+// ---------------------------------------------------------------------------
+TEST_CASE("player_loop: the player's business responds to the choices they make",
+          "[player_loop]") {
+    const PlayerRun& r = standard_session();
+
+    // The scripted player always takes the first choice, which is to invest.
+    // Investment compounds capacity, so the firm they run at the end of the
+    // year is bigger than the one they bought.
+    std::size_t settle_idx = 0;
+    for (std::size_t i = 1; i < r.series.size(); ++i) {
+        if (r.series[i].owned_businesses > r.series[i - 1].owned_businesses) {
+            settle_idx = i;
+            break;
+        }
+    }
+    REQUIRE(settle_idx > 0);
+    INFO("revenue at purchase " << r.series[settle_idx].owned_revenue_per_tick << " -> year end "
+                                << r.last().owned_revenue_per_tick);
+    REQUIRE(r.last().owned_revenue_per_tick > r.series[settle_idx].owned_revenue_per_tick);
+}

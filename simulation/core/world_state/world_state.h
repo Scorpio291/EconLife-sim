@@ -142,6 +142,12 @@ struct WorldState {
     // --- Scheduling ---
     std::vector<CalendarEntry> calendar;  // merged: player + NPC commitments
 
+    // Monotonic calendar-entry id allocator, for the same reason scene cards
+    // have one: entries are removed when they expire, so an id derived by
+    // scanning the live calendar for a maximum would be handed out twice.
+    // Producers emit id == 0 to mean "allocate me one".
+    uint32_t next_calendar_entry_id = 1;
+
     // --- Scene Cards ---
     std::vector<SceneCard> pending_scene_cards;  // generated this tick, awaiting UI delivery
 

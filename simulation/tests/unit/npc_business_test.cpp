@@ -662,7 +662,10 @@ TEST_CASE("test_execute_processes_all_provinces", "[npc_business][tier4]") {
 
     NpcBusinessModule module;
     DeltaBuffer delta{};
-    module.execute(state, delta);
+    // execute() is now the global post-pass (the player's own quarterly
+    // decision); province work goes through execute_province().
+    for (uint32_t p = 0; p < static_cast<uint32_t>(state.provinces.size()); ++p)
+        module.execute_province(p, state, delta);
 
     // Should have deltas from both provinces.
     bool has_deltas = !delta.npc_deltas.empty() || !delta.market_deltas.empty();
@@ -682,4 +685,192 @@ TEST_CASE("test_npc_business_constants", "[npc_business][tier4]") {
     REQUIRE_THAT(NpcBusinessConfig{}.expansion_return_threshold, WithinAbs(0.15f, 0.001f));
     REQUIRE(NpcBusinessConfig{}.ticks_per_quarter == 90);
     REQUIRE(NpcBusinessConfig{}.dispatch_period == 30);
+}
+
+// ===========================================================================
+// The owner's decision — player-owned businesses
+// ===========================================================================
+//
+// execute_province() skips player-owned businesses at their decision tick,
+// because the quarterly call belongs to the owner and the owner is the player.
+// Nothing ever asked them, so a firm the player owned never decided anything:
+// it could not expand, could not tighten, could not answer its own margin. The
+// player held an asset rather than a business.
+
+namespace {
+
+WorldState make_owner_world() {
+    WorldState state = make_test_world_state();
+    Province p{};
+    p.id = 0;
+    p.region_id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    state.provinces.push_back(std::move(p));
+    state.player = std::make_unique<PlayerCharacter>(make_test_player(7));
+
+    NPCBusiness biz = make_test_business(1, BusinessProfile::fast_expander, 0);
+    biz.owner_id = 7;  // the player's
+    biz.cash = 50000.0f;
+    biz.strategic_decision_tick = 100;  // due now
+    state.npc_businesses.push_back(biz);
+    return state;
+}
+
+}  // namespace
+
+TEST_CASE("NpcBusiness: a player-owned business at its decision tick asks the owner",
+          "[npc_business][owner_decision]") {
+    WorldState state = make_owner_world();
+    NpcBusinessModule module;
+    DeltaBuffer delta{};
+
+    module.execute(state, delta);
+
+    // A claim on the player's time...
+    REQUIRE(delta.new_calendar_entries.size() == 1);
+    REQUIRE(delta.new_calendar_entries[0].type == CalendarEntryType::operation);
+    REQUIRE_FALSE(delta.new_calendar_entries[0].player_committed);  // inbound, not self-scheduled
+
+    // ...and the decision itself, answerable, with a conservative default.
+    REQUIRE(delta.new_scene_cards.size() == 1);
+    const SceneCard& card = delta.new_scene_cards[0];
+    REQUIRE(card.choices.size() == 3);
+    REQUIRE(card.card_class == CardClass::timed_optional);
+    REQUIRE(card.default_choice_id == NpcBusinessModule::OWNER_CHOICE_HOLD);
+    REQUIRE_FALSE(card.dialogue.empty());
+    REQUIRE(card.id != 0);
+    REQUIRE(delta.new_calendar_entries[0].scene_card_id == card.id);
+
+    REQUIRE(module.pending_owner_decisions().size() == 1);
+    REQUIRE(module.pending_owner_decisions()[0].business_id == 1);
+}
+
+TEST_CASE("NpcBusiness: the owner is asked once, not every tick",
+          "[npc_business][owner_decision]") {
+    WorldState state = make_owner_world();
+    NpcBusinessModule module;
+
+    DeltaBuffer first{};
+    module.execute(state, first);
+    REQUIRE(first.new_scene_cards.size() == 1);
+    apply_deltas(state, first);
+
+    // The business is still at (past) its decision tick, but the question is
+    // already outstanding.
+    state.current_tick += 1;
+    DeltaBuffer second{};
+    module.execute(state, second);
+    REQUIRE(second.new_scene_cards.empty());
+    REQUIRE(second.new_calendar_entries.empty());
+}
+
+TEST_CASE("NpcBusiness: the owner's choice moves the business",
+          "[npc_business][owner_decision]") {
+    WorldState state = make_owner_world();
+    NpcBusinessModule module;
+
+    DeltaBuffer ask{};
+    module.execute(state, ask);
+    const uint32_t card_id = ask.new_scene_cards[0].id;
+    apply_deltas(state, ask);
+
+    // The player invests.
+    for (auto& c : state.pending_scene_cards) {
+        if (c.id == card_id)
+            c.chosen_choice_id = NpcBusinessModule::OWNER_CHOICE_INVEST;
+    }
+
+    state.current_tick += 1;
+    DeltaBuffer answer{};
+    module.execute(state, answer);
+
+    // Cash goes into the business, and the cadence advances so the next call
+    // comes a quarter from now rather than on the very next tick.
+    bool spent = false, rescheduled = false;
+    for (const auto& bd : answer.business_deltas) {
+        if (bd.business_id != 1)
+            continue;
+        if (bd.cash_delta.has_value() && *bd.cash_delta < 0.0f)
+            spent = true;
+        if (bd.next_decision_tick_update.has_value())
+            rescheduled = true;
+    }
+    REQUIRE(spent);
+    REQUIRE(rescheduled);
+    REQUIRE(module.pending_owner_decisions().empty());
+}
+
+TEST_CASE("NpcBusiness: holding the course changes nothing but still closes the question",
+          "[npc_business][owner_decision]") {
+    WorldState state = make_owner_world();
+    NpcBusinessModule module;
+
+    DeltaBuffer ask{};
+    module.execute(state, ask);
+    const uint32_t card_id = ask.new_scene_cards[0].id;
+    apply_deltas(state, ask);
+
+    for (auto& c : state.pending_scene_cards) {
+        if (c.id == card_id)
+            c.chosen_choice_id = NpcBusinessModule::OWNER_CHOICE_HOLD;
+    }
+
+    state.current_tick += 1;
+    DeltaBuffer answer{};
+    module.execute(state, answer);
+
+    for (const auto& bd : answer.business_deltas) {
+        if (bd.business_id == 1)
+            REQUIRE_FALSE(bd.cash_delta.has_value());
+    }
+    REQUIRE(module.pending_owner_decisions().empty());
+}
+
+TEST_CASE("NpcBusiness: a player lever is the same size as an NPC's",
+          "[npc_business][owner_decision]") {
+    // The choices reuse the strategy magnitudes rather than inventing a
+    // separate player economy: invest is the fast expander's 40%-of-available
+    // cash move, tighten is the cost cutter's 5% trim.
+    WorldState state = make_owner_world();
+    NpcBusinessModule module;
+    const NPCBusiness& biz = state.npc_businesses[0];
+
+    const BusinessDecisionResult invest =
+        module.decision_for_choice(biz, NpcBusinessModule::OWNER_CHOICE_INVEST);
+    REQUIRE(invest.expand);
+    REQUIRE(invest.cash_spent > 0.0f);
+    REQUIRE(invest.cash_spent <= module.compute_available_cash(biz));
+    REQUIRE(invest.hiring_target_change > 0);
+
+    const BusinessDecisionResult cut =
+        module.decision_for_choice(biz, NpcBusinessModule::OWNER_CHOICE_CUT);
+    REQUIRE(cut.contract);
+    REQUIRE(cut.hiring_target_change < 0);
+    REQUIRE_THAT(cut.cost_per_tick_delta, WithinAbs(biz.cost_per_tick * -0.05f, 0.01f));
+
+    const BusinessDecisionResult hold =
+        module.decision_for_choice(biz, NpcBusinessModule::OWNER_CHOICE_HOLD);
+    REQUIRE_FALSE(hold.expand);
+    REQUIRE_FALSE(hold.contract);
+    REQUIRE_THAT(hold.cash_spent, WithinAbs(0.0f, 0.001f));
+}
+
+TEST_CASE("NpcBusiness: outstanding owner decisions round-trip through module state",
+          "[npc_business][owner_decision]") {
+    WorldState state = make_owner_world();
+    NpcBusinessModule module;
+    DeltaBuffer ask{};
+    module.execute(state, ask);
+    REQUIRE(module.pending_owner_decisions().size() == 1);
+
+    std::vector<uint8_t> blob;
+    module.serialize_state(blob);
+
+    NpcBusinessModule restored;
+    REQUIRE(restored.deserialize_state(blob.data(), blob.size()));
+    REQUIRE(restored.pending_owner_decisions().size() == 1);
+    REQUIRE(restored.pending_owner_decisions()[0].business_id ==
+            module.pending_owner_decisions()[0].business_id);
+    REQUIRE(restored.pending_owner_decisions()[0].scene_card_id ==
+            module.pending_owner_decisions()[0].scene_card_id);
 }

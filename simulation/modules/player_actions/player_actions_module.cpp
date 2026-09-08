@@ -67,14 +67,7 @@ static uint32_t next_business_id(const WorldState& state) {
     return max_id + 1;
 }
 
-static uint32_t next_calendar_id(const WorldState& state) {
-    uint32_t max_id = 0;
-    for (const auto& e : state.calendar) {
-        if (e.id > max_id)
-            max_id = e.id;
-    }
-    return max_id + 1;
-}
+
 
 // ---------------------------------------------------------------------------
 // Per-action handlers
@@ -137,7 +130,7 @@ static void handle_calendar_schedule(const CalendarScheduleAction& action, const
     }
 
     CalendarEntry new_entry{};
-    new_entry.id = next_calendar_id(state);
+    new_entry.id = 0;  // allocated by apply_deltas from the monotonic counter
     new_entry.start_tick = action.desired_start_tick;
     new_entry.duration_ticks = action.duration_ticks;
     new_entry.type = action.type;
@@ -557,7 +550,7 @@ static void handle_initiate_contact(const InitiateContactAction& action, const W
 
     // Create a calendar entry for the introduction meeting.
     CalendarEntry entry{};
-    entry.id = next_calendar_id(state);
+    entry.id = 0;  // allocated by apply_deltas from the monotonic counter
     entry.start_tick = state.current_tick + 1;  // next tick
     entry.duration_ticks = 1;
     entry.type = CalendarEntryType::meeting;

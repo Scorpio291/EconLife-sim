@@ -46,6 +46,19 @@ void CalendarModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 state.current_tick > deadline_tick) {
                 execute_missed_deadline(state, delta, entry, deadline_tick);
             }
+            // ...and then the entry leaves the calendar. Nothing removed
+            // expired entries — the comment above claimed the orchestrator did,
+            // and it did not — so the calendar only ever grew, every module
+            // that walks it walked a list of mostly dead appointments, and a
+            // missed deadline fired its consequence again on every tick that
+            // followed. Retiring it here makes the miss fire exactly once.
+            //
+            // Strictly PAST the deadline, not on it: the miss check above needs
+            // its tick, and scene_cards triggers a card on the entry's start
+            // tick — an entry retired the moment it elapsed could take its own
+            // card with it.
+            if (state.current_tick > deadline_tick)
+                delta.retired_calendar_entry_ids.push_back(entry.id);
         }
     }
 
