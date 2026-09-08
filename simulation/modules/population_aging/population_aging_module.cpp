@@ -607,6 +607,24 @@ void PopulationAgingModule::advance_player_life(uint32_t province_idx, const Wor
             pd.health_delta = step;
     }
 
+    // --- Skill rust ---
+    // "Skill leveling (by doing) and skill rust (by neglect)" is V1, and rust
+    // had no producer at all: a domain the player never touched stayed exactly
+    // as sharp as the day they last used it. Decay runs per domain off the
+    // neglect clock the model already carries, after a month's grace, and never
+    // takes a domain below its floor — what you once knew you do not lose
+    // entirely.
+    for (const auto& skill : p.skills) {
+        if (state.current_tick <= skill.last_exercise_tick + SKILL_DECAY_GRACE_PERIOD)
+            continue;
+        if (skill.level <= SKILL_DOMAIN_FLOOR)
+            continue;
+        SkillDelta rust{};
+        rust.skill_id = static_cast<uint32_t>(skill.domain);
+        rust.value = -skill.decay_rate;
+        pd.skill_deltas.push_back(rust);
+    }
+
     // --- Rest ---
     // Exhaustion only ever accumulated; nothing gave it back. It decays toward
     // zero whenever the player is not spending themselves, so the committed

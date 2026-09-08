@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
@@ -285,4 +287,125 @@ TEST_CASE("Damaging player-subject story erodes public reputation", "[media_syst
     REQUIRE(state.player->reputation.public_social < 0.0f);
     REQUIRE(state.player->reputation.public_business < 0.0f);
     REQUIRE(state.player->reputation.public_social <= state.player->reputation.public_business);
+}
+
+// =============================================================================
+// The player finds out because it is in the papers
+// =============================================================================
+//
+// The GDD calls the player's evidence awareness gap "the primary late-game
+// tension; must ship". The channel had an applier and no writer: the evidence
+// pool, the four token types, actionability scoring, the investigator meters
+// and this propagation model all worked, and the player was never told any of
+// it. Coverage is the first real information channel to reach them.
+
+namespace {
+
+WorldState make_media_world() {
+    WorldState w{};
+    w.current_tick = 100;
+    w.world_seed = 42;
+    w.game_mode = GameMode::standard;
+
+    Province p{};
+    p.id = 0;
+    p.region_id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    w.provinces.push_back(std::move(p));
+
+    auto player = std::make_unique<PlayerCharacter>();
+    player->id = 1;
+    player->current_province_id = 0;
+    player->home_province_id = 0;
+    w.player = std::move(player);
+    return w;
+}
+
+Story make_story_about(uint32_t subject_id, std::vector<uint32_t> tokens) {
+    Story story{};
+    story.id = 1;
+    story.subject_id = subject_id;
+    story.journalist_id = 900;
+    story.outlet_id = 1;
+    story.tone = StoryTone::damaging;
+    story.evidence_weight = 0.8f;
+    story.amplification = 2.0f;
+    story.published_tick = 100;
+    story.evidence_token_ids = std::move(tokens);
+    story.is_active = true;
+    return story;
+}
+
+}  // namespace
+
+TEST_CASE("A story about the player tells them what it cites", "[media_system][evidence]") {
+    WorldState w = make_media_world();
+    MediaSystemModule module;
+    module.active_stories().push_back(make_story_about(w.player->id, {11, 22, 33}));
+
+    DeltaBuffer delta{};
+    module.execute(w, delta);
+    apply_deltas(w, delta);
+
+    REQUIRE(w.player->evidence_awareness_map.size() == 3);
+    std::vector<uint32_t> known;
+    for (const auto& e : w.player->evidence_awareness_map)
+        known.push_back(e.token_id);
+    REQUIRE(std::find(known.begin(), known.end(), 11u) != known.end());
+    REQUIRE(std::find(known.begin(), known.end(), 22u) != known.end());
+    REQUIRE(std::find(known.begin(), known.end(), 33u) != known.end());
+
+    // Discovery is stamped with when they found out, which is the number the
+    // exposure model cares about.
+    REQUIRE(w.player->evidence_awareness_map[0].discovery_tick == w.current_tick);
+
+    // And they are told, through the channel they already read.
+    REQUIRE_FALSE(w.pending_scene_cards.empty());
+}
+
+TEST_CASE("The player learns only what was printed, not what the world knows",
+          "[media_system][evidence]") {
+    // Device-mediated information: a story carries the evidence it was built
+    // on, so that is exactly what the player comes to know. Tokens the world
+    // holds but no one published stay unknown.
+    WorldState w = make_media_world();
+    MediaSystemModule module;
+    module.active_stories().push_back(make_story_about(w.player->id, {11}));
+
+    DeltaBuffer delta{};
+    module.execute(w, delta);
+    apply_deltas(w, delta);
+
+    REQUIRE(w.player->evidence_awareness_map.size() == 1);
+    REQUIRE(w.player->evidence_awareness_map[0].token_id == 11u);
+}
+
+TEST_CASE("A story about someone else tells the player nothing", "[media_system][evidence]") {
+    WorldState w = make_media_world();
+    MediaSystemModule module;
+    module.active_stories().push_back(make_story_about(777, {11, 22}));
+
+    DeltaBuffer delta{};
+    module.execute(w, delta);
+    apply_deltas(w, delta);
+
+    REQUIRE(w.player->evidence_awareness_map.empty());
+}
+
+TEST_CASE("Learning the same thing twice is not learning", "[media_system][evidence]") {
+    // The map records when the player FIRST found out; a story that runs for
+    // several ticks must not keep re-discovering its own evidence.
+    WorldState w = make_media_world();
+    MediaSystemModule module;
+    module.active_stories().push_back(make_story_about(w.player->id, {11, 22}));
+
+    for (int tick = 0; tick < 3; ++tick) {
+        DeltaBuffer delta{};
+        module.execute(w, delta);
+        apply_deltas(w, delta);
+        w.current_tick += 1;
+    }
+
+    REQUIRE(w.player->evidence_awareness_map.size() == 2);
+    REQUIRE(w.player->evidence_awareness_map[0].discovery_tick == 100u);
 }

@@ -240,18 +240,34 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
         p.health.exhaustion_accumulator =
             clamp01(safe_add(p.health.exhaustion_accumulator, *d.exhaustion_delta));
     }
-    if (d.skill_delta.has_value()) {
-        const auto& sd = *d.skill_delta;
+    for (const auto& sd : d.skill_deltas) {
         for (auto& skill : p.skills) {
             if (skill.domain == static_cast<SkillDomain>(sd.skill_id)) {
                 skill.level = std::clamp(safe_add(skill.level, sd.value), SKILL_DOMAIN_FLOOR, 1.0f);
+                // Exercising a domain resets its neglect clock. Rust is measured
+                // from here, so without the stamp a skill would keep decaying
+                // while the player was actively using it.
+                if (sd.value > 0.0f)
+                    skill.last_exercise_tick = world.current_tick;
                 break;
             }
         }
     }
-    if (d.new_evidence_awareness.has_value()) {
+    for (uint32_t token_id : d.new_evidence_awareness) {
+        // Learning the same thing twice is not learning: the map records when
+        // the player FIRST found out, which is the number the exposure model
+        // cares about.
+        bool already_known = false;
+        for (const auto& known : p.evidence_awareness_map) {
+            if (known.token_id == token_id) {
+                already_known = true;
+                break;
+            }
+        }
+        if (already_known)
+            continue;
         EvidenceAwarenessEntry entry{};
-        entry.token_id = *d.new_evidence_awareness;
+        entry.token_id = token_id;
         entry.discovery_tick = world.current_tick;
         entry.source_npc_id = 0;
         p.evidence_awareness_map.push_back(entry);

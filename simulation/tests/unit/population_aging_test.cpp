@@ -1280,3 +1280,77 @@ TEST_CASE("PopulationAging: the clock runs in the player's province only",
 
     REQUIRE_THAT(w.player->age, WithinAbs(30.0f + 1.0f / 365.0f, 0.0001f));
 }
+
+// ---------------------------------------------------------------------------
+// Skill rust. "Skill leveling (by doing) and skill rust (by neglect)" is V1,
+// and rust had no producer: a domain the player never touched stayed exactly
+// as sharp as the day they last used it.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PopulationAging: a neglected skill rusts, but not below its floor",
+          "[population_aging][player_life]") {
+    WorldState w = make_player_world();
+    PlayerSkill sharp{};
+    sharp.domain = SkillDomain::Business;
+    sharp.level = 0.60f;
+    sharp.decay_rate = kDefaultSkillDecayRate;
+    sharp.last_exercise_tick = 0;
+    w.player->skills.push_back(sharp);
+
+    PopulationAgingModule module;
+
+    // Inside the grace period, nothing happens: a month off is not neglect.
+    w.current_tick = SKILL_DECAY_GRACE_PERIOD;
+    {
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        REQUIRE(d.player_delta.skill_deltas.empty());
+    }
+
+    // Past it, the domain decays.
+    for (uint32_t t = SKILL_DECAY_GRACE_PERIOD + 1; t < 365; ++t) {
+        w.current_tick = t;
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        apply_deltas(w, d);
+    }
+    INFO("level after a year of neglect: " << w.player->skills[0].level);
+    REQUIRE(w.player->skills[0].level < 0.60f);
+    REQUIRE(w.player->skills[0].level > SKILL_DOMAIN_FLOOR);
+
+    // And it never falls through the floor — what you once knew you do not
+    // lose entirely.
+    w.player->skills[0].level = SKILL_DOMAIN_FLOOR;
+    DeltaBuffer d{};
+    module.advance_player_life(0, w, d);
+    REQUIRE(d.player_delta.skill_deltas.empty());
+}
+
+TEST_CASE("PopulationAging: exercising a domain stops it rusting",
+          "[population_aging][player_life]") {
+    WorldState w = make_player_world();
+    PlayerSkill sharp{};
+    sharp.domain = SkillDomain::Business;
+    sharp.level = 0.60f;
+    sharp.decay_rate = kDefaultSkillDecayRate;
+    sharp.last_exercise_tick = 0;
+    w.player->skills.push_back(sharp);
+
+    w.current_tick = 500;  // long past the grace period
+
+    // An exercise stamps the neglect clock...
+    DeltaBuffer use{};
+    SkillDelta sd{};
+    sd.skill_id = static_cast<uint32_t>(SkillDomain::Business);
+    sd.value = 0.01f;
+    use.player_delta.skill_deltas.push_back(sd);
+    apply_deltas(w, use);
+    REQUIRE(w.player->skills[0].last_exercise_tick == 500u);
+
+    // ...so the next tick does not rust it.
+    w.current_tick = 501;
+    DeltaBuffer d{};
+    PopulationAgingModule module;
+    module.advance_player_life(0, w, d);
+    REQUIRE(d.player_delta.skill_deltas.empty());
+}

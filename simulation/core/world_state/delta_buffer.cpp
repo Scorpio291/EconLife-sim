@@ -26,6 +26,12 @@ void move_extend(std::vector<T>& dst, std::vector<T>&& src) {
 
 void PlayerDelta::merge_from(PlayerDelta&& other) {
     // Additive optionals: sum incoming into existing (or seed with incoming).
+    if (!other.skill_deltas.empty()) {
+        skill_deltas.insert(skill_deltas.end(),
+                            std::make_move_iterator(other.skill_deltas.begin()),
+                            std::make_move_iterator(other.skill_deltas.end()));
+        other.skill_deltas.clear();
+    }
     if (other.age_delta.has_value()) {
         age_delta = age_delta.value_or(0.0f) + *other.age_delta;
     }
@@ -52,11 +58,11 @@ void PlayerDelta::merge_from(PlayerDelta&& other) {
     }
 
     // Replacement optionals: incoming wins when set.
-    if (other.skill_delta.has_value()) {
-        skill_delta = std::move(other.skill_delta);
-    }
-    if (other.new_evidence_awareness.has_value()) {
-        new_evidence_awareness = other.new_evidence_awareness;
+    if (!other.new_evidence_awareness.empty()) {
+        new_evidence_awareness.insert(new_evidence_awareness.end(),
+                                      other.new_evidence_awareness.begin(),
+                                      other.new_evidence_awareness.end());
+        other.new_evidence_awareness.clear();
     }
     if (other.relationship_delta.has_value()) {
         relationship_delta = std::move(other.relationship_delta);

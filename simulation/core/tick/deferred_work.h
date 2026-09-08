@@ -92,8 +92,43 @@ struct DeferredWorkItem {
     WorkPayload payload;  // type-specific
 };
 
+// A sort key for the item's payload, so two items alike in due_tick, type and
+// subject_id still have a defined order. Encodes the variant index alongside
+// the payload's own identifying field — the consequence, shipment, NPC, market
+// or business the work is about — which is what distinguishes them.
+inline uint64_t deferred_payload_key(const WorkPayload& payload) {
+    const uint64_t index = static_cast<uint64_t>(payload.index()) << 32;
+    return index + std::visit(
+                       [](const auto& p) -> uint64_t {
+                           using T = std::decay_t<decltype(p)>;
+                           if constexpr (std::is_same_v<T, ConsequencePayload>)
+                               return p.consequence_id;
+                           else if constexpr (std::is_same_v<T, TransitPayload>)
+                               return p.shipment_id;
+                           else if constexpr (std::is_same_v<T, NPCRelationshipDecayPayload>)
+                               return p.npc_id;
+                           else if constexpr (std::is_same_v<T, EvidenceDecayPayload>)
+                               return p.evidence_token_id;
+                           else if constexpr (std::is_same_v<T, NPCBusinessDecisionPayload>)
+                               return p.business_id;
+                           else if constexpr (std::is_same_v<T, MarketRecomputePayload>)
+                               return p.good_id;
+                           else if constexpr (std::is_same_v<T, InvestigatorMeterPayload>)
+                               return p.npc_id;
+                           else if constexpr (std::is_same_v<T, MaturationPayload>)
+                               return p.business_id;
+                           else if constexpr (std::is_same_v<T, CommercializePayload>)
+                               return p.business_id;
+                           else if constexpr (std::is_same_v<T, PlayerTravelPayload>)
+                               return p.destination_province_id;
+                           else
+                               return 0u;
+                       },
+                       payload);
+}
+
 // Min-heap comparator: lowest due_tick has highest priority, and ties are
-// broken by (type, subject_id) so the order is a TOTAL one.
+// broken by (type, subject_id, payload) so the order is a TOTAL one.
 //
 // Ordering on due_tick alone left every tie to the heap's internal array
 // layout, which depends on the exact history of pushes and pops that produced
@@ -114,7 +149,9 @@ struct DeferredWorkComparator {
             return a.due_tick > b.due_tick;
         if (a.type != b.type)
             return static_cast<uint8_t>(a.type) > static_cast<uint8_t>(b.type);
-        return a.subject_id > b.subject_id;
+        if (a.subject_id != b.subject_id)
+            return a.subject_id > b.subject_id;
+        return deferred_payload_key(a.payload) > deferred_payload_key(b.payload);
     }
 };
 

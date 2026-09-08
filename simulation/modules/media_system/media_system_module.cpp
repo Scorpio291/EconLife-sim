@@ -1,6 +1,7 @@
 #include "modules/media_system/media_system_module.h"
 
 #include <algorithm>
+#include <unordered_set>
 #include <cmath>
 #include <cstring>
 #include <numeric>
@@ -8,6 +9,7 @@
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/scene_cards/notice_card.h"
 
 namespace econlife {
 
@@ -291,6 +293,11 @@ void MediaSystemModule::propagate_stories(const WorldState& state, DeltaBuffer& 
 }
 
 void MediaSystemModule::convert_exposure(const WorldState& state, DeltaBuffer& delta) {
+    // What the player is told this tick, bounded independently of how many
+    // outlets ran the same morning's news.
+    std::unordered_set<uint32_t> player_learned_this_tick;
+    bool told_player_this_tick = false;
+
     // Accumulate exposure per subject (sorted by story.id for determinism)
     for (const auto& story : active_stories_) {
         if (!story.is_active)
@@ -319,7 +326,53 @@ void MediaSystemModule::convert_exposure(const WorldState& state, DeltaBuffer& d
             PlayerDelta rep{};
             rep.reputation_social_delta = -exposure;
             rep.reputation_business_delta = -exposure * 0.5f;
+
+            // ...and it tells them what is known. The GDD calls the player's
+            // evidence awareness gap "the primary late-game tension", and the
+            // channel had an applier and no writer: the evidence pool, the
+            // token types, the investigator meters and this very propagation
+            // model all worked, and the player was simply never told any of it.
+            //
+            // A story carries the evidence it was built on, so the player learns
+            // exactly those tokens and no others — they know what was printed,
+            // not what the simulation knows. That is the device-mediated model
+            // working as designed rather than a readout of world state.
+            // ...and it tells them what is known. The GDD calls the player's
+            // evidence awareness gap "the primary late-game tension", and the
+            // channel had an applier and no writer: the evidence pool, the
+            // token types, the investigator meters and this very propagation
+            // model all worked, and the player was simply never told any of it.
+            //
+            // A story carries the evidence it was built on, so the player learns
+            // exactly those tokens and no others — they know what was printed,
+            // not what the simulation knows. That is the device-mediated model
+            // working as designed rather than a readout of world state.
+            //
+            // Only on the tick it is PUBLISHED. A story stays active for its
+            // whole propagation window, and re-telling the player something
+            // they already read every tick of it is how the random-events card
+            // filled the queue with duplicates — here it also multiplied with
+            // the story-begets-documentary-token loop until the delta buffer
+            // exhausted memory.
+            const bool freshly_published = (story.published_tick == state.current_tick);
+            if (freshly_published) {
+                for (uint32_t token_id : story.evidence_token_ids) {
+                    if (player_learned_this_tick.insert(token_id).second)
+                        rep.new_evidence_awareness.push_back(token_id);
+                }
+            }
+
             delta.player_delta.merge_from(std::move(rep));
+
+            // One notice a day, however many outlets ran it. Being told the
+            // same morning's news once per publication is a queue, not
+            // information.
+            if (freshly_published && !story.evidence_token_ids.empty() && !told_player_this_tick) {
+                told_player_this_tick = true;
+                delta.new_scene_cards.push_back(make_notice_card(
+                    "A story about you has run. It cites what they have on you.",
+                    SceneSetting::phone_call));
+            }
         }
 
         // RegionDelta: ongoing damaging coverage raises regional grievance and

@@ -59,8 +59,11 @@ struct PlayerDelta {
     std::optional<float> age_delta;                       // additive; in-game years
     std::optional<float> health_delta;                    // additive
     std::optional<float> wealth_delta;                    // additive; liquid cash only
-    std::optional<SkillDelta> skill_delta;                // replacement; latest skill update wins
-    std::optional<uint32_t> new_evidence_awareness;       // replacement; latest evidence token wins
+    std::vector<SkillDelta> skill_deltas;                 // append; a tick can exercise one
+                                                          //   domain and rust several others
+    std::vector<uint32_t> new_evidence_awareness;         // append; a single story can put
+                                                          //   several tokens in front of the
+                                                          //   player at once
     std::optional<float> exhaustion_delta;                // additive
     std::optional<RelationshipDelta> relationship_delta;  // replacement; latest update wins
     std::optional<uint32_t> new_province_id;              // replacement; player location

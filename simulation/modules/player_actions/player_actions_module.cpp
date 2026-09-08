@@ -70,6 +70,39 @@ static uint32_t next_business_id(const WorldState& state) {
 
 
 // ---------------------------------------------------------------------------
+// exercise — a domain the player just used gets a little better at it
+// ---------------------------------------------------------------------------
+// "Skill leveling (by doing) and skill rust (by neglect)" is V1, and outside of
+// money it is the player's only progression. The channel existed and nothing
+// wrote to it.
+//
+// The gain is proportional to the room left, so competence approaches mastery
+// and never arrives by repetition alone; a flat increment would make any domain
+// masterable by grinding one action, which is the shape of a rail.
+//
+// The exercise is the ATTEMPT, not the outcome — a negotiation you lose still
+// teaches you how to negotiate — so handlers call this once they reach the
+// substantive path, not only when the world says yes. Handlers that bail on a
+// precondition (wrong province, in transit, not the owner) never get here,
+// which is right: you learn nothing from an action you could not take.
+static void exercise(const WorldState& state, DeltaBuffer& delta, SkillDomain domain) {
+    if (!state.player)
+        return;
+    for (const auto& skill : state.player->skills) {
+        if (skill.domain != domain)
+            continue;
+        const float gain = kSkillExerciseRate * (1.0f - skill.level);
+        if (gain <= 0.0f)
+            return;
+        SkillDelta sd{};
+        sd.skill_id = static_cast<uint32_t>(domain);
+        sd.value = gain;
+        delta.player_delta.skill_deltas.push_back(sd);
+        return;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Per-action handlers
 // ---------------------------------------------------------------------------
 
@@ -91,6 +124,11 @@ static void handle_scene_card_choice(const SceneCardChoiceAction& action, const 
             // Already chosen? Don't overwrite.
             if (card.chosen_choice_id != 0)
                 return;
+
+            // Answering a person is practice at handling people; a news
+            // notification with no counterpart is not.
+            if (card.npc_id != 0)
+                exercise(state, delta, SkillDomain::Persuasion);
 
             SceneCardChoiceDelta scd{};
             scd.scene_card_id = action.scene_card_id;
@@ -267,6 +305,8 @@ static void handle_set_production(const SetProductionAction& action, const World
         if (biz.id == action.business_id) {
             if (biz.owner_id != state.player->id)
                 return;
+
+            exercise(state, delta, SkillDomain::Management);
 
             // Write a BusinessDelta with the output quality update.
             // target_output_rate maps to output_quality for now.
@@ -526,6 +566,8 @@ static void handle_acquire_business(const AcquireBusinessAction& action, const W
         return;
     if (action.offer_multiple <= 0.0f)
         return;
+    exercise(state, delta, SkillDomain::Business);
+
     BusinessAcquisitionRequest req{};
     req.business_id = action.business_id;
     req.buyer_id = state.player->id;

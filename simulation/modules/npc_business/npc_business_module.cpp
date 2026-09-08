@@ -365,6 +365,24 @@ std::vector<uint32_t> NpcBusinessModule::resolve_owner_decisions(const WorldStat
         BusinessDecisionResult result = decision_for_choice(*biz, chosen);
         apply_decision_to_deltas(*biz, result, delta, state.current_tick, cfg_);
 
+        // Running a firm is how a person gets better at running firms. The
+        // quarterly call is the player's recurring exercise of the domain, and
+        // the gain shrinks as they approach mastery.
+        if (state.player != nullptr) {
+            for (const auto& skill : state.player->skills) {
+                if (skill.domain != SkillDomain::Business)
+                    continue;
+                const float gain = kSkillExerciseRate * (1.0f - skill.level);
+                if (gain > 0.0f) {
+                    SkillDelta sd{};
+                    sd.skill_id = static_cast<uint32_t>(SkillDomain::Business);
+                    sd.value = gain;
+                    delta.player_delta.skill_deltas.push_back(sd);
+                }
+                break;
+            }
+        }
+
         // Advance the cadence, exactly as execute_province() does for an NPC
         // owner, so the next call comes a quarter from now.
         BusinessDelta tick_delta{};

@@ -745,13 +745,17 @@ void write_deferred_work_queue(ByteWriter& w, DeferredWorkQueue queue_copy) {
         items.push_back(queue_copy.top());
         queue_copy.pop();
     }
-    // Sort by (due_tick, type, subject_id) for determinism
+    // Sort by (due_tick, type, subject_id, payload) for determinism — the same
+    // total order DeferredWorkComparator drains in, so a queue rebuilt from a
+    // save pops its work in exactly the sequence the live one would have.
     std::sort(items.begin(), items.end(), [](const DeferredWorkItem& a, const DeferredWorkItem& b) {
         if (a.due_tick != b.due_tick)
             return a.due_tick < b.due_tick;
         if (a.type != b.type)
             return static_cast<uint8_t>(a.type) < static_cast<uint8_t>(b.type);
-        return a.subject_id < b.subject_id;
+        if (a.subject_id != b.subject_id)
+            return a.subject_id < b.subject_id;
+        return deferred_payload_key(a.payload) < deferred_payload_key(b.payload);
     });
 
     w.write_u32(static_cast<uint32_t>(items.size()));

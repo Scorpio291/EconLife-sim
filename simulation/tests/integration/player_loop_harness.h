@@ -223,6 +223,8 @@ inline PlayerRun run(const RunConfig& cfg) {
     world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     TickOrchestrator orch;
+    // The config outlives every tick below: set_config keeps a POINTER to it,
+    // so it must not be a temporary or a narrower scope than the orchestrator.
     const PackageConfig pkg = load_package_config(find_package_dir("config"));
     register_base_game_modules(orch, pkg);
     orch.set_config(pkg);
