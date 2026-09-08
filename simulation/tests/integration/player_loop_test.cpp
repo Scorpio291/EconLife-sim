@@ -286,6 +286,24 @@ struct Session {
             orch.execute_tick(world, pool);
         }
     }
+
+    // Play as a person would: answer whatever the world put in front of you,
+    // then let the day run. `script` may enqueue actions before each tick.
+    void play(uint32_t n, const ActionScript& script = {}) {
+        for (uint32_t i = 0; i < n; ++i) {
+            if (script)
+                script(world, world.current_tick);
+            if (world.player) {
+                for (const auto& card : world.pending_scene_cards) {
+                    if (card.chosen_choice_id != 0 || card.choices.empty())
+                        continue;
+                    enqueue_player_action(world, PlayerActionType::scene_card_choice,
+                                          SceneCardChoiceAction{card.id, card.choices.front().id});
+                }
+            }
+            orch.execute_tick(world, pool);
+        }
+    }
 };
 
 std::string scratch_save(const char* name) {
@@ -529,4 +547,108 @@ TEST_CASE("player_loop: something about the character other than money changed",
     REQUIRE(aged);
     REQUIRE(skilled);
     REQUIRE(worked);
+}
+
+// ---------------------------------------------------------------------------
+// THE MVP CONDITION — one arc, across two sittings.
+//
+// Everything above tests a property in isolation. This is the thing the
+// milestone is actually for: a person starts a business career, runs it,
+// closes the game, comes back, and carries on with the same character and the
+// same firm — and both keep developing across the break.
+// ---------------------------------------------------------------------------
+TEST_CASE("player_loop: a career survives being put down and picked up again",
+          "[player_loop]") {
+    const std::string save = scratch_save("two_sittings.econsave");
+
+    // --- First sitting: find a going concern, buy it, run it for a season ---
+    float wealth_at_close = 0.0f;
+    float age_at_close = 0.0f;
+    float skill_at_close = 0.0f;
+    uint32_t tick_at_close = 0;
+    std::size_t firms_at_close = 0;
+    uint32_t workers_at_close = 0;
+
+    {
+        Session first(42, 500, 6);
+        first.play(60);  // let the world settle; a firm trading for a season is
+                         // a firm you can buy
+        first.play(1, buy_a_business_at_tick(first.world.current_tick));
+        first.play(120);  // due diligence closes, then a quarter of trading
+
+        REQUIRE(first.world.player != nullptr);
+        const uint32_t pid = first.world.player->id;
+        for (const auto& biz : first.world.npc_businesses) {
+            if (biz.owner_id != pid)
+                continue;
+            ++firms_at_close;
+            for (const auto& f : first.world.facilities) {
+                if (f.business_id == biz.id)
+                    workers_at_close += f.worker_count;
+            }
+        }
+        INFO("firms owned at close of first sitting: " << firms_at_close);
+        REQUIRE(firms_at_close >= 1);
+
+        wealth_at_close = first.world.player->wealth;
+        age_at_close = first.world.player->age;
+        tick_at_close = first.world.current_tick;
+        for (const auto& sk : first.world.player->skills)
+            skill_at_close = std::max(skill_at_close, sk.level);
+
+        const SaveResult sr = save_game(save, first.world, first.orch);
+        INFO("save: " << sr.error);
+        REQUIRE(sr.ok);
+    }
+    // The first session is destroyed here — the program has been closed.
+
+    // --- Second sitting: pick the same character back up ---
+    Session second(42, 500, 6);
+    const SaveResult lr = load_game(save, second.world, second.orch);
+    INFO("load: " << lr.error);
+    REQUIRE(lr.ok);
+
+    REQUIRE(second.world.current_tick == tick_at_close);
+    REQUIRE_THAT(second.world.player->wealth, WithinAbs(wealth_at_close, 0.01f));
+    REQUIRE_THAT(second.world.player->age, WithinAbs(age_at_close, 0.0001f));
+
+    std::size_t firms_on_return = 0;
+    const uint32_t pid = second.world.player->id;
+    for (const auto& biz : second.world.npc_businesses) {
+        if (biz.owner_id == pid)
+            ++firms_on_return;
+    }
+    INFO("firms owned on return: " << firms_on_return);
+    REQUIRE(firms_on_return == firms_at_close);
+
+    // ...and carry on. The character and the business must keep developing,
+    // not merely survive the reload.
+    second.play(180);
+
+    INFO("wealth " << wealth_at_close << " -> " << second.world.player->wealth);
+    INFO("age " << age_at_close << " -> " << second.world.player->age);
+    REQUIRE(second.world.player->age > age_at_close);
+
+    float skill_at_end = 0.0f;
+    for (const auto& sk : second.world.player->skills)
+        skill_at_end = std::max(skill_at_end, sk.level);
+    INFO("best skill " << skill_at_close << " -> " << skill_at_end);
+    REQUIRE(skill_at_end >= skill_at_close);
+
+    uint32_t workers_at_end = 0;
+    for (const auto& biz : second.world.npc_businesses) {
+        if (biz.owner_id != pid)
+            continue;
+        for (const auto& f : second.world.facilities) {
+            if (f.business_id == biz.id)
+                workers_at_end += f.worker_count;
+        }
+    }
+    INFO("workers " << workers_at_close << " -> " << workers_at_end);
+    REQUIRE(workers_at_end >= workers_at_close);
+
+    // The world kept putting things in front of them, and they kept answering:
+    // the queue is not a pile.
+    INFO("pending cards at end: " << second.world.pending_scene_cards.size());
+    REQUIRE(second.world.pending_scene_cards.size() < 20);
 }

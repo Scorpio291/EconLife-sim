@@ -92,3 +92,126 @@ TEST_CASE("player loop: one year in the life", "[.player-loop-observe]") {
 
     SUCCEED();
 }
+
+// ---------------------------------------------------------------------------
+// The MVP arc, printed: two sittings with the program closed in between.
+//
+//     ./econlife_player_loop_tests "[.player-loop-two-sittings]"
+// ---------------------------------------------------------------------------
+
+#include <filesystem>
+
+#include "core/config/package_config.h"
+#include "core/tick/thread_pool.h"
+#include "core/tick/tick_orchestrator.h"
+#include "core/world_state/player_action_queue.h"
+#include "modules/persistence/save_file.h"
+#include "modules/register_base_game_modules.h"
+
+namespace {
+
+struct Sitting {
+    PackageConfig pkg;  // must outlive the orchestrator: set_config keeps a pointer
+    WorldState world;
+    TickOrchestrator orch;
+    ThreadPool pool{1};
+
+    Sitting()
+        : pkg(load_package_config(econlife::player_loop::find_package_dir("config"))) {
+        WorldGeneratorConfig gen{};
+        gen.seed = 42;
+        gen.province_count = 6;
+        gen.npc_count = 500;
+        econlife::player_loop::set_content_directories(gen);
+        auto result = WorldGenerator::generate_with_player(gen);
+        world = std::move(result.world);
+        world.player = std::make_unique<PlayerCharacter>(std::move(result.player));
+        register_base_game_modules(orch, pkg);
+        orch.set_config(pkg);
+        orch.finalize_registration();
+    }
+
+    void play(uint32_t n, const econlife::player_loop::ActionScript& script = {}) {
+        for (uint32_t i = 0; i < n; ++i) {
+            if (script)
+                script(world, world.current_tick);
+            for (const auto& card : world.pending_scene_cards) {
+                if (card.chosen_choice_id != 0 || card.choices.empty())
+                    continue;
+                enqueue_player_action(world, PlayerActionType::scene_card_choice,
+                                      SceneCardChoiceAction{card.id, card.choices.front().id});
+            }
+            orch.execute_tick(world, pool);
+        }
+    }
+};
+
+void report(const char* label, const WorldState& w) {
+    const PlayerCharacter& p = *w.player;
+    float best_skill = 0.0f;
+    for (const auto& sk : p.skills)
+        best_skill = std::max(best_skill, sk.level);
+
+    std::size_t firms = 0;
+    uint32_t workers = 0, stations = 0;
+    double revenue = 0.0, cost = 0.0, biz_cash = 0.0;
+    for (const auto& biz : w.npc_businesses) {
+        if (biz.owner_id != p.id)
+            continue;
+        ++firms;
+        revenue += biz.revenue_per_tick;
+        cost += biz.cost_per_tick;
+        biz_cash += biz.cash;
+        for (const auto& f : w.facilities) {
+            if (f.business_id != biz.id)
+                continue;
+            workers += f.worker_count;
+            stations += f.max_workers;
+        }
+    }
+
+    std::printf("%-22s tick %5u | wealth %9.0f | age %6.2f | skill %.3f | firms %zu"
+                " | %u/%u staffed | %5.1f rev - %5.1f cost | firm cash %8.0f"
+                " | cards %zu | cal %zu\n",
+                label, w.current_tick, static_cast<double>(p.wealth),
+                static_cast<double>(p.age), static_cast<double>(best_skill), firms, workers,
+                stations, revenue, cost, biz_cash, w.pending_scene_cards.size(), w.calendar.size());
+}
+
+}  // namespace
+
+TEST_CASE("player loop: two sittings, with the game closed in between",
+          "[.player-loop-two-sittings]") {
+    const std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / "econlife_player_loop_saves";
+    std::filesystem::create_directories(dir);
+    const std::string save = (dir / "two_sittings_observe.econsave").string();
+
+    std::printf("\n=== A BUSINESS CAREER, ACROSS TWO SITTINGS (seed 42, 500 NPCs) ===\n\n");
+
+    {
+        Sitting first;
+        report("start", first.world);
+        first.play(60);
+        report("world settled", first.world);
+        first.play(1, econlife::player_loop::buy_a_business_at_tick(first.world.current_tick));
+        first.play(120);
+        report("end of first sitting", first.world);
+
+        const SaveResult sr = save_game(save, first.world, first.orch);
+        std::printf("\n  saved %zu bytes to %s (%s)\n", sr.bytes, sr.path.c_str(),
+                    sr.ok ? "ok" : sr.error.c_str());
+        std::printf("  ...program closed...\n\n");
+        REQUIRE(sr.ok);
+    }
+
+    Sitting second;
+    const SaveResult lr = load_game(save, second.world, second.orch);
+    REQUIRE(lr.ok);
+    report("picked back up", second.world);
+    second.play(180);
+    report("end of second sitting", second.world);
+
+    std::printf("\n");
+    SUCCEED();
+}
