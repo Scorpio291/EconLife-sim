@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
+#include <cstdlib>
 
 #include "player_loop_harness.h"
 
@@ -21,7 +22,9 @@ TEST_CASE("player loop: one year in the life", "[.player-loop-observe]") {
     cfg.npc_count = 500;
     cfg.province_count = 6;
     cfg.ticks = 365;
-    cfg.script = buy_a_business_at_tick(2);
+    const char* env = std::getenv("PLAYER_LOOP_BUY_TICK");
+    const uint32_t buy_tick = (env != nullptr) ? static_cast<uint32_t>(std::atoi(env)) : 60u;
+    cfg.script = buy_a_business_at_tick(buy_tick);
 
     const PlayerRun r = run(cfg);
 
@@ -46,6 +49,15 @@ TEST_CASE("player loop: one year in the life", "[.player-loop-observe]") {
                     s.owned_businesses, s.owned_revenue_per_tick, s.owned_cost_per_tick,
                     s.owned_cash, s.pending_cards, s.calendar_entries, s.evidence_awareness);
     }
+
+    std::printf("\n--- the world around them (comparable to the CLI's metrics line) ---\n");
+    std::printf("  businesses %zu, facilities %zu, npcs %zu\n", r.world_businesses,
+                r.world_facilities, r.world_npcs);
+    std::printf("  avg npc capital %.6f\n", r.avg_npc_capital);
+    std::printf("  firms with a facility ....... %zu, of which earning %zu\n",
+                r.firms_with_facility, r.firms_with_facility_earning);
+    std::printf("  firms without one ........... %zu, of which earning %zu\n",
+                r.firms_without_facility, r.firms_without_facility_earning);
 
     std::printf("\n--- what the world put in front of the player ---\n");
     std::printf("  scene cards created ......... %zu\n", r.cards_created);
@@ -72,8 +84,9 @@ TEST_CASE("player loop: one year in the life", "[.player-loop-observe]") {
                 static_cast<double>(r.last().rep_business),
                 static_cast<double>(r.last().rep_political),
                 static_cast<double>(r.last().rep_social), static_cast<double>(r.last().rep_street));
-    std::printf("  businesses .. %zu (facilities %zu)\n", r.last().owned_businesses,
-                r.last().owned_facilities);
+    std::printf("  businesses .. %zu (facilities %zu, workers %u of %u stations)\n",
+                r.last().owned_businesses, r.last().owned_facilities, r.last().owned_workers,
+                r.last().owned_worker_capacity);
     std::printf("  evidence known %zu, obligations %zu\n\n", r.last().evidence_awareness,
                 r.last().obligations);
 

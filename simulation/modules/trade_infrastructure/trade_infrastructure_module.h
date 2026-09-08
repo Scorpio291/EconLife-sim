@@ -89,6 +89,14 @@ class TradeInfrastructureModule : public ITickModule {
     // Returns true if intercepted.
     bool check_interception(const TransitShipment& shipment, DeterministicRNG& rng) const;
 
+    // Goods in transit are matter that has left one province and not yet
+    // arrived at another. A save that drops them destroys cargo — the shipment
+    // never lands, its owner is never paid, and the destination market never
+    // sees the supply. This is a conservation guarantee, not only a
+    // determinism one.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
    private:
     TradeInfrastructureConfig cfg_;
     std::vector<TransitShipment> active_shipments_;

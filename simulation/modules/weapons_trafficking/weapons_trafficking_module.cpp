@@ -5,6 +5,7 @@
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/persistence/module_state_io.h"
 #include "modules/criminal_operations/criminal_operations_types.h"
 
 namespace econlife {
@@ -238,6 +239,77 @@ void WeaponsTraffickingModule::execute(const WorldState& state, DeltaBuffer& del
     for (uint32_t i = 0; i < state.provinces.size(); ++i) {
         execute_province(i, state, delta);
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Module-private state — diversion and procurement records
+// ---------------------------------------------------------------------------
+
+void WeaponsTraffickingModule::serialize_state(std::vector<uint8_t>& out) const {
+    using namespace state_io;
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(diversion_records_.size()));
+    for (const auto& d : diversion_records_) {
+        put_u32(out, d.business_id);
+        put_u8(out, static_cast<uint8_t>(d.weapon_type));
+        put_f32(out, d.diversion_fraction);
+        put_f32(out, d.output_diverted);
+        put_f32(out, d.output_formal);
+        put_u32(out, d.province_id);
+    }
+    put_u32(out, static_cast<uint32_t>(procurement_records_.size()));
+    for (const auto& p : procurement_records_) {
+        put_u32(out, p.corrupt_npc_id);
+        put_u32(out, p.obligation_node_id);
+        put_u8(out, static_cast<uint8_t>(p.weapon_type));
+        put_f32(out, p.quantity);
+        put_u32(out, p.province_id);
+    }
+}
+
+bool WeaponsTraffickingModule::deserialize_state(const uint8_t* data, size_t size) {
+    using namespace state_io;
+    diversion_records_.clear();
+    procurement_records_.clear();
+    if (data == nullptr || size == 0)
+        return true;
+
+    Reader r(data, size);
+    if (r.u32() != 1u)
+        return false;
+    const uint32_t d_count = r.u32();
+    if (r.error)
+        return false;
+    diversion_records_.reserve(d_count);
+    for (uint32_t i = 0; i < d_count; ++i) {
+        WeaponDiversionRecord d{};
+        d.business_id = r.u32();
+        d.weapon_type = static_cast<WeaponType>(r.u8());
+        d.diversion_fraction = r.f32();
+        d.output_diverted = r.f32();
+        d.output_formal = r.f32();
+        d.province_id = r.u32();
+        if (r.error)
+            return false;
+        diversion_records_.push_back(d);
+    }
+    const uint32_t p_count = r.u32();
+    if (r.error)
+        return false;
+    procurement_records_.reserve(p_count);
+    for (uint32_t i = 0; i < p_count; ++i) {
+        WeaponProcurementRecord p{};
+        p.corrupt_npc_id = r.u32();
+        p.obligation_node_id = r.u32();
+        p.weapon_type = static_cast<WeaponType>(r.u8());
+        p.quantity = r.f32();
+        p.province_id = r.u32();
+        if (r.error)
+            return false;
+        procurement_records_.push_back(p);
+    }
+    return true;
 }
 
 }  // namespace econlife

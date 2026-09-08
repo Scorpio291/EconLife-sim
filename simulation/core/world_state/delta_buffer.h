@@ -151,6 +151,17 @@ struct NewBusinessDelta {
 };
 
 // New facility delivered (Phase 11 construction): appends to world.facilities.
+// A change to how many people work a plant. Expansion buys capacity by
+// staffing up; retrenchment gives it back. Production reads worker_count
+// directly (staffing gates output, and each additional worker adds to it), so
+// this is the channel through which an investment decision becomes physical
+// capacity rather than only a cash movement.
+struct FacilityWorkerDelta {
+    uint32_t business_id = 0;        // the firm doing the hiring or the letting go
+    int32_t worker_count_delta = 0;  // spread across its plants, each bounded by its
+                                     // own max_workers
+};
+
 struct NewFacilityDelta {
     Facility new_facility;
 };
@@ -665,6 +676,7 @@ struct DeltaBuffer {
     std::vector<PropertySubdivisionRequest> new_subdivision_requests;   // merge: append
     std::vector<BusinessAcquisitionRequest> new_business_acquisitions;  // merge: append
     std::vector<NewFacilityDelta> new_facilities;                       // merge: append
+    std::vector<FacilityWorkerDelta> facility_worker_deltas;            // merge: append
     std::vector<ConstructionBidsRequest> new_construction_requests;     // merge: append
     std::vector<ConstructionAwardRequest> new_construction_awards;      // merge: append
     std::vector<RacketSeedDelta> new_racket_seeds;                      // merge: append

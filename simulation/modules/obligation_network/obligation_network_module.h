@@ -51,6 +51,12 @@ class ObligationNetworkModule : public ITickModule {
         uint32_t creditor_npc_id;
     };
 
+    // Escalation is the obligation network's ratchet: how far a demand has
+    // grown, and the path it took to get there. It lived only in memory, so a
+    // save reset every creditor's patience to the start.
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
     std::vector<ObligationState>& obligation_states() { return obligation_states_; }
     const std::vector<ObligationState>& obligation_states() const { return obligation_states_; }
 

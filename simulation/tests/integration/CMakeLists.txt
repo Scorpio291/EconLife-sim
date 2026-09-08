@@ -67,7 +67,12 @@ add_test(NAME emergence_behavioral_suite
 )
 set_tests_properties(emergence_behavioral_suite PROPERTIES
     LABELS "emergence"
-    TIMEOUT 600
+    # Raised from 600. Staffing decisions now reach Facility.worker_count, so
+    # plants that used to sit half-manned run at capacity and the production
+    # layer has correspondingly more to do: the suite went from ~7m45 to ~11m25
+    # on the same machine. That is the cost of the mechanism working, not a
+    # regression to tune away, but the gate has to allow for it.
+    TIMEOUT 1800
 )
 
 # ---------------------------------------------------------------------------

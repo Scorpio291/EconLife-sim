@@ -149,7 +149,7 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // v33: cohort_stats.{nutrition, health, schooling} — what these people ARE. Stocks
     //      with long memories: stature is set in childhood, schooling takes three
     //      generations to rebuild. Reloading without them hands a society back what it lost.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 34);
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 36);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }

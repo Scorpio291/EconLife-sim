@@ -92,10 +92,29 @@ struct DeferredWorkItem {
     WorkPayload payload;  // type-specific
 };
 
-// Min-heap comparator: lowest due_tick has highest priority.
+// Min-heap comparator: lowest due_tick has highest priority, and ties are
+// broken by (type, subject_id) so the order is a TOTAL one.
+//
+// Ordering on due_tick alone left every tie to the heap's internal array
+// layout, which depends on the exact history of pushes and pops that produced
+// it — not on the queue's contents. Two runs holding the same items could drain
+// them in different orders, and a save made that visible: the serializer writes
+// items in canonical (due_tick, type, subject_id) order, so a loaded queue
+// drained ties canonically while the uninterrupted run drained them in
+// insertion-history order. Same work, different sequence, and from there the
+// RNG draws and floating-point accumulations parted company — a resumed game
+// quietly diverged from the one that was saved.
+//
+// With the tie-break, drain order is a function of the queue's contents alone,
+// which is what determinism requires of it and what the save format already
+// assumed.
 struct DeferredWorkComparator {
     bool operator()(const DeferredWorkItem& a, const DeferredWorkItem& b) const noexcept {
-        return a.due_tick > b.due_tick;
+        if (a.due_tick != b.due_tick)
+            return a.due_tick > b.due_tick;
+        if (a.type != b.type)
+            return static_cast<uint8_t>(a.type) > static_cast<uint8_t>(b.type);
+        return a.subject_id > b.subject_id;
     }
 };
 

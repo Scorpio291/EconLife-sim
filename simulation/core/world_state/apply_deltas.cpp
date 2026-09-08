@@ -1046,6 +1046,45 @@ static void apply_new_businesses(WorldState& world, const std::vector<NewBusines
     }
 }
 
+// apply_facility_worker_deltas — staffing changes on existing plants.
+//
+// Bounded by the plant's own capacity: a factory has so many stations, and an
+// investment decision cannot conjure more of them. max_workers == 0 means the
+// facility was built without a type catalog to say how big it is, so it does
+// not grow — an unknown limit is not an infinite one.
+static void apply_facility_worker_deltas(WorldState& world,
+                                         const std::vector<FacilityWorkerDelta>& deltas) {
+    for (const auto& d : deltas) {
+        if (d.worker_count_delta == 0)
+            continue;
+
+        // Staff the plants the firm actually has, in id order so the result does
+        // not depend on vector layout. Hiring fills each plant to its capacity
+        // before moving to the next; letting go empties in the same order. What
+        // does not fit is simply not hired — a firm cannot buy stations that do
+        // not exist.
+        std::vector<Facility*> plants;
+        for (auto& f : world.facilities) {
+            if (f.business_id == d.business_id)
+                plants.push_back(&f);
+        }
+        std::sort(plants.begin(), plants.end(),
+                  [](const Facility* a, const Facility* b) { return a->id < b->id; });
+
+        int64_t remaining = d.worker_count_delta;
+        for (Facility* f : plants) {
+            if (remaining == 0)
+                break;
+            const int64_t current = static_cast<int64_t>(f->worker_count);
+            const int64_t ceiling = static_cast<int64_t>(f->max_workers);
+            const int64_t target = std::clamp<int64_t>(current + remaining, 0, ceiling);
+            remaining -= (target - current);
+            f->worker_count = static_cast<uint32_t>(target);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_new_facilities (Phase 11 construction delivery)
 static void apply_new_facilities(WorldState& world, const std::vector<NewFacilityDelta>& deltas) {
     for (const auto& d : deltas) {
@@ -1166,6 +1205,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_dissolved_businesses(world, delta.dissolved_businesses);
     apply_new_businesses(world, delta.new_businesses);
     apply_new_facilities(world, delta.new_facilities);
+    apply_facility_worker_deltas(world, delta.facility_worker_deltas);
     apply_append_deltas(world, delta);
     apply_scene_card_choice_deltas(world, delta.scene_card_choice_deltas);
     apply_retired_scene_cards(world, delta.retired_scene_card_ids);
@@ -1306,6 +1346,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_subdivision_requests.clear();
     delta.new_business_acquisitions.clear();
     delta.new_facilities.clear();
+    delta.facility_worker_deltas.clear();
     delta.new_construction_requests.clear();
     delta.new_construction_awards.clear();
 }

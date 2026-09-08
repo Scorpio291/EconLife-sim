@@ -100,6 +100,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(new_subdivision_requests, std::move(other.new_subdivision_requests));
     move_extend(new_business_acquisitions, std::move(other.new_business_acquisitions));
     move_extend(new_facilities, std::move(other.new_facilities));
+    move_extend(facility_worker_deltas, std::move(other.facility_worker_deltas));
     move_extend(new_construction_requests, std::move(other.new_construction_requests));
     move_extend(new_construction_awards, std::move(other.new_construction_awards));
     move_extend(new_racket_seeds, std::move(other.new_racket_seeds));

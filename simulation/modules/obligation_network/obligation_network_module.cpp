@@ -7,6 +7,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/persistence/module_state_io.h"
 
 namespace econlife {
 
@@ -210,6 +211,74 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
             delta.npc_deltas.push_back(nd);
         }
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Module-private state — obligation escalation
+// ---------------------------------------------------------------------------
+// Format: u32 schema_tag (1), u32 count, then per obligation:
+//   u32 obligation_id, f32 current_demand, f32 original_value,
+//   u32 deadline_tick, u8 status, u32 creditor_npc_id,
+//   u32 history_count, then per step: u32 tick, u8 from, u8 to
+
+void ObligationNetworkModule::serialize_state(std::vector<uint8_t>& out) const {
+    using namespace state_io;
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(obligation_states_.size()));
+    for (const auto& o : obligation_states_) {
+        put_u32(out, o.obligation_id);
+        put_f32(out, o.current_demand);
+        put_f32(out, o.original_value);
+        put_u32(out, o.deadline_tick);
+        put_u8(out, static_cast<uint8_t>(o.status));
+        put_u32(out, o.creditor_npc_id);
+        put_u32(out, static_cast<uint32_t>(o.history.size()));
+        for (const auto& step : o.history) {
+            put_u32(out, step.tick);
+            put_u8(out, static_cast<uint8_t>(step.from_status));
+            put_u8(out, static_cast<uint8_t>(step.to_status));
+        }
+    }
+}
+
+bool ObligationNetworkModule::deserialize_state(const uint8_t* data, size_t size) {
+    using namespace state_io;
+    obligation_states_.clear();
+    if (data == nullptr || size == 0)
+        return true;
+
+    Reader r(data, size);
+    if (r.u32() != 1u)
+        return false;
+    const uint32_t count = r.u32();
+    if (r.error)
+        return false;
+    obligation_states_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        ObligationState o{};
+        o.obligation_id = r.u32();
+        o.current_demand = r.f32();
+        o.original_value = r.f32();
+        o.deadline_tick = r.u32();
+        o.status = static_cast<ObligationStatus>(r.u8());
+        o.creditor_npc_id = r.u32();
+        const uint32_t steps = r.u32();
+        if (r.error)
+            return false;
+        o.history.reserve(steps);
+        for (uint32_t j = 0; j < steps; ++j) {
+            EscalationStep step{};
+            step.tick = r.u32();
+            step.from_status = static_cast<ObligationStatus>(r.u8());
+            step.to_status = static_cast<ObligationStatus>(r.u8());
+            if (r.error)
+                return false;
+            o.history.push_back(step);
+        }
+        obligation_states_.push_back(std::move(o));
+    }
+    return true;
 }
 
 }  // namespace econlife

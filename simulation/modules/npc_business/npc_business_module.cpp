@@ -745,6 +745,19 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
                                       ? static_cast<float>(-result.hiring_target_change) * -10.0f
                                       : 0.0f;
         delta.npc_deltas.push_back(npc_delta);
+
+        // Staffing is what an expansion BUYS. Without this the decision moved
+        // cash and nothing else for a facility-based firm: production reads
+        // worker_count (staffing gates output, and each extra worker adds to
+        // it), and the organic revenue growth the branch below emits is
+        // overwritten every tick by production's own recomputation. So a player
+        // who invested in a plant paid for capacity and received none — a choice
+        // with no consequence, which is exactly the fake gameplay the design
+        // forbids. Bounded on apply by each plant's max_workers.
+        FacilityWorkerDelta staffing{};
+        staffing.business_id = biz.id;
+        staffing.worker_count_delta = result.hiring_target_change;
+        delta.facility_worker_deltas.push_back(staffing);
     }
 
     // Expansion decision: schedule downstream effects.

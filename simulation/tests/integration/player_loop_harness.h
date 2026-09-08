@@ -30,23 +30,49 @@
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
+#include "core/config/package_config.h"
 #include "modules/register_base_game_modules.h"
 
 namespace econlife::player_loop {
 
-inline std::string find_goods_dir() {
+// Locate a packages/base_game subdirectory from wherever the test binary runs.
+inline std::string find_package_dir(const char* leaf) {
     namespace fs = std::filesystem;
-    static const char* candidates[] = {
-        "packages/base_game/goods",
-        "../packages/base_game/goods",
-        "../../packages/base_game/goods",
-        "../../../packages/base_game/goods",
-    };
-    for (const auto* c : candidates) {
-        if (fs::exists(c) && fs::is_directory(c))
-            return fs::canonical(c).string();
+    static const char* prefixes[] = {"", "../", "../../", "../../../"};
+    for (const auto* p : prefixes) {
+        const fs::path candidate = fs::path(std::string(p) + "packages/base_game") / leaf;
+        if (fs::exists(candidate) && fs::is_directory(candidate))
+            return fs::canonical(candidate).string();
     }
     return "";
+}
+
+inline std::string find_goods_dir() {
+    return find_package_dir("goods");
+}
+
+// The content a real session loads. A world generated without recipes has no
+// production to speak of, so a harness that skips them is not exercising the
+// game the player plays — and a determinism defect in the recipe-driven path
+// would go unseen.
+inline void set_content_directories(WorldGeneratorConfig& gen) {
+    namespace fs = std::filesystem;
+    gen.goods_directory = find_goods_dir();
+    gen.recipes_directory = find_package_dir("recipes");
+    gen.technology_directory = find_package_dir("technology");
+    gen.eras_directory = find_package_dir("eras");
+    gen.occupations_directory = find_package_dir("occupations");
+
+    // Facility types are what turn recipes into places that make things.
+    // Without this file world-gen creates NO facilities at all, production
+    // falls back to the abstract revenue path for every firm, and a harness
+    // that skips it is not running the economy the player buys into.
+    const std::string ft_dir = find_package_dir("facility_types");
+    if (!ft_dir.empty()) {
+        const fs::path csv = fs::path(ft_dir) / "facility_types.csv";
+        if (fs::exists(csv))
+            gen.facility_types_filepath = csv.string();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +96,8 @@ struct PlayerSnapshot {
     double owned_cost_per_tick = 0.0;
     double owned_cash = 0.0;
     std::size_t owned_facilities = 0;
+    uint32_t owned_workers = 0;
+    uint32_t owned_worker_capacity = 0;
 
     // What the world put in front of them.
     std::size_t pending_cards = 0;
@@ -96,6 +124,24 @@ struct PlayerRun {
     // Calendar provenance: entries the player did not put there themselves.
     std::size_t calendar_entries_created = 0;
     std::size_t calendar_entries_world_created = 0;
+
+    // The world around the player at the end of the run, so a harness result
+    // can be compared against a CLI run of the same seed and size — if they
+    // disagree, the harness is not playing the game the player plays.
+    std::size_t world_businesses = 0;
+    std::size_t world_facilities = 0;
+    std::size_t world_npcs = 0;
+    double avg_npc_capital = 0.0;
+
+    // How the two kinds of firm are faring. A business with a facility earns
+    // through production (recipe, inputs, market price); one without earns
+    // through the abstract revenue_per_tick the model carries for services and
+    // trade. If the facility-based firms all fall to zero, the player cannot
+    // buy a producing business at all.
+    std::size_t firms_with_facility = 0;
+    std::size_t firms_with_facility_earning = 0;
+    std::size_t firms_without_facility = 0;
+    std::size_t firms_without_facility_earning = 0;
 
     const PlayerSnapshot& first() const { return series.front(); }
     const PlayerSnapshot& last() const { return series.back(); }
@@ -133,8 +179,11 @@ inline PlayerSnapshot capture(const WorldState& w) {
         s.owned_cash += biz.cash;
     }
     for (const auto& f : w.facilities) {
-        if (owned_ids.count(f.business_id) != 0)
+        if (owned_ids.count(f.business_id) != 0) {
             ++s.owned_facilities;
+            s.owned_workers += f.worker_count;
+            s.owned_worker_capacity += f.max_workers;
+        }
     }
 
     s.pending_cards = w.pending_scene_cards.size();
@@ -168,13 +217,15 @@ inline PlayerRun run(const RunConfig& cfg) {
     gen.seed = cfg.seed;
     gen.province_count = cfg.province_count;
     gen.npc_count = cfg.npc_count;
-    gen.goods_directory = find_goods_dir();
+    set_content_directories(gen);
 
     auto [world, player] = WorldGenerator::generate_with_player(gen);
     world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     TickOrchestrator orch;
-    register_base_game_modules(orch);
+    const PackageConfig pkg = load_package_config(find_package_dir("config"));
+    register_base_game_modules(orch, pkg);
+    orch.set_config(pkg);
     orch.finalize_registration();
     ThreadPool pool(1);
 
@@ -231,6 +282,35 @@ inline PlayerRun run(const RunConfig& cfg) {
         out.series.push_back(capture(world));
     }
 
+    out.world_businesses = world.npc_businesses.size();
+    out.world_facilities = world.facilities.size();
+    out.world_npcs = world.significant_npcs.size();
+    if (!world.significant_npcs.empty()) {
+        double total = 0.0;
+        for (const auto& npc : world.significant_npcs)
+            total += npc.capital;
+        out.avg_npc_capital = total / static_cast<double>(world.significant_npcs.size());
+    }
+
+    {
+        std::set<uint32_t> has_facility;
+        for (const auto& f : world.facilities)
+            has_facility.insert(f.business_id);
+        for (const auto& biz : world.npc_businesses) {
+            const bool facility = has_facility.count(biz.id) != 0;
+            const bool earning = biz.revenue_per_tick > 0.0f;
+            if (facility) {
+                ++out.firms_with_facility;
+                if (earning)
+                    ++out.firms_with_facility_earning;
+            } else {
+                ++out.firms_without_facility;
+                if (earning)
+                    ++out.firms_without_facility_earning;
+            }
+        }
+    }
+
     out.cards_created = ever_seen.size();
     out.cards_resolved = ever_resolved.size();
     // Provenance is decided by the caller marking its own scheduling; by
@@ -243,6 +323,19 @@ inline PlayerRun run(const RunConfig& cfg) {
 // ---------------------------------------------------------------------------
 // Convenience: the standard MVP play session. The player buys the cheapest
 // going concern in their province that they can pay cash for, then runs it.
+//
+// On WHEN to buy. Firms are generated at tick 0 with revenue on the books, and
+// the production layer then works out which of them can actually source their
+// inputs — most facility-based firms fall idle over the first weeks, because
+// the supply chain has not bootstrapped around them. A player who buys on day
+// two is buying a set of opening figures, and a good chance of a firm that
+// stops trading a month later. By the end of the first season the survivors
+// are visibly trading and keep trading, so that is when the standard session
+// buys. It is also what a person would do.
+//
+// (That most facility firms sit idle is a world-economy finding, recorded in
+// the run telemetry as firms_with_facility vs firms_with_facility_earning. It
+// is not the player's problem to solve and not this milestone's to fix.)
 // ---------------------------------------------------------------------------
 inline ActionScript buy_a_business_at_tick(uint32_t at_tick, float offer_multiple = 7.0f) {
     return [at_tick, offer_multiple](WorldState& w, uint32_t tick) {
