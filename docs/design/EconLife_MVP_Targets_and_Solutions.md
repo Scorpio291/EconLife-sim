@@ -157,6 +157,27 @@ alone** is enough for a two-day felt-correctness check — supplier negotiation,
 poor performance review, a landlord, a regulator visit, a rival's offer, a journalist's
 call. Author those, measure whether the loop is fun, then scale.
 
+**What was built (2026-09-08).** (a), (b) and (c) all landed. `SceneCardCatalog` loads
+`packages/base_game/scene_cards/*.csv`; `SceneCardSeedDelta` is the producer channel and
+`WorldState::pending_scene_card_seeds` its queue, persisted at schema v37 because
+producers run on both sides of `scene_cards` in the tick order and a save can fall between
+the emit and the drain. Every notice and news card in the game now names a template
+instead of composing English at the call site, and calendar-triggered cards — which
+previously arrived with **no dialogue at all** — take their copy, class and setting from
+the catalog too.
+
+Three producers still compose their own cards: `real_estate`'s counter and inbound-offer
+cards and `npc_business`'s quarterly owner decision. All three need the card's id AT EMIT
+TIME to bind it to something else (a `NegotiationContext`, a calendar entry), and the seed
+channel allocates ids at drain time. Moving them needs an id-reservation step in the seed
+channel — a real piece of work, not a rewrite, and it is the honest next step rather than
+a thing quietly claimed as done.
+
+The count is 18 authored templates, not the 20–30 above, and every one of them has a live
+producer. Padding the file to hit the number would put copy in the game that nothing can
+ever raise, which reads as content and is not. The remaining ~10 are authoring work that
+should follow new producers, not precede them.
+
 ---
 
 ## T0.3 — The calendar is empty; time is not a constraint

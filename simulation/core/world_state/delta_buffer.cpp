@@ -92,6 +92,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(cross_province_deltas, std::move(other.cross_province_deltas));
     move_extend(dissolved_businesses, std::move(other.dissolved_businesses));
     move_extend(new_businesses, std::move(other.new_businesses));
+    move_extend(scene_card_seeds, std::move(other.scene_card_seeds));
     move_extend(scene_card_choice_deltas, std::move(other.scene_card_choice_deltas));
     move_extend(retired_scene_card_ids, std::move(other.retired_scene_card_ids));
     move_extend(retired_calendar_entry_ids, std::move(other.retired_calendar_entry_ids));

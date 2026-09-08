@@ -523,6 +523,13 @@ struct SceneCardsConfig {
     uint32_t ambient_queue_cap = 50;         // §1.3: oldest unread ambient card is cleared
     uint32_t timed_optional_queue_cap = 12;  // §2: the 13th is demoted to ambient
     uint32_t timed_optional_ttl_ticks = 7;   // §1.2: expiry fires the card's default outcome
+
+    // Directory of authored card templates (packages/*/scene_cards/*.csv).
+    // Empty means no catalog: seeded cards find no template and are dropped,
+    // which is the honest failure — a card whose copy was never written should
+    // not be invented at runtime. Set by the host that knows where the
+    // packages live (the CLI, the harness), not discovered by the module.
+    std::string card_catalog_directory;
 };
 
 struct CommodityTradingConfig {

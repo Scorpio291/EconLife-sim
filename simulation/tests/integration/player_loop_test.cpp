@@ -272,6 +272,8 @@ struct Session {
     explicit Session(uint64_t seed, uint32_t npcs, uint32_t provinces)
         : pkg(load_package_config(find_package_dir("config"))),
           world(build_world(seed, npcs, provinces)) {
+        // The authored card copy, same as a real session loads.
+        pkg.scene_cards.card_catalog_directory = find_package_dir("scene_cards");
         // Register with the package configs a real session uses, not module
         // defaults: a determinism defect that only appears under the shipped
         // configuration is one a player would meet and a test with defaults

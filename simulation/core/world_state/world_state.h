@@ -234,6 +234,18 @@ struct WorldState {
     // pending trigger.
     std::vector<RandomEventTriggerDelta> pending_random_event_triggers;
 
+    // pending_scene_card_seeds: written by any module that wants to say
+    // something to the player (a refused offer, a closed sale, a story that
+    // ran, a quarter's owner decision). Drained by scene_cards within its
+    // execute(), which resolves the named template out of the card catalog and
+    // owns the id, the caps and the lifecycle. Like
+    // pending_random_event_triggers this queue MAY hold entries across tick
+    // boundaries: producers run on both sides of scene_cards in the tick order,
+    // so a seed emitted after it is drained on the next tick rather than lost.
+    // Persisted (schema v37+) — a save taken between the emit and the drain
+    // must not swallow the card.
+    std::vector<SceneCardSeedDelta> pending_scene_card_seeds;
+
     // pending_property_transactions: written by player_actions (Tier 0)
     // and future NPC seller-intent logic. Drained by real_estate at the
     // start of its execute() (Tier 4) within the same tick. Validation

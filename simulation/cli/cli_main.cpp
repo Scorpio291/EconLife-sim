@@ -202,6 +202,10 @@ static std::string find_facility_types_filepath() {
     return find_base_game_path("facility_types/facility_types.csv");
 }
 
+static std::string find_scene_cards_directory() {
+    return find_base_game_path("scene_cards");
+}
+
 static std::string find_technology_directory() {
     return find_base_game_path("technology");
 }
@@ -334,6 +338,11 @@ int main(int argc, char* argv[]) {
     } else {
         std::fprintf(diag, "Config directory: not found (using spec defaults)\n");
     }
+    pkg_config.scene_cards.card_catalog_directory = find_scene_cards_directory();
+    std::fprintf(diag, "Scene card catalog: %s\n",
+                 pkg_config.scene_cards.card_catalog_directory.empty()
+                     ? "not found (cards will not be raised)"
+                     : pkg_config.scene_cards.card_catalog_directory.c_str());
 
     // 3. Set up orchestrator
     TickOrchestrator orchestrator;

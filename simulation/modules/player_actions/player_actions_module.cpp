@@ -14,7 +14,7 @@
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
-#include "modules/scene_cards/notice_card.h"
+#include "modules/scene_cards/card_seed.h"
 
 namespace econlife {
 
@@ -228,23 +228,21 @@ static void handle_start_business(const StartBusinessAction& action, const World
 
     // Player must be in the target province.
     if (action.province_id != player.current_province_id) {
-        delta.new_scene_cards.push_back(
-            make_notice_card("You have to be in the province to open a business there."));
+        seed_card(delta, "not_here");
         return;
     }
 
     // Player must not be in transit.
     if (player.travel_status == NPCTravelStatus::in_transit) {
-        delta.new_scene_cards.push_back(
-            make_notice_card("You are travelling. Settle somewhere before founding anything."));
+        seed_card(delta, "in_transit");
         return;
     }
 
     // Minimum startup capital check (10,000 liquid cash).
     constexpr float MIN_STARTUP_CAPITAL = 10000.0f;
     if (player.wealth < MIN_STARTUP_CAPITAL) {
-        delta.new_scene_cards.push_back(make_notice_card(
-            "You cannot raise the capital to open a business — you need at least 10,000."));
+        seed_card(delta, "no_capital", 0,
+                  {{"amount", std::to_string(static_cast<long long>(MIN_STARTUP_CAPITAL))}});
         return;
     }
 
@@ -260,10 +258,7 @@ static void handle_start_business(const StartBusinessAction& action, const World
     // doctrine forbids — the constant would be the whole reason it earned. So
     // the action refuses, and says which routes to an operating business
     // actually exist. Both are already built and both are reachable.
-    delta.new_scene_cards.push_back(make_notice_card(
-        "There is no trade to open the doors on. A company needs premises that produce "
-        "something or a book of business already trading: buy a going concern in this "
-        "province, or acquire a site and build on it."));
+    seed_card(delta, "no_premises");
     return;
 
     // Create new business.

@@ -7,6 +7,9 @@
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/media_system/media_system_module.h"
+#include "modules/scene_cards/scene_cards_module.h"
+
+#include <filesystem>
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -336,6 +339,25 @@ Story make_story_about(uint32_t subject_id, std::vector<uint32_t> tokens) {
     return story;
 }
 
+// The shipped card copy: the notice is a seed naming a template, so without
+// the catalog there is no card to find.
+std::string find_scene_cards_dir() {
+    namespace fs = std::filesystem;
+    const char* candidates[] = {
+        "packages/base_game/scene_cards",
+        "../packages/base_game/scene_cards",
+        "../../packages/base_game/scene_cards",
+        "../../../packages/base_game/scene_cards",
+        "../../../../packages/base_game/scene_cards",
+        "../../../../../packages/base_game/scene_cards",
+    };
+    for (const auto* c : candidates) {
+        if (fs::is_directory(c))
+            return fs::canonical(c).string();
+    }
+    return "";
+}
+
 }  // namespace
 
 TEST_CASE("A story about the player tells them what it cites", "[media_system][evidence]") {
@@ -359,8 +381,19 @@ TEST_CASE("A story about the player tells them what it cites", "[media_system][e
     // exposure model cares about.
     REQUIRE(w.player->evidence_awareness_map[0].discovery_tick == w.current_tick);
 
-    // And they are told, through the channel they already read.
+    // And they are told, through the channel they already read. The module
+    // names an authored template rather than writing the sentence, so the
+    // proof is a card the player can actually answer coming out the far end.
+    REQUIRE_FALSE(w.pending_scene_card_seeds.empty());
+    SceneCardsConfig cfg{};
+    cfg.card_catalog_directory = find_scene_cards_dir();
+    REQUIRE_FALSE(cfg.card_catalog_directory.empty());
+    SceneCardsModule cards(cfg);
+    DeltaBuffer card_delta{};
+    cards.execute(w, card_delta);
+    apply_deltas(w, card_delta);
     REQUIRE_FALSE(w.pending_scene_cards.empty());
+    REQUIRE_FALSE(w.pending_scene_cards[0].choices.empty());
 }
 
 TEST_CASE("The player learns only what was printed, not what the world knows",

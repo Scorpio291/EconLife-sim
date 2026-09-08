@@ -80,6 +80,11 @@ static const PlayerChoice* find_choice(const SceneCard& card, uint32_t choice_id
 // SceneCardsModule — ITickModule interface
 // ---------------------------------------------------------------------------
 
+SceneCardsModule::SceneCardsModule(const SceneCardsConfig& cfg) : cfg_(cfg) {
+    if (!cfg_.card_catalog_directory.empty())
+        load_catalog(cfg_.card_catalog_directory);
+}
+
 std::string_view SceneCardsModule::name() const noexcept {
     return "scene_cards";
 }
@@ -114,6 +119,11 @@ void SceneCardsModule::execute(const WorldState& state, DeltaBuffer& delta) {
     // Phase 2: Queue lifecycle — discard, retire, expire, cap
     // ===================================================================
     run_queue_lifecycle(state, delta);
+
+    // ===================================================================
+    // Phase 2b: Turn this tick's seed requests into cards
+    // ===================================================================
+    drain_card_seeds(state, delta);
 
     // ===================================================================
     // Phase 3: Trigger new scene cards from calendar entries
@@ -253,6 +263,79 @@ void SceneCardsModule::run_queue_lifecycle(const WorldState& state, DeltaBuffer&
 }
 
 // ---------------------------------------------------------------------------
+// Catalog loading and seed draining
+// ---------------------------------------------------------------------------
+
+void SceneCardsModule::load_catalog(const std::string& directory) {
+    catalog_.load_from_directory(directory);
+}
+
+// A producer names a template and supplies its parameters; everything that
+// makes it a CARD happens here. Producers used to compose the English and the
+// choice list at the call site, which put the writing inside the C++ and meant
+// changing a word needed a recompile.
+//
+// A seed naming a template the catalog does not hold is dropped rather than
+// guessed at: a missing card is a visible content bug, an invented one is not.
+bool SceneCardsModule::compose_from_template(
+    const std::string& card_key, uint32_t card_id, uint32_t npc_id,
+    const std::vector<std::pair<std::string, std::string>>& params, SceneCard& out) const {
+    const SceneCardTemplate* tmpl = catalog_.find(card_key);
+    if (tmpl == nullptr)
+        return false;
+
+    out = SceneCard{};
+    out.id = card_id;  // 0 = apply_deltas allocates
+    out.type = tmpl->type;
+    out.setting = tmpl->setting;
+    out.npc_id = npc_id;
+    out.card_class = tmpl->card_class;
+    out.default_choice_id = tmpl->default_choice_id;
+    out.npc_presentation_state = 0.0f;
+    // Template-filled, not hand-written for this moment. `is_authored` is what
+    // apply_authored_priority uses to let a written scene beat a generated one
+    // for the same NPC on the same tick; a notice drawn from the catalog is
+    // still the generated kind, and marking it authored would let a "sale
+    // closed" line silence a scene someone wrote.
+    out.is_authored = false;
+    out.chosen_choice_id = 0;
+
+    DialogueLine line{};
+    line.speaker_npc_id = npc_id;
+    line.text = SceneCardCatalog::inject(tmpl->dialogue, params);
+    // A parameter that resolves to nothing (a calendar entry with no stated
+    // default outcome) leaves the sentence ending in a space. Trim it rather
+    // than show the player the seam.
+    while (!line.text.empty() && line.text.back() == ' ')
+        line.text.pop_back();
+    line.emotional_tone = 0.0f;
+    out.dialogue.push_back(std::move(line));
+
+    out.choices = tmpl->choices;
+    return true;
+}
+
+void SceneCardsModule::drain_card_seeds(const WorldState& state, DeltaBuffer& delta) const {
+    if (state.pending_scene_card_seeds.empty())
+        return;
+
+    for (const auto& seed : state.pending_scene_card_seeds) {
+        SceneCard card{};
+        if (!compose_from_template(seed.card_key, 0, seed.npc_id, seed.params, card))
+            continue;
+        delta.new_scene_cards.push_back(std::move(card));
+    }
+
+    // The drain is a write to WorldState from inside a module, which the
+    // DeltaBuffer discipline otherwise forbids. It is the same carve-out
+    // legal_process takes for pending_legal_case_seeds and player_actions
+    // takes for the deferred queue: the queue is scratch, this module is its
+    // only consumer, and routing the clear through a delta would leave the
+    // seeds visible to a second drain within the same tick.
+    const_cast<std::vector<SceneCardSeedDelta>&>(state.pending_scene_card_seeds).clear();
+}
+
+// ---------------------------------------------------------------------------
 // Phase 3: Trigger new scene cards from calendar entries
 // ---------------------------------------------------------------------------
 
@@ -294,43 +377,36 @@ void SceneCardsModule::trigger_calendar_cards(const WorldState& state, DeltaBuff
             break;
         }
 
-        // Determine the scene card type from the calendar entry type.
-        SceneCardType card_type = SceneCardType::meeting;
-        SceneSetting card_setting = SceneSetting::private_office;
-        if (entry.type == CalendarEntryType::meeting) {
-            card_type = SceneCardType::meeting;
-            card_setting = SceneSetting::private_office;
+        // The card's copy, class and setting come from the authored catalog,
+        // keyed on what kind of commitment this is. A summons is not a
+        // meeting: it is mandatory and has no default outcome, because not
+        // showing to a summons is not the same act as missing a lunch.
+        const char* card_key = "calendar_commitment";
+        if (entry.mandatory) {
+            card_key = "calendar_summons";
+        } else if (entry.type == CalendarEntryType::meeting) {
+            card_key = "calendar_meeting";
         } else if (entry.type == CalendarEntryType::personal) {
-            card_type = SceneCardType::personal_event;
-            card_setting = SceneSetting::home_dining;
+            card_key = "calendar_personal";
         } else if (entry.type == CalendarEntryType::event) {
-            card_type = SceneCardType::news_notification;
-            card_setting = SceneSetting::phone_call;
+            card_key = "calendar_event";
+        } else if (entry.type == CalendarEntryType::deadline) {
+            card_key = "calendar_deadline";
+        } else if (entry.type == CalendarEntryType::operation) {
+            card_key = "calendar_operation";
         }
 
-        // Create the scene card. Richer dialogue comes from the authored
-        // template catalog; the choices here are the two a committed calendar
-        // entry always offers, and they are not decoration — a card with no
-        // choices cannot be answered, and finalize_new_cards drops it.
-        SceneCard card{};
-        card.id = entry.scene_card_id;
-        card.type = card_type;
-        card.setting = card_setting;
-        card.npc_id = entry.npc_id;
-        card.npc_presentation_state = 0.5f;  // Default; computed in Phase 5
-        card.is_authored = false;            // Calendar-triggered = procedural by default
-        card.chosen_choice_id = 0;
+        // What the world says happens if the player does not turn up. The
+        // calendar entry already carries it; before this it was written for a
+        // UI that never showed it.
+        std::vector<std::pair<std::string, std::string>> params;
+        params.emplace_back("default_outcome",
+                            entry.deadline_consequence.default_outcome_description);
 
-        // Rulebook §1.2/§3: an inbound commitment the player never answers is
-        // a declined commitment — a real outcome, not a null event. A mandatory
-        // calendar entry is a summons and has to be engaged.
-        card.card_class =
-            entry.mandatory ? CardClass::mandatory : CardClass::timed_optional;
-        card.choices.push_back(
-            PlayerChoice{CALENDAR_CHOICE_ATTEND, "Attend", "Keep the commitment.", 0});
-        card.choices.push_back(
-            PlayerChoice{CALENDAR_CHOICE_SKIP, "Skip", "Do not show up.", 0});
-        card.default_choice_id = CALENDAR_CHOICE_SKIP;
+        SceneCard card{};
+        if (!compose_from_template(card_key, entry.scene_card_id, entry.npc_id, params, card))
+            continue;
+        card.npc_presentation_state = 0.5f;  // Default; computed in Phase 5
 
         delta.new_scene_cards.push_back(card);
         cards_added++;

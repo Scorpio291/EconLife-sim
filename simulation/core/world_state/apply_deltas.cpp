@@ -1234,6 +1234,15 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
         world.cross_province_delta_buffer.entries.push_back(std::move(cpd));
     }
 
+    // Route scene-card seeds into WorldState's pending queue. scene_cards
+    // drains them at the start of its execute(), resolves each against the
+    // card catalog and allocates the id. Producers sit on both sides of
+    // scene_cards in the tick order, so unlike the same-tick seed queues this
+    // one may carry an entry into the next tick.
+    for (auto& seed : delta.scene_card_seeds) {
+        world.pending_scene_card_seeds.push_back(std::move(seed));
+    }
+
     // Route legal case seeds into WorldState's pending queue. legal_process
     // drains them at the start of its execute() within the same tick (it
     // runs at Tier 9, after investigator_engine at Tier 8 which is the
@@ -1345,6 +1354,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.cross_province_deltas.clear();
     delta.dissolved_businesses.clear();
     delta.new_businesses.clear();
+    delta.scene_card_seeds.clear();
     delta.scene_card_choice_deltas.clear();
     delta.retired_scene_card_ids.clear();
     delta.retired_calendar_entry_ids.clear();

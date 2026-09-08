@@ -2233,6 +2233,24 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
         }
     }
 
+    // --- v37: pending_scene_card_seeds ---
+    // Cross-tick card queue. Producers run on both sides of scene_cards in the
+    // tick order, so a save taken between the emit and the drain would lose
+    // whatever the world was about to say to the player.
+    {
+        const auto& queue = state.pending_scene_card_seeds;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& seed : queue) {
+            w.write_string(seed.card_key);
+            w.write_u32(seed.npc_id);
+            w.write_u32(static_cast<uint32_t>(seed.params.size()));
+            for (const auto& [key, value] : seed.params) {
+                w.write_string(key);
+                w.write_string(value);
+            }
+        }
+    }
+
     // --- Uncompressed data ready ---
     const auto& raw = w.data();
     uint32_t raw_size = static_cast<uint32_t>(raw.size());
@@ -2849,6 +2867,28 @@ RestoreResult PersistenceModule::deserialize_body(const std::vector<uint8_t>& da
             c.bidding_deadline_tick = r.read_u32();
             c.expected_completion_tick = r.read_u32();
             out_state.construction_contracts.push_back(std::move(c));
+        }
+    }
+
+    // --- v37: pending_scene_card_seeds ---
+    // Pre-v37 saves omit the section: the queue loads empty, which is what a
+    // pre-v37 world had anyway (the channel did not exist).
+    out_state.pending_scene_card_seeds.clear();
+    if (schema_ver >= 37u) {
+        uint32_t seed_count = r.read_u32();
+        out_state.pending_scene_card_seeds.reserve(seed_count);
+        for (uint32_t i = 0; i < seed_count; ++i) {
+            SceneCardSeedDelta seed{};
+            seed.card_key = r.read_string();
+            seed.npc_id = r.read_u32();
+            uint32_t param_count = r.read_u32();
+            seed.params.reserve(param_count);
+            for (uint32_t j = 0; j < param_count; ++j) {
+                std::string key = r.read_string();
+                std::string value = r.read_string();
+                seed.params.emplace_back(std::move(key), std::move(value));
+            }
+            out_state.pending_scene_card_seeds.push_back(std::move(seed));
         }
     }
 

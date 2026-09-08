@@ -23,7 +23,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
-#include "modules/scene_cards/notice_card.h"
+#include "modules/scene_cards/card_seed.h"
 #include "modules/banking/banking_module.h"        // Loan helpers (static methods)
 #include "modules/banking/banking_types.h"         // LoanPurpose
 #include "modules/scene_cards/scene_card_types.h"  // SceneCard, SceneSetting, SceneCardType
@@ -1166,8 +1166,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 // The owner said no. Without a notice the offer simply vanishes
                 // and the player is left watching a deal that never appears.
                 if (req.buyer_id == player_id) {
-                    delta.new_scene_cards.push_back(make_notice_card(
-                        "Your offer was turned down. The owner is not selling at that price."));
+                    seed_card(delta, "offer_declined");
                 }
                 continue;
             }
@@ -1190,8 +1189,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             acq.interest_rate = cfg_.mortgage_interest_rate;
             acq.loan_maturity_ticks = (pm == PaymentMethod::cash) ? 0u : cfg_.mortgage_term_ticks;
             if (req.buyer_id == player_id) {
-                delta.new_scene_cards.push_back(make_notice_card(
-                    "Your offer was accepted. The sale closes once due diligence is done."));
+                seed_card(delta, "offer_accepted");
             }
             biz_acqs.push_back(acq);
         }
@@ -1217,8 +1215,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         if (!biz || biz->owner_id != acq.seller_id) {
             acq.stage = PendingTxStage::cancelled;
             if (acq.buyer_id == player_id) {
-                delta.new_scene_cards.push_back(make_notice_card(
-                    "The sale fell through — the business changed hands before you closed."));
+                seed_card(delta, "sale_lost", 0, {{"subject", "the business"}});
             }
             continue;
         }
@@ -1229,8 +1226,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         if (!buyer_can_pay) {
             acq.stage = PendingTxStage::expired;
             if (acq.buyer_id == player_id) {
-                delta.new_scene_cards.push_back(make_notice_card(
-                    "You could not fund the purchase at close. The deal lapsed."));
+                seed_card(delta, "sale_lapsed");
             }
             continue;
         }
@@ -1267,8 +1263,7 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             delta.new_loan_requests.push_back(loan_req);
         }
         if (acq.buyer_id == player_id) {
-            delta.new_scene_cards.push_back(
-                make_notice_card("The sale closed. The business is yours."));
+            seed_card(delta, "sale_closed", 0, {{"subject", "The business"}});
         }
         acq.stage = PendingTxStage::settled;
     }

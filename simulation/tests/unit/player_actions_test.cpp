@@ -12,7 +12,31 @@
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
 #include "modules/player_actions/player_actions_module.h"
+#include "modules/scene_cards/scene_cards_module.h"
 #include "tests/test_world_factory.h"
+
+#include <filesystem>
+
+namespace {
+// The shipped card copy. A refusal is a seed naming a template, so without the
+// catalog there is no card for the player to read.
+std::string find_scene_cards_dir() {
+    namespace fs = std::filesystem;
+    const char* candidates[] = {
+        "packages/base_game/scene_cards",
+        "../packages/base_game/scene_cards",
+        "../../packages/base_game/scene_cards",
+        "../../../packages/base_game/scene_cards",
+        "../../../../packages/base_game/scene_cards",
+        "../../../../../packages/base_game/scene_cards",
+    };
+    for (const auto* c : candidates) {
+        if (fs::is_directory(c))
+            return fs::canonical(c).string();
+    }
+    return "";
+}
+}  // namespace
 
 using namespace econlife;
 using namespace econlife::test;
@@ -283,7 +307,20 @@ TEST_CASE("Start business does not charge for a business that cannot operate",
     REQUIRE(world.npc_businesses.size() == biz_count_before);
     REQUIRE_THAT(world.player->wealth, WithinAbs(wealth_before, 0.01f));
 
-    // And the refusal reaches the player rather than vanishing.
+    // And the refusal reaches the player rather than vanishing. The module
+    // names an authored template; scene_cards turns it into the card, so the
+    // test follows the same route — a key no template answers to would raise
+    // nothing and fail nothing on its own.
+    REQUIRE(world.pending_scene_card_seeds.size() == 1);
+
+    SceneCardsConfig cfg{};
+    cfg.card_catalog_directory = find_scene_cards_dir();
+    REQUIRE_FALSE(cfg.card_catalog_directory.empty());
+    SceneCardsModule cards(cfg);
+    DeltaBuffer card_delta{};
+    cards.execute(world, card_delta);
+    apply_deltas(world, card_delta);
+
     REQUIRE(world.pending_scene_cards.size() == 1);
     REQUIRE_FALSE(world.pending_scene_cards[0].dialogue.empty());
     REQUIRE_FALSE(world.pending_scene_cards[0].choices.empty());

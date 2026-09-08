@@ -8,6 +8,7 @@
 
 #include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/player.h"        // PlayerCharacter (complete type for state.player->)
+#include "modules/scene_cards/card_seed.h"  // seed_card
 
 namespace econlife {
 
@@ -492,37 +493,20 @@ const RandomEventTemplate* RandomEventsModule::select_template(EventCategory cat
 // emit_news_card — the world tells the player something happened where they are.
 //
 // News is Ambient (Scene Card Rulebook §1.3): it never interrupts and never
-// expires, so it carries no default outcome — but it still carries a choice,
-// because a card the player cannot dismiss is a card that wedges the queue.
-// The card is emitted from the event's immediate effects, i.e. exactly once
-// per event, not once per tick the event is active.
+// expires. The copy lives in the card catalog, not here: this function names a
+// template and says where it happened. The card is emitted from the event's
+// immediate effects, i.e. exactly once per event, not once per tick the event
+// is active.
 // ---------------------------------------------------------------------------
 static void emit_news_card(const WorldState& state, const Province& province,
-                           const ActiveRandomEvent& event, DeltaBuffer& province_delta,
-                           SceneSetting setting, const char* headline) {
+                           DeltaBuffer& province_delta, const char* card_key) {
     if (state.player == nullptr || state.player->current_province_id != province.id)
         return;
 
-    SceneCard sc{};
-    sc.id = 0;  // apply_deltas allocates from WorldState::next_scene_card_id
-    sc.type = SceneCardType::news_notification;
-    sc.setting = setting;
-    sc.npc_id = 0;
-    sc.card_class = CardClass::ambient;
-    sc.npc_presentation_state = 0.0f;  // no NPC portrait on a news card
-
-    DialogueLine line{};
-    line.speaker_npc_id = 0;
-    const std::string place =
-        province.fictional_name.empty() ? ("Province " + std::to_string(province.id))
-                                        : province.fictional_name;
-    line.text = std::string(headline) + " in " + place + ".";
-    line.emotional_tone = -event.severity;  // severity reads as tone; 0 = neutral
-    sc.dialogue.push_back(line);
-
-    sc.choices.push_back(PlayerChoice{1, "Note it", "Acknowledge the report.", 0});
-
-    province_delta.new_scene_cards.push_back(sc);
+    const std::string place = province.fictional_name.empty()
+                                  ? ("Province " + std::to_string(province.id))
+                                  : province.fictional_name;
+    seed_card(province_delta, card_key, 0, {{"place", place}});
 }
 
 void RandomEventsModule::apply_immediate_effects(const WorldState& state, const Province& province,
@@ -660,8 +644,7 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             rd.cohesion_delta = -0.01f * event.severity;
             province_delta.region_deltas.push_back(rd);
 
-            emit_news_card(state, province, event, province_delta, SceneSetting::street_corner,
-                           "Unrest");
+            emit_news_card(state, province, province_delta, "news_unrest");
             break;
         }
     }

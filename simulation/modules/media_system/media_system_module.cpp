@@ -9,7 +9,7 @@
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
-#include "modules/scene_cards/notice_card.h"
+#include "modules/scene_cards/card_seed.h"
 
 namespace econlife {
 
@@ -369,9 +369,7 @@ void MediaSystemModule::convert_exposure(const WorldState& state, DeltaBuffer& d
             // information.
             if (freshly_published && !story.evidence_token_ids.empty() && !told_player_this_tick) {
                 told_player_this_tick = true;
-                delta.new_scene_cards.push_back(make_notice_card(
-                    "A story about you has run. It cites what they have on you.",
-                    SceneSetting::phone_call));
+                seed_card(delta, "story_ran");
             }
         }
 

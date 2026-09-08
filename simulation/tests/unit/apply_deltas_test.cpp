@@ -603,6 +603,41 @@ TEST_CASE("apply_deltas: an explicit card id never collides with an allocated on
     REQUIRE(w.next_scene_card_id > w.pending_scene_cards[0].id);
 }
 
+TEST_CASE("apply_deltas: a card seed is routed to the world queue and survives the tick",
+          "[apply_deltas][core][scene_cards]") {
+    // Producers of card seeds sit on both sides of scene_cards in the tick
+    // order, so the queue is NOT a same-tick scratch buffer like the legal-case
+    // seeds: a seed emitted after scene_cards has run has to still be there
+    // next tick. Clearing it with the rest of the buffer would silently drop
+    // whatever the world was about to say.
+    WorldState w = make_minimal_world();
+
+    DeltaBuffer d{};
+    SceneCardSeedDelta seed{};
+    seed.card_key = "sale_closed";
+    seed.npc_id = 7;
+    seed.params.emplace_back("subject", "The mill");
+    d.scene_card_seeds.push_back(seed);
+    apply_deltas(w, d);
+
+    // The buffer is cleared; the world holds the request.
+    REQUIRE(d.scene_card_seeds.empty());
+    REQUIRE(w.pending_scene_card_seeds.size() == 1);
+    REQUIRE(w.pending_scene_card_seeds[0].card_key == "sale_closed");
+    REQUIRE(w.pending_scene_card_seeds[0].npc_id == 7);
+    REQUIRE(w.pending_scene_card_seeds[0].params.size() == 1);
+
+    // A second, unrelated application does not disturb it: only scene_cards
+    // drains this queue.
+    DeltaBuffer other{};
+    apply_deltas(w, other);
+    REQUIRE(w.pending_scene_card_seeds.size() == 1);
+
+    // No card is created by apply_deltas — resolving the template is the
+    // module's job, and a seed nobody authored copy for must raise nothing.
+    REQUIRE(w.pending_scene_cards.empty());
+}
+
 TEST_CASE("apply_deltas: applying a choice stamps the resolution tick",
           "[apply_deltas][core][scene_cards]") {
     WorldState w = make_minimal_world();

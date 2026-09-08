@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Complete type definitions needed for std::optional and std::vector members.
@@ -425,6 +426,20 @@ struct CrossProvinceDelta {
 
 // Scene card choice — sets chosen_choice_id on a pending scene card.
 // Written by player_actions module; applied before scene_cards module reads.
+// A request to put an authored card in front of the player. The producer names
+// the template and supplies its parameters; scene_cards owns the rest — looking
+// the template up, injecting the parameters, allocating the id, applying the
+// class rules and the queue caps.
+//
+// This is why producers no longer write prose: the module that knows a sale
+// fell through should say "sale_lost, subject = the mill", not compose an
+// English sentence and a choice list at the call site.
+struct SceneCardSeedDelta {
+    std::string card_key;
+    uint32_t npc_id = 0;  // 0 = no counterpart (news, notices)
+    std::vector<std::pair<std::string, std::string>> params;
+};
+
 struct SceneCardChoiceDelta {
     uint32_t scene_card_id;
     uint32_t chosen_choice_id;
@@ -662,6 +677,8 @@ struct DeltaBuffer {
     std::vector<CrossProvinceDelta> cross_province_deltas;       // merge: append
     std::vector<DissolvedBusinessDelta> dissolved_businesses;    // merge: append
     std::vector<NewBusinessDelta> new_businesses;                // merge: append
+    std::vector<SceneCardSeedDelta> scene_card_seeds;            // merge: append; drained by
+                                                                 //   scene_cards into real cards
     std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
     std::vector<uint32_t> retired_scene_card_ids;                // merge: append; owned by
                                                                  //   scene_cards (see its

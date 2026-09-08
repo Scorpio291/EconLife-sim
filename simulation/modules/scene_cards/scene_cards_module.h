@@ -5,7 +5,8 @@
 
 #include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
-#include "scene_card_types.h"  // SceneSetting, SceneCard (complete types)
+#include "scene_card_catalog.h"  // SceneCardCatalog
+#include "scene_card_types.h"     // SceneSetting, SceneCard (complete types)
 
 namespace econlife {
 
@@ -29,7 +30,10 @@ bool is_in_person_setting(SceneSetting setting);
 
 class SceneCardsModule : public ITickModule {
    public:
-    explicit SceneCardsModule(const SceneCardsConfig& cfg = {}) : cfg_(cfg) {}
+    // Loads the card catalog from cfg.card_catalog_directory if one is set.
+    // A host that does not set it gets an empty catalog, which is a working
+    // state for everything that does not seed cards.
+    explicit SceneCardsModule(const SceneCardsConfig& cfg = {});
 
     std::string_view name() const noexcept override;
     std::string_view package_id() const noexcept override;
@@ -39,8 +43,26 @@ class SceneCardsModule : public ITickModule {
 
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // The authored card copy. Loaded once from packages/base_game/scene_cards;
+    // empty until then, which is a working state — producers that pass their
+    // own text still get a card, they just get an unauthored one.
+    void load_catalog(const std::string& directory);
+    const SceneCardCatalog& catalog() const { return catalog_; }
+
    private:
     SceneCardsConfig cfg_;
+    SceneCardCatalog catalog_;
+
+    // Turn this tick's seed requests into real cards.
+    void drain_card_seeds(const WorldState& state, DeltaBuffer& delta) const;
+
+    // Builds a card from an authored template. Returns false when the catalog
+    // holds no such template, in which case nothing is written: a card whose
+    // copy was never written is a content bug that should be visible, not a
+    // sentence invented at runtime.
+    bool compose_from_template(const std::string& card_key, uint32_t card_id, uint32_t npc_id,
+                               const std::vector<std::pair<std::string, std::string>>& params,
+                               SceneCard& out) const;
 
     void resolve_player_choices(const WorldState& state, DeltaBuffer& delta) const;
 

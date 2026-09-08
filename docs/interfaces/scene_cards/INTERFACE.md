@@ -11,6 +11,27 @@ Evaluates trigger conditions for pending scene cards, selects which cards to pre
 - `player` — player state including current_province_id (physical presence requirement), relationships, knowledge map
 - `regional_markets` — economic context for procedurally generated business meeting dialogue
 - `npc_businesses` — business state for board dispute cards, acquisition negotiation cards, and business meeting context
+- `pending_scene_card_seeds` — card REQUESTS from any module: a `card_key` naming an authored template, an optional `npc_id`, and the parameters to inject. Drained here. The queue may carry an entry across a tick boundary, because producers run on both sides of this module in the tick order.
+- `next_scene_card_id` — the monotonic card-id allocator (ids are never reused)
+
+## Card copy is content, not code
+Card dialogue, class, setting, choices and default outcome are authored as CSV
+under `packages/*/scene_cards/` and loaded into `SceneCardCatalog` from
+`SceneCardsConfig::card_catalog_directory`. Producers never write prose: they
+emit a `SceneCardSeedDelta` naming a template, and this module resolves it.
+
+- A seed naming a template the catalog does not hold raises NO card. The
+  missing copy is a content bug that must be visible; a sentence invented at
+  runtime would not be.
+- A template with no choices is refused at load. A card the player cannot
+  answer wedges the queue.
+- An unresolved `{placeholder}` is left in the text rather than blanked, so a
+  producer that forgot a parameter is visible in play.
+- A card whose id something else must name before it exists — a
+  `NegotiationContext` binding, a calendar entry pointing at its card — is
+  still composed by its producer, because the seed channel allocates the id at
+  drain time. Those producers are `real_estate` (counter and inbound-offer
+  cards) and `npc_business` (the quarterly owner decision).
 
 ## Outputs (to DeltaBuffer)
 - `SceneCardDelta` — new scene cards added to `pending_scene_cards` for UI delivery (generated from calendar triggers and procedural generation)
@@ -45,7 +66,7 @@ Evaluates trigger conditions for pending scene cards, selects which cards to pre
 ## Failure Modes
 - Scene card references invalid NPC (deleted or dead): skip card generation, log warning. If NPC died after card was queued but before delivery, card is discarded with no consequence.
 - Player not in correct province for in-person scene: card remains in pending queue; not delivered until physical presence condition met or card expires.
-- Missing authored scene card template: fall back to procedural generation for that interaction type, log warning.
+- Missing authored scene card template: the seed is dropped and no card is raised. There is no fallback prose — see "Card copy is content, not code". `SceneCardCatalog` load failures degrade the same way: an absent or unreadable catalog directory yields an empty catalog rather than an error, and every seeded card silently does not appear, which is why the unit suite asserts every key a producer names against the shipped content.
 
 ## Performance Contract
 - Sequential execution (not province-parallel).
@@ -69,4 +90,8 @@ Evaluates trigger conditions for pending scene cards, selects which cards to pre
 - `test_dead_npc_card_discarded`: NPC dies at tick 8. Scene card for that NPC queued at tick 7. At tick 9, verify card is discarded from pending queue with no consequences applied.
 - `test_authored_card_takes_priority_over_procedural`: Both an authored and procedural scene card trigger for the same NPC at the same tick. Verify only the authored card is delivered.
 - `test_prison_setting_limits_available_choices`: Scene card in prison_cell setting. Verify choice options are restricted to prison-available actions (no business operations, no physical meetings outside prison).
+- `test_seed_becomes_a_card_with_parameters_injected`: A `pending_scene_card_seeds` entry naming `sale_closed` with `subject = "The mill"` produces one card reading "The sale closed. The mill is yours.", and the queue is drained so the seed cannot raise a second card.
+- `test_seed_naming_an_unwritten_template_raises_nothing`: A seed whose `card_key` matches no template produces no card and still leaves the queue empty (it must not retry forever).
+- `test_every_producer_key_is_authored`: Every `card_key` any module names exists in the shipped catalog.
+- `test_calendar_summons_is_mandatory_with_no_default`: A mandatory calendar entry produces a `mandatory` card with `default_choice_id == 0` and no expiry, and its dialogue states the outcome the entry already carried.
 - `test_news_notification_has_no_npc_presentation`: Scene card of type news_notification. Verify no `npc_presentation_state` is computed (no NPC portrait interaction).

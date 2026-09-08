@@ -225,7 +225,10 @@ inline PlayerRun run(const RunConfig& cfg) {
     TickOrchestrator orch;
     // The config outlives every tick below: set_config keeps a POINTER to it,
     // so it must not be a temporary or a narrower scope than the orchestrator.
-    const PackageConfig pkg = load_package_config(find_package_dir("config"));
+    PackageConfig pkg = load_package_config(find_package_dir("config"));
+    // The authored card copy. Without it a seeded card finds no template and
+    // is dropped, so a harness that skips it measures a player nobody talks to.
+    pkg.scene_cards.card_catalog_directory = find_package_dir("scene_cards");
     register_base_game_modules(orch, pkg);
     orch.set_config(pkg);
     orch.finalize_registration();
