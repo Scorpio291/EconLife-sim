@@ -27,6 +27,11 @@ class PopulationAgingModule : public ITickModule {
                           DeltaBuffer& province_delta) override;
     void execute(const WorldState& state, DeltaBuffer& delta) override;
 
+    // The player's own clock: age, fitness tracking the province they live in,
+    // and rest. Runs inside the player's province so it fires once per tick.
+    void advance_player_life(uint32_t province_idx, const WorldState& state,
+                             DeltaBuffer& province_delta) const;
+
     // --- Static utilities for testing ---
     static float compute_income_convergence(float current_income, float target_wage, float rate);
     static float compute_employment_convergence(float current_rate, float target_rate, float rate);

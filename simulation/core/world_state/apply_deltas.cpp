@@ -211,6 +211,13 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
         return;
     PlayerCharacter& p = *world.player;
 
+    if (d.age_delta.has_value()) {
+        p.age = safe_add(p.age, *d.age_delta);
+        // lifespan_projection is declared as "projected in-game years remaining;
+        // recalculated each tick", so it is derived here rather than carried as
+        // an independent number that could drift from the age it describes.
+        p.health.lifespan_projection = std::max(0.0f, p.health.base_lifespan - p.age);
+    }
     if (d.health_delta.has_value()) {
         p.health.current_health = clamp01(safe_add(p.health.current_health, *d.health_delta));
     }

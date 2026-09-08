@@ -56,6 +56,7 @@ struct NPCDelta {
 };
 
 struct PlayerDelta {
+    std::optional<float> age_delta;                       // additive; in-game years
     std::optional<float> health_delta;                    // additive
     std::optional<float> wealth_delta;                    // additive; liquid cash only
     std::optional<SkillDelta> skill_delta;                // replacement; latest skill update wins

@@ -26,6 +26,9 @@ void move_extend(std::vector<T>& dst, std::vector<T>&& src) {
 
 void PlayerDelta::merge_from(PlayerDelta&& other) {
     // Additive optionals: sum incoming into existing (or seed with incoming).
+    if (other.age_delta.has_value()) {
+        age_delta = age_delta.value_or(0.0f) + *other.age_delta;
+    }
     if (other.health_delta.has_value()) {
         health_delta = health_delta.value_or(0.0f) + *other.health_delta;
     }

@@ -2480,6 +2480,21 @@ struct WeaponsTraffickingConfig {
 };
 
 struct PopulationAgingConfig {
+    // --- The player's own clock ---
+    // Ticks per in-game year. The player's age advances 1/365 per tick, which is
+    // the contract declared on PlayerCharacter::age itself.
+    float ticks_per_year = 365.0f;
+    // How fast a person's fitness tracks the conditions they live in. Health here
+    // is the cohort stock's meaning — the share of the year a person is fit to
+    // work — so someone who moves to a sicker place does not become sick that
+    // afternoon; they converge over months. 0.0077/tick closes half the gap in a
+    // season (0.5^(1/90)), the same convergence idiom the cohort_stats writers use.
+    float player_health_convergence_rate = 0.0077f;
+    // Exhaustion drains when the player is not spending themselves. Half of it is
+    // gone in a fortnight of ordinary weeks (0.5^(1/14)); the load that puts it
+    // there comes from committed calendar time.
+    float player_exhaustion_recovery_rate = 0.048f;
+
     float cohort_income_update_rate = 0.05f;
     float cohort_employment_update_rate = 0.02f;
     float max_education_drift_per_year = 0.01f;

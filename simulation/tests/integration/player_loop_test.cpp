@@ -129,3 +129,28 @@ TEST_CASE("player_loop: cards are resolved and retired, not accumulated",
     REQUIRE(r.max_pending_cards < 50);
     REQUIRE(r.last().pending_cards <= r.max_pending_cards);
 }
+
+// ---------------------------------------------------------------------------
+// RATCHET 3 — the player exists in simulation time.
+//
+// Audit baseline: age 30.0 at tick 1, 30.0 at tick 365. PlayerCharacter::age
+// was assigned once at world generation and never again, against the contract
+// declared on the field itself.
+// ---------------------------------------------------------------------------
+TEST_CASE("player_loop: the player is a year older after a year", "[player_loop]") {
+    const PlayerRun& r = standard_session();
+    INFO("age " << r.first().age << " -> " << r.last().age);
+    REQUIRE(r.last().age > r.first().age);
+    REQUIRE_THAT(r.last().age - r.first().age, WithinAbs(1.0f, 0.02f));
+}
+
+TEST_CASE("player_loop: lifespan projection tracks the age it describes", "[player_loop]") {
+    // Not an independent number that can drift from the character it belongs to.
+    RunConfig cfg{};
+    cfg.seed = 42;
+    cfg.npc_count = 120;
+    cfg.province_count = 3;
+    cfg.ticks = 200;
+    const PlayerRun r = run(cfg);
+    REQUIRE(r.last().age > r.first().age);
+}
