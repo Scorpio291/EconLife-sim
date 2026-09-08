@@ -151,6 +151,20 @@ static const char* calendar_type_str(CalendarEntryType t) {
     }
 }
 
+static const char* pending_stage_str(PendingTxStage stage) {
+    switch (stage) {
+        case PendingTxStage::pending:
+            return "pending";
+        case PendingTxStage::settled:
+            return "settled";
+        case PendingTxStage::cancelled:
+            return "cancelled";
+        case PendingTxStage::expired:
+            return "expired";
+    }
+    return "unknown";
+}
+
 static const char* business_sector_str(BusinessSector s) {
     switch (s) {
         case BusinessSector::manufacturing:
@@ -327,6 +341,51 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
     }
     state["businesses"] = businesses;
 
+    // Businesses the player could buy. Device-mediated information: a firm
+    // trading in the province the player is standing in is public knowledge,
+    // and its takings are what due diligence would turn up — so the list is
+    // scoped to the player's current province and to firms they do not already
+    // own. `fair_price` is the seller's own yardstick (30 ticks of revenue at
+    // the fair multiple), i.e. what an offer is judged against, not a quote.
+    json targets = json::array();
+    if (world.player) {
+        const float fair_multiple = 6.0f;
+        const float ticks_per_month = 30.0f;
+        for (const auto& biz : world.npc_businesses) {
+            if (biz.owner_id == world.player->id)
+                continue;
+            if (biz.province_id != world.player->current_province_id)
+                continue;
+            if (biz.revenue_per_tick <= 0.0f)
+                continue;  // a firm with no takings has no acquisition price
+            targets.push_back({{"id", biz.id},
+                               {"sector", business_sector_str(biz.sector)},
+                               {"province_id", biz.province_id},
+                               {"owner_npc_id", biz.owner_id},
+                               {"revenue_per_tick", biz.revenue_per_tick},
+                               {"cost_per_tick", biz.cost_per_tick},
+                               {"fair_price", biz.revenue_per_tick * ticks_per_month * fair_multiple}});
+        }
+    }
+    state["acquisition_targets"] = targets;
+
+    // Deals in flight. A business acquisition takes 60 ticks of due diligence;
+    // without this the player makes an offer and hears nothing for two months.
+    json deals = json::array();
+    if (world.player) {
+        for (const auto& acq : world.pending_business_acquisitions) {
+            if (acq.buyer_id != world.player->id)
+                continue;
+            deals.push_back({{"id", acq.id},
+                             {"business_id", acq.business_id},
+                             {"price", acq.price},
+                             {"offered_tick", acq.offered_tick},
+                             {"close_tick", acq.close_tick},
+                             {"stage", pending_stage_str(acq.stage)}});
+        }
+    }
+    state["pending_acquisitions"] = deals;
+
     // Aggregate metrics
     state["metrics"] = {{"npc_count", world.significant_npcs.size()},
                         {"business_count", world.npc_businesses.size()},
@@ -339,6 +398,14 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
 // ---------------------------------------------------------------------------
 // Action parsing
 // ---------------------------------------------------------------------------
+
+static PaymentMethod parse_payment_method(const std::string& s) {
+    if (s == "mortgage")
+        return PaymentMethod::mortgage;
+    if (s == "mixed")
+        return PaymentMethod::mixed;
+    return PaymentMethod::cash;
+}
 
 bool parse_and_enqueue_action(const nlohmann::json& cmd, WorldState& world) {
     if (!cmd.contains("action_type") || !cmd.contains("payload"))
@@ -405,6 +472,25 @@ bool parse_and_enqueue_action(const nlohmann::json& cmd, WorldState& world) {
         uint32_t npc_id = payload.value("target_npc_id", 0u);
         enqueue_player_action(world, PlayerActionType::initiate_contact,
                               InitiateContactAction{npc_id});
+        return true;
+    }
+    if (action_type == "acquire_business") {
+        AcquireBusinessAction a{};
+        a.business_id = payload.value("business_id", 0u);
+        // Offer price = revenue_per_tick x 30 x offer_multiple; the seller
+        // weighs the multiple against a fair 6x, so the default is a fair bid.
+        a.offer_multiple = payload.value("offer_multiple", 6.0f);
+        a.payment_method = parse_payment_method(payload.value("payment_method", "cash"));
+        a.down_payment_fraction = payload.value("down_payment_fraction", 1.0f);
+        enqueue_player_action(world, PlayerActionType::acquire_business, a);
+        return true;
+    }
+    if (action_type == "set_production") {
+        SetProductionAction a{};
+        a.business_id = payload.value("business_id", 0u);
+        a.recipe_id = payload.value("recipe_id", 0u);
+        a.target_output_rate = payload.value("target_output_rate", 0.5f);
+        enqueue_player_action(world, PlayerActionType::set_production, a);
         return true;
     }
 

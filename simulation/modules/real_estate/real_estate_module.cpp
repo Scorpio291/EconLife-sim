@@ -23,6 +23,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
+#include "modules/scene_cards/notice_card.h"
 #include "modules/banking/banking_module.h"        // Loan helpers (static methods)
 #include "modules/banking/banking_types.h"         // LoanPurpose
 #include "modules/scene_cards/scene_card_types.h"  // SceneCard, SceneSetting, SceneCardType
@@ -1161,8 +1162,15 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                      (static_cast<uint64_t>(state.current_tick) * 0x68C5u) ^
                                      (static_cast<uint64_t>(biz->id) * 0x9E37u) ^
                                      (static_cast<uint64_t>(req.buyer_id) * 0x2545u));
-            if (acq_rng.next_float() >= p_accept)
-                continue;  // owner declined
+            if (acq_rng.next_float() >= p_accept) {
+                // The owner said no. Without a notice the offer simply vanishes
+                // and the player is left watching a deal that never appears.
+                if (req.buyer_id == player_id) {
+                    delta.new_scene_cards.push_back(make_notice_card(
+                        "Your offer was turned down. The owner is not selling at that price."));
+                }
+                continue;
+            }
 
             running_player_wealth -= cash_required;  // reserve cash portion
             PendingBusinessAcquisition acq{};
@@ -1181,6 +1189,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             acq.down_payment_fraction = dpf;
             acq.interest_rate = cfg_.mortgage_interest_rate;
             acq.loan_maturity_ticks = (pm == PaymentMethod::cash) ? 0u : cfg_.mortgage_term_ticks;
+            if (req.buyer_id == player_id) {
+                delta.new_scene_cards.push_back(make_notice_card(
+                    "Your offer was accepted. The sale closes once due diligence is done."));
+            }
             biz_acqs.push_back(acq);
         }
         auto& mutable_reqs = const_cast<std::vector<BusinessAcquisitionRequest>&>(
@@ -1204,6 +1216,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         }
         if (!biz || biz->owner_id != acq.seller_id) {
             acq.stage = PendingTxStage::cancelled;
+            if (acq.buyer_id == player_id) {
+                delta.new_scene_cards.push_back(make_notice_card(
+                    "The sale fell through — the business changed hands before you closed."));
+            }
             continue;
         }
         float cash_portion = acq.price * acq.down_payment_fraction;
@@ -1212,6 +1228,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             (acq.buyer_id == player_id) ? running_player_wealth >= cash_portion : true;
         if (!buyer_can_pay) {
             acq.stage = PendingTxStage::expired;
+            if (acq.buyer_id == player_id) {
+                delta.new_scene_cards.push_back(make_notice_card(
+                    "You could not fund the purchase at close. The deal lapsed."));
+            }
             continue;
         }
         // Buyer pays the cash portion.
@@ -1245,6 +1265,10 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             loan_req.maturity_tick = state.current_tick + acq.loan_maturity_ticks;
             loan_req.collateral_id = acq.business_id;
             delta.new_loan_requests.push_back(loan_req);
+        }
+        if (acq.buyer_id == player_id) {
+            delta.new_scene_cards.push_back(
+                make_notice_card("The sale closed. The business is yours."));
         }
         acq.stage = PendingTxStage::settled;
     }

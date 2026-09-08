@@ -1,0 +1,131 @@
+// Player-loop MVP ratchets.
+//
+// The emergence suite asserts the world behaves. These assert that a PLAYER
+// can participate in it: that the business career earns, that the character
+// changes over time, that the world puts decisions in front of them and they
+// can answer, and that a session survives being closed.
+//
+// Each of these was a documented failure in the 1 September 2026 playability
+// audit. Once green they are ratchets: keep them green.
+//
+// Tagged [player_loop]; the long runs also carry [emergence] so the fast
+// per-commit gate stays fast.
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+
+#include "player_loop_harness.h"
+
+using namespace econlife;
+using namespace econlife::player_loop;
+using Catch::Matchers::WithinAbs;
+
+namespace {
+
+// One standard play session, shared by the ratchets below so a full year is
+// simulated once rather than once per assertion.
+const PlayerRun& standard_session() {
+    static const PlayerRun run_once = [] {
+        RunConfig cfg{};
+        cfg.seed = 42;
+        cfg.npc_count = 500;
+        cfg.province_count = 6;
+        cfg.ticks = 365;
+        cfg.script = buy_a_business_at_tick(2);
+        return run(cfg);
+    }();
+    return run_once;
+}
+
+}  // namespace
+
+// ---------------------------------------------------------------------------
+// RATCHET 1 — the player can operate an economically real business.
+//
+// Audit baseline: the player paid 10,000 to found a company that had no
+// facility, so production never visited it. Revenue and cost were still 0.0
+// after a year and wealth had only gone down.
+// ---------------------------------------------------------------------------
+TEST_CASE("player_loop: the player ends the year owning a business that trades",
+          "[player_loop]") {
+    const PlayerRun& r = standard_session();
+
+    INFO("owned businesses at end: " << r.last().owned_businesses);
+    REQUIRE(r.last().owned_businesses >= 1);
+
+    INFO("revenue/tick " << r.last().owned_revenue_per_tick << ", cost/tick "
+                         << r.last().owned_cost_per_tick);
+    REQUIRE(r.last().owned_revenue_per_tick > 0.0);
+    REQUIRE(r.last().owned_cost_per_tick > 0.0);
+}
+
+TEST_CASE("player_loop: the player's wealth grows from operating, not from the opening balance",
+          "[player_loop]") {
+    const PlayerRun& r = standard_session();
+
+    // Find the tick the purchase settled: wealth drops by the purchase price.
+    std::size_t settle_idx = 0;
+    for (std::size_t i = 1; i < r.series.size(); ++i) {
+        if (r.series[i].owned_businesses > r.series[i - 1].owned_businesses) {
+            settle_idx = i;
+            break;
+        }
+    }
+    REQUIRE(settle_idx > 0);
+
+    const float after_purchase = r.series[settle_idx].wealth;
+    const float at_year_end = r.last().wealth;
+
+    INFO("wealth: opening " << r.first().wealth << " -> after purchase " << after_purchase
+                            << " -> year end " << at_year_end);
+
+    // The purchase really cost something...
+    REQUIRE(after_purchase < r.first().wealth);
+    // ...and from there the player got richer by running the business, rather
+    // than by drawing down what they started with.
+    REQUIRE(at_year_end > after_purchase);
+}
+
+TEST_CASE("player_loop: business cash moves", "[player_loop]") {
+    const PlayerRun& r = standard_session();
+    std::size_t settle_idx = 0;
+    for (std::size_t i = 1; i < r.series.size(); ++i) {
+        if (r.series[i].owned_businesses > r.series[i - 1].owned_businesses) {
+            settle_idx = i;
+            break;
+        }
+    }
+    REQUIRE(settle_idx > 0);
+    INFO("business cash: " << r.series[settle_idx].owned_cash << " -> " << r.last().owned_cash);
+    REQUIRE(r.last().owned_cash != r.series[settle_idx].owned_cash);
+}
+
+// ---------------------------------------------------------------------------
+// RATCHET 2 — scene cards form a loop the player can actually work.
+//
+// Audit baseline: 13 cards, every one {id: 0, dialogue: [], choices: []} —
+// unaddressable, unanswerable, and never retired.
+// ---------------------------------------------------------------------------
+TEST_CASE("player_loop: every card is addressable and answerable", "[player_loop]") {
+    const PlayerRun& r = standard_session();
+    INFO("cards created " << r.cards_created << ", zero-id " << r.cards_with_zero_id
+                          << ", unanswerable " << r.cards_unanswerable);
+    REQUIRE(r.cards_created > 0);
+    REQUIRE(r.cards_with_zero_id == 0);
+    REQUIRE(r.cards_unanswerable == 0);
+}
+
+TEST_CASE("player_loop: cards are resolved and retired, not accumulated",
+          "[player_loop]") {
+    const PlayerRun& r = standard_session();
+    INFO("created " << r.cards_created << ", resolved " << r.cards_resolved << ", retired "
+                    << r.cards_retired << ", max pending " << r.max_pending_cards);
+    REQUIRE(r.cards_resolved > 0);
+    REQUIRE(r.cards_retired > 0);
+
+    // The queue is bounded: a year of play does not leave a pile the player
+    // cannot clear. The bound is generous — what is being pinned is that the
+    // count does not track the run length.
+    REQUIRE(r.max_pending_cards < 50);
+    REQUIRE(r.last().pending_cards <= r.max_pending_cards);
+}

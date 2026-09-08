@@ -257,10 +257,20 @@ TEST_CASE("Player travel arrival updates province_id", "[player_actions][unit]")
 // Start business tests
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Start business creates new business and deducts wealth", "[player_actions][unit]") {
+TEST_CASE("Start business does not charge for a business that cannot operate",
+          "[player_actions][unit]") {
+    // This action used to take 10,000 and hand back a company with no facility
+    // and no trade: production skips it, so revenue and cost stay at zero
+    // forever and financial_distribution has nothing to distribute. A year of
+    // play left the player 10,000 poorer and no better off.
+    //
+    // It now refuses, charges nothing, and says which routes to an operating
+    // business exist. Conjuring revenue for a company founded from nothing
+    // would be the magic rail the doctrine forbids.
     auto world = make_minimal_world();
 
     size_t biz_count_before = world.npc_businesses.size();
+    const float wealth_before = world.player->wealth;
 
     enqueue_player_action(world, PlayerActionType::start_business,
                           StartBusinessAction{BusinessSector::retail, 0});
@@ -270,15 +280,13 @@ TEST_CASE("Start business creates new business and deducts wealth", "[player_act
     module.execute(world, delta);
     apply_deltas(world, delta);
 
-    REQUIRE(world.npc_businesses.size() == biz_count_before + 1);
+    REQUIRE(world.npc_businesses.size() == biz_count_before);
+    REQUIRE_THAT(world.player->wealth, WithinAbs(wealth_before, 0.01f));
 
-    const auto& new_biz = world.npc_businesses.back();
-    REQUIRE(new_biz.sector == BusinessSector::retail);
-    REQUIRE(new_biz.owner_id == world.player->id);
-    REQUIRE(new_biz.province_id == 0);
-
-    // Wealth deducted.
-    REQUIRE_THAT(world.player->wealth, WithinAbs(50000.0f - 10000.0f, 0.01f));
+    // And the refusal reaches the player rather than vanishing.
+    REQUIRE(world.pending_scene_cards.size() == 1);
+    REQUIRE_FALSE(world.pending_scene_cards[0].dialogue.empty());
+    REQUIRE_FALSE(world.pending_scene_cards[0].choices.empty());
 }
 
 TEST_CASE("Start business in wrong province is rejected", "[player_actions][unit]") {
