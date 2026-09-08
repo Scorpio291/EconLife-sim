@@ -13,7 +13,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -53,8 +52,7 @@ const PlayerRun& standard_session() {
 // facility, so production never visited it. Revenue and cost were still 0.0
 // after a year and wealth had only gone down.
 // ---------------------------------------------------------------------------
-TEST_CASE("player_loop: the player ends the year owning a business that trades",
-          "[player_loop]") {
+TEST_CASE("player_loop: the player ends the year owning a business that trades", "[player_loop]") {
     const PlayerRun& r = standard_session();
 
     INFO("owned businesses at end: " << r.last().owned_businesses);
@@ -122,8 +120,7 @@ TEST_CASE("player_loop: every card is addressable and answerable", "[player_loop
     REQUIRE(r.cards_unanswerable == 0);
 }
 
-TEST_CASE("player_loop: cards are resolved and retired, not accumulated",
-          "[player_loop]") {
+TEST_CASE("player_loop: cards are resolved and retired, not accumulated", "[player_loop]") {
     const PlayerRun& r = standard_session();
     INFO("created " << r.cards_created << ", resolved " << r.cards_resolved << ", retired "
                     << r.cards_retired << ", max pending " << r.max_pending_cards);
@@ -199,8 +196,7 @@ TEST_CASE("player_loop: the calendar does not accumulate dead appointments", "[p
 // execute_province() because the call belongs to the owner. Nothing asked, so
 // a player-owned firm never decided anything at all.
 // ---------------------------------------------------------------------------
-TEST_CASE("player_loop: the player's business responds to the choices they make",
-          "[player_loop]") {
+TEST_CASE("player_loop: the player's business responds to the choices they make", "[player_loop]") {
     const PlayerRun& r = standard_session();
 
     // The scripted player always takes the first choice, which is to invest.
@@ -534,8 +530,7 @@ TEST_CASE("player_loop: a character starts with every domain and levels the ones
     REQUIRE(r.last().max_skill > r.first().max_skill);
 }
 
-TEST_CASE("player_loop: something about the character other than money changed",
-          "[player_loop]") {
+TEST_CASE("player_loop: something about the character other than money changed", "[player_loop]") {
     // The audit's sharpest single line: after a year the player was 10,000
     // poorer and identical in every other respect — same age, same health,
     // same reputation, no skills, nothing learned.
@@ -559,8 +554,7 @@ TEST_CASE("player_loop: something about the character other than money changed",
 // closes the game, comes back, and carries on with the same character and the
 // same firm — and both keep developing across the break.
 // ---------------------------------------------------------------------------
-TEST_CASE("player_loop: a career survives being put down and picked up again",
-          "[player_loop]") {
+TEST_CASE("player_loop: a career survives being put down and picked up again", "[player_loop]") {
     const std::string save = scratch_save("two_sittings.econsave");
 
     // --- First sitting: find a going concern, buy it, run it for a season ---

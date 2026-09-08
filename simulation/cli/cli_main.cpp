@@ -23,9 +23,9 @@
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
 #include "interactive_json.h"
-#include "modules/register_base_game_modules.h"
 #include "modules/persistence/persistence_module.h"
 #include "modules/persistence/save_file.h"
+#include "modules/register_base_game_modules.h"
 
 using namespace econlife;
 
@@ -45,10 +45,10 @@ struct CliArgs {
     uint32_t report_every = 30;  // print metrics every N ticks
     uint8_t max_good_tier = 1;   // tier 0-1 at game start
     bool verbose = false;
-    bool interactive = false;     // JSON-line IPC mode for UI bridge
-    bool use_test_world = false;  // fallback to test_world_factory
-    std::string goods_dir;        // path to goods CSVs
-    std::string config_dir;       // optional override for config JSON directory
+    bool interactive = false;        // JSON-line IPC mode for UI bridge
+    bool use_test_world = false;     // fallback to test_world_factory
+    std::string goods_dir;           // path to goods CSVs
+    std::string config_dir;          // optional override for config JSON directory
     std::string save_dir = "saves";  // where autosaves and explicit saves live
     std::string load_path;           // start from this save instead of generating
     // -1 = unset (interactive play defaults to the snapshot interval);
@@ -361,8 +361,8 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "Load failed: %s\n", lr.error.c_str());
             return 1;
         }
-        std::fprintf(diag, "Loaded %s (schema v%u, %zu bytes) at tick %u.\n",
-                     lr.path.c_str(), lr.schema_version, lr.bytes, world.current_tick);
+        std::fprintf(diag, "Loaded %s (schema v%u, %zu bytes) at tick %u.\n", lr.path.c_str(),
+                     lr.schema_version, lr.bytes, world.current_tick);
     }
 
     // 4. Create thread pool
@@ -372,9 +372,8 @@ int main(int argc, char* argv[]) {
     // interval so a session survives being closed without the player thinking
     // about it; batch runs stay off unless asked.
     const uint32_t autosave_every =
-        (args.autosave_every >= 0)
-            ? static_cast<uint32_t>(args.autosave_every)
-            : (args.interactive ? PersistenceModule::SNAPSHOT_INTERVAL : 0u);
+        (args.autosave_every >= 0) ? static_cast<uint32_t>(args.autosave_every)
+                                   : (args.interactive ? PersistenceModule::SNAPSHOT_INTERVAL : 0u);
     const std::string autosave_file = autosave_path(args.save_dir);
 
     auto do_autosave = [&](const WorldState& w) {

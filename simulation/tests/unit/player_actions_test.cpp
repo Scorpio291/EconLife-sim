@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <filesystem>
 
 #include "core/tick/drain_deferred_work.h"
 #include "core/world_state/apply_deltas.h"
@@ -14,8 +15,6 @@
 #include "modules/player_actions/player_actions_module.h"
 #include "modules/scene_cards/scene_cards_module.h"
 #include "tests/test_world_factory.h"
-
-#include <filesystem>
 
 namespace {
 // The shipped card copy. A refusal is a seed naming a template, so without the

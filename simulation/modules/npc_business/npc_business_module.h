@@ -54,7 +54,6 @@ class NpcBusinessModule : public ITickModule {
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
-
     // --- Board composition management ---
     // Module-internal state: board compositions keyed by business_id.
     void set_board_composition(uint32_t business_id, const BoardComposition& board);

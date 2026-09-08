@@ -1,15 +1,13 @@
 #include <algorithm>
-
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <filesystem>
 
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/media_system/media_system_module.h"
 #include "modules/scene_cards/scene_cards_module.h"
-
-#include <filesystem>
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;

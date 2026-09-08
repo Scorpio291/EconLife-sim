@@ -67,8 +67,6 @@ static uint32_t next_business_id(const WorldState& state) {
     return max_id + 1;
 }
 
-
-
 // ---------------------------------------------------------------------------
 // exercise — a domain the player just used gets a little better at it
 // ---------------------------------------------------------------------------

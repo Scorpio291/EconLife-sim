@@ -5,10 +5,9 @@
 // All tests tagged [scene_cards][tier1].
 
 #include <catch2/catch_test_macros.hpp>
-
-#include <filesystem>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -690,8 +689,7 @@ TEST_CASE("mandatory card never expires and is never auto-retired", "[scene_card
     REQUIRE(delta.scene_card_choice_deltas.empty());
 }
 
-TEST_CASE("ambient queue is held at its cap, oldest cleared first",
-          "[scene_cards][lifecycle]") {
+TEST_CASE("ambient queue is held at its cap, oldest cleared first", "[scene_cards][lifecycle]") {
     WorldState state = make_base_state();
     state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
     state.significant_npcs.push_back(make_npc(100, 0));

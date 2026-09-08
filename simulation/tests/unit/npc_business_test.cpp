@@ -764,8 +764,7 @@ TEST_CASE("NpcBusiness: the owner is asked once, not every tick",
     REQUIRE(second.new_calendar_entries.empty());
 }
 
-TEST_CASE("NpcBusiness: the owner's choice moves the business",
-          "[npc_business][owner_decision]") {
+TEST_CASE("NpcBusiness: the owner's choice moves the business", "[npc_business][owner_decision]") {
     WorldState state = make_owner_world();
     NpcBusinessModule module;
 

@@ -29,9 +29,9 @@ class TickOrchestrator;
 
 struct SaveResult {
     bool ok = false;
-    std::string error;       // human-readable reason when !ok
-    std::string path;        // the file written or read
-    std::size_t bytes = 0;   // image size
+    std::string error;      // human-readable reason when !ok
+    std::string path;       // the file written or read
+    std::size_t bytes = 0;  // image size
     uint32_t schema_version = 0;
 };
 

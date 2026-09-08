@@ -9,7 +9,6 @@
 #include "modules/scene_cards/scene_card_catalog.h"
 
 #include <catch2/catch_test_macros.hpp>
-
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -23,8 +22,10 @@ namespace {
 // ctest runs the unit binary from build/simulation/tests/unit.
 std::string find_scene_cards_dir() {
     const char* candidates[] = {
-        "packages/base_game/scene_cards",          "../packages/base_game/scene_cards",
-        "../../packages/base_game/scene_cards",    "../../../packages/base_game/scene_cards",
+        "packages/base_game/scene_cards",
+        "../packages/base_game/scene_cards",
+        "../../packages/base_game/scene_cards",
+        "../../../packages/base_game/scene_cards",
         "../../../../packages/base_game/scene_cards",
         "../../../../../packages/base_game/scene_cards",
     };
@@ -54,10 +55,9 @@ const char* HEADER =
 
 TEST_CASE("SceneCardCatalog: loads a template with its class setting and choices",
           "[scene_cards][catalog]") {
-    const std::string csv =
-        std::string(HEADER) +
-        "a_meeting,timed_optional,meeting,private_office,They want to see you.,"
-        "1,Attend,Keep it.,2,Skip,Do not show.,0,,,2\n";
+    const std::string csv = std::string(HEADER) +
+                            "a_meeting,timed_optional,meeting,private_office,They want to see you.,"
+                            "1,Attend,Keep it.,2,Skip,Do not show.,0,,,2\n";
     SceneCardCatalog catalog;
     REQUIRE(catalog.load_from_file(write_temp_csv("basic.csv", csv)) == 1);
 
@@ -78,16 +78,15 @@ TEST_CASE("SceneCardCatalog: a template with no choices is refused", "[scene_car
     // A card the player cannot answer wedges the queue. scene_cards drops it
     // on admission; refusing it here makes the content error a MISSING card
     // rather than a silent one.
-    const std::string csv =
-        std::string(HEADER) + "mute,ambient,news_notification,phone_call,Nothing to say.,"
-                              "0,,,0,,,0,,,0\n";
+    const std::string csv = std::string(HEADER) +
+                            "mute,ambient,news_notification,phone_call,Nothing to say.,"
+                            "0,,,0,,,0,,,0\n";
     SceneCardCatalog catalog;
     CHECK(catalog.load_from_file(write_temp_csv("mute.csv", csv)) == 0);
     CHECK(catalog.find("mute") == nullptr);
 }
 
-TEST_CASE("SceneCardCatalog: a malformed row is skipped not guessed at",
-          "[scene_cards][catalog]") {
+TEST_CASE("SceneCardCatalog: a malformed row is skipped not guessed at", "[scene_cards][catalog]") {
     const std::string csv = std::string(HEADER) + "truncated,ambient,news_notification\n" +
                             "good,ambient,news_notification,phone_call,Something happened.,"
                             "1,Noted,,0,,,0,,,0\n";
@@ -97,8 +96,7 @@ TEST_CASE("SceneCardCatalog: a malformed row is skipped not guessed at",
     CHECK(catalog.find("good") != nullptr);
 }
 
-TEST_CASE("SceneCardCatalog: a missing directory is empty not an error",
-          "[scene_cards][catalog]") {
+TEST_CASE("SceneCardCatalog: a missing directory is empty not an error", "[scene_cards][catalog]") {
     SceneCardCatalog catalog;
     CHECK(catalog.load_from_directory("") == 0);
     CHECK(catalog.load_from_directory("/nonexistent/econlife/scene_cards") == 0);
@@ -129,24 +127,35 @@ TEST_CASE("SceneCardCatalog: base game card copy loads", "[scene_cards][catalog]
     REQUIRE(catalog.load_from_directory(dir) > 0);
 }
 
-TEST_CASE("SceneCardCatalog: every key a producer names is authored",
-          "[scene_cards][catalog]") {
+TEST_CASE("SceneCardCatalog: every key a producer names is authored", "[scene_cards][catalog]") {
     // The catalog is an indirection with a silent failure mode: a seed naming
     // a template that does not exist raises NO card, so a typo or a renamed
     // row takes the world's voice away without failing anything. This list is
     // the ratchet. A producer added without its copy fails here.
     const char* producer_keys[] = {
         // player_actions — why a founding attempt could not proceed.
-        "not_here", "in_transit", "no_capital", "no_premises",
+        "not_here",
+        "in_transit",
+        "no_capital",
+        "no_premises",
         // real_estate — how a business acquisition went.
-        "offer_declined", "offer_accepted", "sale_closed", "sale_lapsed", "sale_lost",
+        "offer_declined",
+        "offer_accepted",
+        "sale_closed",
+        "sale_lapsed",
+        "sale_lost",
         // media_system — a story that names the player ran.
         "story_ran",
         // random_events — something happened where the player is.
         "news_unrest",
         // scene_cards — a commitment on the calendar falls today.
-        "calendar_meeting", "calendar_event", "calendar_operation", "calendar_deadline",
-        "calendar_personal", "calendar_commitment", "calendar_summons",
+        "calendar_meeting",
+        "calendar_event",
+        "calendar_operation",
+        "calendar_deadline",
+        "calendar_personal",
+        "calendar_commitment",
+        "calendar_summons",
     };
 
     const std::string dir = find_scene_cards_dir();
@@ -168,11 +177,12 @@ TEST_CASE("SceneCardCatalog: every authored card can be answered and expires hon
     REQUIRE(catalog.load_from_directory(dir) > 0);
 
     const char* keys[] = {
-        "not_here",         "in_transit",       "no_capital",          "no_premises",
-        "offer_declined",   "offer_accepted",   "sale_closed",         "sale_lapsed",
-        "sale_lost",        "story_ran",        "news_unrest",         "calendar_meeting",
-        "calendar_event",   "calendar_operation", "calendar_deadline", "calendar_personal",
-        "calendar_commitment", "calendar_summons",
+        "not_here",          "in_transit",          "no_capital",
+        "no_premises",       "offer_declined",      "offer_accepted",
+        "sale_closed",       "sale_lapsed",         "sale_lost",
+        "story_ran",         "news_unrest",         "calendar_meeting",
+        "calendar_event",    "calendar_operation",  "calendar_deadline",
+        "calendar_personal", "calendar_commitment", "calendar_summons",
     };
 
     for (const char* key : keys) {

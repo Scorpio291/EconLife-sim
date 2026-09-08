@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -16,8 +17,6 @@
 #include "core/world_state/world_state.h"
 #include "modules/random_events/event_types.h"
 #include "modules/scene_cards/scene_cards_module.h"
-
-#include <filesystem>
 
 // Include the module implementation for direct testing.
 // The module class is defined in the .cpp file; we include it here for

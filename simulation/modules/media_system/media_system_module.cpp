@@ -1,10 +1,10 @@
 #include "modules/media_system/media_system_module.h"
 
 #include <algorithm>
-#include <unordered_set>
 #include <cmath>
 #include <cstring>
 #include <numeric>
+#include <unordered_set>
 
 #include "core/world_state/apply_deltas.h"  // lookup_npc_by_id
 #include "core/world_state/player.h"

@@ -5,8 +5,8 @@
 
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
-#include "modules/persistence/module_state_io.h"
 #include "modules/criminal_operations/criminal_operations_types.h"
+#include "modules/persistence/module_state_io.h"
 
 namespace econlife {
 
@@ -240,7 +240,6 @@ void WeaponsTraffickingModule::execute(const WorldState& state, DeltaBuffer& del
         execute_province(i, state, delta);
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // Module-private state — diversion and procurement records

@@ -12,8 +12,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 #include <string>
+#include <vector>
 
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
@@ -285,7 +285,8 @@ BusinessDecisionResult NpcBusinessModule::decision_for_choice(const NPCBusiness&
             result.expand = true;
             float expansion_spend = available_cash * 0.40f;
             result.cash_spent = expansion_spend;
-            result.hiring_target_change = static_cast<int32_t>(std::max(1.0f, expansion_spend * 0.02f));
+            result.hiring_target_change =
+                static_cast<int32_t>(std::max(1.0f, expansion_spend * 0.02f));
             result.rd_investment_rate = cfg_.fast_expander_rd_rate;
             result.cash_spent += available_cash * result.rd_investment_rate;
             if (result.cash_spent > available_cash)
@@ -476,8 +477,8 @@ void NpcBusinessModule::schedule_owner_decisions(const WorldState& state, DeltaB
 
         card.choices.push_back(PlayerChoice{OWNER_CHOICE_INVEST, "Invest in growth",
                                             "Put the free cash into capacity and hiring.", 0});
-        card.choices.push_back(PlayerChoice{OWNER_CHOICE_HOLD, "Hold the course",
-                                            "Change nothing this quarter.", 0});
+        card.choices.push_back(
+            PlayerChoice{OWNER_CHOICE_HOLD, "Hold the course", "Change nothing this quarter.", 0});
         card.choices.push_back(PlayerChoice{OWNER_CHOICE_CUT, "Tighten costs",
                                             "Trim the payroll and the running costs.", 0});
 

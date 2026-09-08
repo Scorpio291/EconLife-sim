@@ -23,9 +23,9 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
+#include "modules/banking/banking_module.h"  // Loan helpers (static methods)
+#include "modules/banking/banking_types.h"   // LoanPurpose
 #include "modules/scene_cards/card_seed.h"
-#include "modules/banking/banking_module.h"        // Loan helpers (static methods)
-#include "modules/banking/banking_types.h"         // LoanPurpose
 #include "modules/scene_cards/scene_card_types.h"  // SceneCard, SceneSetting, SceneCardType
 
 namespace econlife {

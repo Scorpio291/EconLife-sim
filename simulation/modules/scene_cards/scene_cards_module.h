@@ -6,7 +6,7 @@
 #include "core/config/package_config.h"
 #include "core/tick/tick_module.h"
 #include "scene_card_catalog.h"  // SceneCardCatalog
-#include "scene_card_types.h"     // SceneSetting, SceneCard (complete types)
+#include "scene_card_types.h"    // SceneSetting, SceneCard (complete types)
 
 namespace econlife {
 

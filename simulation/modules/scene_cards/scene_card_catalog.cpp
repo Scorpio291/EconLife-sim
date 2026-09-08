@@ -43,21 +43,36 @@ SceneCardType parse_type(const std::string& s) {
 // Only the settings the authored cards use. An unknown name falls back to a
 // phone call, which is the least presumptuous setting there is.
 SceneSetting parse_setting(const std::string& s) {
-    if (s == "boardroom") return SceneSetting::boardroom;
-    if (s == "private_office") return SceneSetting::private_office;
-    if (s == "open_plan_office") return SceneSetting::open_plan_office;
-    if (s == "factory_floor") return SceneSetting::factory_floor;
-    if (s == "warehouse") return SceneSetting::warehouse;
-    if (s == "construction_site") return SceneSetting::construction_site;
-    if (s == "restaurant") return SceneSetting::restaurant;
-    if (s == "cafe") return SceneSetting::cafe;
-    if (s == "government_office") return SceneSetting::government_office;
-    if (s == "courthouse") return SceneSetting::courthouse;
-    if (s == "street_corner") return SceneSetting::street_corner;
-    if (s == "home_dining") return SceneSetting::home_dining;
-    if (s == "home_office") return SceneSetting::home_office;
-    if (s == "moving_vehicle") return SceneSetting::moving_vehicle;
-    if (s == "video_call") return SceneSetting::video_call;
+    if (s == "boardroom")
+        return SceneSetting::boardroom;
+    if (s == "private_office")
+        return SceneSetting::private_office;
+    if (s == "open_plan_office")
+        return SceneSetting::open_plan_office;
+    if (s == "factory_floor")
+        return SceneSetting::factory_floor;
+    if (s == "warehouse")
+        return SceneSetting::warehouse;
+    if (s == "construction_site")
+        return SceneSetting::construction_site;
+    if (s == "restaurant")
+        return SceneSetting::restaurant;
+    if (s == "cafe")
+        return SceneSetting::cafe;
+    if (s == "government_office")
+        return SceneSetting::government_office;
+    if (s == "courthouse")
+        return SceneSetting::courthouse;
+    if (s == "street_corner")
+        return SceneSetting::street_corner;
+    if (s == "home_dining")
+        return SceneSetting::home_dining;
+    if (s == "home_office")
+        return SceneSetting::home_office;
+    if (s == "moving_vehicle")
+        return SceneSetting::moving_vehicle;
+    if (s == "video_call")
+        return SceneSetting::video_call;
     return SceneSetting::phone_call;
 }
 

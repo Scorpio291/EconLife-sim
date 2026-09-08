@@ -2043,7 +2043,7 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
     w.write_u32(static_cast<uint32_t>(state.pending_scene_cards.size()));
     for (const auto& s : state.pending_scene_cards)
         write_scene_card(w, s);
-    w.write_u32(state.next_scene_card_id);  // v34: monotonic card id allocator
+    w.write_u32(state.next_scene_card_id);      // v34: monotonic card id allocator
     w.write_u32(state.next_calendar_entry_id);  // v34: monotonic calendar id allocator
 
     // --- Trade infrastructure ---

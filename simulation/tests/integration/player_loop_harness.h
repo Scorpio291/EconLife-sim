@@ -24,13 +24,13 @@
 #include <string>
 #include <vector>
 
+#include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
 #include "core/world_gen/world_generator.h"
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
-#include "core/config/package_config.h"
 #include "modules/register_base_game_modules.h"
 
 namespace econlife::player_loop {
@@ -114,9 +114,9 @@ struct PlayerRun {
     std::vector<PlayerSnapshot> series;
 
     // Scene-card flow across the whole run.
-    std::size_t cards_created = 0;    // distinct card ids ever seen
-    std::size_t cards_resolved = 0;   // cards the player (or a default) answered
-    std::size_t cards_retired = 0;    // cards that left the queue
+    std::size_t cards_created = 0;       // distinct card ids ever seen
+    std::size_t cards_resolved = 0;      // cards the player (or a default) answered
+    std::size_t cards_retired = 0;       // cards that left the queue
     std::size_t cards_unanswerable = 0;  // cards with no choices — must stay 0
     std::size_t cards_with_zero_id = 0;  // unaddressable — must stay 0
     std::size_t max_pending_cards = 0;
@@ -238,10 +238,10 @@ inline PlayerRun run(const RunConfig& cfg) {
     out.series.reserve(cfg.ticks + 1);
     out.series.push_back(capture(world));
 
-    std::set<uint32_t> ever_seen;      // card ids that have existed
-    std::set<uint32_t> ever_resolved;  // card ids observed with a choice recorded
-    std::set<uint32_t> live;           // card ids in the queue last tick
-    std::set<uint32_t> calendar_ever;  // calendar entry ids that have existed
+    std::set<uint32_t> ever_seen;         // card ids that have existed
+    std::set<uint32_t> ever_resolved;     // card ids observed with a choice recorded
+    std::set<uint32_t> live;              // card ids in the queue last tick
+    std::set<uint32_t> calendar_ever;     // calendar entry ids that have existed
     std::set<uint32_t> player_scheduled;  // entries the script asked for
 
     for (uint32_t t = 0; t < cfg.ticks; ++t) {

@@ -116,8 +116,7 @@ struct Sitting {
     TickOrchestrator orch;
     ThreadPool pool{1};
 
-    Sitting()
-        : pkg(load_package_config(econlife::player_loop::find_package_dir("config"))) {
+    Sitting() : pkg(load_package_config(econlife::player_loop::find_package_dir("config"))) {
         WorldGeneratorConfig gen{};
         gen.seed = 42;
         gen.province_count = 6;
@@ -170,12 +169,13 @@ void report(const char* label, const WorldState& w) {
         }
     }
 
-    std::printf("%-22s tick %5u | wealth %9.0f | age %6.2f | skill %.3f | firms %zu"
-                " | %u/%u staffed | %5.1f rev - %5.1f cost | firm cash %8.0f"
-                " | cards %zu | cal %zu\n",
-                label, w.current_tick, static_cast<double>(p.wealth),
-                static_cast<double>(p.age), static_cast<double>(best_skill), firms, workers,
-                stations, revenue, cost, biz_cash, w.pending_scene_cards.size(), w.calendar.size());
+    std::printf(
+        "%-22s tick %5u | wealth %9.0f | age %6.2f | skill %.3f | firms %zu"
+        " | %u/%u staffed | %5.1f rev - %5.1f cost | firm cash %8.0f"
+        " | cards %zu | cal %zu\n",
+        label, w.current_tick, static_cast<double>(p.wealth), static_cast<double>(p.age),
+        static_cast<double>(best_skill), firms, workers, stations, revenue, cost, biz_cash,
+        w.pending_scene_cards.size(), w.calendar.size());
 }
 
 }  // namespace

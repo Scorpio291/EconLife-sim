@@ -27,8 +27,7 @@ void move_extend(std::vector<T>& dst, std::vector<T>&& src) {
 void PlayerDelta::merge_from(PlayerDelta&& other) {
     // Additive optionals: sum incoming into existing (or seed with incoming).
     if (!other.skill_deltas.empty()) {
-        skill_deltas.insert(skill_deltas.end(),
-                            std::make_move_iterator(other.skill_deltas.begin()),
+        skill_deltas.insert(skill_deltas.end(), std::make_move_iterator(other.skill_deltas.begin()),
                             std::make_move_iterator(other.skill_deltas.end()));
         other.skill_deltas.clear();
     }

@@ -194,7 +194,6 @@ bool TradeInfrastructureModule::check_interception(const TransitShipment& shipme
     return roll < effective_risk;
 }
 
-
 // ---------------------------------------------------------------------------
 // Module-private state — shipments in transit
 // ---------------------------------------------------------------------------

@@ -2,8 +2,8 @@
 
 #include <chrono>
 #include <cmath>
-#include <set>
 #include <ctime>
+#include <set>
 
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
@@ -168,31 +168,50 @@ static const char* pending_stage_str(PendingTxStage stage) {
 
 static const char* skill_domain_str(SkillDomain d) {
     switch (d) {
-        case SkillDomain::Business: return "business";
-        case SkillDomain::Finance: return "finance";
-        case SkillDomain::Engineering: return "engineering";
-        case SkillDomain::Politics: return "politics";
-        case SkillDomain::Management: return "management";
-        case SkillDomain::Trade: return "trade";
-        case SkillDomain::Intelligence: return "intelligence";
-        case SkillDomain::Persuasion: return "persuasion";
-        case SkillDomain::CriminalOperations: return "criminal_operations";
-        case SkillDomain::UndercoverInfiltration: return "undercover_infiltration";
-        case SkillDomain::SpecialtyCulinary: return "culinary";
-        case SkillDomain::SpecialtyChemistry: return "chemistry";
-        case SkillDomain::SpecialtyCoding: return "coding";
-        case SkillDomain::SpecialtyAgriculture: return "agriculture";
-        case SkillDomain::SpecialtyConstruction: return "construction";
+        case SkillDomain::Business:
+            return "business";
+        case SkillDomain::Finance:
+            return "finance";
+        case SkillDomain::Engineering:
+            return "engineering";
+        case SkillDomain::Politics:
+            return "politics";
+        case SkillDomain::Management:
+            return "management";
+        case SkillDomain::Trade:
+            return "trade";
+        case SkillDomain::Intelligence:
+            return "intelligence";
+        case SkillDomain::Persuasion:
+            return "persuasion";
+        case SkillDomain::CriminalOperations:
+            return "criminal_operations";
+        case SkillDomain::UndercoverInfiltration:
+            return "undercover_infiltration";
+        case SkillDomain::SpecialtyCulinary:
+            return "culinary";
+        case SkillDomain::SpecialtyChemistry:
+            return "chemistry";
+        case SkillDomain::SpecialtyCoding:
+            return "coding";
+        case SkillDomain::SpecialtyAgriculture:
+            return "agriculture";
+        case SkillDomain::SpecialtyConstruction:
+            return "construction";
     }
     return "unknown";
 }
 
 static const char* evidence_type_str(EvidenceType t) {
     switch (t) {
-        case EvidenceType::financial: return "financial";
-        case EvidenceType::testimonial: return "testimonial";
-        case EvidenceType::documentary: return "documentary";
-        case EvidenceType::physical: return "physical";
+        case EvidenceType::financial:
+            return "financial";
+        case EvidenceType::testimonial:
+            return "testimonial";
+        case EvidenceType::documentary:
+            return "documentary";
+        case EvidenceType::physical:
+            return "physical";
     }
     return "unknown";
 }
@@ -436,13 +455,14 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
                 continue;
             if (biz.revenue_per_tick <= 0.0f)
                 continue;  // a firm with no takings has no acquisition price
-            targets.push_back({{"id", biz.id},
-                               {"sector", business_sector_str(biz.sector)},
-                               {"province_id", biz.province_id},
-                               {"owner_npc_id", biz.owner_id},
-                               {"revenue_per_tick", biz.revenue_per_tick},
-                               {"cost_per_tick", biz.cost_per_tick},
-                               {"fair_price", biz.revenue_per_tick * ticks_per_month * fair_multiple}});
+            targets.push_back(
+                {{"id", biz.id},
+                 {"sector", business_sector_str(biz.sector)},
+                 {"province_id", biz.province_id},
+                 {"owner_npc_id", biz.owner_id},
+                 {"revenue_per_tick", biz.revenue_per_tick},
+                 {"cost_per_tick", biz.cost_per_tick},
+                 {"fair_price", biz.revenue_per_tick * ticks_per_month * fair_multiple}});
         }
     }
     state["acquisition_targets"] = targets;

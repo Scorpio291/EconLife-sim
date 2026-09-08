@@ -213,7 +213,6 @@ void ObligationNetworkModule::execute(const WorldState& state, DeltaBuffer& delt
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Module-private state — obligation escalation
 // ---------------------------------------------------------------------------
