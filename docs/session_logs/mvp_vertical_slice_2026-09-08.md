@@ -14,7 +14,7 @@ worked; the task was to connect the player to it, not to expand simulation scope
 |---|---|
 | `ctest -LE emergence` (fast per-commit) | **1899/1899 pass** |
 | `econlife_player_loop_tests "[player_loop]"` | **17 pass, 1 failing-as-expected ratchet** |
-| `ctest -L emergence` (behavioural) | *still running when this was written — result appended below* |
+| `ctest -L emergence` (behavioural) | **pass** (1/1, 670 s) |
 
 ---
 
