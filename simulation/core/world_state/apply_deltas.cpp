@@ -893,7 +893,19 @@ static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
     for (auto& entry : delta.new_calendar_entries) {
         world.calendar.push_back(std::move(entry));
     }
+    // Scene-card identity. Two passes so an auto-assigned id can never collide
+    // with an explicitly-allocated one regardless of emission order: first
+    // advance the counter past every explicit id in this batch, then hand out
+    // fresh ids to the cards that asked for one (id == 0).
+    for (const auto& card : delta.new_scene_cards) {
+        if (card.id != 0 && card.id >= world.next_scene_card_id)
+            world.next_scene_card_id = card.id + 1;
+    }
     for (auto& card : delta.new_scene_cards) {
+        if (card.id == 0)
+            card.id = world.next_scene_card_id++;
+        if (card.created_tick == 0)
+            card.created_tick = world.current_tick;
         world.pending_scene_cards.push_back(std::move(card));
     }
     for (auto& node : delta.new_obligation_nodes) {
@@ -1034,10 +1046,32 @@ static void apply_scene_card_choice_deltas(WorldState& world,
         for (auto& card : world.pending_scene_cards) {
             if (card.id == d.scene_card_id) {
                 card.chosen_choice_id = d.chosen_choice_id;
+                // Stamp the resolution tick. The card stays in the queue for the
+                // remainder of THIS tick and all of the next, so every consumer
+                // (scene_cards, real_estate negotiations, ...) gets a full tick
+                // to read the choice before scene_cards retires it.
+                card.resolved_tick = world.current_tick;
                 break;
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// apply_retired_scene_cards — erase cards scene_cards has retired.
+// Ids are never reused (WorldState::next_scene_card_id is monotonic), so a
+// retirement can never take out a later card that inherited the id.
+// ---------------------------------------------------------------------------
+static void apply_retired_scene_cards(WorldState& world, const std::vector<uint32_t>& retired_ids) {
+    if (retired_ids.empty())
+        return;
+    world.pending_scene_cards.erase(
+        std::remove_if(world.pending_scene_cards.begin(), world.pending_scene_cards.end(),
+                       [&](const SceneCard& c) {
+                           return std::find(retired_ids.begin(), retired_ids.end(), c.id) !=
+                                  retired_ids.end();
+                       }),
+        world.pending_scene_cards.end());
 }
 
 // ---------------------------------------------------------------------------
@@ -1099,6 +1133,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_new_facilities(world, delta.new_facilities);
     apply_append_deltas(world, delta);
     apply_scene_card_choice_deltas(world, delta.scene_card_choice_deltas);
+    apply_retired_scene_cards(world, delta.retired_scene_card_ids);
     apply_calendar_commit_deltas(world, delta.calendar_commit_deltas);
 
     // Route cross-province deltas into WorldState's CrossProvinceDeltaBuffer
@@ -1219,6 +1254,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.dissolved_businesses.clear();
     delta.new_businesses.clear();
     delta.scene_card_choice_deltas.clear();
+    delta.retired_scene_card_ids.clear();
     delta.calendar_commit_deltas.clear();
     delta.new_legal_case_seeds.clear();
     delta.new_racket_seeds.clear();

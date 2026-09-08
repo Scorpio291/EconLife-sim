@@ -507,6 +507,16 @@ struct SceneCardsConfig {
     uint32_t max_scene_cards_per_tick = 5;
     float trust_weight = 0.7f;
     float risk_weight = 0.3f;
+
+    // --- Queue bounds and expiry (Scene Card Rulebook v0.1 §1-§2) ---
+    // These are the rulebook's authored numbers, not tuning dials: the caps are
+    // an attention budget stated in the design, and the timed-optional window is
+    // the in-game expression of its 8-second countdown at the 1-tick == 1-day
+    // timescale (a meeting request the player never answers is a declined
+    // meeting within the week).
+    uint32_t ambient_queue_cap = 50;         // §1.3: oldest unread ambient card is cleared
+    uint32_t timed_optional_queue_cap = 12;  // §2: the 13th is demoted to ambient
+    uint32_t timed_optional_ttl_ticks = 7;   // §1.2: expiry fires the card's default outcome
 };
 
 struct CommodityTradingConfig {

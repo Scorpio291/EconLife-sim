@@ -84,6 +84,25 @@ enum class SceneCardType : uint8_t {
 };
 
 // ---------------------------------------------------------------------------
+// CardClass
+// ---------------------------------------------------------------------------
+// Scene Card Rulebook v0.1 §1. Class is set by the module that generates the
+// card and decides interruption behaviour, queue priority and expiry:
+//
+//   mandatory      — must be engaged before normal play resumes. Never expires,
+//                    never auto-retires; the player has to answer it.
+//   timed_optional — pauses fast-forward; on expiry the card's default_choice_id
+//                    fires as a real choice and the card retires (§3: dismissing
+//                    a card is a decision with a result, never a null event).
+//   ambient        — never interrupts. Does not expire; the queue is bounded by
+//                    ambient_queue_cap, oldest cleared first (§1.3).
+enum class CardClass : uint8_t {
+    mandatory = 0,
+    timed_optional = 1,
+    ambient = 2,
+};
+
+// ---------------------------------------------------------------------------
 // SceneCard
 // ---------------------------------------------------------------------------
 // Scene cards are the primary interface through which the player experiences
@@ -112,6 +131,16 @@ struct SceneCard {
                                          //   same NPC + tick.
     uint32_t chosen_choice_id = 0;       // 0 = no choice made yet. Set by UI when player selects
                                          //   a choice. Module processes cards with non-zero value.
+
+    // --- Lifecycle (Scene Card Rulebook §1-§3; scene_cards INTERFACE.md
+    //     postcondition "resolved cards are removed from pending_scene_cards") ---
+    CardClass card_class = CardClass::ambient;  // interruption behaviour + expiry policy
+    uint32_t created_tick = 0;                  // tick the card entered the queue
+    uint32_t expires_tick = 0;                  // 0 = never expires. timed_optional only.
+    uint32_t default_choice_id = 0;             // fires on expiry; 0 = no default outcome
+    uint32_t resolved_tick = 0;                 // 0 = unresolved. Set when a choice is applied;
+                                                //   the card retires the tick AFTER this, so every
+                                                //   consumer gets one full tick to read the choice.
 };
 
 }  // namespace econlife

@@ -617,6 +617,12 @@ void write_scene_card(ByteWriter& w, const SceneCard& s) {
     w.write_float(s.npc_presentation_state);
     w.write_bool(s.is_authored);
     w.write_u32(s.chosen_choice_id);
+    // v34: card lifecycle (class, timing, default outcome).
+    w.write_u8(static_cast<uint8_t>(s.card_class));
+    w.write_u32(s.created_tick);
+    w.write_u32(s.expires_tick);
+    w.write_u32(s.default_choice_id);
+    w.write_u32(s.resolved_tick);
 }
 
 void write_player(ByteWriter& w, const PlayerCharacter& p) {
@@ -1532,7 +1538,7 @@ CalendarEntry read_calendar_entry(ByteReader& r) {
     return e;
 }
 
-SceneCard read_scene_card(ByteReader& r) {
+SceneCard read_scene_card(ByteReader& r, uint32_t schema_ver) {
     SceneCard s{};
     s.id = r.read_u32();
     s.type = static_cast<SceneCardType>(r.read_u8());
@@ -1556,6 +1562,17 @@ SceneCard read_scene_card(ByteReader& r) {
     s.npc_presentation_state = r.read_float();
     s.is_authored = r.read_bool();
     s.chosen_choice_id = r.read_u32();
+    if (schema_ver >= 34) {
+        s.card_class = static_cast<CardClass>(r.read_u8());
+        s.created_tick = r.read_u32();
+        s.expires_tick = r.read_u32();
+        s.default_choice_id = r.read_u32();
+        s.resolved_tick = r.read_u32();
+    }
+    // Pre-v34 saves carry no card class: they load as ambient (the struct
+    // default), which is the safe reading — an ambient card never expires and
+    // never blocks, so an old save cannot resurrect a card the player is
+    // unable to clear.
     return s;
 }
 
@@ -1995,6 +2012,7 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
     w.write_u32(static_cast<uint32_t>(state.pending_scene_cards.size()));
     for (const auto& s : state.pending_scene_cards)
         write_scene_card(w, s);
+    w.write_u32(state.next_scene_card_id);  // v34: monotonic card id allocator
 
     // --- Trade infrastructure ---
     w.write_u32(static_cast<uint32_t>(state.tariff_schedules.size()));
@@ -2470,7 +2488,19 @@ RestoreResult PersistenceModule::deserialize_body(const std::vector<uint8_t>& da
     uint32_t sc_count = r.read_u32();
     out_state.pending_scene_cards.resize(sc_count);
     for (uint32_t i = 0; i < sc_count; ++i)
-        out_state.pending_scene_cards[i] = read_scene_card(r);
+        out_state.pending_scene_cards[i] = read_scene_card(r, schema_ver);
+    if (schema_ver >= 34) {
+        out_state.next_scene_card_id = r.read_u32();
+    } else {
+        // A pre-v34 save has no allocator. Resume past the highest id it holds
+        // so a restored card can never be shadowed by a freshly minted one.
+        uint32_t next = 1;
+        for (const auto& c : out_state.pending_scene_cards) {
+            if (c.id >= next)
+                next = c.id + 1;
+        }
+        out_state.next_scene_card_id = next;
+    }
 
     // Tariff schedules
     uint32_t ts_count = r.read_u32();

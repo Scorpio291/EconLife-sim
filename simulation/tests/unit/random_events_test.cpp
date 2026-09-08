@@ -652,9 +652,59 @@ TEST_CASE("test_human_event_scene_card_for_player", "[random_events][tier1]") {
     DeltaBuffer db{};
     module.execute_province(0, ws, db);
 
-    // Verify a scene card was generated.
-    REQUIRE(!db.new_scene_cards.empty());
-    REQUIRE(db.new_scene_cards[0].type == SceneCardType::news_notification);
+    // The event started at tick 100 and the world is at 101: the player was
+    // already told. An active event must NOT re-announce itself every tick —
+    // that is what filled the card queue with duplicates the player could not
+    // clear. The announcement happens once, in the event's immediate effects.
+    REQUIRE(db.new_scene_cards.empty());
+
+    // ... and it stays empty for the rest of the event's life.
+    for (uint32_t t = 102; t < 110; ++t) {
+        ws.current_tick = t;
+        DeltaBuffer later{};
+        module.execute_province(0, ws, later);
+        REQUIRE(later.new_scene_cards.empty());
+    }
+}
+
+TEST_CASE("test_event_news_card_is_answerable", "[random_events][tier1]") {
+    // A news card the player cannot dismiss wedges the queue forever, so every
+    // card this module emits carries content and at least one choice. Forcing
+    // an event to fire exercises the announcement path (apply_immediate_effects).
+    RandomEventsModule module;
+    module.set_base_rate(1.0f);  // every eligible province fires an event
+
+    WorldState ws = make_test_world_state(42, 1);
+    ws.provinces.push_back(make_test_province(0));
+
+    PlayerCharacter player{};
+    player.id = 1;
+    player.current_province_id = 0;
+    player.home_province_id = 0;
+    player.background = Background::MiddleClass;
+    player.age = 30.0f;
+    player.wealth = 10000.0f;
+    player.net_assets = 10000.0f;
+    player.ironman_eligible = false;
+    ws.player = std::make_unique<PlayerCharacter>(player);
+
+    // Sweep ticks until a human-category event announces itself. Category is
+    // drawn from province conditions, so this is not guaranteed on tick 1.
+    bool saw_card = false;
+    for (uint32_t t = 1; t < 200 && !saw_card; ++t) {
+        ws.current_tick = t;
+        DeltaBuffer db{};
+        module.execute_province(0, ws, db);
+        for (const auto& card : db.new_scene_cards) {
+            saw_card = true;
+            CHECK(card.type == SceneCardType::news_notification);
+            CHECK(card.card_class == CardClass::ambient);  // news never interrupts
+            CHECK(card.id == 0);                           // apply_deltas allocates it
+            CHECK_FALSE(card.choices.empty());             // the player can clear it
+            CHECK_FALSE(card.dialogue.empty());            // and it says something
+        }
+    }
+    REQUIRE(saw_card);
 }
 
 // =============================================================================

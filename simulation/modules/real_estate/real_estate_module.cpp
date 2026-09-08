@@ -518,18 +518,23 @@ const SceneCard* find_scene_card(const WorldState& state, uint32_t scene_card_id
     return nullptr;
 }
 
-// Phase 3 — allocate the next SceneCard id from existing pending cards.
+// Phase 3 — allocate a SceneCard id up front.
+//
+// real_estate is one of the few producers that needs the id AT EMIT TIME, to
+// correlate the card with the NegotiationContext it creates alongside it, so it
+// cannot use the id == 0 "allocate for me" path. It allocates from the same
+// monotonic WorldState counter instead of scanning the live queue for a
+// maximum: cards are now retired once resolved, so a max-scan would re-issue a
+// dead card's id and a stale NegotiationContext.scene_card_id would silently
+// match an unrelated new card. The delta scan covers multiple allocations
+// within this one sequential post-pass, before any of them reach WorldState.
 uint32_t next_scene_card_id(const WorldState& state, const DeltaBuffer& delta) {
-    uint32_t max_id = 0;
-    for (const auto& c : state.pending_scene_cards) {
-        if (c.id > max_id)
-            max_id = c.id;
-    }
+    uint32_t next = state.next_scene_card_id;
     for (const auto& c : delta.new_scene_cards) {
-        if (c.id > max_id)
-            max_id = c.id;
+        if (c.id >= next)
+            next = c.id + 1;
     }
-    return max_id + 1;
+    return next;
 }
 
 // Phase 3 — choice ids for accept/decline on NPC-offer SceneCards.
@@ -1727,6 +1732,14 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                             card.npc_presentation_state = 0.5f;
                             card.is_authored = false;
                             card.chosen_choice_id = 0;
+                            // An offer the player never answers lapses into
+                            // walking away — the conservative default the
+                            // Rulebook §3 asks for, and it matches the
+                            // negotiation deadline the context already carries.
+                            card.card_class = CardClass::timed_optional;
+                            card.default_choice_id = CHOICE_DECLINE_OFFER;
+                            card.expires_tick =
+                                state.current_tick + cfg_.negotiation_deadline_ticks;
                             delta.new_scene_cards.push_back(card);
 
                             NegotiationContext neg{};
@@ -1997,6 +2010,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     card.npc_presentation_state = 0.5f;
                     card.is_authored = false;
                     card.chosen_choice_id = 0;
+                    card.card_class = CardClass::timed_optional;
+                    card.default_choice_id = CHOICE_DECLINE_OFFER;
+                    card.expires_tick = state.current_tick + cfg_.negotiation_deadline_ticks;
                     delta.new_scene_cards.push_back(card);
 
                     NegotiationContext neg{};

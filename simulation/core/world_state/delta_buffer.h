@@ -648,6 +648,9 @@ struct DeltaBuffer {
     std::vector<DissolvedBusinessDelta> dissolved_businesses;    // merge: append
     std::vector<NewBusinessDelta> new_businesses;                // merge: append
     std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
+    std::vector<uint32_t> retired_scene_card_ids;                // merge: append; owned by
+                                                                 //   scene_cards (see its
+                                                                 //   INTERFACE.md postcondition)
     std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
     std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
     std::vector<RandomEventTriggerDelta> new_random_event_triggers;     // merge: append

@@ -44,7 +44,10 @@ class SceneCardsModule : public ITickModule {
 
     void resolve_player_choices(const WorldState& state, DeltaBuffer& delta) const;
 
-    void discard_dead_npc_cards(const WorldState& state, DeltaBuffer& delta) const;
+    // Queue lifecycle: discards dead-NPC cards, retires resolved ones, fires
+    // default outcomes for expired timed-optional cards, and holds the ambient
+    // queue at its cap. This is what keeps pending_scene_cards bounded.
+    void run_queue_lifecycle(const WorldState& state, DeltaBuffer& delta) const;
 
     void trigger_calendar_cards(const WorldState& state, DeltaBuffer& delta, uint32_t player_id,
                                 uint32_t player_province) const;

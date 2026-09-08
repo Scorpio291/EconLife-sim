@@ -145,6 +145,15 @@ struct WorldState {
     // --- Scene Cards ---
     std::vector<SceneCard> pending_scene_cards;  // generated this tick, awaiting UI delivery
 
+    // Monotonic scene-card id allocator. THE single owner of card identity.
+    // Cards are retired from pending_scene_cards once resolved, so identity
+    // cannot be derived by scanning the live queue for a maximum — a retired
+    // id would be handed out again and a stale correlation (e.g. a real_estate
+    // NegotiationContext.scene_card_id) would match an unrelated new card.
+    // Producers emit id == 0 to mean "allocate me one"; apply_deltas assigns
+    // from this counter and advances it past any explicitly-assigned id.
+    uint32_t next_scene_card_id = 1;
+
     // --- Global Tick Metadata ---
     uint32_t ticks_this_session;  // monotonic; reset on load; for WAL
     GameMode game_mode;           // set at game creation; immutable

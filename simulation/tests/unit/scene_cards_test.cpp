@@ -94,6 +94,18 @@ static SceneCard make_scene_card(uint32_t id, uint32_t npc_id, SceneSetting sett
     return card;
 }
 
+// finalize_new_cards drops cards the player cannot answer, so a card that is
+// meant to survive admission needs at least one choice. Routing tests (physical
+// presence, authored priority) use this; tests that assert the empty-choices
+// rule deliberately do not.
+static SceneCard make_admissible_card(uint32_t id, uint32_t npc_id, SceneSetting setting,
+                                      bool is_authored = false,
+                                      SceneCardType type = SceneCardType::meeting) {
+    SceneCard card = make_scene_card(id, npc_id, setting, is_authored, type);
+    card.choices.push_back(PlayerChoice{1, "Acknowledge", "", 0});
+    return card;
+}
+
 static WorldState make_base_state() {
     WorldState state{};
     state.current_tick = 10;
@@ -309,7 +321,7 @@ TEST_CASE("test_remote_ignores_province", "[scene_cards][tier1]") {
 
     // Create a delta with a phone_call card pre-populated.
     DeltaBuffer delta{};
-    SceneCard phone_card = make_scene_card(50, 100, SceneSetting::phone_call);
+    SceneCard phone_card = make_admissible_card(50, 100, SceneSetting::phone_call);
     delta.new_scene_cards.push_back(phone_card);
 
     // Now manually run the module's execute. The module will process
@@ -383,7 +395,7 @@ TEST_CASE("test_authored_takes_priority", "[scene_cards][tier1]") {
 
     // We need both cards in new_scene_cards to test priority.
     // Add the authored card to the delta before executing.
-    SceneCard authored_card = make_scene_card(99, 100, SceneSetting::boardroom, true);
+    SceneCard authored_card = make_admissible_card(99, 100, SceneSetting::boardroom, true);
     delta.new_scene_cards.push_back(authored_card);
 
     module.execute(state, delta);
@@ -531,4 +543,231 @@ TEST_CASE("resolved card generates consequence delta", "[scene_cards][tier1]") {
     REQUIRE(delta.npc_deltas[0].npc_id == 100);
     REQUIRE(delta.npc_deltas[0].new_memory_entry.has_value());
     REQUIRE(delta.npc_deltas[0].new_memory_entry->type == MemoryType::interaction);
+}
+
+// ---------------------------------------------------------------------------
+// Queue lifecycle — the guarantee that pending_scene_cards is bounded.
+//
+// Before this pass the queue was append-only at every layer: nothing ever
+// removed a card, resolved or not, so a year of play accumulated cards the
+// player could neither read nor clear. These tests pin each of the four
+// retirement rules and the generation-time invariant behind them.
+// ---------------------------------------------------------------------------
+
+static SceneCard make_answerable_card(uint32_t id, uint32_t npc_id, CardClass klass,
+                                      SceneSetting setting = SceneSetting::phone_call) {
+    SceneCard card = make_scene_card(id, npc_id, setting, false, SceneCardType::call);
+    card.card_class = klass;
+    card.choices.push_back(PlayerChoice{1, "Engage", "", 0});
+    card.choices.push_back(PlayerChoice{2, "Decline", "", 0});
+    card.default_choice_id = 2;
+    return card;
+}
+
+TEST_CASE("resolved card is retired the tick after it was resolved", "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCard card = make_answerable_card(7, 100, CardClass::ambient);
+    card.chosen_choice_id = 1;
+    card.resolved_tick = state.current_tick;  // resolved THIS tick
+    state.pending_scene_cards.push_back(card);
+
+    // Same tick as resolution: still visible, so consumers that run later in
+    // the tick (real_estate negotiations, etc.) can still read the choice.
+    DeltaBuffer delta{};
+    SceneCardsModule module;
+    module.execute(state, delta);
+    REQUIRE(delta.retired_scene_card_ids.empty());
+
+    // Next tick: retired.
+    state.current_tick += 1;
+    DeltaBuffer delta2{};
+    module.execute(state, delta2);
+    REQUIRE(delta2.retired_scene_card_ids.size() == 1);
+    REQUIRE(delta2.retired_scene_card_ids[0] == 7);
+}
+
+TEST_CASE("card whose NPC died is discarded with no consequence", "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0, 0.5f, NPCStatus::dead));
+
+    state.pending_scene_cards.push_back(make_answerable_card(9, 100, CardClass::mandatory));
+
+    DeltaBuffer delta{};
+    SceneCardsModule module;
+    module.execute(state, delta);
+
+    REQUIRE(delta.retired_scene_card_ids.size() == 1);
+    REQUIRE(delta.retired_scene_card_ids[0] == 9);
+    REQUIRE(delta.consequence_deltas.empty());
+}
+
+TEST_CASE("expired timed-optional card fires its default outcome", "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCard card = make_answerable_card(11, 100, CardClass::timed_optional);
+    card.expires_tick = state.current_tick - 1;  // already past
+    state.pending_scene_cards.push_back(card);
+
+    DeltaBuffer delta{};
+    SceneCardsModule module;
+    module.execute(state, delta);
+
+    // The default fires as a real choice rather than the card vanishing:
+    // dismissal is a decision with a result (Rulebook §3).
+    REQUIRE(delta.scene_card_choice_deltas.size() == 1);
+    REQUIRE(delta.scene_card_choice_deltas[0].scene_card_id == 11);
+    REQUIRE(delta.scene_card_choice_deltas[0].chosen_choice_id == 2);
+    REQUIRE(delta.retired_scene_card_ids.empty());  // retires next tick via the resolved path
+}
+
+TEST_CASE("expired timed-optional card with no default outcome is retired",
+          "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCard card = make_answerable_card(12, 100, CardClass::timed_optional);
+    card.default_choice_id = 0;  // nothing authored to fire
+    card.expires_tick = state.current_tick - 1;
+    state.pending_scene_cards.push_back(card);
+
+    DeltaBuffer delta{};
+    SceneCardsModule module;
+    module.execute(state, delta);
+
+    REQUIRE(delta.retired_scene_card_ids.size() == 1);
+    REQUIRE(delta.retired_scene_card_ids[0] == 12);
+}
+
+TEST_CASE("mandatory card never expires and is never auto-retired", "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCard card = make_answerable_card(13, 100, CardClass::mandatory);
+    card.expires_tick = state.current_tick - 100;  // even long past
+    state.pending_scene_cards.push_back(card);
+
+    DeltaBuffer delta{};
+    SceneCardsModule module;
+    module.execute(state, delta);
+
+    REQUIRE(delta.retired_scene_card_ids.empty());
+    REQUIRE(delta.scene_card_choice_deltas.empty());
+}
+
+TEST_CASE("ambient queue is held at its cap, oldest cleared first",
+          "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCardsConfig cfg{};
+    cfg.ambient_queue_cap = 3;
+    SceneCardsModule module(cfg);
+
+    // Five live ambient cards, created in ascending tick order.
+    for (uint32_t i = 0; i < 5; ++i) {
+        SceneCard card = make_answerable_card(100 + i, 100, CardClass::ambient);
+        card.created_tick = i;  // 100 is oldest
+        state.pending_scene_cards.push_back(card);
+    }
+
+    DeltaBuffer delta{};
+    module.execute(state, delta);
+
+    REQUIRE(delta.retired_scene_card_ids.size() == 2);
+    REQUIRE(delta.retired_scene_card_ids[0] == 100);
+    REQUIRE(delta.retired_scene_card_ids[1] == 101);
+}
+
+TEST_CASE("a card with no choices is never admitted to the queue", "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    DeltaBuffer delta{};
+    // A card the player cannot answer would sit in the queue forever.
+    delta.new_scene_cards.push_back(
+        make_scene_card(0, 100, SceneSetting::phone_call, false, SceneCardType::call));
+
+    SceneCardsModule module;
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_scene_cards.empty());
+}
+
+TEST_CASE("timed-optional card gets an expiry; ambient and mandatory do not",
+          "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCardsConfig cfg{};
+    cfg.timed_optional_ttl_ticks = 7;
+    SceneCardsModule module(cfg);
+
+    DeltaBuffer delta{};
+    delta.new_scene_cards.push_back(make_answerable_card(0, 100, CardClass::timed_optional));
+    delta.new_scene_cards.push_back(make_answerable_card(0, 100, CardClass::ambient));
+    delta.new_scene_cards.push_back(make_answerable_card(0, 100, CardClass::mandatory));
+
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_scene_cards.size() == 3);
+    REQUIRE(delta.new_scene_cards[0].expires_tick == state.current_tick + 7);
+    REQUIRE(delta.new_scene_cards[1].expires_tick == 0);
+    REQUIRE(delta.new_scene_cards[2].expires_tick == 0);
+    for (const auto& c : delta.new_scene_cards)
+        REQUIRE(c.created_tick == state.current_tick);
+}
+
+TEST_CASE("timed-optional cards past the tier cap are demoted to ambient",
+          "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCardsConfig cfg{};
+    cfg.timed_optional_queue_cap = 2;
+    cfg.max_scene_cards_per_tick = 10;
+    SceneCardsModule module(cfg);
+
+    // One already live, so only one more slot remains in the tier.
+    state.pending_scene_cards.push_back(make_answerable_card(50, 100, CardClass::timed_optional));
+
+    DeltaBuffer delta{};
+    delta.new_scene_cards.push_back(make_answerable_card(0, 100, CardClass::timed_optional));
+    delta.new_scene_cards.push_back(make_answerable_card(0, 100, CardClass::timed_optional));
+
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_scene_cards.size() == 2);
+    REQUIRE(delta.new_scene_cards[0].card_class == CardClass::timed_optional);
+    REQUIRE(delta.new_scene_cards[1].card_class == CardClass::ambient);
+    REQUIRE(delta.new_scene_cards[1].expires_tick == 0);
+}
+
+TEST_CASE("a default outcome naming a choice the card lacks is dropped",
+          "[scene_cards][lifecycle]") {
+    WorldState state = make_base_state();
+    state.player = std::make_unique<PlayerCharacter>(make_player(1, 0));
+    state.significant_npcs.push_back(make_npc(100, 0));
+
+    SceneCard card = make_answerable_card(0, 100, CardClass::timed_optional);
+    card.default_choice_id = 99;  // no such choice
+    DeltaBuffer delta{};
+    delta.new_scene_cards.push_back(card);
+
+    SceneCardsModule module;
+    module.execute(state, delta);
+
+    REQUIRE(delta.new_scene_cards.size() == 1);
+    REQUIRE(delta.new_scene_cards[0].default_choice_id == 0);
 }
