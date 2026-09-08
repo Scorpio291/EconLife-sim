@@ -40,7 +40,20 @@ export function BusinessPanel() {
     });
   };
 
+  const handleBuy = (businessId: number) => {
+    // A fair bid. The seller weighs the multiple against a fair 6x, so 7x is a
+    // keen offer without being reckless.
+    sendAction('acquire_business', {
+      business_id: businessId,
+      offer_multiple: 7.0,
+      payment_method: 'cash',
+      down_payment_fraction: 1.0,
+    });
+  };
+
   const canStart = player.travel_status !== 'in_transit' && player.wealth >= 10000;
+  const targets = state.acquisition_targets ?? [];
+  const deals = state.pending_acquisitions ?? [];
 
   return (
     <div className="business-panel">
@@ -105,9 +118,79 @@ export function BusinessPanel() {
                     <span className="biz-stat-value">{(biz.output_quality * 100).toFixed(0)}%</span>
                   </div>
                 </div>
+                {(biz.facilities ?? []).length > 0 && (
+                  <ul className="biz-facilities">
+                    {biz.facilities.map((f) => (
+                      <li key={f.id} className="biz-facility">
+                        <span className="facility-name">{f.recipe_id.replace(/_/g, ' ')}</span>
+                        <span className="facility-staff">
+                          {f.workers} / {f.max_workers} staffed
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      <div className="panel-header">
+        <h2>For Sale Nearby</h2>
+      </div>
+      {deals.length > 0 && (
+        <ul className="deal-list">
+          {deals.map((d) => (
+            <li key={d.id} className="deal-row">
+              Offer accepted on #{d.business_id} at {formatMoney(d.price)} — closes tick{' '}
+              {d.close_tick}
+            </li>
+          ))}
+        </ul>
+      )}
+      {targets.length === 0 ? (
+        <p className="empty-msg">Nothing trading for sale in this province</p>
+      ) : (
+        <div className="target-list">
+          {targets
+            .slice()
+            .sort((a, b) => a.fair_price - b.fair_price)
+            .map((t) => {
+              const affordable = player.wealth >= t.revenue_per_tick * 30 * 7.0;
+              return (
+                <div key={t.id} className="target-card">
+                  <div className="biz-header">
+                    <span className="biz-sector">{t.sector.replace(/_/g, ' ')}</span>
+                    <span className="biz-location">
+                      {formatMoney(t.revenue_per_tick)}/day takings
+                    </span>
+                  </div>
+                  <div className="biz-stats">
+                    <div className="biz-stat">
+                      <span className="biz-stat-label">Costs/day</span>
+                      <span className="biz-stat-value">{formatMoney(t.cost_per_tick)}</span>
+                    </div>
+                    <div className="biz-stat">
+                      <span className="biz-stat-label">Fair price</span>
+                      <span className="biz-stat-value">{formatMoney(t.fair_price)}</span>
+                    </div>
+                  </div>
+                  <button
+                    className="start-biz-btn"
+                    onClick={() => handleBuy(t.id)}
+                    disabled={!affordable}
+                    title={
+                      affordable
+                        ? 'Offer seven times monthly takings, in cash'
+                        : 'You cannot raise the cash for this'
+                    }
+                  >
+                    Make an offer
+                  </button>
+                </div>
+              );
+            })}
         </div>
       )}
     </div>

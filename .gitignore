@@ -50,3 +50,4 @@ Testing/
 
 # Claude Code agent worktrees (transient, per-session)
 .claude/
+ui/node_modules/
