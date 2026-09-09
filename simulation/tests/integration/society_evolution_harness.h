@@ -18,8 +18,8 @@
 
 #include "core/config/package_config.h"
 #include "core/tick/thread_pool.h"
-#include "core/world_gen/era_catalog.h"
 #include "core/tick/tick_orchestrator.h"
+#include "core/world_gen/era_catalog.h"
 #include "core/world_gen/world_class.h"
 #include "core/world_gen/world_generator.h"
 #include "core/world_state/world_state.h"
@@ -38,38 +38,40 @@ inline std::string find_base_game_subdir(const char* sub) {
     return "";
 }
 
-inline std::string find_goods_dir_society() { return find_base_game_subdir("goods"); }
+inline std::string find_goods_dir_society() {
+    return find_base_game_subdir("goods");
+}
 
 // One annual observation of the whole society (observable WorldState only).
 struct SocietySnapshot {
     uint32_t year = 0;
-    double total_population = 0.0;     // sum of cohort populations
-    double urban_population = 0.0;     // sum of cohort urban_population (catchment town economy, M3)
-    double mean_surplus = 0.0;         // mean subsistence_surplus_ratio over provinces
-    double specialist_fraction = 0.0;  // Layer-2 livelihoods / livelihoods assigned
-    double total_capital = 0.0;        // sum of significant-NPC capital (proto-capital)
+    double total_population = 0.0;  // sum of cohort populations
+    double urban_population = 0.0;  // sum of cohort urban_population (catchment town economy, M3)
+    double mean_surplus = 0.0;      // mean subsistence_surplus_ratio over provinces
+    double specialist_fraction = 0.0;          // Layer-2 livelihoods / livelihoods assigned
+    double total_capital = 0.0;                // sum of significant-NPC capital (proto-capital)
     double productive_capital_per_head = 0.0;  // BUILT capacity per person (tools, kilns,
                                                // cleared land) — the material era gate
-    double soil_health = 0.0;  // mean fertility of the worked land [0,1] — the only
-                               // channel that can lower the carrying ceiling
-    double ghost_land = 0.0;   // mean ghost-acre fraction: the land coal is standing in
-                               // for — the only channel that can RAISE it without limit
-    double coal_burned = 0.0;  // tonnes/yr drawn from the province seams
+    double soil_health = 0.0;     // mean fertility of the worked land [0,1] — the only
+                                  // channel that can lower the carrying ceiling
+    double ghost_land = 0.0;      // mean ghost-acre fraction: the land coal is standing in
+                                  // for — the only channel that can RAISE it without limit
+    double coal_burned = 0.0;     // tonnes/yr drawn from the province seams
     double coal_remaining = 0.0;  // tonnes still in the ground (the finite escape)
     // R6: knowledge is held per province now, so the SPREAD across them is the thing to
     // watch. A world where every province tracks the frontier is one civilisation with
     // six provinces; a world where they diverge has regions that can fall independently,
     // which is what the record actually contains.
-    double knowledge_leader = 0.0;    // the frontier — what the best-informed place knows
-    double knowledge_laggard = 0.0;   // what the worst-informed place knows
+    double knowledge_leader = 0.0;   // the frontier — what the best-informed place knows
+    double knowledge_laggard = 0.0;  // what the worst-informed place knows
     double knowledge_mean = 0.0;
     // THE WORST ANY SINGLE PROVINCE HAD IT THIS YEAR. The means above hide exactly the
     // thing under study: whether a shock can break ONE region while its neighbours
     // prosper. A world-mean surplus of 1.5 tells you nothing about the province at 0.4.
-    double worst_province_surplus = 0.0;   // min over provinces
-    double worst_province_soil = 0.0;      // min over provinces
-    double max_war_deaths = 0.0;           // max over provinces (battle dead / people)
-    double max_faction_deaths = 0.0;       // max over provinces (civil conflict)
+    double worst_province_surplus = 0.0;    // min over provinces
+    double worst_province_soil = 0.0;       // min over provinces
+    double max_war_deaths = 0.0;            // max over provinces (battle dead / people)
+    double max_faction_deaths = 0.0;        // max over provinces (civil conflict)
     double min_province_specialists = 0.0;  // min stratum: what a scattered region looks like
     // How many INDEPENDENT polities the world contains. Everything political keys off
     // this: war needs somebody to fight, asabiya needs a frontier to be forged at, and
@@ -81,37 +83,37 @@ struct SocietySnapshot {
     // sample's assigned livelihoods. This is the one that says whether the economy has
     // actually changed shape.
     double cohort_specialist_share = 0.0;
-    double supported_share = 0.0;  // what THIS harvest could free, before the inertia lag
+    double supported_share = 0.0;   // what THIS harvest could free, before the inertia lag
     double political_stress = 0.0;  // mean PSI: how close the society is to coming apart
                                     // for reasons that are nothing to do with the weather
     double faction_deaths = 0.0;    // mean annual death fraction from factional conflict
-    double capital_gini = 0.0;         // inequality of that capital [0,1]
-    uint32_t businesses = 0;           // emergent firms
+    double capital_gini = 0.0;      // inequality of that capital [0,1]
+    uint32_t businesses = 0;        // emergent firms
     int era = 0;
-    float knowledge = 0.0f;            // accumulated knowledge_level
-    bool reached_market = false;       // left the commons for a market era (climb complete)
-    bool extinct = false;              // population collapsed to ~0
+    float knowledge = 0.0f;       // accumulated knowledge_level
+    bool reached_market = false;  // left the commons for a market era (climb complete)
+    bool extinct = false;         // population collapsed to ~0
     // THE ENVIRONMENT THE POPULATION IS LIVING OFF. A society that never presses on its
     // land shows a flat surplus and a flat set of stocks; one that does shows both
     // moving. Watching only population and surplus hid which of the two was the cause.
-    double forest = 0.0;         // mean standing wild biomass, share of climax
-    double fish_stock = 0.0;     // mean fishery stock (normalised to carrying capacity)
+    double forest = 0.0;      // mean standing wild biomass, share of climax
+    double fish_stock = 0.0;  // mean fishery stock (normalised to carrying capacity)
     // Why the population is or is not growing, which the net figure alone cannot say.
-    double stability = 0.0;             // mean province stability (gates births)
-    double sick_rate = 0.0;             // mean sickness (gates births)
-    double plague_susceptible = 0.0;    // mean never-exposed share: the fuel for the next wave
-    double records_per_head = 0.0;      // codified knowledge per person — the apparatus that
-                                        // can find and enforce a claim on someone else's crop
-    double topsoil = 0.0;               // mean soil profile remaining: what erosion took
-    double food_store_years = 0.0;      // mean granary, in years of the whole population's food
-    double capital_per_land = 0.0;      // built stock per unit of workable ground — the gate on
-                                        // applying what a society knows
-    double tech_food = 0.0;             // technique the province actually holds, food channel
-    double nutrition = 0.0;             // adult stature as a fraction of potential
-    double health = 0.0;                // share of the year a person is fit to work
-    double schooling = 0.0;             // mean years of learning per adult
-    double fish_capacity = 0.0;         // mean fishery carrying capacity (the stock's K)
-    double fishers = 0.0;               // total people working the water
+    double stability = 0.0;           // mean province stability (gates births)
+    double sick_rate = 0.0;           // mean sickness (gates births)
+    double plague_susceptible = 0.0;  // mean never-exposed share: the fuel for the next wave
+    double records_per_head = 0.0;    // codified knowledge per person — the apparatus that
+                                      // can find and enforce a claim on someone else's crop
+    double topsoil = 0.0;             // mean soil profile remaining: what erosion took
+    double food_store_years = 0.0;    // mean granary, in years of the whole population's food
+    double capital_per_land = 0.0;    // built stock per unit of workable ground — the gate on
+                                      // applying what a society knows
+    double tech_food = 0.0;           // technique the province actually holds, food channel
+    double nutrition = 0.0;           // adult stature as a fraction of potential
+    double health = 0.0;              // share of the year a person is fit to work
+    double schooling = 0.0;           // mean years of learning per adult
+    double fish_capacity = 0.0;       // mean fishery carrying capacity (the stock's K)
+    double fishers = 0.0;             // total people working the water
 };
 
 // Gini over a list of non-negative values (0 = perfect equality).
@@ -160,8 +162,8 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.health += static_cast<double>(p.cohort_stats->health);
         s.schooling += static_cast<double>(p.cohort_stats->schooling);
         s.food_store_years += static_cast<double>(p.cohort_stats->food_store) /
-                                  (static_cast<double>(p.cohort_stats->total_population) *
-                                   static_cast<double>(kTicksPerYear));
+                              (static_cast<double>(p.cohort_stats->total_population) *
+                               static_cast<double>(kTicksPerYear));
         s.fish_capacity += static_cast<double>(p.fisheries.carrying_capacity);
         s.fishers += static_cast<double>(p.cohort_stats->commons_fishers);
         s.fish_stock += static_cast<double>(p.fisheries.current_stock);
@@ -189,9 +191,8 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
             s.max_faction_deaths, static_cast<double>(p.cohort_stats->faction_death_fraction));
         s.cohort_specialist_share += static_cast<double>(p.cohort_stats->specialist_fraction) *
                                      static_cast<double>(p.cohort_stats->total_population);
-        s.supported_share +=
-            static_cast<double>(p.cohort_stats->supported_specialist_fraction) *
-            static_cast<double>(p.cohort_stats->total_population);
+        s.supported_share += static_cast<double>(p.cohort_stats->supported_specialist_fraction) *
+                             static_cast<double>(p.cohort_stats->total_population);
         const double k = static_cast<double>(p.cohort_stats->knowledge_level);
         s.knowledge_leader = std::max(s.knowledge_leader, k);
         s.knowledge_laggard = prov_with_cohorts == 0 ? k : std::min(s.knowledge_laggard, k);
@@ -202,7 +203,7 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         for (const auto& dep : p.deposits)
             if (dep.type == ResourceType::Coal)
                 s.coal_remaining += static_cast<double>(dep.quantity_remaining);
-        surplus_sum += p.cohort_stats->subsistence_surplus_ratio;
+        surplus_sum += static_cast<double>(p.cohort_stats->subsistence_surplus_ratio);
         ++prov_with_cohorts;
     }
     {
@@ -250,19 +251,19 @@ inline SocietySnapshot capture_society(const WorldState& w, uint32_t year) {
         s.productive_capital_per_head /= s.total_population;
     if (!w.provinces.empty())
         s.soil_health /= static_cast<double>(w.provinces.size());
-        s.forest /= static_cast<double>(w.provinces.size());
-        s.fish_stock /= static_cast<double>(w.provinces.size());
-        s.stability /= static_cast<double>(w.provinces.size());
-        s.sick_rate /= static_cast<double>(w.provinces.size());
-        s.plague_susceptible /= static_cast<double>(w.provinces.size());
-        s.records_per_head /= static_cast<double>(w.provinces.size());
-        s.topsoil /= static_cast<double>(w.provinces.size());
-        s.food_store_years /= static_cast<double>(w.provinces.size());
-        s.tech_food /= static_cast<double>(w.provinces.size());
-        s.nutrition /= static_cast<double>(w.provinces.size());
-        s.health /= static_cast<double>(w.provinces.size());
-        s.schooling /= static_cast<double>(w.provinces.size());
-        s.fish_capacity /= static_cast<double>(w.provinces.size());
+    s.forest /= static_cast<double>(w.provinces.size());
+    s.fish_stock /= static_cast<double>(w.provinces.size());
+    s.stability /= static_cast<double>(w.provinces.size());
+    s.sick_rate /= static_cast<double>(w.provinces.size());
+    s.plague_susceptible /= static_cast<double>(w.provinces.size());
+    s.records_per_head /= static_cast<double>(w.provinces.size());
+    s.topsoil /= static_cast<double>(w.provinces.size());
+    s.food_store_years /= static_cast<double>(w.provinces.size());
+    s.tech_food /= static_cast<double>(w.provinces.size());
+    s.nutrition /= static_cast<double>(w.provinces.size());
+    s.health /= static_cast<double>(w.provinces.size());
+    s.schooling /= static_cast<double>(w.provinces.size());
+    s.fish_capacity /= static_cast<double>(w.provinces.size());
     s.businesses = static_cast<uint32_t>(w.npc_businesses.size());
     return s;
 }
@@ -295,8 +296,8 @@ inline std::vector<SocietySnapshot> run_society_years(uint64_t seed, uint32_t np
     config.founding_seed_mode = true;  // no hand-seeded economy; it must emerge
     config.goods_directory = find_goods_dir_society();
     config.technology_directory = find_base_game_subdir("technology");  // tech tree + effects
-    config.bounty_scale = arch.bounty;       // Bounty dial -> natural capital
-    config.hazard_settings = arch.hazard;    // Hazard settings -> per-module effects
+    config.bounty_scale = arch.bounty;               // Bounty dial -> natural capital
+    config.hazard_settings = arch.hazard;            // Hazard settings -> per-module effects
     config.founding_hardiness = founding_hardiness;  // 0 = native (adapted); >0 = transplant
     // eras/occupations dirs left empty -> builtin catalogs (match the CSVs).
 
@@ -418,7 +419,7 @@ inline Trajectory classify_trajectory(const std::vector<SocietySnapshot>& s) {
     if (peak > first.total_population * 1.2 && last.total_population < peak * 0.5)
         return Trajectory::OvershootCrash;
 
-    const bool grew = last.total_population > first.total_population;
+    [[maybe_unused]] const bool grew = last.total_population > first.total_population;
     const bool specialized = last.specialist_fraction >= 0.05;
     const bool wealth = last.total_capital > 0.0;
     const bool advanced = last.era > first.era || last.businesses > 0;

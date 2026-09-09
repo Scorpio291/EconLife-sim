@@ -1,5 +1,4 @@
 #include <catch2/catch_test_macros.hpp>
-
 #include <cmath>
 #include <vector>
 
@@ -27,8 +26,7 @@ SocietySnapshot snap(uint32_t year, double pop, double surplus, double spec, dou
 // ---------------------------------------------------------------------------
 // Trajectory classifier (pure — instant)
 // ---------------------------------------------------------------------------
-TEST_CASE("society: trajectory classifier labels the archetypal runs",
-          "[integration][society]") {
+TEST_CASE("society: trajectory classifier labels the archetypal runs", "[integration][society]") {
     SECTION("extinction") {
         std::vector<SocietySnapshot> s = {snap(0, 1000, 1.0, 0, 0, 0, 1),
                                           snap(1, 200, 0.4, 0, 0, 0, 1),

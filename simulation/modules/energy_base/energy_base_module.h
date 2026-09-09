@@ -63,6 +63,14 @@ class EnergyBaseModule : public ITickModule {
 
     bool is_province_parallel() const noexcept override { return true; }
 
+    // Sets energy_state_dirty_ on the main thread, before the province dispatch.
+    // The flag used to be written inside execute_province(), which runs one
+    // thread per province: every province thread wrote the same member at once
+    // and ThreadSanitizer reported the data race. They all stored the same
+    // value, so nothing observable differed — but a determinism guarantee has
+    // no business resting on that.
+    void init_for_tick(const WorldState& state) override;
+
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
     void execute(const WorldState& state, DeltaBuffer& delta) override;

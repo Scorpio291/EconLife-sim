@@ -993,8 +993,8 @@ TEST_CASE("fisheries: a year of ticks lands on the order of the declared MSY",
     const float landed = run_fishery_ticks(module, state, province_id, 0, cfg.ticks_per_year);
 
     // Declared annual MSY in tonnes (world generator seeds 0.5 * r * K).
-    const float msy_tonnes = state.provinces[province_id].fisheries.max_sustainable_yield *
-                             cfg.fishing_catch_to_tonnes;
+    const float msy_tonnes =
+        state.provinces[province_id].fisheries.max_sustainable_yield * cfg.fishing_catch_to_tonnes;
     REQUIRE_THAT(msy_tonnes, WithinAbs(1000.0f, 1.0f));
 
     // Effort F = 0.15/yr against r = 0.40/yr: the stock walks from 0.85K toward its
@@ -1046,7 +1046,7 @@ TEST_CASE("fisheries: effort above MSY depletes the stock year over year",
     REQUIRE(year3 < year2);
 
     // And the first, biggest year already overshoots the declared annual MSY.
-    const float msy_tonnes = state.provinces[province_id].fisheries.max_sustainable_yield *
-                             cfg.fishing_catch_to_tonnes;
+    const float msy_tonnes =
+        state.provinces[province_id].fisheries.max_sustainable_yield * cfg.fishing_catch_to_tonnes;
     REQUIRE(year1 > msy_tonnes);
 }

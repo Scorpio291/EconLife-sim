@@ -1,7 +1,7 @@
+#include "core/world_gen/world_class.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include "core/world_gen/world_class.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;

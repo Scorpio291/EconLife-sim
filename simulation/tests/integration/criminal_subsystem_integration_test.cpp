@@ -225,13 +225,12 @@ TEST_CASE("Criminal justice loop closes: detection to imprisonment",
             if (n.status == NPCStatus::imprisoned)
                 imprisoned++;
         peak_imprisoned = std::max(peak_imprisoned, imprisoned);
-        int seeds = static_cast<int>(world.pending_legal_case_seeds.size());
         std::printf(
             "yr %u | legalCases=%d ev=[%.2f,%.2f] inv=%d arr=%d chg=%d trial=%d conv=%d acq=%d "
             "impr=%d fined=%d parol=%d pard=%d | NPC.impr=%d%s\n",
-            y, lc, ev_min, ev_max, stage_ct[0], stage_ct[1], stage_ct[2], stage_ct[3], stage_ct[4],
-            stage_ct[5], stage_ct[6], stage_ct[7], stage_ct[8], stage_ct[9], imprisoned,
-            impr_detail.c_str());
+            y, lc, static_cast<double>(ev_min), static_cast<double>(ev_max), stage_ct[0],
+            stage_ct[1], stage_ct[2], stage_ct[3], stage_ct[4], stage_ct[5], stage_ct[6],
+            stage_ct[7], stage_ct[8], stage_ct[9], imprisoned, impr_detail.c_str());
     }
     std::printf("=== END DIAG ===\n\n");
     REQUIRE(world.current_tick == 5u * 365u);

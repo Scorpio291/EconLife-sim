@@ -16,8 +16,8 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <string_view>
 #include <map>
+#include <string_view>
 #include <vector>
 
 #include "core/config/package_config.h"

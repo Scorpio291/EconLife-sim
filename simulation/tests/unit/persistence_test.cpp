@@ -52,8 +52,8 @@ TEST_CASE("Persistence: schema rejects pre-renumbering saves", "[persistence][ti
                     v, PersistenceModule::CURRENT_SCHEMA_VERSION) == false);
     }
     // v23 in particular: the ambiguous version.
-    REQUIRE(PersistenceModule::is_schema_compatible(23, PersistenceModule::CURRENT_SCHEMA_VERSION) ==
-            false);
+    REQUIRE(PersistenceModule::is_schema_compatible(
+                23, PersistenceModule::CURRENT_SCHEMA_VERSION) == false);
 }
 
 TEST_CASE("Persistence: schema accepts v24..current", "[persistence][tier12]") {

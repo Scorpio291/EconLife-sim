@@ -56,8 +56,9 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
         if (!p.cohort_stats)
             continue;
         pop[i] = static_cast<double>(p.cohort_stats->total_population);
-        const float wf =
-            p.cohort_stats->working_age_fraction > 0.0f ? p.cohort_stats->working_age_fraction : 0.6f;
+        const float wf = p.cohort_stats->working_age_fraction > 0.0f
+                             ? p.cohort_stats->working_age_fraction
+                             : 0.6f;
         const float nc = SubsistenceModule::natural_capital_of(p, sub);
         const float extent = SubsistenceModule::workable_extent_of(p, sub);
         // The SAME chronic ceiling the runtime law applies: technique, climate,
@@ -68,10 +69,9 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
         // out on purpose: it is a per-year draw and genesis has no year.
         const float chronic = SubsistenceModule::chronic_ceiling_factors(
             world.technology.knowledge_level, food_mult_for(p), world.hazard_settings, sub);
-        const float output =
-            SubsistenceModule::subsistence_output(nc, extent, static_cast<float>(pop[i]) * wf,
-                                                  sub) *
-            chronic;
+        const float output = SubsistenceModule::subsistence_output(
+                                 nc, extent, static_cast<float>(pop[i]) * wf, sub) *
+                             chronic;
         const float need = static_cast<float>(pop[i]) * sub.per_capita_food_per_tick;
         surplus[i] = std::max(0.0f, output - need);
     }
@@ -99,12 +99,13 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
         std::sort(dests.begin(), dests.end());
         double total_w = 0.0;
         for (const auto& d : dests)
-            total_w += d.second;
+            total_w += static_cast<double>(d.second);
         if (total_w <= 0.0)
             continue;
-        for (const auto& d : dests)
-            net_feedable[d.first] +=
-                static_cast<double>(surplus[s]) * (d.second / total_w) * d.second;
+        for (const auto& d : dests) {
+            const double w = static_cast<double>(d.second);
+            net_feedable[d.first] += static_cast<double>(surplus[s]) * (w / total_w) * w;
+        }
     }
 
     // 3. Era content: facility types that have an era-available recipe (the M4
@@ -227,10 +228,11 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
         // province (no catchment surplus) gets none.
         if (workshop_types.empty())
             continue;
-        const double urban =
-            std::min(net_feedable[i] / std::max(grain.urban_per_capita_food, 1e-3f), pop[i]);
+        const double urban = std::min(
+            net_feedable[i] / static_cast<double>(std::max(grain.urban_per_capita_food, 1e-3f)),
+            pop[i]);
         uint32_t shops = static_cast<uint32_t>(
-            urban / std::max(config.premarket_workers_per_workshop, 1.0f));
+            urban / static_cast<double>(std::max(config.premarket_workers_per_workshop, 1.0f)));
         for (uint32_t s = 0; s < shops && cursor < res.size(); ++cursor) {
             NPC& founder = world.significant_npcs[res[cursor]];
             // Founder-gated: only someone whose wealth could have raised the
@@ -250,7 +252,8 @@ uint32_t PremarketGenesis::materialize(WorldState& world, const RecipeCatalog& r
                 const FacilityType* ft = facility_types.find(workshop_types[idx]);
                 if (ft == nullptr || founder.capital < ft->base_construction_cost)
                     continue;
-                if (chosen_ft == nullptr || ft->base_construction_cost < chosen_ft->base_construction_cost) {
+                if (chosen_ft == nullptr ||
+                    ft->base_construction_cost < chosen_ft->base_construction_cost) {
                     chosen_ft = ft;
                     chosen_offset = idx;
                 }

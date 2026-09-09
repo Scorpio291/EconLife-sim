@@ -59,9 +59,7 @@ class StructuralDemographyModule : public ITickModule {
     // death fraction population_aging consumes in the same tick — so it must sit between
     // them, exactly as warfare does. After warfare too, because the political map it
     // draws is the unit this module measures stress over.
-    std::vector<std::string_view> runs_after() const override {
-        return {"subsistence", "warfare"};
-    }
+    std::vector<std::string_view> runs_after() const override { return {"subsistence", "warfare"}; }
     std::vector<std::string_view> runs_before() const override { return {"population_aging"}; }
 
     // GLOBAL, not province-parallel (R5). A polity is one political unit and its stress is
@@ -160,7 +158,8 @@ class StructuralDemographyModule : public ITickModule {
     // first-arrival on the conflict hazard rate, so it approaches (and never exceeds)
     // total loss however extreme the stress becomes — the bound is physical, not a cap.
     static float conflict_death_fraction(float stress, const StructuralDemographyConfig& cfg) {
-        const float rate = std::max(0.0f, stress) * std::max(0.0f, cfg.conflict_death_rate_at_unit_stress);
+        const float rate =
+            std::max(0.0f, stress) * std::max(0.0f, cfg.conflict_death_rate_at_unit_stress);
         if (std::isnan(rate))
             return 0.0f;  // crash sentinel only
         return 1.0f - std::exp(-rate);

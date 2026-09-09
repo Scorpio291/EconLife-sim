@@ -37,8 +37,8 @@ struct WorldHazardSettings {
 // calibrated so the Earth settings above total ~12. Tunable — not baked into the
 // scoring function.
 struct HazardScoringWeights {
-    float gravity = 2.0f;       // points per g
-    float disease = 3.0f;       // points at setting 1.0
+    float gravity = 2.0f;  // points per g
+    float disease = 3.0f;  // points at setting 1.0
     float predators = 3.0f;
     float radiation = 5.0f;
     float seasonality = 3.333f;
@@ -93,17 +93,19 @@ inline std::string_view class_band_name(WorldClassBand b) {
 // --- Reference settings (anchors / presets) ---
 
 // Earth: the calibration anchor, ~Class 12 — a fertile deathworld.
-inline WorldHazardSettings earth_hazard() { return WorldHazardSettings{}; }
+inline WorldHazardSettings earth_hazard() {
+    return WorldHazardSettings{};
+}
 
 // A gentle Garden world (~Class 2-3): low on every hazard.
 inline WorldHazardSettings garden_hazard() {
-    return WorldHazardSettings{/*g*/ 0.7f, /*dis*/ 0.05f, /*pred*/ 0.05f, /*rad*/ 0.02f,
+    return WorldHazardSettings{/*g*/ 0.7f,     /*dis*/ 0.05f, /*pred*/ 0.05f, /*rad*/ 0.02f,
                                /*seas*/ 0.10f, /*geo*/ 0.05f, /*atmo*/ 0.05f};
 }
 
 // A world harsher than Earth, still in the Deathworld band (~Class 13).
 inline WorldHazardSettings deathworld_hazard() {
-    return WorldHazardSettings{/*g*/ 1.1f, /*dis*/ 0.60f, /*pred*/ 0.55f, /*rad*/ 0.25f,
+    return WorldHazardSettings{/*g*/ 1.1f,     /*dis*/ 0.60f, /*pred*/ 0.55f, /*rad*/ 0.25f,
                                /*seas*/ 0.62f, /*geo*/ 0.62f, /*atmo*/ 0.35f};
 }
 
@@ -114,8 +116,8 @@ inline WorldHazardSettings deathworld_hazard() {
 // ---------------------------------------------------------------------------
 struct WorldArchetype {
     const char* name = "earthlike";
-    float bounty = 1.0f;            // natural-capital multiplier (1.0 = earthlike)
-    WorldHazardSettings hazard{};   // -> World Class (computed)
+    float bounty = 1.0f;           // natural-capital multiplier (1.0 = earthlike)
+    WorldHazardSettings hazard{};  // -> World Class (computed)
 };
 
 // (A Class-derived mortality multiplier used to live here — `hazard_mortality_multiplier`,
@@ -123,12 +125,18 @@ struct WorldArchetype {
 // hazard_mortality_from_settings() below, which scores the individual hazards rather than
 // the single Class number. Deleted 2026-07-26 with the mortality-rail cleanup.)
 
-inline WorldArchetype archetype_garden() { return {"garden", 1.8f, garden_hazard()}; }
-inline WorldArchetype archetype_earthlike() { return {"earthlike", 1.0f, earth_hazard()}; }
+inline WorldArchetype archetype_garden() {
+    return {"garden", 1.8f, garden_hazard()};
+}
+inline WorldArchetype archetype_earthlike() {
+    return {"earthlike", 1.0f, earth_hazard()};
+}
 
 // A BARREN deathworld: high hazard AND scarce resources. This is the one that
 // genuinely struggles — and it struggles because of the low Bounty, not the Class.
-inline WorldArchetype archetype_deathworld() { return {"deathworld", 0.4f, deathworld_hazard()}; }
+inline WorldArchetype archetype_deathworld() {
+    return {"deathworld", 0.4f, deathworld_hazard()};
+}
 
 // A FERTILE deathworld: high hazard (deathworld band, ~Class 13) but resource-rich
 // (earthlike+ Bounty). Earth itself is a Class-12 fertile deathworld that thrived —

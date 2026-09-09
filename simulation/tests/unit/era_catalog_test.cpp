@@ -1,10 +1,9 @@
+#include "core/world_gen/era_catalog.h"
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
 #include <filesystem>
 #include <string>
-
-#include "core/world_gen/era_catalog.h"
 
 using namespace econlife;
 
@@ -94,8 +93,7 @@ TEST_CASE("EraCatalog loads the base-game CSV matching the builtin default",
                    Catch::Matchers::WithinRel(b->knowledge_to_advance, 1e-6f));
         // The MATERIAL gate is pacing surface too: a society advances only when it can
         // build what it knows, so the two copies must agree on that as well.
-        CHECK_THAT(a->capital_to_advance,
-                   Catch::Matchers::WithinRel(b->capital_to_advance, 1e-6f));
+        CHECK_THAT(a->capital_to_advance, Catch::Matchers::WithinRel(b->capital_to_advance, 1e-6f));
     }
 }
 
@@ -124,8 +122,8 @@ TEST_CASE("EraCatalog: the climb's knowledge thresholds strictly increase",
         REQUIRE(e != nullptr);
         if (e->knowledge_to_advance <= 0.0f)
             continue;  // the modern eras advance on the calendar, not on knowledge
-        INFO("era " << static_cast<int>(i) << " (" << e->key
-                    << ") demands " << e->knowledge_to_advance << " after " << previous);
+        INFO("era " << static_cast<int>(i) << " (" << e->key << ") demands "
+                    << e->knowledge_to_advance << " after " << previous);
         CHECK(e->knowledge_to_advance > previous);
         previous = e->knowledge_to_advance;
     }

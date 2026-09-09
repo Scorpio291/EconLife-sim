@@ -393,7 +393,7 @@ TEST_CASE("DrugEconomy: drug type comes from the facility recipe output", "[drug
             pre.supply = 1000.0f;
             state.regional_markets.push_back(pre);
             state.market_index_by_good_province[(static_cast<uint64_t>(pre.good_id) << 32) | 0ull] =
-                state.regional_markets.size() - 1;
+                static_cast<uint32_t>(state.regional_markets.size() - 1);
         }
 
         DrugEconomyModule module;
@@ -457,7 +457,7 @@ TEST_CASE("DrugEconomy: imprisoned operator suppresses output but does not kill 
         pre.supply = 1000.0f;
         state.regional_markets.push_back(pre);
         state.market_index_by_good_province[(static_cast<uint64_t>(pre.good_id) << 32) | 0ull] =
-            state.regional_markets.size() - 1;
+            static_cast<uint32_t>(state.regional_markets.size() - 1);
 
         rebuild_npc_indices(state);
         DrugEconomyModule module;

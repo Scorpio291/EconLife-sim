@@ -20,7 +20,6 @@ float SubsistenceModule::surplus_ratio(float output, uint32_t population,
     return output / need;
 }
 
-
 bool SubsistenceModule::regime_active(std::string_view regime) const {
     return regime_in(cfg_.active_regimes, regime);
 }
@@ -32,7 +31,7 @@ float SubsistenceModule::harvest_failure_factor(float seasonality_dial, Determin
         return 1.0f;  // a world with no seasonal swing never has a failed harvest
     const float p = std::clamp(cfg.seasonality_failure_base_rate * s, 0.0f, 1.0f);
     if (rng.next_float() >= p)
-        return 1.0f;  // a normal harvest year
+        return 1.0f;                                                     // a normal harvest year
     return std::max(0.0f, 1.0f - cfg.seasonality_failure_severity * s);  // a bad harvest year
 }
 
@@ -45,8 +44,8 @@ bool SubsistenceModule::regime_manorial(std::string_view regime) const {
 }
 
 float SubsistenceModule::proto_share_for(bool is_lord, uint32_t lords_count,
-                                         uint32_t residents_count, float total_proto,
-                                         bool manorial, const SubsistenceConfig& cfg) {
+                                         uint32_t residents_count, float total_proto, bool manorial,
+                                         const SubsistenceConfig& cfg) {
     if (residents_count == 0 || total_proto <= 0.0f)
         return 0.0f;
     const float n = static_cast<float>(residents_count);
@@ -58,7 +57,6 @@ float SubsistenceModule::proto_share_for(bool is_lord, uint32_t lords_count,
     const float lord_bonus = (total_proto * tithe) / static_cast<float>(lords_count);
     return is_lord ? peasant_base + lord_bonus : peasant_base;
 }
-
 
 void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
@@ -94,8 +92,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // photosynthesis on finite acres; coal substitutes a stock for that flow, and that
     // is the only term here that can keep rising — hence the only escape from a
     // carrying ceiling that otherwise saturates and fixes the height of every peak.
-    const float natural_capital = natural_capital_of(prov, cfg_, cs.soil_health,
-                                                     cs.ghost_land_fraction, cs.forest_health);
+    const float natural_capital =
+        natural_capital_of(prov, cfg_, cs.soil_health, cs.ghost_land_fraction, cs.forest_health);
     // How much ground there is to cover, as opposed to how much it yields. Sets the
     // labour saturation below; fertility and wear belong to the ceiling, not here.
     const float workable_extent = workable_extent_of(prov, cfg_, cs.ghost_land_fraction);
@@ -132,8 +130,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // silent mill actually is.
     const float capital_per_land =
         workable_extent > 0.0f ? std::max(0.0f, cs.productive_capital) / workable_extent : 0.0f;
-    const float applied = capital_per_land /
-                          (capital_per_land + std::max(1.0f, cfg_.capital_utilisation_halfsat));
+    const float applied =
+        capital_per_land / (capital_per_land + std::max(1.0f, cfg_.capital_utilisation_halfsat));
 
     // MACHINES REPLACE HANDS (R11). Capital gated how much of its knowledge a place could
     // use; it did not let capital do the other and more famous thing. An American farmer
@@ -154,12 +152,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // (Measured without the knowledge gate: era 2 — the Bronze Age, year 287 — came out
     // with 75% of its people off the land and 58% of them in towns, because generic
     // capital alone was conferring ninefold labour leverage.)
-    const float knows_machines =
-        K / (K + std::max(1.0f, cfg_.machine_leverage_knowledge_halfsat));
+    const float knows_machines = K / (K + std::max(1.0f, cfg_.machine_leverage_knowledge_halfsat));
     const float has_machines =
         capital_per_land / (capital_per_land + std::max(1.0f, cfg_.machine_leverage_halfsat));
-    const float machine_leverage =
-        1.0f + cfg_.machine_leverage_max * knows_machines * has_machines;
+    const float machine_leverage = 1.0f + cfg_.machine_leverage_max * knows_machines * has_machines;
     // What one person's labour is worth on the land, machines included.
     const float working_fraction = working_age * machine_leverage;
     const float knowledge_factor =
@@ -173,10 +169,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float tech_food_factor = cs.tech_food_mult;
     // Seasonality (relative to Earth) cuts food reliability via lean seasons; gravity
     // does NOT affect the harvest. Earthlike seasonality is neutral.
-    const float seasonality_factor = std::clamp(
-        1.0f - cfg_.seasonality_food_penalty *
-                   (state.hazard_settings.seasonality - earth_hazard().seasonality),
-        0.3f, 1.3f);
+    const float seasonality_factor =
+        std::clamp(1.0f - cfg_.seasonality_food_penalty *
+                              (state.hazard_settings.seasonality - earth_hazard().seasonality),
+                   0.3f, 1.3f);
     // Episodic harvest failure (M6a): on top of the chronic seasonality penalty, a bad
     // harvest year — scaled by the seasonality dial — cuts this year's output. Seeded
     // by YEAR (not tick) so the failure is consistent across a year at any tick
@@ -191,8 +187,7 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
 
     // Chronic world-hazard food channels (M6a): predators prey on herds (waning as
     // knowledge clears them); a hostile atmosphere caps the ceiling (planetary).
-    const float predator_factor =
-        predator_food_factor(state.hazard_settings.predators, K, cfg_);
+    const float predator_factor = predator_food_factor(state.hazard_settings.predators, K, cfg_);
     const float atmosphere_factor =
         atmosphere_ceiling_factor(state.hazard_settings.atmosphere, cfg_);
 
@@ -218,9 +213,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // specialist class. Work per tick.
     const float target_store = cfg_.granary_reserve_years * need * ticks_per_year;
     const float spoilage = cfg_.granary_spoilage_rate * cs.food_store / ticks_per_year;  // /tick
-    const float build = cs.food_store < target_store
-                            ? cfg_.granary_build_rate * (target_store - cs.food_store) / ticks_per_year
-                            : 0.0f;
+    const float build =
+        cs.food_store < target_store
+            ? cfg_.granary_build_rate * (target_store - cs.food_store) / ticks_per_year
+            : 0.0f;
     const float granary_demand = spoilage + build;  // extra food/tick the reserves require
 
     // GROUNDED specialization: how many people must farm to feed everyone AND keep the
@@ -384,8 +380,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     const float held = cs.specialist_fraction;
     const float shortfall = std::max(0.0f, held - supported_fraction);
     const float defended_fraction = supported_fraction + std::min(shortfall, store_cover);
-    const float rate = defended_fraction < held ? cfg_.specialist_shed_per_year
-                                                : cfg_.specialist_growth_per_year;
+    const float rate =
+        defended_fraction < held ? cfg_.specialist_shed_per_year : cfg_.specialist_growth_per_year;
     // ANNUAL, like the granary, the soil and the capital stock — not a per-tick nibble.
     //
     // It was `rate / ticks_per_year` applied every tick, which is correct only if every
@@ -394,8 +390,7 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // than in a real game, and the stratum crawled. Every measurement of it this session
     // was taken under that regime. A per-tick rate under a per-year stride is a silent
     // 365x error and it looks exactly like a slow mechanism.
-    const float specialist_fraction =
-        annual ? held + (defended_fraction - held) * rate : held;
+    const float specialist_fraction = annual ? held + (defended_fraction - held) * rate : held;
     specialists_people = static_cast<float>(population) * specialist_fraction;
 
     // Actual harvest from the farmers who remain on the land. TOWNSFOLK DO NOT FARM:
@@ -441,8 +436,7 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // surplus published here. On a fresh world it is zero, which is the correct reading.
     const float effective_output = std::max(0.0f, output + cs.grain_import_rate);
     const float imported = std::max(0.0f, cs.grain_import_rate);
-    const float import_dependence =
-        effective_output > 0.0f ? imported / effective_output : 0.0f;
+    const float import_dependence = effective_output > 0.0f ? imported / effective_output : 0.0f;
 
     // Granary: bank the year's net food (after feeding everyone and losing spoilage),
     // or draw it down, once per year. A conserved, capped per-province stock.
@@ -487,12 +481,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // Signed, exactly as `effective_output` is: grain that leaves is grain this province
     // cannot feed anyone with, and a place living beyond its own land must read worse
     // when the route reverses. Floored at zero as a quantity of food, not as a rule.
-    const float potential_output = std::max(
-        0.0f,
-        base_ceiling * (1.0f - std::exp(-std::max(0.0f, total_labor) / half)) +
-            cs.grain_import_rate);
-    const float growth_surplus =
-        need > 0.0f ? potential_output / (need + full_upkeep) : 1.0f;
+    const float potential_output =
+        std::max(0.0f, base_ceiling * (1.0f - std::exp(-std::max(0.0f, total_labor) / half)) +
+                           cs.grain_import_rate);
+    const float growth_surplus = need > 0.0f ? potential_output / (need + full_upkeep) : 1.0f;
 
     RegionDelta rd{};
     rd.region_id = prov.region_id;
@@ -546,9 +538,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         // trusts anybody, or where the polity is coming apart, or where armies are
         // taking things, does not accumulate however large its harvest is. That is the
         // difference between a civilisation that builds and one that merely survives.
-        const float hazard =
-            expropriation_hazard(prov.community.institutional_trust, cs.political_stress,
-                                 cs.war_death_fraction, cfg_);
+        const float hazard = expropriation_hazard(prov.community.institutional_trust,
+                                                  cs.political_stress, cs.war_death_fraction, cfg_);
         const float investment = surplus_food * effective_investment_share(hazard, cfg_);
         const float wear = cs.productive_capital * cfg_.capital_depreciation_per_year;
         rd.productive_capital_delta = investment - wear;
@@ -561,9 +552,9 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         //
         // This is the only channel that can lower the carrying ceiling, and so the only
         // way a society can overshoot and fall rather than climb forever.
-        const float chronic = chronic_ceiling_factors(K, tech_food_factor, state.hazard_settings,
-                                                      cfg_) *
-                              harvest_factor;
+        const float chronic =
+            chronic_ceiling_factors(K, tech_food_factor, state.hazard_settings, cfg_) *
+            harvest_factor;
         // THE BOSERUP ESCAPE. What the land bears indefinitely is a SHARE of what it can
         // yield, and that share RISES WITH TECHNIQUE: crop rotation, fallowing, manuring,
         // legumes and terracing are exactly the knowledge that keeps fields alive. A
@@ -664,11 +655,10 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
         // reason the soil's is: what regrows a forest is sunlight and rain on a given
         // area, not how much of it is left. Scaling renewal by the present stock would
         // cancel it out of both sides and leave the woods with no restoring force at all.
-        const float wild_take = output * wild_share_of(prov, cfg_, cs.forest_health,
-                                                       natural_capital) * ticks_per_year;
-        const float pristine_wild =
-            cfg_.weight_forest_forage * prov.geography.forest_coverage +
-            cfg_.weight_fisheries * prov.fisheries.current_stock;
+        const float wild_take =
+            output * wild_share_of(prov, cfg_, cs.forest_health, natural_capital) * ticks_per_year;
+        const float pristine_wild = cfg_.weight_forest_forage * prov.geography.forest_coverage +
+                                    cfg_.weight_fisheries * prov.fisheries.current_stock;
         const float wild_renewal = cfg_.forage_sustainable_share * cfg_.ceiling_per_capital_unit *
                                    pristine_wild * chronic * ticks_per_year;
         if (wild_renewal > 0.0f) {
@@ -679,8 +669,7 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
                     -cfg_.forage_depletion_per_year * (forage_pressure - 1.0f) * cs.forest_health;
             } else {
                 // Taking less than the woods make: they close back over, slowly.
-                rd.forest_health_delta =
-                    cfg_.forage_recovery_per_year * (1.0f - cs.forest_health);
+                rd.forest_health_delta = cfg_.forage_recovery_per_year * (1.0f - cs.forest_health);
             }
         }
     }
@@ -700,9 +689,9 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // (elder at the dawn -> scribe once writing exists -> scholar with formal
     // scholarship), so the knowledge trickle starts tiny and accelerates.
     const auto layer2 = state.occupation_catalog.in_layer_for_era(2, state.technology.current_era);
-    const uint32_t specialists = std::min(
-        static_cast<uint32_t>(static_cast<float>(residents.size()) * specialist_fraction),
-        static_cast<uint32_t>(residents.size()));
+    const uint32_t specialists =
+        std::min(static_cast<uint32_t>(static_cast<float>(residents.size()) * specialist_fraction),
+                 static_cast<uint32_t>(residents.size()));
 
     // Proto-capital: food beyond need is stored (grain/herds/tools), controlled by
     // the resident heads/founders — the origin of capital. In the egalitarian commons
@@ -718,8 +707,8 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
     // The lord stratum is EMERGENT: the wealthiest resident heads (capital rank,
     // ties broken by id for determinism). Wealth collects the tithe; the tithe
     // compounds the wealth — an aristocracy that entrenches, and can be displaced.
-    const uint32_t lords = manorial ? lord_count(static_cast<uint32_t>(residents.size()), cfg_)
-                                    : 0u;
+    const uint32_t lords =
+        manorial ? lord_count(static_cast<uint32_t>(residents.size()), cfg_) : 0u;
     std::vector<uint32_t> lord_indices;  // resident-vector positions of the lords
     if (lords > 0) {
         std::vector<uint32_t> order(residents.size());
@@ -727,16 +716,16 @@ void SubsistenceModule::execute_province(uint32_t province_idx, const WorldState
             order[i] = i;
         std::sort(order.begin(), order.end(), [&](uint32_t x, uint32_t y) {
             const uint32_t ix = residents[x], iy = residents[y];
-            const float cx = ix < state.significant_npcs.size() ? state.significant_npcs[ix].capital
-                                                                : -1.0f;
-            const float cy = iy < state.significant_npcs.size() ? state.significant_npcs[iy].capital
-                                                                : -1.0f;
+            const float cx =
+                ix < state.significant_npcs.size() ? state.significant_npcs[ix].capital : -1.0f;
+            const float cy =
+                iy < state.significant_npcs.size() ? state.significant_npcs[iy].capital : -1.0f;
             if (cx != cy)
                 return cx > cy;  // richest first
-            const uint32_t idx_x = ix < state.significant_npcs.size() ? state.significant_npcs[ix].id
-                                                                      : ix;
-            const uint32_t idx_y = iy < state.significant_npcs.size() ? state.significant_npcs[iy].id
-                                                                      : iy;
+            const uint32_t idx_x =
+                ix < state.significant_npcs.size() ? state.significant_npcs[ix].id : ix;
+            const uint32_t idx_y =
+                iy < state.significant_npcs.size() ? state.significant_npcs[iy].id : iy;
             return idx_x < idx_y;  // deterministic tie-break
         });
         lord_indices.assign(order.begin(), order.begin() + lords);

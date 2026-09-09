@@ -134,8 +134,7 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
 
     // The background population also consumes (food subsistence, below), so we run
     // even when there are no significant NPCs — only bail if there is truly no one.
-    const uint32_t population =
-        province.cohort_stats ? province.cohort_stats->total_population : 0;
+    const uint32_t population = province.cohort_stats ? province.cohort_stats->total_population : 0;
     if (province_npcs.empty() && population == 0)
         return;
 

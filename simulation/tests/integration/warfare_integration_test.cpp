@@ -10,7 +10,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -45,9 +44,8 @@ TEST_CASE("Warfare: annual cadence and conserved plunder under the real orchestr
     // identically (same seed), so the weak province's relative wealth isolates the
     // war effect end-to-end: ONE annual plunder leaves ~80% of the control wealth; a
     // per-tick re-fire (the review finding) would compound 0.8^365 to ~0.
-    auto run_world = [](float aggression_prob, uint32_t& weak_out,
-                        double& weak_capital_out, double& total_capital_out,
-                        float& weak_war_death_out) {
+    auto run_world = [](float aggression_prob, uint32_t& weak_out, double& weak_capital_out,
+                        double& total_capital_out, float& weak_war_death_out) {
         WorldGeneratorConfig config{};
         config.seed = 777;
         config.province_count = 6;
@@ -95,7 +93,7 @@ TEST_CASE("Warfare: annual cadence and conserved plunder under the real orchestr
             npc.capital = (npc.home_province_id == weak) ? 100.0f : 0.0f;
 
         PackageConfig pkg{};
-        pkg.subsistence.proto_capital_rate = 0.0f;      // no proto-capital confound
+        pkg.subsistence.proto_capital_rate = 0.0f;  // no proto-capital confound
         pkg.warfare.base_aggression_prob = aggression_prob;
 
         TickOrchestrator orch;
@@ -115,8 +113,8 @@ TEST_CASE("Warfare: annual cadence and conserved plunder under the real orchestr
         total_capital_out = 0.0;
         for (const auto& npc : world.significant_npcs) {
             if (npc.home_province_id == weak)
-                weak_capital_out += npc.capital;
-            total_capital_out += npc.capital;
+                weak_capital_out += static_cast<double>(npc.capital);
+            total_capital_out += static_cast<double>(npc.capital);
         }
         weak_war_death_out = world.provinces[weak].cohort_stats->war_death_fraction;
     };

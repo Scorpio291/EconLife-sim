@@ -73,7 +73,8 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
             continue;
 
         for (const auto& d : dests) {
-            const double alloc = static_cast<double>(surplus) * (static_cast<double>(d.second) / total_w);
+            const double alloc =
+                static_cast<double>(surplus) * (static_cast<double>(d.second) / total_w);
             const double delivered = alloc * static_cast<double>(d.second);  // ox eats (1 - df)
             net_feedable[d.first] += delivered;
         }
@@ -96,8 +97,9 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
         avail[i] = std::max(0.0f, cs.food_store);
         // The province's own reserve target: what a full granary means here.
         target[i] = static_cast<double>(cs.total_population) *
-                    subsistence_cfg_.per_capita_food_per_tick * tpy *
-                    subsistence_cfg_.granary_reserve_years;
+                    static_cast<double>(subsistence_cfg_.per_capita_food_per_tick) *
+                    static_cast<double>(tpy) *
+                    static_cast<double>(subsistence_cfg_.granary_reserve_years);
     }
     if (rate_tick > 0.0f) {
         for (uint32_t src = 0; src < n; ++src) {
@@ -122,11 +124,12 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
                 const double f_dst = avail[dst] / target[dst];
                 if (f_src <= f_dst)
                     continue;  // grain flows down the scarcity gradient only
-                const double sent =
-                    std::min(avail[src], rate_tick * (f_src - f_dst) * target[dst]);
+                const double sent = std::min(
+                    avail[src], static_cast<double>(rate_tick) * (f_src - f_dst) * target[dst]);
                 if (sent <= 0.0)
                     continue;
-                const double delivered = sent * df;  // the oxen eat the rest en route
+                const double delivered =
+                    sent * static_cast<double>(df);  // the oxen eat the rest en route
                 avail[src] -= sent;
                 store_delta[src] -= sent;
                 avail[dst] += delivered;
@@ -147,7 +150,7 @@ void GrainLogisticsModule::execute(const WorldState& state, DeltaBuffer& delta) 
         RegionDelta rd{};
         rd.region_id = state.provinces[i].region_id;
         rd.net_feedable_surplus_replacement = static_cast<float>(net_feedable[i]);
-        float urban = static_cast<float>(net_feedable[i] / per_capita);
+        float urban = static_cast<float>(net_feedable[i] / static_cast<double>(per_capita));
         if (state.provinces[i].cohort_stats) {
             const float pop = static_cast<float>(state.provinces[i].cohort_stats->total_population);
             if (urban > pop)
