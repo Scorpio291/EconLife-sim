@@ -21,12 +21,12 @@ namespace {
 // Everything a polity is, summed over the provinces that belong to it.
 struct PolityTotals {
     double population = 0.0;
-    double wage_weighted = 0.0;      // population-weighted surplus ratio
+    double wage_weighted = 0.0;       // population-weighted surplus ratio
     double reference_weighted = 0.0;  // population-weighted wage the people are used to
-    double youth_weighted = 0.0;    // population-weighted youth share
-    double held_weighted = 0.0;     // population-weighted stratum held
+    double youth_weighted = 0.0;      // population-weighted youth share
+    double held_weighted = 0.0;       // population-weighted stratum held
     double supported_weighted = 0.0;  // population-weighted stratum supported
-    double trust_weighted = 0.0;    // population-weighted institutional trust
+    double trust_weighted = 0.0;      // population-weighted institutional trust
     double food_store = 0.0;
     double target_store = 0.0;
 };

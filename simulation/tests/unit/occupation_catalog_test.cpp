@@ -1,9 +1,8 @@
-#include <catch2/catch_test_macros.hpp>
+#include "core/world_gen/occupation_catalog.h"
 
+#include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <string>
-
-#include "core/world_gen/occupation_catalog.h"
 
 using namespace econlife;
 
@@ -24,7 +23,8 @@ std::string find_occupations_dir() {
 }
 }  // namespace
 
-TEST_CASE("OccupationCatalog builtin default defines the livelihood layers", "[occupation][tier0]") {
+TEST_CASE("OccupationCatalog builtin default defines the livelihood layers",
+          "[occupation][tier0]") {
     OccupationCatalog cat;
     cat.load_builtin_default();
 
@@ -33,13 +33,13 @@ TEST_CASE("OccupationCatalog builtin default defines the livelihood layers", "[o
 
     const OccupationDefinition* farmer = cat.find("farmer");
     REQUIRE(farmer != nullptr);
-    CHECK(farmer->layer == 1);                 // subsistence/food livelihood
-    CHECK(farmer->knowledge_output == 0.0f);   // food producers make no knowledge
+    CHECK(farmer->layer == 1);                // subsistence/food livelihood
+    CHECK(farmer->knowledge_output == 0.0f);  // food producers make no knowledge
 
     const OccupationDefinition* trader = cat.find("trader");
     REQUIRE(trader != nullptr);
-    CHECK(trader->layer == 2);            // surplus-funded specialist
-    CHECK(trader->min_surplus > 1.0f);    // needs a surplus to be supported
+    CHECK(trader->layer == 2);          // surplus-funded specialist
+    CHECK(trader->min_surplus > 1.0f);  // needs a surplus to be supported
 
     // Knowledge-producers: the engine of progress.
     const OccupationDefinition* scholar = cat.find("scholar");

@@ -109,7 +109,7 @@ inline Snapshot capture(const WorldState& w) {
             if (npc.status == NPCStatus::dead)
                 s.criminals_dead++;
         }
-        s.total_capital += npc.capital;
+        s.total_capital += static_cast<double>(npc.capital);
         if (static_cast<double>(npc.capital) >= s.max_capital) {
             s.max_capital = static_cast<double>(npc.capital);
             s.richest_role = static_cast<int>(npc.role);
@@ -143,7 +143,7 @@ inline Snapshot capture(const WorldState& w) {
         }
         s.max_business_revenue =
             std::max(s.max_business_revenue, static_cast<double>(b.revenue_per_tick));
-        s.deferred_salary_total += b.deferred_salary_liability;
+        s.deferred_salary_total += static_cast<double>(b.deferred_salary_liability);
     }
     for (const auto& npc : w.significant_npcs) {
         for (const auto& m : npc.memory_log) {
@@ -157,21 +157,21 @@ inline Snapshot capture(const WorldState& w) {
 
     const std::size_t np = w.provinces.size();
     for (const auto& p : w.provinces) {
-        s.mean_stability += p.conditions.stability_score;
-        s.mean_gini += p.conditions.inequality_index;
-        s.mean_grievance += p.community.grievance_level;
-        s.mean_inequality += p.conditions.inequality_index;
-        s.mean_cohesion += p.community.cohesion;
-        s.mean_inst_trust += p.community.institutional_trust;
-        s.mean_resource_access += p.community.resource_access;
-        s.mean_response_stage += p.community.response_stage;
+        s.mean_stability += static_cast<double>(p.conditions.stability_score);
+        s.mean_gini += static_cast<double>(p.conditions.inequality_index);
+        s.mean_grievance += static_cast<double>(p.community.grievance_level);
+        s.mean_inequality += static_cast<double>(p.conditions.inequality_index);
+        s.mean_cohesion += static_cast<double>(p.community.cohesion);
+        s.mean_inst_trust += static_cast<double>(p.community.institutional_trust);
+        s.mean_resource_access += static_cast<double>(p.community.resource_access);
+        s.mean_response_stage += static_cast<double>(p.community.response_stage);
         s.max_response_stage =
             std::max(s.max_response_stage, static_cast<int>(p.community.response_stage));
         if (p.cohort_stats) {
-            s.mean_crime += p.cohort_stats->crime_rate;
-            s.mean_dominance += p.cohort_stats->criminal_dominance_index;
-            s.mean_unemployment += p.cohort_stats->unemployment_rate;
-            s.formal_employment += p.cohort_stats->formal_employment_rate;
+            s.mean_crime += static_cast<double>(p.cohort_stats->crime_rate);
+            s.mean_dominance += static_cast<double>(p.cohort_stats->criminal_dominance_index);
+            s.mean_unemployment += static_cast<double>(p.cohort_stats->unemployment_rate);
+            s.formal_employment += static_cast<double>(p.cohort_stats->formal_employment_rate);
             s.total_population += p.cohort_stats->total_population;
         }
     }

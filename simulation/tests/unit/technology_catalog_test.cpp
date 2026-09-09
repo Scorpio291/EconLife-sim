@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <unistd.h>
 
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/shared_types.h"
@@ -465,9 +464,9 @@ TEST_CASE("Era timeline matches the re-based spec", "[technology][era]") {
     EraCatalog cat;
     cat.load_builtin_default();
     CHECK(cat.find("turn_of_millennium")->index == 8);  // modern anchor
-    CHECK(cat.find("divergence")->index == 17);          // last era
+    CHECK(cat.find("divergence")->index == 17);         // last era
     CHECK(cat.max_era() == 17);
-    CHECK(cat.v1_max_era() == 12);  // V1 spans the dawn through "transition"
+    CHECK(cat.v1_max_era() == 12);               // V1 spans the dawn through "transition"
     CHECK(cat.by_index(1)->key == "neolithic");  // the dawn
 }
 
@@ -519,8 +518,7 @@ MaturationOutcome run_maturation(float effective_tier, float cash) {
 }
 }  // namespace
 
-TEST_CASE("Technology: maturation is funded from cash and costs money",
-          "[technology][rnd]") {
+TEST_CASE("Technology: maturation is funded from cash and costs money", "[technology][rnd]") {
     // A well-funded actor matures the node AND is charged for the R&D.
     MaturationOutcome funded = run_maturation(/*effective_tier=*/5.0f, /*cash=*/100000.0f);
     CHECK(funded.maturation_delta > 0.0f);
@@ -602,8 +600,7 @@ TEST_CASE("technique: the era ladder IS the tree's content, not a fit to histori
         REQUIRE(def != nullptr);
         INFO("era " << static_cast<int>(era) << ": authored " << def->knowledge_to_advance
                     << ", tree says " << derived[era - 1]);
-        CHECK_THAT(def->knowledge_to_advance,
-                   Catch::Matchers::WithinAbs(derived[era - 1], 1.0f));
+        CHECK_THAT(def->knowledge_to_advance, Catch::Matchers::WithinAbs(derived[era - 1], 1.0f));
     }
     // And it is a ladder: strictly rising, and compounding rather than creeping, because
     // each era's tree stands for more learning than the one before.
@@ -688,7 +685,7 @@ TEST_CASE("technique: a chain cannot outrun its weakest link", "[technology][no-
     const float unbuilt = cat.effects_for(k, 0.5f, eras, cfg).mortality_mult;
     const float built = cat.effects_for(k, 20000.0f, eras, cfg).mortality_mult;
     CHECK_THAT(unbuilt, Catch::Matchers::WithinAbs(1.0f, 0.05f));  // knows it, cannot do it
-    CHECK(built < 0.7f);                                          // both, and it works
+    CHECK(built < 0.7f);                                           // both, and it works
 }
 
 TEST_CASE("technique: the dawn is not a blank slate but it is not the Bronze Age either",

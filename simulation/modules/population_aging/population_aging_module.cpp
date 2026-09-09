@@ -112,7 +112,7 @@ float PopulationAgingModule::disaster_mortality_factor(float geology_dial, Deter
     // Poisson arrival: probability = 1 - exp(-rate); physical, uncapped.
     const float p = 1.0f - std::exp(-std::max(0.0f, cfg.geology_disaster_base_rate * g));
     if (rng.next_float() >= p)
-        return 1.0f;  // no disaster this year
+        return 1.0f;                                  // no disaster this year
     return 1.0f + cfg.geology_disaster_severity * g;  // quake/storm/wildfire mortality spike
 }
 
@@ -449,8 +449,9 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
             cfg.food_deficit_mortality_strength * (1.0f - f_surplus) - 1.0f;
         famine_mortality_factor = std::max(1.0f, famine_mortality_factor);
     } else {
-        famine_mortality_factor = std::max(
-            cfg.food_mortality_floor, 1.0f - cfg.food_surplus_mortality_relief * (f_surplus - 1.0f));
+        famine_mortality_factor =
+            std::max(cfg.food_mortality_floor,
+                     1.0f - cfg.food_surplus_mortality_relief * (f_surplus - 1.0f));
     }
 
     // Births: survival scales with stability and healthcare (proxied by the
@@ -640,17 +641,16 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                         c.education_level, province.demographics.education_level,
                         cfg_.max_education_drift_per_year);
                 }
-                const EraDefinition* era =
-                    state.era_catalog.by_index(state.technology.current_era);
+                const EraDefinition* era = state.era_catalog.by_index(state.technology.current_era);
                 // Pre-market (commons) demographics span the whole agrarian arc — through
                 // the money/coinage eras and the feudal/mercantile/industrial regimes —
                 // until the modern market economy takes over.
                 const bool commons =
-                    era && (era->economic_regime == "subsistence" ||
-                            era->economic_regime == "barter" || era->economic_regime == "coinage" ||
-                            era->economic_regime == "money" || era->economic_regime == "feudal" ||
-                            era->economic_regime == "mercantile" ||
-                            era->economic_regime == "industrial");
+                    era &&
+                    (era->economic_regime == "subsistence" || era->economic_regime == "barter" ||
+                     era->economic_regime == "coinage" || era->economic_regime == "money" ||
+                     era->economic_regime == "feudal" || era->economic_regime == "mercantile" ||
+                     era->economic_regime == "industrial");
 
                 // Pre-market demographics are FOOD-driven, not politics-driven: a dawn
                 // society has no modern institutions, and the political stability score is
@@ -727,11 +727,10 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                         cs.total_population > 0
                             ? cs.urban_population / static_cast<float>(cs.total_population)
                             : 0.0f;
-                    DeterministicRNG epi_rng(state.world_seed ^
-                                             (static_cast<uint64_t>(state.current_tick) *
-                                              0x9E3779B97F4A7C15ull) ^
-                                             (static_cast<uint64_t>(province.id) << 17) ^
-                                             0xED1DEC1Cull);
+                    DeterministicRNG epi_rng(
+                        state.world_seed ^
+                        (static_cast<uint64_t>(state.current_tick) * 0x9E3779B97F4A7C15ull) ^
+                        (static_cast<uint64_t>(province.id) << 17) ^ 0xED1DEC1Cull);
                     // PLAGUE COMES BACK. The wave's severity scales with how many people
                     // have never met the disease, and that stock is drawn down here and
                     // refilled by turnover — so the recurrence interval and the declining
@@ -746,11 +745,10 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                     plague_published = true;
                     // Geology disasters (quakes/storms/wildfires) — a separate episodic
                     // spike scaled by the geology dial (not density). Independent RNG.
-                    DeterministicRNG geo_rng(state.world_seed ^
-                                             (static_cast<uint64_t>(state.current_tick) *
-                                              0xC2B2AE3D27D4EB4Full) ^
-                                             (static_cast<uint64_t>(province.id) << 23) ^
-                                             0x6E01060715ull);
+                    DeterministicRNG geo_rng(
+                        state.world_seed ^
+                        (static_cast<uint64_t>(state.current_tick) * 0xC2B2AE3D27D4EB4Full) ^
+                        (static_cast<uint64_t>(province.id) << 23) ^ 0x6E01060715ull);
                     hazard_rate_mult *=
                         disaster_mortality_factor(state.hazard_settings.geology, geo_rng, cfg_);
                 }
@@ -815,9 +813,8 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
                 // historically, so the same tech mortality multiplier that ends the
                 // plagues releases this too — which is why urbanisation could only break
                 // past its pre-modern tenth once medicine arrived.
-                const float crowding_rate = urban_crowding_rate(
-                    cs.urban_population,
-                    cs.tech_mortality_mult, cfg_);
+                const float crowding_rate =
+                    urban_crowding_rate(cs.urban_population, cs.tech_mortality_mult, cfg_);
 
                 process_births_deaths(next, eff_stability, cs.sick_rate, cs.addiction_rate,
                                       birth_surplus, famine_surplus, hazard_rate_mult,
@@ -855,7 +852,8 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
 
                 // Hardiness drifts toward the world's hazard level over generations
                 // (adaptation under sustained pressure; softening under ease).
-                new_hardiness = cs.hardiness + (world_hazard - cs.hardiness) * cfg_.hardiness_drift_rate;
+                new_hardiness =
+                    cs.hardiness + (world_hazard - cs.hardiness) * cfg_.hardiness_drift_rate;
             }
 
             // Recompute aggregates over the canonical (sorted) group order.
@@ -968,13 +966,11 @@ void PopulationAgingModule::advance_capability(uint32_t province_idx, const Worl
         // quarter-century average of how well its children ate. A society exactly at
         // subsistence sits at the floor; one with a real surplus approaches its potential.
         const float fed = std::max(0.0f, cs.subsistence_surplus_ratio);
-        const float target_stature =
-            std::clamp(c.stature_floor_at_subsistence +
-                           (1.0f - c.stature_floor_at_subsistence) * (fed - 1.0f),
-                       0.5f, 1.0f);
-        const float stature =
-            cs.nutrition + (target_stature - cs.nutrition) * std::clamp(c.stature_adjust_per_year,
-                                                                        0.0f, 1.0f);
+        const float target_stature = std::clamp(
+            c.stature_floor_at_subsistence + (1.0f - c.stature_floor_at_subsistence) * (fed - 1.0f),
+            0.5f, 1.0f);
+        const float stature = cs.nutrition + (target_stature - cs.nutrition) *
+                                                 std::clamp(c.stature_adjust_per_year, 0.0f, 1.0f);
         rd.nutrition_replacement = stature;
 
         // HEALTH — the share of the year a person is fit to work. Endemic disease and
@@ -988,9 +984,8 @@ void PopulationAgingModule::advance_capability(uint32_t province_idx, const Worl
                            c.days_lost_per_stature_shortfall * shortfall +
                            std::clamp(cs.sick_rate, 0.0f, 1.0f) * 0.5f;
         const float target_health = std::clamp(1.0f - lost, 0.05f, 1.0f);
-        rd.health_replacement =
-            cs.health + (target_health - cs.health) * std::clamp(c.health_adjust_per_year, 0.0f,
-                                                                 1.0f);
+        rd.health_replacement = cs.health + (target_health - cs.health) *
+                                                std::clamp(c.health_adjust_per_year, 0.0f, 1.0f);
 
         // SCHOOLING — mean years of learning per adult. Built by the share of the learned
         // stratum whose time is spared for teaching, and lost as the taught generation
@@ -998,18 +993,20 @@ void PopulationAgingModule::advance_capability(uint32_t province_idx, const Worl
         // to read within a few generations, which is what a dark age is.
         const double pop = static_cast<double>(cs.total_population);
         if (pop > 0.0) {
-            const double learned = pop * static_cast<double>(std::max(0.0f, cs.specialist_fraction)) *
+            const double learned = pop *
+                                   static_cast<double>(std::max(0.0f, cs.specialist_fraction)) *
                                    static_cast<double>(std::max(0.0f, c.teaching_share_of_learned));
-            const double pupil_years = learned * static_cast<double>(c.pupil_years_per_teacher_year);
+            const double pupil_years =
+                learned * static_cast<double>(c.pupil_years_per_teacher_year);
             const double gained = pupil_years / pop;  // years of learning added per adult
             const double lost_years = static_cast<double>(cs.schooling) *
                                       static_cast<double>(c.schooling_turnover_per_year);
             // Saturating: a society cannot school everybody past what schooling is.
-            const double room = std::max(0.0, 1.0 - static_cast<double>(cs.schooling) /
-                                                        std::max(1.0f, c.schooling_years_saturation));
-            rd.schooling_replacement =
-                static_cast<float>(std::max(0.0, static_cast<double>(cs.schooling) +
-                                                     gained * room - lost_years));
+            const double room = std::max(
+                0.0, 1.0 - static_cast<double>(cs.schooling) /
+                               static_cast<double>(std::max(1.0f, c.schooling_years_saturation)));
+            rd.schooling_replacement = static_cast<float>(
+                std::max(0.0, static_cast<double>(cs.schooling) + gained * room - lost_years));
         }
         delta.region_deltas.push_back(rd);
     }

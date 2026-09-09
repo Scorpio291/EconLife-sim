@@ -14,6 +14,22 @@ bool EnergyBaseModule::regime_active(std::string_view regime) const {
     return regime_in(cfg_.active_regimes, regime);
 }
 
+// The flag means "this module was live in an active regime, with at least one
+// province it could publish for". Deciding that here, sequentially, is the same
+// predicate execute_province() used to evaluate in parallel — it is only the
+// WRITE that moves off the worker threads.
+void EnergyBaseModule::init_for_tick(const WorldState& state) {
+    const EraDefinition* era = state.era_catalog.by_index(state.technology.current_era);
+    if (era == nullptr || !regime_active(era->economic_regime))
+        return;
+    for (const Province& prov : state.provinces) {
+        if (prov.cohort_stats && prov.cohort_stats->total_population > 0) {
+            energy_state_dirty_ = true;
+            return;
+        }
+    }
+}
+
 void EnergyBaseModule::execute_province(uint32_t province_idx, const WorldState& state,
                                         DeltaBuffer& province_delta) {
     if (province_idx >= state.provinces.size())
@@ -30,7 +46,8 @@ void EnergyBaseModule::execute_province(uint32_t province_idx, const WorldState&
     if (population == 0)
         return;
 
-    energy_state_dirty_ = true;
+    // energy_state_dirty_ is set in init_for_tick(), on the main thread. Writing
+    // it here raced across the province threads.
 
     // Coal is raised and burned over a year, like the harvest. Between annual ticks the
     // published flow simply stands.
@@ -78,14 +95,14 @@ void EnergyBaseModule::execute_province(uint32_t province_idx, const WorldState&
     // knowledge sits unused, which is exactly what happened everywhere coal was known
     // and never adopted.
     const float adoption = coal_adoption(cs.subsistence_surplus_ratio, best_workability, cfg_);
-    const float wanted_tonnes = static_cast<float>(population) * cfg_.tonnes_per_head_per_year *
-                                adoption * technique;
+    const float wanted_tonnes =
+        static_cast<float>(population) * cfg_.tonnes_per_head_per_year * adoption * technique;
 
     // --- What is actually there -----------------------------------------------------
     // The seam is finite and located. This is the whole point: the escape from the
     // organic economy is a stock being spent, so it has an end.
-    const float in_the_ground = std::max(0.0f, seam->quantity_remaining) *
-                                std::max(1.0f, cfg_.tonnes_per_deposit_unit);
+    const float in_the_ground =
+        std::max(0.0f, seam->quantity_remaining) * std::max(1.0f, cfg_.tonnes_per_deposit_unit);
     float burned = std::min(wanted_tonnes, in_the_ground);
     if (!(burned > 0.0f))
         burned = 0.0f;

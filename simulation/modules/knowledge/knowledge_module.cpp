@@ -12,8 +12,7 @@
 
 namespace econlife {
 
-namespace {
-}
+namespace {}
 
 bool KnowledgeModule::regime_active(std::string_view regime) const {
     return regime_in(cfg_.active_regimes, regime);
@@ -106,20 +105,18 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
         // premise): under pressure the WHOLE population innovates, not just a thin elite.
         // Scarcity is the PROVINCE's own now — a place pressing on its own land
         // intensifies, and its comfortable neighbour does not.
-        const float scarcity =
-            std::clamp(1.0f - cs.subsistence_surplus_ratio, 0.0f, 1.0f);
-        const float pressure = std::clamp(
-            cfg_.adversity_base +
-                cfg_.adversity_hazard_weight *
-                    std::max(0.0f, world_hazard - cfg_.adversity_garden_hazard) +
-                cfg_.adversity_scarcity_weight * scarcity,
-            0.0f, cfg_.adversity_pressure_cap);
+        const float scarcity = std::clamp(1.0f - cs.subsistence_surplus_ratio, 0.0f, 1.0f);
+        const float pressure =
+            std::clamp(cfg_.adversity_base +
+                           cfg_.adversity_hazard_weight *
+                               std::max(0.0f, world_hazard - cfg_.adversity_garden_hazard) +
+                           cfg_.adversity_scarcity_weight * scarcity,
+                       0.0f, cfg_.adversity_pressure_cap);
         pressure_of[i] = pressure;
 
         const double specialist_term = keepers[i] * static_cast<double>(per_worker_output) *
                                        static_cast<double>(cfg_.production_scalar);
-        const double population_term =
-            static_cast<double>(cfg_.population_innovation_rate) * pop;
+        const double population_term = static_cast<double>(cfg_.population_innovation_rate) * pop;
         // WHAT THESE PEOPLE ARE, not a fitted clock. How fast a society works things out
         // depends on how much learning its people carry and how many days a year they are
         // fit to use it — both real, both measurable, both stocks with long memories.
@@ -162,12 +159,10 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
         world_keepers += keepers[i];
     uint32_t leap_npc_id = 0;
     if (world_keepers > 0.0 && cfg_.genius_rate_per_worker_year > 0.0f && n > 0) {
-        const double rate =
-            static_cast<double>(cfg_.genius_rate_per_worker_year) * world_keepers;
+        const double rate = static_cast<double>(cfg_.genius_rate_per_worker_year) * world_keepers;
         const double p_leap = 1.0 - std::exp(-rate);
-        DeterministicRNG genius_rng(state.world_seed ^
-                                    (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^
-                                    0x9E17A5ull);
+        DeterministicRNG genius_rng(
+            state.world_seed ^ (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^ 0x9E17A5ull);
         if (static_cast<double>(genius_rng.next_float()) < p_leap) {
             const auto* host = state.provinces[leap_province].cohort_stats.get();
             // Under the same necessity as everybody else: a mind works on the problems
@@ -193,13 +188,13 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // belongs to a named person, not to an anonymous aggregate. Deterministic
             // pick: the lowest-id living knowledge-keeper, else the lowest-id living adult.
             for (const auto& npc : state.significant_npcs) {
-                const bool gone = npc.status == NPCStatus::dead ||
-                                  npc.status == NPCStatus::fled ||
+                const bool gone = npc.status == NPCStatus::dead || npc.status == NPCStatus::fled ||
                                   npc.status == NPCStatus::imprisoned;
                 if (gone)
                     continue;
                 const OccupationDefinition* o =
-                    npc.occupation != 0 ? state.occupation_catalog.by_index(npc.occupation) : nullptr;
+                    npc.occupation != 0 ? state.occupation_catalog.by_index(npc.occupation)
+                                        : nullptr;
                 if (o != nullptr && o->knowledge_output > 0.0f) {
                     leap_npc_id = npc.id;
                     break;
@@ -225,8 +220,9 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             continue;
         const RegionCohortStats& cs = *prov.cohort_stats;
         const double local = static_cast<double>(cs.knowledge_level);
-        const double stratum_sustains = keepers[i] * static_cast<double>(per_worker_output) *
-                                        static_cast<double>(cfg_.knowledge_sustained_per_output_unit);
+        const double stratum_sustains =
+            keepers[i] * static_cast<double>(per_worker_output) *
+            static_cast<double>(cfg_.knowledge_sustained_per_output_unit);
         const double codified = static_cast<double>(cs.codified_knowledge);
         const double sustainable = std::max(stratum_sustains, codified);
         const double unsustainable = std::max(0.0, local - sustainable);
@@ -252,8 +248,7 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // Somebody has to be able to read it. A region whose learned stratum has
             // scattered absorbs nothing, however close its neighbours and however much
             // they know — which is what a dark age actually is.
-            const double absorb =
-                absorptive_capacity(prov.cohort_stats->specialist_fraction, cfg_);
+            const double absorb = absorptive_capacity(prov.cohort_stats->specialist_fraction, cfg_);
             if (absorb <= 0.0)
                 continue;
             for (const auto& link : prov.links) {
@@ -282,9 +277,9 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             rd.province_knowledge_delta = static_cast<float>(net[i]);
             delta.region_deltas.push_back(rd);
         }
-        frontier = std::max(frontier,
-                            std::max(0.0, static_cast<double>(prov.cohort_stats->knowledge_level) +
-                                              net[i]));
+        frontier = std::max(
+            frontier,
+            std::max(0.0, static_cast<double>(prov.cohort_stats->knowledge_level) + net[i]));
     }
 
     const float level = state.technology.knowledge_level;
@@ -341,10 +336,9 @@ void KnowledgeModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // THE PRESS (R3E). The same keepers, copying orders of magnitude faster
             // once movable type exists — which is what turns the corpus from a floor a
             // dark age can erode into one it cannot.
-            const double copying =
-                local_keepers * static_cast<double>(per_worker_output) *
-                static_cast<double>(cfg_.codify_rate_per_worker_year) *
-                printing_copy_mult(static_cast<float>(frontier), cfg_);
+            const double copying = local_keepers * static_cast<double>(per_worker_output) *
+                                   static_cast<double>(cfg_.codify_rate_per_worker_year) *
+                                   printing_copy_mult(static_cast<float>(frontier), cfg_);
             // Cannot record what is not known HERE: a province's corpus tends toward its
             // own living knowledge, never past it. A scribe cannot copy a book that has
             // not reached his city.

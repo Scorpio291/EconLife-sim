@@ -213,7 +213,8 @@ bool RecipeCatalog::load_csv(const std::string& filepath) {
         // Optional column 25: yield_modifier_inputs — a ';'-separated list of input good
         // keys that BOOST yield rather than gate it (fertilizer for crops, corn feed for
         // livestock). Marks the matching RecipeInput so production treats it as a modifier,
-        // letting the food chain bootstrap from a subsistence base. See RecipeInput::yield_modifier.
+        // letting the food chain bootstrap from a subsistence base. See
+        // RecipeInput::yield_modifier.
         if (fields.size() > 25 && !fields[25].empty()) {
             std::stringstream modss(fields[25]);
             std::string mod_key;

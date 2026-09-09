@@ -15,7 +15,8 @@ TEST_CASE("RegionalConditions: stability steps toward target", "[regional_condit
     REQUIRE_THAT(result, WithinAbs(0.8002f, 0.001f));
 }
 
-TEST_CASE("RegionalConditions: stability falls toward a low target", "[regional_conditions][tier11]") {
+TEST_CASE("RegionalConditions: stability falls toward a low target",
+          "[regional_conditions][tier11]") {
     // Target below current -> stability declines (no blind climb to 1.0).
     // 0.80 + 0.001 * (0.20 - 0.80) = 0.80 - 0.0006 = 0.7994
     float result = RegionalConditionsModule::compute_stability_step(0.80f, 0.20f, 0);

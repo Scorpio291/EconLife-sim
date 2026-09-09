@@ -207,19 +207,19 @@ TEST_CASE("RecipeCatalog::validate_against_goods - clean catalog", "[module][pro
     GoodsCatalog goods = load_iron_goods("econlife_test_recipe_validate_clean_goods");
 
     // Single iron_smelting recipe; all good_ids exist in the goods catalog.
-    auto recipe_path = write_temp_csv(
-        "recipes_validate_clean.csv",
-        "recipe_key,facility_type_key,display_name,"
-        "input_1_key,input_1_qty,input_2_key,input_2_qty,"
-        "input_3_key,input_3_qty,input_4_key,input_4_qty,"
-        "output_1_key,output_1_qty,output_1_is_byproduct,"
-        "output_2_key,output_2_qty,output_2_is_byproduct,"
-        "labor_per_tick,energy_per_tick,mechanical_per_tick,fuel_per_tick,"
-    "min_tech_tier,key_technology_node,era_available\n"
-        "iron_smelting,smelter,Iron Smelting,"
-        "iron_ore,5,coking_coal,2,,,,,"
-        "steel,3,0,,,0,"
-        "80,5.0,0,0,2,,1\n");
+    auto recipe_path =
+        write_temp_csv("recipes_validate_clean.csv",
+                       "recipe_key,facility_type_key,display_name,"
+                       "input_1_key,input_1_qty,input_2_key,input_2_qty,"
+                       "input_3_key,input_3_qty,input_4_key,input_4_qty,"
+                       "output_1_key,output_1_qty,output_1_is_byproduct,"
+                       "output_2_key,output_2_qty,output_2_is_byproduct,"
+                       "labor_per_tick,energy_per_tick,mechanical_per_tick,fuel_per_tick,"
+                       "min_tech_tier,key_technology_node,era_available\n"
+                       "iron_smelting,smelter,Iron Smelting,"
+                       "iron_ore,5,coking_coal,2,,,,,"
+                       "steel,3,0,,,0,"
+                       "80,5.0,0,0,2,,1\n");
     RecipeCatalog recipes;
     REQUIRE(recipes.load_csv(recipe_path));
 

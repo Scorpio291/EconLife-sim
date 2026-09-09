@@ -1,13 +1,12 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include <algorithm>
 #include <memory>
 
 #include "core/rng/deterministic_rng.h"
+#include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
-#include "core/world_state/apply_deltas.h"
 #include "modules/subsistence/subsistence_module.h"
 
 using namespace econlife;
@@ -106,7 +105,6 @@ TEST_CASE("regime gate: active across the dawn commons arc, inert in market eras
     CHECK_FALSE(mod.regime_active("modern"));
 }
 
-
 TEST_CASE("execute_province produces a surplus at the dawn and is inert in the modern era",
           "[subsistence][tier1]") {
     SubsistenceModule mod;
@@ -142,14 +140,13 @@ TEST_CASE("execute_province produces a surplus at the dawn and is inert in the m
     }
 }
 
-
 TEST_CASE("subsistence: a surplus dawn province assigns specialist occupations",
           "[subsistence][tier1]") {
     SubsistenceModule mod;
     WorldState w{};
     w.era_catalog.load_builtin_default();
     w.occupation_catalog.load_builtin_default();
-    w.technology.current_era = 1;  // subsistence regime
+    w.technology.current_era = 1;          // subsistence regime
     w.hazard_settings.seasonality = 0.0f;  // isolate from episodic harvest failures (M6a)
     w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
 
@@ -190,8 +187,8 @@ TEST_CASE("subsistence: a surplus dawn province assigns specialist occupations",
         if (o->layer == 2)
             ++specialists;
     }
-    CHECK(assigned == 40);     // everyone has a livelihood
-    CHECK(specialists >= 1);   // and the surplus supports a non-farming stratum
+    CHECK(assigned == 40);    // everyone has a livelihood
+    CHECK(specialists >= 1);  // and the surplus supports a non-farming stratum
 }
 
 TEST_CASE("subsistence: the non-farming stratum forms and sheds on a generational clock",
@@ -235,7 +232,7 @@ TEST_CASE("subsistence: the non-farming stratum forms and sheds on a generationa
     const float after_shock = run(1);
     CHECK(after_shock > after_century * 0.5f);  // still standing a year later
     const float after_decades = run(60);
-    CHECK(after_decades < after_shock);          // but shedding
+    CHECK(after_decades < after_shock);  // but shedding
 }
 
 TEST_CASE("subsistence: a food surplus accrues proto-capital to resident founders",
@@ -245,7 +242,7 @@ TEST_CASE("subsistence: a food surplus accrues proto-capital to resident founder
     // Dawn world, fertile province with a resident significant NPC (a "head").
     WorldState w{};
     w.era_catalog.load_builtin_default();
-    w.technology.current_era = 1;  // subsistence regime
+    w.technology.current_era = 1;          // subsistence regime
     w.hazard_settings.seasonality = 0.0f;  // isolate from episodic harvest failures (M6a)
     w.provinces.push_back(make_province(0, /*ag=*/0.9f, /*population=*/1000));
 
@@ -314,9 +311,9 @@ TEST_CASE("manorialism: tithe concentrates proto-capital to lords, conserved",
     // Manorial: the lord takes the tithe; peasants share the rest.
     const float lord = SubsistenceModule::proto_share_for(true, lords, n, total, true, cfg);
     const float peasant = SubsistenceModule::proto_share_for(false, lords, n, total, true, cfg);
-    CHECK(lord > peasant);             // the lord/peasant divide
-    CHECK(peasant < 10.0f);            // peasants get less than the even commons share
-    CHECK_THAT(lord, WithinAbs(55.0f, 0.5f));   // 5 base + 50 tithe
+    CHECK(lord > peasant);                     // the lord/peasant divide
+    CHECK(peasant < 10.0f);                    // peasants get less than the even commons share
+    CHECK_THAT(lord, WithinAbs(55.0f, 0.5f));  // 5 base + 50 tithe
     CHECK_THAT(peasant, WithinAbs(5.0f, 0.5f));
 
     // CONSERVED: lords x lord-share + peasants x peasant-share == the same total.
@@ -332,7 +329,7 @@ TEST_CASE("manorialism: lordship is EMERGENT — the wealthiest resident collect
     WorldState w{};
     w.era_catalog.load_builtin_default();
     w.occupation_catalog.load_builtin_default();
-    w.technology.current_era = 5;  // feudal (manorial)
+    w.technology.current_era = 5;          // feudal (manorial)
     w.hazard_settings.seasonality = 0.0f;  // no harvest-failure noise
     w.provinces.push_back(Province{});
     auto& p = w.provinces[0];
@@ -389,7 +386,7 @@ TEST_CASE("harvest failures: episodic, scaled by the seasonality dial", "[subsis
         int hits = 0;
         const int N = 5000;
         for (int s = 0; s < N; ++s) {
-            DeterministicRNG rng(static_cast<uint64_t>(s) * 2246822519ull + 3u);
+            DeterministicRNG rng(static_cast<uint64_t>(s) * static_cast<uint64_t>(2246822519) + 3u);
             if (SubsistenceModule::harvest_failure_factor(seasonality, rng, cfg) < 1.0f)
                 ++hits;
         }
@@ -422,11 +419,12 @@ TEST_CASE("chronic hazards: predators (waning) and atmosphere (planetary) cut fo
     CHECK(SubsistenceModule::atmosphere_ceiling_factor(0.0f, cfg) == 1.0f);
 
     // Predators cut food, and the cut WANES as accumulated knowledge clears them.
-    const float dawn = SubsistenceModule::predator_food_factor(1.0f, 0.0f, cfg);      // no knowledge
-    const float advanced = SubsistenceModule::predator_food_factor(1.0f, 1e6f, cfg);  // high knowledge
+    const float dawn = SubsistenceModule::predator_food_factor(1.0f, 0.0f, cfg);  // no knowledge
+    const float advanced =
+        SubsistenceModule::predator_food_factor(1.0f, 1e6f, cfg);  // high knowledge
     CHECK(dawn < 1.0f);
-    CHECK(advanced > dawn);    // technique clears predators
-    CHECK(advanced > 0.99f);   // ~fully cleared
+    CHECK(advanced > dawn);   // technique clears predators
+    CHECK(advanced > 0.99f);  // ~fully cleared
     // At the half-saturation knowledge, predator pressure is ~half.
     const float half =
         SubsistenceModule::predator_food_factor(1.0f, cfg.predator_clearance_halfsat, cfg);
@@ -534,7 +532,7 @@ TEST_CASE("subsistence: a province fed from elsewhere reads better fed than its 
         w.current_tick = kTicksPerYear;
         w.world_seed = 1;
         w.era_catalog.load_builtin_default();
-        w.technology.current_era = 5;  // feudal — a commons regime
+        w.technology.current_era = 5;          // feudal — a commons regime
         w.hazard_settings.seasonality = 0.0f;  // isolate from harvest-failure draws
         w.provinces.push_back(make_province(0, /*ag=*/0.3f, /*population=*/20000));
         w.provinces[0].cohort_stats->grain_import_rate = import_rate;
@@ -549,7 +547,7 @@ TEST_CASE("subsistence: a province fed from elsewhere reads better fed than its 
     const float fed = surplus_with_import(5000.0f);
     const float draining = surplus_with_import(-2000.0f);
 
-    CHECK(fed > alone);      // grain arriving feeds people
+    CHECK(fed > alone);       // grain arriving feeds people
     CHECK(draining < alone);  // and grain leaving does not
 }
 
@@ -641,9 +639,9 @@ TEST_CASE("subsistence: distrust, faction and war each suppress building",
           "[subsistence][tier2][property]") {
     const SubsistenceConfig cfg{};
     const float base = SubsistenceModule::expropriation_hazard(1.0f, 0.0f, 0.0f, cfg);
-    CHECK(SubsistenceModule::expropriation_hazard(0.0f, 0.0f, 0.0f, cfg) > base);  // nobody
-                                                                                   // trusts
-    CHECK(SubsistenceModule::expropriation_hazard(1.0f, 0.5f, 0.0f, cfg) > base);  // factions
+    CHECK(SubsistenceModule::expropriation_hazard(0.0f, 0.0f, 0.0f, cfg) > base);   // nobody
+                                                                                    // trusts
+    CHECK(SubsistenceModule::expropriation_hazard(1.0f, 0.5f, 0.0f, cfg) > base);   // factions
     CHECK(SubsistenceModule::expropriation_hazard(1.0f, 0.0f, 0.02f, cfg) > base);  // armies
 
     // And each shows up as less actually built.
@@ -670,9 +668,9 @@ TEST_CASE("subsistence: the difference between accumulating and merely surviving
     // (Was a fixed 33-year horizon, which left 0.2% of intended investment at the peak
     // stress this model reaches and erased the capital stock across a crisis.)
     CHECK_THAT(severe / cfg.capital_investment_share, Catch::Matchers::WithinAbs(0.368f, 0.02f));
-    CHECK_THAT(SubsistenceModule::effective_investment_share(1.0f, cfg) /
-                   cfg.capital_investment_share,
-               Catch::Matchers::WithinAbs(0.368f, 0.02f));  // saturated, not zero
+    CHECK_THAT(
+        SubsistenceModule::effective_investment_share(1.0f, cfg) / cfg.capital_investment_share,
+        Catch::Matchers::WithinAbs(0.368f, 0.02f));  // saturated, not zero
     // Saturating toward zero, never negative: an arbitrarily lawless place still cannot
     // build LESS than nothing.
     CHECK(SubsistenceModule::effective_investment_share(10.0f, cfg) >= 0.0f);
@@ -780,9 +778,9 @@ TEST_CASE("no rails: what a province can spare is not decided by its era",
         w.hazard_settings.seasonality = 0.0f;
         w.provinces.push_back(make_province(0, /*ag=*/0.8f, /*population=*/4000));
         auto& cs = *w.provinces[0].cohort_stats;
-        cs.knowledge_level = 20000.0f;      // held equal
-        cs.productive_capital = 4.0e6f;     // held equal (1,000/head)
-        cs.urban_capacity = 2000.0f;        // held equal: haulage is the real limit
+        cs.knowledge_level = 20000.0f;   // held equal
+        cs.productive_capital = 4.0e6f;  // held equal (1,000/head)
+        cs.urban_capacity = 2000.0f;     // held equal: haulage is the real limit
         cs.net_feedable_surplus = 2000.0f;
         DeltaBuffer d{};
         mod.execute_province(0, w, d);
@@ -863,7 +861,7 @@ TEST_CASE("ecology: taking more wild food than the woods make eats the woods",
         w.technology.current_era = 1;
         w.hazard_settings.seasonality = 0.0f;
         w.provinces.push_back(make_province(0, /*ag=*/0.8f, population));
-        w.provinces[0].geography.forest_coverage = 0.6f;  // a wooded province
+        w.provinces[0].geography.forest_coverage = 0.6f;    // a wooded province
         w.provinces[0].cohort_stats->forest_health = 0.7f;  // part cut, so both ways show
         DeltaBuffer d{};
         mod.execute_province(0, w, d);
@@ -1119,8 +1117,8 @@ TEST_CASE("no rails: stocks evolve on a stated cadence, not per tick",
         return *d.region_deltas[0].specialist_fraction_replacement;
     };
 
-    const float mid_year = held_after(kTicksPerYear + 7);  // not year-aligned
-    const float year_end = held_after(kTicksPerYear);      // year-aligned
+    const float mid_year = held_after(kTicksPerYear + 7);            // not year-aligned
+    const float year_end = held_after(kTicksPerYear);                // year-aligned
     CHECK_THAT(mid_year, Catch::Matchers::WithinAbs(0.05f, 1e-6f));  // unchanged off-cadence
     CHECK(year_end > 0.05f);                                         // moves once a year
 }

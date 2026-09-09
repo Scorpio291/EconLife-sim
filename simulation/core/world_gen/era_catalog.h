@@ -75,17 +75,17 @@ inline bool is_market_regime(std::string_view regime) {
 }
 
 struct EraDefinition {
-    uint8_t index;                 // 1-based timeline position; the runtime era key
-    std::string key;               // string id (e.g., "subsistence", "turn_of_millennium")
-    std::string display_name;      // human-readable
-    int32_t start_year;            // calendar year the era opens (negative = BCE)
-    std::string economic_regime;   // behavioral regime hint: "subsistence", "barter",
-                                   //   "mercantile", "industrial", "modern", ...
-    bool is_default_entry;         // true for the era a freshly generated world enters
-                                   //   by default when no starting era is specified
-    bool v1_in_scope;              // true if this era is within V1 scope
-    float knowledge_to_advance;    // accumulated knowledge needed to advance OUT of this era
-                                   //   (0 = not knowledge-gated; advances by other triggers)
+    uint8_t index;                // 1-based timeline position; the runtime era key
+    std::string key;              // string id (e.g., "subsistence", "turn_of_millennium")
+    std::string display_name;     // human-readable
+    int32_t start_year;           // calendar year the era opens (negative = BCE)
+    std::string economic_regime;  // behavioral regime hint: "subsistence", "barter",
+                                  //   "mercantile", "industrial", "modern", ...
+    bool is_default_entry;        // true for the era a freshly generated world enters
+                                  //   by default when no starting era is specified
+    bool v1_in_scope;             // true if this era is within V1 scope
+    float knowledge_to_advance;   // accumulated knowledge needed to advance OUT of this era
+                                  //   (0 = not knowledge-gated; advances by other triggers)
     // Productive capital per head needed to advance OUT of this era: the tools,
     // buildings, cleared land, kilns, mines and machines a society must actually have
     // BUILT to use what it knows. Knowing how to make bronze is not the Bronze Age;

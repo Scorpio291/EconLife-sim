@@ -226,7 +226,7 @@ TEST_CASE("Addiction: spend scales with substance market scarcity premium",
         m.supply = supply;
         world.regional_markets.push_back(m);
         world.market_index_by_good_province[(static_cast<uint64_t>(m.good_id) << 32) | 0ull] =
-            world.regional_markets.size() - 1;
+            static_cast<uint32_t>(world.regional_markets.size() - 1);
 
         AddictionModule module;
         DeltaBuffer delta{};
@@ -279,7 +279,7 @@ TEST_CASE("Addiction: an unaffordable scarcity premium starves the addict instea
     m.supply = 50.0f;
     world.regional_markets.push_back(m);
     world.market_index_by_good_province[(static_cast<uint64_t>(m.good_id) << 32) | 0ull] =
-        world.regional_markets.size() - 1;
+        static_cast<uint32_t>(world.regional_markets.size() - 1);
 
     AddictionModule module;
     DeltaBuffer delta{};

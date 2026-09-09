@@ -44,7 +44,8 @@ struct Reader {
             ok = false;
             return 0;
         }
-        uint32_t v = static_cast<uint32_t>(data[pos]) | (static_cast<uint32_t>(data[pos + 1]) << 8) |
+        uint32_t v = static_cast<uint32_t>(data[pos]) |
+                     (static_cast<uint32_t>(data[pos + 1]) << 8) |
                      (static_cast<uint32_t>(data[pos + 2]) << 16) |
                      (static_cast<uint32_t>(data[pos + 3]) << 24);
         pos += 4;
@@ -244,7 +245,8 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
         if (i < state.npc_indices_by_home_province.size()) {
             for (uint32_t idx : state.npc_indices_by_home_province[i]) {
                 if (idx < state.significant_npcs.size())
-                    avail_capital[i] += std::max(0.0f, state.significant_npcs[idx].capital);
+                    avail_capital[i] +=
+                        static_cast<double>(std::max(0.0f, state.significant_npcs[idx].capital));
             }
         }
     }
@@ -370,9 +372,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 if (it2 == h3_to_idx.end() || it2->second == a)
                     continue;
                 const uint32_t b2 = it2->second;
-                const float path = cavalry[pid_a]
-                                       ? 1.0f
-                                       : link_df(a, b1) * link_df(b1, b2);
+                const float path = cavalry[pid_a] ? 1.0f : link_df(a, b1) * link_df(b1, b2);
                 if (path > 0.0f) {
                     auto t = targets.find(b2);
                     if (t == targets.end() || path > t->second)
@@ -393,8 +393,8 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             const float army_a = polity_levy[pid_a];
             if (army_a <= 0.0f)
                 continue;
-            const float rations_a =
-                army_a * cfg_.campaign_days * cfg_.soldier_ration_mult / std::max(path_fraction, 1e-3f);
+            const float rations_a = army_a * cfg_.campaign_days * cfg_.soldier_ration_mult /
+                                    std::max(path_fraction, 1e-3f);
             const float store_need_a = rations_a * (1.0f - cfg_.forage_share);
             const float drawn_a = static_cast<float>(
                 std::min(static_cast<double>(store_need_a), polity_store(pid_a)));
@@ -434,16 +434,14 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 (avail_capital[a] + avail_capital[b] > 0.0)
                     ? avail_capital[b] / (avail_capital[a] + avail_capital[b])
                     : 0.0;
-            const float deter =
-                1.0f - cfg_.relation_deter_weight * std::max(0.0f, relation(a, b));
-            const float attack_prob = std::clamp(
-                cfg_.base_aggression_prob *
-                    (1.0f + cfg_.prize_weight * static_cast<float>(prize_share)) * deter,
-                0.0f, 1.0f);
-            DeterministicRNG rng(state.world_seed ^
-                                 (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^
-                                 (static_cast<uint64_t>(a) << 21) ^
-                                 (static_cast<uint64_t>(b) << 41) ^ 0x4A1207ull);
+            const float deter = 1.0f - cfg_.relation_deter_weight * std::max(0.0f, relation(a, b));
+            const float attack_prob =
+                std::clamp(cfg_.base_aggression_prob *
+                               (1.0f + cfg_.prize_weight * static_cast<float>(prize_share)) * deter,
+                           0.0f, 1.0f);
+            DeterministicRNG rng(
+                state.world_seed ^ (static_cast<uint64_t>(year) * 0x9E3779B97F4A7C15ull) ^
+                (static_cast<uint64_t>(a) << 21) ^ (static_cast<uint64_t>(b) << 41) ^ 0x4A1207ull);
             if (rng.next_float() >= attack_prob)
                 continue;  // no war this year
 
@@ -481,7 +479,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                         continue;
                     const float share = dead * (levy[i] / mustered);
                     const float fallen = std::min(share, levy[i]);  // physical bound
-                    war_death[i] += fallen / static_cast<float>(pop[i]);
+                    war_death[i] += static_cast<double>(fallen / static_cast<float>(pop[i]));
                 }
             };
             // Allied contingents add strength at forage rates but are not yet
@@ -497,10 +495,11 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // SACK (victor only): grain plunder is carry-limited and pays the ox law
             // on the way home; what is sacked but not delivered is BURNED — an
             // explicit destruction sink, conserved.
-            const double sack = cfg_.sack_fraction * avail_store[b];
+            const double sack = static_cast<double>(cfg_.sack_fraction) * avail_store[b];
             if (sack > 0.0) {
-                const double carry = static_cast<double>(army_a) * cfg_.carry_per_soldier;
-                const double delivered = std::min(sack, carry) * path_fraction;
+                const double carry =
+                    static_cast<double>(army_a) * static_cast<double>(cfg_.carry_per_soldier);
+                const double delivered = std::min(sack, carry) * static_cast<double>(path_fraction);
                 avail_store[b] -= sack;
                 store_delta[b] -= sack;
                 avail_store[a] += delivered;
@@ -542,8 +541,9 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     }
                 }
             }
-            const double coin =
-                victor_can_receive ? cfg_.plunder_fraction * avail_capital[b] : 0.0;
+            const double coin = victor_can_receive
+                                    ? static_cast<double>(cfg_.plunder_fraction) * avail_capital[b]
+                                    : 0.0;
             if (coin > 0.0) {
                 avail_capital[b] -= coin;
                 plundered_from[b] += coin;
@@ -608,9 +608,8 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             admin_route = std::max(admin_route, link_df(m, it->second));
         }
         const float eff_years = static_cast<float>(years_held) * admin_route;
-        const float cohesion =
-            1.0f + cfg_.cohesion_gain_max * eff_years /
-                       (eff_years + std::max(1.0f, cfg_.cohesion_halfsat_years));
+        const float cohesion = 1.0f + cfg_.cohesion_gain_max * eff_years /
+                                          (eff_years + std::max(1.0f, cfg_.cohesion_halfsat_years));
 
         // IMPERIAL OVERSTRETCH (R10). An empire cannot bring its whole army against one
         // rebellious province: it has to hold all of them at once, so the force actually
@@ -648,8 +647,7 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
             // first secession.
             polity_levy[pid] = std::max(0.0f, polity_levy[pid] - levy[m]);
             polity_levy[m] += levy[m];
-            polity_strength[pid] =
-                std::max(0.0f, polity_strength[pid] - levy[m] * asabiya_mult[m]);
+            polity_strength[pid] = std::max(0.0f, polity_strength[pid] - levy[m] * asabiya_mult[m]);
             polity_strength[m] += levy[m] * asabiya_mult[m];
         }
     }
@@ -740,7 +738,9 @@ void WarfareModule::execute(const WorldState& state, DeltaBuffer& delta) {
                 continue;
             const float cap = std::max(0.0f, state.significant_npcs[idx].capital);
             const double debit =
-                (orig_capital[i] > 0.0) ? plundered_from[i] * (cap / orig_capital[i]) : 0.0;
+                (orig_capital[i] > 0.0)
+                    ? plundered_from[i] * (static_cast<double>(cap) / orig_capital[i])
+                    : 0.0;
             const double net = credit_each - debit;
             if (net != 0.0) {
                 NPCDelta nd{};

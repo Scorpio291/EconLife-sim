@@ -51,6 +51,15 @@ jobs:
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             cmake --build build --config ${{ matrix.build_type }} -j 2
+          elif [[ "${{ matrix.build_type }}" == "Debug" ]]; then
+            # Linux Debug: cap parallelism. Debug carries full debug info, and
+            # the several large test executables (unit, integration, emergence,
+            # player_loop, determinism, benchmarks) reach the LINK step at the
+            # same time under unconstrained -j. Each ld then holds its own
+            # debug info resident and the runner is OOM-killed — "ld terminated
+            # with signal 9", targets Terminated, exit 143. Same failure mode
+            # and same remedy as the sanitizer cell below.
+            cmake --build build --config ${{ matrix.build_type }} -j 2
           else
             cmake --build build --config ${{ matrix.build_type }} -j
           fi
@@ -264,7 +273,14 @@ jobs:
 
       - name: Run integration tests (address-undefined)
         if: matrix.sanitizer == 'address-undefined'
-        run: ctest --test-dir build -L "integration" --output-on-failure --timeout 600
+        # Sanitized runs are several times slower than the plain build, and the
+        # per-test ceiling has to allow for that or it fails tests that are
+        # working. "Criminal justice loop closes: detection to imprisonment"
+        # takes ~207 s unsanitized and overran the old 600 s ceiling under
+        # ASan+UBSan — a timeout, with no sanitizer diagnostic anywhere in the
+        # log. This raises the ceiling for the instrumented lane only; the
+        # plain Linux/Windows cells keep theirs.
+        run: ctest --test-dir build -L "integration" --output-on-failure --timeout 2400
 
       - name: Run determinism tests (thread)
         if: matrix.sanitizer == 'thread'

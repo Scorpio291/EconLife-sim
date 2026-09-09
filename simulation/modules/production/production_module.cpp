@@ -169,8 +169,8 @@ void ProductionModule::execute_province(uint32_t province_idx, const WorldState&
     // process heat from its endowment (burning biomass/fossil for the shortfalls,
     // conserving matter) before any facility runs, so the same-tick availability ratios
     // throttle production per power form when a form is scarce.
-    const ProvincePower power = supply_province_power(
-        province_idx, state, province_businesses, available_supply, province_delta);
+    const ProvincePower power = supply_province_power(province_idx, state, province_businesses,
+                                                      available_supply, province_delta);
 
     // Process each business.
     for (const NPCBusiness* biz : province_businesses) {
@@ -441,8 +441,7 @@ ProvincePower ProductionModule::supply_province_power(
         const float flow_used = std::min(mech_flow, demand_mech);
         const float steam_gen = burn_fuels(kBiomassThenFossil, demand_mech - flow_used,
                                            province_idx, state, available_supply, delta);
-        power.mechanical =
-            std::max(0.0f, std::min(1.0f, (flow_used + steam_gen) / demand_mech));
+        power.mechanical = std::max(0.0f, std::min(1.0f, (flow_used + steam_gen) / demand_mech));
     }
 
     // 5. Process heat: burning fuel only (no matter-free heat). Draws the shared stock

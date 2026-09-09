@@ -26,10 +26,11 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-EnergyBaseConfig cfg() { return EnergyBaseConfig{}; }
+EnergyBaseConfig cfg() {
+    return EnergyBaseConfig{};
+}
 
-ResourceDeposit coal(uint32_t id, float quantity, float quality, float depth,
-                     float accessibility) {
+ResourceDeposit coal(uint32_t id, float quantity, float quality, float depth, float accessibility) {
     ResourceDeposit d{};
     d.id = id;
     d.type = ResourceType::Coal;
@@ -48,7 +49,7 @@ WorldState coal_world(float knowledge, float surplus, uint32_t population, float
     w.current_tick = kTicksPerYear;  // an annual tick: coal is raised over a year
     w.world_seed = 1;
     w.era_catalog.load_builtin_default();
-    w.technology.current_era = 6;  // industrial — a commons regime
+    w.technology.current_era = 6;              // industrial — a commons regime
     w.technology.knowledge_level = knowledge;  // the world's frontier
     Province p{};
     p.id = 0;
@@ -94,7 +95,8 @@ TEST_CASE("energy_base: a Neolithic society cannot mine coal however much is und
     const auto c = cfg();
     const float dawn = EnergyBaseModule::mining_technique(0.0f, c);
     const float classical = EnergyBaseModule::mining_technique(c.mining_technique_halfsat, c);
-    const float victorian = EnergyBaseModule::mining_technique(50.0f * c.mining_technique_halfsat, c);
+    const float victorian =
+        EnergyBaseModule::mining_technique(50.0f * c.mining_technique_halfsat, c);
 
     CHECK_THAT(dawn, WithinAbs(0.0f, 1e-6f));
     CHECK_THAT(classical, WithinAbs(0.5f, 1e-3f));

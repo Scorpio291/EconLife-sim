@@ -300,7 +300,17 @@ void PoliticalCycleModule::process_national_unrest(const WorldState& state, Delt
                     // the next election) and the government concedes — grievance
                     // relief + trust restoration in the worst-off provinces.
                     nd.approval_delta = -cfg_.crisis_approval_hit;
+                    // GCC 13 reports a -Wnull-dereference inside the inlined
+                    // std::vector copy constructor here: it cannot prove the
+                    // source buffer is non-null at `*__to = *__from`. It is the
+                    // same well-known false positive that econlife_relax_test_
+                    // warnings() exists for on the test targets. The production
+                    // library keeps the full baseline, so suppress it around
+                    // this one copy rather than for the whole module.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnull-dereference"
                     std::vector<const Province*> by_grievance = provs;
+#pragma GCC diagnostic pop
                     std::sort(by_grievance.begin(), by_grievance.end(),
                               [](const Province* a, const Province* b) {
                                   if (a->community.grievance_level != b->community.grievance_level)
@@ -529,7 +539,8 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
         if (proposal.sponsor_id != 0) {
             // O(1) through the id index rather than a linear scan of every NPC per
             // proposal per tick — the same helper ~10 other modules already use.
-            const NPC* sponsor = lookup_npc_by_id(state, static_cast<uint32_t>(proposal.sponsor_id));
+            const NPC* sponsor =
+                lookup_npc_by_id(state, static_cast<uint32_t>(proposal.sponsor_id));
             const bool sponsor_active = sponsor != nullptr && sponsor->status == NPCStatus::active;
             if (!sponsor_active) {
                 proposal.status = LegislativeProposalStatus::failed;

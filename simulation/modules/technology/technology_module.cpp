@@ -74,7 +74,7 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
 
     const uint8_t era = state.technology.current_era;
     const float advance_at = std::clamp(adoption_cfg_.era_advance_main_share, 0.0f, 1.0f);
-    uint32_t best_spokes = 0;   // spokes of this era worked out, at the furthest province
+    uint32_t best_spokes = 0;    // spokes of this era worked out, at the furthest province
     float best_previous = 0.0f;  // and the era it entered from, for the fall
 
     for (const auto& p : state.provinces) {
@@ -92,9 +92,7 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
         // them. Without this, a political-stress spike removed a society's technology
         // inside a century and took the food ceiling down with it.
         const float rate = std::clamp(adoption_cfg_.technique_inertia_per_year, 0.0f, 1.0f);
-        auto toward = [rate](float held, float target) {
-            return held + (target - held) * rate;
-        };
+        auto toward = [rate](float held, float target) { return held + (target - held) * rate; };
         RegionDelta rd{};
         rd.region_id = p.region_id;
         rd.tech_food_mult_replacement = toward(cs.tech_food_mult, e.food_mult);
@@ -102,15 +100,14 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
         rd.tech_knowledge_mult_replacement = toward(cs.tech_knowledge_mult, e.knowledge_mult);
         delta.region_deltas.push_back(rd);
 
-        best_spokes = std::max(best_spokes,
-                               state.technology_catalog->spokes_worked(
-                                   era, cs.knowledge_level, capital_per_head,
-                                   state.era_catalog, adoption_cfg_, advance_at));
+        best_spokes = std::max(best_spokes, state.technology_catalog->spokes_worked(
+                                                era, cs.knowledge_level, capital_per_head,
+                                                state.era_catalog, adoption_cfg_, advance_at));
         if (era >= 2)
-            best_previous = std::max(best_previous,
-                                     state.technology_catalog->main_path_progress(
-                                         static_cast<uint8_t>(era - 1), cs.knowledge_level,
-                                         capital_per_head, state.era_catalog, adoption_cfg_));
+            best_previous =
+                std::max(best_previous, state.technology_catalog->main_path_progress(
+                                            static_cast<uint8_t>(era - 1), cs.knowledge_level,
+                                            capital_per_head, state.era_catalog, adoption_cfg_));
     }
 
     // AN ERA IS A SET OF TECHNIQUES, NOT A NUMBER. A society moves on when it has worked
@@ -144,8 +141,7 @@ void TechnologyModule::publish_province_technique(const WorldState& state, Delta
     // How long that takes is not a target. A society that runs its main lines early and
     // one that spends two thousand years deepening its side branches are both playing
     // properly, and the model has no business grading either.
-    const auto spokes_here =
-        static_cast<uint32_t>(state.technology_catalog->spokes_in(era).size());
+    const auto spokes_here = static_cast<uint32_t>(state.technology_catalog->spokes_in(era).size());
     const uint32_t needed = std::min(adoption_cfg_.era_advance_spokes_required, spokes_here);
     if (era < max_era && spokes_here > 0 && best_spokes >= needed) {
         TechnologyDelta td{};

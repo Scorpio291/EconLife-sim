@@ -70,12 +70,12 @@ struct Recipe {
     // heat ← biomass, later fossil; electricity ← energy_per_tick). Parsed from
     // CSV; 0 = that form is not required. Not yet consumed by production until the
     // motive-power pre-pass lands (B2); inert reference data until then.
-    float mechanical_per_tick;          // rotary/reciprocating work (mills, hammers, pumps, bellows)
-    float fuel_per_tick;                // process heat / chemical energy (smelting, kilns, drying)
-    float base_cost_per_tick;           // operating cost per tick at baseline
-    bool is_technology_intensive;       // if true, quality is capped by maturation level
-    std::string key_technology_node;    // tech node for maturation cap; "" for commodities
-    uint8_t era_available;              // era when recipe becomes available (1-5)
+    float mechanical_per_tick;        // rotary/reciprocating work (mills, hammers, pumps, bellows)
+    float fuel_per_tick;              // process heat / chemical energy (smelting, kilns, drying)
+    float base_cost_per_tick;         // operating cost per tick at baseline
+    bool is_technology_intensive;     // if true, quality is capped by maturation level
+    std::string key_technology_node;  // tech node for maturation cap; "" for commodities
+    uint8_t era_available;            // era when recipe becomes available (1-5)
 
     // Extraction binding: if set, this recipe extracts a finite geological/biological
     // resource and may only run where the province holds a matching ResourceDeposit

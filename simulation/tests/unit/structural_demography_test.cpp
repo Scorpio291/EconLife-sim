@@ -25,11 +25,12 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-StructuralDemographyConfig cfg() { return StructuralDemographyConfig{}; }
+StructuralDemographyConfig cfg() {
+    return StructuralDemographyConfig{};
+}
 
 // A commons-era province under whatever structural conditions the test wants.
-WorldState stressed_world(float wage, float held, float supported, float food_store,
-                          float trust) {
+WorldState stressed_world(float wage, float held, float supported, float food_store, float trust) {
     WorldState w{};
     w.current_tick = kTicksPerYear;  // an annual tick
     w.world_seed = 1;
@@ -335,8 +336,7 @@ TEST_CASE("structural_demography: with nowhere better to go, a province starves 
     DeltaBuffer d{};
     mod.execute(w, d);
     REQUIRE(d.region_deltas.size() == 2);
-    CHECK_THAT(d.region_deltas[0].refugee_flow_replacement.value_or(-1.0f),
-               WithinAbs(0.0f, 1e-6f));
+    CHECK_THAT(d.region_deltas[0].refugee_flow_replacement.value_or(-1.0f), WithinAbs(0.0f, 1e-6f));
 }
 
 TEST_CASE("structural_demography: inert in market eras", "[structural_demography][psi]") {

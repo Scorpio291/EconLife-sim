@@ -57,9 +57,9 @@ class PopulationAgingModule : public ITickModule {
     // turnover. Pure given the RNG. (Disease is a pre-market population check; medicine
     // releases it in the modern era.)
     struct PlagueYear {
-        float mortality_factor = 1.0f;    // >= 1.0; multiplies the annual death RATE
-        float susceptible_after = 1.0f;   // the stock after this year's wave and turnover
-        bool outbreak = false;            // whether a wave struck at all
+        float mortality_factor = 1.0f;   // >= 1.0; multiplies the annual death RATE
+        float susceptible_after = 1.0f;  // the stock after this year's wave and turnover
+        bool outbreak = false;           // whether a wave struck at all
     };
     static PlagueYear plague_year(float disease_dial, float urban_fraction, float susceptible,
                                   DeterministicRNG& rng, const PopulationAgingConfig& cfg);
@@ -95,8 +95,7 @@ class PopulationAgingModule : public ITickModule {
     // Chronic fertility multiplier (<= 1.0) from ambient radiation (M6a chronic split):
     // a distinct channel from the background mortality scalar — radiation kills AND
     // suppresses births. Planetary; never wanes. Scaled by the `radiation` dial.
-    static float radiation_fertility_factor(float radiation_dial,
-                                            const PopulationAgingConfig& cfg);
+    static float radiation_fertility_factor(float radiation_dial, const PopulationAgingConfig& cfg);
 
     // Chance a child born now reaches fifteen, given the annual death rate the young
     // actually face. Roughly half did not, before modern medicine. Pure/static.
@@ -149,8 +148,7 @@ class PopulationAgingModule : public ITickModule {
     // what the children ate, what the water and the crowding did, whose time the surplus
     // could spare for teaching. Annual; see the definition for why each moves at the speed
     // it does.
-    void advance_capability(uint32_t province_idx, const WorldState& state,
-                            DeltaBuffer& delta);
+    void advance_capability(uint32_t province_idx, const WorldState& state, DeltaBuffer& delta);
 
    private:
     HumanCapabilityConfig capability_cfg_{};

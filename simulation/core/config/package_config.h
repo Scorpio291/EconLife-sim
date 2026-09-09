@@ -385,12 +385,12 @@ struct BusinessLifecycleConfig {
     // Founders are real residents who commit their own capital — no money from
     // nothing — so firm formation is bound to accumulated local wealth.
     bool genesis_enabled = true;
-    uint32_t genesis_cadence_ticks = 30;            // evaluate monthly
-    float firms_per_resident_denominator = 10.0f;   // target = residents / this
-    float genesis_saturation_deadband = 0.10f;      // spawn only while >10% under target
-    float genesis_gap_fill_fraction = 0.10f;        // fill 10% of the unmet gap per evaluation
-    float founder_min_capital = 6000.0f;            // a founder needs at least this to start
-    float founder_investment_fraction = 0.30f;      // and seeds the firm with this share of it
+    uint32_t genesis_cadence_ticks = 30;           // evaluate monthly
+    float firms_per_resident_denominator = 10.0f;  // target = residents / this
+    float genesis_saturation_deadband = 0.10f;     // spawn only while >10% under target
+    float genesis_gap_fill_fraction = 0.10f;       // fill 10% of the unmet gap per evaluation
+    float founder_min_capital = 6000.0f;           // a founder needs at least this to start
+    float founder_investment_fraction = 0.30f;     // and seeds the firm with this share of it
     // Economic regimes (era_catalog economic_regime) in which the flat per-resident
     // genesis runs. In pre-market regimes (subsistence/barter/...) firms are an
     // anachronism — the economy is livelihoods, not businesses — so genesis is
@@ -540,9 +540,9 @@ struct SubsistenceConfig {
     // Natural-capital weights: how much each province endowment contributes to the
     // food-carrying ceiling. Food potential is a labour-worked draw on these.
     float weight_agricultural_productivity = 1.0f;  // farmland / soil fertility
-    float weight_arable_land = 0.5f;                 // arable fraction
-    float weight_forest_forage = 0.3f;               // forageable biomass
-    float weight_fisheries = 0.4f;                   // fish stock
+    float weight_arable_land = 0.5f;                // arable fraction
+    float weight_forest_forage = 0.3f;              // forageable biomass
+    float weight_fisheries = 0.4f;                  // fish stock
 
     // Carrying ceiling scale: max food a province's natural capital can yield is
     // capacity_per_unit * (weighted natural capital). Output approaches this ceiling
@@ -719,7 +719,7 @@ struct SubsistenceConfig {
     float predator_food_penalty = 0.10f;         // food loss at predators=1, uncleared
     float predator_clearance_halfsat = 5000.0f;  // knowledge at which predator pressure halves
     // A hostile/toxic atmosphere caps the carrying ceiling (planetary; never wanes).
-    float atmosphere_cap_penalty = 0.12f;        // ceiling loss at atmosphere=1
+    float atmosphere_cap_penalty = 0.12f;  // ceiling loss at atmosphere=1
 
     // Specialization ceiling: a society can't free MORE than this share of its people
     // from food work. Pre-industrial economies ran ~80-90% farmers, so a non-farming
@@ -750,14 +750,14 @@ struct SubsistenceConfig {
     // in deficit years, so a bad harvest doesn't immediately starve the population or
     // its elite. When farming below the reserve target, the society produces an extra
     // `granary_topup_fraction` of need to refill the store.
-    float granary_reserve_years = 3.0f;    // granary capacity, in years of consumption
-    float granary_spoilage_rate = 0.05f;   // fraction of stored food lost per year (rot/pests).
-                                           // Maintaining reserves therefore demands a permanent
-                                           // production surplus (≈ spoilage × reserve), which is
-                                           // what frees a standing specialist class — grounded,
-                                           // not a margin.
-    float granary_build_rate = 0.10f;      // fraction of the reserve gap a society aims to close
-                                           // per year while under-stocked (extra farming).
+    float granary_reserve_years = 3.0f;   // granary capacity, in years of consumption
+    float granary_spoilage_rate = 0.05f;  // fraction of stored food lost per year (rot/pests).
+                                          // Maintaining reserves therefore demands a permanent
+                                          // production surplus (≈ spoilage × reserve), which is
+                                          // what frees a standing specialist class — grounded,
+                                          // not a margin.
+    float granary_build_rate = 0.10f;     // fraction of the reserve gap a society aims to close
+                                          // per year while under-stocked (extra farming).
     // Defaults to the canonical kTicksPerYear rather than re-spelling 365: modules
     // that gate annually on the constant (warfare, knowledge, population_aging) and
     // modules that use this field (subsistence, grain_logistics) must agree, or the
@@ -777,7 +777,7 @@ struct SubsistenceConfig {
     // Shed rate: the stratum falls toward what food supports over ~a generation when it
     // cannot be fed. Growth is slower still — institutions take longer to build than to
     // lose, which is the asymmetry that makes collapses quick and recoveries slow.
-    float specialist_shed_per_year = 0.04f;   // ~25-year timescale downward
+    float specialist_shed_per_year = 0.04f;    // ~25-year timescale downward
     float specialist_growth_per_year = 0.02f;  // ~50-year timescale upward
 
     // --- The land wears out (the one thing that can lower the ceiling) ---
@@ -812,7 +812,9 @@ struct SubsistenceConfig {
     // the era thresholds (3,830 to leave the Neolithic) because rotation and manuring
     // are early, cheap discoveries — a society should learn to keep its fields alive
     // long before it learns metallurgy.
-    float sustainable_yield_technique_halfsat = 110.0f;  // RESCALED to the content knowledge axis: the knowledge a society holds as it leaves the Neolithic
+    float sustainable_yield_technique_halfsat =
+        110.0f;  // RESCALED to the content knowledge axis: the knowledge a society holds as it
+                 // leaves the Neolithic
     // Fraction of remaining fertility lost per year at DOUBLE the sustainable harvest.
     // ~1.5%/yr means a society mining its land at 2x loses a third of its fertility in
     // a lifetime — the order of the Mesopotamian salinisation record.
@@ -882,7 +884,8 @@ struct SubsistenceConfig {
     // max = total multiplier headroom; halfsat = knowledge at half the boost. 0 max
     // disables the coupling.
     float knowledge_productivity_max = 26.0f;
-    float knowledge_productivity_halfsat = 449.0f;  // RESCALED to the content knowledge axis: early Iron Age learning
+    float knowledge_productivity_halfsat =
+        449.0f;  // RESCALED to the content knowledge axis: early Iron Age learning
 
     // --- KNOWING IS NOT HAVING (R9) --------------------------------------------------
     // The boost above was applied to knowledge ALONE, so the model could not express the
@@ -911,12 +914,12 @@ struct SubsistenceConfig {
     // the middle eras) rather than from an outside figure. Half the known technique is
     // applied at that stock.
     float capital_utilisation_halfsat = 2.05e8f;  // PER UNIT OF WORKABLE EXTENT (was
-                                              // 1,000 per head; the headcount
-                                              // denominator collapsed after a die-off
-                                              // and flew this gate open). ~a mature
-                                              // pre-industrial province: 80,000 people
-                                              // at ~1,000 built per head, on ~0.39 of
-                                              // workable ground.
+                                                  // 1,000 per head; the headcount
+                                                  // denominator collapsed after a die-off
+                                                  // and flew this gate open). ~a mature
+                                                  // pre-industrial province: 80,000 people
+                                                  // at ~1,000 built per head, on ~0.39 of
+                                                  // workable ground.
 
     // --- MACHINES REPLACE HANDS (R11) -------------------------------------------------
     // Capital gated how much of its knowledge a place could USE (R9), but nothing in the
@@ -939,7 +942,7 @@ struct SubsistenceConfig {
     // of them and the rest are freed. Output is still bounded by the land's ceiling, so
     // this frees hands rather than conjuring food — which is exactly what mechanisation
     // did.
-    float machine_leverage_max = 50.0f;      // output per farmer, 1800 -> 2000
+    float machine_leverage_max = 50.0f;  // output per farmer, 1800 -> 2000
     // MECHANISED FARMING IS AN INDUSTRIAL TECHNIQUE, and the knowledge gate on it has to
     // say so. It borrowed `knowledge_productivity_halfsat`, which is the gate on technique
     // raising the carrying ceiling generally — a much lower bar — so on the content
@@ -959,13 +962,13 @@ struct SubsistenceConfig {
     // behaves. Regenerated with the ladder by set_content_exponent.py.
     float machine_leverage_knowledge_halfsat = 34196.0f;
     float machine_leverage_halfsat = 6.2e8f;  // PER UNIT OF WORKABLE EXTENT, same reason and
-                                          // same reference: three times the built stock
-                                          // of a mature pre-industrial province before
-                                          // the land counts as half mechanised.
-                                               // above the ~1,000 an established AGRARIAN
-                                               // province holds here, so the leverage is a
-                                               // property of industrial capital rather than
-                                               // of having a plough
+                                              // same reference: three times the built stock
+                                              // of a mature pre-industrial province before
+                                              // the land counts as half mechanised.
+                                              // above the ~1,000 an established AGRARIAN
+                                              // province holds here, so the leverage is a
+                                              // property of industrial capital rather than
+                                              // of having a plough
 
     // Seasonality (climate swing) reduces food reliability — lean seasons cut the
     // harvest. Applied RELATIVE to Earth's seasonality, so an earthlike world is
@@ -1102,7 +1105,6 @@ struct TechnologyAdoptionConfig {
     float difficulty_free_below = 1.0f;
 };
 
-
 // ---------------------------------------------------------------------------
 // HumanCapabilityConfig — WHAT A PEOPLE IS, and how fast it changes (2026-08-23).
 //
@@ -1135,7 +1137,7 @@ struct HumanCapabilityConfig {
     // A pre-modern adult lost something like a month a year to illness and injury before
     // sanitation and medicine; the crowded and badly-watered lost far more. This is the
     // baseline share of the year lost at unit disease burden with no sanitation.
-    float days_lost_share_at_unit_disease = 0.14f;   // ~51 days
+    float days_lost_share_at_unit_disease = 0.14f;  // ~51 days
     // Hunger and illness compound: an underfed population is ill more often and recovers
     // more slowly, which is the largest single reason famine mortality exceeds starvation.
     float days_lost_per_stature_shortfall = 0.8f;
@@ -1192,15 +1194,15 @@ struct KnowledgeConfig {
     // Jones' semi-endogenous form: dK/dt scales as L / K^beta. Expressed against a
     // reference stock so the dawn is untouched and the penalty only bites once a society
     // knows a great deal.
-    float discovery_difficulty_exponent = 1.0f;   // beta: the canonical semi-endogenous
-                                                  // value (Jones 1995). At beta = 1 a
-                                                  // society with a fixed learned stratum
-                                                  // accumulates as sqrt(t) rather than
-                                                  // linearly — steady progress, no spike.
-    float discovery_difficulty_halfsat = 770.0f;  // RESCALED to the content knowledge axis: mid Iron Age learning  // the stock at which the next discovery
-                                                    // costs twice what the first did. Below
-                                                    // it the dawn is unaffected; the
-                                                    // measured runaway begins just above.
+    float discovery_difficulty_exponent = 1.0f;  // beta: the canonical semi-endogenous
+                                                 // value (Jones 1995). At beta = 1 a
+                                                 // society with a fixed learned stratum
+                                                 // accumulates as sqrt(t) rather than
+                                                 // linearly — steady progress, no spike.
+    float discovery_difficulty_halfsat =
+        770.0f;  // RESCALED to the content knowledge axis: mid Iron Age learning  // the stock at
+                 // which the next discovery costs twice what the first did. Below it the dawn is
+                 // unaffected; the measured runaway begins just above.
 
     // Economic regimes in which the knowledge engine runs (it is otherwise inert).
     std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
@@ -1316,7 +1318,9 @@ struct KnowledgeConfig {
     // saturates rather than switching: presses spread, they do not appear everywhere at
     // once. Threshold set near where an earthlike world stands around its Early Modern
     // era, which is when it actually happened.
-    float printing_knowledge_halfsat = 23540.0f;  // RESCALED to the content knowledge axis: Early Modern learning, which is when the press actually spread
+    float printing_knowledge_halfsat =
+        23540.0f;  // RESCALED to the content knowledge axis: Early Modern learning, which is when
+                   // the press actually spread
     // How much faster a press copies than a hand. Two orders of magnitude, from the
     // manuscript-to-print book counts above.
     float printing_copy_multiplier = 100.0f;
@@ -1388,11 +1392,11 @@ struct KnowledgeConfig {
     // years of learning per adult times the share of the year they are fit to work, both
     // stocks with long memories, both measurable in the record. See
     // RegionCohortStats::schooling and ::health, and HumanCapabilityConfig.
-    float adversity_base = 0.35f;               // drive with no special pressure (idle curiosity)
-    float adversity_hazard_weight = 0.6f;       // drive from the world's hazard above a gentle one
-    float adversity_scarcity_weight = 1.4f;     // drive from food scarcity (Malthusian pressure)
-    float adversity_garden_hazard = 0.45f;      // hazard level below which a world is "comfortable"
-    float adversity_pressure_cap = 3.0f;        // ceiling on the pressure multiplier
+    float adversity_base = 0.35f;            // drive with no special pressure (idle curiosity)
+    float adversity_hazard_weight = 0.6f;    // drive from the world's hazard above a gentle one
+    float adversity_scarcity_weight = 1.4f;  // drive from food scarcity (Malthusian pressure)
+    float adversity_garden_hazard = 0.45f;   // hazard level below which a world is "comfortable"
+    float adversity_pressure_cap = 3.0f;     // ceiling on the pressure multiplier
 };
 
 // Grain logistics — the "tyranny of the ox" (medieval band §3.5). A draft team eats
@@ -1416,8 +1420,9 @@ struct GrainLogisticsConfig {
     float land_mode = 1.0f;
     float river_mode = 0.10f;
     float maritime_mode = 0.05f;
-    float terrain_weight = 1.0f;  // transit_terrain_cost raises cost (mountains/swamp block hauling)
-    float infra_relief = 0.8f;    // infrastructure_bonus (roads) lowers cost
+    float terrain_weight =
+        1.0f;                   // transit_terrain_cost raises cost (mountains/swamp block hauling)
+    float infra_relief = 0.8f;  // infrastructure_bonus (roads) lowers cost
     float gravity_weight = 0.5f;  // gravity above 1g raises cost (heavier world -> smaller radius)
 
     // --- Urbanization (M3): the catchment surplus becomes town population ---
@@ -1634,20 +1639,20 @@ struct WarfareConfig {
     // Active in the pre-market arc (dawn polities war). Modern war is the political_cycle's.
     std::vector<std::string> active_regimes = {"subsistence", "barter",     "coinage",   "money",
                                                "feudal",      "mercantile", "industrial"};
-    float aggression_ratio = 1.3f;     // attack only with >= this strength edge (risk policy)
+    float aggression_ratio = 1.3f;       // attack only with >= this strength edge (risk policy)
     float base_aggression_prob = 0.04f;  // annual prob a qualifying opportunity is taken
     // --- The grounded war economy (G2): armies are PEOPLE eating GRAIN. All
     // constants are defensible in real units (grounding doctrine).
-    float levy_fraction = 0.10f;      // share of population an agrarian polity can field
-    float campaign_days = 120.0f;     // an attacking army's campaign season
-    float defense_days = 60.0f;       // the defender mobilizes once invaded
+    float levy_fraction = 0.10f;       // share of population an agrarian polity can field
+    float campaign_days = 120.0f;      // an attacking army's campaign season
+    float defense_days = 60.0f;        // the defender mobilizes once invaded
     float soldier_ration_mult = 2.0f;  // campaign consumption vs civilian (baggage, waste, animals)
-    float forage_share = 0.5f;        // ration share coverable off the land (pillage / home fields);
-                                      // the rest must come from the GRANARY (food_store) — an
-                                      // unprovisioned army fights at forage strength
-    float battle_lethality = 0.10f;   // fraction of the enemy's effective strength that becomes
-                                      // your dead over a season (Lanchester attrition coefficient)
-    float sack_fraction = 0.25f;      // of the loser's granary a victorious sack reaches
+    float forage_share = 0.5f;       // ration share coverable off the land (pillage / home fields);
+                                     // the rest must come from the GRANARY (food_store) — an
+                                     // unprovisioned army fights at forage strength
+    float battle_lethality = 0.10f;  // fraction of the enemy's effective strength that becomes
+                                     // your dead over a season (Lanchester attrition coefficient)
+    float sack_fraction = 0.25f;     // of the loser's granary a victorious sack reaches
     float carry_per_soldier = 100.0f;  // food units a soldier + cart share hauls home (loot limit);
                                        // what is sacked but cannot be carried is BURNED (conserved
                                        // to an explicit destruction sink)
@@ -1680,20 +1685,20 @@ struct WarfareConfig {
     // polity members pool power (internal peace, external weight); and a member whose
     // own power outgrows the rest of its polity SECEDES (the hold problem — an empire
     // that can no longer overawe a member cannot keep it).
-    uint32_t absorb_after_wins = 3;   // decisive wins (same attacker->defender) to absorb
+    uint32_t absorb_after_wins = 3;      // decisive wins (same attacker->defender) to absorb
     float secession_power_ratio = 0.8f;  // member secedes when own power > ratio x rest-of-polity
     // The conqueror multipliers (M6c-6, design §5.5) — how the rare empire BREAKS the
     // bounded-war default, each archetype through a different gate:
     // ALEXANDER — leadership: rarely, a polity seat produces an exceptional commander
     // whose tenure multiplies the polity's power; when the leader dies the multiplier
     // vanishes and the hold problem fragments what institutions never caught up with.
-    float leadership_rate = 0.004f;       // annual prob a seat produces a great commander
-    float leadership_power_mult = 2.5f;   // polity power multiplier while the leader lives
+    float leadership_rate = 0.004f;         // annual prob a seat produces a great commander
+    float leadership_power_mult = 2.5f;     // polity power multiplier while the leader lives
     uint32_t leadership_tenure_years = 30;  // the conqueror's active span
     // GENGHIS — mobility: a steppe polity (herd-fed cavalry, no grain supply line)
     // projects force PAST the adjacency reach — it can strike 2-hop targets.
-    float steppe_arable_max = 0.2f;   // a province this un-arable ...
-    float steppe_forest_max = 0.3f;   // ... and this open is steppe (grassland)
+    float steppe_arable_max = 0.2f;         // a province this un-arable ...
+    float steppe_forest_max = 0.3f;         // ... and this open is steppe (grassland)
     float cavalry_polity_min_share = 0.5f;  // steppe share of polity power to fight as cavalry
     // ROME — cohesion: integration grows with tenure and SATURATES on the
     // assimilation timescale (no hard cap; diminishing returns are the mechanism:
@@ -1801,7 +1806,7 @@ struct SeasonalAgricultureConfig {
     // by subsistence — because a constant effort meant a province emptied by plague landed
     // the same catch as one crowded to its limit, and the stock could not answer the
     // population living off it.
-    float fishing_effort = 0.15f;             // ANNUAL fraction of stock harvested
+    float fishing_effort = 0.15f;  // ANNUAL fraction of stock harvested
     // Annual harvest fraction one fisher accounts for, as a first-arrival rate: the effort
     // is 1 - exp(-catchability x fishers), so it rises with the boats and approaches
     // taking the whole stock in a year without ever reaching it. Set against the fleet
@@ -1809,7 +1814,7 @@ struct SeasonalAgricultureConfig {
     // water land about the 15% the market fleet does — so the two arcs meet rather than
     // step, and a fishery is over-fished by crowding rather than by a number.
     float fisher_catchability = 8.0e-5f;
-                                              // (module converts to per-tick)
+    // (module converts to per-tick)
     float fishing_catch_to_tonnes = 5000.0f;  // normalized-stock → fish_wild tonnes
 };
 
@@ -2105,10 +2110,10 @@ struct NpcSpendingConfig {
     // individual wallet (cohorts are abstract), so it is not charged cash — the demand
     // signal raises food prices, which is what food producers earn against.
     float per_capita_food_per_tick = 0.0008f;  // subsistence food units per person per tick
-    std::vector<std::string> food_basket = {
-        "flour",       "rice",          "beef",          "pork",
-        "poultry_meat", "dairy_products", "fish_wild",     "fish_farmed",
-        "packaged_food", "refined_sugar", "soy_oil_refined"};
+    std::vector<std::string> food_basket = {"flour",         "rice",           "beef",
+                                            "pork",          "poultry_meat",   "dairy_products",
+                                            "fish_wild",     "fish_farmed",    "packaged_food",
+                                            "refined_sugar", "soy_oil_refined"};
 };
 
 struct AntitrustConfig {
@@ -2189,11 +2194,11 @@ struct ProductionConfig {
     // and tailings; light/organic industries less. Covers every product via its
     // category — no per-recipe authoring. Waste accumulates in the province (and
     // disperses via the standard surplus decay) until handled.
-    float waste_rate_hazardous = 0.35f;   // petroleum, chemicals, pharma → hazardous_waste
-    float waste_rate_ewaste = 0.20f;      // electronics → hazardous_waste
-    float waste_rate_heavy = 0.25f;       // heavy_industry, metals, geological, vehicles
+    float waste_rate_hazardous = 0.35f;     // petroleum, chemicals, pharma → hazardous_waste
+    float waste_rate_ewaste = 0.20f;        // electronics → hazardous_waste
+    float waste_rate_heavy = 0.25f;         // heavy_industry, metals, geological, vehicles
     float waste_rate_construction = 0.20f;  // construction, structural
-    float waste_rate_light = 0.12f;       // food, agricultural, textiles, timber, biological
+    float waste_rate_light = 0.12f;         // food, agricultural, textiles, timber, biological
 };
 
 struct RndConfig {
@@ -2433,12 +2438,12 @@ struct RegionalConditionsConfig {
     // provinces). The residual pollutes: a saturating function of the hazardous-
     // weighted waste stock raises sick_rate (pollution illness → mortality via
     // population_aging). Routed to health, NOT grievance (single-owner discipline).
-    float waste_handling_base = 0.40f;        // baseline fraction handled per tick
-    float waste_handling_infra = 0.40f;       // additional handling × infrastructure_rating
+    float waste_handling_base = 0.40f;            // baseline fraction handled per tick
+    float waste_handling_infra = 0.40f;           // additional handling × infrastructure_rating
     float waste_handling_hazardous_scale = 0.5f;  // hazardous waste is harder to handle
-    float hazardous_pollution_weight = 3.0f;  // hazardous waste pollutes far more per unit
-    float waste_pollution_halfsat = 500.0f;   // weighted-waste stock at half-max pollution
-    float waste_pollution_sick_scale = 0.02f;  // max per-tick sick_rate contribution
+    float hazardous_pollution_weight = 3.0f;      // hazardous waste pollutes far more per unit
+    float waste_pollution_halfsat = 500.0f;       // weighted-waste stock at half-max pollution
+    float waste_pollution_sick_scale = 0.02f;     // max per-tick sick_rate contribution
 };
 
 struct TrustUpdatesConfig {
@@ -2616,11 +2621,11 @@ struct PopulationAgingConfig {
     // round (0.70 on mortality), which is backwards.
     float wage_fertility_elasticity = 0.40f;  // births ~ w^+e: prosperity brings marriage forward
     float wage_mortality_elasticity = 0.30f;  // deaths ~ w^-e: hunger kills before famine does
-    float food_surplus_birth_cap = 2.0f;          // max birth multiplier from surplus. A fed
-                                                  // population grows and consumes productivity gains
-                                                  // (the Malthusian reality), keeping the surplus
-                                                  // modest and the population tracking the carrying
-                                                  // ceiling rather than ballooning a huge surplus.
+    float food_surplus_birth_cap = 2.0f;      // max birth multiplier from surplus. A fed
+                                              // population grows and consumes productivity gains
+                                              // (the Malthusian reality), keeping the surplus
+                                              // modest and the population tracking the carrying
+                                              // ceiling rather than ballooning a huge surplus.
     float food_deficit_mortality_strength = 4.0f;  // extra mortality per unit of deficit; a real
                                                    // famine culls hard, so an overshot population
                                                    // self-corrects back to its food supply
@@ -2634,7 +2639,7 @@ struct PopulationAgingConfig {
                                                   // surplus eases survival only a little — disease
                                                   // and the world's hazards, not food, dominate
                                                   // pre-modern mortality)
-    float food_mortality_floor = 0.5f;            // mortality never falls below this fraction
+    float food_mortality_floor = 0.5f;  // mortality never falls below this fraction
     // REMOVED (2026-08-22): `commons_stability_floor`, a constant substituted for the
     // political stability score in pre-market eras. It multiplied births and divided into
     // mortality, so it alone fixed the surplus at which births met deaths (1.45,
@@ -2677,11 +2682,11 @@ struct PopulationAgingConfig {
     // medicine releases disease-as-population-check in the modern era (the hockey-stick
     // cause). Memoryless single-year spikes for now; multi-year outbreaks + spread
     // along trade links are the follow-up (design §5.5, D8).
-    float epidemic_base_rate = 0.02f;       // annual outbreak HAZARD RATE at disease=1, rural;
-                                            // probability arrives as 1 - exp(-rate) (Poisson) —
-                                            // physically bounded, no cap (grounding doctrine)
-    float epidemic_density_weight = 2.0f;   // urban crowding multiplies the outbreak rate
-    float epidemic_severity = 1.2f;         // mortality-multiplier bump at disease=1, rural
+    float epidemic_base_rate = 0.02f;      // annual outbreak HAZARD RATE at disease=1, rural;
+                                           // probability arrives as 1 - exp(-rate) (Poisson) —
+                                           // physically bounded, no cap (grounding doctrine)
+    float epidemic_density_weight = 2.0f;  // urban crowding multiplies the outbreak rate
+    float epidemic_severity = 1.2f;        // mortality-multiplier bump at disease=1, rural
 
     // --- PLAGUE COMES BACK (R3B) ---------------------------------------------------
     // The Black Death was not one blip. England fell 4.8M (1348) -> 2.6M (1351) and kept
@@ -2717,7 +2722,7 @@ struct PopulationAgingConfig {
 
     // Radiation chronically depresses FERTILITY (a distinct channel from the
     // background mortality scalar; planetary, never wanes). M6a chronic split.
-    float radiation_fertility_penalty = 0.18f;   // birth-rate loss at radiation=1
+    float radiation_fertility_penalty = 0.18f;  // birth-rate loss at radiation=1
 
     // --- THE URBAN GRAVEYARD -------------------------------------------------------
     // Before sanitation a town was a net consumer of people. Crowding put the midden

@@ -506,8 +506,8 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             // they strike — a one-time hit scaled by severity. Droughts hurt the
             // harvest (handled by the per-tick agricultural-modifier path) but do not
             // wreck infrastructure, so they are excluded here.
-            const bool is_drought = event.template_id == "drought_mild" ||
-                                    event.template_id == "drought_severe";
+            const bool is_drought =
+                event.template_id == "drought_mild" || event.template_id == "drought_severe";
             if (!is_drought) {
                 const float infra_dmg =
                     cfg_.natural_infra_dmg_min +
