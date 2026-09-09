@@ -273,14 +273,12 @@ jobs:
 
       - name: Run integration tests (address-undefined)
         if: matrix.sanitizer == 'address-undefined'
-        # Sanitized runs are several times slower than the plain build, and the
-        # per-test ceiling has to allow for that or it fails tests that are
-        # working. "Criminal justice loop closes: detection to imprisonment"
-        # takes ~207 s unsanitized and overran the old 600 s ceiling under
-        # ASan+UBSan — a timeout, with no sanitizer diagnostic anywhere in the
-        # log. This raises the ceiling for the instrumented lane only; the
-        # plain Linux/Windows cells keep theirs.
-        run: ctest --test-dir build -L "integration" --output-on-failure --timeout 2400
+        # The long integration tests carry their own TIMEOUT property (set in
+        # simulation/tests/integration/CMakeLists.txt), which overrides this
+        # default — sanitized runs are several times slower and were failing
+        # tests that worked, just slowly. This stays at the lane's own value
+        # for everything else.
+        run: ctest --test-dir build -L "integration" --output-on-failure --timeout 600
 
       - name: Run determinism tests (thread)
         if: matrix.sanitizer == 'thread'

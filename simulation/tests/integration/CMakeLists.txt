@@ -23,11 +23,22 @@ econlife_relax_test_warnings(econlife_integration_tests)
 # (e.g. "packages/base_game/goods" via find_goods_dir) resolve regardless of
 # where ctest was invoked from. Without this, the goods CSV integration test
 # previously silently SKIPped in CI because its relative-path search failed.
+#
+# TIMEOUT is set here rather than per-lane on the ctest command line, because
+# the same test has to fit under every toolchain. "Criminal justice loop
+# closes: detection to imprisonment" runs ~207 s in an optimized local build;
+# in the CI Debug cell it overran the lane's 300 s ceiling, and under
+# ASan+UBSan it overran 600 s — both reported as failures of a test that was
+# working, just slowly. A per-test property overrides the lane default, so one
+# number covers Debug, Release, Windows and both sanitizer lanes. It is a
+# hang-catcher, not a performance budget: the whole integration suite runs in
+# ~580 s in Debug, so nothing legitimate comes close to it.
 catch_discover_tests(econlife_integration_tests
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     PROPERTIES
         SKIP_RETURN_CODE 4
         LABELS "integration"
+        TIMEOUT 1800
 )
 
 # ---------------------------------------------------------------------------
