@@ -14,6 +14,7 @@
 #include "modules/economy/economy_types.h"
 #include "modules/technology/technology_module.h"
 #include "modules/technology/technology_types.h"
+#include "tests/test_process_id.h"
 
 using namespace econlife;
 
@@ -39,8 +40,8 @@ static std::string write_temp_csv(const std::string& filename, const std::string
     // several at once, so a shared fixed path is a race: two cases writing the same
     // fixture raced and one read a half-written file. It passed alone and failed in the
     // suite, which is the signature.
-    auto dir = fs::temp_directory_path() /
-               ("econlife_tech_test_" + std::to_string(static_cast<long>(::getpid())));
+    auto dir =
+        fs::temp_directory_path() / econlife::test::process_scoped_name("econlife_tech_test_");
     fs::create_directories(dir);
     auto path = dir / filename;
     std::ofstream out(path);

@@ -16,6 +16,7 @@
 #include "core/world_state/world_state.h"
 #include "modules/technology/technology_module.h"
 #include "modules/technology/technology_types.h"
+#include "tests/test_process_id.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -154,7 +155,7 @@ TEST_CASE("Technology: eras with a main path are not advanced by the calendar",
     {
         namespace fs = std::filesystem;
         const auto dir =
-            fs::temp_directory_path() / ("econlife_mainpath_" + std::to_string(::getpid()));
+            fs::temp_directory_path() / econlife::test::process_scoped_name("econlife_mainpath_");
         fs::create_directories(dir);
         const auto path = dir / "nodes.csv";
         std::ofstream f(path);

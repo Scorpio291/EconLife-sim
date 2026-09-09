@@ -10,6 +10,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/knowledge/knowledge_module.h"
+#include "tests/test_process_id.h"
 
 using namespace econlife;
 
@@ -256,7 +257,7 @@ struct GatedEras {
 
     GatedEras() {
         dir = std::filesystem::temp_directory_path() /
-              ("econlife_eras_" + std::to_string(::getpid()));
+              econlife::test::process_scoped_name("econlife_eras_");
         std::filesystem::create_directories(dir);
         std::ofstream f(dir / "eras.csv");
         f << "era_index,era_key,display_name,start_year,economic_regime,is_default_entry,"
