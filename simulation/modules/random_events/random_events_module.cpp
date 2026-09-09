@@ -341,7 +341,7 @@ void RandomEventsModule::apply_economic_per_tick(const WorldState& state, const 
     }
 }
 
-void RandomEventsModule::apply_human_per_tick(const WorldState& state, const Province& province,
+void RandomEventsModule::apply_human_per_tick(const WorldState& /*state*/, const Province& province,
                                               const ActiveRandomEvent& event,
                                               DeltaBuffer& province_delta) {
     RegionDelta rd{};
@@ -522,8 +522,8 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             // they strike — a one-time hit scaled by severity. Droughts hurt the
             // harvest (handled by the per-tick agricultural-modifier path) but do not
             // wreck infrastructure, so they are excluded here.
-            const bool is_drought = event.template_id == "drought_mild" ||
-                                    event.template_id == "drought_severe";
+            const bool is_drought =
+                event.template_id == "drought_mild" || event.template_id == "drought_severe";
             if (!is_drought) {
                 const float infra_dmg =
                     cfg_.natural_infra_dmg_min +

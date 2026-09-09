@@ -1,12 +1,12 @@
 // TechnologyCatalog — CSV loading for technology nodes and maturation ceilings.
 
 #include "core/world_gen/technology_catalog.h"
-#include <functional>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <sstream>
 #include <string>
 
@@ -318,8 +318,8 @@ uint32_t TechnologyCatalog::spokes_worked(uint8_t era, float knowledge, float ca
     return worked;
 }
 
-float TechnologyCatalog::main_path_progress(uint8_t era, float knowledge,
-                                            float capital_per_head, const EraCatalog& eras,
+float TechnologyCatalog::main_path_progress(uint8_t era, float knowledge, float capital_per_head,
+                                            const EraCatalog& eras,
                                             const TechnologyAdoptionConfig& cfg,
                                             const std::string& spoke) const {
     const double K = static_cast<double>(std::max(0.0f, knowledge));
@@ -331,12 +331,12 @@ float TechnologyCatalog::main_path_progress(uint8_t era, float knowledge,
             continue;
         if (!spoke.empty() && n.spoke != spoke)
             continue;
-        const double k_req = static_cast<double>(knowledge_required(n.era_available, n.difficulty,
-                                                                    eras));
+        const double k_req =
+            static_cast<double>(knowledge_required(n.era_available, n.difficulty, eras));
         const double knows = k_req > 0.0 ? K / (K + k_req) : 1.0;
-        const double c_req = static_cast<double>(std::max(0.0f, cfg.capital_per_difficulty)) *
-                             static_cast<double>(std::max(0.0f, n.difficulty -
-                                                                    cfg.difficulty_free_below));
+        const double c_req =
+            static_cast<double>(std::max(0.0f, cfg.capital_per_difficulty)) *
+            static_cast<double>(std::max(0.0f, n.difficulty - cfg.difficulty_free_below));
         const double has = c_req > 0.0 ? c / (c + c_req) : 1.0;
         sum += knows * has;
         ++count;
@@ -407,9 +407,10 @@ EraTechEffects TechnologyCatalog::effects_for(float knowledge, float capital_per
         if (p <= 0.0f)
             continue;
         const TechnologyNode& n = nodes_[i];
-        knowledge_budget += static_cast<double>(std::max(0.0f, n.knowledge_mult - 1.0f)) * p;
-        food_budget += static_cast<double>(std::max(0.0f, n.food_mult - 1.0f)) * p;
-        mortality_budget += static_cast<double>(std::max(0.0f, 1.0f - n.mortality_mult)) * p;
+        const double pd = static_cast<double>(p);
+        knowledge_budget += static_cast<double>(std::max(0.0f, n.knowledge_mult - 1.0f)) * pd;
+        food_budget += static_cast<double>(std::max(0.0f, n.food_mult - 1.0f)) * pd;
+        mortality_budget += static_cast<double>(std::max(0.0f, 1.0f - n.mortality_mult)) * pd;
     }
     auto saturate_gain = [](double budget, float cap) {
         const double m = static_cast<double>(std::max(0.0f, cap));

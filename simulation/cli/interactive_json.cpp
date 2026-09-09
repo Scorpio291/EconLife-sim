@@ -212,6 +212,8 @@ static const char* evidence_type_str(EvidenceType t) {
             return "documentary";
         case EvidenceType::physical:
             return "physical";
+        case EvidenceType::digital:
+            return "digital";
     }
     return "unknown";
 }

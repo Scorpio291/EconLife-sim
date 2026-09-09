@@ -158,9 +158,9 @@ void report(const char* label, const WorldState& w) {
         if (biz.owner_id != p.id)
             continue;
         ++firms;
-        revenue += biz.revenue_per_tick;
-        cost += biz.cost_per_tick;
-        biz_cash += biz.cash;
+        revenue += static_cast<double>(biz.revenue_per_tick);
+        cost += static_cast<double>(biz.cost_per_tick);
+        biz_cash += static_cast<double>(biz.cash);
         for (const auto& f : w.facilities) {
             if (f.business_id != biz.id)
                 continue;

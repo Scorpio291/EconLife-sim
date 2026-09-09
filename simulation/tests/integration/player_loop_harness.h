@@ -174,9 +174,9 @@ inline PlayerSnapshot capture(const WorldState& w) {
             continue;
         ++s.owned_businesses;
         owned_ids.insert(biz.id);
-        s.owned_revenue_per_tick += biz.revenue_per_tick;
-        s.owned_cost_per_tick += biz.cost_per_tick;
-        s.owned_cash += biz.cash;
+        s.owned_revenue_per_tick += static_cast<double>(biz.revenue_per_tick);
+        s.owned_cost_per_tick += static_cast<double>(biz.cost_per_tick);
+        s.owned_cash += static_cast<double>(biz.cash);
     }
     for (const auto& f : w.facilities) {
         if (owned_ids.count(f.business_id) != 0) {
@@ -293,7 +293,7 @@ inline PlayerRun run(const RunConfig& cfg) {
     if (!world.significant_npcs.empty()) {
         double total = 0.0;
         for (const auto& npc : world.significant_npcs)
-            total += npc.capital;
+            total += static_cast<double>(npc.capital);
         out.avg_npc_capital = total / static_cast<double>(world.significant_npcs.size());
     }
 

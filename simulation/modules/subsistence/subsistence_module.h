@@ -95,8 +95,8 @@ class SubsistenceModule : public ITickModule {
                                float forest_health, float natural_capital) {
         if (natural_capital <= 0.0f)
             return 0.0f;
-        const float wild = std::clamp(forest_health, 0.0f, 1.0f) *
-                               cfg.weight_forest_forage * province.geography.forest_coverage +
+        const float wild = std::clamp(forest_health, 0.0f, 1.0f) * cfg.weight_forest_forage *
+                               province.geography.forest_coverage +
                            cfg.weight_fisheries * province.fisheries.current_stock;
         return std::min(1.0f, wild / natural_capital);
     }
@@ -145,8 +145,7 @@ class SubsistenceModule : public ITickModule {
         // identical on a river valley and on scrubland, since ceiling and half-
         // saturation then rose together and their ratio — which is what a thinly
         // settled band actually lives on — cancelled the quality out entirely.
-        const float half =
-            std::max(1.0f, cfg.labor_half_saturation_per_extent * workable_extent);
+        const float half = std::max(1.0f, cfg.labor_half_saturation_per_extent * workable_extent);
         const float saturation = 1.0f - std::exp(-labor / half);
         return ceiling * saturation;
     }

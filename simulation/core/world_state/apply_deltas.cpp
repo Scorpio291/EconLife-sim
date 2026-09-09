@@ -654,8 +654,8 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     // Additive. Floored at 0 — a corpus cannot be less than nothing.
                     // No upper bound: what a society writes down is limited by what it
                     // knows and how many scribes it can feed, not by a cap here.
-                    cs.codified_knowledge =
-                        std::max(0.0f, safe_add(cs.codified_knowledge, *d.codified_knowledge_delta));
+                    cs.codified_knowledge = std::max(
+                        0.0f, safe_add(cs.codified_knowledge, *d.codified_knowledge_delta));
                 }
                 if (d.soil_health_delta.has_value()) {
                     // Additive. Bounded to [0, 1] by DEFINITION — it is a fraction of
@@ -707,8 +707,8 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     // Additive: investment out of surplus minus the year's wear. A
                     // real stock, so it cannot go negative (you cannot un-build past
                     // nothing); the floor is physical, not a behaviour cap.
-                    cs.productive_capital =
-                        std::max(0.0f, safe_add(cs.productive_capital, *d.productive_capital_delta));
+                    cs.productive_capital = std::max(
+                        0.0f, safe_add(cs.productive_capital, *d.productive_capital_delta));
                 }
                 if (d.food_store_replacement.has_value()) {
                     // Replacement; the subsistence module folds the year's net food
@@ -719,8 +719,8 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                 if (d.territorial_conflict_stage_replacement.has_value()) {
                     // Replacement; criminal_operations recomputes the per-province
                     // conflict intensity each tick from org conflict_state.
-                    cs.territorial_conflict_stage =
-                        std::min(*d.territorial_conflict_stage_replacement, static_cast<uint8_t>(6));
+                    cs.territorial_conflict_stage = std::min(
+                        *d.territorial_conflict_stage_replacement, static_cast<uint8_t>(6));
                 }
                 if (d.grain_surplus_replacement.has_value()) {
                     // Replacement; subsistence recomputes the haulable surplus each tick.
@@ -732,8 +732,9 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     float v = *d.net_feedable_surplus_replacement;
                     cs.net_feedable_surplus = (v >= 0.0f) ? v : 0.0f;
                 }
-                auto sane01 = [](float v) { return std::isfinite(v) ? std::clamp(v, 0.0f, 1.0f)
-                                                                    : 1.0f; };
+                auto sane01 = [](float v) {
+                    return std::isfinite(v) ? std::clamp(v, 0.0f, 1.0f) : 1.0f;
+                };
                 if (d.nutrition_replacement.has_value())
                     cs.nutrition = sane01(*d.nutrition_replacement);
                 if (d.health_replacement.has_value())
@@ -796,11 +797,13 @@ static void apply_region_deltas(WorldState& world, const std::vector<RegionDelta
                     // susceptible, which is the safe default for a stock nobody has
                     // touched (it is what a fresh world starts with).
                     float v = *d.plague_susceptible_replacement;
-                    cs.plague_susceptible_fraction = std::isnan(v) ? 1.0f : std::clamp(v, 0.0f, 1.0f);
+                    cs.plague_susceptible_fraction =
+                        std::isnan(v) ? 1.0f : std::clamp(v, 0.0f, 1.0f);
                 }
                 if (d.supported_specialist_fraction_replacement.has_value()) {
                     float v = *d.supported_specialist_fraction_replacement;
-                    cs.supported_specialist_fraction = std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
+                    cs.supported_specialist_fraction =
+                        std::isnan(v) ? 0.0f : std::clamp(v, 0.0f, 1.0f);
                 }
                 if (d.political_stress_replacement.has_value()) {
                     // Replacement; structural_demography recomputes the PSI each year.

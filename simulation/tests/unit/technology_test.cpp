@@ -4,13 +4,11 @@
 // technology_catalog_test.cpp; here we exercise execute().
 
 #include <catch2/catch_test_macros.hpp>
-
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
-#include <unistd.h>
-#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "core/world_gen/technology_catalog.h"
 #include "core/world_state/apply_deltas.h"
@@ -18,6 +16,7 @@
 #include "core/world_state/world_state.h"
 #include "modules/technology/technology_module.h"
 #include "modules/technology/technology_types.h"
+#include "tests/test_process_id.h"
 
 using namespace econlife;
 using Catch::Matchers::WithinAbs;
@@ -155,7 +154,8 @@ TEST_CASE("Technology: eras with a main path are not advanced by the calendar",
     w.technology.base_year = -10000;  // the Neolithic opens at 10000 BCE
     {
         namespace fs = std::filesystem;
-        const auto dir = fs::temp_directory_path() / ("econlife_mainpath_" + std::to_string(::getpid()));
+        const auto dir =
+            fs::temp_directory_path() / econlife::test::process_scoped_name("econlife_mainpath_");
         fs::create_directories(dir);
         const auto path = dir / "nodes.csv";
         std::ofstream f(path);
@@ -184,8 +184,7 @@ TEST_CASE("Technology: eras with a main path are not advanced by the calendar",
     CHECK_FALSE(advanced);
 }
 
-TEST_CASE("Technology: a BCE start year does not wrap the calendar",
-          "[technology][tier1][era]") {
+TEST_CASE("Technology: a BCE start year does not wrap the calendar", "[technology][tier1][era]") {
     // base_year is signed: an unsigned field turned -10000 into ~4.29e9, which
     // satisfied every calendar comparison from tick 0 onward.
     GlobalTechnologyState gts;

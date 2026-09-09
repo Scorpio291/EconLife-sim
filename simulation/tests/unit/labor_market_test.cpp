@@ -818,8 +818,10 @@ TEST_CASE("test_salary_expectation_with_money_motivation", "[labor_market][tier2
 // and no employment record, sample employed = 0 → unemployment delta
 // pulls upward, formal_employment delta pulls downward.
 
-TEST_CASE("labor_market: emits an unemployment delta converging on the sample (and no longer formal_employment)",
-          "[labor_market][tier2][unemployment]") {
+TEST_CASE(
+    "labor_market: emits an unemployment delta converging on the sample (and no longer "
+    "formal_employment)",
+    "[labor_market][tier2][unemployment]") {
     WorldState state = make_test_world_state();
     state.provinces.push_back(make_test_province(0));
 

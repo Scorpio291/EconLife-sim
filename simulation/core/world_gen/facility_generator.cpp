@@ -172,8 +172,8 @@ void FacilityGenerator::seed_technology(WorldState& world, DeterministicRNG& rng
     // climb. (Before the era re-base this table was seeded unconditionally.)
     const std::string start_regime =
         start_era_def != nullptr ? start_era_def->economic_regime : std::string();
-    const bool market_start = (start_regime == "modern" || start_regime == "near_future" ||
-                               start_regime == "space_age");
+    const bool market_start =
+        (start_regime == "modern" || start_regime == "near_future" || start_regime == "space_age");
     TechnologyConfig tech_config;
     for (uint8_t i = 0; i < RESEARCH_DOMAIN_COUNT; ++i) {
         world.technology.domain_knowledge[i] =

@@ -212,7 +212,7 @@ struct Lod2PriceIndexDelta {
 
 struct TechnologyDelta {
     // Era transition: replacement. Only one per tick (from TechnologyModule).
-    std::optional<uint8_t> new_era;       // 1-based era index (see EraCatalog)
+    std::optional<uint8_t> new_era;        // 1-based era index (see EraCatalog)
     std::optional<float> knowledge_delta;  // additive; GlobalTechnologyState.knowledge_level
 
     // Domain knowledge decay: additive per domain index.
@@ -275,12 +275,10 @@ struct RegionDelta {
     std::optional<float>
         specialist_fraction_replacement;  // replacement; cohort_stats->specialist_fraction
                                           // (share of population freed from farming)
-    std::optional<float>
-        productive_capital_delta;  // additive; cohort_stats->productive_capital
-                                   // (investment out of surplus, minus wear)
-    std::optional<float>
-        soil_health_delta;  // additive; cohort_stats->soil_health (working the land out,
-                            // or letting it recover)
+    std::optional<float> productive_capital_delta;  // additive; cohort_stats->productive_capital
+                                                    // (investment out of surplus, minus wear)
+    std::optional<float> soil_health_delta;  // additive; cohort_stats->soil_health (working the
+                                             // land out, or letting it recover)
     std::optional<float>
         forest_health_delta;  // additive; cohort_stats->forest_health (hunting and cutting
                               // faster than the wood grows back, or letting it return)
@@ -295,7 +293,7 @@ struct RegionDelta {
     std::optional<float>
         codified_knowledge_delta;  // additive; cohort_stats->codified_knowledge
                                    // (scribes copying, records decaying or burning)
-                                          // (commons food production / need this tick)
+                                   // (commons food production / need this tick)
     std::optional<float>
         food_store_replacement;  // replacement; cohort_stats->food_store (granary stock,
                                  // recomputed by the subsistence module from the year's net)

@@ -18,10 +18,10 @@
 
 // Complete type definitions needed for std::vector/std::map value members and unique_ptr members
 #include "core/world_gen/era_catalog.h"                // EraCatalog (data-driven era timeline)
-#include "core/world_gen/occupation_catalog.h"         // OccupationCatalog (livelihood vocabulary)
-#include "core/world_gen/world_class.h"                 // WorldHazardSettings (the world's hazards)
 #include "core/world_gen/goods_catalog.h"              // GoodsCatalog (unique_ptr member)
-#include "core/world_gen/technology_catalog.h"        // TechnologyCatalog (what a PLACE can do)
+#include "core/world_gen/occupation_catalog.h"         // OccupationCatalog (livelihood vocabulary)
+#include "core/world_gen/technology_catalog.h"         // TechnologyCatalog (what a PLACE can do)
+#include "core/world_gen/world_class.h"                // WorldHazardSettings (the world's hazards)
 #include "geography.h"                                 // Nation, Province, Region
 #include "modules/economy/economy_types.h"             // RegionalMarket, NPCBusiness
 #include "modules/production/production_types.h"       // Facility, Recipe

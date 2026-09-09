@@ -142,11 +142,11 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     if (community.response_stage >= 5)
         instability_events++;
 
-    const float stability_target = compute_stability_target(
-        cohort_stats->formal_employment_rate, province.infrastructure_rating,
-        community.institutional_trust, cohort_stats->crime_rate,
-        cohort_stats->criminal_dominance_index, conditions.inequality_index,
-        community.grievance_level, cfg_);
+    const float stability_target =
+        compute_stability_target(cohort_stats->formal_employment_rate,
+                                 province.infrastructure_rating, community.institutional_trust,
+                                 cohort_stats->crime_rate, cohort_stats->criminal_dominance_index,
+                                 conditions.inequality_index, community.grievance_level, cfg_);
     float new_stability = compute_stability_step(conditions.stability_score, stability_target,
                                                  instability_events, cfg_);
     rdelta.stability_delta = new_stability - conditions.stability_score;
@@ -248,10 +248,9 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     // reflected here through addicted_count, but those writers should be retired
     // so the field has one owner in code as well as in effect (F3 follow-up,
     // deliberately left to their own modules rather than edited blind from here).
-    const float addiction_sample =
-        active_npc_count > 0
-            ? static_cast<float>(addicted_count) / static_cast<float>(active_npc_count)
-            : 0.0f;
+    const float addiction_sample = active_npc_count > 0 ? static_cast<float>(addicted_count) /
+                                                              static_cast<float>(active_npc_count)
+                                                        : 0.0f;
     rdelta.addiction_rate_delta = addiction_sample - cohort_stats->addiction_rate;
 
     // --- Formal employment: size-weighted mean of cohort employment_rate ---

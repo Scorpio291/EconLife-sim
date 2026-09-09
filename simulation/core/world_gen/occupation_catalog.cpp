@@ -84,7 +84,7 @@ bool OccupationCatalog::load_csv(const std::string& filepath) {
         o.layer = parse_u8(f[2], 1);
         o.min_surplus = parse_f(f[3], 1.0f);
         o.knowledge_output = f.size() > 4 ? parse_f(f[4], 0.0f) : 0.0f;  // optional column
-        o.min_era = f.size() > 5 ? parse_u8(f[5], 1) : 1;               // optional column
+        o.min_era = f.size() > 5 ? parse_u8(f[5], 1) : 1;                // optional column
         if (o.min_era == 0)
             o.min_era = 1;
         loaded.push_back(std::move(o));
@@ -163,7 +163,7 @@ std::vector<const OccupationDefinition*> OccupationCatalog::in_layer(uint8_t lay
 }
 
 std::vector<const OccupationDefinition*> OccupationCatalog::in_layer_for_era(uint8_t layer,
-                                                                            uint8_t era) const {
+                                                                             uint8_t era) const {
     std::vector<const OccupationDefinition*> out;
     for (const auto& o : occupations_)
         if (o.layer == layer && o.min_era <= era)

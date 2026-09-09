@@ -1,6 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
 #include <memory>
 
 #include "core/world_state/apply_deltas.h"
@@ -13,7 +12,9 @@ using namespace econlife;
 using Catch::Matchers::WithinAbs;
 
 namespace {
-GrainLogisticsConfig cfg() { return GrainLogisticsConfig{}; }
+GrainLogisticsConfig cfg() {
+    return GrainLogisticsConfig{};
+}
 
 // Add a province with a given h3 id, region id (1:1 with province in world-gen), and
 // haulable grain surplus.
@@ -27,7 +28,8 @@ void add_province(WorldState& w, uint64_t h3, uint32_t region_id, float surplus)
     w.provinces.push_back(std::move(p));
 }
 
-ProvinceLink link_to(uint64_t neighbor_h3, LinkType type, float terrain = 0.0f, float infra = 0.0f) {
+ProvinceLink link_to(uint64_t neighbor_h3, LinkType type, float terrain = 0.0f,
+                     float infra = 0.0f) {
     ProvinceLink l{};
     l.neighbor_h3 = static_cast<H3Index>(neighbor_h3);
     l.type = type;
@@ -55,16 +57,17 @@ TEST_CASE("grain_logistics: water delivers far more than land", "[grain_logistic
     const float river = GrainLogisticsModule::delivered_fraction(LinkType::River, 0, 0, 1.0f, c);
     const float sea = GrainLogisticsModule::delivered_fraction(LinkType::Maritime, 0, 0, 1.0f, c);
     CHECK(land < river);
-    CHECK(river <= sea);            // maritime is the cheapest mode
-    CHECK(river > 0.85f);           // water haulage barely loses anything
-    CHECK(land < 0.6f);             // land is the tyranny
+    CHECK(river <= sea);   // maritime is the cheapest mode
+    CHECK(river > 0.85f);  // water haulage barely loses anything
+    CHECK(land < 0.6f);    // land is the tyranny
     CHECK(land > 0.0f);
 }
 
 TEST_CASE("grain_logistics: mountains block land hauling; roads relieve it",
           "[grain_logistics][tier1]") {
     const auto c = cfg();
-    const float flat = GrainLogisticsModule::delivered_fraction(LinkType::Land, 0.0f, 0.0f, 1.0f, c);
+    const float flat =
+        GrainLogisticsModule::delivered_fraction(LinkType::Land, 0.0f, 0.0f, 1.0f, c);
     const float mountains =
         GrainLogisticsModule::delivered_fraction(LinkType::Land, 1.0f, 0.0f, 1.0f, c);
     const float roaded =
@@ -137,9 +140,9 @@ TEST_CASE("grain_logistics: catchment surplus sets the urban CAPACITY (M3), boun
     // town (capacity bounded by population); one with modest surplus supports a small one.
     // This is the CAPACITY the town pulls migrants toward, not the town itself.
     WorldState w = dawn_world();
-    add_province(w, 100, 0, 1000.0f);  // surplus 1000
-    add_province(w, 200, 1, 1000.0f);  // surplus 1000
-    w.provinces[0].cohort_stats->total_population = 600;    // surplus > pop -> capped
+    add_province(w, 100, 0, 1000.0f);                        // surplus 1000
+    add_province(w, 200, 1, 1000.0f);                        // surplus 1000
+    w.provinces[0].cohort_stats->total_population = 600;     // surplus > pop -> capped
     w.provinces[1].cohort_stats->total_population = 100000;  // surplus << pop -> not capped
 
     GrainLogisticsModule mod;
@@ -148,8 +151,9 @@ TEST_CASE("grain_logistics: catchment surplus sets the urban CAPACITY (M3), boun
     apply_deltas(w, d);
 
     // per_capita = 1.0, no links -> net_feedable == surplus.
-    CHECK_THAT(w.provinces[0].cohort_stats->urban_capacity, WithinAbs(600.0f, 0.5f));   // bounded
-    CHECK_THAT(w.provinces[1].cohort_stats->urban_capacity, WithinAbs(1000.0f, 0.5f));  // surplus/per_capita
+    CHECK_THAT(w.provinces[0].cohort_stats->urban_capacity, WithinAbs(600.0f, 0.5f));  // bounded
+    CHECK_THAT(w.provinces[1].cohort_stats->urban_capacity,
+               WithinAbs(1000.0f, 0.5f));  // surplus/per_capita
 }
 
 TEST_CASE("grain_logistics: a river hub grows a bigger town than a stranded province (M3)",
@@ -181,8 +185,8 @@ TEST_CASE("grain_logistics: a river hub grows a bigger town than a stranded prov
 TEST_CASE("grain_logistics: inert in market eras (no commons surplus to haul)",
           "[grain_logistics][tier1]") {
     WorldState w = dawn_world();
-    w.technology.current_era = 8;       // modern (market regime)
-    add_province(w, 100, 0, 1000.0f);   // surplus present but module must not run
+    w.technology.current_era = 8;      // modern (market regime)
+    add_province(w, 100, 0, 1000.0f);  // surplus present but module must not run
 
     GrainLogisticsModule mod;
     DeltaBuffer d{};
@@ -199,7 +203,7 @@ TEST_CASE("grain_logistics: stored grain flows down the scarcity gradient, payin
         w.current_tick = 365;
         w.era_catalog.load_builtin_default();
         w.technology.current_era = 5;
-        SubsistenceConfig sub{};  // targets: pop x 1 x 365 x 3
+        SubsistenceConfig sub{};        // targets: pop x 1 x 365 x 3
         add_province(w, 100, 0, 0.0f);  // src: no fresh surplus, but a FULL granary
         add_province(w, 200, 1, 0.0f);  // dst: empty granary
         w.provinces[0].cohort_stats->total_population = 1000;
@@ -223,15 +227,18 @@ TEST_CASE("grain_logistics: stored grain flows down the scarcity gradient, payin
 
     const auto river = run(LinkType::River);
     const auto land = run(LinkType::Land);
-    const float target = 1000.0f * 365.0f * 3.0f;
+    // Held as double: it is compared against src/dst, which are doubles. The
+    // float arithmetic is kept so the value is identical to the one the world
+    // was seeded with.
+    const double target = static_cast<double>(1000.0f * 365.0f * 3.0f);
     GrainLogisticsConfig cfg{};
     SubsistenceConfig sub{};
     // One tick's flow: rate/365 x gap(1.0) x target_dst, delivered x df. Exact.
-    const double sent = cfg.grain_trade_rate_per_year / 365.0 * 1.0 * target;
+    const double sent = static_cast<double>(cfg.grain_trade_rate_per_year) / 365.0 * 1.0 * target;
     const double df_river =
         GrainLogisticsModule::delivered_fraction(LinkType::River, 0, 0, 1.0f, cfg);
     CHECK_THAT(river.src, WithinAbs(target - sent, 1.0));
-    CHECK_THAT(river.dst, WithinAbs(sent * df_river, 1.0));
+    CHECK_THAT(river.dst, WithinAbs(sent * static_cast<double>(df_river), 1.0));
     // Conservation: nothing minted; the shortfall is exactly the teams' share.
     CHECK(river.src + river.dst < target);
     CHECK(river.src + river.dst > target - sent);

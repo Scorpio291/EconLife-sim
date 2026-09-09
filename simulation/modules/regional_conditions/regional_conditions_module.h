@@ -33,7 +33,8 @@ class RegionalConditionsModule : public ITickModule {
     // inequality/grievance lower it. Each input is treated as a [0,1] signal.
     static float compute_stability_target(float employment, float infrastructure, float trust,
                                           float crime, float criminal_dominance, float inequality,
-                                          float grievance, const RegionalConditionsConfig& cfg = {});
+                                          float grievance,
+                                          const RegionalConditionsConfig& cfg = {});
     // One tick of stability movement toward `target` at the recovery rate, minus
     // the degradation from active community-response unrest. Replaces the former
     // blind recovery toward 1.0.

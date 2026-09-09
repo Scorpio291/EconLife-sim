@@ -116,7 +116,7 @@ TEST_CASE("DesignerDrug: scheduled-with-successor keeps supplying; without-succe
     pre.supply = 1000.0f;
     state.regional_markets.push_back(pre);
     state.market_index_by_good_province[(static_cast<uint64_t>(pre.good_id) << 32) | 0ull] =
-        state.regional_markets.size() - 1;
+        static_cast<uint32_t>(state.regional_markets.size() - 1);
 
     DesignerDrugModule with_succ;
     with_succ.compounds_mut().push_back(make_scheduled_compound(10, /*has_successor=*/true));

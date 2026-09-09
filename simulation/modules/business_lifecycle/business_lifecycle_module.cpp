@@ -23,8 +23,7 @@ void BusinessLifecycleModule::execute(const WorldState& state, DeltaBuffer& delt
     // Era-transition effects: apply_deltas sets era_started_tick = current_tick
     // when the era transitions. We fire effects one tick later so the new era is
     // visible in WorldState regardless of orchestration step grouping.
-    if (state.current_tick != 0 &&
-        state.technology.era_started_tick + 1 == state.current_tick) {
+    if (state.current_tick != 0 && state.technology.era_started_tick + 1 == state.current_tick) {
         uint8_t new_era = static_cast<uint8_t>(state.technology.current_era);
         apply_stranded_asset_penalties(state, delta, new_era);
         spawn_era_entrants(state, delta, new_era);

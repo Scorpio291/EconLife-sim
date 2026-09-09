@@ -125,7 +125,7 @@ TEST_CASE("PopulationAging: generational hardiness — soft people on a harsh wo
     PopulationAgingModule module;
     auto run = [&](float hardiness) {
         WorldState w = make_annual_cohort_world(/*surplus=*/1.5f);  // fed: deaths are hazard-driven
-        w.hazard_settings = deathworld_hazard();                   // a harsh world
+        w.hazard_settings = deathworld_hazard();                    // a harsh world
         w.provinces[0].cohort_stats->hardiness = hardiness;
         DeltaBuffer d{};
         module.execute_province(0, w, d);
@@ -133,8 +133,8 @@ TEST_CASE("PopulationAging: generational hardiness — soft people on a harsh wo
         return d.cohort_stats_deltas[0];
     };
     const float native = hazard_mortality_from_settings(deathworld_hazard());  // adapted (~1.07)
-    auto soft_d = run(0.2f);       // garden-bred, unadapted
-    auto native_d = run(native);   // native, adapted
+    auto soft_d = run(0.2f);      // garden-bred, unadapted
+    auto native_d = run(native);  // native, adapted
 
     // The unadapted soft people suffer more mortality -> fewer survivors than natives.
     // (Unchanged intent; the GAP is now larger than it was, because the maladaptation
@@ -274,8 +274,7 @@ TEST_CASE("PopulationAging: half of children do not reach fifteen, until medicin
     // so the pre-medical rate a child faces is the base rate times the youth multiplier
     // and nothing else — which is exactly what that multiplier is derived from.
     constexpr PopulationAgingConfig cfg{};
-    const float premodern_youth_rate =
-        cfg.base_annual_death_rate * cfg.youth_mortality_multiplier;
+    const float premodern_youth_rate = cfg.base_annual_death_rate * cfg.youth_mortality_multiplier;
     const float survival = PopulationAgingModule::child_survival(premodern_youth_rate, cfg);
     CHECK_THAT(survival, WithinAbs(0.5f, 0.02f));  // ~half, as the record has it
 
@@ -319,8 +318,8 @@ TEST_CASE("PopulationAging: subsistence surplus drives the Malthusian loop",
     const uint32_t surplus = annual_population(1.5f);  // surplus: population grows
     const uint32_t famine = annual_population(0.5f);   // deficit: population is culled
 
-    CHECK(surplus > fed);    // a food surplus lifts births
-    CHECK(famine < fed);     // a deficit raises mortality
+    CHECK(surplus > fed);  // a food surplus lifts births
+    CHECK(famine < fed);   // a deficit raises mortality
     CHECK(famine < surplus);
 }
 
@@ -539,7 +538,7 @@ TEST_CASE("PopulationAging: disease epidemics — episodic, scaled by disease di
         int hits = 0;
         const int N = 4000;
         for (int s = 0; s < N; ++s) {
-            DeterministicRNG rng(static_cast<uint64_t>(s) * 2654435761ull + 1u);
+            DeterministicRNG rng(static_cast<uint64_t>(s) * static_cast<uint64_t>(2654435761) + 1u);
             if (PopulationAgingModule::epidemic_mortality_factor(disease, density, rng, cfg) > 1.0f)
                 ++hits;
         }
@@ -591,7 +590,7 @@ TEST_CASE("PopulationAging: geology disasters — episodic, scaled by the geolog
         int hits = 0;
         const int N = 5000;
         for (int s = 0; s < N; ++s) {
-            DeterministicRNG rng(static_cast<uint64_t>(s) * 40503ull + 7u);
+            DeterministicRNG rng(static_cast<uint64_t>(s) * static_cast<uint64_t>(40503) + 7u);
             if (PopulationAgingModule::disaster_mortality_factor(geology, rng, cfg) > 1.0f)
                 ++hits;
         }
@@ -644,8 +643,8 @@ TEST_CASE("population: a society exactly at subsistence stops growing on its own
     // imposes this — it falls out of where the two power laws meet.
     PopulationAgingModule mod;
     WorldState w = make_annual_cohort_world(/*surplus=*/1.0f);
-    const uint64_t before = w.provinces[0].cohort_stats->cohorts[
-        DemographicGroup::working_urban_mid].size;
+    const uint64_t before =
+        w.provinces[0].cohort_stats->cohorts[DemographicGroup::working_urban_mid].size;
 
     DeltaBuffer d{};
     mod.execute_province(0, w, d);
@@ -687,9 +686,9 @@ TEST_CASE("population: growth answers to how well fed people are, in both direct
         return static_cast<double>(after) - static_cast<double>(before);
     };
 
-    const double fed = year_change(1.6f);      // room to spare
+    const double fed = year_change(1.6f);  // room to spare
     const double subsistence = year_change(1.0f);
-    const double hungry = year_change(0.7f);   // pressing on the land
+    const double hungry = year_change(0.7f);  // pressing on the land
 
     CHECK(fed > subsistence);
     CHECK(hungry < subsistence);
@@ -709,7 +708,7 @@ TEST_CASE("population: growth answers to how well fed people are, in both direct
     // channel to be dominant: in England real wages moved the birth rate far more than
     // they moved the death rate. At w = 0.7 the fertility elasticity of 0.4 gives
     // 0.7^0.4 = 0.87, so about 13% fewer births — which is what shows up here.
-    CHECK(hungry > 0.0);               // still growing, just more slowly
+    CHECK(hungry > 0.0);                 // still growing, just more slowly
     CHECK(hungry < 0.95 * subsistence);  // hunger has taken a real bite out of it
 }
 
@@ -793,9 +792,9 @@ TEST_CASE("population: crowding is what kills, so a hamlet is not a city",
 
     CHECK(hamlet < town);
     CHECK(town < city);
-    CHECK(city < cfg.urban_crowding_death_rate);              // approached, never reached
+    CHECK(city < cfg.urban_crowding_death_rate);  // approached, never reached
     CHECK_THAT(town, WithinAbs(cfg.urban_crowding_death_rate * 0.5f, 1e-6f));  // half-saturation
-    CHECK(hamlet < 0.05f * cfg.urban_crowding_death_rate);    // a village is barely a town
+    CHECK(hamlet < 0.05f * cfg.urban_crowding_death_rate);  // a village is barely a town
 }
 
 TEST_CASE("population: medicine is what closes the grave",
@@ -885,7 +884,7 @@ TEST_CASE("population: a town with no countryside to draw on cannot hold its siz
         for (int year = 0; year < 10; ++year) {
             auto& cs = *w.provinces[0].cohort_stats;
             cs.urban_capacity = static_cast<float>(cs.total_population);  // grain is never
-                                                                         // the constraint
+                                                                          // the constraint
             cs.food_store = 1000.0f;
             DeltaBuffer d{};
             mod.execute_province(0, w, d);
@@ -905,8 +904,8 @@ TEST_CASE("population: a town with no countryside to draw on cannot hold its siz
     const uint64_t with_graveyard = run_decade(PopulationAgingConfig{}.urban_crowding_death_rate);
     const uint64_t without = run_decade(0.0f);
 
-    CHECK(with_graveyard < without);      // crowding is what drains it
-    CHECK(with_graveyard < 200000u);      // and it drains: the town cannot replace itself
+    CHECK(with_graveyard < without);  // crowding is what drains it
+    CHECK(with_graveyard < 200000u);  // and it drains: the town cannot replace itself
 }
 
 TEST_CASE("population: a town cannot be larger than the countryside can spare",
@@ -918,7 +917,7 @@ TEST_CASE("population: a town cannot be larger than the countryside can spare",
     // the town shrinks toward that twentieth rather than filling up.
     PopulationAgingModule mod;
     WorldState w = make_commons_town_world(/*urban=*/20000, /*rural=*/80000);
-    w.provinces[0].cohort_stats->urban_capacity = 100000.0f;  // grain for everyone
+    w.provinces[0].cohort_stats->urban_capacity = 100000.0f;   // grain for everyone
     w.provinces[0].cohort_stats->specialist_fraction = 0.05f;  // but only 5% can be spared
 
     const uint64_t before = cohort_size(w, DemographicGroup::working_urban_mid);
@@ -931,7 +930,7 @@ TEST_CASE("population: a town cannot be larger than the countryside can spare",
     // so the comparison is against a control with no migration pressure rather than
     // against the starting headcount.
     WorldState control = make_commons_town_world(/*urban=*/20000, /*rural=*/80000);
-    control.provinces[0].cohort_stats->urban_capacity = 20000.0f;   // town already at
+    control.provinces[0].cohort_stats->urban_capacity = 20000.0f;    // town already at
     control.provinces[0].cohort_stats->specialist_fraction = 0.20f;  // both limits
     DeltaBuffer cd{};
     mod.execute_province(0, control, cd);
@@ -1016,8 +1015,8 @@ TEST_CASE("population: a new generation restores what the plague took",
         }
     }
     INFO("years for susceptibility to climb 0.30 -> 0.67: " << years_to_two_thirds);
-    CHECK(years_to_two_thirds > 10);   // a generation, not a season
-    CHECK(years_to_two_thirds < 60);   // but within a human lifetime, so plague DOES return
+    CHECK(years_to_two_thirds > 10);  // a generation, not a season
+    CHECK(years_to_two_thirds < 60);  // but within a human lifetime, so plague DOES return
 }
 
 TEST_CASE("population: on a disease-free world plague never comes",
@@ -1062,7 +1061,9 @@ WorldState make_capability_world(float surplus, float specialists, float schooli
     w.provinces.push_back(std::move(p));
     return w;
 }
-struct Cap { float nutrition, health, schooling; };
+struct Cap {
+    float nutrition, health, schooling;
+};
 Cap advance_one_year(WorldState& w) {
     PopulationAgingModule mod;
     DeltaBuffer d{};
@@ -1070,9 +1071,12 @@ Cap advance_one_year(WorldState& w) {
     Cap out{w.provinces[0].cohort_stats->nutrition, w.provinces[0].cohort_stats->health,
             w.provinces[0].cohort_stats->schooling};
     for (const auto& rd : d.region_deltas) {
-        if (rd.nutrition_replacement) out.nutrition = *rd.nutrition_replacement;
-        if (rd.health_replacement) out.health = *rd.health_replacement;
-        if (rd.schooling_replacement) out.schooling = *rd.schooling_replacement;
+        if (rd.nutrition_replacement)
+            out.nutrition = *rd.nutrition_replacement;
+        if (rd.health_replacement)
+            out.health = *rd.health_replacement;
+        if (rd.schooling_replacement)
+            out.schooling = *rd.schooling_replacement;
     }
     return out;
 }
@@ -1085,7 +1089,7 @@ TEST_CASE("people: stature answers the harvest, but slowly", "[population_aging]
     WorldState hungry = make_capability_world(0.7f, 0.10f, 3.0f, 0.98f);
     const float up = advance_one_year(fed).nutrition;
     const float down = advance_one_year(hungry).nutrition;
-    CHECK(up > 0.90f);   // a fed people grows toward its potential
+    CHECK(up > 0.90f);    // a fed people grows toward its potential
     CHECK(down < 0.98f);  // a hungry one falls away from it
     // And neither moves far in one year: this is a generational stock.
     CHECK(up < 0.95f);
@@ -1130,7 +1134,8 @@ TEST_CASE("people: an unschooled society works nothing out", "[population_aging]
         km.execute(w, d);
         float k = 0.0f;
         for (const auto& rd : d.region_deltas)
-            if (rd.province_knowledge_delta) k += *rd.province_knowledge_delta;
+            if (rd.province_knowledge_delta)
+                k += *rd.province_knowledge_delta;
         return k;
     };
     const float none = produced_with(0.0f);
@@ -1138,7 +1143,6 @@ TEST_CASE("people: an unschooled society works nothing out", "[population_aging]
     CHECK_THAT(none, Catch::Matchers::WithinAbs(0.0f, 1e-6f));
     CHECK(some > 0.0f);
 }
-
 
 // ---------------------------------------------------------------------------
 // The player's own clock.

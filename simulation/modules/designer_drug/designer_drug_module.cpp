@@ -156,8 +156,8 @@ void DesignerDrugModule::emit_grounded_supply(const WorldState& state,
     // compound's province. No operation -> no supply (a compound cannot make itself).
     const NPCBusiness* creator = nullptr;
     for (const auto& biz : state.npc_businesses) {
-        if (biz.owner_id == compound.creator_actor_id &&
-            biz.province_id == compound.province_id && biz.criminal_sector) {
+        if (biz.owner_id == compound.creator_actor_id && biz.province_id == compound.province_id &&
+            biz.criminal_sector) {
             creator = &biz;
             break;
         }

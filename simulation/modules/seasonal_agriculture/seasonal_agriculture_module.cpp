@@ -15,9 +15,9 @@
 #include <cmath>
 
 #include "core/good_id_hash.h"
+#include "core/world_gen/era_catalog.h"
 #include "core/world_state/apply_deltas.h"  // lookup_good_id
 #include "core/world_state/delta_buffer.h"
-#include "core/world_gen/era_catalog.h"
 #include "core/world_state/world_state.h"
 
 // Mathematical constant - defined outside namespace to avoid MSVC issues.

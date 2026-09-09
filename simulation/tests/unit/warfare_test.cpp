@@ -1,7 +1,6 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
-#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -16,8 +15,8 @@ using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
-void add_polity(WorldState& w, uint64_t h3, uint32_t region_id, uint32_t population,
-                float surplus, float food_store = 0.0f) {
+void add_polity(WorldState& w, uint64_t h3, uint32_t region_id, uint32_t population, float surplus,
+                float food_store = 0.0f) {
     Province p{};
     p.id = region_id;
     p.region_id = region_id;
@@ -101,8 +100,8 @@ TEST_CASE("warfare: a lopsided war kills in proportion to enemy strength (real u
     // No granaries: both fight at forage strength. ASABIYA (R3C) scales what a levy
     // FIGHTS as, never how many bodies it is — the levy is still 10,000 and 400 men, but
     // each people fights as though it were (1 + weight x asabiya) times that.
-    const float mult = WarfareModule::asabiya_strength_mult(
-        w.provinces[0].cohort_stats->asabiya, cfg);
+    const float mult =
+        WarfareModule::asabiya_strength_mult(w.provinces[0].cohort_stats->asabiya, cfg);
     const float S_a = 10000.0f * mult * cfg.forage_share;
     const float S_b = 400.0f * mult * cfg.forage_share;
     // A's losses come out of its own muster and are nowhere near it.
@@ -146,13 +145,15 @@ TEST_CASE("warfare: campaigns eat granaries and a sack burns what it cannot carr
     CHECK(store_b < 1.0e6);
     // War destroys grain ONLY through named sinks: rations eaten + sack burned.
     const double army_a = 10000.0, army_b = 400.0;
-    const double drawn_a =
-        army_a * cfg.campaign_days * cfg.soldier_ration_mult * (1.0 - cfg.forage_share);
-    const double drawn_b =
-        army_b * cfg.defense_days * cfg.soldier_ration_mult * (1.0 - cfg.forage_share);
+    const double drawn_a = army_a * static_cast<double>(cfg.campaign_days) *
+                           static_cast<double>(cfg.soldier_ration_mult) *
+                           (1.0 - static_cast<double>(cfg.forage_share));
+    const double drawn_b = army_b * static_cast<double>(cfg.defense_days) *
+                           static_cast<double>(cfg.soldier_ration_mult) *
+                           (1.0 - static_cast<double>(cfg.forage_share));
     const double store_b_after_rations = 1.0e6 - drawn_b;
-    const double sack = cfg.sack_fraction * store_b_after_rations;
-    const double carry = army_a * cfg.carry_per_soldier;
+    const double sack = static_cast<double>(cfg.sack_fraction) * store_b_after_rations;
+    const double carry = army_a * static_cast<double>(cfg.carry_per_soldier);
     const double delivered = std::min(sack, carry) * 1.0;  // border war: path 1
     const double expected_total = total_before - drawn_a - drawn_b - (sack - delivered);
     CHECK_THAT(total_after, WithinRel(expected_total, 0.001));
@@ -176,8 +177,7 @@ TEST_CASE("warfare: evenly-matched neighbours stay at peace", "[warfare][tier2]"
     CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);
 }
 
-TEST_CASE("warfare: annual gate — decisions fire once per year, not per tick",
-          "[warfare][tier2]") {
+TEST_CASE("warfare: annual gate — decisions fire once per year, not per tick", "[warfare][tier2]") {
     WorldState w = dawn_world();
     WarfareConfig cfg = sure_cfg();
     add_polity(w, 100, 0, 100000, 1.5f);
@@ -269,8 +269,8 @@ TEST_CASE("warfare: coin plunder moves wealth to the victor (conserved)", "[warf
 
     const float a_cap = w.significant_npcs[0].capital + w.significant_npcs[1].capital;
     const float b_cap = w.significant_npcs[2].capital + w.significant_npcs[3].capital;
-    CHECK(b_cap < 1000.0f);  // the loser is plundered
-    CHECK(a_cap > 200.0f);   // the victor takes the loot
+    CHECK(b_cap < 1000.0f);                              // the loser is plundered
+    CHECK(a_cap > 200.0f);                               // the victor takes the loot
     CHECK_THAT(a_cap + b_cap, WithinAbs(before, 0.5f));  // conserved exactly
 }
 
@@ -411,7 +411,7 @@ TEST_CASE("warfare: betraying an ally brands the betrayer a pariah (reputation e
     apply_deltas(w, d2);
     CHECK(w.provinces[1].cohort_stats->war_death_fraction > 0.0f);   // B betrayed
     CHECK(w.provinces[2].cohort_stats->war_death_fraction == 0.0f);  // C untouched
-    CHECK(mod.relation(0, 2) < ac_before);  // the pariah brand
+    CHECK(mod.relation(0, 2) < ac_before);                           // the pariah brand
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -482,8 +482,8 @@ TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone
     mod.execute(w, d);
     apply_deltas(w, d);
     // Asabiya scales the fighting strength on both sides; the bodies are unchanged.
-    const float mult = WarfareModule::asabiya_strength_mult(
-        w.provinces[0].cohort_stats->asabiya, cfg);
+    const float mult =
+        WarfareModule::asabiya_strength_mult(w.provinces[0].cohort_stats->asabiya, cfg);
     const float S_kingdom = (10000.0f + 1000.0f) * mult * cfg.forage_share;
     const float dead_c_frac = cfg.battle_lethality * S_kingdom / 30000.0f;
     CHECK_THAT(w.provinces[2].cohort_stats->war_death_fraction, WithinRel(dead_c_frac, 0.02f));
@@ -583,7 +583,7 @@ TEST_CASE("warfare: the Alexander arc — a great commander conquers; his death 
           "[warfare][conqueror][tier2]") {
     WorldState w = dawn_world(0);
     WarfareConfig cfg = sure_cfg();
-    cfg.absorb_after_wins = 1;  // a decisive campaign
+    cfg.absorb_after_wins = 1;                   // a decisive campaign
     add_polity(w, 100, 0, /*pop=*/40000, 1.0f);  // A: small Macedon (levy 4000)
     add_polity(w, 200, 1, /*pop=*/48000, 1.0f);  // B: the bigger neighbour (levy 4800)
     w.provinces[0].links.push_back(link_to(200));
@@ -745,8 +745,7 @@ TEST_CASE("warfare: solidarity is made and lost on the scale of a century",
     CHECK(years_to_soften < 400);
 }
 
-TEST_CASE("warfare: a people with no solidarity cannot develop any",
-          "[warfare][tier1][asabiya]") {
+TEST_CASE("warfare: a people with no solidarity cannot develop any", "[warfare][tier1][asabiya]") {
     // The growth term is logistic, so zero is a fixed point — which is exactly why the
     // stock is seeded above it rather than at it. This is a property of the law, not an
     // oversight, and it is the reason the seed exists.
@@ -757,8 +756,7 @@ TEST_CASE("warfare: a people with no solidarity cannot develop any",
     CHECK_THAT(WarfareModule::asabiya_year(1.0f, 1.0f, cfg), WithinAbs(1.0f, 1e-6f));
 }
 
-TEST_CASE("warfare: a cohesive people fights above its numbers",
-          "[warfare][tier1][asabiya]") {
+TEST_CASE("warfare: a cohesive people fights above its numbers", "[warfare][tier1][asabiya]") {
     // Ibn Khaldun's central claim, and the reason a frontier tribe can take an empire
     // that outnumbers it several times over.
     const WarfareConfig cfg{};

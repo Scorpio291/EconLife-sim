@@ -90,7 +90,7 @@ TEST_CASE("history gen: founding-seed world bootstraps an economy from zero firm
     auto total_capital = [](const WorldState& w) {
         double t = 0.0;
         for (const auto& n : w.significant_npcs)
-            t += n.capital;
+            t += static_cast<double>(n.capital);
         return t;
     };
     auto solvent = [](const WorldState& w) {
@@ -120,7 +120,7 @@ TEST_CASE("history gen: founding-seed world bootstraps an economy from zero firm
     // capital grows year over year through the run, and a real share of the
     // population is solvent at the end (income reaches people, not just owners).
     WorldState w1 = generate_world_with_history(base_config(42, true), PackageConfig{}, 1, 1);
-    CHECK(total_capital(w) > total_capital(w1));            // growing as it develops
+    CHECK(total_capital(w) > total_capital(w1));                          // growing as it develops
     CHECK(solvent(w) > static_cast<int>(w.significant_npcs.size() / 4));  // broad-based income
 }
 

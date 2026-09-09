@@ -1,17 +1,16 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
-#include <unistd.h>
 
 #include "core/world_gen/era_catalog.h"
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/knowledge/knowledge_module.h"
+#include "tests/test_process_id.h"
 
 using namespace econlife;
 
@@ -84,7 +83,6 @@ TEST_CASE("knowledge: regime gate is dawn-only", "[knowledge][tier1]") {
     CHECK_FALSE(mod.regime_active("modern"));
 }
 
-
 // ===========================================================================
 // WHO ADVANCES A SOCIETY: a share of the population, gated on surplus and/or
 // pressure — plus rare individuals who make leaps.
@@ -111,8 +109,7 @@ TEST_CASE("knowledge: production scales with the learned population",
     }
 }
 
-TEST_CASE("knowledge: a bigger freed stratum advances faster",
-          "[knowledge][tier1][population]") {
+TEST_CASE("knowledge: a bigger freed stratum advances faster", "[knowledge][tier1][population]") {
     KnowledgeModule mod;
     // The food surplus is what frees people from the land; a society that can spare
     // more of them advances faster on the same population.
@@ -218,8 +215,8 @@ TEST_CASE("knowledge: a leap is deterministic and credited to a LIVING person",
     for (const auto& nd : d.npc_deltas)
         if (nd.new_memory_entry.has_value())
             credited = nd.npc_id;
-    REQUIRE(credited != 0);       // a named person is on the record
-    CHECK(credited != 1u);        // never a corpse
+    REQUIRE(credited != 0);  // a named person is on the record
+    CHECK(credited != 1u);   // never a corpse
 
     // Same seed and year reproduce the same discovery exactly.
     DeltaBuffer d2{};
@@ -260,7 +257,7 @@ struct GatedEras {
 
     GatedEras() {
         dir = std::filesystem::temp_directory_path() /
-              ("econlife_eras_" + std::to_string(::getpid()));
+              econlife::test::process_scoped_name("econlife_eras_");
         std::filesystem::create_directories(dir);
         std::ofstream f(dir / "eras.csv");
         f << "era_index,era_key,display_name,start_year,economic_regime,is_default_entry,"
@@ -320,8 +317,8 @@ TEST_CASE("knowledge: writing is the ratchet — literate societies forget less"
     WorldState literate = make_world(/*era=*/4, 5000, 0.05f, /*knowledge=*/20000.0f);
     const double oral_change = produced_knowledge(mod, oral);
     const double literate_change = produced_knowledge(mod, literate);
-    CHECK(oral_change < 0.0);                 // the oral society is losing it
-    CHECK(literate_change > oral_change);     // the literate one loses less (or gains)
+    CHECK(oral_change < 0.0);              // the oral society is losing it
+    CHECK(literate_change > oral_change);  // the literate one loses less (or gains)
 }
 
 // THE FALL MOVED TOO (2026-08-23). "An era is LOST when the society can no longer carry
@@ -386,7 +383,7 @@ TEST_CASE("knowledge: records are a FLOOR under forgetting — the ratchet",
     archived.provinces[0].cohort_stats->codified_knowledge = 20000.0f;
     const double with_records = produced_knowledge(mod, archived);
 
-    CHECK(without_records < 0.0);          // a dark age
+    CHECK(without_records < 0.0);           // a dark age
     CHECK(with_records > without_records);  // the corpus arrests it
     // With a corpus covering everything the society knew, nothing is forgotten.
     CHECK(with_records >= 0.0);
@@ -441,9 +438,9 @@ TEST_CASE("knowledge: the press multiplies copying by orders of magnitude",
         KnowledgeModule::printing_copy_mult(50.0f * cfg.printing_knowledge_halfsat, cfg);
 
     // Half-saturation: half the gain realised.
-    CHECK_THAT(early, Catch::Matchers::WithinRel(
-                          1.0 + (static_cast<double>(cfg.printing_copy_multiplier) - 1.0) * 0.5,
-                          1e-4));
+    CHECK_THAT(early,
+               Catch::Matchers::WithinRel(
+                   1.0 + (static_cast<double>(cfg.printing_copy_multiplier) - 1.0) * 0.5, 1e-4));
     CHECK(late > 0.9 * static_cast<double>(cfg.printing_copy_multiplier));
     // Saturating: approached, never exceeded. Presses spread; they do not appear
     // everywhere at once, and there is no year in which printing is switched on.
@@ -461,8 +458,8 @@ TEST_CASE("knowledge: printing is gated on what a society knows, not on a date",
     // so these are expressed against the half-saturation rather than as bare numbers,
     // which is what they were always about.
     const KnowledgeConfig cfg{};
-    const double backward = KnowledgeModule::printing_copy_mult(
-        cfg.printing_knowledge_halfsat / 900.0f, cfg);
+    const double backward =
+        KnowledgeModule::printing_copy_mult(cfg.printing_knowledge_halfsat / 900.0f, cfg);
     const double advanced =
         KnowledgeModule::printing_copy_mult(cfg.printing_knowledge_halfsat * 5.5f, cfg);
     // The saturating form has a tail, so a Neolithic society at a nine-hundredth of the
@@ -522,10 +519,10 @@ TEST_CASE("knowledge: conquest costs a civilisation its refuges",
     // one keeps its armies and loses its libraries — and the libraries are what let the
     // next cycle start above the last.
     const KnowledgeConfig cfg{};
-    const double fragmented_loss =
-        static_cast<double>(cfg.record_loss_per_year) / KnowledgeModule::shelter_loss_divisor(6, cfg);
-    const double unified_loss =
-        static_cast<double>(cfg.record_loss_per_year) / KnowledgeModule::shelter_loss_divisor(1, cfg);
+    const double fragmented_loss = static_cast<double>(cfg.record_loss_per_year) /
+                                   KnowledgeModule::shelter_loss_divisor(6, cfg);
+    const double unified_loss = static_cast<double>(cfg.record_loss_per_year) /
+                                KnowledgeModule::shelter_loss_divisor(1, cfg);
     CHECK(unified_loss > fragmented_loss);
     CHECK(unified_loss > 3.0 * fragmented_loss);
 }
@@ -654,8 +651,7 @@ TEST_CASE("knowledge: learning from a neighbour costs the neighbour nothing",
     CHECK(province_knowledge_gain(dl, 0) > province_knowledge_gain(da, 0));
 }
 
-TEST_CASE("knowledge: catching up is easier than leading",
-          "[knowledge][tier1][regional]") {
+TEST_CASE("knowledge: catching up is easier than leading", "[knowledge][tier1][regional]") {
     // Ideas get harder to find against what a place ALREADY knows, so a province at the
     // frontier finds the going harder than one still catching up. This is why late
     // developers converge quickly and why the leader's advantage narrows.
@@ -739,7 +735,7 @@ TEST_CASE("knowledge: a dark region beside a learned one stays dark until it can
         return 0.0;
     };
 
-    const double literate = learned_by(0.10f);   // has a scholarly class
+    const double literate = learned_by(0.10f);    // has a scholarly class
     const double scattered = learned_by(0.001f);  // its scholars are gone
 
     CHECK(literate > 0.0);

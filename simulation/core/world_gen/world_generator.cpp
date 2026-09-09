@@ -6,7 +6,6 @@
 // All random draws go through DeterministicRNG for full reproducibility.
 
 #include "core/world_gen/world_generator.h"
-#include "core/world_gen/premarket_genesis.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,6 +20,7 @@
 #include "core/world_gen/facility_generator.h"
 #include "core/world_gen/h3_utils.h"
 #include "core/world_gen/nation_generator.h"
+#include "core/world_gen/premarket_genesis.h"
 #include "core/world_gen/settlement_generator.h"
 #include "core/world_state/apply_deltas.h"  // rebuild_npc_indices
 
@@ -483,8 +483,8 @@ WorldState WorldGenerator::generate(WorldGeneratorConfig config) {
     // be there), with the written corpus alongside it — a literate era has its books —
     // and left at zero for a dawn start, which genuinely knows nothing.
     if (config.starting_era >= 2) {
-        const EraDefinition* prev = world.era_catalog.by_index(
-            static_cast<uint8_t>(config.starting_era - 1));
+        const EraDefinition* prev =
+            world.era_catalog.by_index(static_cast<uint8_t>(config.starting_era - 1));
         const float seeded = prev ? std::max(0.0f, prev->knowledge_to_advance) : 0.0f;
         world.technology.knowledge_level = std::max(world.technology.knowledge_level, seeded);
         for (auto& p : world.provinces) {
@@ -780,8 +780,7 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
     if (config.founding_population_scale < 1.0f) {
         const double scaled = static_cast<double>(province.demographics.total_population) *
                               static_cast<double>(config.founding_population_scale);
-        province.demographics.total_population =
-            std::max(200u, static_cast<uint32_t>(scaled));
+        province.demographics.total_population = std::max(200u, static_cast<uint32_t>(scaled));
     }
 
     // Common geography fields.

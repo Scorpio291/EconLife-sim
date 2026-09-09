@@ -11,8 +11,8 @@
 // TechStage, TechHolding, and ActorTechnologyState are defined in shared_types.h
 // (core header) to avoid circular dependencies. This header provides the
 // module-specific types that build on top of them.
-#include "core/world_state/shared_types.h"
 #include "core/world_gen/era_catalog.h"  // MAX_ERA_CAPACITY (data-driven era timeline)
+#include "core/world_state/shared_types.h"
 
 namespace econlife {
 
