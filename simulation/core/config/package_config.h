@@ -325,6 +325,12 @@ struct InvestigatorEngineConfig {
 };
 
 struct NpcBusinessConfig {
+    // How long the player has to answer the quarterly owner decision before it
+    // takes its default course. A fortnight: long enough to be a real window at
+    // one tick per day, short enough that a firm is not left undecided for a
+    // season while its margin moves.
+    uint32_t owner_decision_window_ticks = 14;
+
     float cash_critical_months = 2.0f;
     float cash_comfortable_months = 3.0f;
     float cash_surplus_months = 5.0f;
@@ -507,6 +513,23 @@ struct SceneCardsConfig {
     uint32_t max_scene_cards_per_tick = 5;
     float trust_weight = 0.7f;
     float risk_weight = 0.3f;
+
+    // --- Queue bounds and expiry (Scene Card Rulebook v0.1 §1-§2) ---
+    // These are the rulebook's authored numbers, not tuning dials: the caps are
+    // an attention budget stated in the design, and the timed-optional window is
+    // the in-game expression of its 8-second countdown at the 1-tick == 1-day
+    // timescale (a meeting request the player never answers is a declined
+    // meeting within the week).
+    uint32_t ambient_queue_cap = 50;         // §1.3: oldest unread ambient card is cleared
+    uint32_t timed_optional_queue_cap = 12;  // §2: the 13th is demoted to ambient
+    uint32_t timed_optional_ttl_ticks = 7;   // §1.2: expiry fires the card's default outcome
+
+    // Directory of authored card templates (packages/*/scene_cards/*.csv).
+    // Empty means no catalog: seeded cards find no template and are dropped,
+    // which is the honest failure — a card whose copy was never written should
+    // not be invented at runtime. Set by the host that knows where the
+    // packages live (the CLI, the harness), not discovered by the module.
+    std::string card_catalog_directory;
 };
 
 struct CommodityTradingConfig {
@@ -2475,6 +2498,21 @@ struct WeaponsTraffickingConfig {
 };
 
 struct PopulationAgingConfig {
+    // --- The player's own clock ---
+    // Ticks per in-game year. The player's age advances 1/365 per tick, which is
+    // the contract declared on PlayerCharacter::age itself.
+    float ticks_per_year = 365.0f;
+    // How fast a person's fitness tracks the conditions they live in. Health here
+    // is the cohort stock's meaning — the share of the year a person is fit to
+    // work — so someone who moves to a sicker place does not become sick that
+    // afternoon; they converge over months. 0.0077/tick closes half the gap in a
+    // season (0.5^(1/90)), the same convergence idiom the cohort_stats writers use.
+    float player_health_convergence_rate = 0.0077f;
+    // Exhaustion drains when the player is not spending themselves. Half of it is
+    // gone in a fortnight of ordinary weeks (0.5^(1/14)); the load that puts it
+    // there comes from committed calendar time.
+    float player_exhaustion_recovery_rate = 0.048f;
+
     float cohort_income_update_rate = 0.05f;
     float cohort_employment_update_rate = 0.02f;
     float max_education_drift_per_year = 0.01f;

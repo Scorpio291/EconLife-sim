@@ -6,13 +6,36 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <filesystem>
 
 #include "core/tick/drain_deferred_work.h"
 #include "core/world_state/apply_deltas.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
 #include "modules/player_actions/player_actions_module.h"
+#include "modules/scene_cards/scene_cards_module.h"
 #include "tests/test_world_factory.h"
+
+namespace {
+// The shipped card copy. A refusal is a seed naming a template, so without the
+// catalog there is no card for the player to read.
+std::string find_scene_cards_dir() {
+    namespace fs = std::filesystem;
+    const char* candidates[] = {
+        "packages/base_game/scene_cards",
+        "../packages/base_game/scene_cards",
+        "../../packages/base_game/scene_cards",
+        "../../../packages/base_game/scene_cards",
+        "../../../../packages/base_game/scene_cards",
+        "../../../../../packages/base_game/scene_cards",
+    };
+    for (const auto* c : candidates) {
+        if (fs::is_directory(c))
+            return fs::canonical(c).string();
+    }
+    return "";
+}
+}  // namespace
 
 using namespace econlife;
 using namespace econlife::test;
@@ -257,10 +280,20 @@ TEST_CASE("Player travel arrival updates province_id", "[player_actions][unit]")
 // Start business tests
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Start business creates new business and deducts wealth", "[player_actions][unit]") {
+TEST_CASE("Start business does not charge for a business that cannot operate",
+          "[player_actions][unit]") {
+    // This action used to take 10,000 and hand back a company with no facility
+    // and no trade: production skips it, so revenue and cost stay at zero
+    // forever and financial_distribution has nothing to distribute. A year of
+    // play left the player 10,000 poorer and no better off.
+    //
+    // It now refuses, charges nothing, and says which routes to an operating
+    // business exist. Conjuring revenue for a company founded from nothing
+    // would be the magic rail the doctrine forbids.
     auto world = make_minimal_world();
 
     size_t biz_count_before = world.npc_businesses.size();
+    const float wealth_before = world.player->wealth;
 
     enqueue_player_action(world, PlayerActionType::start_business,
                           StartBusinessAction{BusinessSector::retail, 0});
@@ -270,15 +303,26 @@ TEST_CASE("Start business creates new business and deducts wealth", "[player_act
     module.execute(world, delta);
     apply_deltas(world, delta);
 
-    REQUIRE(world.npc_businesses.size() == biz_count_before + 1);
+    REQUIRE(world.npc_businesses.size() == biz_count_before);
+    REQUIRE_THAT(world.player->wealth, WithinAbs(wealth_before, 0.01f));
 
-    const auto& new_biz = world.npc_businesses.back();
-    REQUIRE(new_biz.sector == BusinessSector::retail);
-    REQUIRE(new_biz.owner_id == world.player->id);
-    REQUIRE(new_biz.province_id == 0);
+    // And the refusal reaches the player rather than vanishing. The module
+    // names an authored template; scene_cards turns it into the card, so the
+    // test follows the same route — a key no template answers to would raise
+    // nothing and fail nothing on its own.
+    REQUIRE(world.pending_scene_card_seeds.size() == 1);
 
-    // Wealth deducted.
-    REQUIRE_THAT(world.player->wealth, WithinAbs(50000.0f - 10000.0f, 0.01f));
+    SceneCardsConfig cfg{};
+    cfg.card_catalog_directory = find_scene_cards_dir();
+    REQUIRE_FALSE(cfg.card_catalog_directory.empty());
+    SceneCardsModule cards(cfg);
+    DeltaBuffer card_delta{};
+    cards.execute(world, card_delta);
+    apply_deltas(world, card_delta);
+
+    REQUIRE(world.pending_scene_cards.size() == 1);
+    REQUIRE_FALSE(world.pending_scene_cards[0].dialogue.empty());
+    REQUIRE_FALSE(world.pending_scene_cards[0].choices.empty());
 }
 
 TEST_CASE("Start business in wrong province is rejected", "[player_actions][unit]") {

@@ -9,12 +9,22 @@ export interface Player {
   province_id: number;
   home_province_id: number;
   travel_status: 'resident' | 'in_transit' | 'visiting';
+  lifespan_projection: number;
   reputation: {
     business: number;
     political: number;
     social: number;
     street: number;
   };
+  // Only domains the player has actually raised above the floor.
+  skills: { domain: string; level: number; last_exercise_tick: number }[];
+  // What the PLAYER knows is held against them — not what the world holds.
+  evidence_known: {
+    token_id: number;
+    discovery_tick: number;
+    type?: string;
+    actionability?: number;
+  }[];
 }
 
 export interface DialogueLine {
@@ -65,6 +75,15 @@ export interface Province {
   cohesion: number;
 }
 
+export interface Facility {
+  id: number;
+  province_id: number;
+  recipe_id: string;
+  workers: number;
+  max_workers: number;
+  operational: boolean;
+}
+
 export interface Business {
   id: number;
   sector: string;
@@ -72,7 +91,31 @@ export interface Business {
   cash: number;
   revenue_per_tick: number;
   cost_per_tick: number;
+  profit_per_tick: number;
   output_quality: number;
+  facilities: Facility[];
+}
+
+// A firm trading in the player's own province that they could buy. `fair_price`
+// is the seller's yardstick — thirty days of takings at the fair multiple —
+// which is what an offer is judged against, not a quote.
+export interface AcquisitionTarget {
+  id: number;
+  sector: string;
+  province_id: number;
+  owner_npc_id: number;
+  revenue_per_tick: number;
+  cost_per_tick: number;
+  fair_price: number;
+}
+
+export interface PendingAcquisition {
+  id: number;
+  business_id: number;
+  price: number;
+  offered_tick: number;
+  close_tick: number;
+  stage: string;
 }
 
 export interface Metrics {
@@ -90,6 +133,8 @@ export interface SimState {
   calendar: CalendarEntry[];
   provinces: Province[];
   businesses: Business[];
+  acquisition_targets: AcquisitionTarget[];
+  pending_acquisitions: PendingAcquisition[];
   metrics: Metrics;
 }
 

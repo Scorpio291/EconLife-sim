@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "core/rng/deterministic_rng.h"
@@ -251,12 +252,319 @@ void NpcBusinessModule::execute_province(uint32_t province_idx, const WorldState
     }
 }
 
-void NpcBusinessModule::execute(const WorldState& state, DeltaBuffer& delta) {
-    // Province-parallel modules dispatch through execute_province().
-    // This fallback processes all provinces sequentially if called directly.
-    for (uint32_t p = 0; p < static_cast<uint32_t>(state.provinces.size()); ++p) {
-        execute_province(p, state, delta);
+// ===========================================================================
+// The owner's decision — player-owned businesses
+// ===========================================================================
+//
+// execute_province() skips player-owned businesses at their decision tick: the
+// quarterly call belongs to the owner, and the owner is the player. But nothing
+// ever asked them, so a firm the player owned simply never decided anything —
+// it could not expand, could not tighten, could not respond to its own margin.
+// The player held an asset, not a business.
+//
+// This runs as a global post-pass (once per tick, sequentially) rather than
+// per province, because it allocates scene-card ids and a parallel dispatch
+// would hand the same id to two provinces at once.
+
+BusinessDecisionResult NpcBusinessModule::decision_for_choice(const NPCBusiness& biz,
+                                                              uint32_t choice_id) const {
+    BusinessDecisionResult result{};
+    result.business_id = biz.id;
+    result.board_approved = true;
+
+    const float available_cash = compute_available_cash(biz);
+
+    switch (choice_id) {
+        case OWNER_CHOICE_INVEST: {
+            // The same move a fast expander makes with the same numbers: 40% of
+            // available cash into expansion, hiring scaled to the spend, and the
+            // profile's R&D rate. A player's lever is the size an NPC's is —
+            // there is no separate player economy.
+            if (available_cash <= 0.0f)
+                break;  // nothing to invest; the course holds
+            result.expand = true;
+            float expansion_spend = available_cash * 0.40f;
+            result.cash_spent = expansion_spend;
+            result.hiring_target_change =
+                static_cast<int32_t>(std::max(1.0f, expansion_spend * 0.02f));
+            result.rd_investment_rate = cfg_.fast_expander_rd_rate;
+            result.cash_spent += available_cash * result.rd_investment_rate;
+            if (result.cash_spent > available_cash)
+                result.cash_spent = available_cash;
+            break;
+        }
+        case OWNER_CHOICE_CUT: {
+            // The cost cutter's modest tightening, again at its own magnitudes.
+            result.contract = true;
+            result.hiring_target_change =
+                -static_cast<int32_t>(std::max(1.0f, biz.cost_per_tick * 0.05f * 10.0f));
+            result.cost_per_tick_delta = biz.cost_per_tick * -0.05f;
+            break;
+        }
+        case OWNER_CHOICE_HOLD:
+        default:
+            // Maintain current operations. This is the conservative default the
+            // Scene Card Rulebook §3 asks for: not the worst outcome, the one
+            // that preserves the status quo.
+            break;
     }
+    return result;
+}
+
+std::vector<uint32_t> NpcBusinessModule::resolve_owner_decisions(const WorldState& state,
+                                                                 DeltaBuffer& delta) {
+    std::vector<uint32_t> just_resolved;
+    if (pending_owner_decisions_.empty())
+        return just_resolved;
+
+    std::vector<PendingOwnerDecision> still_waiting;
+    still_waiting.reserve(pending_owner_decisions_.size());
+
+    for (const auto& pending : pending_owner_decisions_) {
+        const NPCBusiness* biz = nullptr;
+        for (const auto& b : state.npc_businesses) {
+            if (b.id == pending.business_id) {
+                biz = &b;
+                break;
+            }
+        }
+        // The business is gone, or the player no longer owns it: the decision
+        // is not theirs to make any more.
+        if (biz == nullptr || state.player == nullptr || biz->owner_id != state.player->id)
+            continue;
+
+        const SceneCard* card = nullptr;
+        for (const auto& c : state.pending_scene_cards) {
+            if (c.id == pending.scene_card_id) {
+                card = &c;
+                break;
+            }
+        }
+
+        uint32_t chosen = 0;
+        if (card != nullptr) {
+            if (card->chosen_choice_id == 0) {
+                still_waiting.push_back(pending);
+                continue;  // the player has not answered yet
+            }
+            chosen = card->chosen_choice_id;
+        } else {
+            // No card in the queue. Until the decision window has run out this
+            // is simply a card that has not landed yet — it is created in this
+            // pass's own delta and reaches WorldState at the end of the tick.
+            // Once the window HAS run out with no card to answer, take the
+            // default rather than leave the business stuck at its decision tick
+            // re-asking forever, which is the failure mode this pass exists to
+            // avoid.
+            if (state.current_tick <= pending.asked_tick + cfg_.owner_decision_window_ticks) {
+                still_waiting.push_back(pending);
+                continue;
+            }
+            chosen = OWNER_CHOICE_HOLD;
+        }
+
+        BusinessDecisionResult result = decision_for_choice(*biz, chosen);
+        apply_decision_to_deltas(*biz, result, delta, state.current_tick, cfg_);
+
+        // Running a firm is how a person gets better at running firms. The
+        // quarterly call is the player's recurring exercise of the domain, and
+        // the gain shrinks as they approach mastery.
+        if (state.player != nullptr) {
+            for (const auto& skill : state.player->skills) {
+                if (skill.domain != SkillDomain::Business)
+                    continue;
+                const float gain = kSkillExerciseRate * (1.0f - skill.level);
+                if (gain > 0.0f) {
+                    SkillDelta sd{};
+                    sd.skill_id = static_cast<uint32_t>(SkillDomain::Business);
+                    sd.value = gain;
+                    delta.player_delta.skill_deltas.push_back(sd);
+                }
+                break;
+            }
+        }
+
+        // Advance the cadence, exactly as execute_province() does for an NPC
+        // owner, so the next call comes a quarter from now.
+        BusinessDelta tick_delta{};
+        tick_delta.business_id = biz->id;
+        tick_delta.next_decision_tick_update = state.current_tick + cfg_.ticks_per_quarter;
+        delta.business_deltas.push_back(tick_delta);
+        just_resolved.push_back(biz->id);
+    }
+
+    pending_owner_decisions_ = std::move(still_waiting);
+    return just_resolved;
+}
+
+void NpcBusinessModule::schedule_owner_decisions(const WorldState& state, DeltaBuffer& delta,
+                                                 const std::vector<uint32_t>& just_resolved) {
+    if (state.player == nullptr)
+        return;
+
+    // Card ids are allocated up front here because the calendar entry has to
+    // name the card it renders. Draw from the monotonic WorldState counter and
+    // advance past anything already claimed in this batch.
+    uint32_t next_card_id = state.next_scene_card_id;
+    for (const auto& c : delta.new_scene_cards) {
+        if (c.id >= next_card_id)
+            next_card_id = c.id + 1;
+    }
+
+    for (const auto& biz : state.npc_businesses) {
+        if (biz.owner_id != state.player->id)
+            continue;
+        if (!is_decision_tick(biz, state.current_tick))
+            continue;
+        // Just answered in this same pass: the quarter has been advanced, but
+        // only in the delta buffer, so `biz` still reads as due.
+        if (std::find(just_resolved.begin(), just_resolved.end(), biz.id) != just_resolved.end())
+            continue;
+
+        bool already_asked = false;
+        for (const auto& pending : pending_owner_decisions_) {
+            if (pending.business_id == biz.id) {
+                already_asked = true;
+                break;
+            }
+        }
+        if (already_asked)
+            continue;
+
+        const uint32_t card_id = next_card_id++;
+
+        // The claim on the player's time. This is an obligation the WORLD
+        // raised — the quarter came round — not something the player put in
+        // their own diary.
+        CalendarEntry entry{};
+        entry.id = 0;  // allocated by apply_deltas
+        entry.start_tick = state.current_tick;
+        entry.duration_ticks = cfg_.owner_decision_window_ticks;
+        entry.type = CalendarEntryType::operation;
+        entry.npc_id = 0;
+        entry.player_committed = false;  // inbound, not self-scheduled
+        entry.mandatory = false;
+        entry.scene_card_id = card_id;
+        entry.deadline_consequence = {};
+        entry.deadline_consequence.default_outcome_description =
+            "The business holds its current course.";
+        delta.new_calendar_entries.push_back(entry);
+
+        // The decision itself.
+        SceneCard card{};
+        card.id = card_id;
+        card.type = SceneCardType::meeting;
+        card.setting = SceneSetting::private_office;
+        card.npc_id = 0;
+        card.card_class = CardClass::timed_optional;
+        card.default_choice_id = OWNER_CHOICE_HOLD;
+        card.expires_tick = state.current_tick + cfg_.owner_decision_window_ticks;
+        card.npc_presentation_state = 0.0f;
+        card.is_authored = false;
+        card.chosen_choice_id = 0;
+
+        const float margin = compute_profit_margin(biz);
+        const float available_cash = compute_available_cash(biz);
+        DialogueLine line{};
+        line.speaker_npc_id = 0;
+        line.text = "The quarter is closed. Takings run at " +
+                    std::to_string(static_cast<int>(biz.revenue_per_tick)) + " a day against " +
+                    std::to_string(static_cast<int>(biz.cost_per_tick)) + " of costs, with " +
+                    std::to_string(static_cast<int>(available_cash)) +
+                    " free to put to work. What do you want to do?";
+        line.emotional_tone = margin;
+        card.dialogue.push_back(std::move(line));
+
+        card.choices.push_back(PlayerChoice{OWNER_CHOICE_INVEST, "Invest in growth",
+                                            "Put the free cash into capacity and hiring.", 0});
+        card.choices.push_back(
+            PlayerChoice{OWNER_CHOICE_HOLD, "Hold the course", "Change nothing this quarter.", 0});
+        card.choices.push_back(PlayerChoice{OWNER_CHOICE_CUT, "Tighten costs",
+                                            "Trim the payroll and the running costs.", 0});
+
+        delta.new_scene_cards.push_back(std::move(card));
+
+        PendingOwnerDecision rec{};
+        rec.business_id = biz.id;
+        rec.scene_card_id = card_id;
+        rec.calendar_entry_id = 0;  // filled by apply_deltas; not needed to resolve
+        rec.asked_tick = state.current_tick;
+        pending_owner_decisions_.push_back(rec);
+    }
+}
+
+void NpcBusinessModule::execute(const WorldState& state, DeltaBuffer& delta) {
+    // Global post-pass: the owner's side of the quarterly decision. Province
+    // work is done in execute_province().
+    const std::vector<uint32_t> just_resolved = resolve_owner_decisions(state, delta);
+    schedule_owner_decisions(state, delta, just_resolved);
+}
+
+// ===========================================================================
+// Module-private state — outstanding owner decisions
+// ===========================================================================
+//
+// Format (little-endian fixed-width):
+//   u32 schema_tag (1 == this layout)
+//   u32 count
+//   per record: u32 business_id, u32 scene_card_id, u32 calendar_entry_id,
+//               u32 asked_tick
+
+namespace {
+
+void put_u32_le(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFFu));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFFu));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFFu));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFFu));
+}
+
+bool take_u32_le(const uint8_t*& p, const uint8_t* end, uint32_t& out) {
+    if (static_cast<size_t>(end - p) < 4)
+        return false;
+    out = static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
+          (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
+    p += 4;
+    return true;
+}
+
+constexpr uint32_t OWNER_DECISION_SCHEMA_TAG = 1;
+
+}  // namespace
+
+void NpcBusinessModule::serialize_state(std::vector<uint8_t>& out) const {
+    put_u32_le(out, OWNER_DECISION_SCHEMA_TAG);
+    put_u32_le(out, static_cast<uint32_t>(pending_owner_decisions_.size()));
+    for (const auto& rec : pending_owner_decisions_) {
+        put_u32_le(out, rec.business_id);
+        put_u32_le(out, rec.scene_card_id);
+        put_u32_le(out, rec.calendar_entry_id);
+        put_u32_le(out, rec.asked_tick);
+    }
+}
+
+bool NpcBusinessModule::deserialize_state(const uint8_t* data, size_t size) {
+    pending_owner_decisions_.clear();
+    if (data == nullptr || size == 0)
+        return true;  // nothing stored is a valid state
+
+    const uint8_t* p = data;
+    const uint8_t* end = data + size;
+    uint32_t tag = 0;
+    if (!take_u32_le(p, end, tag) || tag != OWNER_DECISION_SCHEMA_TAG)
+        return false;
+    uint32_t count = 0;
+    if (!take_u32_le(p, end, count))
+        return false;
+    pending_owner_decisions_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        PendingOwnerDecision rec{};
+        if (!take_u32_le(p, end, rec.business_id) || !take_u32_le(p, end, rec.scene_card_id) ||
+            !take_u32_le(p, end, rec.calendar_entry_id) || !take_u32_le(p, end, rec.asked_tick))
+            return false;
+        pending_owner_decisions_.push_back(rec);
+    }
+    return true;
 }
 
 // ===========================================================================
@@ -456,6 +764,19 @@ void NpcBusinessModule::apply_decision_to_deltas(const NPCBusiness& biz,
                                       ? static_cast<float>(-result.hiring_target_change) * -10.0f
                                       : 0.0f;
         delta.npc_deltas.push_back(npc_delta);
+
+        // Staffing is what an expansion BUYS. Without this the decision moved
+        // cash and nothing else for a facility-based firm: production reads
+        // worker_count (staffing gates output, and each extra worker adds to
+        // it), and the organic revenue growth the branch below emits is
+        // overwritten every tick by production's own recomputation. So a player
+        // who invested in a plant paid for capacity and received none — a choice
+        // with no consequence, which is exactly the fake gameplay the design
+        // forbids. Bounded on apply by each plant's max_workers.
+        FacilityWorkerDelta staffing{};
+        staffing.business_id = biz.id;
+        staffing.worker_count_delta = result.hiring_target_change;
+        delta.facility_worker_deltas.push_back(staffing);
     }
 
     // Expansion decision: schedule downstream effects.

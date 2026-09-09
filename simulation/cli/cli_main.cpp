@@ -23,6 +23,8 @@
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
 #include "interactive_json.h"
+#include "modules/persistence/persistence_module.h"
+#include "modules/persistence/save_file.h"
 #include "modules/register_base_game_modules.h"
 
 using namespace econlife;
@@ -43,10 +45,15 @@ struct CliArgs {
     uint32_t report_every = 30;  // print metrics every N ticks
     uint8_t max_good_tier = 1;   // tier 0-1 at game start
     bool verbose = false;
-    bool interactive = false;     // JSON-line IPC mode for UI bridge
-    bool use_test_world = false;  // fallback to test_world_factory
-    std::string goods_dir;        // path to goods CSVs
-    std::string config_dir;       // optional override for config JSON directory
+    bool interactive = false;        // JSON-line IPC mode for UI bridge
+    bool use_test_world = false;     // fallback to test_world_factory
+    std::string goods_dir;           // path to goods CSVs
+    std::string config_dir;          // optional override for config JSON directory
+    std::string save_dir = "saves";  // where autosaves and explicit saves live
+    std::string load_path;           // start from this save instead of generating
+    // -1 = unset (interactive play defaults to the snapshot interval);
+    // 0 = explicitly off; > 0 = ticks between rolling autosaves.
+    int64_t autosave_every = -1;
     std::vector<ScheduledAction> scheduled_actions;
 };
 
@@ -60,6 +67,9 @@ static void print_usage(const char* prog) {
     std::printf("  --report-every N  Print metrics every N ticks (default: 30)\n");
     std::printf("  --max-tier N      Max good tier at start (default: 1)\n");
     std::printf("  --goods-dir PATH  Path to goods CSV directory\n");
+    std::printf("  --save-dir PATH   Directory for saves (default: saves)\n");
+    std::printf("  --load PATH       Resume from a save instead of generating a world\n");
+    std::printf("  --autosave N      Autosave every N ticks (0 = off; interactive default: 30)\n");
     std::printf("  --config-dir PATH Path to JSON config directory (default: auto-detect)\n");
     std::printf("  --test-world      Use minimal test world factory instead\n");
     std::printf("  --interactive     JSON-line IPC mode for UI bridge\n");
@@ -134,6 +144,12 @@ static CliArgs parse_args(int argc, char* argv[]) {
             args.goods_dir = argv[++i];
         } else if (std::strcmp(argv[i], "--config-dir") == 0 && i + 1 < argc) {
             args.config_dir = argv[++i];
+        } else if (std::strcmp(argv[i], "--save-dir") == 0 && i + 1 < argc) {
+            args.save_dir = argv[++i];
+        } else if (std::strcmp(argv[i], "--load") == 0 && i + 1 < argc) {
+            args.load_path = argv[++i];
+        } else if (std::strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) {
+            args.autosave_every = std::strtoll(argv[++i], nullptr, 10);
         } else if (std::strcmp(argv[i], "--test-world") == 0) {
             args.use_test_world = true;
         } else if (std::strcmp(argv[i], "--interactive") == 0) {
@@ -184,6 +200,10 @@ static std::string find_recipes_directory() {
 
 static std::string find_facility_types_filepath() {
     return find_base_game_path("facility_types/facility_types.csv");
+}
+
+static std::string find_scene_cards_directory() {
+    return find_base_game_path("scene_cards");
 }
 
 static std::string find_technology_directory() {
@@ -318,6 +338,11 @@ int main(int argc, char* argv[]) {
     } else {
         std::fprintf(diag, "Config directory: not found (using spec defaults)\n");
     }
+    pkg_config.scene_cards.card_catalog_directory = find_scene_cards_directory();
+    std::fprintf(diag, "Scene card catalog: %s\n",
+                 pkg_config.scene_cards.card_catalog_directory.empty()
+                     ? "not found (cards will not be raised)"
+                     : pkg_config.scene_cards.card_catalog_directory.c_str());
 
     // 3. Set up orchestrator
     TickOrchestrator orchestrator;
@@ -327,8 +352,39 @@ int main(int argc, char* argv[]) {
     std::fprintf(diag, "Registered %zu modules, topological sort OK.\n\n",
                  orchestrator.modules().size());
 
+    // 3b. Resume from a save, if asked. This has to happen AFTER module
+    // registration: module-private state is restored through the same module
+    // list that wrote it.
+    if (!args.load_path.empty()) {
+        SaveResult lr = load_game(args.load_path, world, orchestrator);
+        if (!lr.ok) {
+            std::fprintf(stderr, "Load failed: %s\n", lr.error.c_str());
+            return 1;
+        }
+        std::fprintf(diag, "Loaded %s (schema v%u, %zu bytes) at tick %u.\n", lr.path.c_str(),
+                     lr.schema_version, lr.bytes, world.current_tick);
+    }
+
     // 4. Create thread pool
     ThreadPool pool(args.threads);
+
+    // Autosave cadence. Interactive play defaults to the module's own snapshot
+    // interval so a session survives being closed without the player thinking
+    // about it; batch runs stay off unless asked.
+    const uint32_t autosave_every =
+        (args.autosave_every >= 0) ? static_cast<uint32_t>(args.autosave_every)
+                                   : (args.interactive ? PersistenceModule::SNAPSHOT_INTERVAL : 0u);
+    const std::string autosave_file = autosave_path(args.save_dir);
+
+    auto do_autosave = [&](const WorldState& w) {
+        if (autosave_every == 0 || w.current_tick == 0)
+            return;
+        if (w.current_tick % autosave_every != 0)
+            return;
+        SaveResult sr = save_game(autosave_file, w, orchestrator);
+        if (!sr.ok)
+            std::fprintf(stderr, "Autosave failed: %s\n", sr.error.c_str());
+    };
 
     // ── Interactive mode (JSON-line IPC for UI bridge) ──────────────────────
     if (args.interactive) {
@@ -392,12 +448,55 @@ int main(int argc, char* argv[]) {
                         return 1;
                     }
 
+                    do_autosave(world);
+
                     nlohmann::json msg;
                     msg["type"] = "state";
                     msg["state"] = serialize_ui_state(world);
                     std::cout << msg.dump() << '\n';
                     std::cout.flush();
                 }
+                continue;
+            }
+
+            if (cmdType == "save") {
+                const std::string path =
+                    cmd.contains("path") ? cmd["path"].get<std::string>() : autosave_file;
+                SaveResult sr = save_game(path, world, orchestrator);
+                nlohmann::json ack;
+                ack["type"] = "ack";
+                ack["success"] = sr.ok;
+                ack["path"] = sr.path;
+                if (!sr.ok)
+                    ack["message"] = sr.error;
+                else
+                    ack["bytes"] = sr.bytes;
+                std::cout << ack.dump() << '\n';
+                std::cout.flush();
+                continue;
+            }
+
+            if (cmdType == "load") {
+                const std::string path =
+                    cmd.contains("path") ? cmd["path"].get<std::string>() : autosave_file;
+                SaveResult lr = load_game(path, world, orchestrator);
+                nlohmann::json ack;
+                ack["type"] = "ack";
+                ack["success"] = lr.ok;
+                ack["path"] = lr.path;
+                if (!lr.ok) {
+                    ack["message"] = lr.error;
+                    std::cout << ack.dump() << '\n';
+                    std::cout.flush();
+                    continue;
+                }
+                std::cout << ack.dump() << '\n';
+                // The world changed under the UI; send it the new one.
+                nlohmann::json msg;
+                msg["type"] = "state";
+                msg["state"] = serialize_ui_state(world);
+                std::cout << msg.dump() << '\n';
+                std::cout.flush();
                 continue;
             }
 
@@ -444,6 +543,7 @@ int main(int argc, char* argv[]) {
 
         auto tick_start = std::chrono::steady_clock::now();
         orchestrator.execute_tick(world, pool);
+        do_autosave(world);
         auto tick_end = std::chrono::steady_clock::now();
 
         double tick_ms = std::chrono::duration<double, std::milli>(tick_end - tick_start).count();

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <set>
 
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
@@ -151,6 +152,72 @@ static const char* calendar_type_str(CalendarEntryType t) {
     }
 }
 
+static const char* pending_stage_str(PendingTxStage stage) {
+    switch (stage) {
+        case PendingTxStage::pending:
+            return "pending";
+        case PendingTxStage::settled:
+            return "settled";
+        case PendingTxStage::cancelled:
+            return "cancelled";
+        case PendingTxStage::expired:
+            return "expired";
+    }
+    return "unknown";
+}
+
+static const char* skill_domain_str(SkillDomain d) {
+    switch (d) {
+        case SkillDomain::Business:
+            return "business";
+        case SkillDomain::Finance:
+            return "finance";
+        case SkillDomain::Engineering:
+            return "engineering";
+        case SkillDomain::Politics:
+            return "politics";
+        case SkillDomain::Management:
+            return "management";
+        case SkillDomain::Trade:
+            return "trade";
+        case SkillDomain::Intelligence:
+            return "intelligence";
+        case SkillDomain::Persuasion:
+            return "persuasion";
+        case SkillDomain::CriminalOperations:
+            return "criminal_operations";
+        case SkillDomain::UndercoverInfiltration:
+            return "undercover_infiltration";
+        case SkillDomain::SpecialtyCulinary:
+            return "culinary";
+        case SkillDomain::SpecialtyChemistry:
+            return "chemistry";
+        case SkillDomain::SpecialtyCoding:
+            return "coding";
+        case SkillDomain::SpecialtyAgriculture:
+            return "agriculture";
+        case SkillDomain::SpecialtyConstruction:
+            return "construction";
+    }
+    return "unknown";
+}
+
+static const char* evidence_type_str(EvidenceType t) {
+    switch (t) {
+        case EvidenceType::financial:
+            return "financial";
+        case EvidenceType::testimonial:
+            return "testimonial";
+        case EvidenceType::documentary:
+            return "documentary";
+        case EvidenceType::physical:
+            return "physical";
+        case EvidenceType::digital:
+            return "digital";
+    }
+    return "unknown";
+}
+
 static const char* business_sector_str(BusinessSector s) {
     switch (s) {
         case BusinessSector::manufacturing:
@@ -242,11 +309,41 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
                            {"province_id", p.current_province_id},
                            {"home_province_id", p.home_province_id},
                            {"travel_status", travel_status_str(p.travel_status)},
+                           {"lifespan_projection", p.health.lifespan_projection},
                            {"reputation",
                             {{"business", p.reputation.public_business},
                              {"political", p.reputation.public_political},
                              {"social", p.reputation.public_social},
                              {"street", p.reputation.street}}}};
+
+        // What the player has become good at. Only domains above the floor —
+        // a list of fifteen entries at 0.05 is noise, not information.
+        json skills = json::array();
+        for (const auto& skill : p.skills) {
+            if (skill.level <= SKILL_DOMAIN_FLOOR)
+                continue;
+            skills.push_back({{"domain", skill_domain_str(skill.domain)},
+                              {"level", skill.level},
+                              {"last_exercise_tick", skill.last_exercise_tick}});
+        }
+        state["player"]["skills"] = skills;
+
+        // What the player KNOWS is held against them — not what the world
+        // holds. The gap between the two is the point (GDD: the player
+        // evidence awareness gap), so this reports only the awareness map.
+        json known = json::array();
+        for (const auto& e : p.evidence_awareness_map) {
+            json ev = {{"token_id", e.token_id}, {"discovery_tick", e.discovery_tick}};
+            for (const auto& token : world.evidence_pool) {
+                if (token.id != e.token_id)
+                    continue;
+                ev["type"] = evidence_type_str(token.type);
+                ev["actionability"] = token.actionability;
+                break;
+            }
+            known.push_back(ev);
+        }
+        state["player"]["evidence_known"] = known;
     }
 
     // Pending scene cards
@@ -315,17 +412,106 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
     if (world.player) {
         for (const auto& biz : world.npc_businesses) {
             if (biz.owner_id == world.player->id) {
+                // The plants the firm runs, and how staffed they are. Without
+                // this the player owns a number, not a business: they cannot
+                // see what they make, where, or whether there is room to grow.
+                json plants = json::array();
+                for (const auto& f : world.facilities) {
+                    if (f.business_id != biz.id)
+                        continue;
+                    plants.push_back({{"id", f.id},
+                                      {"province_id", f.province_id},
+                                      {"recipe_id", f.recipe_id},
+                                      {"workers", f.worker_count},
+                                      {"max_workers", f.max_workers},
+                                      {"operational", f.is_operational}});
+                }
                 businesses.push_back({{"id", biz.id},
                                       {"sector", business_sector_str(biz.sector)},
                                       {"province_id", biz.province_id},
                                       {"cash", biz.cash},
                                       {"revenue_per_tick", biz.revenue_per_tick},
                                       {"cost_per_tick", biz.cost_per_tick},
-                                      {"output_quality", biz.output_quality}});
+                                      {"profit_per_tick", biz.revenue_per_tick - biz.cost_per_tick},
+                                      {"output_quality", biz.output_quality},
+                                      {"facilities", plants}});
             }
         }
     }
     state["businesses"] = businesses;
+
+    // Businesses the player could buy. Device-mediated information: a firm
+    // trading in the province the player is standing in is public knowledge,
+    // and its takings are what due diligence would turn up — so the list is
+    // scoped to the player's current province and to firms they do not already
+    // own. `fair_price` is the seller's own yardstick (30 ticks of revenue at
+    // the fair multiple), i.e. what an offer is judged against, not a quote.
+    json targets = json::array();
+    if (world.player) {
+        const float fair_multiple = 6.0f;
+        const float ticks_per_month = 30.0f;
+        for (const auto& biz : world.npc_businesses) {
+            if (biz.owner_id == world.player->id)
+                continue;
+            if (biz.province_id != world.player->current_province_id)
+                continue;
+            if (biz.revenue_per_tick <= 0.0f)
+                continue;  // a firm with no takings has no acquisition price
+            targets.push_back(
+                {{"id", biz.id},
+                 {"sector", business_sector_str(biz.sector)},
+                 {"province_id", biz.province_id},
+                 {"owner_npc_id", biz.owner_id},
+                 {"revenue_per_tick", biz.revenue_per_tick},
+                 {"cost_per_tick", biz.cost_per_tick},
+                 {"fair_price", biz.revenue_per_tick * ticks_per_month * fair_multiple}});
+        }
+    }
+    state["acquisition_targets"] = targets;
+
+    // The prices the player's own firms buy and sell at, in the province they
+    // trade in. A business decision without prices is a guess — and this is
+    // what a proprietor reads in the trade press, not a view of every market
+    // in the world.
+    json prices = json::array();
+    if (world.player) {
+        std::set<uint32_t> player_provinces;
+        for (const auto& biz : world.npc_businesses) {
+            if (biz.owner_id == world.player->id)
+                player_provinces.insert(biz.province_id);
+        }
+        player_provinces.insert(world.player->current_province_id);
+        for (const auto& m : world.regional_markets) {
+            if (player_provinces.count(m.province_id) == 0)
+                continue;
+            if (m.spot_price <= 0.0f)
+                continue;
+            prices.push_back({{"good_id", m.good_id},
+                              {"province_id", m.province_id},
+                              {"spot_price", m.spot_price},
+                              {"equilibrium_price", m.equilibrium_price},
+                              {"supply", m.supply},
+                              {"demand", m.demand_buffer}});
+        }
+    }
+    state["market_prices"] = prices;
+
+    // Deals in flight. A business acquisition takes 60 ticks of due diligence;
+    // without this the player makes an offer and hears nothing for two months.
+    json deals = json::array();
+    if (world.player) {
+        for (const auto& acq : world.pending_business_acquisitions) {
+            if (acq.buyer_id != world.player->id)
+                continue;
+            deals.push_back({{"id", acq.id},
+                             {"business_id", acq.business_id},
+                             {"price", acq.price},
+                             {"offered_tick", acq.offered_tick},
+                             {"close_tick", acq.close_tick},
+                             {"stage", pending_stage_str(acq.stage)}});
+        }
+    }
+    state["pending_acquisitions"] = deals;
 
     // Aggregate metrics
     state["metrics"] = {{"npc_count", world.significant_npcs.size()},
@@ -339,6 +525,14 @@ nlohmann::json serialize_ui_state(const WorldState& world) {
 // ---------------------------------------------------------------------------
 // Action parsing
 // ---------------------------------------------------------------------------
+
+static PaymentMethod parse_payment_method(const std::string& s) {
+    if (s == "mortgage")
+        return PaymentMethod::mortgage;
+    if (s == "mixed")
+        return PaymentMethod::mixed;
+    return PaymentMethod::cash;
+}
 
 bool parse_and_enqueue_action(const nlohmann::json& cmd, WorldState& world) {
     if (!cmd.contains("action_type") || !cmd.contains("payload"))
@@ -405,6 +599,85 @@ bool parse_and_enqueue_action(const nlohmann::json& cmd, WorldState& world) {
         uint32_t npc_id = payload.value("target_npc_id", 0u);
         enqueue_player_action(world, PlayerActionType::initiate_contact,
                               InitiateContactAction{npc_id});
+        return true;
+    }
+    if (action_type == "acquire_business") {
+        AcquireBusinessAction a{};
+        a.business_id = payload.value("business_id", 0u);
+        // Offer price = revenue_per_tick x 30 x offer_multiple; the seller
+        // weighs the multiple against a fair 6x, so the default is a fair bid.
+        a.offer_multiple = payload.value("offer_multiple", 6.0f);
+        a.payment_method = parse_payment_method(payload.value("payment_method", "cash"));
+        a.down_payment_fraction = payload.value("down_payment_fraction", 1.0f);
+        enqueue_player_action(world, PlayerActionType::acquire_business, a);
+        return true;
+    }
+    if (action_type == "calendar_schedule") {
+        CalendarScheduleAction a{};
+        a.type = static_cast<CalendarEntryType>(payload.value("type", 0u));
+        a.npc_id = payload.value("npc_id", 0u);
+        a.desired_start_tick = payload.value("desired_start_tick", world.current_tick + 1u);
+        a.duration_ticks = payload.value("duration_ticks", 1u);
+        enqueue_player_action(world, PlayerActionType::calendar_schedule, a);
+        return true;
+    }
+    if (action_type == "list_property_for_sale") {
+        ListPropertyForSaleAction a{};
+        a.property_id = payload.value("property_id", 0u);
+        a.asking_price = payload.value("asking_price", 0.0f);
+        enqueue_player_action(world, PlayerActionType::list_property_for_sale, a);
+        return true;
+    }
+    if (action_type == "unlist_property") {
+        UnlistPropertyAction a{};
+        a.property_id = payload.value("property_id", 0u);
+        enqueue_player_action(world, PlayerActionType::unlist_property, a);
+        return true;
+    }
+    if (action_type == "make_property_offer") {
+        MakePropertyOfferAction a{};
+        a.property_id = payload.value("property_id", 0u);
+        a.offer_price = payload.value("offer_price", 0.0f);
+        a.payment_method = parse_payment_method(payload.value("payment_method", "cash"));
+        a.down_payment_fraction = payload.value("down_payment_fraction", 1.0f);
+        enqueue_player_action(world, PlayerActionType::make_property_offer, a);
+        return true;
+    }
+    if (action_type == "cancel_pending_transaction") {
+        CancelPendingTransactionAction a{};
+        a.property_id = payload.value("property_id", 0u);
+        enqueue_player_action(world, PlayerActionType::cancel_pending_transaction, a);
+        return true;
+    }
+    if (action_type == "place_auction_bid") {
+        PlaceAuctionBidAction a{};
+        a.auction_id = payload.value("auction_id", 0u);
+        a.bid_amount = payload.value("bid_amount", 0.0f);
+        enqueue_player_action(world, PlayerActionType::place_auction_bid, a);
+        return true;
+    }
+    if (action_type == "request_construction_bids") {
+        RequestConstructionBidsAction a{};
+        a.property_id = payload.value("property_id", 0u);
+        a.facility_type_key = payload.value("facility_type_key", std::string{});
+        a.recipe_id = payload.value("recipe_id", std::string{});
+        a.bidding_window_ticks = payload.value("bidding_window_ticks", 14u);
+        enqueue_player_action(world, PlayerActionType::request_construction_bids, a);
+        return true;
+    }
+    if (action_type == "award_construction_bid") {
+        AwardConstructionBidAction a{};
+        a.contract_id = payload.value("contract_id", 0u);
+        a.bid_index = payload.value("bid_index", 0u);
+        enqueue_player_action(world, PlayerActionType::award_construction_bid, a);
+        return true;
+    }
+    if (action_type == "set_production") {
+        SetProductionAction a{};
+        a.business_id = payload.value("business_id", 0u);
+        a.recipe_id = payload.value("recipe_id", 0u);
+        a.target_output_rate = payload.value("target_output_rate", 0.5f);
+        enqueue_player_action(world, PlayerActionType::set_production, a);
         return true;
     }
 

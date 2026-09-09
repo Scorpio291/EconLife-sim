@@ -1143,3 +1143,218 @@ TEST_CASE("people: an unschooled society works nothing out", "[population_aging]
     CHECK_THAT(none, Catch::Matchers::WithinAbs(0.0f, 1e-6f));
     CHECK(some > 0.0f);
 }
+
+// ---------------------------------------------------------------------------
+// The player's own clock.
+//
+// PlayerCharacter::age was assigned once at world generation and never again,
+// against the contract declared on the field itself. A player could run a
+// business for a year and still be exactly as old as their own birthday, which
+// left lifespan, terminal illness, succession and the heir with no clock.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+WorldState make_player_world(float province_health = 1.0f) {
+    WorldState w{};
+    w.current_tick = 1;
+    w.world_seed = 42;
+    w.game_mode = GameMode::standard;
+
+    Province p{};
+    p.id = 0;
+    p.region_id = 0;
+    p.cohort_stats = std::make_unique<RegionCohortStats>();
+    p.cohort_stats->health = province_health;
+    w.provinces.push_back(std::move(p));
+
+    auto player = std::make_unique<PlayerCharacter>();
+    player->id = 1;
+    player->age = 30.0f;
+    player->current_province_id = 0;
+    player->home_province_id = 0;
+    player->health.current_health = 1.0f;
+    player->health.base_lifespan = 75.0f;
+    player->health.lifespan_projection = 75.0f;
+    player->health.exhaustion_accumulator = 0.0f;
+    w.player = std::move(player);
+    return w;
+}
+
+}  // namespace
+
+TEST_CASE("PopulationAging: the player ages one year per 365 ticks",
+          "[population_aging][player_life]") {
+    WorldState w = make_player_world();
+    PopulationAgingModule module;
+
+    for (int t = 0; t < 365; ++t) {
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        apply_deltas(w, d);
+        w.current_tick += 1;
+    }
+
+    REQUIRE_THAT(w.player->age, WithinAbs(31.0f, 0.01f));
+}
+
+TEST_CASE("PopulationAging: lifespan projection is derived from age, not carried",
+          "[population_aging][player_life]") {
+    WorldState w = make_player_world();
+    PopulationAgingModule module;
+
+    for (int t = 0; t < 365 * 2; ++t) {
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        apply_deltas(w, d);
+        w.current_tick += 1;
+    }
+
+    REQUIRE_THAT(w.player->age, WithinAbs(32.0f, 0.02f));
+    REQUIRE_THAT(w.player->health.lifespan_projection, WithinAbs(75.0f - 32.0f, 0.02f));
+}
+
+TEST_CASE("PopulationAging: the player's fitness follows the province they live in",
+          "[population_aging][player_life]") {
+    // The baseline world is healthy by design, so the mechanism is proven in a
+    // controlled world — the same approach the emergence suite uses for crisis
+    // mechanisms.
+    WorldState w = make_player_world(0.60f);  // a sick place
+    PopulationAgingModule module;
+
+    for (int t = 0; t < 365; ++t) {
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        apply_deltas(w, d);
+        w.current_tick += 1;
+    }
+
+    INFO("player health after a year in a province at 0.60: " << w.player->health.current_health);
+    REQUIRE(w.player->health.current_health < 1.0f);
+    REQUIRE(w.player->health.current_health > 0.60f);  // converging, not snapping
+
+    // And it comes back when the place does.
+    w.provinces[0].cohort_stats->health = 1.0f;
+    const float sick = w.player->health.current_health;
+    for (int t = 0; t < 365; ++t) {
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        apply_deltas(w, d);
+        w.current_tick += 1;
+    }
+    REQUIRE(w.player->health.current_health > sick);
+}
+
+TEST_CASE("PopulationAging: exhaustion drains when the player is not spending themselves",
+          "[population_aging][player_life]") {
+    WorldState w = make_player_world();
+    w.player->health.exhaustion_accumulator = 0.80f;
+    PopulationAgingModule module;
+
+    for (int t = 0; t < 14; ++t) {
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        apply_deltas(w, d);
+        w.current_tick += 1;
+    }
+
+    // Roughly half gone in a fortnight, and never below zero.
+    INFO("exhaustion after 14 ticks: " << w.player->health.exhaustion_accumulator);
+    REQUIRE(w.player->health.exhaustion_accumulator < 0.55f);
+    REQUIRE(w.player->health.exhaustion_accumulator > 0.30f);
+}
+
+TEST_CASE("PopulationAging: the clock runs in the player's province only",
+          "[population_aging][player_life]") {
+    // The pass lives inside province-parallel dispatch, so it must fire for
+    // exactly one province — otherwise the player would age once per province
+    // per tick.
+    WorldState w = make_player_world();
+    Province second{};
+    second.id = 1;
+    second.region_id = 0;
+    second.cohort_stats = std::make_unique<RegionCohortStats>();
+    w.provinces.push_back(std::move(second));
+
+    PopulationAgingModule module;
+    DeltaBuffer d{};
+    module.advance_player_life(0, w, d);  // the player's province
+    module.advance_player_life(1, w, d);  // somewhere else
+    apply_deltas(w, d);
+
+    REQUIRE_THAT(w.player->age, WithinAbs(30.0f + 1.0f / 365.0f, 0.0001f));
+}
+
+// ---------------------------------------------------------------------------
+// Skill rust. "Skill leveling (by doing) and skill rust (by neglect)" is V1,
+// and rust had no producer: a domain the player never touched stayed exactly
+// as sharp as the day they last used it.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PopulationAging: a neglected skill rusts, but not below its floor",
+          "[population_aging][player_life]") {
+    WorldState w = make_player_world();
+    PlayerSkill sharp{};
+    sharp.domain = SkillDomain::Business;
+    sharp.level = 0.60f;
+    sharp.decay_rate = kDefaultSkillDecayRate;
+    sharp.last_exercise_tick = 0;
+    w.player->skills.push_back(sharp);
+
+    PopulationAgingModule module;
+
+    // Inside the grace period, nothing happens: a month off is not neglect.
+    w.current_tick = SKILL_DECAY_GRACE_PERIOD;
+    {
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        REQUIRE(d.player_delta.skill_deltas.empty());
+    }
+
+    // Past it, the domain decays.
+    for (uint32_t t = SKILL_DECAY_GRACE_PERIOD + 1; t < 365; ++t) {
+        w.current_tick = t;
+        DeltaBuffer d{};
+        module.advance_player_life(0, w, d);
+        apply_deltas(w, d);
+    }
+    INFO("level after a year of neglect: " << w.player->skills[0].level);
+    REQUIRE(w.player->skills[0].level < 0.60f);
+    REQUIRE(w.player->skills[0].level > SKILL_DOMAIN_FLOOR);
+
+    // And it never falls through the floor — what you once knew you do not
+    // lose entirely.
+    w.player->skills[0].level = SKILL_DOMAIN_FLOOR;
+    DeltaBuffer d{};
+    module.advance_player_life(0, w, d);
+    REQUIRE(d.player_delta.skill_deltas.empty());
+}
+
+TEST_CASE("PopulationAging: exercising a domain stops it rusting",
+          "[population_aging][player_life]") {
+    WorldState w = make_player_world();
+    PlayerSkill sharp{};
+    sharp.domain = SkillDomain::Business;
+    sharp.level = 0.60f;
+    sharp.decay_rate = kDefaultSkillDecayRate;
+    sharp.last_exercise_tick = 0;
+    w.player->skills.push_back(sharp);
+
+    w.current_tick = 500;  // long past the grace period
+
+    // An exercise stamps the neglect clock...
+    DeltaBuffer use{};
+    SkillDelta sd{};
+    sd.skill_id = static_cast<uint32_t>(SkillDomain::Business);
+    sd.value = 0.01f;
+    use.player_delta.skill_deltas.push_back(sd);
+    apply_deltas(w, use);
+    REQUIRE(w.player->skills[0].last_exercise_tick == 500u);
+
+    // ...so the next tick does not rust it.
+    w.current_tick = 501;
+    DeltaBuffer d{};
+    PopulationAgingModule module;
+    module.advance_player_life(0, w, d);
+    REQUIRE(d.player_delta.skill_deltas.empty());
+}

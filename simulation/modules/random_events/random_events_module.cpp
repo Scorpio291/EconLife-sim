@@ -8,6 +8,7 @@
 
 #include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/player.h"        // PlayerCharacter (complete type for state.player->)
+#include "modules/scene_cards/card_seed.h"  // seed_card
 
 namespace econlife {
 
@@ -340,7 +341,7 @@ void RandomEventsModule::apply_economic_per_tick(const WorldState& state, const 
     }
 }
 
-void RandomEventsModule::apply_human_per_tick(const WorldState& state, const Province& province,
+void RandomEventsModule::apply_human_per_tick(const WorldState& /*state*/, const Province& province,
                                               const ActiveRandomEvent& event,
                                               DeltaBuffer& province_delta) {
     RegionDelta rd{};
@@ -349,15 +350,10 @@ void RandomEventsModule::apply_human_per_tick(const WorldState& state, const Pro
     rd.cohesion_delta = -0.005f * event.severity;
     province_delta.region_deltas.push_back(rd);
 
-    if (state.player != nullptr && state.player->current_province_id == province.id) {
-        SceneCard sc{};
-        sc.id = 0;
-        sc.type = SceneCardType::news_notification;
-        sc.setting = SceneSetting::street_corner;
-        sc.npc_id = 0;
-        sc.npc_presentation_state = 0.5f;
-        province_delta.new_scene_cards.push_back(sc);
-    }
+    // No scene card here. The player was told when the event STARTED
+    // (apply_immediate_effects); this function runs every tick the event is
+    // active, and re-announcing the same unrest daily is how the queue filled
+    // with duplicates the player could not clear.
 }
 
 void RandomEventsModule::roll_for_new_event(const WorldState& state, const Province& province,
@@ -491,6 +487,26 @@ const RandomEventTemplate* RandomEventsModule::select_template(EventCategory cat
     }
 
     return candidates.back().first;
+}
+
+// ---------------------------------------------------------------------------
+// emit_news_card — the world tells the player something happened where they are.
+//
+// News is Ambient (Scene Card Rulebook §1.3): it never interrupts and never
+// expires. The copy lives in the card catalog, not here: this function names a
+// template and says where it happened. The card is emitted from the event's
+// immediate effects, i.e. exactly once per event, not once per tick the event
+// is active.
+// ---------------------------------------------------------------------------
+static void emit_news_card(const WorldState& state, const Province& province,
+                           DeltaBuffer& province_delta, const char* card_key) {
+    if (state.player == nullptr || state.player->current_province_id != province.id)
+        return;
+
+    const std::string place = province.fictional_name.empty()
+                                  ? ("Province " + std::to_string(province.id))
+                                  : province.fictional_name;
+    seed_card(province_delta, card_key, 0, {{"place", place}});
 }
 
 void RandomEventsModule::apply_immediate_effects(const WorldState& state, const Province& province,
@@ -628,15 +644,7 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             rd.cohesion_delta = -0.01f * event.severity;
             province_delta.region_deltas.push_back(rd);
 
-            if (state.player != nullptr && state.player->current_province_id == province.id) {
-                SceneCard sc{};
-                sc.id = 0;
-                sc.type = SceneCardType::news_notification;
-                sc.setting = SceneSetting::street_corner;
-                sc.npc_id = 0;
-                sc.npc_presentation_state = 0.5f;
-                province_delta.new_scene_cards.push_back(sc);
-            }
+            emit_news_card(state, province, province_delta, "news_unrest");
             break;
         }
     }

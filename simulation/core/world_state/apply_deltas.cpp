@@ -211,6 +211,13 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
         return;
     PlayerCharacter& p = *world.player;
 
+    if (d.age_delta.has_value()) {
+        p.age = safe_add(p.age, *d.age_delta);
+        // lifespan_projection is declared as "projected in-game years remaining;
+        // recalculated each tick", so it is derived here rather than carried as
+        // an independent number that could drift from the age it describes.
+        p.health.lifespan_projection = std::max(0.0f, p.health.base_lifespan - p.age);
+    }
     if (d.health_delta.has_value()) {
         p.health.current_health = clamp01(safe_add(p.health.current_health, *d.health_delta));
     }
@@ -233,18 +240,34 @@ static void apply_player_delta(WorldState& world, const PlayerDelta& d) {
         p.health.exhaustion_accumulator =
             clamp01(safe_add(p.health.exhaustion_accumulator, *d.exhaustion_delta));
     }
-    if (d.skill_delta.has_value()) {
-        const auto& sd = *d.skill_delta;
+    for (const auto& sd : d.skill_deltas) {
         for (auto& skill : p.skills) {
             if (skill.domain == static_cast<SkillDomain>(sd.skill_id)) {
                 skill.level = std::clamp(safe_add(skill.level, sd.value), SKILL_DOMAIN_FLOOR, 1.0f);
+                // Exercising a domain resets its neglect clock. Rust is measured
+                // from here, so without the stamp a skill would keep decaying
+                // while the player was actively using it.
+                if (sd.value > 0.0f)
+                    skill.last_exercise_tick = world.current_tick;
                 break;
             }
         }
     }
-    if (d.new_evidence_awareness.has_value()) {
+    for (uint32_t token_id : d.new_evidence_awareness) {
+        // Learning the same thing twice is not learning: the map records when
+        // the player FIRST found out, which is the number the exposure model
+        // cares about.
+        bool already_known = false;
+        for (const auto& known : p.evidence_awareness_map) {
+            if (known.token_id == token_id) {
+                already_known = true;
+                break;
+            }
+        }
+        if (already_known)
+            continue;
         EvidenceAwarenessEntry entry{};
-        entry.token_id = *d.new_evidence_awareness;
+        entry.token_id = token_id;
         entry.discovery_tick = world.current_tick;
         entry.source_npc_id = 0;
         p.evidence_awareness_map.push_back(entry);
@@ -893,10 +916,31 @@ static void apply_currency_deltas(WorldState& world, const std::vector<CurrencyD
 // apply_append_deltas — calendar entries, scene cards, obligations
 // ---------------------------------------------------------------------------
 static void apply_append_deltas(WorldState& world, DeltaBuffer& delta) {
+    // Calendar identity, same two-pass rule as scene cards: advance the
+    // allocator past every explicit id in this batch, then fill in the ones
+    // that asked to be allocated.
+    for (const auto& entry : delta.new_calendar_entries) {
+        if (entry.id != 0 && entry.id >= world.next_calendar_entry_id)
+            world.next_calendar_entry_id = entry.id + 1;
+    }
     for (auto& entry : delta.new_calendar_entries) {
+        if (entry.id == 0)
+            entry.id = world.next_calendar_entry_id++;
         world.calendar.push_back(std::move(entry));
     }
+    // Scene-card identity. Two passes so an auto-assigned id can never collide
+    // with an explicitly-allocated one regardless of emission order: first
+    // advance the counter past every explicit id in this batch, then hand out
+    // fresh ids to the cards that asked for one (id == 0).
+    for (const auto& card : delta.new_scene_cards) {
+        if (card.id != 0 && card.id >= world.next_scene_card_id)
+            world.next_scene_card_id = card.id + 1;
+    }
     for (auto& card : delta.new_scene_cards) {
+        if (card.id == 0)
+            card.id = world.next_scene_card_id++;
+        if (card.created_tick == 0)
+            card.created_tick = world.current_tick;
         world.pending_scene_cards.push_back(std::move(card));
     }
     for (auto& node : delta.new_obligation_nodes) {
@@ -1021,6 +1065,45 @@ static void apply_new_businesses(WorldState& world, const std::vector<NewBusines
     }
 }
 
+// apply_facility_worker_deltas — staffing changes on existing plants.
+//
+// Bounded by the plant's own capacity: a factory has so many stations, and an
+// investment decision cannot conjure more of them. max_workers == 0 means the
+// facility was built without a type catalog to say how big it is, so it does
+// not grow — an unknown limit is not an infinite one.
+static void apply_facility_worker_deltas(WorldState& world,
+                                         const std::vector<FacilityWorkerDelta>& deltas) {
+    for (const auto& d : deltas) {
+        if (d.worker_count_delta == 0)
+            continue;
+
+        // Staff the plants the firm actually has, in id order so the result does
+        // not depend on vector layout. Hiring fills each plant to its capacity
+        // before moving to the next; letting go empties in the same order. What
+        // does not fit is simply not hired — a firm cannot buy stations that do
+        // not exist.
+        std::vector<Facility*> plants;
+        for (auto& f : world.facilities) {
+            if (f.business_id == d.business_id)
+                plants.push_back(&f);
+        }
+        std::sort(plants.begin(), plants.end(),
+                  [](const Facility* a, const Facility* b) { return a->id < b->id; });
+
+        int64_t remaining = d.worker_count_delta;
+        for (Facility* f : plants) {
+            if (remaining == 0)
+                break;
+            const int64_t current = static_cast<int64_t>(f->worker_count);
+            const int64_t ceiling = static_cast<int64_t>(f->max_workers);
+            const int64_t target = std::clamp<int64_t>(current + remaining, 0, ceiling);
+            remaining -= (target - current);
+            f->worker_count = static_cast<uint32_t>(target);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // apply_new_facilities (Phase 11 construction delivery)
 static void apply_new_facilities(WorldState& world, const std::vector<NewFacilityDelta>& deltas) {
     for (const auto& d : deltas) {
@@ -1037,10 +1120,51 @@ static void apply_scene_card_choice_deltas(WorldState& world,
         for (auto& card : world.pending_scene_cards) {
             if (card.id == d.scene_card_id) {
                 card.chosen_choice_id = d.chosen_choice_id;
+                // Stamp the resolution tick. The card stays in the queue for the
+                // remainder of THIS tick and all of the next, so every consumer
+                // (scene_cards, real_estate negotiations, ...) gets a full tick
+                // to read the choice before scene_cards retires it.
+                card.resolved_tick = world.current_tick;
                 break;
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// apply_retired_scene_cards — erase cards scene_cards has retired.
+// Ids are never reused (WorldState::next_scene_card_id is monotonic), so a
+// retirement can never take out a later card that inherited the id.
+// ---------------------------------------------------------------------------
+static void apply_retired_scene_cards(WorldState& world, const std::vector<uint32_t>& retired_ids) {
+    if (retired_ids.empty())
+        return;
+    world.pending_scene_cards.erase(
+        std::remove_if(world.pending_scene_cards.begin(), world.pending_scene_cards.end(),
+                       [&](const SceneCard& c) {
+                           return std::find(retired_ids.begin(), retired_ids.end(), c.id) !=
+                                  retired_ids.end();
+                       }),
+        world.pending_scene_cards.end());
+}
+
+// ---------------------------------------------------------------------------
+// apply_retired_calendar_entries — erase entries the calendar has finished with.
+// The calendar was append-only: an entry that elapsed stayed in the vector for
+// the rest of the game, so every module that walks the calendar walked a list
+// that only ever grew, and a missed deadline re-fired its consequence on every
+// subsequent tick.
+// ---------------------------------------------------------------------------
+static void apply_retired_calendar_entries(WorldState& world,
+                                           const std::vector<uint32_t>& retired_ids) {
+    if (retired_ids.empty())
+        return;
+    world.calendar.erase(std::remove_if(world.calendar.begin(), world.calendar.end(),
+                                        [&](const CalendarEntry& e) {
+                                            return std::find(retired_ids.begin(), retired_ids.end(),
+                                                             e.id) != retired_ids.end();
+                                        }),
+                         world.calendar.end());
 }
 
 // ---------------------------------------------------------------------------
@@ -1100,14 +1224,26 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     apply_dissolved_businesses(world, delta.dissolved_businesses);
     apply_new_businesses(world, delta.new_businesses);
     apply_new_facilities(world, delta.new_facilities);
+    apply_facility_worker_deltas(world, delta.facility_worker_deltas);
     apply_append_deltas(world, delta);
     apply_scene_card_choice_deltas(world, delta.scene_card_choice_deltas);
+    apply_retired_scene_cards(world, delta.retired_scene_card_ids);
+    apply_retired_calendar_entries(world, delta.retired_calendar_entry_ids);
     apply_calendar_commit_deltas(world, delta.calendar_commit_deltas);
 
     // Route cross-province deltas into WorldState's CrossProvinceDeltaBuffer
     // for application at the start of the next tick.
     for (auto& cpd : delta.cross_province_deltas) {
         world.cross_province_delta_buffer.entries.push_back(std::move(cpd));
+    }
+
+    // Route scene-card seeds into WorldState's pending queue. scene_cards
+    // drains them at the start of its execute(), resolves each against the
+    // card catalog and allocates the id. Producers sit on both sides of
+    // scene_cards in the tick order, so unlike the same-tick seed queues this
+    // one may carry an entry into the next tick.
+    for (auto& seed : delta.scene_card_seeds) {
+        world.pending_scene_card_seeds.push_back(std::move(seed));
     }
 
     // Route legal case seeds into WorldState's pending queue. legal_process
@@ -1221,7 +1357,10 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.cross_province_deltas.clear();
     delta.dissolved_businesses.clear();
     delta.new_businesses.clear();
+    delta.scene_card_seeds.clear();
     delta.scene_card_choice_deltas.clear();
+    delta.retired_scene_card_ids.clear();
+    delta.retired_calendar_entry_ids.clear();
     delta.calendar_commit_deltas.clear();
     delta.new_legal_case_seeds.clear();
     delta.new_racket_seeds.clear();
@@ -1236,6 +1375,7 @@ void apply_deltas(WorldState& world, DeltaBuffer& delta, const SafetyCeilingsCon
     delta.new_subdivision_requests.clear();
     delta.new_business_acquisitions.clear();
     delta.new_facilities.clear();
+    delta.facility_worker_deltas.clear();
     delta.new_construction_requests.clear();
     delta.new_construction_awards.clear();
 }

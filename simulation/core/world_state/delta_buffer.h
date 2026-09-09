@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Complete type definitions needed for std::optional and std::vector members.
@@ -56,10 +57,14 @@ struct NPCDelta {
 };
 
 struct PlayerDelta {
+    std::optional<float> age_delta;                       // additive; in-game years
     std::optional<float> health_delta;                    // additive
     std::optional<float> wealth_delta;                    // additive; liquid cash only
-    std::optional<SkillDelta> skill_delta;                // replacement; latest skill update wins
-    std::optional<uint32_t> new_evidence_awareness;       // replacement; latest evidence token wins
+    std::vector<SkillDelta> skill_deltas;                 // append; a tick can exercise one
+                                                          //   domain and rust several others
+    std::vector<uint32_t> new_evidence_awareness;         // append; a single story can put
+                                                          //   several tokens in front of the
+                                                          //   player at once
     std::optional<float> exhaustion_delta;                // additive
     std::optional<RelationshipDelta> relationship_delta;  // replacement; latest update wins
     std::optional<uint32_t> new_province_id;              // replacement; player location
@@ -150,6 +155,17 @@ struct NewBusinessDelta {
 };
 
 // New facility delivered (Phase 11 construction): appends to world.facilities.
+// A change to how many people work a plant. Expansion buys capacity by
+// staffing up; retrenchment gives it back. Production reads worker_count
+// directly (staffing gates output, and each additional worker adds to it), so
+// this is the channel through which an investment decision becomes physical
+// capacity rather than only a cash movement.
+struct FacilityWorkerDelta {
+    uint32_t business_id = 0;        // the firm doing the hiring or the letting go
+    int32_t worker_count_delta = 0;  // spread across its plants, each bounded by its
+                                     // own max_workers
+};
+
 struct NewFacilityDelta {
     Facility new_facility;
 };
@@ -408,6 +424,20 @@ struct CrossProvinceDelta {
 
 // Scene card choice — sets chosen_choice_id on a pending scene card.
 // Written by player_actions module; applied before scene_cards module reads.
+// A request to put an authored card in front of the player. The producer names
+// the template and supplies its parameters; scene_cards owns the rest — looking
+// the template up, injecting the parameters, allocating the id, applying the
+// class rules and the queue caps.
+//
+// This is why producers no longer write prose: the module that knows a sale
+// fell through should say "sale_lost, subject = the mill", not compose an
+// English sentence and a choice list at the call site.
+struct SceneCardSeedDelta {
+    std::string card_key;
+    uint32_t npc_id = 0;  // 0 = no counterpart (news, notices)
+    std::vector<std::pair<std::string, std::string>> params;
+};
+
 struct SceneCardChoiceDelta {
     uint32_t scene_card_id;
     uint32_t chosen_choice_id;
@@ -645,7 +675,14 @@ struct DeltaBuffer {
     std::vector<CrossProvinceDelta> cross_province_deltas;       // merge: append
     std::vector<DissolvedBusinessDelta> dissolved_businesses;    // merge: append
     std::vector<NewBusinessDelta> new_businesses;                // merge: append
+    std::vector<SceneCardSeedDelta> scene_card_seeds;            // merge: append; drained by
+                                                                 //   scene_cards into real cards
     std::vector<SceneCardChoiceDelta> scene_card_choice_deltas;  // merge: append
+    std::vector<uint32_t> retired_scene_card_ids;                // merge: append; owned by
+                                                                 //   scene_cards (see its
+                                                                 //   INTERFACE.md postcondition)
+    std::vector<uint32_t> retired_calendar_entry_ids;            // merge: append; owned by
+                                                                 //   calendar
     std::vector<CalendarCommitDelta> calendar_commit_deltas;     // merge: append
     std::vector<LegalCaseSeedDelta> new_legal_case_seeds;        // merge: append
     std::vector<RandomEventTriggerDelta> new_random_event_triggers;     // merge: append
@@ -657,6 +694,7 @@ struct DeltaBuffer {
     std::vector<PropertySubdivisionRequest> new_subdivision_requests;   // merge: append
     std::vector<BusinessAcquisitionRequest> new_business_acquisitions;  // merge: append
     std::vector<NewFacilityDelta> new_facilities;                       // merge: append
+    std::vector<FacilityWorkerDelta> facility_worker_deltas;            // merge: append
     std::vector<ConstructionBidsRequest> new_construction_requests;     // merge: append
     std::vector<ConstructionAwardRequest> new_construction_awards;      // merge: append
     std::vector<RacketSeedDelta> new_racket_seeds;                      // merge: append

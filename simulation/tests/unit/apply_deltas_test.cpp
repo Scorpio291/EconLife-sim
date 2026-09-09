@@ -533,3 +533,130 @@ TEST_CASE("apply_deltas: multiple NPC deltas accumulate", "[apply_deltas][core]"
     apply_deltas(w, delta);
     REQUIRE_THAT(w.significant_npcs[0].capital, WithinAbs(10300.0, 0.01));
 }
+
+// ---------------------------------------------------------------------------
+// Scene-card identity. WorldState::next_scene_card_id is the single owner of
+// card ids: monotonic, never reused. Identity used to be derived by scanning
+// the live queue for a maximum, which breaks the moment resolved cards are
+// retired — a retired card's id would be handed out again and a stale
+// correlation (real_estate's NegotiationContext.scene_card_id) would silently
+// match an unrelated new card.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("apply_deltas: cards emitted with id 0 get fresh monotonic ids",
+          "[apply_deltas][core][scene_cards]") {
+    WorldState w = make_minimal_world();
+    REQUIRE(w.next_scene_card_id == 1);
+
+    DeltaBuffer d{};
+    d.new_scene_cards.push_back(SceneCard{});  // id 0 == "allocate me one"
+    d.new_scene_cards.push_back(SceneCard{});
+    apply_deltas(w, d);
+
+    REQUIRE(w.pending_scene_cards.size() == 2);
+    REQUIRE(w.pending_scene_cards[0].id == 1);
+    REQUIRE(w.pending_scene_cards[1].id == 2);
+    REQUIRE(w.next_scene_card_id == 3);
+    // created_tick is stamped on admission.
+    REQUIRE(w.pending_scene_cards[0].created_tick == w.current_tick);
+}
+
+TEST_CASE("apply_deltas: ids are never reused after a card is retired",
+          "[apply_deltas][core][scene_cards]") {
+    WorldState w = make_minimal_world();
+
+    DeltaBuffer d{};
+    d.new_scene_cards.push_back(SceneCard{});
+    apply_deltas(w, d);
+    REQUIRE(w.pending_scene_cards[0].id == 1);
+
+    DeltaBuffer retire{};
+    retire.retired_scene_card_ids.push_back(1);
+    apply_deltas(w, retire);
+    REQUIRE(w.pending_scene_cards.empty());
+
+    // The queue is empty, but the allocator has moved on.
+    DeltaBuffer d2{};
+    d2.new_scene_cards.push_back(SceneCard{});
+    apply_deltas(w, d2);
+    REQUIRE(w.pending_scene_cards.size() == 1);
+    REQUIRE(w.pending_scene_cards[0].id == 2);
+}
+
+TEST_CASE("apply_deltas: an explicit card id never collides with an allocated one",
+          "[apply_deltas][core][scene_cards]") {
+    WorldState w = make_minimal_world();
+
+    DeltaBuffer d{};
+    SceneCard auto_card{};  // id 0
+    SceneCard explicit_card{};
+    explicit_card.id = 1;  // a producer that needs its id up front took 1
+    // Emission order deliberately puts the auto card first: the two-pass
+    // assignment must still keep them distinct.
+    d.new_scene_cards.push_back(auto_card);
+    d.new_scene_cards.push_back(explicit_card);
+    apply_deltas(w, d);
+
+    REQUIRE(w.pending_scene_cards.size() == 2);
+    REQUIRE(w.pending_scene_cards[0].id != w.pending_scene_cards[1].id);
+    REQUIRE(w.pending_scene_cards[1].id == 1);
+    REQUIRE(w.next_scene_card_id > w.pending_scene_cards[0].id);
+}
+
+TEST_CASE("apply_deltas: a card seed is routed to the world queue and survives the tick",
+          "[apply_deltas][core][scene_cards]") {
+    // Producers of card seeds sit on both sides of scene_cards in the tick
+    // order, so the queue is NOT a same-tick scratch buffer like the legal-case
+    // seeds: a seed emitted after scene_cards has run has to still be there
+    // next tick. Clearing it with the rest of the buffer would silently drop
+    // whatever the world was about to say.
+    WorldState w = make_minimal_world();
+
+    DeltaBuffer d{};
+    SceneCardSeedDelta seed{};
+    seed.card_key = "sale_closed";
+    seed.npc_id = 7;
+    seed.params.emplace_back("subject", "The mill");
+    d.scene_card_seeds.push_back(seed);
+    apply_deltas(w, d);
+
+    // The buffer is cleared; the world holds the request.
+    REQUIRE(d.scene_card_seeds.empty());
+    REQUIRE(w.pending_scene_card_seeds.size() == 1);
+    REQUIRE(w.pending_scene_card_seeds[0].card_key == "sale_closed");
+    REQUIRE(w.pending_scene_card_seeds[0].npc_id == 7);
+    REQUIRE(w.pending_scene_card_seeds[0].params.size() == 1);
+
+    // A second, unrelated application does not disturb it: only scene_cards
+    // drains this queue.
+    DeltaBuffer other{};
+    apply_deltas(w, other);
+    REQUIRE(w.pending_scene_card_seeds.size() == 1);
+
+    // No card is created by apply_deltas — resolving the template is the
+    // module's job, and a seed nobody authored copy for must raise nothing.
+    REQUIRE(w.pending_scene_cards.empty());
+}
+
+TEST_CASE("apply_deltas: applying a choice stamps the resolution tick",
+          "[apply_deltas][core][scene_cards]") {
+    WorldState w = make_minimal_world();
+
+    DeltaBuffer d{};
+    SceneCard card{};
+    card.choices.push_back(PlayerChoice{1, "Yes", "", 0});
+    d.new_scene_cards.push_back(card);
+    apply_deltas(w, d);
+    const uint32_t card_id = w.pending_scene_cards[0].id;
+    REQUIRE(w.pending_scene_cards[0].resolved_tick == 0);
+
+    DeltaBuffer choice{};
+    SceneCardChoiceDelta scd{};
+    scd.scene_card_id = card_id;
+    scd.chosen_choice_id = 1;
+    choice.scene_card_choice_deltas.push_back(scd);
+    apply_deltas(w, choice);
+
+    REQUIRE(w.pending_scene_cards[0].chosen_choice_id == 1);
+    REQUIRE(w.pending_scene_cards[0].resolved_tick == w.current_tick);
+}

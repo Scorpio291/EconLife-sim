@@ -16,6 +16,7 @@
 #include "core/rng/deterministic_rng.h"
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
+#include "modules/persistence/module_state_io.h"
 
 namespace econlife {
 
@@ -191,6 +192,78 @@ bool TradeInfrastructureModule::check_interception(const TransitShipment& shipme
     // Roll: intercepted if random draw < effective_risk.
     const float roll = rng.next_float();
     return roll < effective_risk;
+}
+
+// ---------------------------------------------------------------------------
+// Module-private state — shipments in transit
+// ---------------------------------------------------------------------------
+// Format: u32 schema_tag (1), u32 count, then each shipment's fields in
+// declaration order.
+
+void TradeInfrastructureModule::serialize_state(std::vector<uint8_t>& out) const {
+    using namespace state_io;
+    put_u32(out, 1u);
+    put_u32(out, static_cast<uint32_t>(active_shipments_.size()));
+    for (const auto& s : active_shipments_) {
+        put_u32(out, s.id);
+        put_u32(out, s.good_id);
+        put_f32(out, s.quantity_dispatched);
+        put_f32(out, s.quantity_remaining);
+        put_f32(out, s.quality_at_departure);
+        put_f32(out, s.quality_current);
+        put_u32(out, s.origin_province_id);
+        put_u32(out, s.destination_province_id);
+        put_u32(out, s.owner_id);
+        put_u32(out, s.dispatch_tick);
+        put_u32(out, s.arrival_tick);
+        put_u8(out, static_cast<uint8_t>(s.mode));
+        put_f32(out, s.cost_paid);
+        put_u8(out, s.is_criminal ? 1u : 0u);
+        put_f32(out, s.interception_risk_per_tick);
+        put_u8(out, s.is_concealed ? 1u : 0u);
+        put_f32(out, s.route_concealment_modifier);
+        put_u8(out, static_cast<uint8_t>(s.status));
+    }
+}
+
+bool TradeInfrastructureModule::deserialize_state(const uint8_t* data, size_t size) {
+    using namespace state_io;
+    active_shipments_.clear();
+    if (data == nullptr || size == 0)
+        return true;
+
+    Reader r(data, size);
+    if (r.u32() != 1u)
+        return false;
+    const uint32_t count = r.u32();
+    if (r.error)
+        return false;
+    active_shipments_.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        TransitShipment s{};
+        s.id = r.u32();
+        s.good_id = r.u32();
+        s.quantity_dispatched = r.f32();
+        s.quantity_remaining = r.f32();
+        s.quality_at_departure = r.f32();
+        s.quality_current = r.f32();
+        s.origin_province_id = r.u32();
+        s.destination_province_id = r.u32();
+        s.owner_id = r.u32();
+        s.dispatch_tick = r.u32();
+        s.arrival_tick = r.u32();
+        s.mode = static_cast<TransportMode>(r.u8());
+        s.cost_paid = r.f32();
+        s.is_criminal = r.u8() != 0u;
+        s.interception_risk_per_tick = r.f32();
+        s.is_concealed = r.u8() != 0u;
+        s.route_concealment_modifier = r.f32();
+        s.status = static_cast<ShipmentStatus>(r.u8());
+        if (r.error)
+            return false;
+        active_shipments_.push_back(s);
+    }
+    return true;
 }
 
 }  // namespace econlife

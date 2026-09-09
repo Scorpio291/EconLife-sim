@@ -564,6 +564,79 @@ void process_births_deaths(std::map<DemographicGroup, PopulationCohort>& cohorts
 
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// advance_player_life — the player's own clock
+// ---------------------------------------------------------------------------
+// PlayerCharacter::age declares "increments each tick by (1.0 / 365.0)" and was
+// assigned exactly once, at world generation, and never again. A player could
+// run a business for a year and still be exactly as old as their own birthday,
+// which leaves the whole Progression & Legacy pillar — lifespan, terminal
+// illness, succession, the heir — with no clock to hang on.
+//
+// Health is not given its own invented decay curve. It is the cohort stock's
+// quantity — the share of the year a person is fit to work — so the player's
+// health converges toward the health of the population they live among, which
+// is already fed by real flows (endemic disease, crowding, water, hunger,
+// sanitation, medicine). Move to a sicker province and you get sicker; live
+// through a plague year and you carry it. Nothing here decides an outcome that
+// the world was not already deciding for everyone else.
+//
+// Runs inside the province the player occupies, so it fires once per tick under
+// province-parallel dispatch without needing a global pass.
+void PopulationAgingModule::advance_player_life(uint32_t province_idx, const WorldState& state,
+                                                DeltaBuffer& province_delta) const {
+    if (!state.player)
+        return;
+    const PlayerCharacter& p = *state.player;
+    if (p.current_province_id != state.provinces[province_idx].id)
+        return;
+
+    PlayerDelta pd{};
+
+    // --- Time ---
+    const float ticks_per_year = (cfg_.ticks_per_year > 0.0f) ? cfg_.ticks_per_year : 365.0f;
+    pd.age_delta = 1.0f / ticks_per_year;
+
+    // --- Fitness tracks the place ---
+    const auto& province = state.provinces[province_idx];
+    if (province.cohort_stats) {
+        const float target = std::clamp(province.cohort_stats->health, 0.0f, 1.0f);
+        const float gap = target - p.health.current_health;
+        const float step = cfg_.player_health_convergence_rate * gap;
+        if (step != 0.0f)
+            pd.health_delta = step;
+    }
+
+    // --- Skill rust ---
+    // "Skill leveling (by doing) and skill rust (by neglect)" is V1, and rust
+    // had no producer at all: a domain the player never touched stayed exactly
+    // as sharp as the day they last used it. Decay runs per domain off the
+    // neglect clock the model already carries, after a month's grace, and never
+    // takes a domain below its floor — what you once knew you do not lose
+    // entirely.
+    for (const auto& skill : p.skills) {
+        if (state.current_tick <= skill.last_exercise_tick + SKILL_DECAY_GRACE_PERIOD)
+            continue;
+        if (skill.level <= SKILL_DOMAIN_FLOOR)
+            continue;
+        SkillDelta rust{};
+        rust.skill_id = static_cast<uint32_t>(skill.domain);
+        rust.value = -skill.decay_rate;
+        pd.skill_deltas.push_back(rust);
+    }
+
+    // --- Rest ---
+    // Exhaustion only ever accumulated; nothing gave it back. It decays toward
+    // zero whenever the player is not spending themselves, so the committed
+    // time that puts it there has something to push against.
+    if (p.health.exhaustion_accumulator > 0.0f) {
+        pd.exhaustion_delta =
+            -cfg_.player_exhaustion_recovery_rate * p.health.exhaustion_accumulator;
+    }
+
+    province_delta.player_delta.merge_from(std::move(pd));
+}
+
 void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldState& state,
                                              DeltaBuffer& province_delta) {
     if (province_idx >= state.provinces.size())
@@ -573,6 +646,10 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
     advance_capability(province_idx, state, province_delta);
 
     const auto& province = state.provinces[province_idx];
+
+    // The player is one of these people. Their clock runs here, in the province
+    // they are standing in, so it advances exactly once per tick.
+    advance_player_life(province_idx, state, province_delta);
 
     // --- Significant-NPC aging (annual) ----------------------------------------
     // Advance age one year and roll natural death for NPCs past their lifespan.

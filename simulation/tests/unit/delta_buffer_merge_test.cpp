@@ -39,9 +39,9 @@ void populate_every_field(DeltaBuffer& db, uint32_t tag) {
         SkillDelta sd{};
         sd.skill_id = tag;
         sd.value = static_cast<float>(tag);
-        db.player_delta.skill_delta = sd;
+        db.player_delta.skill_deltas.push_back(sd);
     }
-    db.player_delta.new_evidence_awareness = tag;
+    db.player_delta.new_evidence_awareness.push_back(tag);
     {
         RelationshipDelta rd{};
         rd.target_npc_id = tag;
@@ -223,9 +223,9 @@ TEST_CASE("test_player_delta_merge_additive_and_replacement", "[world_state][del
         SkillDelta sd{};
         sd.skill_id = 1;
         sd.value = 1.0f;
-        dst.skill_delta = sd;
+        dst.skill_deltas.push_back(sd);
     }
-    dst.new_evidence_awareness = 100;
+    dst.new_evidence_awareness.push_back(100);
     dst.new_province_id = 5;
     dst.new_travel_status = NPCTravelStatus::resident;
 
@@ -237,9 +237,9 @@ TEST_CASE("test_player_delta_merge_additive_and_replacement", "[world_state][del
         SkillDelta sd{};
         sd.skill_id = 7;
         sd.value = 9.0f;
-        src.skill_delta = sd;
+        src.skill_deltas.push_back(sd);
     }
-    src.new_evidence_awareness = 200;
+    src.new_evidence_awareness.push_back(200);
     src.new_province_id = 9;
     src.new_travel_status = NPCTravelStatus::in_transit;
 
@@ -250,10 +250,18 @@ TEST_CASE("test_player_delta_merge_additive_and_replacement", "[world_state][del
     REQUIRE_THAT(*dst.wealth_delta, WithinAbs(150.0f, 0.001f));
     REQUIRE_THAT(*dst.exhaustion_delta, WithinAbs(0.75f, 0.001f));
 
+    // Append: skills and evidence are lists now, because a tick can exercise
+    // one domain and rust several others, and one story can put several tokens
+    // in front of the player. Both sides survive the merge.
+    REQUIRE(dst.skill_deltas.size() == 2);
+    REQUIRE(dst.skill_deltas[0].skill_id == 1);
+    REQUIRE(dst.skill_deltas[1].skill_id == 7);
+    REQUIRE_THAT(dst.skill_deltas[1].value, WithinAbs(9.0f, 0.001f));
+    REQUIRE(dst.new_evidence_awareness.size() == 2);
+    REQUIRE(dst.new_evidence_awareness[0] == 100);
+    REQUIRE(dst.new_evidence_awareness[1] == 200);
+
     // Replacement: incoming wins.
-    REQUIRE(dst.skill_delta->skill_id == 7);
-    REQUIRE_THAT(dst.skill_delta->value, WithinAbs(9.0f, 0.001f));
-    REQUIRE(*dst.new_evidence_awareness == 200);
     REQUIRE(*dst.new_province_id == 9);
     REQUIRE(*dst.new_travel_status == NPCTravelStatus::in_transit);
 }

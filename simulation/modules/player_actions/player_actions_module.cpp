@@ -14,6 +14,7 @@
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
+#include "modules/scene_cards/card_seed.h"
 
 namespace econlife {
 
@@ -66,13 +67,37 @@ static uint32_t next_business_id(const WorldState& state) {
     return max_id + 1;
 }
 
-static uint32_t next_calendar_id(const WorldState& state) {
-    uint32_t max_id = 0;
-    for (const auto& e : state.calendar) {
-        if (e.id > max_id)
-            max_id = e.id;
+// ---------------------------------------------------------------------------
+// exercise — a domain the player just used gets a little better at it
+// ---------------------------------------------------------------------------
+// "Skill leveling (by doing) and skill rust (by neglect)" is V1, and outside of
+// money it is the player's only progression. The channel existed and nothing
+// wrote to it.
+//
+// The gain is proportional to the room left, so competence approaches mastery
+// and never arrives by repetition alone; a flat increment would make any domain
+// masterable by grinding one action, which is the shape of a rail.
+//
+// The exercise is the ATTEMPT, not the outcome — a negotiation you lose still
+// teaches you how to negotiate — so handlers call this once they reach the
+// substantive path, not only when the world says yes. Handlers that bail on a
+// precondition (wrong province, in transit, not the owner) never get here,
+// which is right: you learn nothing from an action you could not take.
+static void exercise(const WorldState& state, DeltaBuffer& delta, SkillDomain domain) {
+    if (!state.player)
+        return;
+    for (const auto& skill : state.player->skills) {
+        if (skill.domain != domain)
+            continue;
+        const float gain = kSkillExerciseRate * (1.0f - skill.level);
+        if (gain <= 0.0f)
+            return;
+        SkillDelta sd{};
+        sd.skill_id = static_cast<uint32_t>(domain);
+        sd.value = gain;
+        delta.player_delta.skill_deltas.push_back(sd);
+        return;
     }
-    return max_id + 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +122,11 @@ static void handle_scene_card_choice(const SceneCardChoiceAction& action, const 
             // Already chosen? Don't overwrite.
             if (card.chosen_choice_id != 0)
                 return;
+
+            // Answering a person is practice at handling people; a news
+            // notification with no counterpart is not.
+            if (card.npc_id != 0)
+                exercise(state, delta, SkillDomain::Persuasion);
 
             SceneCardChoiceDelta scd{};
             scd.scene_card_id = action.scene_card_id;
@@ -136,7 +166,7 @@ static void handle_calendar_schedule(const CalendarScheduleAction& action, const
     }
 
     CalendarEntry new_entry{};
-    new_entry.id = next_calendar_id(state);
+    new_entry.id = 0;  // allocated by apply_deltas from the monotonic counter
     new_entry.start_tick = action.desired_start_tick;
     new_entry.duration_ticks = action.duration_ticks;
     new_entry.type = action.type;
@@ -195,17 +225,39 @@ static void handle_start_business(const StartBusinessAction& action, const World
     const auto& player = *state.player;
 
     // Player must be in the target province.
-    if (action.province_id != player.current_province_id)
+    if (action.province_id != player.current_province_id) {
+        seed_card(delta, "not_here");
         return;
+    }
 
     // Player must not be in transit.
-    if (player.travel_status == NPCTravelStatus::in_transit)
+    if (player.travel_status == NPCTravelStatus::in_transit) {
+        seed_card(delta, "in_transit");
         return;
+    }
 
     // Minimum startup capital check (10,000 liquid cash).
     constexpr float MIN_STARTUP_CAPITAL = 10000.0f;
-    if (player.wealth < MIN_STARTUP_CAPITAL)
+    if (player.wealth < MIN_STARTUP_CAPITAL) {
+        seed_card(delta, "no_capital", 0,
+                  {{"amount", std::to_string(static_cast<long long>(MIN_STARTUP_CAPITAL))}});
         return;
+    }
+
+    // A business earns through a facility that runs a recipe, or — for the
+    // service and trade firms the model carries abstractly — through takings
+    // it already has. A company founded from nothing has neither, so it can
+    // never earn: production skips it and financial_distribution has nothing
+    // to distribute. Charging the founding capital for that is taking the
+    // player's money for an entity incapable of operating, which is what this
+    // action used to do silently.
+    //
+    // Conjuring a revenue figure for it instead would be the magic rail the
+    // doctrine forbids — the constant would be the whole reason it earned. So
+    // the action refuses, and says which routes to an operating business
+    // actually exist. Both are already built and both are reachable.
+    seed_card(delta, "no_premises");
+    return;
 
     // Create new business.
     NPCBusiness new_biz{};
@@ -246,6 +298,8 @@ static void handle_set_production(const SetProductionAction& action, const World
         if (biz.id == action.business_id) {
             if (biz.owner_id != state.player->id)
                 return;
+
+            exercise(state, delta, SkillDomain::Management);
 
             // Write a BusinessDelta with the output quality update.
             // target_output_rate maps to output_quality for now.
@@ -505,6 +559,8 @@ static void handle_acquire_business(const AcquireBusinessAction& action, const W
         return;
     if (action.offer_multiple <= 0.0f)
         return;
+    exercise(state, delta, SkillDomain::Business);
+
     BusinessAcquisitionRequest req{};
     req.business_id = action.business_id;
     req.buyer_id = state.player->id;
@@ -529,7 +585,7 @@ static void handle_initiate_contact(const InitiateContactAction& action, const W
 
     // Create a calendar entry for the introduction meeting.
     CalendarEntry entry{};
-    entry.id = next_calendar_id(state);
+    entry.id = 0;  // allocated by apply_deltas from the monotonic counter
     entry.start_tick = state.current_tick + 1;  // next tick
     entry.duration_ticks = 1;
     entry.type = CalendarEntryType::meeting;

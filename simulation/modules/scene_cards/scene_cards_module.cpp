@@ -61,6 +61,11 @@ static const NPC* find_npc(const WorldState& state, uint32_t npc_id) {
     return lookup_npc_by_id(state, npc_id);
 }
 
+// Choice ids on a calendar-triggered card. Kept as named constants because
+// the default outcome refers to one of them.
+static constexpr uint32_t CALENDAR_CHOICE_ATTEND = 1;
+static constexpr uint32_t CALENDAR_CHOICE_SKIP = 2;
+
 // Finds a PlayerChoice within a SceneCard by choice id. Returns nullptr if not found.
 static const PlayerChoice* find_choice(const SceneCard& card, uint32_t choice_id) {
     for (const auto& choice : card.choices) {
@@ -74,6 +79,11 @@ static const PlayerChoice* find_choice(const SceneCard& card, uint32_t choice_id
 // ---------------------------------------------------------------------------
 // SceneCardsModule — ITickModule interface
 // ---------------------------------------------------------------------------
+
+SceneCardsModule::SceneCardsModule(const SceneCardsConfig& cfg) : cfg_(cfg) {
+    if (!cfg_.card_catalog_directory.empty())
+        load_catalog(cfg_.card_catalog_directory);
+}
 
 std::string_view SceneCardsModule::name() const noexcept {
     return "scene_cards";
@@ -106,9 +116,14 @@ void SceneCardsModule::execute(const WorldState& state, DeltaBuffer& delta) {
     resolve_player_choices(state, delta);
 
     // ===================================================================
-    // Phase 2: Discard cards for dead NPCs
+    // Phase 2: Queue lifecycle — discard, retire, expire, cap
     // ===================================================================
-    discard_dead_npc_cards(state, delta);
+    run_queue_lifecycle(state, delta);
+
+    // ===================================================================
+    // Phase 2b: Turn this tick's seed requests into cards
+    // ===================================================================
+    drain_card_seeds(state, delta);
 
     // ===================================================================
     // Phase 3: Trigger new scene cards from calendar entries
@@ -173,15 +188,151 @@ void SceneCardsModule::resolve_player_choices(const WorldState& state, DeltaBuff
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2: Discard scene cards for dead NPCs
+// Phase 2: Queue lifecycle
+// ---------------------------------------------------------------------------
+// pending_scene_cards is append-only at the WorldState layer; this pass is the
+// only thing that takes cards back out, and it is what makes the queue bounded.
+// Four rules, in the order a card meets them:
+//
+//   1. The card's NPC died      -> discarded, no consequence (INTERFACE.md
+//                                  failure mode + test_dead_npc_card_discarded).
+//   2. The card was resolved    -> retired the tick AFTER resolution, so every
+//                                  consumer had a full tick to read the choice.
+//   3. A timed_optional card    -> its default_choice_id is fired as a real
+//      passed its expiry           choice (Rulebook §3: dismissal is a decision
+//                                  with a result); the card then retires through
+//                                  rule 2 next tick. With no default outcome
+//                                  authored there is nothing to fire, so it is
+//                                  retired directly rather than left to wedge.
+//   4. Ambient cards over cap   -> the oldest surplus is cleared (§1.3).
+//
+// mandatory cards are deliberately exempt from 3 and 4: they must be engaged.
+void SceneCardsModule::run_queue_lifecycle(const WorldState& state, DeltaBuffer& delta) const {
+    const uint32_t now = state.current_tick;
+
+    // Live ambient cards, oldest first, for the cap sweep in rule 4.
+    std::vector<const SceneCard*> ambient_live;
+
+    for (const auto& card : state.pending_scene_cards) {
+        // Rule 1 — the NPC is gone.
+        if (card.npc_id != 0) {
+            const NPC* npc = find_npc(state, card.npc_id);
+            if (!npc || npc->status == NPCStatus::dead) {
+                delta.retired_scene_card_ids.push_back(card.id);
+                continue;
+            }
+        }
+
+        // Rule 2 — resolved, and its tick of visibility has passed.
+        if (card.resolved_tick != 0) {
+            if (now > card.resolved_tick)
+                delta.retired_scene_card_ids.push_back(card.id);
+            continue;
+        }
+
+        // Rule 3 — expiry fires the authored default outcome.
+        if (card.card_class == CardClass::timed_optional && card.expires_tick != 0 &&
+            now > card.expires_tick) {
+            if (find_choice(card, card.default_choice_id) != nullptr) {
+                SceneCardChoiceDelta scd{};
+                scd.scene_card_id = card.id;
+                scd.chosen_choice_id = card.default_choice_id;
+                delta.scene_card_choice_deltas.push_back(scd);
+            } else {
+                delta.retired_scene_card_ids.push_back(card.id);
+            }
+            continue;
+        }
+
+        if (card.card_class == CardClass::ambient)
+            ambient_live.push_back(&card);
+    }
+
+    // Rule 4 — hold the ambient tier at its cap, oldest cleared first.
+    if (ambient_live.size() > cfg_.ambient_queue_cap) {
+        std::stable_sort(ambient_live.begin(), ambient_live.end(),
+                         [](const SceneCard* a, const SceneCard* b) {
+                             if (a->created_tick != b->created_tick)
+                                 return a->created_tick < b->created_tick;
+                             return a->id < b->id;
+                         });
+        const std::size_t surplus = ambient_live.size() - cfg_.ambient_queue_cap;
+        for (std::size_t i = 0; i < surplus; ++i)
+            delta.retired_scene_card_ids.push_back(ambient_live[i]->id);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Catalog loading and seed draining
 // ---------------------------------------------------------------------------
 
-void SceneCardsModule::discard_dead_npc_cards(const WorldState& state,
-                                              DeltaBuffer& /* delta */) const {
-    // Dead NPC filtering is applied in finalize_new_cards for new cards
-    // and implicitly by the WorldState application layer for existing
-    // pending cards. No explicit delta needed here.
-    (void)state;
+void SceneCardsModule::load_catalog(const std::string& directory) {
+    catalog_.load_from_directory(directory);
+}
+
+// A producer names a template and supplies its parameters; everything that
+// makes it a CARD happens here. Producers used to compose the English and the
+// choice list at the call site, which put the writing inside the C++ and meant
+// changing a word needed a recompile.
+//
+// A seed naming a template the catalog does not hold is dropped rather than
+// guessed at: a missing card is a visible content bug, an invented one is not.
+bool SceneCardsModule::compose_from_template(
+    const std::string& card_key, uint32_t card_id, uint32_t npc_id,
+    const std::vector<std::pair<std::string, std::string>>& params, SceneCard& out) const {
+    const SceneCardTemplate* tmpl = catalog_.find(card_key);
+    if (tmpl == nullptr)
+        return false;
+
+    out = SceneCard{};
+    out.id = card_id;  // 0 = apply_deltas allocates
+    out.type = tmpl->type;
+    out.setting = tmpl->setting;
+    out.npc_id = npc_id;
+    out.card_class = tmpl->card_class;
+    out.default_choice_id = tmpl->default_choice_id;
+    out.npc_presentation_state = 0.0f;
+    // Template-filled, not hand-written for this moment. `is_authored` is what
+    // apply_authored_priority uses to let a written scene beat a generated one
+    // for the same NPC on the same tick; a notice drawn from the catalog is
+    // still the generated kind, and marking it authored would let a "sale
+    // closed" line silence a scene someone wrote.
+    out.is_authored = false;
+    out.chosen_choice_id = 0;
+
+    DialogueLine line{};
+    line.speaker_npc_id = npc_id;
+    line.text = SceneCardCatalog::inject(tmpl->dialogue, params);
+    // A parameter that resolves to nothing (a calendar entry with no stated
+    // default outcome) leaves the sentence ending in a space. Trim it rather
+    // than show the player the seam.
+    while (!line.text.empty() && line.text.back() == ' ')
+        line.text.pop_back();
+    line.emotional_tone = 0.0f;
+    out.dialogue.push_back(std::move(line));
+
+    out.choices = tmpl->choices;
+    return true;
+}
+
+void SceneCardsModule::drain_card_seeds(const WorldState& state, DeltaBuffer& delta) const {
+    if (state.pending_scene_card_seeds.empty())
+        return;
+
+    for (const auto& seed : state.pending_scene_card_seeds) {
+        SceneCard card{};
+        if (!compose_from_template(seed.card_key, 0, seed.npc_id, seed.params, card))
+            continue;
+        delta.new_scene_cards.push_back(std::move(card));
+    }
+
+    // The drain is a write to WorldState from inside a module, which the
+    // DeltaBuffer discipline otherwise forbids. It is the same carve-out
+    // legal_process takes for pending_legal_case_seeds and player_actions
+    // takes for the deferred queue: the queue is scratch, this module is its
+    // only consumer, and routing the clear through a delta would leave the
+    // seeds visible to a second drain within the same tick.
+    const_cast<std::vector<SceneCardSeedDelta>&>(state.pending_scene_card_seeds).clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -226,31 +377,36 @@ void SceneCardsModule::trigger_calendar_cards(const WorldState& state, DeltaBuff
             break;
         }
 
-        // Determine the scene card type from the calendar entry type.
-        SceneCardType card_type = SceneCardType::meeting;
-        SceneSetting card_setting = SceneSetting::private_office;
-        if (entry.type == CalendarEntryType::meeting) {
-            card_type = SceneCardType::meeting;
-            card_setting = SceneSetting::private_office;
+        // The card's copy, class and setting come from the authored catalog,
+        // keyed on what kind of commitment this is. A summons is not a
+        // meeting: it is mandatory and has no default outcome, because not
+        // showing to a summons is not the same act as missing a lunch.
+        const char* card_key = "calendar_commitment";
+        if (entry.mandatory) {
+            card_key = "calendar_summons";
+        } else if (entry.type == CalendarEntryType::meeting) {
+            card_key = "calendar_meeting";
         } else if (entry.type == CalendarEntryType::personal) {
-            card_type = SceneCardType::personal_event;
-            card_setting = SceneSetting::home_dining;
+            card_key = "calendar_personal";
         } else if (entry.type == CalendarEntryType::event) {
-            card_type = SceneCardType::news_notification;
-            card_setting = SceneSetting::phone_call;
+            card_key = "calendar_event";
+        } else if (entry.type == CalendarEntryType::deadline) {
+            card_key = "calendar_deadline";
+        } else if (entry.type == CalendarEntryType::operation) {
+            card_key = "calendar_operation";
         }
 
-        // Create the scene card. Dialogue and choices will be
-        // populated by the procedural generation system or loaded
-        // from authored content in the package files.
+        // What the world says happens if the player does not turn up. The
+        // calendar entry already carries it; before this it was written for a
+        // UI that never showed it.
+        std::vector<std::pair<std::string, std::string>> params;
+        params.emplace_back("default_outcome",
+                            entry.deadline_consequence.default_outcome_description);
+
         SceneCard card{};
-        card.id = entry.scene_card_id;
-        card.type = card_type;
-        card.setting = card_setting;
-        card.npc_id = entry.npc_id;
+        if (!compose_from_template(card_key, entry.scene_card_id, entry.npc_id, params, card))
+            continue;
         card.npc_presentation_state = 0.5f;  // Default; computed in Phase 5
-        card.is_authored = false;            // Calendar-triggered = procedural by default
-        card.chosen_choice_id = 0;
 
         delta.new_scene_cards.push_back(card);
         cards_added++;
@@ -292,8 +448,24 @@ void SceneCardsModule::apply_authored_priority(const WorldState& /* state */,
 
 void SceneCardsModule::finalize_new_cards(const WorldState& state, DeltaBuffer& delta,
                                           uint32_t player_id, uint32_t player_province) const {
+    // Count the live timed-optional tier before admitting new cards, so the
+    // demotion rule below (Rulebook §2) measures against the real queue.
+    uint32_t timed_live = 0;
+    for (const auto& card : state.pending_scene_cards) {
+        if (card.card_class == CardClass::timed_optional && card.resolved_tick == 0)
+            ++timed_live;
+    }
+
     auto it = std::remove_if(
         delta.new_scene_cards.begin(), delta.new_scene_cards.end(), [&](SceneCard& card) -> bool {
+            // --- A card the player cannot answer is a card that wedges the
+            // queue. This is the invariant that makes the queue provably
+            // drainable, so it is enforced here rather than trusted to
+            // producers: no choices, no card. ---
+            if (card.choices.empty()) {
+                return true;  // Discard
+            }
+
             // --- Dead NPC check ---
             if (card.npc_id != 0) {
                 const NPC* npc = find_npc(state, card.npc_id);
@@ -321,6 +493,34 @@ void SceneCardsModule::finalize_new_cards(const WorldState& state, DeltaBuffer& 
             } else {
                 // No NPC associated (e.g., pure news notification).
                 card.npc_presentation_state = 0.0f;
+            }
+
+            // --- Lifecycle stamping ---
+            card.created_tick = state.current_tick;
+
+            if (card.card_class == CardClass::timed_optional) {
+                // Rulebook §2: the tier-2 queue holds 12. The 13th is demoted to
+                // ambient — it keeps its content and its choices, it just stops
+                // demanding the player's attention on a timer.
+                if (timed_live >= cfg_.timed_optional_queue_cap) {
+                    card.card_class = CardClass::ambient;
+                    card.expires_tick = 0;
+                } else {
+                    ++timed_live;
+                    if (card.expires_tick == 0)
+                        card.expires_tick = state.current_tick + cfg_.timed_optional_ttl_ticks;
+                }
+            } else {
+                // mandatory and ambient cards do not expire (§1.1, §1.3).
+                card.expires_tick = 0;
+            }
+
+            // A default outcome that names a choice the card does not carry
+            // would strand the card at expiry; drop the reference so the
+            // lifecycle pass retires it instead of waiting forever.
+            if (card.default_choice_id != 0 &&
+                find_choice(card, card.default_choice_id) == nullptr) {
+                card.default_choice_id = 0;
             }
 
             return false;  // Keep card

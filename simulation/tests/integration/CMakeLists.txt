@@ -78,5 +78,47 @@ add_test(NAME emergence_behavioral_suite
 )
 set_tests_properties(emergence_behavioral_suite PROPERTIES
     LABELS "emergence"
-    TIMEOUT 600
+    # Raised from 600. Staffing decisions now reach Facility.worker_count, so
+    # plants that used to sit half-manned run at capacity and the production
+    # layer has correspondingly more to do: the suite went from ~7m45 to ~11m25
+    # on the same machine. That is the cost of the mechanism working, not a
+    # regression to tune away, but the gate has to allow for it.
+    TIMEOUT 1800
+)
+
+# ---------------------------------------------------------------------------
+# Player-loop suite — the player-facing counterpart to the emergence suite.
+#
+# Registered as a SINGLE ctest entry running the whole [player_loop] tag in one
+# process, so the memoized play session is simulated once and shared across
+# every ratchet rather than re-run per assertion.
+#
+#     ctest -L player_loop                                   (the ratchets)
+#     ./econlife_player_loop_tests "[.player-loop-observe]"  (the human trace)
+#
+# It runs in the fast per-commit gate: these assertions are the ones that catch
+# "the world is fine but the player cannot play", which is exactly the class of
+# defect the module suites cannot see.
+# ---------------------------------------------------------------------------
+add_executable(econlife_player_loop_tests
+    player_loop_test.cpp
+    player_loop_observe.cpp
+)
+
+target_link_libraries(econlife_player_loop_tests PRIVATE
+    Catch2::Catch2WithMain
+    econlife_modules
+)
+
+econlife_set_warnings(econlife_player_loop_tests)
+econlife_maybe_werror(econlife_player_loop_tests)
+econlife_relax_test_warnings(econlife_player_loop_tests)
+
+add_test(NAME player_loop_suite
+    COMMAND econlife_player_loop_tests "[player_loop]"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(player_loop_suite PROPERTIES
+    LABELS "integration;player_loop"
+    TIMEOUT 900
 )

@@ -562,6 +562,22 @@ WorldGenerator::WorldWithPlayer WorldGenerator::generate_with_player(
     result.player.designated_heir_npc_id = 0;
     result.player.restoration_history.restoration_count = 0;
 
+    // One entry per SkillDomain, as player.h specifies. Skills are "leveled
+    // through use", so a new character starts every domain at the floor and
+    // earns anything above it — nothing is granted at creation. The vector was
+    // left empty, which meant skill deltas had nothing to find and the player's
+    // only progression besides money did not exist.
+    result.player.skills.clear();
+    result.player.skills.reserve(kSkillDomainCount);
+    for (uint8_t d = 0; d < kSkillDomainCount; ++d) {
+        PlayerSkill skill{};
+        skill.domain = static_cast<SkillDomain>(d);
+        skill.level = SKILL_DOMAIN_FLOOR;
+        skill.decay_rate = kDefaultSkillDecayRate;
+        skill.last_exercise_tick = 0;
+        result.player.skills.push_back(skill);
+    }
+
     return result;
 }
 

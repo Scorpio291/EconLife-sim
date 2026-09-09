@@ -23,8 +23,9 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/player.h"  // PlayerCharacter complete type
 #include "core/world_state/world_state.h"
-#include "modules/banking/banking_module.h"        // Loan helpers (static methods)
-#include "modules/banking/banking_types.h"         // LoanPurpose
+#include "modules/banking/banking_module.h"  // Loan helpers (static methods)
+#include "modules/banking/banking_types.h"   // LoanPurpose
+#include "modules/scene_cards/card_seed.h"
 #include "modules/scene_cards/scene_card_types.h"  // SceneCard, SceneSetting, SceneCardType
 
 namespace econlife {
@@ -518,18 +519,23 @@ const SceneCard* find_scene_card(const WorldState& state, uint32_t scene_card_id
     return nullptr;
 }
 
-// Phase 3 — allocate the next SceneCard id from existing pending cards.
+// Phase 3 — allocate a SceneCard id up front.
+//
+// real_estate is one of the few producers that needs the id AT EMIT TIME, to
+// correlate the card with the NegotiationContext it creates alongside it, so it
+// cannot use the id == 0 "allocate for me" path. It allocates from the same
+// monotonic WorldState counter instead of scanning the live queue for a
+// maximum: cards are now retired once resolved, so a max-scan would re-issue a
+// dead card's id and a stale NegotiationContext.scene_card_id would silently
+// match an unrelated new card. The delta scan covers multiple allocations
+// within this one sequential post-pass, before any of them reach WorldState.
 uint32_t next_scene_card_id(const WorldState& state, const DeltaBuffer& delta) {
-    uint32_t max_id = 0;
-    for (const auto& c : state.pending_scene_cards) {
-        if (c.id > max_id)
-            max_id = c.id;
-    }
+    uint32_t next = state.next_scene_card_id;
     for (const auto& c : delta.new_scene_cards) {
-        if (c.id > max_id)
-            max_id = c.id;
+        if (c.id >= next)
+            next = c.id + 1;
     }
-    return max_id + 1;
+    return next;
 }
 
 // Phase 3 — choice ids for accept/decline on NPC-offer SceneCards.
@@ -1156,8 +1162,14 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                                      (static_cast<uint64_t>(state.current_tick) * 0x68C5u) ^
                                      (static_cast<uint64_t>(biz->id) * 0x9E37u) ^
                                      (static_cast<uint64_t>(req.buyer_id) * 0x2545u));
-            if (acq_rng.next_float() >= p_accept)
-                continue;  // owner declined
+            if (acq_rng.next_float() >= p_accept) {
+                // The owner said no. Without a notice the offer simply vanishes
+                // and the player is left watching a deal that never appears.
+                if (req.buyer_id == player_id) {
+                    seed_card(delta, "offer_declined");
+                }
+                continue;
+            }
 
             running_player_wealth -= cash_required;  // reserve cash portion
             PendingBusinessAcquisition acq{};
@@ -1176,6 +1188,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             acq.down_payment_fraction = dpf;
             acq.interest_rate = cfg_.mortgage_interest_rate;
             acq.loan_maturity_ticks = (pm == PaymentMethod::cash) ? 0u : cfg_.mortgage_term_ticks;
+            if (req.buyer_id == player_id) {
+                seed_card(delta, "offer_accepted");
+            }
             biz_acqs.push_back(acq);
         }
         auto& mutable_reqs = const_cast<std::vector<BusinessAcquisitionRequest>&>(
@@ -1199,6 +1214,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
         }
         if (!biz || biz->owner_id != acq.seller_id) {
             acq.stage = PendingTxStage::cancelled;
+            if (acq.buyer_id == player_id) {
+                seed_card(delta, "sale_lost", 0, {{"subject", "the business"}});
+            }
             continue;
         }
         float cash_portion = acq.price * acq.down_payment_fraction;
@@ -1207,6 +1225,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             (acq.buyer_id == player_id) ? running_player_wealth >= cash_portion : true;
         if (!buyer_can_pay) {
             acq.stage = PendingTxStage::expired;
+            if (acq.buyer_id == player_id) {
+                seed_card(delta, "sale_lapsed");
+            }
             continue;
         }
         // Buyer pays the cash portion.
@@ -1240,6 +1261,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
             loan_req.maturity_tick = state.current_tick + acq.loan_maturity_ticks;
             loan_req.collateral_id = acq.business_id;
             delta.new_loan_requests.push_back(loan_req);
+        }
+        if (acq.buyer_id == player_id) {
+            seed_card(delta, "sale_closed", 0, {{"subject", "The business"}});
         }
         acq.stage = PendingTxStage::settled;
     }
@@ -1727,6 +1751,14 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                             card.npc_presentation_state = 0.5f;
                             card.is_authored = false;
                             card.chosen_choice_id = 0;
+                            // An offer the player never answers lapses into
+                            // walking away — the conservative default the
+                            // Rulebook §3 asks for, and it matches the
+                            // negotiation deadline the context already carries.
+                            card.card_class = CardClass::timed_optional;
+                            card.default_choice_id = CHOICE_DECLINE_OFFER;
+                            card.expires_tick =
+                                state.current_tick + cfg_.negotiation_deadline_ticks;
                             delta.new_scene_cards.push_back(card);
 
                             NegotiationContext neg{};
@@ -1997,6 +2029,9 @@ void RealEstateModule::execute(const WorldState& state, DeltaBuffer& delta) {
                     card.npc_presentation_state = 0.5f;
                     card.is_authored = false;
                     card.chosen_choice_id = 0;
+                    card.card_class = CardClass::timed_optional;
+                    card.default_choice_id = CHOICE_DECLINE_OFFER;
+                    card.expires_tick = state.current_tick + cfg_.negotiation_deadline_ticks;
                     delta.new_scene_cards.push_back(card);
 
                     NegotiationContext neg{};

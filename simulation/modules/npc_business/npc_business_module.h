@@ -54,8 +54,6 @@ class NpcBusinessModule : public ITickModule {
     void execute_province(uint32_t province_idx, const WorldState& state,
                           DeltaBuffer& province_delta) override;
 
-    void execute(const WorldState& state, DeltaBuffer& delta) override;
-
     // --- Board composition management ---
     // Module-internal state: board compositions keyed by business_id.
     void set_board_composition(uint32_t business_id, const BoardComposition& board);
@@ -92,15 +90,60 @@ class NpcBusinessModule : public ITickModule {
     // Check if a business is player-owned (should be skipped).
     static bool is_player_owned(const NPCBusiness& biz, const WorldState& state);
 
+    // --- The owner's decision (player-owned businesses) ---
+    //
+    // execute_province() skips player-owned businesses at their decision tick,
+    // because the quarterly call is the OWNER'S to make and the owner is the
+    // player. Nothing ever asked them, so a player-owned firm simply never
+    // decided anything. The global post-pass below asks: it puts the decision
+    // on the player's calendar as a scene card, and applies whichever course
+    // they choose through the same machinery an NPC owner's choice would use.
+    bool has_global_post_pass() const noexcept override { return true; }
+    void execute(const WorldState& state, DeltaBuffer& delta) override;
+
+    // Choice ids on an owner-decision card.
+    static constexpr uint32_t OWNER_CHOICE_INVEST = 1;
+    static constexpr uint32_t OWNER_CHOICE_HOLD = 2;  // the conservative default
+    static constexpr uint32_t OWNER_CHOICE_CUT = 3;
+
+    // One outstanding quarterly decision waiting on the player.
+    struct PendingOwnerDecision {
+        uint32_t business_id = 0;
+        uint32_t scene_card_id = 0;
+        uint32_t calendar_entry_id = 0;
+        uint32_t asked_tick = 0;
+    };
+    const std::vector<PendingOwnerDecision>& pending_owner_decisions() const {
+        return pending_owner_decisions_;
+    }
+
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
+    // Build the decision a given choice represents. Exposed for testing: the
+    // point of these is that a player's lever is the SAME size as an NPC's,
+    // drawn from the same strategy magnitudes, not a separate player economy.
+    BusinessDecisionResult decision_for_choice(const NPCBusiness& biz, uint32_t choice_id) const;
+
+    // Apply a decision result to the delta buffer. Public so the owner-decision
+    // pass routes a player's choice through exactly the path an NPC's takes.
+    static void apply_decision_to_deltas(const NPCBusiness& biz,
+                                         const BusinessDecisionResult& result, DeltaBuffer& delta,
+                                         uint32_t current_tick, const NpcBusinessConfig& cfg);
+
    private:
     NpcBusinessConfig cfg_;
     // Internal board composition storage (keyed by business_id)
     std::unordered_map<uint32_t, BoardComposition> board_compositions_;
 
-    // Apply a decision result to the delta buffer.
-    static void apply_decision_to_deltas(const NPCBusiness& biz,
-                                         const BusinessDecisionResult& result, DeltaBuffer& delta,
-                                         uint32_t current_tick, const NpcBusinessConfig& cfg);
+    std::vector<PendingOwnerDecision> pending_owner_decisions_;
+
+    // Returns the businesses whose decision was closed in this pass, so the
+    // scheduling half does not immediately re-ask them: the advanced cadence
+    // is still sitting in the delta buffer and is not visible in `state` yet.
+    std::vector<uint32_t> resolve_owner_decisions(const WorldState& state, DeltaBuffer& delta);
+    void schedule_owner_decisions(const WorldState& state, DeltaBuffer& delta,
+                                  const std::vector<uint32_t>& just_resolved);
 };
 
 }  // namespace econlife

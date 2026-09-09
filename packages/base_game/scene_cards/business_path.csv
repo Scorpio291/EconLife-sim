@@ -1,0 +1,19 @@
+card_key,card_class,type,setting,dialogue,choice1_id,choice1_label,choice1_description,choice2_id,choice2_label,choice2_description,choice3_id,choice3_label,choice3_description,default_choice_id
+news_unrest,ambient,news_notification,street_corner,Unrest in {place}.,1,Note it,Acknowledge the report.,0,,,0,,,0
+offer_declined,ambient,news_notification,phone_call,Your offer was turned down. The owner is not selling at that price.,1,Noted,,0,,,0,,,0
+offer_accepted,ambient,news_notification,phone_call,Your offer was accepted. The sale closes once due diligence is done.,1,Noted,,0,,,0,,,0
+sale_closed,ambient,news_notification,private_office,The sale closed. {subject} is yours.,1,Noted,,0,,,0,,,0
+sale_lapsed,ambient,news_notification,phone_call,You could not fund the purchase at close. The deal lapsed.,1,Noted,,0,,,0,,,0
+sale_lost,ambient,news_notification,phone_call,The sale fell through — {subject} changed hands before you closed.,1,Noted,,0,,,0,,,0
+no_premises,ambient,news_notification,private_office,There is no trade to open the doors on. A company needs premises that produce something or a book of business already trading: buy a going concern in this province or acquire a site and build on it.,1,Noted,,0,,,0,,,0
+not_here,ambient,news_notification,phone_call,You have to be in the province to open a business there.,1,Noted,,0,,,0,,,0
+in_transit,ambient,news_notification,moving_vehicle,You are travelling. Settle somewhere before founding anything.,1,Noted,,0,,,0,,,0
+no_capital,ambient,news_notification,private_office,You cannot raise the capital to open a business — you need at least {amount}.,1,Noted,,0,,,0,,,0
+story_ran,ambient,news_notification,phone_call,A story about you has run. It cites what they have on you.,1,Read it,,0,,,0,,,0
+calendar_meeting,timed_optional,meeting,private_office,A meeting is in your diary for today. {default_outcome},1,Attend,Keep the commitment.,2,Skip,Do not show up.,0,,,2
+calendar_event,timed_optional,news_notification,phone_call,An event you are down for falls today. {default_outcome},1,Attend,Keep the commitment.,2,Skip,Do not show up.,0,,,2
+calendar_operation,timed_optional,meeting,street_corner,A job you committed to runs today. {default_outcome},1,Attend,Keep the commitment.,2,Skip,Do not show up.,0,,,2
+calendar_deadline,timed_optional,meeting,private_office,A deadline you are held to falls today. {default_outcome},1,Attend,Keep the commitment.,2,Skip,Do not show up.,0,,,2
+calendar_personal,timed_optional,personal_event,home_dining,Something at home needs you today. {default_outcome},1,Attend,Keep the commitment.,2,Skip,Do not show up.,0,,,2
+calendar_commitment,timed_optional,meeting,private_office,Something you committed to falls today. {default_outcome},1,Attend,Keep the commitment.,2,Skip,Do not show up.,0,,,2
+calendar_summons,mandatory,meeting,government_office,You are required to attend today. {default_outcome},1,Attend,Answer the summons.,2,Skip,Do not show up.,0,,,0

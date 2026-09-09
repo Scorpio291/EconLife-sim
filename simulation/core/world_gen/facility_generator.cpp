@@ -136,6 +136,9 @@ void FacilityGenerator::create_facilities(WorldState& world, DeterministicRNG& r
             facility.worker_count = std::min(
                 ft->max_workers,
                 static_cast<uint32_t>(3 + rng.next_uint(std::max(1u, ft->max_workers / 4))));
+            // The plant's physical size, carried on the facility so the runtime
+            // knows what it can staff up to without the type catalog in hand.
+            facility.max_workers = ft->max_workers;
             facility.is_operational = true;
 
             world.facilities.push_back(std::move(facility));

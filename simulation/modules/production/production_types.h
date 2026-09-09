@@ -104,6 +104,11 @@ struct Facility {
     bool is_operational;         // false = facility is shut down or under construction
     uint32_t property_id;        // PropertyListing this facility sits on (Phase 11
                                  // construction); 0 = unlinked / legacy facility
+    uint32_t max_workers = 0;    // stations the plant physically has, from the facility
+                                 // type it was built to. 0 = unknown (legacy facility or
+                                 // a world generated without the facility-type catalog);
+                                 // treated as "no room to grow" so hiring cannot invent
+                                 // capacity out of a number nobody wrote down.
 };
 
 // ---------------------------------------------------------------------------

@@ -211,6 +211,12 @@ void write_resource_deposit(ByteWriter& w, const ResourceDeposit& r) {
     w.write_float(r.accessibility);
     w.write_float(r.depletion_rate);
     w.write_float(r.quantity_remaining);
+    // v35: the era a deposit becomes workable in. Omitting it meant every
+    // deposit loaded back at era_unlock = 1 — the struct default — so a save
+    // silently unlocked every late-era resource in the world. Extraction
+    // facilities that had been idle started producing on load, and the resumed
+    // game's economy parted company with the one that was saved.
+    w.write_u8(r.era_unlock);
 }
 
 void write_memory_entry(ByteWriter& w, const MemoryEntry& m) {
@@ -617,6 +623,12 @@ void write_scene_card(ByteWriter& w, const SceneCard& s) {
     w.write_float(s.npc_presentation_state);
     w.write_bool(s.is_authored);
     w.write_u32(s.chosen_choice_id);
+    // v34: card lifecycle (class, timing, default outcome).
+    w.write_u8(static_cast<uint8_t>(s.card_class));
+    w.write_u32(s.created_tick);
+    w.write_u32(s.expires_tick);
+    w.write_u32(s.default_choice_id);
+    w.write_u32(s.resolved_tick);
 }
 
 void write_player(ByteWriter& w, const PlayerCharacter& p) {
@@ -733,13 +745,17 @@ void write_deferred_work_queue(ByteWriter& w, DeferredWorkQueue queue_copy) {
         items.push_back(queue_copy.top());
         queue_copy.pop();
     }
-    // Sort by (due_tick, type, subject_id) for determinism
+    // Sort by (due_tick, type, subject_id, payload) for determinism — the same
+    // total order DeferredWorkComparator drains in, so a queue rebuilt from a
+    // save pops its work in exactly the sequence the live one would have.
     std::sort(items.begin(), items.end(), [](const DeferredWorkItem& a, const DeferredWorkItem& b) {
         if (a.due_tick != b.due_tick)
             return a.due_tick < b.due_tick;
         if (a.type != b.type)
             return static_cast<uint8_t>(a.type) < static_cast<uint8_t>(b.type);
-        return a.subject_id < b.subject_id;
+        if (a.subject_id != b.subject_id)
+            return a.subject_id < b.subject_id;
+        return deferred_payload_key(a.payload) < deferred_payload_key(b.payload);
     });
 
     w.write_u32(static_cast<uint32_t>(items.size()));
@@ -777,6 +793,13 @@ void write_deferred_work_queue(ByteWriter& w, DeferredWorkQueue queue_copy) {
                     w.write_u32(p.business_id);
                     w.write_u32(p.node_key);
                     w.write_u8(p.decision);
+                } else if constexpr (std::is_same_v<T, PlayerTravelPayload>) {
+                    // Variant index 10. Neither this branch nor its reader case
+                    // existed: a player in transit when the game was saved
+                    // arrived at province 0 on load, because the payload
+                    // carrying their destination was written as nothing and
+                    // read back as EmptyPayload.
+                    w.write_u32(p.destination_province_id);
                 }
             },
             item.payload);
@@ -872,6 +895,8 @@ void write_facility(ByteWriter& w, const Facility& f) {
     w.write_bool(f.is_operational);
     // v14 (Phase 11): property_id link. Always written by current code.
     w.write_u32(f.property_id);
+    // v36: the plant's physical worker capacity.
+    w.write_u32(f.max_workers);
 }
 
 Facility read_facility(ByteReader& r, uint32_t schema_ver) {
@@ -887,6 +912,7 @@ Facility read_facility(ByteReader& r, uint32_t schema_ver) {
     f.is_operational = r.read_bool();
     // v14 (Phase 11): property_id link. Pre-v14 facility blocks omit it.
     f.property_id = (schema_ver >= 14u) ? r.read_u32() : 0u;
+    f.max_workers = (schema_ver >= 36u) ? r.read_u32() : 0u;
     return f;
 }
 
@@ -1086,7 +1112,7 @@ ProvinceLink read_province_link(ByteReader& r) {
     return l;
 }
 
-ResourceDeposit read_resource_deposit(ByteReader& r) {
+ResourceDeposit read_resource_deposit(ByteReader& r, uint32_t schema_ver) {
     ResourceDeposit rd{};
     rd.id = r.read_u32();
     rd.type = static_cast<ResourceType>(r.read_u8());
@@ -1096,6 +1122,11 @@ ResourceDeposit read_resource_deposit(ByteReader& r) {
     rd.accessibility = r.read_float();
     rd.depletion_rate = r.read_float();
     rd.quantity_remaining = r.read_float();
+    if (schema_ver >= 35)
+        rd.era_unlock = r.read_u8();
+    // Pre-v35 saves keep the struct default of 1. That is the same (wrong)
+    // reading they had while running, so an old save behaves as it always did
+    // rather than changing under the player.
     return rd;
 }
 
@@ -1296,7 +1327,7 @@ Province read_province(ByteReader& r, uint32_t schema_ver) {
     uint32_t dep_count = r.read_u32();
     p.deposits.resize(dep_count);
     for (uint32_t i = 0; i < dep_count; ++i)
-        p.deposits[i] = read_resource_deposit(r);
+        p.deposits[i] = read_resource_deposit(r, schema_ver);
 
     p.demographics = read_demographics(r);
     p.infrastructure_rating = r.read_float();
@@ -1532,7 +1563,7 @@ CalendarEntry read_calendar_entry(ByteReader& r) {
     return e;
 }
 
-SceneCard read_scene_card(ByteReader& r) {
+SceneCard read_scene_card(ByteReader& r, uint32_t schema_ver) {
     SceneCard s{};
     s.id = r.read_u32();
     s.type = static_cast<SceneCardType>(r.read_u8());
@@ -1556,6 +1587,17 @@ SceneCard read_scene_card(ByteReader& r) {
     s.npc_presentation_state = r.read_float();
     s.is_authored = r.read_bool();
     s.chosen_choice_id = r.read_u32();
+    if (schema_ver >= 34) {
+        s.card_class = static_cast<CardClass>(r.read_u8());
+        s.created_tick = r.read_u32();
+        s.expires_tick = r.read_u32();
+        s.default_choice_id = r.read_u32();
+        s.resolved_tick = r.read_u32();
+    }
+    // Pre-v34 saves carry no card class: they load as ambient (the struct
+    // default), which is the safe reading — an ambient card never expires and
+    // never blocks, so an old save cannot resurrect a card the player is
+    // unable to clear.
     return s;
 }
 
@@ -1735,6 +1777,12 @@ DeferredWorkQueue read_deferred_work_queue(ByteReader& r) {
                 cp.node_key = r.read_u32();
                 cp.decision = r.read_u8();
                 item.payload = cp;
+                break;
+            }
+            case 10: {
+                PlayerTravelPayload tp{};
+                tp.destination_province_id = r.read_u32();
+                item.payload = tp;
                 break;
             }
             default:
@@ -1995,6 +2043,8 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
     w.write_u32(static_cast<uint32_t>(state.pending_scene_cards.size()));
     for (const auto& s : state.pending_scene_cards)
         write_scene_card(w, s);
+    w.write_u32(state.next_scene_card_id);      // v34: monotonic card id allocator
+    w.write_u32(state.next_calendar_entry_id);  // v34: monotonic calendar id allocator
 
     // --- Trade infrastructure ---
     w.write_u32(static_cast<uint32_t>(state.tariff_schedules.size()));
@@ -2180,6 +2230,24 @@ std::vector<uint8_t> PersistenceModule::serialize(const WorldState& state,
             w.write_u8(static_cast<uint8_t>(c.stage));
             w.write_u32(c.bidding_deadline_tick);
             w.write_u32(c.expected_completion_tick);
+        }
+    }
+
+    // --- v37: pending_scene_card_seeds ---
+    // Cross-tick card queue. Producers run on both sides of scene_cards in the
+    // tick order, so a save taken between the emit and the drain would lose
+    // whatever the world was about to say to the player.
+    {
+        const auto& queue = state.pending_scene_card_seeds;
+        w.write_u32(static_cast<uint32_t>(queue.size()));
+        for (const auto& seed : queue) {
+            w.write_string(seed.card_key);
+            w.write_u32(seed.npc_id);
+            w.write_u32(static_cast<uint32_t>(seed.params.size()));
+            for (const auto& [key, value] : seed.params) {
+                w.write_string(key);
+                w.write_string(value);
+            }
         }
     }
 
@@ -2470,7 +2538,26 @@ RestoreResult PersistenceModule::deserialize_body(const std::vector<uint8_t>& da
     uint32_t sc_count = r.read_u32();
     out_state.pending_scene_cards.resize(sc_count);
     for (uint32_t i = 0; i < sc_count; ++i)
-        out_state.pending_scene_cards[i] = read_scene_card(r);
+        out_state.pending_scene_cards[i] = read_scene_card(r, schema_ver);
+    if (schema_ver >= 34) {
+        out_state.next_scene_card_id = r.read_u32();
+        out_state.next_calendar_entry_id = r.read_u32();
+    } else {
+        // A pre-v34 save has no allocator. Resume past the highest id it holds
+        // so a restored card can never be shadowed by a freshly minted one.
+        uint32_t next = 1;
+        for (const auto& c : out_state.pending_scene_cards) {
+            if (c.id >= next)
+                next = c.id + 1;
+        }
+        out_state.next_scene_card_id = next;
+        uint32_t next_cal = 1;
+        for (const auto& e : out_state.calendar) {
+            if (e.id >= next_cal)
+                next_cal = e.id + 1;
+        }
+        out_state.next_calendar_entry_id = next_cal;
+    }
 
     // Tariff schedules
     uint32_t ts_count = r.read_u32();
@@ -2780,6 +2867,28 @@ RestoreResult PersistenceModule::deserialize_body(const std::vector<uint8_t>& da
             c.bidding_deadline_tick = r.read_u32();
             c.expected_completion_tick = r.read_u32();
             out_state.construction_contracts.push_back(std::move(c));
+        }
+    }
+
+    // --- v37: pending_scene_card_seeds ---
+    // Pre-v37 saves omit the section: the queue loads empty, which is what a
+    // pre-v37 world had anyway (the channel did not exist).
+    out_state.pending_scene_card_seeds.clear();
+    if (schema_ver >= 37u) {
+        uint32_t seed_count = r.read_u32();
+        out_state.pending_scene_card_seeds.reserve(seed_count);
+        for (uint32_t i = 0; i < seed_count; ++i) {
+            SceneCardSeedDelta seed{};
+            seed.card_key = r.read_string();
+            seed.npc_id = r.read_u32();
+            uint32_t param_count = r.read_u32();
+            seed.params.reserve(param_count);
+            for (uint32_t j = 0; j < param_count; ++j) {
+                std::string key = r.read_string();
+                std::string value = r.read_string();
+                seed.params.emplace_back(std::move(key), std::move(value));
+            }
+            out_state.pending_scene_card_seeds.push_back(std::move(seed));
         }
     }
 

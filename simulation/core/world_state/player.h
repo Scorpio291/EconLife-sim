@@ -115,6 +115,23 @@ enum class Background : uint8_t {
 static constexpr uint32_t SKILL_DECAY_GRACE_PERIOD = 30;  // ticks (~1 in-game month)
 static constexpr float SKILL_DOMAIN_FLOOR = 0.05f;
 
+// Number of SkillDomain values. A character carries one PlayerSkill per domain.
+static constexpr uint8_t kSkillDomainCount =
+    static_cast<uint8_t>(SkillDomain::SpecialtyConstruction) + 1;
+
+// Per-tick decay once a domain has gone unexercised past the grace period.
+// The field comment on PlayerSkill::decay_rate states this rate: ~7% of a
+// domain's level per in-game year of neglect.
+static constexpr float kDefaultSkillDecayRate = 0.0002f;
+
+// What one exercise of a domain is worth. The gain is proportional to the room
+// left (rate x (1 - level)), so competence approaches mastery and never
+// arrives at it by repetition alone — a linear increment would make any domain
+// masterable by grinding the same action, which is the shape of a rail. This
+// is a pacing dial, not a mechanism constant: at 0.01 a domain worked steadily
+// reaches ~0.8 in a few hundred exercises, a career rather than a season.
+static constexpr float kSkillExerciseRate = 0.01f;
+
 struct PlayerSkill {
     SkillDomain domain;
     float level;                  // 0.0–1.0; leveled through use

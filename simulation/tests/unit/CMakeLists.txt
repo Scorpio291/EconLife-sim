@@ -8,6 +8,7 @@ add_executable(econlife_unit_tests
     production_test.cpp
     calendar_test.cpp
     scene_cards_test.cpp
+    scene_card_catalog_test.cpp
     random_events_test.cpp
     supply_chain_test.cpp
     seasonal_agriculture_test.cpp

@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,7 @@
 #include "core/world_state/delta_buffer.h"
 #include "core/world_state/world_state.h"
 #include "modules/random_events/event_types.h"
+#include "modules/scene_cards/scene_cards_module.h"
 
 // Include the module implementation for direct testing.
 // The module class is defined in the .cpp file; we include it here for
@@ -22,6 +24,25 @@
 #include "modules/random_events/random_events_module.cpp"
 
 using namespace econlife;
+
+// The shipped card copy. The news announcement is a seed naming a template;
+// without the catalog there is no card to answer.
+static std::string find_scene_cards_dir() {
+    namespace fs = std::filesystem;
+    const char* candidates[] = {
+        "packages/base_game/scene_cards",
+        "../packages/base_game/scene_cards",
+        "../../packages/base_game/scene_cards",
+        "../../../packages/base_game/scene_cards",
+        "../../../../packages/base_game/scene_cards",
+        "../../../../../packages/base_game/scene_cards",
+    };
+    for (const auto* c : candidates) {
+        if (fs::is_directory(c))
+            return fs::canonical(c).string();
+    }
+    return "";
+}
 
 // =============================================================================
 // Test helpers — minimal WorldState and Province construction
@@ -652,9 +673,78 @@ TEST_CASE("test_human_event_scene_card_for_player", "[random_events][tier1]") {
     DeltaBuffer db{};
     module.execute_province(0, ws, db);
 
-    // Verify a scene card was generated.
-    REQUIRE(!db.new_scene_cards.empty());
-    REQUIRE(db.new_scene_cards[0].type == SceneCardType::news_notification);
+    // The event started at tick 100 and the world is at 101: the player was
+    // already told. An active event must NOT re-announce itself every tick —
+    // that is what filled the card queue with duplicates the player could not
+    // clear. The announcement happens once, in the event's immediate effects.
+    REQUIRE(db.scene_card_seeds.empty());
+
+    // ... and it stays empty for the rest of the event's life.
+    for (uint32_t t = 102; t < 110; ++t) {
+        ws.current_tick = t;
+        DeltaBuffer later{};
+        module.execute_province(0, ws, later);
+        REQUIRE(later.scene_card_seeds.empty());
+    }
+}
+
+TEST_CASE("test_event_news_card_is_answerable", "[random_events][tier1]") {
+    // A news card the player cannot dismiss wedges the queue forever. This
+    // module no longer writes the card: it names an authored template and says
+    // where the event happened, and scene_cards turns that into the card. So
+    // the test follows the same route — seed, then drain through a scene_cards
+    // module holding the shipped copy — because the failure this guards
+    // against is now a NAME that no template answers to, which raises no card
+    // at all and fails nothing on its own.
+    RandomEventsModule module;
+    module.set_base_rate(1.0f);  // every eligible province fires an event
+
+    WorldState ws = make_test_world_state(42, 1);
+    ws.provinces.push_back(make_test_province(0));
+
+    PlayerCharacter player{};
+    player.id = 1;
+    player.current_province_id = 0;
+    player.home_province_id = 0;
+    player.background = Background::MiddleClass;
+    player.age = 30.0f;
+    player.wealth = 10000.0f;
+    player.net_assets = 10000.0f;
+    player.ironman_eligible = false;
+    ws.player = std::make_unique<PlayerCharacter>(player);
+
+    // Sweep ticks until a human-category event announces itself. Category is
+    // drawn from province conditions, so this is not guaranteed on tick 1.
+    bool saw_seed = false;
+    for (uint32_t t = 1; t < 200 && !saw_seed; ++t) {
+        ws.current_tick = t;
+        DeltaBuffer db{};
+        module.execute_province(0, ws, db);
+        for (auto& seed : db.scene_card_seeds) {
+            saw_seed = true;
+            ws.pending_scene_card_seeds.push_back(seed);
+        }
+    }
+    REQUIRE(saw_seed);
+
+    SceneCardsConfig cfg{};
+    cfg.card_catalog_directory = find_scene_cards_dir();
+    REQUIRE_FALSE(cfg.card_catalog_directory.empty());
+    SceneCardsModule cards(cfg);
+
+    DeltaBuffer out{};
+    cards.execute(ws, out);
+
+    REQUIRE_FALSE(out.new_scene_cards.empty());
+    for (const auto& card : out.new_scene_cards) {
+        CHECK(card.type == SceneCardType::news_notification);
+        CHECK(card.card_class == CardClass::ambient);  // news never interrupts
+        CHECK(card.id == 0);                           // apply_deltas allocates it
+        CHECK_FALSE(card.choices.empty());             // the player can clear it
+        CHECK_FALSE(card.dialogue.empty());            // and it says something
+        // The place is the world's, not a placeholder left showing.
+        CHECK(card.dialogue[0].text.find('{') == std::string::npos);
+    }
 }
 
 // =============================================================================

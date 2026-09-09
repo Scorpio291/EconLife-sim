@@ -26,6 +26,14 @@ void move_extend(std::vector<T>& dst, std::vector<T>&& src) {
 
 void PlayerDelta::merge_from(PlayerDelta&& other) {
     // Additive optionals: sum incoming into existing (or seed with incoming).
+    if (!other.skill_deltas.empty()) {
+        skill_deltas.insert(skill_deltas.end(), std::make_move_iterator(other.skill_deltas.begin()),
+                            std::make_move_iterator(other.skill_deltas.end()));
+        other.skill_deltas.clear();
+    }
+    if (other.age_delta.has_value()) {
+        age_delta = age_delta.value_or(0.0f) + *other.age_delta;
+    }
     if (other.health_delta.has_value()) {
         health_delta = health_delta.value_or(0.0f) + *other.health_delta;
     }
@@ -49,11 +57,11 @@ void PlayerDelta::merge_from(PlayerDelta&& other) {
     }
 
     // Replacement optionals: incoming wins when set.
-    if (other.skill_delta.has_value()) {
-        skill_delta = std::move(other.skill_delta);
-    }
-    if (other.new_evidence_awareness.has_value()) {
-        new_evidence_awareness = other.new_evidence_awareness;
+    if (!other.new_evidence_awareness.empty()) {
+        new_evidence_awareness.insert(new_evidence_awareness.end(),
+                                      other.new_evidence_awareness.begin(),
+                                      other.new_evidence_awareness.end());
+        other.new_evidence_awareness.clear();
     }
     if (other.relationship_delta.has_value()) {
         relationship_delta = std::move(other.relationship_delta);
@@ -83,7 +91,10 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(cross_province_deltas, std::move(other.cross_province_deltas));
     move_extend(dissolved_businesses, std::move(other.dissolved_businesses));
     move_extend(new_businesses, std::move(other.new_businesses));
+    move_extend(scene_card_seeds, std::move(other.scene_card_seeds));
     move_extend(scene_card_choice_deltas, std::move(other.scene_card_choice_deltas));
+    move_extend(retired_scene_card_ids, std::move(other.retired_scene_card_ids));
+    move_extend(retired_calendar_entry_ids, std::move(other.retired_calendar_entry_ids));
     move_extend(calendar_commit_deltas, std::move(other.calendar_commit_deltas));
     move_extend(new_legal_case_seeds, std::move(other.new_legal_case_seeds));
     move_extend(new_random_event_triggers, std::move(other.new_random_event_triggers));
@@ -95,6 +106,7 @@ void DeltaBuffer::merge_from(DeltaBuffer&& other) {
     move_extend(new_subdivision_requests, std::move(other.new_subdivision_requests));
     move_extend(new_business_acquisitions, std::move(other.new_business_acquisitions));
     move_extend(new_facilities, std::move(other.new_facilities));
+    move_extend(facility_worker_deltas, std::move(other.facility_worker_deltas));
     move_extend(new_construction_requests, std::move(other.new_construction_requests));
     move_extend(new_construction_awards, std::move(other.new_construction_awards));
     move_extend(new_racket_seeds, std::move(other.new_racket_seeds));

@@ -67,6 +67,9 @@ class WeaponsTraffickingModule : public ITickModule {
     // Compute chain-of-custody evidence actionability
     static float compute_chain_custody_actionability(float base_actionability);
 
+    void serialize_state(std::vector<uint8_t>& out) const override;
+    bool deserialize_state(const uint8_t* data, size_t size) override;
+
    private:
     WeaponsTraffickingConfig cfg_;
 

@@ -142,8 +142,23 @@ struct WorldState {
     // --- Scheduling ---
     std::vector<CalendarEntry> calendar;  // merged: player + NPC commitments
 
+    // Monotonic calendar-entry id allocator, for the same reason scene cards
+    // have one: entries are removed when they expire, so an id derived by
+    // scanning the live calendar for a maximum would be handed out twice.
+    // Producers emit id == 0 to mean "allocate me one".
+    uint32_t next_calendar_entry_id = 1;
+
     // --- Scene Cards ---
     std::vector<SceneCard> pending_scene_cards;  // generated this tick, awaiting UI delivery
+
+    // Monotonic scene-card id allocator. THE single owner of card identity.
+    // Cards are retired from pending_scene_cards once resolved, so identity
+    // cannot be derived by scanning the live queue for a maximum — a retired
+    // id would be handed out again and a stale correlation (e.g. a real_estate
+    // NegotiationContext.scene_card_id) would match an unrelated new card.
+    // Producers emit id == 0 to mean "allocate me one"; apply_deltas assigns
+    // from this counter and advances it past any explicitly-assigned id.
+    uint32_t next_scene_card_id = 1;
 
     // --- Global Tick Metadata ---
     uint32_t ticks_this_session;  // monotonic; reset on load; for WAL
@@ -218,6 +233,18 @@ struct WorldState {
     // by persistence schema v8+ so a save mid-cycle does not drop the
     // pending trigger.
     std::vector<RandomEventTriggerDelta> pending_random_event_triggers;
+
+    // pending_scene_card_seeds: written by any module that wants to say
+    // something to the player (a refused offer, a closed sale, a story that
+    // ran, a quarter's owner decision). Drained by scene_cards within its
+    // execute(), which resolves the named template out of the card catalog and
+    // owns the id, the caps and the lifecycle. Like
+    // pending_random_event_triggers this queue MAY hold entries across tick
+    // boundaries: producers run on both sides of scene_cards in the tick order,
+    // so a seed emitted after it is drained on the next tick rather than lost.
+    // Persisted (schema v37+) — a save taken between the emit and the drain
+    // must not swallow the card.
+    std::vector<SceneCardSeedDelta> pending_scene_card_seeds;
 
     // pending_property_transactions: written by player_actions (Tier 0)
     // and future NPC seller-intent logic. Drained by real_estate at the

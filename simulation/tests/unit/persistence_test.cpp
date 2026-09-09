@@ -149,7 +149,11 @@ TEST_CASE("Persistence: constants match spec", "[persistence][tier12]") {
     // v33: cohort_stats.{nutrition, health, schooling} — what these people ARE. Stocks
     //      with long memories: stature is set in childhood, schooling takes three
     //      generations to rebuild. Reloading without them hands a society back what it lost.
-    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 33);
+    // v37: pending_scene_card_seeds — what the world is about to say to the
+    //      player. Producers sit on both sides of scene_cards in the tick
+    //      order, so the queue crosses tick boundaries and a save taken
+    //      between the emit and the drain must carry it.
+    REQUIRE(PersistenceModule::CURRENT_SCHEMA_VERSION == 37);
     REQUIRE(PersistenceModule::SNAPSHOT_INTERVAL == 30);
     REQUIRE(PersistenceModule::WAL_SEGMENT_TICKS == 30);
 }
@@ -824,6 +828,39 @@ TEST_CASE("Persistence: round-trip preserves pending_random_event_triggers (v8)"
     REQUIRE(restored.pending_random_event_triggers[1].template_key == "market_shock");
     REQUIRE(restored.pending_random_event_triggers[1].province_id == 4);
     REQUIRE_THAT(restored.pending_random_event_triggers[1].severity, WithinAbs(0.31f, 0.001f));
+}
+
+TEST_CASE("Persistence: round-trip preserves pending_scene_card_seeds (v37)",
+          "[persistence][tier12][serialization][v37]") {
+    // What the world is about to say to the player. The queue crosses tick
+    // boundaries — producers run on both sides of scene_cards — so a save
+    // taken between the emit and the drain has to carry it, or the sale that
+    // closed while the player was saving is never mentioned again.
+    auto world = test::create_test_world(99, 10, 2, 5);
+
+    SceneCardSeedDelta s1{};
+    s1.card_key = "sale_closed";
+    s1.npc_id = 0;
+    s1.params.emplace_back("subject", "The mill");
+    world.pending_scene_card_seeds.push_back(s1);
+
+    SceneCardSeedDelta s2{};
+    s2.card_key = "offer_declined";
+    s2.npc_id = 41;
+    world.pending_scene_card_seeds.push_back(s2);
+
+    auto bytes = PersistenceModule::serialize(world);
+    WorldState restored{};
+    REQUIRE(PersistenceModule::deserialize(bytes, restored) == RestoreResult::success);
+
+    REQUIRE(restored.pending_scene_card_seeds.size() == 2);
+    REQUIRE(restored.pending_scene_card_seeds[0].card_key == "sale_closed");
+    REQUIRE(restored.pending_scene_card_seeds[0].params.size() == 1);
+    REQUIRE(restored.pending_scene_card_seeds[0].params[0].first == "subject");
+    REQUIRE(restored.pending_scene_card_seeds[0].params[0].second == "The mill");
+    REQUIRE(restored.pending_scene_card_seeds[1].card_key == "offer_declined");
+    REQUIRE(restored.pending_scene_card_seeds[1].npc_id == 41);
+    REQUIRE(restored.pending_scene_card_seeds[1].params.empty());
 }
 
 TEST_CASE("Persistence: empty trigger queue round-trips cleanly (v8)",

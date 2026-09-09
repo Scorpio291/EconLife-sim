@@ -92,10 +92,66 @@ struct DeferredWorkItem {
     WorkPayload payload;  // type-specific
 };
 
-// Min-heap comparator: lowest due_tick has highest priority.
+// A sort key for the item's payload, so two items alike in due_tick, type and
+// subject_id still have a defined order. Encodes the variant index alongside
+// the payload's own identifying field — the consequence, shipment, NPC, market
+// or business the work is about — which is what distinguishes them.
+inline uint64_t deferred_payload_key(const WorkPayload& payload) {
+    const uint64_t index = static_cast<uint64_t>(payload.index()) << 32;
+    return index + std::visit(
+                       [](const auto& p) -> uint64_t {
+                           using T = std::decay_t<decltype(p)>;
+                           if constexpr (std::is_same_v<T, ConsequencePayload>)
+                               return p.consequence_id;
+                           else if constexpr (std::is_same_v<T, TransitPayload>)
+                               return p.shipment_id;
+                           else if constexpr (std::is_same_v<T, NPCRelationshipDecayPayload>)
+                               return p.npc_id;
+                           else if constexpr (std::is_same_v<T, EvidenceDecayPayload>)
+                               return p.evidence_token_id;
+                           else if constexpr (std::is_same_v<T, NPCBusinessDecisionPayload>)
+                               return p.business_id;
+                           else if constexpr (std::is_same_v<T, MarketRecomputePayload>)
+                               return p.good_id;
+                           else if constexpr (std::is_same_v<T, InvestigatorMeterPayload>)
+                               return p.npc_id;
+                           else if constexpr (std::is_same_v<T, MaturationPayload>)
+                               return p.business_id;
+                           else if constexpr (std::is_same_v<T, CommercializePayload>)
+                               return p.business_id;
+                           else if constexpr (std::is_same_v<T, PlayerTravelPayload>)
+                               return p.destination_province_id;
+                           else
+                               return 0u;
+                       },
+                       payload);
+}
+
+// Min-heap comparator: lowest due_tick has highest priority, and ties are
+// broken by (type, subject_id, payload) so the order is a TOTAL one.
+//
+// Ordering on due_tick alone left every tie to the heap's internal array
+// layout, which depends on the exact history of pushes and pops that produced
+// it — not on the queue's contents. Two runs holding the same items could drain
+// them in different orders, and a save made that visible: the serializer writes
+// items in canonical (due_tick, type, subject_id) order, so a loaded queue
+// drained ties canonically while the uninterrupted run drained them in
+// insertion-history order. Same work, different sequence, and from there the
+// RNG draws and floating-point accumulations parted company — a resumed game
+// quietly diverged from the one that was saved.
+//
+// With the tie-break, drain order is a function of the queue's contents alone,
+// which is what determinism requires of it and what the save format already
+// assumed.
 struct DeferredWorkComparator {
     bool operator()(const DeferredWorkItem& a, const DeferredWorkItem& b) const noexcept {
-        return a.due_tick > b.due_tick;
+        if (a.due_tick != b.due_tick)
+            return a.due_tick > b.due_tick;
+        if (a.type != b.type)
+            return static_cast<uint8_t>(a.type) > static_cast<uint8_t>(b.type);
+        if (a.subject_id != b.subject_id)
+            return a.subject_id > b.subject_id;
+        return deferred_payload_key(a.payload) > deferred_payload_key(b.payload);
     }
 };
 
