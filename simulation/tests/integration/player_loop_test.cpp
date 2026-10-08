@@ -28,12 +28,22 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
+// The career ratchets buy a going concern for cash out of the opening balance, so
+// the world they run in must hold one the balance can reach in the start province.
+// That is a property of the generated world, not of the loop under test. With
+// provinces placed by their H3 cell (B1), seed 42's start province has nothing
+// under 75k against a 50k balance; across seeds 40-51 three worlds offer a cash
+// buy on day 60 (seven did before B1). Of those, 47 is the one whose firm also has
+// staffing headroom for the investment ratchet to measure. Recorded in
+// docs/session_logs/flagged_issues.md (2026-10-08, the career ratchets).
+constexpr uint64_t kCareerSeed = 47;
+
 // One standard play session, shared by the ratchets below so a full year is
 // simulated once rather than once per assertion.
 const PlayerRun& standard_session() {
     static const PlayerRun run_once = [] {
         RunConfig cfg{};
-        cfg.seed = 42;
+        cfg.seed = kCareerSeed;
         cfg.npc_count = 500;
         cfg.province_count = 6;
         cfg.ticks = 365;
@@ -566,10 +576,11 @@ TEST_CASE("player_loop: a career survives being put down and picked up again", "
     uint32_t workers_at_close = 0;
 
     {
-        Session first(42, 500, 6);
+        Session first(kCareerSeed, 500, 6);
         first.play(60);  // let the world settle; a firm trading for a season is
                          // a firm you can buy
-        first.play(1, buy_a_business_at_tick(first.world.current_tick));
+        // Offer, and re-offer weekly if turned down, for a month.
+        first.play(28, buy_a_business_at_tick(first.world.current_tick));
         first.play(120);  // due diligence closes, then a quarter of trading
 
         REQUIRE(first.world.player != nullptr);
