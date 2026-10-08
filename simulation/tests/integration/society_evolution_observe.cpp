@@ -165,7 +165,7 @@ TEST_CASE("society observe: the historical climb (year each era is reached)",
 // one world; what matters is that no mechanism change silently moves an era by
 // a millennium.
 // ===========================================================================
-TEST_CASE("society: the climb is a climb — eras arrive in order, none skipped, none free",
+TEST_CASE("society: the climb is a climb - eras arrive in order, none skipped, none free",
           "[emergence][integration][society][pacing]") {
     // WHAT THIS GATE STOPPED ASSERTING, AND WHY.
     //
@@ -647,7 +647,7 @@ TEST_CASE("society observe: knowledge at each era's historical year (F7 calibrat
                 peak_year, static_cast<double>(series.back().knowledge), series.back().year);
 }
 
-TEST_CASE("society observe: transplant — soft vs native people on a harsh world",
+TEST_CASE("society observe: transplant - soft vs native people on a harsh world",
           "[.society-transplant]") {
     // Same harsh-but-FERTILE world (high hazard, plenty of food, so the difference is
     // adaptation, not starvation). Natives are adapted; a soft garden-bred people

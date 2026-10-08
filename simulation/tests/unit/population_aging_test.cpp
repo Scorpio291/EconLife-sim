@@ -120,7 +120,7 @@ WorldState make_one_province_world(uint32_t tick) {
 }
 }  // namespace
 
-TEST_CASE("PopulationAging: generational hardiness — soft people on a harsh world",
+TEST_CASE("PopulationAging: generational hardiness - soft people on a harsh world",
           "[population_aging][hardiness][tier11]") {
     PopulationAgingModule module;
     auto run = [&](float hardiness) {
@@ -523,7 +523,7 @@ TEST_CASE("PopulationAging: NPC aging only fires on annual ticks", "[population_
         REQUIRE(nd.npc_id != 1);
 }
 
-TEST_CASE("PopulationAging: disease epidemics — episodic, scaled by disease dial and crowding",
+TEST_CASE("PopulationAging: disease epidemics - episodic, scaled by disease dial and crowding",
           "[population_aging][tier11]") {
     PopulationAgingConfig cfg{};
 
@@ -575,7 +575,7 @@ TEST_CASE("PopulationAging: disease epidemics — episodic, scaled by disease di
     CHECK(saw_outbreak);
 }
 
-TEST_CASE("PopulationAging: geology disasters — episodic, scaled by the geology dial",
+TEST_CASE("PopulationAging: geology disasters - episodic, scaled by the geology dial",
           "[population_aging][tier11]") {
     PopulationAgingConfig cfg{};
 
