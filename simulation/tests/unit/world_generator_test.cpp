@@ -971,7 +971,7 @@ TEST_CASE("WorldGenerator - fjord provinces satisfy geographic preconditions",
             CHECK_FALSE(p.geography.is_landlocked);
             CHECK(p.geography.coastal_length_km > 100.0f);
             CHECK(p.geography.terrain_roughness > 0.55f);
-            CHECK(p.geography.latitude > 50.0f);
+            CHECK(std::abs(p.geography.latitude) > 50.0f);
             // Fjord Maritime links must have elevated transit cost (>= default 0.2).
             for (const auto& link : p.links) {
                 if (link.type == LinkType::Maritime) {
@@ -3823,4 +3823,58 @@ TEST_CASE("WorldGenerator: planetary_params carried to generated world", "[world
     auto world = WorldGenerator::generate(config);
     CHECK(world.provinces.size() == 6);
     CHECK(world.nations.size() >= 2);
+}
+
+// ---------------------------------------------------------------------------
+// B1 (Simulation Foundation v01 §7): a province's position and size are facts of
+// its H3 cell, not of its economic archetype.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("WorldGenerator - latitude, longitude and area come from the H3 cell",
+          "[world_gen][b1]") {
+    for (uint64_t seed = 1; seed <= 20; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            LatLng centre{};
+            REQUIRE(cellToLatLng(p.h3_index, &centre) == E_SUCCESS);
+            CHECK_THAT(p.geography.latitude,
+                       Catch::Matchers::WithinAbs(radsToDegs(centre.lat), 1e-4));
+            CHECK_THAT(p.geography.longitude,
+                       Catch::Matchers::WithinAbs(radsToDegs(centre.lng), 1e-4));
+            double area = 0.0;
+            REQUIRE(cellAreaKm2(p.h3_index, &area) == E_SUCCESS);
+            CHECK_THAT(p.geography.area_km2, Catch::Matchers::WithinRel(area, 1e-5));
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator - H3 neighbours differ in latitude by at most one cell diameter",
+          "[world_gen][b1]") {
+    // Scenario from Simulation Foundation v01 §7 (B1). A res-4 cell is ~1,770 km^2,
+    // i.e. ~45 km across; one cell diameter is well under one degree of latitude
+    // (111 km). Before B1 each province drew its latitude from its archetype, and
+    // neighbouring provinces sat up to 35 degrees apart.
+    for (uint64_t seed = 1; seed <= 20; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            const double diameter_deg = 2.0 * std::sqrt(p.geography.area_km2 / 3.14159265) / 111.0;
+            for (const auto& link : p.links) {
+                if (link.type == LinkType::Maritime)
+                    continue;  // a sea route need not join adjacent cells
+                auto it = world.h3_province_map.find(link.neighbor_h3);
+                if (it == world.h3_province_map.end())
+                    continue;
+                const auto& q = world.provinces[it->second];
+                CHECK(std::abs(p.geography.latitude - q.geography.latitude) <= diameter_deg);
+            }
+        }
+    }
 }
