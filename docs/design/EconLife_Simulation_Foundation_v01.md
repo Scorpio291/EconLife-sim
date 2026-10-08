@@ -24,6 +24,7 @@ EconLife's foundation is a simulation of everything the economy stands on: a sta
 | V4 | Speed of light | **Information travels with its carrier in every era; `c` is the floor.** | Supersedes "information is instant". §4. |
 | V5 | Era numbering | **Docs follow `eras.csv` (Era 8 = 2000); prefer `era_key`. Explore alternatives to the era concept.** | Renumbered R&D, Commodities, WorldGen and Tier List (+7). Alternatives: §5. |
 | V6 | Real Earth or generated world | **Procedural world is the V1 default; a GIS Earth is a later scenario.** | GDD §2 and World Map Conflict 2 updated. |
+| V7 | How the world is shown | **The planet is a globe. Zooming in moves down the H3 hierarchy, from the whole planet to regions, provinces and cities.** | Each zoom level is an H3 resolution (planet res 0–3, province res 4, settlement res 6–9, streets res 10+). Finer data exists only where the simulation has refined the cell (the LOD window, V3); a coarser view shows the conserved aggregate of its children, never a separately stored value. Needs B1 (every cell has a latitude/longitude). Rendering the globe is UI work after B2. |
 | D5 | AGI, fusion, BCI | **Not cut. They come once the simulation is mature and enable travel to other planets and beyond.** | Tier List: new "Deep Future" section replaces the Cut List entry. |
 | D8 | World Class | **A classification of the generated world; later a player-facing choice of starting planet.** | World Class is derived (§2), presets choose planet/biota parameters (EX for the player UI). |
 
@@ -219,6 +220,7 @@ Every process states its clock. A process that runs per tick must be correct at 
 
 ### Ratchet scenarios
 
+- **[SCENARIO]** *When* the view zooms out from a set of cells to their H3 parent, *then* every conserved quantity shown at the parent equals the sum over its children. (V7)
 - **[SCENARIO]** *When* two provinces are H3 neighbours, *then* their latitudes differ by at most one cell diameter. (B1)
 - **[SCENARIO]** *When* a world is generated, *then* the physical pass covers the whole sphere (Σ cell area ≈ 4πr²) and the LOD 0 provinces are a subset of it. (B2)
 - **[SCENARIO]** *When* a province sits on a converging continental–continental boundary, *then* its pre-erosion elevation exceeds the mean of non-boundary cells on the same plates. (B3)
