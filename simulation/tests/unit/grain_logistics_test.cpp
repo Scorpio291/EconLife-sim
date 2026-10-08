@@ -77,7 +77,7 @@ TEST_CASE("grain_logistics: mountains block land hauling; roads relieve it",
     CHECK(roaded > flat);      // a road extends the radius
 }
 
-TEST_CASE("grain_logistics: heavier gravity shrinks the haulage radius (§5.5 coupling)",
+TEST_CASE("grain_logistics: heavier gravity shrinks the haulage radius (sec. 5.5 coupling)",
           "[grain_logistics][tier1]") {
     const auto c = cfg();
     const float earth = GrainLogisticsModule::delivered_fraction(LinkType::Land, 0, 0, 1.0f, c);
@@ -102,7 +102,7 @@ TEST_CASE("grain_logistics: a province with no links keeps all its surplus local
     CHECK_THAT(w.provinces[0].cohort_stats->net_feedable_surplus, WithinAbs(1000.0f, 0.5f));
 }
 
-TEST_CASE("grain_logistics: conserved haulage — water neighbour out-feeds a land neighbour",
+TEST_CASE("grain_logistics: conserved haulage - water neighbour out-feeds a land neighbour",
           "[grain_logistics][tier1]") {
     WorldState w = dawn_world();
     add_province(w, 100, 0, 1000.0f);  // A: the only surplus
