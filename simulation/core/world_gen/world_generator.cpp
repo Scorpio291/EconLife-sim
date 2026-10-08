@@ -1958,7 +1958,8 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     static constexpr float kLapseRateCPerM = 0.0065f;
     for (auto& prov : world.provinces) {
-        float base_temp = a.temp_equator_c - std::abs(prov.geography.latitude) * a.temp_lat_rate;
+        const float lat = prov.geography.latitude;
+        float base_temp = a.temp_equator_c - a.temp_lat_curvature * lat * lat;
         float lapse = prov.geography.elevation_avg_m * kLapseRateCPerM;
         float phys_temp = base_temp - lapse;
 

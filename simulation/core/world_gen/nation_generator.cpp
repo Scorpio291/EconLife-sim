@@ -119,102 +119,105 @@ void NationGenerator::form_nations(WorldState& world, DeterministicRNG& rng,
     target_count = std::min(target_count, static_cast<uint32_t>(habitable.size()));
     target_count = std::max(target_count, std::min(2u, static_cast<uint32_t>(habitable.size())));
 
-    // Build attractiveness² weights for seed selection bias.
-    // Attractiveness² biases toward high-value inland/coastal cores, not thin margins.
-    std::vector<float> weights(habitable.size());
-    float total_weight = 0.0f;
-    for (size_t i = 0; i < habitable.size(); ++i) {
-        float a = provinces[habitable[i]].settlement_attractiveness;
-        weights[i] = a * a;
-        total_weight += weights[i];
-    }
-
-    // Track which provinces are available for seed selection.
-    // Using a bool vector is O(1) per check vs O(log n) for unordered_set.
-    std::vector<bool> available(prov_count, false);
-    for (uint32_t pid : habitable)
-        available[pid] = true;
-
-    std::vector<uint32_t> seed_province_ids;
-    seed_province_ids.reserve(target_count);
-
     // Minimum separation in graph hops (BFS distance through ProvinceLinks).
-    // Spec §9.5.1: "no two seeds closer than 3 H3 grid-disks."
-    // For small worlds (< seed_separation * 2 provinces), reduce to avoid
-    // excluding all candidates.
-    uint32_t effective_separation = nfp.seed_separation;
-    if (habitable.size() < effective_separation * 2) {
-        effective_separation = 0;  // small worlds: no separation constraint
-    }
-
-    // Weighted sampling loop. On each iteration we pick one seed, then
-    // exclude neighbors within effective_separation via BFS.
-    // Instead of recomputing total_weight from scratch each time (O(n)),
-    // we subtract removed weights incrementally.
-    uint32_t max_attempts = static_cast<uint32_t>(habitable.size()) * 3;
-    for (uint32_t attempt = 0; seed_province_ids.size() < target_count && attempt < max_attempts;
-         ++attempt) {
-        if (total_weight <= 0.0f)
-            break;
-
-        // Weighted random selection.
-        float roll = rng.next_float() * total_weight;
-        float cumulative = 0.0f;
-        uint32_t chosen = habitable[0];
-        size_t chosen_idx = 0;
+    // Spec §9.5.1: "no two seeds closer than 3 H3 grid-disks." That spacing is set
+    // for an Earth-scale map. When the habitable window is too compact to hold even
+    // two seeds that far apart (six adjacent res-4 cells are at most two hops
+    // across), the spacing is relaxed one hop at a time until it can. Province
+    // COUNT is not the test: what matters is the window's diameter in hops.
+    const uint32_t required_seeds = std::min(2u, static_cast<uint32_t>(habitable.size()));
+    std::vector<uint32_t> seed_province_ids;
+    for (uint32_t effective_separation = nfp.seed_separation;; --effective_separation) {
+        seed_province_ids.clear();
+        seed_province_ids.reserve(target_count);
+        // Build attractiveness² weights for seed selection bias.
+        // Attractiveness² biases toward high-value inland/coastal cores, not thin margins.
+        std::vector<float> weights(habitable.size());
+        float total_weight = 0.0f;
         for (size_t i = 0; i < habitable.size(); ++i) {
-            if (!available[habitable[i]])
-                continue;
-            cumulative += weights[i];
-            if (cumulative >= roll) {
-                chosen = habitable[i];
-                chosen_idx = i;
-                break;
-            }
+            float a = provinces[habitable[i]].settlement_attractiveness;
+            weights[i] = a * a;
+            total_weight += weights[i];
         }
 
-        if (!available[chosen])
-            continue;
+        // Track which provinces are available for seed selection.
+        // Using a bool vector is O(1) per check vs O(log n) for unordered_set.
+        std::vector<bool> available(prov_count, false);
+        for (uint32_t pid : habitable)
+            available[pid] = true;
 
-        seed_province_ids.push_back(chosen);
-        available[chosen] = false;
-        total_weight -= weights[chosen_idx];
-        weights[chosen_idx] = 0.0f;
+        // Weighted sampling loop. On each iteration we pick one seed, then
+        // exclude neighbors within effective_separation via BFS.
+        // Instead of recomputing total_weight from scratch each time (O(n)),
+        // we subtract removed weights incrementally.
+        uint32_t max_attempts = static_cast<uint32_t>(habitable.size()) * 3;
+        for (uint32_t attempt = 0;
+             seed_province_ids.size() < target_count && attempt < max_attempts; ++attempt) {
+            if (total_weight <= 0.0f)
+                break;
 
-        // BFS exclusion zone: mark neighbors within effective_separation as unavailable.
-        if (effective_separation > 0) {
-            std::queue<std::pair<uint32_t, uint32_t>> bfs;
-            bfs.push({chosen, 0});
-            std::unordered_set<uint32_t> visited_bfs;
-            visited_bfs.insert(chosen);
-            while (!bfs.empty()) {
-                auto [cur, dist] = bfs.front();
-                bfs.pop();
-                if (dist >= effective_separation)
+            // Weighted random selection.
+            float roll = rng.next_float() * total_weight;
+            float cumulative = 0.0f;
+            uint32_t chosen = habitable[0];
+            size_t chosen_idx = 0;
+            for (size_t i = 0; i < habitable.size(); ++i) {
+                if (!available[habitable[i]])
                     continue;
-                for (const auto& link : provinces[cur].links) {
-                    auto it = h3_to_idx.find(link.neighbor_h3);
-                    if (it == h3_to_idx.end())
+                cumulative += weights[i];
+                if (cumulative >= roll) {
+                    chosen = habitable[i];
+                    chosen_idx = i;
+                    break;
+                }
+            }
+
+            if (!available[chosen])
+                continue;
+
+            seed_province_ids.push_back(chosen);
+            available[chosen] = false;
+            total_weight -= weights[chosen_idx];
+            weights[chosen_idx] = 0.0f;
+
+            // BFS exclusion zone: mark neighbors within effective_separation as unavailable.
+            if (effective_separation > 0) {
+                std::queue<std::pair<uint32_t, uint32_t>> bfs;
+                bfs.push({chosen, 0});
+                std::unordered_set<uint32_t> visited_bfs;
+                visited_bfs.insert(chosen);
+                while (!bfs.empty()) {
+                    auto [cur, dist] = bfs.front();
+                    bfs.pop();
+                    if (dist >= effective_separation)
                         continue;
-                    uint32_t nid = it->second;
-                    if (visited_bfs.count(nid))
-                        continue;
-                    visited_bfs.insert(nid);
-                    if (available[nid]) {
-                        available[nid] = false;
-                        // Find and zero this province's weight to keep total_weight accurate.
-                        for (size_t i = 0; i < habitable.size(); ++i) {
-                            if (habitable[i] == nid) {
-                                total_weight -= weights[i];
-                                weights[i] = 0.0f;
-                                break;
+                    for (const auto& link : provinces[cur].links) {
+                        auto it = h3_to_idx.find(link.neighbor_h3);
+                        if (it == h3_to_idx.end())
+                            continue;
+                        uint32_t nid = it->second;
+                        if (visited_bfs.count(nid))
+                            continue;
+                        visited_bfs.insert(nid);
+                        if (available[nid]) {
+                            available[nid] = false;
+                            // Find and zero this province's weight to keep total_weight accurate.
+                            for (size_t i = 0; i < habitable.size(); ++i) {
+                                if (habitable[i] == nid) {
+                                    total_weight -= weights[i];
+                                    weights[i] = 0.0f;
+                                    break;
+                                }
                             }
                         }
+                        bfs.push({nid, dist + 1});
                     }
-                    bfs.push({nid, dist + 1});
                 }
             }
         }
+
+        if (seed_province_ids.size() >= required_seeds || effective_separation == 0)
+            break;
     }
 
     // Fallback: if no seeds were placed, use the highest-attractiveness province.

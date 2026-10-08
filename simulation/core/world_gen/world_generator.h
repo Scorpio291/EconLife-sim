@@ -241,9 +241,14 @@ struct WorldGeneratorConfig {
     // AtmosphereParams — thresholds for Stage 4 atmosphere pass
     // -----------------------------------------------------------------------
     struct AtmosphereParams {
-        // Base temperature from latitude: T = temp_equator - |lat| * temp_lat_rate
-        float temp_equator_c = 30.0f;
-        float temp_lat_rate = 0.70f;  // °C per degree latitude
+        // Base sea-level temperature from latitude: T = temp_equator - temp_lat_curvature * lat²
+        // (lat in degrees). Fitted to Earth's observed zonal-mean annual surface
+        // temperature: ~26 °C at the equator, ~20 °C at 30°, ~8 °C at 50°, ~0 °C at 60°,
+        // ~-21 °C at 80°. A straight line cannot hold that shape: the old 0.70 °C per
+        // degree from 30 °C put 54° N at -8 °C, tundra where Hamburg and Moscow stand.
+        // Once PlanetaryParameters drives insolation (B6) this becomes derived.
+        float temp_equator_c = 27.0f;
+        float temp_lat_curvature = 0.0075f;  // °C per degree² of latitude
 
         // Continentality: 1.0 - 1.0/(1.0 + distance_proxy * cont_decay)
         float cont_decay = 0.005f;            // decay rate for distance-to-coast proxy

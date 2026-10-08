@@ -1033,32 +1033,34 @@ TEST_CASE("WorldGenerator - stages 5-9 are deterministic", "[world_gen][determin
 
 TEST_CASE("WorldGenerator - elevation correlates with terrain roughness after refinement",
           "[world_gen][geography]") {
-    // High-roughness provinces must have higher elevation than low-roughness ones.
-    // With roughness_factor = 0.30 + roughness * 1.50:
-    //   roughness 0.10 → factor 0.45; roughness 0.80 → factor 1.50
-    // So a roughness-0.80 province must have significantly higher elevation.
-    for (uint64_t seed = 1; seed <= 10; ++seed) {
+    // Refinement scales each province's base elevation by
+    // elev_roughness_base + roughness * elev_roughness_range, so rough country stands
+    // higher than flat country ON AVERAGE. The base elevation is drawn independently
+    // of roughness, so one rough province can still sit below one flat one in a
+    // single six-province world; the claim is about the population, and is tested
+    // there: pooled over many worlds, mean elevation of rough provinces exceeds that
+    // of flat ones.
+    double rough_sum = 0.0, flat_sum = 0.0;
+    int rough_n = 0, flat_n = 0;
+    for (uint64_t seed = 1; seed <= 60; ++seed) {
         WorldGeneratorConfig config{};
         config.seed = seed;
         config.province_count = 6;
         config.npc_count = 50;
         auto world = WorldGenerator::generate(config);
-
-        float max_roughness = 0.0f, max_elevation_at_max_roughness = 0.0f;
-        float min_roughness = 1.0f, min_elevation_at_min_roughness = 99999.0f;
         for (const auto& p : world.provinces) {
-            if (p.geography.terrain_roughness > max_roughness) {
-                max_roughness = p.geography.terrain_roughness;
-                max_elevation_at_max_roughness = p.geography.elevation_avg_m;
-            }
-            if (p.geography.terrain_roughness < min_roughness) {
-                min_roughness = p.geography.terrain_roughness;
-                min_elevation_at_min_roughness = p.geography.elevation_avg_m;
+            if (p.geography.terrain_roughness >= 0.5f) {
+                rough_sum += static_cast<double>(p.geography.elevation_avg_m);
+                ++rough_n;
+            } else if (p.geography.terrain_roughness <= 0.25f) {
+                flat_sum += static_cast<double>(p.geography.elevation_avg_m);
+                ++flat_n;
             }
         }
-        // Most-rough province must be higher than least-rough (across the world).
-        CHECK(max_elevation_at_max_roughness > min_elevation_at_min_roughness);
     }
+    REQUIRE(rough_n > 20);
+    REQUIRE(flat_n > 20);
+    CHECK(rough_sum / rough_n > 1.5 * (flat_sum / flat_n));
 }
 
 TEST_CASE("WorldGenerator - temperature decreases with elevation (lapse rate)",
@@ -3865,7 +3867,8 @@ TEST_CASE("WorldGenerator - H3 neighbours differ in latitude by at most one cell
         config.npc_count = 50;
         auto world = WorldGenerator::generate(config);
         for (const auto& p : world.provinces) {
-            const double diameter_deg = 2.0 * std::sqrt(p.geography.area_km2 / 3.14159265) / 111.0;
+            const double diameter_deg =
+                2.0 * std::sqrt(static_cast<double>(p.geography.area_km2) / 3.14159265) / 111.0;
             for (const auto& link : p.links) {
                 if (link.type == LinkType::Maritime)
                     continue;  // a sea route need not join adjacent cells
@@ -3873,7 +3876,8 @@ TEST_CASE("WorldGenerator - H3 neighbours differ in latitude by at most one cell
                 if (it == world.h3_province_map.end())
                     continue;
                 const auto& q = world.provinces[it->second];
-                CHECK(std::abs(p.geography.latitude - q.geography.latitude) <= diameter_deg);
+                CHECK(static_cast<double>(std::abs(p.geography.latitude - q.geography.latitude)) <=
+                      diameter_deg);
             }
         }
     }
