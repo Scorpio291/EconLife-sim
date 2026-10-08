@@ -26,7 +26,11 @@ This document specifies how the real world becomes the EconLife game world. It c
 
 GDD Section 2 "The Setting" has been rewritten to describe a January 2000 starting world. The 2040s-like conditions are framed as emergent outcomes of 25 years of simulation, not starting conditions. The Feature Tier List has been updated to "Historical-to-present simulation (Year 2000–Era 5) — V1". The R&D document remains authoritative on the time period.
 
-### Conflict 2 — Procedural World Generation — **RESOLVED (FTL, TDD v3+)**
+### Conflict 2 — Procedural World Generation — **SUPERSEDED 2026-10-08 (decision V6)**
+
+**Current decision:** the procedural world (WorldGen pipeline) is the V1 default world source. The GIS-derived Earth described in this document is a later scenario (EX) that must produce the same world.json contract. The LOD architecture, scenario system and LOD 1/LOD 2 specifications below still apply to procedural worlds. The text below records the earlier resolution and is kept for history.
+
+*Earlier resolution (no longer in force):*
 
 The Feature Tier List now specifies "GIS-seeded real-world map (Option B) — V1". `WorldGenParameters` has been replaced by `WorldLoadParameters` in TDD v3+. Procedural generation is available as a modding pipeline tool but the base game world is real-world-derived.
 

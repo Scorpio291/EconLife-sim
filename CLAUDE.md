@@ -187,6 +187,7 @@ Modders edit CSVs without recompilation.
 - GDD v1.7: docs/design/EconLife_GDD.md
 - Technical Design v29: docs/design/EconLife_Technical_Design_v29.md
 - Feature Tier List: docs/design/EconLife_Feature_Tier_List.md
+- Simulation Foundation (layers, contracts, clocks; decisions 2026-10-08): docs/design/EconLife_Simulation_Foundation_v01.md
 - Commodities & Factories: docs/design/EconLife_Commodities_and_Factories_v23.md
 - R&D & Technology: docs/design/EconLife_RnD_and_Technology_v22.md
 - AI Development Plan: docs/design/EconLife_AI_Development_Plan_updated.md
