@@ -28,14 +28,18 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-// The career ratchets buy a going concern for cash out of the opening balance, so
-// the world they run in must hold one the balance can reach in the start province.
-// That is a property of the generated world, not of the loop under test. With
-// provinces placed by their H3 cell (B1), seed 42's start province has nothing
-// under 75k against a 50k balance; across seeds 40-51 three worlds offer a cash
-// buy on day 60 (seven did before B1). Of those, 47 is the one whose firm also has
-// staffing headroom for the investment ratchet to measure. Recorded in
-// docs/session_logs/flagged_issues.md (2026-10-08, the career ratchets).
+// The career ratchets below follow ONE long session in one world, chosen because
+// its start province has a going concern the 50k opening balance can buy for cash
+// on day 60 and staffing headroom for the investment ratchet to measure. That is
+// a property of the generated world, not of the loop under test: across seeds
+// 40-59 a cash buy is open on day 60 in 10 worlds and a financed one in 18
+// ("[.career_report]" in player_career_scenarios_test.cpp prints the table).
+//
+// The session is kept as a deterministic positive scenario. It is not the only
+// evidence that a player can get into business: player_career_scenarios_test.cpp
+// checks the entry path (affordable firm and willing owner, insufficient funds,
+// owner refusal, no firm nearby) in several worlds, each with its own
+// precondition, so no conclusion rests on this seed.
 constexpr uint64_t kCareerSeed = 47;
 
 // One standard play session, shared by the ratchets below so a full year is

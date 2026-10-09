@@ -102,6 +102,7 @@ set_tests_properties(emergence_behavioral_suite PROPERTIES
 # ---------------------------------------------------------------------------
 add_executable(econlife_player_loop_tests
     player_loop_test.cpp
+    player_career_scenarios_test.cpp
     player_loop_observe.cpp
 )
 

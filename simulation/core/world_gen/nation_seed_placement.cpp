@@ -78,7 +78,7 @@ struct Bits {
 uint32_t first_bit(const Bits& b) {
     for (size_t wi = 0; wi < b.w.size(); ++wi)
         if (b.w[wi] != 0)
-            return static_cast<uint32_t>(wi * 64 + std::countr_zero(b.w[wi]));
+            return static_cast<uint32_t>(wi * 64 + static_cast<size_t>(std::countr_zero(b.w[wi])));
     return std::numeric_limits<uint32_t>::max();
 }
 
@@ -130,7 +130,8 @@ struct MisSearch {
             for (size_t wi = 0; wi < mask.w.size() && pick == std::numeric_limits<uint32_t>::max();
                  ++wi) {
                 for (uint64_t m = mask.w[wi]; m != 0; m &= m - 1) {
-                    const uint32_t v = static_cast<uint32_t>(wi * 64 + std::countr_zero(m));
+                    const uint32_t v =
+                        static_cast<uint32_t>(wi * 64 + static_cast<size_t>(std::countr_zero(m)));
                     const uint32_t degree = closed[v].count_and(mask) - 1;
                     if (degree <= 1) {
                         pick = v;
