@@ -25,6 +25,7 @@ EconLife's foundation is a simulation of everything the economy stands on: a sta
 | V5 | Era numbering | **Docs follow `eras.csv` (Era 8 = 2000); prefer `era_key`. Explore alternatives to the era concept.** | Renumbered R&D, Commodities, WorldGen and Tier List (+7). Alternatives: §5. |
 | V6 | Real Earth or generated world | **Procedural world is the V1 default; a GIS Earth is a later scenario.** | GDD §2 and World Map Conflict 2 updated. |
 | V7 | How the world is shown | **The planet is a globe. Zooming in moves down the H3 hierarchy, from the whole planet to regions, provinces and cities.** | Each zoom level is an H3 resolution (planet res 0–3, province res 4, settlement res 6–9, streets res 10+). Finer data exists only where the simulation has refined the cell (the LOD window, V3); a coarser view shows the conserved aggregate of its children, never a separately stored value. Needs B1 (every cell has a latitude/longitude). Rendering the globe is UI work after B2. |
+| V8 | What sets a place's climate | **Latitude is only the sunlight. Temperature and climate zones follow from the land and sea around a place, ocean currents, prevailing winds, elevation and mountain barriers.** | Climate is computed on the planet-wide grid (B7), after land/sea (B2), plates (B3) and erosion (B5) exist. The archetype temperature blend and the dice-rolled ocean currents in today's Stage 4 are removed, not tuned. |
 | D5 | AGI, fusion, BCI | **Not cut. They come once the simulation is mature and enable travel to other planets and beyond.** | Tier List: new "Deep Future" section replaces the Cut List entry. |
 | D8 | World Class | **A classification of the generated world; later a player-facing choice of starting planet.** | World Class is derived (§2), presets choose planet/biota parameters (EX for the player UI). |
 
@@ -97,6 +98,13 @@ A deposit then states the **elements** it contains, with grade and by-products. 
 Order: **Stage 2 erosion → Stage 4 atmosphere → Stage 3 hydrology → Stage 5 soils.** Hydrology needs precipitation; the code already runs atmosphere first.
 - Erosion uses a stream-power law, scaled by gravity per WorldGen §Planetary. It produces valleys, floodplains, deltas, alluvial fans and placer concentration.
 - Latitude and longitude are read from the H3 cell, never drawn.
+- **Climate (V8).** Latitude sets only top-of-atmosphere sunlight (from the star, orbit and axial tilt in L0/L1). Everything else is a mechanism on the global grid:
+  - *Land and sea:* the heat capacity of water damps the seasons; continentality is the real distance to the coast along the grid, not a proxy from coastline length.
+  - *Prevailing winds:* the circulation cells (Hadley, Ferrel, polar) follow from rotation rate and the equator-to-pole contrast, and carry heat and moisture across the grid.
+  - *Ocean currents:* surface gyres are driven by those winds and bent by the continents' shapes. That gives warm western-boundary currents (Gulf Stream, Kuroshio) and cold eastern-boundary upwelling (Humboldt, Benguela). A coast gets its current from where it sits in its ocean basin, never from a dice roll.
+  - *Elevation:* temperature falls with the lapse rate; mountains force air up, so the windward side gets the rain and the leeward side lies in rain shadow. Moisture is carried and spent along the wind, so it is conserved.
+  - *Climate zones* (Köppen) are read off the resulting monthly temperature and precipitation, never assigned.
+  - *Scale-back (documented):* an annual-mean energy balance with prescribed circulation belts and a steady-state gyre per basin, not a general circulation model. It is good enough to place Norway's ice-free fjords and Atacama's desert, and can be replaced later.
 
 ### L4 Biosphere (V1 as a generator; EX as a simulator)
 
@@ -213,6 +221,7 @@ Every process states its clock. A process that runs per tick must be correct at 
 | B4 | Province archetype becomes a derived label; remove `apply_archetype` and archetype deposits as seeds | F2 |
 | B5 | Stage 2 erosion | F3 |
 | B6 | `PlanetaryParameters` as the single source; derive the hazard axes | F4 |
+| B7 | Climate on the global grid (V8): sunlight by latitude and season, land/sea heat capacity, wind belts, wind-driven ocean gyres, lapse rate, moisture carried along the wind, Köppen read off the result | V8 |
 | C1 | Data-driven deposit types with elements and grades | F7 |
 | C2 | Biota generator + biosphere timeline; crops off `ResourceDeposit`; fossil fuels gated | F6 |
 | D | Information latency on links | F5 |
@@ -221,6 +230,8 @@ Every process states its clock. A process that runs per tick must be correct at 
 ### Ratchet scenarios
 
 - **[SCENARIO]** *When* the view zooms out from a set of cells to their H3 parent, *then* every conserved quantity shown at the parent equals the sum over its children. (V7)
+- **[SCENARIO]** *When* two coasts sit at the same latitude on the western and eastern edges of one ocean basin, *then* the coast with the poleward warm current is warmer in winter than the one with cold upwelling. (B7)
+- **[SCENARIO]** *When* a mountain range lies across the prevailing wind, *then* the leeward side receives less precipitation than the windward side, and the moisture missing on the leeward side fell on the windward side. (B7)
 - **[SCENARIO]** *When* two provinces are H3 neighbours, *then* their latitudes differ by at most one cell diameter. (B1)
 - **[SCENARIO]** *When* a world is generated, *then* the physical pass covers the whole sphere (Σ cell area ≈ 4πr²) and the LOD 0 provinces are a subset of it. (B2)
 - **[SCENARIO]** *When* a province sits on a converging continental–continental boundary, *then* its pre-erosion elevation exceeds the mean of non-boundary cells on the same plates. (B3)
