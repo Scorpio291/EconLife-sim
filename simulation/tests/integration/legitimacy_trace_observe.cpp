@@ -35,6 +35,10 @@ using namespace econlife;
 
 namespace {
 
+double D(float x) {
+    return static_cast<double>(x);
+}
+
 // Fields attributed per module: the legitimacy inputs and what drives them.
 constexpr int kFields = 4;
 const char* const kFieldName[kFields] = {"stability", "infrastructure", "grievance", "trust"};
@@ -179,17 +183,17 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
                         ++count[e.province_id][c];
                     const double dur = static_cast<double>(e.end_tick - e.started_tick);
                     if (e.category == EventCategory::natural) {
-                        cost[e.province_id] += 0.02 * e.severity + 0.01 * e.severity * dur;
+                        cost[e.province_id] += 0.02 * D(e.severity) + 0.01 * D(e.severity) * dur;
                         if (e.template_id != "drought_mild" && e.template_id != "drought_severe")
-                            infra_hit[e.province_id] += 0.01 + 0.14 * e.severity;
+                            infra_hit[e.province_id] += 0.01 + 0.14 * D(e.severity);
                     } else if (e.category == EventCategory::accident) {
-                        cost[e.province_id] += 0.01 * e.severity + 0.005 * e.severity * dur;
+                        cost[e.province_id] += 0.01 * D(e.severity) + 0.005 * D(e.severity) * dur;
                     }
                     if (y == 3 && e.province_id <= 1) {
                         char line[160];
                         std::snprintf(line, sizeof line, "    p%u tick %u %-18s sev %.3f dur %u",
                                       e.province_id, e.started_tick, e.template_id.c_str(),
-                                      e.severity, e.end_tick - e.started_tick);
+                                      D(e.severity), e.end_tick - e.started_tick);
                         log.emplace_back(line);
                     }
                 }
@@ -210,23 +214,24 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
                     "%4u %3u %8.0f %.3f %.3f %.3f %.3f %.3f  %.3f %.3f %.3f %.3f %7.1f %.3f   "
                     "%.3f %.3f    %u\n",
                     p.id, p.nation_id, c ? c->total_population / 1000.0 : 0.0,
-                    p.conditions.stability_score, p.community.institutional_trust,
-                    p.community.grievance_level, c ? c->unemployment_rate : 0.f,
-                    c ? c->formal_employment_rate : 0.f, p.infrastructure_rating,
-                    c ? c->crime_rate : 0.f, c ? c->criminal_dominance_index : 0.f,
-                    p.conditions.inequality_index, c ? c->mean_income : 0.f,
-                    c ? c->subsistence_surplus_ratio : 0.f, c ? c->sick_rate : 0.f,
-                    c ? c->homeless_rate : 0.f, static_cast<unsigned>(p.community.response_stage));
+                    D(p.conditions.stability_score), D(p.community.institutional_trust),
+                    D(p.community.grievance_level), D(c ? c->unemployment_rate : 0.f),
+                    D(c ? c->formal_employment_rate : 0.f), D(p.infrastructure_rating),
+                    D(c ? c->crime_rate : 0.f), D(c ? c->criminal_dominance_index : 0.f),
+                    D(p.conditions.inequality_index), D(c ? c->mean_income : 0.f),
+                    D(c ? c->subsistence_surplus_ratio : 0.f), D(c ? c->sick_rate : 0.f),
+                    D(c ? c->homeless_rate : 0.f),
+                    static_cast<unsigned>(D(p.community.response_stage)));
             }
             // Population-weighted legitimacy target, as political_cycle computes it.
             double w = 0, tr = 0, st = 0, gr = 0, un = 0;
             for (const auto& p : world.provinces) {
                 const double pop = p.cohort_stats ? p.cohort_stats->total_population : 0.0;
                 w += pop;
-                tr += pop * p.community.institutional_trust;
-                st += pop * p.conditions.stability_score;
-                gr += pop * p.community.grievance_level;
-                un += pop * (p.cohort_stats ? p.cohort_stats->unemployment_rate : 0.f);
+                tr += pop * D(p.community.institutional_trust);
+                st += pop * D(p.conditions.stability_score);
+                gr += pop * D(p.community.grievance_level);
+                un += pop * D(p.cohort_stats ? p.cohort_stats->unemployment_rate : 0.f);
             }
             if (w > 0) {
                 tr /= w, st /= w, gr /= w, un /= w;
@@ -253,7 +258,7 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
                 }
                 const double vol = 1.0 + (n ? dev / n : 0.0);
                 const double cs = p.climate.climate_stress_current;
-                const double inst = 1.0 - p.conditions.stability_score;
+                const double inst = 1.0 - D(p.conditions.stability_score);
                 std::printf(
                     "  roll p%u: climate %.3f instab %.3f volatility %.3f (%d markets, "
                     "worst dev %.2f) -> rate x%.2f = %.2f events/yr\n",
@@ -341,9 +346,9 @@ TEST_CASE("legitimacy trace: counterfactual event rates", "[.legitimacy-trace]")
                 for (const auto& p : world.provinces) {
                     const double pop = p.cohort_stats ? p.cohort_stats->total_population : 0.0;
                     w += pop;
-                    st += pop * p.conditions.stability_score;
-                    gr += pop * p.community.grievance_level;
-                    tr += pop * p.community.institutional_trust;
+                    st += pop * D(p.conditions.stability_score);
+                    gr += pop * D(p.community.grievance_level);
+                    tr += pop * D(p.community.institutional_trust);
                 }
                 std::printf(
                     "base rate %.4f seed %llu year %u: legitimacy %.3f  stab %.3f griev %.3f "
