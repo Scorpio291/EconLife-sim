@@ -55,6 +55,7 @@ catch_discover_tests(econlife_integration_tests
 # ---------------------------------------------------------------------------
 add_executable(econlife_emergence_tests
     emergence_observe.cpp
+    legitimacy_trace_observe.cpp
     emergence_test.cpp
     society_evolution_observe.cpp
 )

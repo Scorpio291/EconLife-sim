@@ -886,6 +886,70 @@ TEST_CASE("test_different_seeds_different_events", "[random_events][tier1]") {
     REQUIRE(any_difference);
 }
 
+// =============================================================================
+// Test: every (world seed, tick, province) draws its own stream
+//
+// The roll used to be seeded with world_seed ^ tick ^ province.id. XOR folds the
+// three together, so province p at tick t drew exactly what province 0 drew at
+// tick t ^ p, and world seed 43 drew exactly what seed 42 drew a tick earlier or
+// later. In the orchestrated baseline every province suffered the same events one
+// tick apart and seeds 42-45 all lived one history. These tests count the events
+// two runs share (same template, same severity): a shared stream shares nearly
+// all of them, independent streams essentially none.
+// =============================================================================
+
+namespace {
+
+std::vector<ActiveRandomEvent> roll_events(uint64_t seed, uint32_t provinces, uint32_t ticks) {
+    RandomEventsModule module;
+    module.set_base_rate(3.0f);  // ~10% per tick, so a year yields dozens of events
+    WorldState ws = make_test_world_state(seed, 0);
+    for (uint32_t p = 0; p < provinces; ++p)
+        ws.provinces.push_back(make_test_province(p, 0.3f, 0.7f, 0.5f));
+    for (uint32_t tick = 0; tick < ticks; ++tick) {
+        ws.current_tick = tick;
+        for (uint32_t p = 0; p < provinces; ++p) {
+            DeltaBuffer db{};
+            module.execute_province(p, ws, db);
+        }
+    }
+    return module.active_events();
+}
+
+// Events of `b` whose template and severity also occur in `a`.
+size_t shared_events(const std::vector<ActiveRandomEvent>& a,
+                     const std::vector<ActiveRandomEvent>& b) {
+    size_t shared = 0;
+    for (const auto& e : b)
+        for (const auto& f : a)
+            if (e.template_id == f.template_id && e.severity == f.severity) {
+                ++shared;
+                break;
+            }
+    return shared;
+}
+
+}  // namespace
+
+TEST_CASE("test_provinces_draw_independent_event_streams", "[random_events][tier1]") {
+    // Two provinces in identical condition: only the stream can tell them apart.
+    const auto events = roll_events(42, 2, 360);
+    std::vector<ActiveRandomEvent> p0, p1;
+    for (const auto& e : events)
+        (e.province_id == 0 ? p0 : p1).push_back(e);
+    REQUIRE(p0.size() >= 20);
+    REQUIRE(p1.size() >= 20);
+    CHECK(shared_events(p0, p1) * 10 < p1.size());
+}
+
+TEST_CASE("test_neighbouring_world_seeds_draw_independent_histories", "[random_events][tier1]") {
+    const auto a = roll_events(42, 1, 360);
+    const auto b = roll_events(43, 1, 360);
+    REQUIRE(a.size() >= 20);
+    REQUIRE(b.size() >= 20);
+    CHECK(shared_events(a, b) * 10 < b.size());
+}
+
 // ─── Cross-module trigger: pending_random_event_triggers drain ──────────────
 
 TEST_CASE("RandomEvents: drains pending_random_event_triggers and creates ActiveRandomEvent",
