@@ -4924,6 +4924,21 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         }
 
         stats["habitable_province_count"] = habitable;
+        {
+            // §9.5.1: what nation seeding was asked for and what the geography admitted.
+            static constexpr const char* kOutcome[] = {"achieved", "geography_limited",
+                                                       "undetermined", "no_candidates"};
+            const auto& r = world.nation_seed_report;
+            stats["nation_seeds"] = {
+                {"requested", r.requested},
+                {"placed", r.placed},
+                {"max_feasible", r.max_feasible},
+                {"max_feasible_exact", r.max_feasible_exact},
+                {"candidate_count", r.candidate_count},
+                {"separation_hops", r.separation_hops},
+                {"outcome", kOutcome[static_cast<uint8_t>(r.outcome)]},
+            };
+        }
         stats["ocean_province_count"] = ocean;
         stats["total_named_features"] = static_cast<int>(world.named_features.size());
         stats["total_pre_game_events"] = static_cast<int>(world.pre_game_events.size());
