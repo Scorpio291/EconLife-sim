@@ -565,6 +565,15 @@ struct GeographyProfile {
 // ---------------------------------------------------------------------------
 struct ClimateProfile {
     KoppenZone koppen_zone;
+    // Authoritative during B1: the value left here by the end of world-gen
+    // Stage 4 (simulate_atmosphere) is the climate every later stage reads,
+    // including the Koppen re-derivation (Pass 9), settlement attractiveness
+    // and nation formation. It is an interim value: 40% archetype temperature
+    // blended with 60% of a latitude curve plus elevation lapse rate, then
+    // adjusted by dice-rolled ocean currents (Pass 5). The archetype's own
+    // first-pass temperature (apply_archetype) is an input to that blend, not a
+    // second climate. Foundation phase B7 replaces all of it with climate that
+    // follows land, sea, currents, winds and relief (decision V8).
     float temperature_avg_c;
     float temperature_min_c;
     float temperature_max_c;
