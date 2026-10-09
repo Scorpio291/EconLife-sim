@@ -137,7 +137,7 @@ struct BiomeBiota { std::vector<Taxon> pool; float npp_gC_m2_yr; };
 
 ### L5–L7
 
-These already exist (cohorts, nutrition/health/schooling, hardiness, knowledge per province, grain logistics, polity stress, war, NPCs, player). This document adds only §4 (latency) and §5 (era).
+These already exist (cohorts, nutrition/health/schooling, hardiness, knowledge per province, grain logistics, polity stress, war, NPCs, player). This document adds only §4 (latency and physical time), §5 (era) and §6.1 (units).
 
 ---
 
@@ -164,6 +164,82 @@ struct LinkTransit {                  // extends ProvinceLink (same link grain_l
 
 **[SCENARIO]** *When* an order is sent between provinces 300 km apart by a society whose fastest technique is a mounted relay at 200 km/day, *then* it arrives no earlier than 1.5 days later.
 **[SCENARIO]** *When* both ends hold an electric telegraph on the link, *then* latency ≤ 1 tick.
+
+### 4.1 Four times, kept apart (R1 F-03)
+
+A message carries physical time. The integrator only decides *when the simulation looks at it*. Those are different quantities and must never overwrite each other.
+
+| Name | Meaning | Type, unit | Set by |
+|---|---|---|---|
+| `physical_event_time` (E) | the instant the sender committed the message | `int64` seconds | the sending mechanism |
+| `physical_arrival_time` (A) | the instant the carrier delivers it | `int64` seconds, `A = E + ceil(latency)` | the link, at send time, once |
+| `simulation_processing_time` (P) | the orchestrator step in which the receiver first sees it | `uint32` tick (the step's `current_tick`) | the deferred-work drain |
+| `actor_action_time` (R) | the instant stamped on anything the receiver does about it | `int64` seconds | the receiving mechanism |
+
+**Axis.** Physical time is integer seconds on one axis per world, with 0 at the start of tick 0. Tick `t` covers `[t·86 400, (t+1)·86 400)`. Years are 365 days (`kTicksPerYear`), matching the calendar in code. `int64` seconds spans ±2.9·10¹¹ years, which covers Deep Time without a second representation.
+
+**Units and rounding.**
+- Latency is computed in `double` from the link (km, km/day or m/s) and converted to seconds with **ceil**, never round or truncate. The `c` floor is a lower bound, so rounding may only push arrival later. 0.2 days becomes exactly 17 280 s.
+- A message between two distinct actors always has a latency of at least 1 s after rounding, because the distance or handling time is greater than zero. Consequently `A > E` holds for every message.
+- `P` is the first step whose `current_tick ≥ due_tick`, where `due_tick = ceil(A / 86 400)` in ticks. This is the existing `DeferredWorkItem::due_tick` drain rule (`due_tick <= current_tick`, `drain_deferred_work.cpp`). The payload keeps `A`, and `due_tick` is derived from it, never the other way round.
+
+**Invariant.** `E < A ≤ P_seconds` and `R ≥ A`. Here `P_seconds = P·86 400` is the instant the processing step represents.
+
+### 4.2 When the receiver can react
+
+The receiver can act on a message in step `P` and in no earlier step. Its reaction is a new event with `E' = R`, where `R = max(A, P_seconds)`. That reaction is then subject to its own latency, so `A' = R + ceil(latency')`. A reaction is never back-dated into a step the integrator has already closed, because those effects are already applied.
+
+What this guarantees **at every stride**:
+1. `A` is identical whatever the stride, since it is computed once at send time from `E` and the link.
+2. Nothing reacts before `A`.
+3. The reaction lag `R − A` is less than one step (one day in Play, up to 31 days in History at 12 steps/year).
+4. Messages processed in the same step are handled in the order of §4.3.
+
+What it does **not** guarantee: identical downstream outcomes at different strides. A coarser stride quantises reactions to its step, so a reply sent at day 12.2 at stride 365 is sent at day 30 or 31 at stride 12. Mechanisms that integrate over time may use `A` to apportion the step (for example, an exposure accrues from `A` to the step's end, not for the whole step). That is a per-mechanism choice and must be stated by the mechanism, not assumed by the integrator. The stride warning in CLAUDE.md ("Integration stride") applies: a measurement taken at a coarse stride measures the integration as well as the model.
+
+### 4.3 Ordering and tie-breaking
+
+The order in which pending messages are processed is a **total order** on the key
+
+`(A, E, sender_id, receiver_id, kind, sender_seq)`
+
+Each part of the key:
+- `kind` is the message type's stable id.
+- `sender_seq` is a per-sender `uint64` counter, incremented at each send.
+
+Each sender is processed by exactly one thread in a tick (province-parallel dispatch), so `sender_seq` is deterministic without a global lock. The key never depends on container iteration order, heap layout, pointer values or thread scheduling. This is the same principle `DeferredWorkComparator` already applies to `(due_tick, type, subject_id, payload)`. Messages extend that comparator; they do not get a second queue.
+
+**Causal order holds without a vector clock.** A reply to message M is created no earlier than `A_M`, and has latency of at least 1 s. So its own arrival satisfies `A' > A_M` and it sorts after M under the key.
+
+### 4.4 Per clock
+
+- **Deep Time** (world generation, L0–L4). There are no actors and no messages. Process time is geological and is stated in years (`int64`) or Myr (`double`) by each generator. Nothing from Deep Time enters the message queue.
+- **History** (12 steps/year, `current_tick` advances 30 or 31 ticks per step; see `society_evolution_harness.h`). The sender's `E` is the instant of the step that sent it (`current_tick·86 400`). This is the coarse integrator's resolution for *event* times, and it is documented as such. `A` is exact from there on. A message is processed at the first step at or after `A`.
+- **Play** (1 tick = 1 day). Same rules with a step of one day. `E` may carry sub-day precision when the sending mechanism has it (a scheduled departure time, for example). Otherwise it is the start of the tick.
+
+### 4.5 History → Play transition, and save/load
+
+- The tick axis is continuous from History into Play. If a rebase is ever introduced, it shifts `E`, `A`, `R` and `due_tick` by the same integer offset and changes nothing else.
+- Pending messages cross the transition unchanged, with their `E`, `A` and `sender_seq`. They are not re-stamped to the transition instant.
+- A save writes, for each pending message, `E`, `A`, sender, receiver, kind, `sender_seq` and the payload, in key order. It also writes each sender's next `sender_seq`. `due_tick` is derived on load. Loading therefore reproduces the same drain order as an uninterrupted run. This matches the existing save rule for `DeferredWorkQueue` (`persistence_module.cpp`, `write_deferred_work_queue`).
+
+### 4.6 Scenarios
+
+**[SCENARIO] Sub-day latency survives a coarse stride.**
+- *Given* a message sent at `E = day 10 + 0` on a link with 0.2 days of latency, *then* `A = 10·86 400 + 17 280` s at every stride.
+- At stride 365 it is processed on tick 11 (`due_tick = ceil(10.2) = 11`), and a reply has `E' = 11·86 400`.
+- At stride 12 it is processed at the first step with `current_tick ≥ 11`, and a reply has `E' =` that step's instant.
+- In both cases the stored `A` is the same, and no reaction is stamped before `A`.
+
+**[SCENARIO] Identical arrival timestamps.** *Given* two messages with the same `A` to one receiver from different senders, *then* they are processed in `(E, sender_id, …)` order. The order is identical whether they were enqueued in either order, and identical after a save/load between enqueue and processing.
+
+**[SCENARIO] History → Play.** *Given* a message sent in the last History step with `A` three days into Play, *then* it is processed on Play tick `ceil(A / 86 400)`, carrying its original `E` and `A`.
+
+**[SCENARIO] Save/load of pending information.** *Given* a world with pending messages that is saved and reloaded, *then* the sequence of `(A, receiver, kind)` processed over the next N ticks is identical to the uninterrupted run, and the next `sender_seq` for every sender is identical.
+
+**[SCENARIO] Causal order independent of container order.** *Given* the same messages inserted into the pending set in a shuffled order (shuffled by a seeded `DeterministicRNG`, several seeds), *then* the processing sequence is identical for all permutations. A reply always processes after the message that caused it.
+
+*This section is a contract only (R1 F-03). No scheduling infrastructure is implemented under it. The first mechanism that sends messages (B5 polity orders, or C1 price information) implements it, and implements these scenarios as tests.*
 
 ---
 
@@ -206,7 +282,30 @@ Use **C as the mechanism and D as the display**.
 | History | 12 orchestrator steps / year (CLAUDE.md "Integration stride") | L5–L6, planet at LOD 2 | Founding seed → entry date |
 | Play | 1 tick = 1 day | L5–L7 in the LOD 0 window, plus L3/L4 runtime feedback | Snapshot from history via persistence |
 
-Every process states its clock. A process that runs per tick must be correct at both the history and the play stride ("a per-tick rate is only correct if every tick runs").
+Every process states its clock. A process that runs per tick must be correct at both the history and the play stride ("a per-tick rate is only correct if every tick runs"). Physical times inside a clock follow §4.1.
+
+### 6.1 Units and precision (R1 F-09)
+
+There is no units framework. Each quantity uses one unit, named in the field's suffix, and conversion happens only at the boundaries listed here. New fields follow the convention already in the code.
+
+| Quantity | Unit and type | Existing examples | Notes |
+|---|---|---|---|
+| Simulation time | tick = 1 day, `uint32 current_tick`; 365-day year (`kTicksPerYear`) | `world_state.h`, `deferred_work.h` | Steps and gates are counted in ticks. |
+| Physical time (events, arrivals) | seconds, `int64`, 0 at the start of tick 0 | §4.1 (contract, not yet in code) | Latency is ceil-rounded to seconds. |
+| Geological time | years `int64`, or Myr `double`, stated per generator | world generation | Never mixed with ticks. |
+| Distance, length | km, `float` in world state, `double` in computation | `shared_border_km`, `coastal_length_km`, `length_km` | Suffix `_km`. |
+| Elevation, depth | m, `float` | `elevation_avg_m` | Suffix `_m`. |
+| Area | km², `float` stored, `double` from H3 | `area_km2` | |
+| Mass | tonnes | `transport_cost_per_km_per_tonne`, `tonnes_per_deposit_unit` | Goods quantities are in each good's own unit (CSV). A bridge to tonnes is an explicit, documented constant, never implicit. |
+| Position | `H3Index` (`uint64`) is authoritative | `ProvinceLink::neighbor_h3`, `Province::h3_index` | |
+| Latitude, longitude | degrees `float`, derived from `H3Index` (`h3_utils::cell_center_lat_lng`) | `GeographyProfile::latitude/longitude` | A cache. Recomputable from the cell. `float` resolves about 1 m at 180°, far below a res-4 cell (~47 km across). |
+
+**Precision at layer boundaries.**
+- Generation computes in `double` and stores in the world-state type (usually `float`).
+- Any quantity that is derived from another (lat/lng from H3, area from H3) is recomputed from its source rather than carried through a lossy chain.
+- Persistence writes exactly the stored type and nothing else (`write_float` for `float`, `write_u64` for `H3Index`). A save/load round trip is therefore bit-exact.
+- Accumulations use `double` in canonical order (good_id asc, province_id asc), as CLAUDE.md requires.
+- A value crossing from one layer to another keeps its unit. If a consumer needs another unit, it converts at its own boundary with a named function, never by a bare literal in an expression.
 
 ---
 

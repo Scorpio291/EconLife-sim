@@ -410,6 +410,24 @@ jobs:
           fi
           echo "Test name check passed."
 
+      - name: Verify the removed knowledge clock stays removed
+        run: |
+          # KnowledgeConfig::knowledge_rate was a constant bisected against a historical
+          # date (removed 2026-08-23). Research speed now derives from schooling, health
+          # and the knowledge-keepers a surplus frees. Comments may still name it as
+          # history; code and package data may not.
+          if grep -rnE '^[^/#*]*\bknowledge_rate\b' simulation/ packages/ tools/ \
+               --include="*.h" --include="*.cpp" --include="*.hpp" --include="*.json" \
+               --include="*.csv" --include="*.py" --include="*.sh"; then
+            echo "ERROR: knowledge_rate (the fitted knowledge clock) must not return."
+            exit 1
+          fi
+          if [ -e tools/calibration/calib_rate.sh ]; then
+            echo "ERROR: calib_rate.sh (the clock's fitting script) must not return."
+            exit 1
+          fi
+          echo "Knowledge clock check passed."
+
       - name: Verify no std::rand or system time in simulation
         run: |
           # Check for forbidden randomness sources.
