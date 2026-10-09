@@ -177,7 +177,7 @@ TEST_CASE("warfare: evenly-matched neighbours stay at peace", "[warfare][tier2]"
     CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);
 }
 
-TEST_CASE("warfare: annual gate — decisions fire once per year, not per tick", "[warfare][tier2]") {
+TEST_CASE("warfare: annual gate - decisions fire once per year, not per tick", "[warfare][tier2]") {
     WorldState w = dawn_world();
     WarfareConfig cfg = sure_cfg();
     add_polity(w, 100, 0, 100000, 1.5f);
@@ -458,7 +458,7 @@ TEST_CASE("warfare: repeated victories absorb the loser's polity (empire peace i
     CHECK(w.provinces[1].cohort_stats->war_death_fraction == 0.0f);
 }
 
-TEST_CASE("warfare: polity members pool power — the kingdom deters what a lone province cannot",
+TEST_CASE("warfare: polity members pool power - the kingdom deters what a lone province cannot",
           "[warfare][polity][tier2]") {
     WorldState w = dawn_world(0);
     WarfareConfig cfg = sure_cfg();
@@ -579,7 +579,7 @@ std::vector<uint8_t> make_warfare_blob(
 }
 }  // namespace
 
-TEST_CASE("warfare: the Alexander arc — a great commander conquers; his death fragments it",
+TEST_CASE("warfare: the Alexander arc - a great commander conquers; his death fragments it",
           "[warfare][conqueror][tier2]") {
     WorldState w = dawn_world(0);
     WarfareConfig cfg = sure_cfg();
@@ -618,7 +618,7 @@ TEST_CASE("warfare: the Alexander arc — a great commander conquers; his death 
     CHECK(mod.polity_of(1) == 1);
 }
 
-TEST_CASE("warfare: the Genghis reach — a steppe polity strikes past the grain radius",
+TEST_CASE("warfare: the Genghis reach - a steppe polity strikes past the grain radius",
           "[warfare][conqueror][tier2]") {
     // Chain A - B - C: a farming A's supply line to the 2-hop target C pays the ox
     // law on both legs (path ~0.25) and arrives too weak; a STEPPE A (herd-fed
@@ -645,7 +645,7 @@ TEST_CASE("warfare: the Genghis reach — a steppe polity strikes past the grain
     CHECK(run(0.05f) > 0.0f);  // steppe cavalry: the ox does not bind the herd-fed
 }
 
-TEST_CASE("warfare: the Rome hold — integration needs tenure AND a route for administration",
+TEST_CASE("warfare: the Rome hold - integration needs tenure AND a route for administration",
           "[warfare][conqueror][tier2]") {
     auto run = [](bool long_held, bool with_route) {
         WorldState w = dawn_world(0);

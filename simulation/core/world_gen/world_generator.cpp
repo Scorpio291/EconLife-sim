@@ -648,10 +648,6 @@ WorldGenerator::ProvinceArchetype WorldGenerator::assign_archetype(Deterministic
 
 void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype archetype,
                                      DeterministicRNG& rng, const WorldGeneratorConfig& config) {
-    // Base values — varied by archetype.
-    float lat_base = 30.0f + rng.next_float() * 30.0f;   // 30-60 degrees
-    float lon_base = -20.0f + rng.next_float() * 80.0f;  // -20 to 60
-
     switch (archetype) {
         case ProvinceArchetype::industrial_hub:
             province.geography.terrain_roughness = 0.2f + rng.next_float() * 0.2f;
@@ -690,7 +686,6 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
             province.climate.koppen_zone = KoppenZone::Cfa;
             province.climate.precipitation_mm = 700.0f + rng.next_float() * 500.0f;
             province.energy_cost_baseline = 0.05f + rng.next_float() * 0.03f;
-            lat_base = 25.0f + rng.next_float() * 20.0f;  // warmer
             break;
 
         case ProvinceArchetype::resource_rich:
@@ -710,7 +705,6 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
             province.demographics.income_high_fraction = 0.25f;
             province.climate.koppen_zone = KoppenZone::Dfb;  // continental
             province.energy_cost_baseline = 0.03f + rng.next_float() * 0.02f;
-            lat_base = 45.0f + rng.next_float() * 15.0f;  // northern
             break;
 
         case ProvinceArchetype::coastal_trade:
@@ -783,15 +777,17 @@ void WorldGenerator::apply_archetype(Province& province, ProvinceArchetype arche
         province.demographics.total_population = std::max(200u, static_cast<uint32_t>(scaled));
     }
 
-    // Common geography fields.
-    province.geography.latitude = lat_base;
-    province.geography.longitude = lon_base;
+    // Common geography fields. Where the province is and how big it is are facts of
+    // its H3 cell, not of its archetype: the climate follows from the position.
+    const h3_utils::LatLngDeg centre = h3_utils::cell_center_lat_lng(province.h3_index);
+    province.geography.latitude = static_cast<float>(centre.lat);
+    province.geography.longitude = static_cast<float>(centre.lng);
     province.geography.elevation_avg_m = 50.0f + rng.next_float() * 800.0f;
-    province.geography.area_km2 = 1500.0f + rng.next_float() * 600.0f;
+    province.geography.area_km2 = static_cast<float>(h3_utils::cell_area_km2(province.h3_index));
 
     // Common climate fields.
     province.climate.temperature_avg_c =
-        25.0f - province.geography.latitude * 0.3f + rng.next_float() * 5.0f;
+        25.0f - std::abs(province.geography.latitude) * 0.3f + rng.next_float() * 5.0f;
     province.climate.temperature_min_c =
         province.climate.temperature_avg_c - 15.0f - rng.next_float() * 10.0f;
     province.climate.temperature_max_c =
@@ -1962,7 +1958,8 @@ void WorldGenerator::simulate_atmosphere(WorldState& world, DeterministicRNG& rn
     // -----------------------------------------------------------------------
     static constexpr float kLapseRateCPerM = 0.0065f;
     for (auto& prov : world.provinces) {
-        float base_temp = a.temp_equator_c - std::abs(prov.geography.latitude) * a.temp_lat_rate;
+        const float lat = prov.geography.latitude;
+        float base_temp = a.temp_equator_c - a.temp_lat_curvature * lat * lat;
         float lapse = prov.geography.elevation_avg_m * kLapseRateCPerM;
         float phys_temp = base_temp - lapse;
 
@@ -3270,7 +3267,8 @@ void WorldGenerator::detect_special_features(WorldState& world, DeterministicRNG
                                              const WorldGeneratorConfig& config) {
     const auto& t = config.terrain;
     for (auto& prov : world.provinces) {
-        const float lat = prov.geography.latitude;
+        // Polar distance, not sign: Patagonia has fjords and Antarctica permafrost.
+        const float lat = std::abs(prov.geography.latitude);
         const KoppenZone kz = prov.climate.koppen_zone;
 
         // ---- Permafrost ----
@@ -4926,6 +4924,21 @@ nlohmann::json WorldGenerator::to_encyclopedia_json(const WorldState& world,
         }
 
         stats["habitable_province_count"] = habitable;
+        {
+            // §9.5.1: what nation seeding was asked for and what the geography admitted.
+            static constexpr const char* kOutcome[] = {"achieved", "geography_limited",
+                                                       "undetermined", "no_candidates"};
+            const auto& r = world.nation_seed_report;
+            stats["nation_seeds"] = {
+                {"requested", r.requested},
+                {"placed", r.placed},
+                {"max_feasible", r.max_feasible},
+                {"max_feasible_exact", r.max_feasible_exact},
+                {"candidate_count", r.candidate_count},
+                {"separation_hops", r.separation_hops},
+                {"outcome", kOutcome[static_cast<uint8_t>(r.outcome)]},
+            };
+        }
         stats["ocean_province_count"] = ocean;
         stats["total_named_features"] = static_cast<int>(world.named_features.size());
         stats["total_pre_game_events"] = static_cast<int>(world.pre_game_events.size());

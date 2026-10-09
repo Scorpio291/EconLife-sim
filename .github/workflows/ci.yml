@@ -44,9 +44,9 @@ jobs:
         # h3.pdb as their PDB output; with unconstrained `/m` MSBuild
         # races them and one loses with LNK1201 "error writing to
         # program database". `-j 2` is sufficient headroom for our own
-        # targets while preventing the h3 PDB race. Linux uses the
-        # unconstrained Ninja/Make parallelism (where this race
-        # doesn't exist).
+        # targets while preventing the h3 PDB race. Linux is bounded
+        # too (see each branch below): unbounded Make parallelism runs
+        # the runner out of memory.
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
@@ -61,7 +61,11 @@ jobs:
             # and same remedy as the sanitizer cell below.
             cmake --build build --config ${{ matrix.build_type }} -j 2
           else
-            cmake --build build --config ${{ matrix.build_type }} -j
+            # Linux Release: bounded by the core count. A bare `-j` means NO
+            # limit under Make, so every translation unit compiles at once; as
+            # the target count grew the runner was OOM-killed ("Killed signal
+            # terminated program cc1plus", runner shutdown, exit 143).
+            cmake --build build --config ${{ matrix.build_type }} -j "$(nproc)"
           fi
 
       - name: Run unit tests
@@ -397,6 +401,18 @@ jobs:
             exit 1
           fi
           echo "Dependency direction check passed."
+
+      - name: Verify test names are ASCII
+        run: |
+          # ctest passes each Catch2 test name back to the test binary as a filter.
+          # On Windows that round trip mangles non-ASCII characters (an em dash
+          # arrives as "ΓÇö"), the filter matches nothing and the test fails there
+          # while passing on Linux. Keep test names ASCII.
+          if grep -rnP '(TEST_CASE|TEST_CASE_METHOD|SCENARIO)\((\s*\w+\s*,)?\s*"[^"]*[^\x00-\x7F]' simulation/tests; then
+            echo "ERROR: test names must be ASCII (use '-' for a dash)."
+            exit 1
+          fi
+          echo "Test name check passed."
 
       - name: Verify no std::rand or system time in simulation
         run: |

@@ -20,6 +20,7 @@ add_library(econlife_core STATIC
     world_gen/premarket_genesis.cpp
     world_gen/world_generator.cpp
     world_gen/nation_generator.cpp
+    world_gen/nation_seed_placement.cpp
     world_gen/settlement_generator.cpp
     world_gen/facility_generator.cpp
     world_gen/h3_utils.cpp

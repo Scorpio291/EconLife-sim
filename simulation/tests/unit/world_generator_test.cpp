@@ -160,7 +160,11 @@ TEST_CASE("WorldGenerator  - generates valid WorldState", "[world_gen][generator
     CHECK(world.current_tick == 0);
     CHECK(world.world_seed == 12345);
     CHECK(world.provinces.size() == 6);
-    CHECK(world.nations.size() >= 2);  // form_nations creates multiple nations
+    // Six adjacent cells cannot hold two nation seeds the spec's separation
+    // apart (§9.5.1), so the V1 window is one nation, as the Feature Tier List
+    // scopes it. The count is whatever placement achieved, never forced.
+    CHECK(world.nations.size() == world.nation_seed_report.placed);
+    CHECK(world.nations.size() >= 1);
     CHECK(world.region_groups.size() == 6);
     CHECK_FALSE(world.significant_npcs.empty());
     CHECK_FALSE(world.npc_businesses.empty());
@@ -533,7 +537,7 @@ TEST_CASE("WorldGenerator  - nation structure valid", "[world_gen][nation]") {
 
     auto world = WorldGenerator::generate(config);
 
-    REQUIRE(world.nations.size() >= 2);  // form_nations creates multiple nations
+    REQUIRE(world.nations.size() >= 1);  // V1 window: one nation (§9.5.1 separation)
     const auto& nation = world.nations[0];
     CHECK(nation.id == 0);
     CHECK_FALSE(nation.name.empty());
@@ -971,7 +975,7 @@ TEST_CASE("WorldGenerator - fjord provinces satisfy geographic preconditions",
             CHECK_FALSE(p.geography.is_landlocked);
             CHECK(p.geography.coastal_length_km > 100.0f);
             CHECK(p.geography.terrain_roughness > 0.55f);
-            CHECK(p.geography.latitude > 50.0f);
+            CHECK(std::abs(p.geography.latitude) > 50.0f);
             // Fjord Maritime links must have elevated transit cost (>= default 0.2).
             for (const auto& link : p.links) {
                 if (link.type == LinkType::Maritime) {
@@ -1033,32 +1037,34 @@ TEST_CASE("WorldGenerator - stages 5-9 are deterministic", "[world_gen][determin
 
 TEST_CASE("WorldGenerator - elevation correlates with terrain roughness after refinement",
           "[world_gen][geography]") {
-    // High-roughness provinces must have higher elevation than low-roughness ones.
-    // With roughness_factor = 0.30 + roughness * 1.50:
-    //   roughness 0.10 → factor 0.45; roughness 0.80 → factor 1.50
-    // So a roughness-0.80 province must have significantly higher elevation.
-    for (uint64_t seed = 1; seed <= 10; ++seed) {
+    // Refinement scales each province's base elevation by
+    // elev_roughness_base + roughness * elev_roughness_range, so rough country stands
+    // higher than flat country ON AVERAGE. The base elevation is drawn independently
+    // of roughness, so one rough province can still sit below one flat one in a
+    // single six-province world; the claim is about the population, and is tested
+    // there: pooled over many worlds, mean elevation of rough provinces exceeds that
+    // of flat ones.
+    double rough_sum = 0.0, flat_sum = 0.0;
+    int rough_n = 0, flat_n = 0;
+    for (uint64_t seed = 1; seed <= 60; ++seed) {
         WorldGeneratorConfig config{};
         config.seed = seed;
         config.province_count = 6;
         config.npc_count = 50;
         auto world = WorldGenerator::generate(config);
-
-        float max_roughness = 0.0f, max_elevation_at_max_roughness = 0.0f;
-        float min_roughness = 1.0f, min_elevation_at_min_roughness = 99999.0f;
         for (const auto& p : world.provinces) {
-            if (p.geography.terrain_roughness > max_roughness) {
-                max_roughness = p.geography.terrain_roughness;
-                max_elevation_at_max_roughness = p.geography.elevation_avg_m;
-            }
-            if (p.geography.terrain_roughness < min_roughness) {
-                min_roughness = p.geography.terrain_roughness;
-                min_elevation_at_min_roughness = p.geography.elevation_avg_m;
+            if (p.geography.terrain_roughness >= 0.5f) {
+                rough_sum += static_cast<double>(p.geography.elevation_avg_m);
+                ++rough_n;
+            } else if (p.geography.terrain_roughness <= 0.25f) {
+                flat_sum += static_cast<double>(p.geography.elevation_avg_m);
+                ++flat_n;
             }
         }
-        // Most-rough province must be higher than least-rough (across the world).
-        CHECK(max_elevation_at_max_roughness > min_elevation_at_min_roughness);
     }
+    REQUIRE(rough_n > 20);
+    REQUIRE(flat_n > 20);
+    CHECK(rough_sum / rough_n > 1.5 * (flat_sum / flat_n));
 }
 
 TEST_CASE("WorldGenerator - temperature decreases with elevation (lapse rate)",
@@ -2668,7 +2674,7 @@ TEST_CASE("WorldGenerator  - population: JSON includes settlement fields",
 // Stage 9.5 — Nation formation tests
 // ===========================================================================
 
-TEST_CASE("WorldGenerator  - nations: multiple nations formed from 6 provinces",
+TEST_CASE("WorldGenerator  - nations: 6 adjacent provinces form one nation",
           "[world_gen][nations]") {
     WorldGeneratorConfig config{};
     config.seed = 42;
@@ -2677,10 +2683,17 @@ TEST_CASE("WorldGenerator  - nations: multiple nations formed from 6 provinces",
 
     auto world = WorldGenerator::generate(config);
 
-    // With 6 provinces, expect at least 2 nations (spec minimum for geopolitical tension).
-    CHECK(world.nations.size() >= 2);
-    // Should not exceed province count.
-    CHECK(world.nations.size() <= 6);
+    // Six adjacent res-4 cells are at most two hops across, and seeds must be more
+    // than seed_separation (3) hops apart: the geography holds exactly one seed.
+    // The spec asks for more (min(clamp(sqrt(6) x 1.8, 20, 400), 6) = 6) and the
+    // report says the geography, not the selection, is why it got one.
+    const auto& rep = world.nation_seed_report;
+    CHECK(world.nations.size() == 1);
+    CHECK(rep.requested == rep.candidate_count);
+    CHECK(rep.placed == 1);
+    CHECK(rep.max_feasible == 1);
+    CHECK(rep.max_feasible_exact);
+    CHECK(rep.outcome == NationSeedOutcome::geography_limited);
 }
 
 TEST_CASE("WorldGenerator  - nations: every province assigned to a nation",
@@ -2911,32 +2924,31 @@ TEST_CASE("WorldGenerator  - nomadic: JSON includes nomadic fields", "[world_gen
 TEST_CASE("WorldGenerator  - nations: target count formula scales correctly",
           "[world_gen][nations][scalability]") {
     // The spec formula is: sqrt(habitable) * 1.8, clamped [20, 400].
-    // For V1 with 6 provinces: sqrt(6) * 1.8 ≈ 4.4; graceful fallback below 20.
-    // For 100 provinces: sqrt(100) * 1.8 = 18; still below 20 minimum.
-    // For 200 provinces: sqrt(200) * 1.8 ≈ 25.5; above 20 minimum.
-    // We test the formula indirectly through nation count vs province count.
+    // It is capped at the habitable count, since a seed needs a province.
     WorldGeneratorConfig config{};
     config.seed = 42;
     config.npc_count = 50;
 
-    SECTION("6 provinces produces 2-6 nations") {
-        config.province_count = 6;
+    // The formula sets the REQUEST; the separation rule decides what the
+    // geography admits. Check both halves: requested follows the formula, and
+    // nations equal what placement achieved.
+    auto requested_for = [&](uint32_t habitable) {
+        const auto& nfp = config.nation_formation;
+        uint32_t raw =
+            static_cast<uint32_t>(std::sqrt(static_cast<float>(habitable)) * nfp.seed_count_scale);
+        return std::min(std::clamp(raw, nfp.seed_count_min, nfp.seed_count_max), habitable);
+    };
+    for (uint32_t provinces : {2u, 4u, 6u, 40u, 100u, 200u}) {
+        config.province_count = provinces;
         auto world = WorldGenerator::generate(config);
-        CHECK(world.nations.size() >= 2);
-        CHECK(world.nations.size() <= 6);
-    }
-
-    SECTION("4 provinces produces at least 2 nations") {
-        config.province_count = 4;
-        auto world = WorldGenerator::generate(config);
-        CHECK(world.nations.size() >= 2);
-        CHECK(world.nations.size() <= 4);
-    }
-
-    SECTION("2 provinces produces exactly 2 nations") {
-        config.province_count = 2;
-        auto world = WorldGenerator::generate(config);
-        CHECK(world.nations.size() == 2);
+        const auto& rep = world.nation_seed_report;
+        INFO("provinces " << provinces);
+        CHECK(rep.requested == requested_for(rep.candidate_count));
+        CHECK(world.nations.size() == rep.placed);
+        CHECK(rep.placed <= rep.requested);
+        CHECK(rep.placed >= 1);
+        if (provinces <= 6)
+            CHECK(rep.placed == 1);  // a compact window is one seed's worth of geography
     }
 }
 
@@ -2952,7 +2964,7 @@ TEST_CASE("WorldGenerator  - nations: config params respected", "[world_gen][nat
         config_high.nation_formation.maritime_resistance = 10.0f;
         auto world = WorldGenerator::generate(config_high);
         // Just check it doesn't crash and produces valid nations.
-        CHECK(world.nations.size() >= 2);
+        CHECK(world.nations.size() >= 1);
         for (const auto& n : world.nations) {
             CHECK(!n.province_ids.empty());
         }
@@ -3822,5 +3834,61 @@ TEST_CASE("WorldGenerator: planetary_params carried to generated world", "[world
 
     auto world = WorldGenerator::generate(config);
     CHECK(world.provinces.size() == 6);
-    CHECK(world.nations.size() >= 2);
+    CHECK(world.nations.size() >= 1);
+}
+
+// ---------------------------------------------------------------------------
+// B1 (Simulation Foundation v01 §7): a province's position and size are facts of
+// its H3 cell, not of its economic archetype.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("WorldGenerator - latitude, longitude and area come from the H3 cell",
+          "[world_gen][b1]") {
+    for (uint64_t seed = 1; seed <= 20; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            LatLng centre{};
+            REQUIRE(cellToLatLng(p.h3_index, &centre) == E_SUCCESS);
+            CHECK_THAT(p.geography.latitude,
+                       Catch::Matchers::WithinAbs(radsToDegs(centre.lat), 1e-4));
+            CHECK_THAT(p.geography.longitude,
+                       Catch::Matchers::WithinAbs(radsToDegs(centre.lng), 1e-4));
+            double area = 0.0;
+            REQUIRE(cellAreaKm2(p.h3_index, &area) == E_SUCCESS);
+            CHECK_THAT(p.geography.area_km2, Catch::Matchers::WithinRel(area, 1e-5));
+        }
+    }
+}
+
+TEST_CASE("WorldGenerator - H3 neighbours differ in latitude by at most one cell diameter",
+          "[world_gen][b1]") {
+    // Scenario from Simulation Foundation v01 §7 (B1). A res-4 cell is ~1,770 km^2,
+    // i.e. ~45 km across; one cell diameter is well under one degree of latitude
+    // (111 km). Before B1 each province drew its latitude from its archetype, and
+    // neighbouring provinces sat up to 35 degrees apart.
+    for (uint64_t seed = 1; seed <= 20; ++seed) {
+        WorldGeneratorConfig config{};
+        config.seed = seed;
+        config.province_count = 6;
+        config.npc_count = 50;
+        auto world = WorldGenerator::generate(config);
+        for (const auto& p : world.provinces) {
+            const double diameter_deg =
+                2.0 * std::sqrt(static_cast<double>(p.geography.area_km2) / 3.14159265) / 111.0;
+            for (const auto& link : p.links) {
+                if (link.type == LinkType::Maritime)
+                    continue;  // a sea route need not join adjacent cells
+                auto it = world.h3_province_map.find(link.neighbor_h3);
+                if (it == world.h3_province_map.end())
+                    continue;
+                const auto& q = world.provinces[it->second];
+                CHECK(static_cast<double>(std::abs(p.geography.latitude - q.geography.latitude)) <=
+                      diameter_deg);
+            }
+        }
+    }
 }

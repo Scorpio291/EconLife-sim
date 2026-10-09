@@ -50,6 +50,29 @@ struct ProvinceLink {
 };
 
 // ---------------------------------------------------------------------------
+// NationSeedReport (WorldGen §9.5.1)
+// ---------------------------------------------------------------------------
+// What nation seed placement was asked for, what it placed, and why any gap
+// exists. A generation diagnostic like LoadingCommentary: written once by
+// NationGenerator::form_nations, exported in world.json, not persisted.
+enum class NationSeedOutcome : uint8_t {
+    achieved = 0,           // placed == requested
+    geography_limited = 1,  // placed == the most seeds the separation rule admits here (proven)
+    undetermined = 2,       // placed < requested, above the exact-search size, bound not tight
+    no_candidates = 3,      // no habitable province to seed
+};
+
+struct NationSeedReport {
+    uint32_t requested = 0;           // spec target: sqrt(habitable) x scale, clamped, <= habitable
+    uint32_t placed = 0;              // seeds actually placed
+    uint32_t max_feasible = 0;        // upper bound on separated seeds in this geography
+    bool max_feasible_exact = false;  // true when max_feasible is the exact maximum
+    uint32_t candidate_count = 0;     // habitable provinces considered
+    uint32_t separation_hops = 0;     // seeds are more than this many link hops apart
+    NationSeedOutcome outcome = NationSeedOutcome::no_candidates;
+};
+
+// ---------------------------------------------------------------------------
 // WorldGenParameters
 // ---------------------------------------------------------------------------
 // Input parameters for the procedural world generation pipeline
@@ -542,6 +565,15 @@ struct GeographyProfile {
 // ---------------------------------------------------------------------------
 struct ClimateProfile {
     KoppenZone koppen_zone;
+    // Authoritative during B1: the value left here by the end of world-gen
+    // Stage 4 (simulate_atmosphere) is the climate every later stage reads,
+    // including the Koppen re-derivation (Pass 9), settlement attractiveness
+    // and nation formation. It is an interim value: 40% archetype temperature
+    // blended with 60% of a latitude curve plus elevation lapse rate, then
+    // adjusted by dice-rolled ocean currents (Pass 5). The archetype's own
+    // first-pass temperature (apply_archetype) is an input to that blend, not a
+    // second climate. Foundation phase B7 replaces all of it with climate that
+    // follows land, sea, currents, winds and relief (decision V8).
     float temperature_avg_c;
     float temperature_min_c;
     float temperature_max_c;

@@ -28,6 +28,12 @@ H3Index lat_lng_to_cell(double lat_deg, double lng_deg, int resolution) {
     return out;
 }
 
+LatLngDeg cell_center_lat_lng(H3Index cell) {
+    LatLng coords{};
+    check(cellToLatLng(cell, &coords), "cell_center_lat_lng");
+    return {radsToDegs(coords.lat), radsToDegs(coords.lng)};
+}
+
 std::vector<H3Index> grid_neighbors(H3Index cell) {
     // gridDisk(cell, 1) returns the cell itself plus all neighbors.
     // Max neighbors at k=1 is 7 (center + 6); 6 for pentagons (center + 5).

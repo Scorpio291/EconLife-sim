@@ -28,7 +28,7 @@ Rolls for random occurrences each tick per province using a Poisson probability 
 - Calendar module has executed (date context available for seasonal event weighting).
 - Province conditions (climate_stress_current, instability, infrastructure_rating) are current for this tick.
 - Event template registry loaded from `/data/events/event_templates.json` at startup; immutable during session.
-- RNG state is deterministic and reproducible from `world_seed + current_tick + province_id`.
+- RNG state is deterministic and reproducible from `world_seed`, `current_tick` and `province_id`, derived as `DeterministicRNG(world_seed).fork(current_tick).fork(province_id)` so that every (seed, tick, province) draws an independent stream. Combining the three by XOR or addition is forbidden: it makes province p at tick t draw what province 0 drew at tick t ^ p, and neighbouring world seeds draw each other's history.
 
 ## Postconditions
 - Each LOD 0 province has been evaluated for a new random event firing via the Poisson model.

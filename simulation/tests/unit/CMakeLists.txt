@@ -60,6 +60,8 @@ add_executable(econlife_unit_tests
     apply_deltas_test.cpp
     drain_deferred_work_test.cpp
     world_generator_test.cpp
+    nation_seed_placement_test.cpp
+    world_geography_test.cpp
     recipe_catalog_test.cpp
     era_catalog_test.cpp
     world_class_test.cpp

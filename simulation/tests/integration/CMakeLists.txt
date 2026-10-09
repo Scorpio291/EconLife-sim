@@ -55,6 +55,7 @@ catch_discover_tests(econlife_integration_tests
 # ---------------------------------------------------------------------------
 add_executable(econlife_emergence_tests
     emergence_observe.cpp
+    legitimacy_trace_observe.cpp
     emergence_test.cpp
     society_evolution_observe.cpp
 )
@@ -102,6 +103,7 @@ set_tests_properties(emergence_behavioral_suite PROPERTIES
 # ---------------------------------------------------------------------------
 add_executable(econlife_player_loop_tests
     player_loop_test.cpp
+    player_career_scenarios_test.cpp
     player_loop_observe.cpp
 )
 

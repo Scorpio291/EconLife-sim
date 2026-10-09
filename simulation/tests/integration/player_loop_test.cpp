@@ -28,12 +28,26 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
+// The career ratchets below follow ONE long session in one world, chosen because
+// its start province has a going concern the 50k opening balance can buy for cash
+// on day 60 and staffing headroom for the investment ratchet to measure. That is
+// a property of the generated world, not of the loop under test: across seeds
+// 40-59 a cash buy is open on day 60 in 10 worlds and a financed one in 18
+// ("[.career_report]" in player_career_scenarios_test.cpp prints the table).
+//
+// The session is kept as a deterministic positive scenario. It is not the only
+// evidence that a player can get into business: player_career_scenarios_test.cpp
+// checks the entry path (affordable firm and willing owner, insufficient funds,
+// owner refusal, no firm nearby) in several worlds, each with its own
+// precondition, so no conclusion rests on this seed.
+constexpr uint64_t kCareerSeed = 47;
+
 // One standard play session, shared by the ratchets below so a full year is
 // simulated once rather than once per assertion.
 const PlayerRun& standard_session() {
     static const PlayerRun run_once = [] {
         RunConfig cfg{};
-        cfg.seed = 42;
+        cfg.seed = kCareerSeed;
         cfg.npc_count = 500;
         cfg.province_count = 6;
         cfg.ticks = 365;
@@ -341,7 +355,7 @@ TEST_CASE("player_loop: a saved game reloads to the state it was saved in", "[pl
     REQUIRE_THAT(resumed.world.player->age, WithinAbs(age, 0.0001f));
 }
 
-TEST_CASE("player_loop: the save image is complete — save, load, save is byte-identical",
+TEST_CASE("player_loop: the save image is complete - save, load, save is byte-identical",
           "[player_loop]") {
     // Anything the save covers must survive the trip unchanged. This is the
     // check that catches a field written but not read, or read into the wrong
@@ -566,10 +580,11 @@ TEST_CASE("player_loop: a career survives being put down and picked up again", "
     uint32_t workers_at_close = 0;
 
     {
-        Session first(42, 500, 6);
+        Session first(kCareerSeed, 500, 6);
         first.play(60);  // let the world settle; a firm trading for a season is
                          // a firm you can buy
-        first.play(1, buy_a_business_at_tick(first.world.current_tick));
+        // Offer, and re-offer weekly if turned down, for a month.
+        first.play(28, buy_a_business_at_tick(first.world.current_tick));
         first.play(120);  // due diligence closes, then a quarter of trading
 
         REQUIRE(first.world.player != nullptr);

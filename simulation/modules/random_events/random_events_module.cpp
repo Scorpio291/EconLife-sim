@@ -99,9 +99,13 @@ void RandomEventsModule::execute_province(uint32_t province_idx, const WorldStat
     if (province.lod_level != SimulationLOD::full)
         return;
 
-    uint64_t rng_seed = state.world_seed ^ static_cast<uint64_t>(state.current_tick) ^
-                        static_cast<uint64_t>(province.id);
-    DeterministicRNG rng(rng_seed);
+    // One stream per (world seed, tick, province), each fork avalanching the bits.
+    // The seed used to be world_seed ^ tick ^ province.id: XOR let province p at
+    // tick t draw exactly what province 0 drew at tick t ^ p, and neighbouring world
+    // seeds draw each other's history, so every province suffered the same events a
+    // tick apart and seeds 42-45 lived one history.
+    DeterministicRNG rng =
+        DeterministicRNG(state.world_seed).fork(state.current_tick).fork(province.id);
 
     process_active_events(state, province, province_delta);
     roll_for_new_event(state, province, rng, province_delta);

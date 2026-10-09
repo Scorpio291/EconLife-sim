@@ -241,9 +241,14 @@ struct WorldGeneratorConfig {
     // AtmosphereParams — thresholds for Stage 4 atmosphere pass
     // -----------------------------------------------------------------------
     struct AtmosphereParams {
-        // Base temperature from latitude: T = temp_equator - |lat| * temp_lat_rate
-        float temp_equator_c = 30.0f;
-        float temp_lat_rate = 0.70f;  // °C per degree latitude
+        // Base sea-level temperature from latitude: T = temp_equator - temp_lat_curvature * lat²
+        // (lat in degrees). Fitted to Earth's observed zonal-mean annual surface
+        // temperature: ~26 °C at the equator, ~20 °C at 30°, ~8 °C at 50°, ~0 °C at 60°,
+        // ~-21 °C at 80°. A straight line cannot hold that shape: the old 0.70 °C per
+        // degree from 30 °C put 54° N at -8 °C, tundra where Hamburg and Moscow stand.
+        // Once PlanetaryParameters drives insolation (B6) this becomes derived.
+        float temp_equator_c = 27.0f;
+        float temp_lat_curvature = 0.0075f;  // °C per degree² of latitude
 
         // Continentality: 1.0 - 1.0/(1.0 + distance_proxy * cont_decay)
         float cont_decay = 0.005f;            // decay rate for distance-to-coast proxy
@@ -427,6 +432,23 @@ class WorldGenerator {
     static void write_encyclopedia_json(const WorldState& world, const WorldGeneratorConfig& config,
                                         const std::string& path);
 
+    // The two terrain mechanisms below are pure functions of fields already set
+    // on the provinces (no RNG), and public so they can be tested on constructed
+    // provinces rather than only through averages over generated worlds.
+
+    // Stage 4a — Province geography refinement (WorldGen v0.18; simplified pass).
+    // Applies terrain_roughness → elevation correlation so mountainous provinces have
+    // physically consistent altitude. Applies elevation lapse rate to all three
+    // temperature fields (6.5 °C / 1 000 m environmental lapse rate).
+    // Must run BEFORE detect_terrain_flags() so mountain pass detection uses corrected
+    // elevation. No RNG needed — fully deterministic from already-set Province fields.
+    static void refine_province_geography(WorldState& world, const WorldGeneratorConfig& config);
+
+    // Stage 2 derived — Terrain flag detection (WorldGen v0.18).
+    // Detects mountain passes (high-terrain chokepoints) and island isolation.
+    // Must run after create_province_links() so ProvinceLink vectors are populated.
+    static void detect_terrain_flags(WorldState& world, const WorldGeneratorConfig& config);
+
    private:
     // Province archetypes for economic diversity.
     enum class ProvinceArchetype : uint8_t {
@@ -495,19 +517,6 @@ class WorldGenerator {
     // derived values. Must run after generate_plates() and create_province_links().
     static void calculate_hydrology(WorldState& world, DeterministicRNG& rng,
                                     const WorldGeneratorConfig& config);
-
-    // Stage 2 derived — Terrain flag detection (WorldGen v0.18).
-    // Detects mountain passes (high-terrain chokepoints) and island isolation.
-    // Must run after create_province_links() so ProvinceLink vectors are populated.
-    static void detect_terrain_flags(WorldState& world, const WorldGeneratorConfig& config);
-
-    // Stage 4a — Province geography refinement (WorldGen v0.18; simplified pass).
-    // Applies terrain_roughness → elevation correlation so mountainous provinces have
-    // physically consistent altitude. Applies elevation lapse rate to all three
-    // temperature fields (6.5 °C / 1 000 m environmental lapse rate).
-    // Must run BEFORE detect_terrain_flags() so mountain pass detection uses corrected
-    // elevation. No RNG needed — fully deterministic from already-set Province fields.
-    static void refine_province_geography(WorldState& world, const WorldGeneratorConfig& config);
 
     // Stage 4b — Economic geography seeding (WorldGen v0.18; simplified pass).
     // Derives trade_openness from port_capacity + river_access + landlocked/island status,
