@@ -398,6 +398,36 @@ jobs:
           fi
           echo "Dependency direction check passed."
 
+      - name: Verify test names are ASCII
+        run: |
+          # ctest passes each Catch2 test name back to the test binary as a filter.
+          # On Windows that round trip mangles non-ASCII characters (an em dash
+          # arrives as "ΓÇö"), the filter matches nothing and the test fails there
+          # while passing on Linux. Keep test names ASCII.
+          if grep -rnP '(TEST_CASE|TEST_CASE_METHOD|SCENARIO)\((\s*\w+\s*,)?\s*"[^"]*[^\x00-\x7F]' simulation/tests; then
+            echo "ERROR: test names must be ASCII (use '-' for a dash)."
+            exit 1
+          fi
+          echo "Test name check passed."
+
+      - name: Verify the removed knowledge clock stays removed
+        run: |
+          # KnowledgeConfig::knowledge_rate was a constant bisected against a historical
+          # date (removed 2026-08-23). Research speed now derives from schooling, health
+          # and the knowledge-keepers a surplus frees. Comments may still name it as
+          # history; code and package data may not.
+          if grep -rnE '^[^/#*]*\bknowledge_rate\b' simulation/ packages/ tools/ \
+               --include="*.h" --include="*.cpp" --include="*.hpp" --include="*.json" \
+               --include="*.csv" --include="*.py" --include="*.sh"; then
+            echo "ERROR: knowledge_rate (the fitted knowledge clock) must not return."
+            exit 1
+          fi
+          if [ -e tools/calibration/calib_rate.sh ]; then
+            echo "ERROR: calib_rate.sh (the clock's fitting script) must not return."
+            exit 1
+          fi
+          echo "Knowledge clock check passed."
+
       - name: Verify no std::rand or system time in simulation
         run: |
           # Check for forbidden randomness sources.

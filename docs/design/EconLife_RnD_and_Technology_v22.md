@@ -5,11 +5,14 @@
 
 ---
 
+> **Era numbering (2026-10-08, decision V5):** every era number in this document follows `packages/base_game/eras/eras.csv` — Era 1 = Neolithic … Era 7 = Industrial, **Era 8 = Turn of the Millennium (2000)**, Era 12 = Transition (2024), Era 17 = Divergence. Before this date this document counted Era 1 = 2000; those references were shifted by +7. Prefer the `era_key` (e.g. `turn_of_millennium`) when writing new text. See `EconLife_Simulation_Foundation_v01.md` §5.
+
+
 ## Purpose
 
 This document specifies three deeply connected systems:
 
-1. **The Era System** — the game begins in the year 2000 and time advances, changing what technology exists, what regulations apply, and how the world economy is structured. This framework now extends to Era 10 (~2250) with full scope markers for V1 and EX content.
+1. **The Era System** — the game begins in the year 2000 and time advances, changing what technology exists, what regulations apply, and how the world economy is structured. This framework now extends to Era 17 (~2250) with full scope markers for V1 and EX content.
 
 2. **Research & Development** — the mechanism by which technology advances. Without R&D, manufacturing is static. With it, players can be ahead of history or behind it.
 
@@ -42,29 +45,29 @@ Simulated time passes at a configurable rate. The default: **1 game year ≈ 6 r
 
 ### Eras
 
-The simulation divides history into ten eras. Era transitions are not hard cutoffs — they are thresholds on accumulated global conditions that trigger new events, regulations, and technology unlocks. Player choices can accelerate or delay transitions.
+This document specifies the modern and future eras 8–17 of the 17-era ladder in `packages/base_game/eras/eras.csv` (eras 1–7, Neolithic → Industrial, are in `EconLife_Historical_Eras_and_Tech_Arc.md`). Era transitions are not hard cutoffs — they are thresholds on accumulated global conditions that trigger new events, regulations, and technology unlocks. Player choices can accelerate or delay transitions.
 
 ```cpp
 enum class SimulationEra : uint8_t {
     // V1 ERAS — fully specified; Bootstrapper generates all content
-    era_1_turn_of_millennium,  // 2000–2007: Globalization peak, pre-crisis, pre-smartphone
-    era_2_disruption,          // 2007–2013: Financial crisis, smartphone revolution, social media
-    era_3_acceleration,        // 2013–2019: App economy, early EVs, shale revolution, gig economy
-    era_4_fracture,            // 2019–2024: COVID shock, deglobalization, EV mainstream, AI emergence
-    era_5_transition,          // 2024–2035: Energy transition, AI integration, supply chain rebalancing
+    era_8_turn_of_millennium,  // 2000–2007: Globalization peak, pre-crisis, pre-smartphone
+    era_9_disruption,          // 2007–2013: Financial crisis, smartphone revolution, social media
+    era_10_acceleration,        // 2013–2019: App economy, early EVs, shale revolution, gig economy
+    era_11_fracture,            // 2019–2024: COVID shock, deglobalization, EV mainstream, AI emergence
+    era_12_transition,          // 2024–2035: Energy transition, AI integration, supply chain rebalancing
 
     // EX ERAS — engine must handle; content scaffolding is post-V1
-    era_6_convergence,         // 2035–2050: AI ubiquity, renewables dominant, genetic medicine
-    era_7_reckoning,           // 2050–2075: Climate consequences peak, fusion arrives, longevity medicine
-    era_8_synthesis,           // 2075–2100: Space economy, biological manufacturing, post-scarcity goods
-    era_9_expansion,           // 2100–2150: Interplanetary economy, radical materials, new governance
-    era_10_divergence,         // 2150–2250+: Civilization bifurcation, extreme technology, new paradigms
+    era_13_convergence,         // 2035–2050: AI ubiquity, renewables dominant, genetic medicine
+    era_14_reckoning,           // 2050–2075: Climate consequences peak, fusion arrives, longevity medicine
+    era_15_synthesis,           // 2075–2100: Space economy, biological manufacturing, post-scarcity goods
+    era_16_expansion,           // 2100–2150: Interplanetary economy, radical materials, new governance
+    era_17_divergence,         // 2150–2250+: Civilization bifurcation, extreme technology, new paradigms
 };
 ```
 
 **Era transition triggers** (all eras):
 - Simulated calendar year (primary threshold)
-- `global_climate_stress` accumulation (can accelerate Era 4/5/7 thresholds)
+- `global_climate_stress` accumulation (can accelerate Era 11/12/14 thresholds)
 - Global economic conditions (severe financial crises can trigger disruption eras early)
 - Cumulative technology unlock density (if players or NPCs rapidly advance a domain, era-level effects can trigger early)
 - Player actions (monopolizing or crashing a sector can accelerate structural change)
@@ -111,61 +114,61 @@ Additional eras (5→10) follow the same pattern with era-appropriate triggers (
 
 ### Era Descriptions
 
-#### Era 1 — Turn of the Millennium (2000–2007) [V1]
+#### Era 8 — Turn of the Millennium (2000–2007) [V1]
 Peak globalization. The internet is maturing. Feature phones dominate. Oil is cheap. China joins the WTO. Pharmaceutical patents are highly profitable. Climate change is a political talking point, not yet an economic force. The player enters a world of enormous opportunity and low disruption pressure.
 
 **Dominant industries:** Petroleum refining, automotive, consumer electronics, telecommunications, pharmaceuticals.
 **Key shock events:** 9/11 security response, early 2000s recession, dot-com hangover, China WTO accession (2001), early shale experimentation.
 
-#### Era 2 — Disruption (2007–2013) [V1]
+#### Era 9 — Disruption (2007–2013) [V1]
 The global financial crisis fractures the pre-2008 model. Smartphones arrive and destroy incumbent consumer electronics. Social media platforms begin capturing advertising spend. The app economy is born. First EVs appear (niche). Austerity reshapes public sector demand in many regions. Shale revolution transforms energy geopolitics.
 
 **Dominant industries:** Financial services (restructuring), mobile, social media, shale oil, pharmaceutical generics (patent cliffs hit).
 **Key shock events:** 2008 financial crisis, TARP, smartphone proliferation, Arab Spring (social media role), shale oil boom, Eurozone crisis.
 
-#### Era 3 — Acceleration (2013–2019) [V1]
+#### Era 10 — Acceleration (2013–2019) [V1]
 The app economy matures. Cloud computing becomes the dominant IT model. Early EVs expand from luxury to premium mass market. Renewable energy costs decline sharply — solar and wind become competitive without subsidy in some regions. Gig economy disrupts labor markets. Machine learning begins producing commercial applications.
 
 **Dominant industries:** Cloud services, EV early supply chain, renewable energy equipment, gig platforms, e-commerce logistics.
 **Key shock events:** Paris Agreement (2015), first commercial EV mass market, trade tensions (US/China decoupling beginning), GDPR, early autonomous vehicle development.
 
-#### Era 4 — Fracture (2019–2024) [V1]
+#### Era 11 — Fracture (2019–2024) [V1]
 COVID delivers a supply chain shock that exposes the fragility of hyperglobalization. Deglobalization accelerates. Semiconductor shortage reveals strategic vulnerability. EVs cross the mainstream threshold. Generative AI emerges as a commercial force. Geopolitical blocks harden. Inflation and rate shocks reshape capital allocation.
 
 **Dominant industries:** Onshore manufacturing, defense supply chains, AI software, EV mass market, pharmaceutical mRNA platforms.
 **Key shock events:** COVID-19 pandemic, global chip shortage, Russia-Ukraine war and energy shock, AI breakthrough (LLMs), EV adoption inflection.
 
-#### Era 5 — Transition (2024–2035) [V1]
+#### Era 12 — Transition (2024–2035) [V1]
 Energy transition becomes the dominant economic story. Renewables are the default new generation capacity. EV penetration crosses 50% in leading markets. AI is integrated into almost every industry. Supply chains are regionalized. Carbon pricing spreads. First commercial SMRs come online. Space economy begins.
 
 **Dominant industries:** Renewable energy, battery manufacturing, AI infrastructure, onshored semiconductor fabrication, reusable launch.
 **Key shock events:** First commercial fusion milestone (private), AGI precursor systems, SMR deployment, Antarctic ice sheet instability confirmed, carbon border adjustments.
 
-#### Era 6 — Convergence (2035–2050) [EX]
+#### Era 13 — Convergence (2035–2050) [EX]
 AI becomes ubiquitous infrastructure, like electricity. Renewables provide the majority of global electricity. Lab-grown protein disrupts agriculture. Gene therapies become routine. First permanent lunar base. Designer drugs shift from chemistry to synthetic biology. The first generation of significant longevity treatments enters clinical use.
 
 **Dominant industries:** AI services, biological manufacturing, space infrastructure, precision medicine, green hydrogen.
 **Key shock events:** First fusion power plant (commercial), lab-grown food reaches price parity, lunar economy formalized, cognitive enhancement market emerges.
 
-#### Era 7 — Reckoning (2050–2075) [EX]
+#### Era 14 — Reckoning (2050–2075) [EX]
 Climate consequences hit maximum economic intensity regardless of mitigation efforts to date (30–50 year lag from emissions). Fusion power begins structural disruption of energy markets. Longevity medicine extends working lives by decades, reshaping labor and pension economics. Asteroid mining delivers first non-Earth metal supply. The first AI systems with genuine autonomous economic agency operate in regulated frameworks.
 
 **Dominant industries:** Climate adaptation infrastructure, fusion energy, longevity medicine, space mining, autonomous AI agents.
 **Key shock events:** First Category 6 hurricane season, fusion grid parity confirmed, first multi-decade life extension treatment approved, Mars colony becomes economically self-sustaining.
 
-#### Era 8 — Synthesis (2075–2100) [EX]
+#### Era 15 — Synthesis (2075–2100) [EX]
 Post-scarcity begins to arrive in specific goods — energy abundance from fusion, automated manufacturing, biological food production. But scarcity concentrates in new forms: cognitive property, longevity access inequality, space resource rights. Brain-computer interfaces cross the medical threshold into consumer use. Biological factories produce most bulk chemicals.
 
 **Dominant industries:** Space resources, biological manufacturing, cognitive augmentation, quantum computing applications, longevity services.
 **Key shock events:** First space elevator operational (materials-dependent), BCI adoption crosses 5% global population, Mars GDP surpasses smaller Earth nations.
 
-#### Era 9 — Expansion (2100–2150) [EX]
+#### Era 16 — Expansion (2100–2150) [EX]
 Interplanetary trade creates genuinely new economic geographies. Outer solar system resource extraction begins. The political structures of the early 21st century are straining under the weight of life extension, AI economic agency, and interplanetary sovereignty claims. Molecular-level manufacturing arrives in specialized domains.
 
 **Dominant industries:** Interplanetary logistics, molecular manufacturing, cognitive labor markets (AI and human hybrid), outer planet resource extraction.
 **Key shock events:** First interplanetary financial market, asteroid belt property rights treaty (contested), first post-biological human legal case.
 
-#### Era 10 — Divergence (2150–2250+) [EX]
+#### Era 17 — Divergence (2150–2250+) [EX]
 Civilizational bifurcation. Some factions have access to life extension, cognitive augmentation, and space resources. Others do not. New economic paradigms — post-scarcity, post-scarcity conflict, extraction-based colonialism in space — coexist with rump industrial economies on Earth. The simulation's long-horizon consequence space is fully open.
 
 **Dominant industries:** Highly faction-dependent. Energy: fusion and space-based solar near-free. Matter: molecular assembly widely available. Labor: AI dominant in most domains; human labor in niche, premium, or contested applications.
@@ -175,7 +178,7 @@ Civilizational bifurcation. Some factions have access to life extension, cogniti
 
 ### What Changes Between Eras
 
-| Condition | Era 1 | Era 2 | Era 3 | Era 4 | Era 5 | Era 6 [EX] | Era 7 [EX] | Era 8 [EX] | Era 9 [EX] | Era 10 [EX] |
+| Condition | Era 8 | Era 9 | Era 10 | Era 11 | Era 12 | Era 13 [EX] | Era 14 [EX] | Era 15 [EX] | Era 16 [EX] | Era 17 [EX] |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Mobile/compute | Feature phones | Smartphones | App economy | Mobile+AI | AI-native | Ubiquitous AI | Cognitive AI | BCI early | BCI mainstream | Digital-physical merge |
 | Energy | Coal/oil dominant | Shale revolution | Renewables emerging | EV tipping point | Renewables dominant | Fusion demo | Fusion scale | Fusion abundance | Post-scarcity energy | Near-free energy |
@@ -199,7 +202,7 @@ Era transitions are not instant. They propagate through the simulation as:
 - **Stranded assets** — businesses built on prior-era assumptions face declining revenue
 - **Tech unlock events** — certain goods and recipes become researchable (see Technology Tree)
 
-The world does not wait for the player. If the player does nothing in Era 1, NPC businesses will advance technology, build market share, and establish dominance. The player can enter any industry at any time, but the earlier they move, the more they pay for uncertainty — and the more they gain if they're right.
+The world does not wait for the player. If the player does nothing in Era 8, NPC businesses will advance technology, build market share, and establish dominance. The player can enter any industry at any time, but the earlier they move, the more they pay for uncertainty — and the more they gain if they're right.
 
 ---
 
@@ -320,7 +323,7 @@ Technology nodes are defined in data files (moddable). Each node specifies:
 
 ---
 
-### Era 1 Starting State (Year 2000) [V1]
+### Era 8 Starting State (Year 2000) [V1]
 
 What exists at game start — no research required:
 
@@ -358,11 +361,11 @@ What exists at game start — no research required:
 - mRNA pharmaceuticals
 - Social media platforms as goods
 - AI hardware accelerators
-- Shale oil extraction (fracking improvements — near-term unlock, Era 1)
-- Designer drugs (era 1 analogue frameworks allow research)
+- Shale oil extraction (fracking improvements — near-term unlock, Era 8)
+- Designer drugs (era 8 analogue frameworks allow research)
 - Advanced synthetic opioids
 - Small modular reactors
-- Fusion power (Era 6+ EX)
+- Fusion power (Era 13+ EX)
 - Gene editing therapies
 - Reusable orbital launch
 
@@ -370,7 +373,7 @@ What exists at game start — no research required:
 
 ### Technology Tree — Complete Domain Chains
 
-Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are untagged; EX nodes are marked `[EX]`. Scope-limited nodes carry their scope marker.
+Each chain shows the full progression from Year 2000 to Era 17. V1 nodes are untagged; EX nodes are marked `[EX]`. Scope-limited nodes carry their scope marker.
 
 ---
 
@@ -378,69 +381,69 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Conventional Energy — Mature to Stranded**
 ```
-[Era 1] Hydraulic fracturing improvements  (difficulty: 1.0, patentable: yes)
+[Era 8] Hydraulic fracturing improvements  (difficulty: 1.0, patentable: yes)
     → product unlock: shale_oil_extraction, shale_gas_extraction
-    → WorldGen note: shale resource deposits are era_available = 2 in WorldGen §8.7.
-      The tech node is researchable Era 1 (modelling real pre-2000 fracking work),
-      but the resource deposits remain invisible until Era 2 regardless of tech status.
-      Tech and resource gate are decoupled: research early = first-mover on Era 2 production start.
+    → WorldGen note: shale resource deposits are era_available = 9 in WorldGen §8.7.
+      The tech node is researchable Era 8 (modelling real pre-2000 fracking work),
+      but the resource deposits remain invisible until Era 9 regardless of tech status.
+      Tech and resource gate are decoupled: research early = first-mover on Era 9 production start.
     → process improvement: petroleum_extraction_cost –25%
-        → [Era 1] Directional drilling optimization  (difficulty: 0.8)
+        → [Era 8] Directional drilling optimization  (difficulty: 0.8)
             → process improvement: shale_yield +15%
-        → [Era 2] Heavy oil processing  (difficulty: 1.2)
+        → [Era 9] Heavy oil processing  (difficulty: 1.2)
             → process improvement: oil_sands_extraction unlocked; heavy_crude_refining_cost –20%
-            → WorldGen note: oil_sands resource era_available = 2; aligns with this tech
-        → [Era 3] Enhanced oil recovery — CO₂ injection  (difficulty: 1.5)
+            → WorldGen note: oil_sands resource era_available = 9; aligns with this tech
+        → [Era 10] Enhanced oil recovery — CO₂ injection  (difficulty: 1.5)
             → dual outcome: yield +20%, generates CO₂ sequestration byproduct credit
-        → [Era 3] Arctic offshore drilling  (difficulty: 2.0)
+        → [Era 10] Arctic offshore drilling  (difficulty: 2.0)
             → facility unlock: arctic_offshore_platform
-            → WorldGen note: Arctic offshore oil era_available = 3; climate-gated (sea ice recession)
+            → WorldGen note: Arctic offshore oil era_available = 10; climate-gated (sea ice recession)
               Tech alone is insufficient — resource deposit also requires regional_climate_stress threshold
 ```
-*Strategic note: Shale investment maximizes cash flow through Era 1–3. Carbon costs begin stranding shale in Era 4–5.*
+*Strategic note: Shale investment maximizes cash flow through Era 8–10. Carbon costs begin stranding shale in Era 11–12.*
 
 **Chain: Lithium-Ion Battery**
 ```
-[Era 1] Li-ion cell chemistry optimization  (difficulty: 1.5, patentable: yes)
+[Era 8] Li-ion cell chemistry optimization  (difficulty: 1.5, patentable: yes)
     → product unlock: battery_cell_liion (higher energy density)
-        → [Era 2] Battery management system  (difficulty: 1.0)
+        → [Era 9] Battery management system  (difficulty: 1.0)
             → product unlock: battery_management_system
-                → [Era 2] EV powertrain integration  (difficulty: 2.0)
+                → [Era 9] EV powertrain integration  (difficulty: 2.0)
                     → product unlock: ev_drivetrain
-                        → [Era 2] Electric vehicle  (difficulty: 3.0)
+                        → [Era 9] Electric vehicle  (difficulty: 3.0)
                             → product unlock: electric_vehicle
-                                → [Era 3] Fast charging infrastructure  (difficulty: 1.5)
+                                → [Era 10] Fast charging infrastructure  (difficulty: 1.5)
                                     → product unlock: ev_charging_station
-                                        → [Era 3] Grid-scale battery storage  (difficulty: 4.0)
+                                        → [Era 10] Grid-scale battery storage  (difficulty: 4.0)
                                             → product unlock: grid_battery_array
-                                                → [Era 4] Vehicle-to-grid integration  (difficulty: 1.0)
+                                                → [Era 11] Vehicle-to-grid integration  (difficulty: 1.0)
                                                     → process improvement: grid_stability +X
 
-[Era 3] Solid-state battery research  (difficulty: 3.0, patentable: yes)
-    → [Era 4] Solid-state battery cell  (difficulty: 5.0)
+[Era 10] Solid-state battery research  (difficulty: 3.0, patentable: yes)
+    → [Era 11] Solid-state battery cell  (difficulty: 5.0)
         → process improvement: energy_density +40%, charge_time –50%
         → product unlock: battery_cell_solid_state
-            → [Era 5] Structural battery materials  (difficulty: 4.0) [EX eligible]
+            → [Era 12] Structural battery materials  (difficulty: 4.0) [EX eligible]
                 → product unlock: structural_battery_composite
                     (vehicle chassis doubles as energy storage; enables lighter EVs)
 ```
 
 **Chain: Solar Power**
 ```
-[Era 1] Photovoltaic cell efficiency research  (difficulty: 1.0)
-    → [Era 2] Cost-competitive solar panel  (difficulty: 2.0, patentable: yes)
+[Era 8] Photovoltaic cell efficiency research  (difficulty: 1.0)
+    → [Era 9] Cost-competitive solar panel  (difficulty: 2.0, patentable: yes)
         → process improvement: solar_panel_unit_cost –40%
-            → [Era 2] Solar farm  (difficulty: 1.5)
+            → [Era 9] Solar farm  (difficulty: 1.5)
                 → facility unlock: solar_farm
-                    → [Era 3] Grid-scale solar  (difficulty: 2.0)
+                    → [Era 10] Grid-scale solar  (difficulty: 2.0)
                         → process improvement: solar_grid_lcoe –30%
-                            → [Era 4] Perovskite solar cells  (difficulty: 3.0)
+                            → [Era 11] Perovskite solar cells  (difficulty: 3.0)
                                 → process improvement: conversion_efficiency +8pp
-                                    → [Era 5] Tandem solar cells  (difficulty: 4.0)
+                                    → [Era 12] Tandem solar cells  (difficulty: 4.0)
                                         → conversion_efficiency +12pp; cost parity achieved
-                                            → [Era 6] Solar-battery integrated storage  (difficulty: 2.0) [EX]
+                                            → [Era 13] Solar-battery integrated storage  (difficulty: 2.0) [EX]
                                                 → product unlock: solar_storage_hybrid_unit
-                                                    → [Era 8] Space-based solar power collection  (difficulty: 30.0) [EX]
+                                                    → [Era 15] Space-based solar power collection  (difficulty: 30.0) [EX]
                                                         → requires: space_systems.orbital_construction
                                                         → product unlock: spacebased_solar_transmitter
                                                             (effectively infinite energy density; strands all ground generation)
@@ -448,69 +451,69 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Wind Power**
 ```
-[Era 1] Wind turbine blade efficiency research  (difficulty: 1.0)
-    → [Era 2] Offshore wind platform  (difficulty: 2.5, patentable: yes)
+[Era 8] Wind turbine blade efficiency research  (difficulty: 1.0)
+    → [Era 9] Offshore wind platform  (difficulty: 2.5, patentable: yes)
         → facility unlock: offshore_wind_farm
-            → [Era 3] Grid-scale wind  (difficulty: 2.0)
-                → [Era 4] Floating offshore wind  (difficulty: 4.0) [EX eligible]
+            → [Era 10] Grid-scale wind  (difficulty: 2.0)
+                → [Era 11] Floating offshore wind  (difficulty: 4.0) [EX eligible]
                     → enables deep-water installation; opens new geographies
-                        → [Era 6] Airborne wind energy systems  (difficulty: 5.0) [EX]
+                        → [Era 13] Airborne wind energy systems  (difficulty: 5.0) [EX]
                             → product unlock: airborne_wind_generator
 ```
 
 **Chain: Hydrogen Economy**
 ```
-[Era 3] Green hydrogen electrolysis  (difficulty: 2.0, patentable: yes)
+[Era 10] Green hydrogen electrolysis  (difficulty: 2.0, patentable: yes)
     → product unlock: green_hydrogen
-        → [Era 4] Hydrogen fuel cell — industrial  (difficulty: 3.0)
+        → [Era 11] Hydrogen fuel cell — industrial  (difficulty: 3.0)
             → product unlock: industrial_fuel_cell
-                → [Era 5] Hydrogen fuel cell vehicle  (difficulty: 3.5) [EX eligible]
+                → [Era 12] Hydrogen fuel cell vehicle  (difficulty: 3.5) [EX eligible]
                     → product unlock: hydrogen_vehicle
-                        → [Era 6] Hydrogen pipeline infrastructure  (difficulty: 4.0) [EX]
+                        → [Era 13] Hydrogen pipeline infrastructure  (difficulty: 4.0) [EX]
                             → facility unlock: hydrogen_distribution_network
-                                → [Era 7] Hydrogen-ammonia fuel synthesis  (difficulty: 3.0) [EX]
+                                → [Era 14] Hydrogen-ammonia fuel synthesis  (difficulty: 3.0) [EX]
                                     → product unlock: green_ammonia
                                         (disrupts fossil fertilizer completely)
 ```
 
 **Chain: Nuclear — Fission to Fusion**
 ```
-[Era 1] Gen III+ reactor design (available; no R&D needed for construction)
-    → [Era 2] Small modular reactor design  (difficulty: 5.0, patentable: yes)
+[Era 8] Gen III+ reactor design (available; no R&D needed for construction)
+    → [Era 9] Small modular reactor design  (difficulty: 5.0, patentable: yes)
         → facility unlock: small_modular_reactor
-            → [Era 3] SMR commercial deployment  (difficulty: 3.0)
+            → [Era 10] SMR commercial deployment  (difficulty: 3.0)
                 → process improvement: nuclear_capex –40% vs. large plants
-                    → [Era 4] Gen IV fast reactor  (difficulty: 8.0, patentable: yes) [EX eligible]
+                    → [Era 11] Gen IV fast reactor  (difficulty: 8.0, patentable: yes) [EX eligible]
                         → facility unlock: gen4_fast_reactor
                         → product unlock: reactor_byproduct_plutonium (regulated)
-                            → [Era 5] Thorium fuel cycle  (difficulty: 6.0) [EX]
+                            → [Era 12] Thorium fuel cycle  (difficulty: 6.0) [EX]
                                 → process improvement: nuclear_waste_volume –90%
 
-[Era 4] Fusion ignition research  (difficulty: 25.0)  [EX]
+[Era 11] Fusion ignition research  (difficulty: 25.0)  [EX]
     → requires: nuclear_engineering domain knowledge ≥ 0.6
-    → [Era 5] First private fusion demonstration  (difficulty: 15.0) [EX]
+    → [Era 12] First private fusion demonstration  (difficulty: 15.0) [EX]
         → product unlock: fusion_demonstration_plant
-            → [Era 6] Fusion pilot power plant  (difficulty: 20.0) [EX]
+            → [Era 13] Fusion pilot power plant  (difficulty: 20.0) [EX]
                 → facility unlock: fusion_pilot_plant
-                    → [Era 7] Commercial fusion grid  (difficulty: 30.0) [EX]
+                    → [Era 14] Commercial fusion grid  (difficulty: 30.0) [EX]
                         → process improvement: electricity_generation_cost –70%
                         → stranded_asset trigger: all_fossil_fuel_generation
-                            → [Era 8] Fusion abundance  (difficulty: 10.0) [EX]
+                            → [Era 15] Fusion abundance  (difficulty: 10.0) [EX]
                                 → energy_cost approaches near-zero for simulation purposes
                                 → new economic bottleneck: materials and cognitive labor
 ```
 
 **Chain: Carbon Capture**
 ```
-[Era 3] Carbon capture and storage (CCS) — industrial  (difficulty: 2.0, patentable: yes)
+[Era 10] Carbon capture and storage (CCS) — industrial  (difficulty: 2.0, patentable: yes)
     → process improvement: point_source_emissions –60% for heavy industry
-        → [Era 4] Direct air capture — prototype  (difficulty: 4.0) [EX eligible]
+        → [Era 11] Direct air capture — prototype  (difficulty: 4.0) [EX eligible]
             → product unlock: direct_air_capture_unit
-                → [Era 5] DAC at scale  (difficulty: 6.0) [EX]
+                → [Era 12] DAC at scale  (difficulty: 6.0) [EX]
                     → process improvement: dac_unit_cost –50%
-                        → [Era 6] Enhanced weathering  (difficulty: 3.0) [EX]
+                        → [Era 13] Enhanced weathering  (difficulty: 3.0) [EX]
                             → agricultural byproduct: soil_alkalization_agent
-                                → [Era 7] Ocean alkalinity enhancement  (difficulty: 5.0) [EX]
+                                → [Era 14] Ocean alkalinity enhancement  (difficulty: 5.0) [EX]
                                     → requires: geoengineering domain
                                     → modifies: global_co2_index removal rate
 ```
@@ -521,71 +524,71 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Process Node Scaling**
 ```
-[Era 1] 130nm process node (available at game start; Tier 3)
-    → [Era 1] 90nm process node  (difficulty: 3.0, ~2003)
-        → [Era 2] 65nm process node  (difficulty: 4.0, ~2006)
-            → [Era 2] 45nm process node  (difficulty: 5.0, ~2008)
-                → [Era 3] 22nm process node  (difficulty: 6.0, ~2012)
-                    → [Era 4] 7nm process node  (difficulty: 8.0, ~2018)
-                        → [Era 4] 5nm process node  (difficulty: 9.0, ~2020)
-                            → [Era 5] 3nm / angstrom era  (difficulty: 10.0, ~2022)
-                                → [Era 5] Gate-all-around transistor  (difficulty: 8.0)
-                                    → [Era 5] 2nm process  (difficulty: 12.0)
+[Era 8] 130nm process node (available at game start; Tier 3)
+    → [Era 8] 90nm process node  (difficulty: 3.0, ~2003)
+        → [Era 9] 65nm process node  (difficulty: 4.0, ~2006)
+            → [Era 9] 45nm process node  (difficulty: 5.0, ~2008)
+                → [Era 10] 22nm process node  (difficulty: 6.0, ~2012)
+                    → [Era 11] 7nm process node  (difficulty: 8.0, ~2018)
+                        → [Era 11] 5nm process node  (difficulty: 9.0, ~2020)
+                            → [Era 12] 3nm / angstrom era  (difficulty: 10.0, ~2022)
+                                → [Era 12] Gate-all-around transistor  (difficulty: 8.0)
+                                    → [Era 12] 2nm process  (difficulty: 12.0)
 ```
 *Each process node: reduces energy consumption per transistor, increases output quality ceiling, reduces per-unit cost. Massive capex per generation makes semiconductors a natural monopoly business.*
 
 **Chain: Beyond Silicon**
 ```
-[Era 3] GaN power electronics research  (difficulty: 2.0, patentable: yes)
+[Era 10] GaN power electronics research  (difficulty: 2.0, patentable: yes)
     → product unlock: gan_power_chip
     → process improvement: power_electronics_efficiency +15%
-        → [Era 4] SiC power electronics  (difficulty: 2.5)
+        → [Era 11] SiC power electronics  (difficulty: 2.5)
             → enables high-voltage EV inverters; EV efficiency +8%
-                → [Era 5] Wide-bandgap semiconductor platform  (difficulty: 4.0)
+                → [Era 12] Wide-bandgap semiconductor platform  (difficulty: 4.0)
                     → process improvement: power_chip_switching_loss –30%
 ```
 
 **Chain: Advanced Chip Architectures**
 ```
-[Era 3] 3D chip stacking (TSV technology)  (difficulty: 3.0, patentable: yes)
+[Era 10] 3D chip stacking (TSV technology)  (difficulty: 3.0, patentable: yes)
     → process improvement: chip_compute_density +40%
-        → [Era 4] Monolithic 3D integration  (difficulty: 5.0)
-            → [Era 5] Photonic computing interconnects  (difficulty: 6.0) [EX eligible]
+        → [Era 11] Monolithic 3D integration  (difficulty: 5.0)
+            → [Era 12] Photonic computing interconnects  (difficulty: 6.0) [EX eligible]
                 → process improvement: chip_bandwidth +300%
-                    → [Era 6] Photonic computing processor  (difficulty: 8.0) [EX]
+                    → [Era 13] Photonic computing processor  (difficulty: 8.0) [EX]
                         → product unlock: photonic_processor
-                            → [Era 6] Neuromorphic chip architecture  (difficulty: 7.0) [EX]
+                            → [Era 13] Neuromorphic chip architecture  (difficulty: 7.0) [EX]
                                 → product unlock: neuromorphic_chip
                                 → process improvement: ai_inference_energy –95%
-                                    → [Era 7] Neuromorphic general-purpose computing  (difficulty: 10.0) [EX]
+                                    → [Era 14] Neuromorphic general-purpose computing  (difficulty: 10.0) [EX]
 ```
 
 **Chain: Quantum Computing** (cross-domain with quantum_systems)
 ```
-[Era 3] Quantum bit (qubit) demonstration  (difficulty: 5.0) [EX eligible]
-    → [Era 4] NISQ quantum processor — 50–100 qubits  (difficulty: 8.0) [EX]
+[Era 10] Quantum bit (qubit) demonstration  (difficulty: 5.0) [EX eligible]
+    → [Era 11] NISQ quantum processor — 50–100 qubits  (difficulty: 8.0) [EX]
         → product unlock: nisq_quantum_processor
         → limited utility; primarily research tool
-            → [Era 5] Quantum error correction  (difficulty: 15.0) [EX]
-                → [Era 6] Fault-tolerant quantum computer  (difficulty: 20.0) [EX]
+            → [Era 12] Quantum error correction  (difficulty: 15.0) [EX]
+                → [Era 13] Fault-tolerant quantum computer  (difficulty: 20.0) [EX]
                     → product unlock: fault_tolerant_quantum_computer
                     → unlocks: quantum_chemistry_simulation (enables new drug discovery)
-                        → [Era 7] Quantum supremacy for commercial optimization  (difficulty: 15.0) [EX]
+                        → [Era 14] Quantum supremacy for commercial optimization  (difficulty: 15.0) [EX]
                             → process improvement: logistics_optimization –30%
                             → process improvement: financial_modeling_speed ×1000
-                                → [Era 8] Quantum internet node  (difficulty: 12.0) [EX]
+                                → [Era 15] Quantum internet node  (difficulty: 12.0) [EX]
                                     → product unlock: quantum_network_node
                                     → enables unhackable communication
 ```
 
 **Chain: Molecular Computing** [EX]
 ```
-[Era 8] Molecular electronics research  (difficulty: 20.0) [EX]
+[Era 15] Molecular electronics research  (difficulty: 20.0) [EX]
     → requires: materials_science.atomically_precise_fabrication
-    → [Era 9] Molecular logic gate  (difficulty: 25.0) [EX]
-        → [Era 9] DNA computing substrate  (difficulty: 20.0) [EX]
+    → [Era 16] Molecular logic gate  (difficulty: 25.0) [EX]
+        → [Era 16] DNA computing substrate  (difficulty: 20.0) [EX]
             → product unlock: dna_computing_array
-                → [Era 10] Molecular-scale processor  (difficulty: 30.0) [EX]
+                → [Era 17] Molecular-scale processor  (difficulty: 30.0) [EX]
 ```
 
 ---
@@ -594,86 +597,86 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Advanced Composites**
 ```
-[Era 1] Carbon fiber manufacturing process optimization  (difficulty: 1.0, patentable: yes)
+[Era 8] Carbon fiber manufacturing process optimization  (difficulty: 1.0, patentable: yes)
     → process improvement: carbon_fiber_cost –20%
-        → [Era 2] Aerospace-grade carbon fiber composite  (difficulty: 2.0)
+        → [Era 9] Aerospace-grade carbon fiber composite  (difficulty: 2.0)
             → product unlock: carbon_fiber_composite
-                → [Era 3] Automotive carbon fiber integration  (difficulty: 1.5)
+                → [Era 10] Automotive carbon fiber integration  (difficulty: 1.5)
                     → process improvement: vehicle_weight –15%, fuel_efficiency +10%
-                        → [Era 4] Carbon fiber mass production  (difficulty: 3.0)
+                        → [Era 11] Carbon fiber mass production  (difficulty: 3.0)
                             → product unlock: carbon_fiber_panel (consumer vehicle grade)
 ```
 
 **Chain: Advanced Alloys and Coatings**
 ```
-[Era 1] High-strength low-alloy (HSLA) steel optimization  (difficulty: 0.8)
+[Era 8] High-strength low-alloy (HSLA) steel optimization  (difficulty: 0.8)
     → process improvement: structural_steel_yield_strength +20%
-        → [Era 2] Advanced high-strength steel (AHSS)  (difficulty: 1.5)
+        → [Era 9] Advanced high-strength steel (AHSS)  (difficulty: 1.5)
             → automotive weight reduction; EV range benefit
-                → [Era 3] High-entropy alloys research  (difficulty: 3.0, patentable: yes)
+                → [Era 10] High-entropy alloys research  (difficulty: 3.0, patentable: yes)
                     → product unlock: high_entropy_alloy
                     → extreme temperature and corrosion resistance
-                        → [Era 5] Refractory high-entropy alloys  (difficulty: 4.0) [EX eligible]
+                        → [Era 12] Refractory high-entropy alloys  (difficulty: 4.0) [EX eligible]
                             → enables hypersonic vehicle components
                             → enables fusion reactor first-wall materials
 ```
 
 **Chain: Polymers and Nanomaterials**
 ```
-[Era 1] Advanced polymer science  (difficulty: 1.0)
-    → [Era 2] High-performance thermoplastics  (difficulty: 1.5)
+[Era 8] Advanced polymer science  (difficulty: 1.0)
+    → [Era 9] High-performance thermoplastics  (difficulty: 1.5)
         → product unlock: engineering_thermoplastic
-            → [Era 3] Graphene research  (difficulty: 3.0, patentable: yes)
-                → [Era 4] Graphene composite material  (difficulty: 4.0)
+            → [Era 10] Graphene research  (difficulty: 3.0, patentable: yes)
+                → [Era 11] Graphene composite material  (difficulty: 4.0)
                     → product unlock: graphene_composite
                     → conductivity and strength far exceed steel at fractions of weight
-                        → [Era 5] Carbon nanotube fiber  (difficulty: 6.0) [EX eligible]
+                        → [Era 12] Carbon nanotube fiber  (difficulty: 6.0) [EX eligible]
                             → product unlock: cnt_fiber_material
-                                → [Era 7] CNT macrofiber — structural cable  (difficulty: 10.0) [EX]
+                                → [Era 14] CNT macrofiber — structural cable  (difficulty: 10.0) [EX]
                                     → required prerequisite for: space_systems.space_elevator
                                     → product unlock: space_elevator_cable_material
-                                        → [Era 8] Space elevator construction  (difficulty: 40.0) [EX]
+                                        → [Era 15] Space elevator construction  (difficulty: 40.0) [EX]
                                             → requires: cnt_fiber_material + orbital_construction
                                             → facility unlock: space_elevator
 
-[Era 3] Aerogel manufacturing optimization  (difficulty: 2.0, patentable: yes)
+[Era 10] Aerogel manufacturing optimization  (difficulty: 2.0, patentable: yes)
     → product unlock: aerogel_insulation
     → process improvement: building_insulation_energy –25%
-        → [Era 4] Aerogel structural applications  (difficulty: 3.0)
+        → [Era 11] Aerogel structural applications  (difficulty: 3.0)
             → product unlock: structural_aerogel_panel
 ```
 
 **Chain: Metamaterials and Smart Materials**
 ```
-[Era 3] Metamaterial electromagnetic research  (difficulty: 3.0) [EX eligible]
-    → [Era 4] Acoustic metamaterial panel  (difficulty: 2.0)
+[Era 10] Metamaterial electromagnetic research  (difficulty: 3.0) [EX eligible]
+    → [Era 11] Acoustic metamaterial panel  (difficulty: 2.0)
         → product unlock: acoustic_metamaterial (industrial noise reduction)
-            → [Era 5] Optical metamaterial  (difficulty: 5.0) [EX]
+            → [Era 12] Optical metamaterial  (difficulty: 5.0) [EX]
                 → product unlock: metamaterial_optical_component
-                    → [Era 6] Programmable metamaterial surface  (difficulty: 6.0) [EX]
+                    → [Era 13] Programmable metamaterial surface  (difficulty: 6.0) [EX]
                         → product unlock: programmable_surface_panel
                         → reconfigurable antenna, structural, optical properties
 
-[Era 4] Self-healing polymer research  (difficulty: 3.0, patentable: yes) [EX eligible]
-    → [Era 5] Self-healing coating  (difficulty: 2.5) [EX]
+[Era 11] Self-healing polymer research  (difficulty: 3.0, patentable: yes) [EX eligible]
+    → [Era 12] Self-healing coating  (difficulty: 2.5) [EX]
         → product unlock: self_healing_paint_coating
-            → [Era 6] Structural self-healing composite  (difficulty: 5.0) [EX]
+            → [Era 13] Structural self-healing composite  (difficulty: 5.0) [EX]
                 → process improvement: maintenance_cost –30% for composite structures
-                    → [Era 7] Autonomous repair material  (difficulty: 8.0) [EX]
+                    → [Era 14] Autonomous repair material  (difficulty: 8.0) [EX]
 ```
 
 **Chain: Atomically Precise Manufacturing** [EX]
 ```
-[Era 6] Scanning probe lithography at molecular scale  (difficulty: 10.0) [EX]
+[Era 13] Scanning probe lithography at molecular scale  (difficulty: 10.0) [EX]
     → research tool only; no production unlock
-        → [Era 7] Atomically precise small-molecule synthesis  (difficulty: 15.0) [EX]
+        → [Era 14] Atomically precise small-molecule synthesis  (difficulty: 15.0) [EX]
             → product unlock: atomically_precise_molecule
-                → [Era 8] Atomically precise fabrication (nano-scale)  (difficulty: 25.0) [EX]
+                → [Era 15] Atomically precise fabrication (nano-scale)  (difficulty: 25.0) [EX]
                     → enables: molecular_electronics, synthetic_biology.programmable_proteins
-                        → [Era 9] Molecular assembler prototype  (difficulty: 40.0) [EX]
+                        → [Era 16] Molecular assembler prototype  (difficulty: 40.0) [EX]
                             → product unlock: molecular_assembler
                             → MAJOR economic disruption: manufacturing cost structure collapses
-                                → [Era 10] Generalized molecular assembly  (difficulty: 50.0) [EX]
+                                → [Era 17] Generalized molecular assembly  (difficulty: 50.0) [EX]
                                     → process improvement: any_manufactured_good_cost –80%
                                     → stranded_asset trigger: all_conventional_manufacturing
 ```
@@ -684,35 +687,35 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Manufacturing Automation**
 ```
-[Era 1] CNC machining optimization  (difficulty: 0.5)
+[Era 8] CNC machining optimization  (difficulty: 0.5)
     → process improvement: precision_manufacturing_cost –10%
-        → [Era 1] Industrial robot programming advances  (difficulty: 1.0)
+        → [Era 8] Industrial robot programming advances  (difficulty: 1.0)
             → process improvement: assembly_line_labor_requirement –15%
-                → [Era 2] Additive manufacturing — polymer  (difficulty: 1.5, patentable: yes)
+                → [Era 9] Additive manufacturing — polymer  (difficulty: 1.5, patentable: yes)
                     → product unlock: fdm_3d_printer
-                        → [Era 3] Additive manufacturing — metal  (difficulty: 2.5)
+                        → [Era 10] Additive manufacturing — metal  (difficulty: 2.5)
                             → product unlock: metal_3d_printer
                             → enables low-volume custom metal parts
-                                → [Era 4] Industrial additive manufacturing  (difficulty: 3.0)
+                                → [Era 11] Industrial additive manufacturing  (difficulty: 3.0)
                                     → process improvement: custom_part_lead_time –80%
-                                        → [Era 5] Mass-customization manufacturing  (difficulty: 3.0) [EX eligible]
+                                        → [Era 12] Mass-customization manufacturing  (difficulty: 3.0) [EX eligible]
                                             → product unlock: mass_customization_factory_module
 ```
 
 **Chain: Robotics**
 ```
-[Era 2] Collaborative robot (cobot) platform  (difficulty: 2.0, patentable: yes)
+[Era 9] Collaborative robot (cobot) platform  (difficulty: 2.0, patentable: yes)
     → product unlock: cobot_unit
-        → [Era 3] Autonomous mobile robot (warehouse/logistics)  (difficulty: 2.5)
+        → [Era 10] Autonomous mobile robot (warehouse/logistics)  (difficulty: 2.5)
             → product unlock: amr_unit
-                → [Era 4] General-purpose humanoid robot — prototype  (difficulty: 8.0) [EX eligible]
+                → [Era 11] General-purpose humanoid robot — prototype  (difficulty: 8.0) [EX eligible]
                     → requires: software_systems.computer_vision + mechanical_engineering
-                        → [Era 5] Humanoid robot — commercial  (difficulty: 6.0) [EX]
+                        → [Era 12] Humanoid robot — commercial  (difficulty: 6.0) [EX]
                             → product unlock: humanoid_robot_unit
                             → labor market disruption: displaces 20–40% of physical labor NPCs
-                                → [Era 6] Adaptive manufacturing robot  (difficulty: 5.0) [EX]
+                                → [Era 13] Adaptive manufacturing robot  (difficulty: 5.0) [EX]
                                     → process improvement: retooling_time –70%
-                                        → [Era 7] Self-replicating manufacturing system  (difficulty: 20.0) [EX]
+                                        → [Era 14] Self-replicating manufacturing system  (difficulty: 20.0) [EX]
                                             → facility can partially construct copies of itself
                                             → exponential capital formation capability
 ```
@@ -720,43 +723,43 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 **Chain: Vehicles and Transport**
 (See also: advanced_transportation domain for hypersonic+)
 ```
-[Era 1] Hybrid powertrain  (difficulty: 1.0, patentable: yes)
+[Era 8] Hybrid powertrain  (difficulty: 1.0, patentable: yes)
     → product unlock: hybrid_vehicle
-        → [Era 3] Autonomous vehicle sensor suite  (difficulty: 3.0)
+        → [Era 10] Autonomous vehicle sensor suite  (difficulty: 3.0)
             → product unlock: lidar_sensor_array, av_compute_unit
-                → [Era 4] Autonomous vehicle — L4  (difficulty: 5.0)
+                → [Era 11] Autonomous vehicle — L4  (difficulty: 5.0)
                     → product unlock: autonomous_vehicle
-                        → [Era 5] Autonomous logistics fleet  (difficulty: 3.0)
+                        → [Era 12] Autonomous logistics fleet  (difficulty: 3.0)
                             → process improvement: logistics_cost –30%
                             → NPC truck driver employment collapses
 
-[Era 4] Electric vertical takeoff and landing (eVTOL)  (difficulty: 4.0) [EX eligible]
+[Era 11] Electric vertical takeoff and landing (eVTOL)  (difficulty: 4.0) [EX eligible]
     → product unlock: evtol_aircraft
-        → [Era 5] Urban air mobility service  (difficulty: 3.0) [EX]
+        → [Era 12] Urban air mobility service  (difficulty: 3.0) [EX]
             → product unlock: uam_service_route
 ```
 
 **Chain: Precision Manufacturing**
 ```
-[Era 1] Six-sigma manufacturing processes  (difficulty: 0.5)
+[Era 8] Six-sigma manufacturing processes  (difficulty: 0.5)
     → process improvement: defect_rate –20%
-        → [Era 2] Statistical process control — digital  (difficulty: 1.0)
-            → [Era 3] AI-assisted quality control  (difficulty: 2.0)
+        → [Era 9] Statistical process control — digital  (difficulty: 1.0)
+            → [Era 10] AI-assisted quality control  (difficulty: 2.0)
                 → process improvement: quality_inspection_labor –60%
-                    → [Era 5] Zero-defect adaptive manufacturing  (difficulty: 3.0) [EX eligible]
+                    → [Era 12] Zero-defect adaptive manufacturing  (difficulty: 3.0) [EX eligible]
                         → process improvement: defect_rate approaches zero
 ```
 
 **Chain: Deep Sea Resource Extraction** [EX]
 ```
-[Era 3] Deep sea mining platform  (difficulty: 2.5, patentable: yes) [EX]
+[Era 10] Deep sea mining platform  (difficulty: 2.5, patentable: yes) [EX]
     → facility unlock: deep_sea_mining_platform
-    → WorldGen note: deep sea mineral deposits seeded at Stage 8, era_available = 3;
+    → WorldGen note: deep sea mineral deposits seeded at Stage 8, era_available = 10;
       this tech is the required unlock condition (WorldGen §8.7)
     → product unlock: polymetallic_nodule_ore (manganese, nickel, cobalt)
-        → [Era 4] Deep sea mineral processing  (difficulty: 2.0) [EX]
+        → [Era 11] Deep sea mineral processing  (difficulty: 2.0) [EX]
             → process improvement: deep_sea_ore_yield +30%
-                → [Era 5] Autonomous underwater vehicle — industrial  (difficulty: 3.0) [EX]
+                → [Era 12] Autonomous underwater vehicle — industrial  (difficulty: 3.0) [EX]
                     → process improvement: deep_sea_extraction_cost –40%
                     → product unlock: auv_mining_unit
 ```
@@ -767,58 +770,58 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Platform and Infrastructure**
 ```
-[Era 1] Broadband internet infrastructure  (available at start, advancing)
-    → [Era 1] Content delivery network  (difficulty: 1.0, patentable: yes)
+[Era 8] Broadband internet infrastructure  (available at start, advancing)
+    → [Era 8] Content delivery network  (difficulty: 1.0, patentable: yes)
         → product unlock: cdn_infrastructure
-            → [Era 2] Cloud computing platform  (difficulty: 3.0)
+            → [Era 9] Cloud computing platform  (difficulty: 3.0)
                 → product unlock: cloud_compute_service
-                    → [Era 3] Microservices architecture  (difficulty: 1.5)
+                    → [Era 10] Microservices architecture  (difficulty: 1.5)
                         → process improvement: software_development_velocity +30%
-                            → [Era 3] Serverless computing platform  (difficulty: 2.0)
-                                → [Era 4] Edge computing network  (difficulty: 3.0)
+                            → [Era 10] Serverless computing platform  (difficulty: 2.0)
+                                → [Era 11] Edge computing network  (difficulty: 3.0)
                                     → product unlock: edge_compute_node
-                                        → [Era 4] 5G network equipment  (difficulty: 3.5)
+                                        → [Era 11] 5G network equipment  (difficulty: 3.5)
                                             → product unlock: 5g_base_station
-                                                → [Era 6] 6G/integrated sensing+comm  (difficulty: 5.0) [EX]
+                                                → [Era 13] 6G/integrated sensing+comm  (difficulty: 5.0) [EX]
 ```
 
 **Chain: Artificial Intelligence**
 ```
-[Era 2] Machine learning research  (difficulty: 2.0)
-    → [Era 3] Deep learning framework  (difficulty: 3.0, patentable: yes)
+[Era 9] Machine learning research  (difficulty: 2.0)
+    → [Era 10] Deep learning framework  (difficulty: 3.0, patentable: yes)
         → product unlock: ml_inference_service
-            → [Era 3] Computer vision system  (difficulty: 2.5)
+            → [Era 10] Computer vision system  (difficulty: 2.5)
                 → process improvement: quality_control_automation; manufacturing labor –30%
-                    → [Era 3] Natural language processing  (difficulty: 3.0)
+                    → [Era 10] Natural language processing  (difficulty: 3.0)
                         → product unlock: nlp_service
-                            → [Era 4] Large language model  (difficulty: 8.0)
+                            → [Era 11] Large language model  (difficulty: 8.0)
                                 → product unlock: llm_api_service
-                                    → [Era 4] AI hardware accelerator (GPU cluster)  (difficulty: 5.0)
+                                    → [Era 11] AI hardware accelerator (GPU cluster)  (difficulty: 5.0)
                                         → product unlock: gpu_compute_cluster
-                                            → [Era 5] Autonomous AI agent platform  (difficulty: 8.0) [EX eligible]
+                                            → [Era 12] Autonomous AI agent platform  (difficulty: 8.0) [EX eligible]
                                                 → product unlock: autonomous_ai_agent_service
                                                 → labor market disruption: knowledge worker demand –40%
-                                                    → [Era 6] AGI precursor system  (difficulty: 30.0) [EX]
+                                                    → [Era 13] AGI precursor system  (difficulty: 30.0) [EX]
                                                         → requires: semiconductor_physics.neuromorphic_chip
                                                         → MAJOR economic event: knowledge labor market collapses
-                                                            → [Era 7] Economically autonomous AI  (difficulty: 20.0) [EX]
+                                                            → [Era 14] Economically autonomous AI  (difficulty: 20.0) [EX]
                                                                 → AI systems can hold contracts, own IP
                                                                 → new economic actor class in simulation
-                                                                    → [Era 8] Post-AGI industrial AI  (difficulty: 15.0) [EX]
+                                                                    → [Era 15] Post-AGI industrial AI  (difficulty: 15.0) [EX]
                                                                         → process improvement: ALL manufacturing and logistics –50%
 ```
 
 **Chain: Security and Privacy**
 ```
-[Era 1] Firewall and intrusion detection  (difficulty: 0.5)
-    → [Era 2] Advanced persistent threat (APT) detection  (difficulty: 1.5)
-        → [Era 3] AI-assisted threat detection  (difficulty: 2.0)
-            → [Era 4] Quantum-resistant cryptography  (difficulty: 4.0, patentable: yes)
+[Era 8] Firewall and intrusion detection  (difficulty: 0.5)
+    → [Era 9] Advanced persistent threat (APT) detection  (difficulty: 1.5)
+        → [Era 10] AI-assisted threat detection  (difficulty: 2.0)
+            → [Era 11] Quantum-resistant cryptography  (difficulty: 4.0, patentable: yes)
                 → product unlock: post_quantum_crypto_library
-                → defensive: protects against Era 5+ quantum decryption
-                    → [Era 5] Quantum key distribution network  (difficulty: 6.0) [EX]
+                → defensive: protects against Era 12+ quantum decryption
+                    → [Era 12] Quantum key distribution network  (difficulty: 6.0) [EX]
                         → product unlock: qkd_network_node
-                            → [Era 7] Quantum internet security fabric  (difficulty: 10.0) [EX]
+                            → [Era 14] Quantum internet security fabric  (difficulty: 10.0) [EX]
 ```
 
 ---
@@ -827,23 +830,23 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Platform Evolution**
 ```
-[Era 1] Early internet forums and communities  (available at start)
-    → [Era 2] Social network platform  (difficulty: 2.0, patentable: no)
+[Era 8] Early internet forums and communities  (available at start)
+    → [Era 9] Social network platform  (difficulty: 2.0, patentable: no)
         → product unlock: social_media_platform
         → NPC behavior change: time_on_platform displaces traditional media
-            → [Era 2] Content algorithm v1  (difficulty: 1.5)
+            → [Era 9] Content algorithm v1  (difficulty: 1.5)
                 → process improvement: user_retention +X%
-                    → [Era 3] Targeted advertising inventory  (difficulty: 2.0, patentable: yes)
+                    → [Era 10] Targeted advertising inventory  (difficulty: 2.0, patentable: yes)
                         → product unlock: targeted_ad_inventory
-                            → [Era 3] Influencer economy platform  (difficulty: 1.5)
+                            → [Era 10] Influencer economy platform  (difficulty: 1.5)
                                 → product unlock: creator_monetization_layer
-                                    → [Era 4] AI-generated content at scale  (difficulty: 3.0) [EX eligible]
+                                    → [Era 11] AI-generated content at scale  (difficulty: 3.0) [EX eligible]
                                         → product unlock: synthetic_content_feed
                                         → regulatory pressure: deepfake laws
-                                            → [Era 5] Immersive social platform (AR/VR)  (difficulty: 4.0) [EX]
+                                            → [Era 12] Immersive social platform (AR/VR)  (difficulty: 4.0) [EX]
                                                 → product unlock: immersive_social_platform
-                                                    → [Era 6] Persistent digital-physical social layer  (difficulty: 6.0) [EX]
-                                                        → [Era 7] Direct neural social interface  (difficulty: 10.0) [EX]
+                                                    → [Era 13] Persistent digital-physical social layer  (difficulty: 6.0) [EX]
+                                                        → [Era 14] Direct neural social interface  (difficulty: 10.0) [EX]
                                                             → requires: cognitive_science.bidirectional_bci
 ```
 
@@ -853,56 +856,56 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Pharmaceutical Development**
 ```
-[Era 1] Combinatorial drug screening  (difficulty: 1.0)
-    → [Era 1] Targeted small molecule drugs  (difficulty: 2.0, patentable: yes)
+[Era 8] Combinatorial drug screening  (difficulty: 1.0)
+    → [Era 8] Targeted small molecule drugs  (difficulty: 2.0, patentable: yes)
         → product unlock: pharmaceutical_rx_targeted
-            → [Era 2] Biologic drugs (protein-based)  (difficulty: 3.0)
+            → [Era 9] Biologic drugs (protein-based)  (difficulty: 3.0)
                 → product unlock: biologic_drug
-                    → [Era 3] Gene therapy — ex vivo  (difficulty: 5.0, patentable: yes)
+                    → [Era 10] Gene therapy — ex vivo  (difficulty: 5.0, patentable: yes)
                         → product unlock: gene_therapy_treatment
-                            → [Era 4] mRNA therapeutics  (difficulty: 6.0, patentable: yes)
+                            → [Era 11] mRNA therapeutics  (difficulty: 6.0, patentable: yes)
                                 → product unlock: mrna_pharmaceutical
                                 → mRNA vaccine platform: rapid response to novel pathogens
-                                    → [Era 5] In vivo gene editing (CRISPR 2.0)  (difficulty: 7.0) [EX eligible]
+                                    → [Era 12] In vivo gene editing (CRISPR 2.0)  (difficulty: 7.0) [EX eligible]
                                         → product unlock: in_vivo_gene_editing_therapy
-                                            → [Era 6] Whole-genome therapeutic replacement  (difficulty: 12.0) [EX]
+                                            → [Era 13] Whole-genome therapeutic replacement  (difficulty: 12.0) [EX]
                                                 → product unlock: genome_therapeutic
-                                                    → [Era 6] Polygenic disease correction  (difficulty: 8.0) [EX]
+                                                    → [Era 13] Polygenic disease correction  (difficulty: 8.0) [EX]
 ```
 
 **Chain: Life Extension Medicine** [EX]
 ```
-[Era 5] Senolytic therapy research  (difficulty: 5.0) [EX]
+[Era 12] Senolytic therapy research  (difficulty: 5.0) [EX]
     → product unlock: senolytic_drug
     → effect: NPC lifespan extension +5 years in simulation
-        → [Era 6] Telomere extension therapy  (difficulty: 8.0) [EX]
+        → [Era 13] Telomere extension therapy  (difficulty: 8.0) [EX]
             → product unlock: telomere_therapy
             → NPC lifespan +10-15 years
-                → [Era 7] Comprehensive longevity treatment  (difficulty: 15.0) [EX]
+                → [Era 14] Comprehensive longevity treatment  (difficulty: 15.0) [EX]
                     → product unlock: longevity_package
                     → NPC lifespan +30 years
                     → MAJOR economic event: retirement age shifts, pension system stress
-                        → [Era 8] Radical life extension  (difficulty: 25.0) [EX]
+                        → [Era 15] Radical life extension  (difficulty: 25.0) [EX]
                             → product unlock: radical_longevity_treatment
                             → NPC lifespan effectively open-ended for wealthy NPCs
                             → longevity inequality becomes major political driver
-                                → [Era 9] Post-biological substrate  (difficulty: 50.0) [EX]
+                                → [Era 16] Post-biological substrate  (difficulty: 50.0) [EX]
                                     → requires: cognitive_science.mind_upload
 ```
 
 **Chain: Agricultural Biotechnology**
 ```
-[Era 1] Genetically modified crops (existing; regulatory context varies)
-    → [Era 2] Drought-resistant crop variants  (difficulty: 1.5, patentable: yes)
+[Era 8] Genetically modified crops (existing; regulatory context varies)
+    → [Era 9] Drought-resistant crop variants  (difficulty: 1.5, patentable: yes)
         → process improvement: agricultural_yield_climate_resilience +15%
-            → [Era 3] Precision fermentation — proteins  (difficulty: 2.0)
+            → [Era 10] Precision fermentation — proteins  (difficulty: 2.0)
                 → product unlock: fermentation_protein
-                    → [Era 4] Lab-grown meat — prototype  (difficulty: 4.0) [EX eligible]
+                    → [Era 11] Lab-grown meat — prototype  (difficulty: 4.0) [EX eligible]
                         → product unlock: cultivated_meat (expensive)
-                            → [Era 5] Lab-grown meat — cost parity  (difficulty: 5.0) [EX]
+                            → [Era 12] Lab-grown meat — cost parity  (difficulty: 5.0) [EX]
                                 → process improvement: cultivated_meat_cost –70%
                                 → MAJOR disruption: livestock farming demand collapses in some regions
-                                    → [Era 6] Synthetic ecosystem food production  (difficulty: 8.0) [EX]
+                                    → [Era 13] Synthetic ecosystem food production  (difficulty: 8.0) [EX]
                                         → product unlock: synthetic_agricultural_system
                                         → climate-proof food supply; decoupled from land/water
 ```
@@ -913,21 +916,21 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Offensive and Defensive Cyber**
 ```
-[Era 1] Vulnerability research platform  (difficulty: 1.0, patentable: no)
+[Era 8] Vulnerability research platform  (difficulty: 1.0, patentable: no)
     → product unlock: zero_day_exploit (criminal/intelligence good)
-        → [Era 2] Advanced persistent threat toolkit  (difficulty: 2.0)
+        → [Era 9] Advanced persistent threat toolkit  (difficulty: 2.0)
             → product unlock: apt_toolkit (criminal/state actor good)
-                → [Era 3] AI-assisted vulnerability discovery  (difficulty: 3.0, patentable: yes)
+                → [Era 10] AI-assisted vulnerability discovery  (difficulty: 3.0, patentable: yes)
                     → product unlock: ai_vuln_scanner
-                        → [Era 4] Autonomous offensive cyber system  (difficulty: 5.0) [EX eligible]
+                        → [Era 11] Autonomous offensive cyber system  (difficulty: 5.0) [EX eligible]
                             → product unlock: autonomous_cyberweapon (heavily regulated)
-                                → [Era 5] Infrastructure cyber-physical attack capability  (difficulty: 8.0) [EX]
+                                → [Era 12] Infrastructure cyber-physical attack capability  (difficulty: 8.0) [EX]
                                     → can target power grids, water systems, manufacturing
-                                        → [Era 6] AI-native cyberwar platform  (difficulty: 10.0) [EX]
+                                        → [Era 13] AI-native cyberwar platform  (difficulty: 10.0) [EX]
                                             → economic warfare between polities
 
-[Era 3] Defensive deception technology (honeypots, active defense)  (difficulty: 2.0)
-    → [Era 5] AI-managed cyber defense  (difficulty: 4.0) [EX eligible]
+[Era 10] Defensive deception technology (honeypots, active defense)  (difficulty: 2.0)
+    → [Era 12] AI-managed cyber defense  (difficulty: 4.0) [EX eligible]
         → process improvement: intrusion_detection_rate +40%
 ```
 
@@ -937,27 +940,27 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Complex Financial Products**
 ```
-[Era 1] Structured financial products (CDOs, MBS)  (difficulty: 1.0, patentable: no)
+[Era 8] Structured financial products (CDOs, MBS)  (difficulty: 1.0, patentable: no)
     → product unlock: structured_credit_instrument
     → risk: systemic exposure accumulates
-        → [Era 2] Algorithmic trading system  (difficulty: 2.0, patentable: yes)
+        → [Era 9] Algorithmic trading system  (difficulty: 2.0, patentable: yes)
             → product unlock: algorithmic_trading_engine
-                → [Era 2] High-frequency trading platform  (difficulty: 2.5)
+                → [Era 9] High-frequency trading platform  (difficulty: 2.5)
                     → product unlock: hft_colocation_service
-                        → [Era 3] Predictive market model — AI  (difficulty: 3.0)
+                        → [Era 10] Predictive market model — AI  (difficulty: 3.0)
                             → process improvement: trading_alpha +X%
-                                → [Era 4] Decentralized finance protocol  (difficulty: 2.5) [EX eligible]
+                                → [Era 11] Decentralized finance protocol  (difficulty: 2.5) [EX eligible]
                                     → product unlock: defi_protocol
-                                        → [Era 4] Central bank digital currency  (difficulty: 3.0)
+                                        → [Era 11] Central bank digital currency  (difficulty: 3.0)
                                             → product unlock: cbdc_platform
                                             → regulatory event: crypto frameworks enacted
-                                                → [Era 5] AI portfolio management service  (difficulty: 3.0) [EX]
+                                                → [Era 12] AI portfolio management service  (difficulty: 3.0) [EX]
                                                     → product unlock: ai_investment_service
-                                                        → [Era 6] Autonomous economic agent (DAO)  (difficulty: 5.0) [EX]
+                                                        → [Era 13] Autonomous economic agent (DAO)  (difficulty: 5.0) [EX]
                                                             → product unlock: dao_governance_structure
-                                                                → [Era 7] Interplanetary financial instrument  (difficulty: 8.0) [EX]
+                                                                → [Era 14] Interplanetary financial instrument  (difficulty: 8.0) [EX]
                                                                     → product unlock: interplanetary_bond
-                                                                        → [Era 9] Post-scarcity economics research  (difficulty: 20.0) [EX]
+                                                                        → [Era 16] Post-scarcity economics research  (difficulty: 20.0) [EX]
                                                                             → publication only; raises global_knowledge_level
 ```
 
@@ -967,31 +970,31 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Designer Drug Progression (Scheduling Race)**
 ```
-[Era 1] Novel synthetic cannabinoid  (difficulty: 0.5, patentable: no)
+[Era 8] Novel synthetic cannabinoid  (difficulty: 0.5, patentable: no)
     → product unlock: synthetic_cannabinoid (legal until scheduled)
     → scheduling_clock starts on detection
-        → [Era 1] Synthetic stimulant (bath salts class)  (difficulty: 0.5)
+        → [Era 8] Synthetic stimulant (bath salts class)  (difficulty: 0.5)
             → product unlock: synthetic_stimulant_nps
-                → [Era 2] Synthetic opioid analogs — fentanyl class  (difficulty: 1.5)
+                → [Era 9] Synthetic opioid analogs — fentanyl class  (difficulty: 1.5)
                     → product unlock: synthetic_opioid_analog
                     → high risk/reward: extreme LD50 proximity, law enforcement focus
-                        → [Era 2] Synthetic psychedelic analogs  (difficulty: 1.0)
+                        → [Era 9] Synthetic psychedelic analogs  (difficulty: 1.0)
                             → product unlock: synthetic_psychedelic_nps
-                                → [Era 3] Structure-activity relationship (SAR) modeling — illicit  (difficulty: 2.0)
+                                → [Era 10] Structure-activity relationship (SAR) modeling — illicit  (difficulty: 2.0)
                                     → process improvement: analog_synthesis_speed +40%
                                     → designer_drug_pipeline_capacity +2 slots
-                                        → [Era 4] Synthetic biology for drug synthesis  (difficulty: 4.0) [EX eligible]
+                                        → [Era 11] Synthetic biology for drug synthesis  (difficulty: 4.0) [EX eligible]
                                             → yeast/bacteria engineered for alkaloid production
                                             → replaces chemical synthesis for some compounds
-                                                → [Era 5] Neurochemical precision drug  (difficulty: 5.0) [EX]
+                                                → [Era 12] Neurochemical precision drug  (difficulty: 5.0) [EX]
                                                     → product unlock: precision_neuro_drug
                                                     → grey market: enhancement vs. scheduled
-                                                        → [Era 6] Black market longevity compound  (difficulty: 8.0) [EX]
-                                                            → criminal version of Era 6 longevity therapy
-                                                                → [Era 7] Illicit cognitive enhancement  (difficulty: 6.0) [EX]
+                                                        → [Era 13] Black market longevity compound  (difficulty: 8.0) [EX]
+                                                            → criminal version of Era 13 longevity therapy
+                                                                → [Era 14] Illicit cognitive enhancement  (difficulty: 6.0) [EX]
                                                                     → product unlock: illicit_bci_enhancement
                                                                     → requires: cognitive_science.bci unlocked (legal version)
-                                                                        → [Era 8] Criminal synthetic biology  (difficulty: 15.0) [EX]
+                                                                        → [Era 15] Criminal synthetic biology  (difficulty: 15.0) [EX]
                                                                             → biological weapon / mass-casualty agent risk
                                                                             → biosecurity regulatory response
 ```
@@ -1004,42 +1007,42 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Climate Tech**
 ```
-[Era 2] Industrial emissions monitoring  (difficulty: 0.5)
+[Era 9] Industrial emissions monitoring  (difficulty: 0.5)
     → product unlock: emissions_sensor_array
-        → [Era 2] Carbon credit verification system  (difficulty: 1.0, patentable: yes)
+        → [Era 9] Carbon credit verification system  (difficulty: 1.0, patentable: yes)
             → product unlock: carbon_credit_instrument
-                → [Era 3] Carbon offset project — forestry  (difficulty: 1.0)
+                → [Era 10] Carbon offset project — forestry  (difficulty: 1.0)
                     → product unlock: carbon_offset_forestry_credit
-                        → [Era 4] Corporate net-zero audit system  (difficulty: 1.5)
+                        → [Era 11] Corporate net-zero audit system  (difficulty: 1.5)
                             → regulatory unlock: enables carbon_tax_compliance_service
 
-[Era 3] Second-generation biofuel  (difficulty: 2.0, patentable: yes)
+[Era 10] Second-generation biofuel  (difficulty: 2.0, patentable: yes)
     → product unlock: cellulosic_ethanol
-        → [Era 4] Sustainable aviation fuel (SAF)  (difficulty: 2.5)
+        → [Era 11] Sustainable aviation fuel (SAF)  (difficulty: 2.5)
             → product unlock: sustainable_aviation_fuel
-                → [Era 5] Green ammonia fertilizer  (difficulty: 3.0) [EX eligible]
+                → [Era 12] Green ammonia fertilizer  (difficulty: 3.0) [EX eligible]
                     → process improvement: fertilizer_co2_intensity –80%
 
-[Era 4] Climate adaptation infrastructure  (difficulty: 2.0)
+[Era 11] Climate adaptation infrastructure  (difficulty: 2.0)
     → product unlock: flood_barrier_system
     → product unlock: drought_resilient_irrigation
-        → [Era 5] Urban heat island mitigation  (difficulty: 1.5) [EX eligible]
+        → [Era 12] Urban heat island mitigation  (difficulty: 1.5) [EX eligible]
             → process improvement: city_cooling_energy –20%
-                → [Era 6] Ecosystem restoration at scale  (difficulty: 5.0) [EX]
+                → [Era 13] Ecosystem restoration at scale  (difficulty: 5.0) [EX]
                     → modifies: regional_forest_coverage
                     → modifies: global_co2_index (negative feedback)
 ```
 
 **Chain: Industrial Gas Separation** (chemical_synthesis domain)
 ```
-[Era 1] Industrial gas separation — cryogenic distillation  (difficulty: 0.5, available at start)
+[Era 8] Industrial gas separation — cryogenic distillation  (difficulty: 0.5, available at start)
     → used for nitrogen, oxygen; no unlock needed
-        → [Era 3] Helium separation plant  (difficulty: 1.5, patentable: yes)
+        → [Era 10] Helium separation plant  (difficulty: 1.5, patentable: yes)
             → product unlock: extracted_helium
             → WorldGen note: helium_fraction field is set per gas deposit at Stage 8 gen time;
-              this tech is the required unlock (WorldGen §8.7 "Helium extraction from gas, era 3")
+              this tech is the required unlock (WorldGen §8.7 "Helium extraction from gas, era 10")
             → helium applications: superconductor cooling, MRI, semiconductor fab purge gas
-                → [Era 4] Helium recycling system  (difficulty: 1.0)
+                → [Era 11] Helium recycling system  (difficulty: 1.0)
                     → process improvement: helium_consumption –60% per unit of use
                     → strategic: limits depletion of finite helium reserves
 ```
@@ -1049,26 +1052,26 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 #### Domain: nuclear_engineering [EX]
 
 ```
-[Era 2] Small modular reactor design  (difficulty: 5.0, patentable: yes) [EX eligible; node in energy_systems]
+[Era 9] Small modular reactor design  (difficulty: 5.0, patentable: yes) [EX eligible; node in energy_systems]
     → facility unlock: small_modular_reactor
-        → [Era 3] Thorium fuel cycle  (difficulty: 3.5, patentable: yes)  [V1; energy_systems domain]
+        → [Era 10] Thorium fuel cycle  (difficulty: 3.5, patentable: yes)  [V1; energy_systems domain]
             → process improvement: nuclear_waste_volume –90% vs uranium cycle
-            → WorldGen note: thorium ore is seeded from Era 1; fuel use unlocked here at Era 3
-                → [Era 3] Advanced reactor fuel cycle  (difficulty: 4.0) [EX]
+            → WorldGen note: thorium ore is seeded from Era 8; fuel use unlocked here at Era 10
+                → [Era 10] Advanced reactor fuel cycle  (difficulty: 4.0) [EX]
                     → process improvement: nuclear_fuel_utilization +30%
-                        → [Era 4] Gen IV fast reactor  (difficulty: 8.0) [EX]
+                        → [Era 11] Gen IV fast reactor  (difficulty: 8.0) [EX]
                             → facility unlock: gen4_fast_reactor
-                                → [Era 4] Isotope separation  (difficulty: 3.0) [EX]
+                                → [Era 11] Isotope separation  (difficulty: 3.0) [EX]
                                     → product unlock: isotope_separation
                                     → enables K-40 fuel use (WorldGen §8.7), nuclear medicine isotopes
-                                        → [Era 5] Fusion plasma physics  (difficulty: 20.0) [EX]
+                                        → [Era 12] Fusion plasma physics  (difficulty: 20.0) [EX]
                                             → requires: quantum_systems domain knowledge ≥ 0.3
-                                                → [Era 6] Fusion ignition  (difficulty: 20.0) [EX]
+                                                → [Era 13] Fusion ignition  (difficulty: 20.0) [EX]
                                                     → see energy_systems.fusion chain
 
-[Era 5] Nuclear medicine — advanced imaging  (difficulty: 3.0) [EX]
+[Era 12] Nuclear medicine — advanced imaging  (difficulty: 3.0) [EX]
     → product unlock: pet_ct_scanner_advanced
-        → [Era 6] Targeted radionuclide therapy  (difficulty: 4.0) [EX]
+        → [Era 13] Targeted radionuclide therapy  (difficulty: 4.0) [EX]
             → product unlock: targeted_radionuclide_drug
 ```
 
@@ -1077,26 +1080,26 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 #### Domain: advanced_transportation [EX]
 
 ```
-[Era 3] Supersonic business jet research  (difficulty: 4.0, patentable: yes) [EX eligible]
+[Era 10] Supersonic business jet research  (difficulty: 4.0, patentable: yes) [EX eligible]
     → product unlock: supersonic_business_jet
-        → [Era 5] Hypersonic aircraft research  (difficulty: 8.0) [EX]
+        → [Era 12] Hypersonic aircraft research  (difficulty: 8.0) [EX]
             → requires: materials_science.high_entropy_alloys
             → product unlock: hypersonic_vehicle_platform
-                → [Era 6] Commercial hypersonic airliner  (difficulty: 10.0) [EX]
+                → [Era 13] Commercial hypersonic airliner  (difficulty: 10.0) [EX]
                     → product unlock: hypersonic_commercial_route
                     → strategic implication: point-to-point travel anywhere < 2 hours
-                        → [Era 7] Suborbital point-to-point transport  (difficulty: 15.0) [EX]
+                        → [Era 14] Suborbital point-to-point transport  (difficulty: 15.0) [EX]
                             → product unlock: suborbital_transport_route
-                                → [Era 8] Space elevator  (difficulty: 40.0) [EX]
+                                → [Era 15] Space elevator  (difficulty: 40.0) [EX]
                                     → requires: materials_science.space_elevator_cable_material
                                     → facility unlock: space_elevator
                                     → strategic implication: launch cost drops to near-zero; all orbital economics change
-                                        → [Era 9] Non-rocket space access  (difficulty: 20.0) [EX]
+                                        → [Era 16] Non-rocket space access  (difficulty: 20.0) [EX]
                                             → electromagnetic launch, laser propulsion variants
 
-[Era 4] eVTOL aircraft  (difficulty: 4.0) [EX eligible]
+[Era 11] eVTOL aircraft  (difficulty: 4.0) [EX eligible]
     → see mechanical_engineering.vehicles chain
-        → [Era 5] Urban air mobility service platform  (difficulty: 3.0) [EX]
+        → [Era 12] Urban air mobility service platform  (difficulty: 3.0) [EX]
             → product unlock: uam_service_route
 ```
 
@@ -1106,52 +1109,52 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 
 **Chain: Launch and Orbital Access**
 ```
-[Era 3] Reusable orbital launch vehicle  (difficulty: 5.0, patentable: yes) [EX eligible]
+[Era 10] Reusable orbital launch vehicle  (difficulty: 5.0, patentable: yes) [EX eligible]
     → product unlock: reusable_launch_vehicle
     → process improvement: launch_cost –70% vs. expendable
-        → [Era 4] Crewed commercial spaceflight  (difficulty: 6.0) [EX]
+        → [Era 11] Crewed commercial spaceflight  (difficulty: 6.0) [EX]
             → product unlock: crewed_spacecraft
-                → [Era 4] Commercial space station  (difficulty: 8.0) [EX]
+                → [Era 11] Commercial space station  (difficulty: 8.0) [EX]
                     → facility unlock: commercial_orbital_station
-                        → [Era 5] Lunar cargo delivery service  (difficulty: 6.0) [EX]
+                        → [Era 12] Lunar cargo delivery service  (difficulty: 6.0) [EX]
                             → product unlock: lunar_delivery_service
-                                → [Era 5] Lunar base construction  (difficulty: 10.0) [EX]
+                                → [Era 12] Lunar base construction  (difficulty: 10.0) [EX]
                                     → facility unlock: lunar_base
-                                        → [Era 6] Lunar helium-3 extraction  (difficulty: 8.0) [EX]
+                                        → [Era 13] Lunar helium-3 extraction  (difficulty: 8.0) [EX]
                                             → product unlock: helium3_fuel
                                             → enables next-gen fusion fuel
-                                                → [Era 6] Lunar regolith manufacturing  (difficulty: 6.0) [EX]
+                                                → [Era 13] Lunar regolith manufacturing  (difficulty: 6.0) [EX]
                                                     → product unlock: lunar_manufactured_good
-                                                        → [Era 7] Mars colony — early  (difficulty: 15.0) [EX]
+                                                        → [Era 14] Mars colony — early  (difficulty: 15.0) [EX]
                                                             → facility unlock: mars_base
 ```
 
 **Chain: Asteroid Mining**
 ```
-[Era 5] Asteroid prospecting — robotic  (difficulty: 6.0) [EX]
+[Era 12] Asteroid prospecting — robotic  (difficulty: 6.0) [EX]
     → product unlock: asteroid_survey_data
-        → [Era 6] Asteroid mining — near-Earth  (difficulty: 12.0) [EX]
+        → [Era 13] Asteroid mining — near-Earth  (difficulty: 12.0) [EX]
             → product unlock: asteroid_metal_ore
             → economic event: rare earth prices collapse if successful
-                → [Era 7] Industrial-scale asteroid mining  (difficulty: 15.0) [EX]
+                → [Era 14] Industrial-scale asteroid mining  (difficulty: 15.0) [EX]
                     → product unlock: asteroid_bulk_metal (iron, nickel, platinum-group)
                     → MAJOR economic disruption: metals markets
-                        → [Era 8] Outer belt mining operations  (difficulty: 20.0) [EX]
+                        → [Era 15] Outer belt mining operations  (difficulty: 20.0) [EX]
                             → product unlock: outer_belt_resources
-                                → [Era 9] Asteroid belt economy  (difficulty: 30.0) [EX]
+                                → [Era 16] Asteroid belt economy  (difficulty: 30.0) [EX]
                                     → new SimulationRegion: asteroid_belt (EX)
 ```
 
 **Chain: In-Space Manufacturing**
 ```
-[Era 6] Microgravity manufacturing research  (difficulty: 5.0) [EX]
+[Era 13] Microgravity manufacturing research  (difficulty: 5.0) [EX]
     → requires: commercial_orbital_station
     → product unlock: microgravity_manufactured_crystal (pharmaceutical use)
-        → [Era 7] In-space factory  (difficulty: 10.0) [EX]
+        → [Era 14] In-space factory  (difficulty: 10.0) [EX]
             → facility unlock: orbital_manufacturing_station
-                → [Era 8] In-space resource utilization  (difficulty: 8.0) [EX]
+                → [Era 15] In-space resource utilization  (difficulty: 8.0) [EX]
                     → process improvement: space_construction_cost –60%
-                        → [Era 9] Orbital megastructure construction  (difficulty: 40.0) [EX]
+                        → [Era 16] Orbital megastructure construction  (difficulty: 40.0) [EX]
                             → product unlock: orbital_megastructure_module
 ```
 
@@ -1160,30 +1163,30 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 #### Domain: cognitive_science [EX]
 
 ```
-[Era 4] Consumer neurofeedback device  (difficulty: 2.0, patentable: yes) [EX eligible]
+[Era 11] Consumer neurofeedback device  (difficulty: 2.0, patentable: yes) [EX eligible]
     → product unlock: consumer_neurofeedback_headset
-        → [Era 5] Medical BCI — motor cortex  (difficulty: 6.0) [EX]
+        → [Era 12] Medical BCI — motor cortex  (difficulty: 6.0) [EX]
             → product unlock: medical_bci_motor
             → regulatory: FDA/equiv approval path ~5 years in-sim
-                → [Era 5] High-bandwidth neural recording array  (difficulty: 5.0) [EX]
+                → [Era 12] High-bandwidth neural recording array  (difficulty: 5.0) [EX]
                     → research tool only; not commercial
-                        → [Era 6] Cognitive enhancement implant  (difficulty: 8.0) [EX]
+                        → [Era 13] Cognitive enhancement implant  (difficulty: 8.0) [EX]
                             → product unlock: cognitive_enhancement_bci
                             → grey market exists before regulatory approval
                             → labor market: enhanced workers command wage premium
-                                → [Era 6] Memory augmentation BCI  (difficulty: 8.0) [EX]
+                                → [Era 13] Memory augmentation BCI  (difficulty: 8.0) [EX]
                                     → product unlock: memory_augmentation_bci
-                                        → [Era 7] Bidirectional BCI — read/write  (difficulty: 15.0) [EX]
+                                        → [Era 14] Bidirectional BCI — read/write  (difficulty: 15.0) [EX]
                                             → product unlock: bidirectional_bci
                                             → enables: direct neural communication
-                                                → [Era 8] Neural mesh — persistent  (difficulty: 20.0) [EX]
+                                                → [Era 15] Neural mesh — persistent  (difficulty: 20.0) [EX]
                                                     → product unlock: neural_mesh_implant
                                                     → cognitive labor market transformation
-                                                        → [Era 9] Mind upload prototype  (difficulty: 50.0) [EX]
+                                                        → [Era 16] Mind upload prototype  (difficulty: 50.0) [EX]
                                                             → requires: quantum_systems.fault_tolerant_quantum_computer
                                                             → product unlock: digital_consciousness_substrate
                                                             → new legal and economic entity class
-                                                                → [Era 10] Substrate-independent existence  (difficulty: 30.0) [EX]
+                                                                → [Era 17] Substrate-independent existence  (difficulty: 30.0) [EX]
                                                                     → post-biological human NPC class enters simulation
 ```
 
@@ -1192,28 +1195,28 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 #### Domain: synthetic_biology [EX]
 
 ```
-[Era 4] CRISPR-Cas9 therapeutic application  (difficulty: 4.0, patentable: yes) [EX eligible]
+[Era 11] CRISPR-Cas9 therapeutic application  (difficulty: 4.0, patentable: yes) [EX eligible]
     → product unlock: crispr_therapy
-        → [Era 5] Metabolic engineering for industrial chemicals  (difficulty: 5.0) [EX]
+        → [Era 12] Metabolic engineering for industrial chemicals  (difficulty: 5.0) [EX]
             → product unlock: bio_manufactured_chemical
             → process improvement: chemical_synthesis_energy –40%
-                → [Era 6] Programmable microbiome  (difficulty: 6.0) [EX]
+                → [Era 13] Programmable microbiome  (difficulty: 6.0) [EX]
                     → product unlock: therapeutic_microbiome
                     → agricultural application: soil microbiome enhancement
-                        → [Era 6] Whole-genome synthesis  (difficulty: 8.0) [EX]
+                        → [Era 13] Whole-genome synthesis  (difficulty: 8.0) [EX]
                             → product unlock: synthetic_genome
-                                → [Era 7] Gene drive — contained  (difficulty: 10.0) [EX]
+                                → [Era 14] Gene drive — contained  (difficulty: 10.0) [EX]
                                     → product unlock: contained_gene_drive
                                     → application: malaria elimination, invasive species
                                     → regulatory risk: international biosafety treaties
-                                        → [Era 7] Programmable organism — industrial  (difficulty: 12.0) [EX]
+                                        → [Era 14] Programmable organism — industrial  (difficulty: 12.0) [EX]
                                             → facility unlock: biological_factory
                                             → produces: any organic compound at low cost
-                                                → [Era 8] Synthetic ecosystem design  (difficulty: 20.0) [EX]
+                                                → [Era 15] Synthetic ecosystem design  (difficulty: 20.0) [EX]
                                                     → product unlock: synthetic_ecosystem_module
-                                                        → [Era 9] Designer organism — general  (difficulty: 30.0) [EX]
+                                                        → [Era 16] Designer organism — general  (difficulty: 30.0) [EX]
                                                             → product unlock: bespoke_organism
-                                                                → [Era 10] Post-biological ecology  (difficulty: 40.0) [EX]
+                                                                → [Era 17] Post-biological ecology  (difficulty: 40.0) [EX]
                                                                     → climate recovery or new equilibrium
 ```
 
@@ -1228,32 +1231,32 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 - No additional V1 data structures needed; geoengineering reuses existing climate and resource systems
 
 ```
-[Era 5] Stratospheric aerosol injection research  (difficulty: 5.0) [EX]
+[Era 12] Stratospheric aerosol injection research  (difficulty: 5.0) [EX]
     → controversial; accelerates regulatory response globally
-    → no product unlock (research only for Era 5)
-        → [Era 6] SAI pilot deployment  (difficulty: 8.0) [EX]
+    → no product unlock (research only for Era 12)
+        → [Era 13] SAI pilot deployment  (difficulty: 8.0) [EX]
             → modifies: global_temperature_delta (small reduction)
             → triggers: geopolitical conflict events
-                → [Era 7] Coordinated SAI program  (difficulty: 15.0) [EX]
+                → [Era 14] Coordinated SAI program  (difficulty: 15.0) [EX]
                     → requires: political_pressure_req = very high (global consensus)
                     → modifies: global_temperature_delta –0.5°C
                     → risk: termination_shock (if stopped abruptly)
 
-[Era 6] Ocean iron fertilization  (difficulty: 4.0) [EX]
+[Era 13] Ocean iron fertilization  (difficulty: 4.0) [EX]
     → modifies: ocean_co2_absorption +5%
     → risk: ocean_ecosystem_disruption event probability +0.02/tick
 
-[Era 7] Marine cloud brightening  (difficulty: 6.0) [EX]
+[Era 14] Marine cloud brightening  (difficulty: 6.0) [EX]
     → modifies: regional_albedo (regional effect)
 
-[Era 8] Planetary albedo management  (difficulty: 25.0) [EX]
+[Era 15] Planetary albedo management  (difficulty: 25.0) [EX]
     → requires: space_systems.orbital_megastructure_construction
     → modifies: global_temperature_delta (significant)
 
-[Era 9] Deliberate climate control  (difficulty: 30.0) [EX]
+[Era 16] Deliberate climate control  (difficulty: 30.0) [EX]
     → set global_temperature_delta as policy variable
     → only achievable with multiple geoengineering techs combined
-        → [Era 10] Planetary atmospheric engineering  (difficulty: 50.0) [EX]
+        → [Era 17] Planetary atmospheric engineering  (difficulty: 50.0) [EX]
             → climate is now a managed system, not an external force
 ```
 
@@ -1262,24 +1265,24 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 #### Domain: quantum_systems [EX]
 
 ```
-[Era 3] Quantum key distribution — point-to-point  (difficulty: 3.0, patentable: yes) [EX eligible]
+[Era 10] Quantum key distribution — point-to-point  (difficulty: 3.0, patentable: yes) [EX eligible]
     → product unlock: qkd_link
-        → [Era 4] Quantum random number generator — commercial  (difficulty: 1.5) [EX eligible]
+        → [Era 11] Quantum random number generator — commercial  (difficulty: 1.5) [EX eligible]
             → product unlock: quantum_rng_module
-                → [Era 5] Quantum sensor — navigation  (difficulty: 4.0) [EX]
+                → [Era 12] Quantum sensor — navigation  (difficulty: 4.0) [EX]
                     → product unlock: quantum_inertial_sensor
                     → enables GPS-free precision navigation
-                        → [Era 5] Quantum sensor — gravitational  (difficulty: 5.0) [EX]
+                        → [Era 12] Quantum sensor — gravitational  (difficulty: 5.0) [EX]
                             → product unlock: quantum_gravimeter
                             → enables mineral/oil survey without drilling
-                                → [Era 6] Quantum communication network  (difficulty: 8.0) [EX]
+                                → [Era 13] Quantum communication network  (difficulty: 8.0) [EX]
                                     → product unlock: quantum_repeater_node
-                                        → [Era 7] Continental quantum internet  (difficulty: 12.0) [EX]
+                                        → [Era 14] Continental quantum internet  (difficulty: 12.0) [EX]
                                             → process improvement: financial_transaction_security → unbreakable
-                                                → [Era 8] Global quantum internet  (difficulty: 20.0) [EX]
+                                                → [Era 15] Global quantum internet  (difficulty: 20.0) [EX]
                                                     → product unlock: quantum_internet_node
 
-[Era 4] NISQ quantum processor  (difficulty: 8.0) [EX eligible]
+[Era 11] NISQ quantum processor  (difficulty: 8.0) [EX eligible]
     → see semiconductor_physics.quantum chain
 ```
 
@@ -1288,17 +1291,17 @@ Each chain shows the full progression from Year 2000 to Era 10. V1 nodes are unt
 ### Smartphones and Platform Economy Chain (Preserved + Extended)
 
 ```
-[Era 1] Mobile chipsets (Tier 3 semiconductors)
-    → [Era 2] ARM processor architecture license
-        → [Era 2] Mobile operating system
-            → [Era 2] Smartphone (product unlock: mobile_phone_smartphone)
-                → [Era 2] App platform (product unlock: app_platform)
-                    → [Era 3] App economy infrastructure
-                        → [Era 3] Gig platform (product unlock: gig_economy_platform)
-                            → [Era 4] Super-app platform  (product unlock: super_app)
-                                → [Era 5] AI-native app platform  [EX eligible]
-                                    → [Era 6] Spatial computing platform (AR/MR)  [EX]
-                                        → [Era 7] Neural interface app platform  [EX]
+[Era 8] Mobile chipsets (Tier 3 semiconductors)
+    → [Era 9] ARM processor architecture license
+        → [Era 9] Mobile operating system
+            → [Era 9] Smartphone (product unlock: mobile_phone_smartphone)
+                → [Era 9] App platform (product unlock: app_platform)
+                    → [Era 10] App economy infrastructure
+                        → [Era 10] Gig platform (product unlock: gig_economy_platform)
+                            → [Era 11] Super-app platform  (product unlock: super_app)
+                                → [Era 12] AI-native app platform  [EX eligible]
+                                    → [Era 13] Spatial computing platform (AR/MR)  [EX]
+                                        → [Era 14] Neural interface app platform  [EX]
                                             → requires: cognitive_science.bidirectional_bci
 ```
 
@@ -1431,7 +1434,7 @@ float compute_maturation_ceiling(
 
 `MATURATION_ERA_CEILING_BASE` and `MATURATION_ENHANCERS` are data-file defined (`/data/technology/maturation_ceilings.csv`, `/data/technology/maturation_enhancers.csv`). Example values:
 
-| node_key | Era 1 | Era 2 | Era 3 | Era 4 | Era 5 |
+| node_key | Era 8 | Era 9 | Era 10 | Era 11 | Era 12 |
 |---|---|---|---|---|---|
 | electric_vehicle | 0.10 | 0.35 | 0.55 | 0.75 | 0.90 |
 | mobile_phone_smartphone | — | 0.25 | 0.50 | 0.70 | 0.85 |
@@ -1541,8 +1544,8 @@ Transferred maturation is still era-capped. A late entrant who licenses cutting-
     AND actor B can initiate reverse_engineering.
     AND reverse_engineering success grants actor B maturation = 0.30 × 0.50 = 0.15.
 
-[SCENARIO S-TL-03]: When era advances from Era 2 to Era 3,
-    AND MATURATION_ERA_CEILING_BASE[electric_vehicle][Era 3] = 0.55,
+[SCENARIO S-TL-03]: When era advances from Era 9 to Era 10,
+    AND MATURATION_ERA_CEILING_BASE[electric_vehicle][Era 10] = 0.55,
     then actor A's maturation_ceiling rises to 0.55 immediately (no action required).
     AND actor A can now invest maturation beyond 0.30 up to 0.55.
 
@@ -1780,12 +1783,12 @@ struct CriminalRnDProject : public ResearchProject {
 
 | Era | Scheduling framework | Effect on designer drug R&D |
 |---|---|---|
-| Era 1 | Specific molecule bans | Research any novel structure |
-| Era 2 | Class-based analogue acts | Must change structural class, not just molecule |
-| Era 3 | Pharmacological analogue acts | Effect-based scheduling; much harder to evade |
-| Era 4 | AI-assisted scheduling review | Review period shortens dramatically |
-| Era 5+ [EX] | Real-time predictive scheduling | Near-instant scheduling from molecular structure alone |
-| Era 6+ [EX] | Synthetic biology biosecurity | Criminal biotech faces additional treaty frameworks |
+| Era 8 | Specific molecule bans | Research any novel structure |
+| Era 9 | Class-based analogue acts | Must change structural class, not just molecule |
+| Era 10 | Pharmacological analogue acts | Effect-based scheduling; much harder to evade |
+| Era 11 | AI-assisted scheduling review | Review period shortens dramatically |
+| Era 12+ [EX] | Real-time predictive scheduling | Near-instant scheduling from molecular structure alone |
+| Era 13+ [EX] | Synthetic biology biosecurity | Criminal biotech faces additional treaty frameworks |
 
 ### Criminal Research Infrastructure
 
@@ -1799,7 +1802,7 @@ opsec_profile = {
 }
 ```
 
-In Era 6+ [EX], synthetic biology criminal labs add:
+In Era 13+ [EX], synthetic biology criminal labs add:
 ```
 opsec_profile_addendum = {
     biological_waste_signal:   0.7–0.9 (characteristic biomass disposal)
@@ -2011,7 +2014,7 @@ struct ResourceDeposit {
 | System | Responsibility |
 |---|---|
 | **WorldGen** | Identify deposits in cold/permafrost provinces (latitude > 60°N in Earth analog); set `requires_climate_gate = true`; assign `climate_unlock_threshold` based on deposit geology; assign `required_tech_node` from the technology tree |
-| **R&D** | Define the technology nodes referenced in `required_tech_node`; ensure these nodes unlock at appropriate eras (arctic drilling in Era 3–4; rare earth processing in Era 2–3); gate these nodes appropriately |
+| **R&D** | Define the technology nodes referenced in `required_tech_node`; ensure these nodes unlock at appropriate eras (arctic drilling in Era 10–11; rare earth processing in Era 9–10); gate these nodes appropriately |
 | **Climate** | Update `province.climate_profile.regional_climate_stress` each tick derived from `global_temperature_delta` |
 
 **Access check timing:**
@@ -2052,22 +2055,22 @@ struct ClimateRegulation {
 
 | Era | Regulatory measure | Economic effect |
 |---|---|---|
-| Era 1 | Kyoto Protocol (weak; US non-participant) | Minimal; some regions get carbon reporting requirements |
-| Era 2 | Carbon trading markets in some regions | Adds cost to heavy emitters; creates carbon credit market |
-| Era 3 | Paris Agreement ratification | Broader carbon targets; renewable mandates in some regions |
-| Era 4 | Net-zero commitments + EV mandates | ICE vehicle sales restricted in some regions; carbon tax rises |
-| Era 5 | Carbon border adjustments + industrial mandates | Strands high-emission manufacturing; green premium reverses |
-| Era 6 [EX] | Mandatory geoengineering governance | Players' geoengineering requires global treaty compliance |
-| Era 7 [EX] | Adaptation mandates + tipping point protocols | Forced relocation subsidies; managed retreat from coastal zones |
-| Era 8 [EX] | Planetary management treaties | Coordinated climate control; violations trigger sanctions |
+| Era 8 | Kyoto Protocol (weak; US non-participant) | Minimal; some regions get carbon reporting requirements |
+| Era 9 | Carbon trading markets in some regions | Adds cost to heavy emitters; creates carbon credit market |
+| Era 10 | Paris Agreement ratification | Broader carbon targets; renewable mandates in some regions |
+| Era 11 | Net-zero commitments + EV mandates | ICE vehicle sales restricted in some regions; carbon tax rises |
+| Era 12 | Carbon border adjustments + industrial mandates | Strands high-emission manufacturing; green premium reverses |
+| Era 13 [EX] | Mandatory geoengineering governance | Players' geoengineering requires global treaty compliance |
+| Era 14 [EX] | Adaptation mandates + tipping point protocols | Forced relocation subsidies; managed retreat from coastal zones |
+| Era 15 [EX] | Planetary management treaties | Coordinated climate control; violations trigger sanctions |
 
 ### Strategic Implications
 
 **The stranded asset problem:**
-A player who maximizes fossil fuel investment in Era 1–2 will have highly profitable operations for 10–15 in-game years. By Era 4, those same assets face carbon taxes, regulatory restrictions, declining demand, and environmental liabilities. The optimal NPV strategy likely involves fossil fuels *early* and pivoting to clean technology *before* the regulatory hammer falls.
+A player who maximizes fossil fuel investment in Era 8–9 will have highly profitable operations for 10–15 in-game years. By Era 11, those same assets face carbon taxes, regulatory restrictions, declining demand, and environmental liabilities. The optimal NPV strategy likely involves fossil fuels *early* and pivoting to clean technology *before* the regulatory hammer falls.
 
 **First-mover advantage in clean tech:**
-Solar panels are expensive and uncompetitive in 2000. A player who funds solar R&D in Era 1–2 and builds manufacturing capacity early will own a major cost advantage by Era 3 when the market turns competitive.
+Solar panels are expensive and uncompetitive in 2000. A player who funds solar R&D in Era 8–9 and builds manufacturing capacity early will own a major cost advantage by Era 10 when the market turns competitive.
 
 **Climate as a political tool:**
 Regional climate stress raises NPC voter concern, which raises the political pressure required to ignore climate regulation. A player who controls polluting industries in a climate-stressed region will face increasingly hostile local politics.
@@ -2207,7 +2210,7 @@ The R&D project logic, patent mechanics, and climate accumulation formulas are e
 
 **Historical scenario mods:** A modder could create a "start in 1970" scenario by adjusting era baselines, removing already-invented goods from the starting state, and configuring a different CO₂ starting level. This is fully data-driven.
 
-**Future scenario mods:** A modder could add Era 11 ("Post-Singularity") or extend any domain chain by adding new node CSV entries with `era_available = 11`.
+**Future scenario mods:** A modder could add Era 18 ("Post-Singularity") or extend any domain chain by adding new node CSV entries with `era_available = 18`.
 
 ---
 
@@ -2445,9 +2448,9 @@ This registry is the machine-readable flat table of all V1 tech nodes. EX nodes 
 ## Part 12 — Open Questions
 
 **Resolved since v2.0:**
-- ~~WorldGen §8.7 unlock condition "Thorium reactor tech" mismatched era~~ — `thorium_fuel_cycle` moved to Era 3 V1 (`energy_systems` domain, prereq `smr_design`). WorldGen §8.7 and tech tree now agree.
+- ~~WorldGen §8.7 unlock condition "Thorium reactor tech" mismatched era~~ — `thorium_fuel_cycle` moved to Era 10 V1 (`energy_systems` domain, prereq `smr_design`). WorldGen §8.7 and tech tree now agree.
 - ~~WorldGen §8.7 lists five unlock conditions with no matching node key~~ — Added: `heavy_oil_processing`, `arctic_offshore_drilling`, `deep_sea_mining`, `helium_separation_plant`, `isotope_separation`.
-- ~~Shale oil: Era 1 tech vs Era 2 WorldGen resource gate conflict~~ — Resolved as intentional decoupling. Tech is researchable Era 1; WorldGen deposit `era_available = 2` is a separate physical/regulatory constraint. Both are now annotated.
+- ~~Shale oil: Era 8 tech vs Era 9 WorldGen resource gate conflict~~ — Resolved as intentional decoupling. Tech is researchable Era 8; WorldGen deposit `era_available = 9` is a separate physical/regulatory constraint. Both are now annotated.
 - ~~GlobalTechnologyState.unlocked_nodes as global boolean~~ — Replaced by `first_researched_by` / `first_commercialized_by`; per-actor holdings in `ActorTechnologyState`.
 
 **Open:**
@@ -2458,19 +2461,19 @@ This registry is the machine-readable flat table of all V1 tech nodes. EX nodes 
 
 3. **R&D as a tradeable good.** Should R&D output itself be tradeable? Currently R&D produces TechHoldings and domain knowledge, not a tradeable commodity. Deferred.
 
-4. **Technology export controls [EX].** Era 4+ chip restrictions between nation-analog factions. Requires a national technology export policy system. Flagging for EX scope.
+4. **Technology export controls [EX].** Era 11+ chip restrictions between nation-analog factions. Requires a national technology export policy system. Flagging for EX scope.
 
-5. **Longevity medicine economic model [EX].** When NPCs live 30+ years longer, labor market, pension system, and political succession models need updating. Significant cross-document change for Era 7+ design phase.
+5. **Longevity medicine economic model [EX].** When NPCs live 30+ years longer, labor market, pension system, and political succession models need updating. Significant cross-document change for Era 14+ design phase.
 
 6. **Space as a SimulationRegion [EX].** Asteroid belt and orbital space need new `SimulationRegion` instances. WorldGen v0.16 covers Earth only; space geography is an EX-phase expansion.
 
-7. **Post-scarcity economic modeling [EX].** When fusion and molecular assembly arrive (Era 8–9), the scarcity assumptions underlying the price system change. A new economic paradigm model is needed.
+7. **Post-scarcity economic modeling [EX].** When fusion and molecular assembly arrive (Era 15–16), the scarcity assumptions underlying the price system change. A new economic paradigm model is needed.
 
-8. **Criminal synthetic biology threat model [EX].** Era 8+ criminal biotech needs a biosecurity regulatory system, containment failure event type, and NPC response behaviors.
+8. **Criminal synthetic biology threat model [EX].** Era 15+ criminal biotech needs a biosecurity regulatory system, containment failure event type, and NPC response behaviors.
 
-9. **AI as economic actor [EX].** When `economically_autonomous_ai` is unlocked (Era 7), the current NPC struct (which assumes biological entities) needs extension to represent AI-held contracts, IP, and transactions.
+9. **AI as economic actor [EX].** When `economically_autonomous_ai` is unlocked (Era 14), the current NPC struct (which assumes biological entities) needs extension to represent AI-held contracts, IP, and transactions.
 
-10. **Interplanetary financial instruments [EX].** Era 7+ multi-region instruments across Earth/lunar/Mars economies break the real-time assumption when light-speed delays become material.
+10. **Interplanetary financial instruments [EX].** Era 14+ multi-region instruments across Earth/lunar/Mars economies break the real-time assumption when light-speed delays become material.
 
 11. **maturation_ceiling data population.** `MATURATION_ERA_CEILING_BASE` and `MATURATION_ENHANCERS` tables (`/data/technology/maturation_ceilings.csv`, `/data/technology/maturation_enhancers.csv`) need values for all V1 product_unlock nodes. Currently only example values exist. This is required before any simulation-accurate testing of technology quality dynamics.
 
@@ -2478,7 +2481,7 @@ This registry is the machine-readable flat table of all V1 tech nodes. EX nodes 
 
 13. ~~**Permafrost thaw dual-gate ownership.**~~ **CLOSED (v2.3):** R&D Part 8 now owns the Permafrost Thaw Dual-Gate Formula under Climate Integration section. WorldGen seeds deposit parameters; Climate system updates stress indices; R&D evaluates accessibility each tick.
 
-14. **Planet-age nuclear path branching [EX].** WorldGen §2357 notes that old-planet campaigns (uranium-scarce) need a direct path to thorium that bypasses Gen IV fast reactors. The current chain still requires `smr_design → thorium_fuel_cycle`, which is available at Era 3 — but the Gen IV branch still requires uranium. Needs explicit branch documentation for non-Earth-analog campaigns.
+14. **Planet-age nuclear path branching [EX].** WorldGen §2357 notes that old-planet campaigns (uranium-scarce) need a direct path to thorium that bypasses Gen IV fast reactors. The current chain still requires `smr_design → thorium_fuel_cycle`, which is available at Era 10 — but the Gen IV branch still requires uranium. Needs explicit branch documentation for non-Earth-analog campaigns.
 
 ---
 

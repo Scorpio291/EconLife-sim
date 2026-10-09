@@ -10,6 +10,9 @@
 
 ---
 
+> **Era numbering (2026-10-08, decision V5):** every era number in this document follows `packages/base_game/eras/eras.csv` — Era 1 = Neolithic … Era 7 = Industrial, **Era 8 = Turn of the Millennium (2000)**, Era 12 = Transition (2024), Era 17 = Divergence. Before this date this document counted Era 1 = 2000; those references were shifted by +7. Prefer the `era_key` (e.g. `turn_of_millennium`) when writing new text. See `EconLife_Simulation_Foundation_v01.md` §5.
+
+
 ## Purpose
 
 This document defines:
@@ -1798,29 +1801,29 @@ Not all goods in the master list exist at game start. Era-locked goods are inacc
 
 New column for the goods CSV: `era_available` (1–5, default 1 = available from start).
 
-**Goods locked at Era 1 start:**
+**Goods locked at Era 8 start:**
 
 | Key | Era Available | Unlock Path |
 |---|---|---|
-| `mobile_phone` (smartphone) | Era 2 | ARM processor → mobile OS → smartphone R&D |
-| `battery_cell` (Li-ion EV scale) | Era 2 | Li-ion chemistry research |
-| `battery_pack` | Era 2 | Requires battery_cell (era 2) |
-| `electric_vehicle` | Era 2 | Requires EV drivetrain R&D |
-| `electric_motor` (EV-grade) | Era 2 | Requires EV powertrain research |
-| `display_panel` (OLED) | Era 2 | OLED chemistry research |
-| `solar_panel` (competitive) | Era 2–3 | Photovoltaic efficiency research (Era 2 unlocks the good; Era 3 makes it cost-competitive) |
-| `semiconductor_chip` (sub-65nm) | Era 2+ | Successive process node research |
-| `server_unit` (cloud-scale) | Era 2 | Cloud architecture research |
-| `mrna_pharmaceutical` | Era 4 | mRNA delivery mechanism research |
-| `ai_hardware_accelerator` | Era 4 | AI hardware research |
-| `synthetic_cannabinoid` | Era 1* | Criminal R&D; legal until scheduled |
+| `mobile_phone` (smartphone) | Era 9 | ARM processor → mobile OS → smartphone R&D |
+| `battery_cell` (Li-ion EV scale) | Era 9 | Li-ion chemistry research |
+| `battery_pack` | Era 9 | Requires battery_cell (era 9) |
+| `electric_vehicle` | Era 9 | Requires EV drivetrain R&D |
+| `electric_motor` (EV-grade) | Era 9 | Requires EV powertrain research |
+| `display_panel` (OLED) | Era 9 | OLED chemistry research |
+| `solar_panel` (competitive) | Era 9–10 | Photovoltaic efficiency research (Era 9 unlocks the good; Era 10 makes it cost-competitive) |
+| `semiconductor_chip` (sub-65nm) | Era 9+ | Successive process node research |
+| `server_unit` (cloud-scale) | Era 9 | Cloud architecture research |
+| `mrna_pharmaceutical` | Era 11 | mRNA delivery mechanism research |
+| `ai_hardware_accelerator` | Era 11 | AI hardware research |
+| `synthetic_cannabinoid` | Era 8* | Criminal R&D; legal until scheduled |
 | `designer_drug` | Any era | Criminal R&D; always legal until scheduled |
 
-*Era 1 goods may still require R&D if they were not commercially available in 2000.
+*Era 8 goods may still require R&D if they were not commercially available in 2000.
 
 **What this means for factory recipes:**
 
-Recipes that require an era-locked input good cannot run until that good is available. A vehicle assembly plant built in 2000 that requires `battery_pack` as an input will simply not be able to produce electric vehicles until the Era 2 unlock occurs. The recipe is defined from the start (modders and planners can see it) — the inputs just don't exist yet.
+Recipes that require an era-locked input good cannot run until that good is available. A vehicle assembly plant built in 2000 that requires `battery_pack` as an input will simply not be able to produce electric vehicles until the Era 9 unlock occurs. The recipe is defined from the start (modders and planners can see it) — the inputs just don't exist yet.
 
 ---
 
@@ -1830,13 +1833,13 @@ Tech tier availability also follows the era system. Operators in 2000 cannot bui
 
 | Tech Tier | Era Available | Historical analog |
 |---|---|---|
-| Tier 1 | Era 1 (start) | Basic industrial (always existed) |
-| Tier 2 | Era 1 (start) | Standard 2000-era industry |
-| Tier 3 | Era 1 (start, frontier) | Cutting-edge 2000-era (early semiconductors, precision manufacturing) |
-| Tier 4 | Era 2 | Post-2007 advanced manufacturing (advanced fabs, EV production) |
-| Tier 5 | Era 4 | Post-2019 frontier (5nm semiconductors, AI hardware, advanced biotech) |
+| Tier 1 | Era 8 (start) | Basic industrial (always existed) |
+| Tier 2 | Era 8 (start) | Standard 2000-era industry |
+| Tier 3 | Era 8 (start, frontier) | Cutting-edge 2000-era (early semiconductors, precision manufacturing) |
+| Tier 4 | Era 9 | Post-2007 advanced manufacturing (advanced fabs, EV production) |
+| Tier 5 | Era 11 | Post-2019 frontier (5nm semiconductors, AI hardware, advanced biotech) |
 
-A Tier 3 facility at game start is therefore genuinely high-end — few NPC businesses operate at that level. A player who builds Tier 3 manufacturing in Era 1 has a genuine advantage over Era 1 competitors, and a genuine disadvantage against Era 4 Tier 5 entrants who arrive later but with better technology.
+A Tier 3 facility at game start is therefore genuinely high-end — few NPC businesses operate at that level. A player who builds Tier 3 manufacturing in Era 8 has a genuine advantage over Era 8 competitors, and a genuine disadvantage against Era 11 Tier 5 entrants who arrive later but with better technology.
 
 **Stranded asset mechanic:**
 A Tier 2 steel mill built in 2000 will still be Tier 2 in 2025. The owner can upgrade it (costly; requires construction time and capital), or operate it at growing competitive disadvantage as newer players and NPC businesses build Tier 4+ facilities. This is how real industrial history works — older plants are exactly this problem, and incumbents who delay upgrading lose market position to newer entrants.
@@ -1908,7 +1911,7 @@ quantity_on_arrival = quantity_shipped × (1.0 - SPOILAGE_RATE × transport_tick
 | Pharmaceutical | 0.002/tick | 0.001/tick | Temp-sensitive; cold chain adds cost |
 
 **Cold chain as a facility upgrade:**
-Transport and logistics hubs can install refrigeration (a tech upgrade, available from Era 1 but costs capital). Refrigerated transport halves all perishable decay and spoilage rates. This creates a meaningful infrastructure investment decision — the player who builds cold chain infrastructure in a region gains an advantage in food and pharmaceutical trade that competitors who skipped it cannot easily match.
+Transport and logistics hubs can install refrigeration (a tech upgrade, available from Era 8 but costs capital). Refrigerated transport halves all perishable decay and spoilage rates. This creates a meaningful infrastructure investment decision — the player who builds cold chain infrastructure in a region gains an advantage in food and pharmaceutical trade that competitors who skipped it cannot easily match.
 
 ---
 

@@ -156,8 +156,15 @@ society**. Every node is `main`, `side` or `hub`.
   The era ladder in `eras.csv` is the running total of node weights and is NEVER fitted;
   regenerate it with `tools/calibration/set_content_exponent.py`. A unit test asserts
   eras.csv against the tree.
-- **There is exactly one fitted number in the climb**: `KnowledgeConfig::knowledge_rate`,
-  the clock. See `tools/calibration/README.md`.
+- **There is no fitted clock in the climb.** `KnowledgeConfig::knowledge_rate`, the
+  constant once bisected against a historical date, was removed on 2026-08-23 and must not
+  come back under any name. How fast a province learns comes out of its people and its
+  institutions (`KnowledgeModule`): the knowledge-keepers its surplus can free, the
+  output of their institutions (elder, scribe, scholar), the whole population under
+  pressure, the era's learning-to-learn multiplier, and the schooling and health of the
+  people doing it (see "What a Population IS" below), divided by how hard the next idea
+  is to find. See `tools/calibration/README.md`; CI fails if `knowledge_rate` reappears
+  in code or package data.
 - **Node effects compose by saturation, not multiplication.** Techniques overlap; a
   product of many small bonuses explodes (measured: x9,557 on food).
 - **Do not grade the speed of an ascent.** Different worlds take different times and none
@@ -187,6 +194,7 @@ Modders edit CSVs without recompilation.
 - GDD v1.7: docs/design/EconLife_GDD.md
 - Technical Design v29: docs/design/EconLife_Technical_Design_v29.md
 - Feature Tier List: docs/design/EconLife_Feature_Tier_List.md
+- Simulation Foundation (layers, contracts, clocks; decisions 2026-10-08): docs/design/EconLife_Simulation_Foundation_v01.md
 - Commodities & Factories: docs/design/EconLife_Commodities_and_Factories_v23.md
 - R&D & Technology: docs/design/EconLife_RnD_and_Technology_v22.md
 - AI Development Plan: docs/design/EconLife_AI_Development_Plan_updated.md
