@@ -44,9 +44,9 @@ jobs:
         # h3.pdb as their PDB output; with unconstrained `/m` MSBuild
         # races them and one loses with LNK1201 "error writing to
         # program database". `-j 2` is sufficient headroom for our own
-        # targets while preventing the h3 PDB race. Linux uses the
-        # unconstrained Ninja/Make parallelism (where this race
-        # doesn't exist).
+        # targets while preventing the h3 PDB race. Linux is bounded
+        # too (see each branch below): unbounded Make parallelism runs
+        # the runner out of memory.
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
@@ -61,7 +61,11 @@ jobs:
             # and same remedy as the sanitizer cell below.
             cmake --build build --config ${{ matrix.build_type }} -j 2
           else
-            cmake --build build --config ${{ matrix.build_type }} -j
+            # Linux Release: bounded by the core count. A bare `-j` means NO
+            # limit under Make, so every translation unit compiles at once; as
+            # the target count grew the runner was OOM-killed ("Killed signal
+            # terminated program cc1plus", runner shutdown, exit 143).
+            cmake --build build --config ${{ matrix.build_type }} -j "$(nproc)"
           fi
 
       - name: Run unit tests
