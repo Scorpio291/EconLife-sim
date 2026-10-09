@@ -14,8 +14,8 @@
 //
 //   ./econlife_emergence_tests "[.legitimacy-trace]"
 
-#include <catch2/catch_test_macros.hpp>
 #include <array>
+#include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -26,6 +26,7 @@
 #include "core/tick/thread_pool.h"
 #include "core/tick/tick_orchestrator.h"
 #include "core/world_gen/world_generator.h"
+#include "core/world_state/apply_deltas.h"
 #include "modules/random_events/random_events_module.h"
 #include "modules/register_base_game_modules.h"
 #include "tests/integration/emergence_harness.h"
@@ -195,10 +196,11 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
             }
 
             const auto& nat = world.nations[0];
-            std::printf("\n=== seed %llu year %u: nations %zu, nations[0] legitimacy %.3f, gov %d\n",
-                        static_cast<unsigned long long>(seed), y, world.nations.size(),
-                        static_cast<double>(nat.political_cycle.national_legitimacy),
-                        static_cast<int>(nat.government_type));
+            std::printf(
+                "\n=== seed %llu year %u: nations %zu, nations[0] legitimacy %.3f, gov %d\n",
+                static_cast<unsigned long long>(seed), y, world.nations.size(),
+                static_cast<double>(nat.political_cycle.national_legitimacy),
+                static_cast<int>(nat.government_type));
             std::printf(
                 "prov nat   pop(k) stab  trust griev unemp formal infra crime cdom  ineq  "
                 "income  surplus sick  homeless resp\n");
@@ -234,30 +236,121 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
                     tr, st, gr, un, 0.35 * tr + 0.45 * st - 0.50 * gr - 0.30 * un, 0.35 * tr,
                     0.45 * st, 0.50 * gr, 0.30 * un);
             }
-            std::printf("events started this year (natural/accident/economic/human), "
-                        "lifetime stability cost, natural infra hit:\n");
+            // The event roll's inputs, as random_events reads them: rate multiplier
+            // (1 + 1.5 climate)(1 + instability)(1 + mean |spot - eq| / eq).
+            for (const auto& p : world.provinces) {
+                double dev = 0, worst = 0;
+                int n = 0;
+                for (uint32_t i : markets_in_province(world, p.id)) {
+                    const auto& m = world.regional_markets[i];
+                    if (m.equilibrium_price > 0.0f) {
+                        const double d =
+                            std::abs(m.spot_price - m.equilibrium_price) / m.equilibrium_price;
+                        dev += d;
+                        worst = std::max(worst, d);
+                        ++n;
+                    }
+                }
+                const double vol = 1.0 + (n ? dev / n : 0.0);
+                const double cs = p.climate.climate_stress_current;
+                const double inst = 1.0 - p.conditions.stability_score;
+                std::printf(
+                    "  roll p%u: climate %.3f instab %.3f volatility %.3f (%d markets, "
+                    "worst dev %.2f) -> rate x%.2f = %.2f events/yr\n",
+                    p.id, cs, inst, vol, n, worst, (1 + 1.5 * cs) * (1 + inst) * vol,
+                    0.15 * 12 * (1 + 1.5 * cs) * (1 + inst) * vol);
+            }
+            {
+                // spot / equilibrium across province 0's markets, bucketed.
+                int b[6] = {0, 0, 0, 0, 0, 0};  // <0.5, <0.9, <1.1, <2, <2.9, >=2.9
+                int zero_supply = 0, zero_demand = 0;
+                for (uint32_t i : markets_in_province(world, 0)) {
+                    const auto& m = world.regional_markets[i];
+                    if (!(m.equilibrium_price > 0.0f))
+                        continue;
+                    const double r = m.spot_price / m.equilibrium_price;
+                    ++b[r < 0.5 ? 0 : r < 0.9 ? 1 : r < 1.1 ? 2 : r < 2 ? 3 : r < 2.9 ? 4 : 5];
+                    zero_supply += m.supply <= 0.0f;
+                    zero_demand += m.demand_buffer <= 0.0f;
+                }
+                std::printf(
+                    "  p0 spot/eq: <0.5 %d  0.5-0.9 %d  0.9-1.1 %d  1.1-2 %d  2-2.9 %d  "
+                    ">=2.9 %d   supply<=0 %d  demand<=0 %d\n",
+                    b[0], b[1], b[2], b[3], b[4], b[5], zero_supply, zero_demand);
+            }
+            std::printf(
+                "events started this year (natural/accident/economic/human), "
+                "lifetime stability cost, natural infra hit:\n");
             for (size_t p = 0; p < np; ++p)
                 std::printf("  p%zu  %2d %2d %2d %2d   cost %.3f   infra %.3f\n", p, count[p][0],
                             count[p][1], count[p][2], count[p][3], cost[p], infra_hit[p]);
             for (const auto& l : log)
                 std::printf("%s\n", l.c_str());
             for (int f = 0; f < kFields; ++f) {
-            std::printf("%s change this year by module (per province, then mean):\n",
-                        kFieldName[f]);
-            for (const auto& [mod, v] : ledger.year[f]) {
-                double sum = 0.0, mag = 0.0;
-                for (double d : v) {
-                    sum += d;
-                    mag += std::abs(d);
+                std::printf("%s change this year by module (per province, then mean):\n",
+                            kFieldName[f]);
+                for (const auto& [mod, v] : ledger.year[f]) {
+                    double sum = 0.0, mag = 0.0;
+                    for (double d : v) {
+                        sum += d;
+                        mag += std::abs(d);
+                    }
+                    if (mag < 1e-6)
+                        continue;
+                    std::printf("  %-28s", mod.c_str());
+                    for (double d : v)
+                        std::printf(" %+.4f", d);
+                    std::printf("  | %+.4f\n", sum / static_cast<double>(v.size()));
                 }
-                if (mag < 1e-6)
-                    continue;
-                std::printf("  %-28s", mod.c_str());
-                for (double d : v)
-                    std::printf(" %+.4f", d);
-                std::printf("  | %+.4f\n", sum / static_cast<double>(v.size()));
-            }
             }
         }
     }
+}
+
+TEST_CASE("legitimacy trace: counterfactual event rates", "[.legitimacy-trace]") {
+    // The same worlds with the random-event roll switched off (base rate 0; no
+    // cross-module triggers fire in this baseline): what legitimacy is left is what
+    // the material and institutional conditions alone sustain. Then at base rate
+    // 0.15 / 2.972: the rate the roll would have if markets cleared, since 148 of
+    // 151 markets sit at spot = 3 x equilibrium and the volatility multiplier reads
+    // 2.972 in every province of every seed.
+    for (float rate : {0.0f, 0.15f / 2.972f})
+        for (uint64_t seed : {42ULL, 43ULL, 44ULL, 45ULL}) {
+            WorldGeneratorConfig config{};
+            config.seed = seed;
+            config.province_count = 6;
+            config.npc_count = 200;
+            config.criminal_baseline = 0.10f;
+            config.goods_directory = emergence::find_goods_dir();
+            auto [world, player] = WorldGenerator::generate_with_player(config);
+            world.player = std::make_unique<PlayerCharacter>(std::move(player));
+            TickOrchestrator orch;
+            register_base_game_modules(orch);
+            orch.finalize_registration();
+            RandomEventsModule* events = nullptr;
+            for (const auto& m : orch.modules())
+                if (auto* r = dynamic_cast<RandomEventsModule*>(m.get()))
+                    events = r;
+            REQUIRE(events != nullptr);
+            events->set_base_rate(rate);
+            ThreadPool pool(1);
+            for (uint32_t y = 1; y <= 3; ++y) {
+                for (uint32_t t = 0; t < 365; ++t)
+                    orch.execute_tick(world, pool);
+                double w = 0, st = 0, gr = 0, tr = 0;
+                for (const auto& p : world.provinces) {
+                    const double pop = p.cohort_stats ? p.cohort_stats->total_population : 0.0;
+                    w += pop;
+                    st += pop * p.conditions.stability_score;
+                    gr += pop * p.community.grievance_level;
+                    tr += pop * p.community.institutional_trust;
+                }
+                std::printf(
+                    "base rate %.4f seed %llu year %u: legitimacy %.3f  stab %.3f griev %.3f "
+                    "trust %.3f  events %zu\n",
+                    static_cast<double>(rate), static_cast<unsigned long long>(seed), y,
+                    static_cast<double>(world.nations[0].political_cycle.national_legitimacy),
+                    st / w, gr / w, tr / w, events->active_events().size());
+            }
+        }
 }
