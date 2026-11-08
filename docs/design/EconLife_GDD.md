@@ -101,7 +101,7 @@ The writers' job on this project is not to write story events. It is to write th
 
 ### The Setting
 
-The game begins in January 2000. Not a stylized past, not a remembered one — the live conditions of that moment, exactly as they were.
+The game begins in January 2000 — the technology, institutions and economic conditions of that moment (decision V6, 2026-10-08). The world itself is not the real Earth: it is a procedurally generated planet whose geography, resources and history were produced by the simulation (physical world generation, then forward-simulated history up to the year 2000; see `EconLife_Simulation_Foundation_v01.md`). The description below is the *technological and institutional* starting point, not a copy of real nations.
 
 The internet is commercially young and accelerating. Email has become standard in business. E-commerce exists — Amazon is five years old — but physical retail still dominates by an enormous margin. Google launched two years ago. Broadband penetration is below 10% in most wealthy countries; the majority of households that connect to the internet do so over phone lines. The convergence of the telephone and the computer that will define the next two decades hasn't happened. The smartphone doesn't exist.
 
@@ -119,7 +119,7 @@ The world the player starts in is not the world they will end in. The automation
 
 The world is composed of **provinces** (equivalent to counties or municipalities), each belonging to one of several **nations**. Provinces have simulated attributes: population and demographics (age distribution, education levels, income brackets, political lean), natural resources (ore deposits, arable land, oil reserves, forests, fisheries), infrastructure rating (roads, power grid, broadband, water supply), local real estate market with dynamic pricing, and crime rate, inequality index, and social stability score.
 
-Nations have independent governments, currencies, tax codes, trade relationships, central banks, and diplomatic postures toward other nations. A nation's internal conditions — stability, inequality, debt level, corruption index — evolve over time based on the aggregate behavior of all actors within it, including the player. The world is initialized from the political map of January 2000. National borders change only through in-simulation political events — province geography is fixed; nation membership of a province can change.
+Nations have independent governments, currencies, tax codes, trade relationships, central banks, and diplomatic postures toward other nations. A nation's internal conditions — stability, inequality, debt level, corruption index — evolve over time based on the aggregate behavior of all actors within it, including the player. The political map at January 2000 is the outcome of the simulated history that produced the world, not the real-world map of 2000 (a GIS-derived Earth is a later scenario). National borders change only through in-simulation political events — province geography is fixed; nation membership of a province can change.
 
 ### Time Scale
 
@@ -1739,6 +1739,8 @@ The core intent is non-negotiable: a living world where the story emerges from t
 This GDD describes the complete intended design of EconLife — the full vision. It does not describe what ships in v1. Building the full document in one production cycle is not viable. The design must be tiered, the first release scoped to a vertical slice that proves the core simulation works, and the technical architecture validated before content production scales up.
 
 ### The V1 Vertical Slice
+
+**Foundation first (decision V1, 2026-10-08):** the physical and historical foundation the game is built on (planet-wide generation, geology, climate, biota, mechanical history, information latency; see `EconLife_Simulation_Foundation_v01.md`) is built properly before play scope grows. Play scope below can wait; foundation fidelity cannot.
 
 V1 EconLife is a contained, deep version of the core loop set in one nation with three to five regions. It includes legitimate business and political career paths at full depth, a criminal economy limited to the drug supply chain and money laundering, NPC simulation at meaningful but not maximal complexity, and the full consequence, exposure, and obligation architecture. It includes procedural world generation — the 11-stage `WorldGenPipeline` is a V1 feature; worlds can be seeded from `WorldGenParameters` or from the GIS real-world pipeline; both produce identical `world.json` output. It does not include human trafficking, generational play, or multi-nation operations. Those are post-launch expansions built on a proven simulation foundation.
 

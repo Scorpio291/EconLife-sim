@@ -4,6 +4,9 @@
 
 ---
 
+> **Era numbering (2026-10-08, decision V5):** every era number in this document follows `packages/base_game/eras/eras.csv` — Era 1 = Neolithic … Era 7 = Industrial, **Era 8 = Turn of the Millennium (2000)**, Era 12 = Transition (2024), Era 17 = Divergence. Before this date this document counted Era 1 = 2000; those references were shifted by +7. Prefer the `era_key` (e.g. `turn_of_millennium`) when writing new text. See `EconLife_Simulation_Foundation_v01.md` §5.
+
+
 ## Status and Scope
 
 This document specifies the procedural world generation pipeline — an alternative world source to the GIS-seeded real-world pipeline described in World Map & Geography v1.1. Both pipelines produce identical output format (`world.json`) and are consumed identically by the engine.
@@ -14,7 +17,7 @@ This document specifies the procedural world generation pipeline — an alternat
 
 > **DESIGN DECISION 2026-06-16 — mechanical history generation (supersedes the narrative-only model for the *human* history layer).** The physical pipeline (Stages 1–8: tectonics→…→resources) stays exactly as specified — world gen → base resources. But the *human* history (settlements, firms, fortunes, nations, crime, conditions) shifts from **backward-narrated flavor** (Stages 9–10 seed a full economy and Stage 10.2 invents a plausible past to explain it) to **forward-simulated emergence**: world gen produces only the physical substrate + a minimal founding population, then the simulation orchestrator is run for decades/centuries of pre-game history so cities, countries, and economies actually develop, crash, and evolve — and the player chooses where (and when) to enter. The starting world becomes the *true outcome* of simulated history, not a hand-seeded snapshot; Stage 10 narrative becomes a *record* of what was simulated rather than an invention. Rationale: a richer, emergent world. Full architecture and phasing: **docs/design/EconLife_Mechanical_History_Generation_Plan.md**. This is the trajectory the engine's recent work (conservation of matter/energy, removal of arbitrary wealth caps, world-gen↔goods/production RNG decoupling, real balancing loops) has been laying the foundation for.
 
-**End date:** The game has no forced end state (GDD §19, Feature Tier List). The simulation starts in January 2000 and runs indefinitely — through generational play, heir succession, and Era 5 and beyond. The five-era arc in the R&D document describes the baseline historical trajectory the world follows; it is not a ceiling. Planetary and multi-body content in this document is forward architecture for expansions set in that open-ended future.
+**End date:** The game has no forced end state (GDD §19, Feature Tier List). The simulation starts in January 2000 and runs indefinitely — through generational play, heir succession, and Era 12 and beyond. The five-era arc in the R&D document describes the baseline historical trajectory the world follows; it is not a ceiling. Planetary and multi-body content in this document is forward architecture for expansions set in that open-ended future.
 
 ---
 
@@ -35,6 +38,8 @@ WorldGenPipeline {
     Stage 11: output_world_json()         → identical format to GIS pipeline output
 }
 ```
+
+> **Scale and order (2026-10-08, decision V3):** Stages 1–8 run over the whole globe on a coarse H3 grid (res 2–3); the LOD 0 window (V1: 6 provinces) is refined from that pass, never generated in isolation. Atmosphere (Stage 4) runs **before** hydrology (Stage 3) because river discharge, snowpack and aquifer recharge read precipitation; the code already does this. Province economic archetypes are a label derived after generation (`classify_province_archetype`), never a seed for geography. See `EconLife_Simulation_Foundation_v01.md`.
 
 Each stage writes province fields. Later stages read earlier-stage fields. The dependency chain is strict and one-directional — no stage reads from a later stage. This makes each stage independently unit-testable and the full pipeline reproducible from a seed.
 
@@ -1908,7 +1913,7 @@ Some resources are not separate deposits but co-located quality attributes on a 
 
 **Cobalt (`cobalt_fraction` on Nickel and Copper deposits):**
 
-Cobalt is geochemically bound with nickel in ultramafic magmatic deposits (pentlandite ore) and with copper in sediment-hosted copper deposits (DRC-type). It is never a standalone primary resource — it is always a by-product or co-product of nickel or copper mining. Its economic significance scales from negligible (Era 1–2) to critical (Era 3+ battery cathode manufacturing).
+Cobalt is geochemically bound with nickel in ultramafic magmatic deposits (pentlandite ore) and with copper in sediment-hosted copper deposits (DRC-type). It is never a standalone primary resource — it is always a by-product or co-product of nickel or copper mining. Its economic significance scales from negligible (Era 8–9) to critical (Era 10+ battery cathode manufacturing).
 
 ```python
 def seed_cobalt_fraction(deposit):
@@ -1932,14 +1937,14 @@ def seed_cobalt_fraction(deposit):
             deposit.cobalt_fraction = 0.005
     
     # cobalt_fraction is the mass ratio of extractable cobalt to host metal
-    # Era lock: cobalt is accessible from Era 1 alongside host metal
-    # Economic significance multiplier activates at Era 3 (battery manufacturing tech)
-    deposit.cobalt_era_economic_multiplier = {1: 0.05, 2: 0.15, 3: 1.00, 4: 1.20, 5: 0.90}
+    # Era lock: cobalt is accessible whenever its host metal is mined
+    # Economic significance multiplier activates at Era 10 (battery manufacturing tech)
+    deposit.cobalt_era_economic_multiplier = {8: 0.05, 9: 0.15, 10: 1.00, 11: 1.20, 12: 0.90}  # eras.csv indices; eras < 8 → 0.0 (no battery demand)
 ```
 
 **Peat** (on Histosol provinces):
 
-Peat is not a mineral deposit — it is an accumulated organic sediment in waterlogged provinces. It is seeded wherever `soil_type == Histosol` with quantity derived from `groundwater_reserve` and `plate_age` (older waterlogging = deeper peat). It is a slow-renewable fuel: extraction is effectively permanent on game timescales (peat accumulates ~1mm/year; significant deposits are thousands of years old). As a fuel resource it bridges Era 1 in provinces without coal access, at the cost of destroying the soil if the peat layer is removed.
+Peat is not a mineral deposit — it is an accumulated organic sediment in waterlogged provinces. It is seeded wherever `soil_type == Histosol` with quantity derived from `groundwater_reserve` and `plate_age` (older waterlogging = deeper peat). It is a slow-renewable fuel: extraction is effectively permanent on game timescales (peat accumulates ~1mm/year; significant deposits are thousands of years old). As a fuel resource it bridges the pre-coal eras in provinces without coal access, at the cost of destroying the soil if the peat layer is removed.
 
 ```cpp
 // Added to ResourceDeposit when resource == "Peat":
@@ -2035,7 +2040,7 @@ k40_age_modifier(age) = 0.5 ^ (age / 1.25)
 // K-40 is ~0.012% of natural potassium; the rest is stable K-39 and K-41.
 // Potash (KCl) total quantity is invariant — the stable isotopes are unaffected.
 // K-40 depletion only matters if the player has tech to use K-40 as a fuel/tracer.
-// Era 4+ mechanic; not modelled in Era 1–3. Field stored for forward compatibility.
+// Era 11+ mechanic; not modelled in Era 8–10. Field stored for forward compatibility.
 // province.potash_k40_fraction = 0.012% × k40_age_modifier(age)
 ```
 
@@ -2174,7 +2179,7 @@ def seed_solar_potential(province) -> ResourceDeposit | None:
         quality       = potential,   # quality == quantity for renewables (no ore grade concept)
         depth         = 0.0,         # surface resource
         accessibility = 1.0,         # no extraction difficulty; land use only
-        era_available = 2,           # utility-scale solar is Era 2 (post-1950s equivalent)
+        era_available = 9,           # utility-scale solar is Era 9 (post-1950s equivalent)
         is_renewable  = True,
     )
 
@@ -2233,7 +2238,7 @@ def seed_wind_potential(province) -> ResourceDeposit | None:
         quality       = potential,
         depth         = 0.0,
         accessibility = 1.0,
-        era_available = 2,           # modern wind turbines are Era 2
+        era_available = 9,           # modern wind turbines are Era 9
         is_renewable  = True,
     )
 ```
@@ -2305,9 +2310,9 @@ All values are in abstract `quantity units` where 1.0 = a medium-sized commercia
 | Uranium | 0.05 | Age depletion primary filter; U-235 especially depleted on old worlds |
 | Thorium | 0.05 | Slow decay; threshold rarely triggered except on very ancient planets |
 | Lead | 0.10 | Low value; requires size to justify extraction |
-| RareEarths | 0.04 | High value but processing complexity; small deposits often uneconomic in Era 1–2 |
+| RareEarths | 0.04 | High value but processing complexity; small deposits often uneconomic in Era 8–9 |
 | Diamonds | 0.02 | Extreme value; even trace kimberlite economically significant |
-| Nickel | 0.08 | Battery demand (Era 3+) makes smaller deposits economic over time |
+| Nickel | 0.08 | Battery demand (Era 10+) makes smaller deposits economic over time |
 | PlatinumGroupMetals | 0.02 | Extreme value; very small deposits viable |
 | Coal | 0.15 | Bulk commodity; thin seams uneconomic without rail access |
 | CrudeOil | 0.10 | Small fields are real (many small North Sea fields) but below threshold here |
@@ -2525,14 +2530,14 @@ Resources that require technology to access are seeded at Stage 8 but flagged wi
 
 | Resource | era_available | Unlock condition |
 |---|---|---|
-| Shale oil / tight gas | 2 | Unconventional extraction tech |
-| Oil sands | 2 | Heavy oil processing tech |
-| Arctic offshore oil | 3 | Arctic drilling tech + sea ice recession |
-| Deep sea minerals | 3 | Deep sea mining tech (EX) |
-| Lithium brine (salt flat) | 1 | Standard extraction; Era 1 accessible |
-| Thorium (as fuel) | 3 | Thorium reactor tech unlock; seeded as mineral from Era 1 |
-| Helium extraction from gas | 3 | Helium separation plant; `helium_fraction` field already set |
-| Potassium-40 isotope use | 4 | Isotope separation tech (EX); K-40 fraction field set at gen time |
+| Shale oil / tight gas | 9 | Unconventional extraction tech |
+| Oil sands | 9 | Heavy oil processing tech |
+| Arctic offshore oil | 10 | Arctic drilling tech + sea ice recession |
+| Deep sea minerals | 10 | Deep sea mining tech (EX) |
+| Lithium brine (salt flat) | 8 | Standard extraction; Era 8 accessible |
+| Thorium (as fuel) | 10 | Thorium reactor tech unlock; the mineral exists from world generation (era 1) |
+| Helium extraction from gas | 10 | Helium separation plant; `helium_fraction` field already set |
+| Potassium-40 isotope use | 11 | Isotope separation tech (EX); K-40 fraction field set at gen time |
 
 ---
 
@@ -3150,7 +3155,7 @@ def compute_player_eligible_provinces(provinces) -> list[H3Index]:
     """
     Returns provinces the game UI will offer as starting location options.
     Criteria: liveable, early-game accessible, not so isolated that the
-    simulation has no meaningful economic activity nearby at Era 1.
+    simulation has no meaningful economic activity nearby at Era 8.
     The player character will start as a private individual in whichever
     province they choose — owning nothing, holding no office.
     """
@@ -4465,7 +4470,7 @@ for province in all_provinces:
 
     # --- Resource context ---
     for deposit in sorted(province.resource_deposits, key=lambda d: -d.quantity):
-        if deposit.quantity > NOTABLE_THRESHOLD and deposit.era_available == 1:
+        if deposit.quantity > NOTABLE_THRESHOLD and deposit.era_available <= world.starting_era:
             history.add(generate_discovery_event(province, deposit))
             break  # one discovery narrative per province is enough
 
@@ -4800,9 +4805,9 @@ The pipeline outputs two files:
 
 This section specifies the data structures needed to run the world generation pipeline on non-Earth planetary bodies — Mars-analogs, super-Earths, moons — and to support orbital transport in late-game expansion content.
 
-**Tier:** `PlanetaryParameters` struct and gravity-adjusted pipeline formulas are **EX** — they extend the world generator without touching V1 simulation systems. Orbital transport as a transit mode and multi-body `WorldState` are **V3+** (expansion content; not yet specified beyond architecture constraints established here).
+**Tier (revised 2026-10-08, decisions V3/V6):** `PlanetaryParameters` is **V1** and the single source of physical truth; the World Class hazard axes for gravity, radiation, atmosphere and geology are derived from it. Gravity-adjusted pipeline formulas are V1 for Earth-analog values and exercised for other bodies in EX. Orbital transport as a transit mode and multi-body `WorldState` are **V3+** (expansion content; not yet specified beyond architecture constraints established here).
 
-The game has no forced end state. Era 5 is open-ended. Generational play through heirs can run decades or centuries of simulated time. Planetary expansion content is a natural arc for that open future — not a hard design commitment at this stage, but the V1 data structures must not foreclose it. The `PlanetaryParameters` struct costs nothing to add to the world gen pipeline now.
+The game has no forced end state. Era 12 is open-ended. Generational play through heirs can run decades or centuries of simulated time. Planetary expansion content is a natural arc for that open future — not a hard design commitment at this stage, but the V1 data structures must not foreclose it. The `PlanetaryParameters` struct costs nothing to add to the world gen pipeline now.
 
 ### `PlanetaryParameters` Struct
 
@@ -5641,7 +5646,7 @@ The star's activity class determines the frequency and severity of space weather
 | 1909 Storm | 1909 | ~−400 | Major telegraph disruption; trans-Atlantic cable disruption |
 | Quebec Blackout | 1989 | −589 | Quebec power grid collapse (9-hour blackout); satellite drag; radio blackout |
 
-The 1921 storm is particularly relevant: it struck an electrified railroad network and early telephone exchange — infrastructure that would be Era 1 or early Era 2 equivalent in the game. The pre-game history window (up to 150 years before game start) captures events from approximately 1850 onward, well within the documented active solar weather record.
+The 1921 storm is particularly relevant: it struck an electrified railroad network and early telephone exchange — infrastructure that would be Era 7 (Industrial) equivalent in the game. The pre-game history window (up to 150 years before game start) captures events from approximately 1850 onward, well within the documented active solar weather record.
 
 ```cpp
 enum class SolarWeatherClass : uint8_t {
@@ -5654,14 +5659,14 @@ enum class SolarWeatherClass : uint8_t {
 // Infrastructure vulnerability by type — determines what a solar event damages
 // These are checked against what the affected province/nation actually has at event time
 enum class ConductorInfraType : uint8_t {
-    TelegraphNetwork,    // Era 1: long copper wire networks; highly vulnerable; low recovery cost
-    TelephoneNetwork,    // Era 1–2: similar vulnerability to telegraph; urban concentration
-    ElectrifiedRailroad, // Era 1–2: long conductive track; switching/signal equipment vulnerable
-    PowerGrid,           // Era 2–3: long transmission lines; transformers most vulnerable component
+    TelegraphNetwork,    // Era 7+: long copper wire networks; highly vulnerable; low recovery cost
+    TelephoneNetwork,    // Era 7+: similar vulnerability to telegraph; urban concentration
+    ElectrifiedRailroad, // Era 7+: long conductive track; switching/signal equipment vulnerable
+    PowerGrid,           // Era 7–8+: long transmission lines; transformers most vulnerable component
                          // transformer replacement: weeks to months lead time
-    CommunicationsCable, // Era 1–4: submarine and buried cables; significant induced current risk
-    SatelliteSystem,     // Era 3–5: direct radiation + atmospheric drag; total loss possible
-    SolidStateElectronics, // Era 3–5: unshielded circuits; vulnerable to direct EMP
+    CommunicationsCable, // Era 7+: submarine and buried cables; significant induced current risk
+    SatelliteSystem,     // Era 10–12: direct radiation + atmospheric drag; total loss possible
+    SolidStateElectronics, // Era 10–12: unshielded circuits; vulnerable to direct EMP
 };
 
 struct SolarEventEffects {
@@ -5695,13 +5700,13 @@ struct SolarWeatherProfile {
 
 | Infrastructure type | Era available | Minor storm | Major (Carrington-class) | Recovery |
 |---|---|---|---|---|
-| Telegraph network | Era 1 | 30% disrupted | 85% destroyed | Days–weeks |
-| Telephone network | Era 1 | 20% disrupted | 70% disrupted | Days–weeks |
-| Electrified railroad signals | Era 1–2 | 15% disrupted | 60% disrupted; fire risk | Days |
-| Power grid (long-haul) | Era 2 | 10% disrupted | 65% disrupted; transformer loss | Weeks–months |
-| Submarine cables | Era 1+ | 5% disrupted | 40% disrupted | Weeks |
-| Satellite systems | Era 3 | 20% degraded | 50% lost | Months–years |
-| Unshielded electronics | Era 3 | 5% damaged | 35% damaged | Replacement |
+| Telegraph network | Era 7+ | 30% disrupted | 85% destroyed | Days–weeks |
+| Telephone network | Era 7+ | 20% disrupted | 70% disrupted | Days–weeks |
+| Electrified railroad signals | Era 7+ | 15% disrupted | 60% disrupted; fire risk | Days |
+| Power grid (long-haul) | Era 7–8+ | 10% disrupted | 65% disrupted; transformer loss | Weeks–months |
+| Submarine cables | Era 7+ | 5% disrupted | 40% disrupted | Weeks |
+| Satellite systems | Era 10 | 20% degraded | 50% lost | Months–years |
+| Unshielded electronics | Era 10 | 5% damaged | 35% damaged | Replacement |
 
 **Power grid transformer damage** is the most economically severe outcome on a modern grid. Large high-voltage transformers are manufactured to order with lead times of 12–18 months. A Carrington-class event that damages multiple transformers simultaneously creates a cascade — no power, no pumping, no refrigeration, disrupted supply chains — that unfolds over months. The `recovery_time_ticks` field for power grid damage should be significantly higher than for telegraph damage.
 
@@ -5804,11 +5809,11 @@ solar_constant_wm2 = (star.luminosity_solar × 1361.0) / (semi_major_axis_au²)
 |---|---|---|
 | Phase 0 runs silently for V1 | V1 | Feeds `solar_constant_wm2`; seeds comet event calendar |
 | Comet events in news/culture | V1 | Bright comets appear as news events; no interaction required |
-| Solar weather — telegraph/telephone/railroad damage | V1 | Era 1 infrastructure vulnerable from game start; conductor type checked, not era |
+| Solar weather — telegraph/telephone/railroad damage | V1 | Era 7+ infrastructure vulnerable from game start; conductor type checked, not era |
 | Solar weather — power grid transformer damage | V1–2 | Grid infrastructure triggers when player builds or inherits it; weeks–months recovery |
 | Historical solar storm events in Province History | V1 | Pre-game window 150 years; 1–2 expected Carrington-class events; explains anomalous infra hardening |
-| Solar weather — satellite disruption | EX | Era 3+ infrastructure; direct radiation + atmospheric drag |
-| Solar weather — unshielded electronics damage | EX | Era 3+ solid-state equipment |
+| Solar weather — satellite disruption | EX | Era 10+ infrastructure; direct radiation + atmospheric drag |
+| Solar weather — unshielded electronics damage | EX | Era 10+ solid-state equipment |
 | Infrastructure hardening market | EX | Per-type hardening investment; cost multiplier from `SolarWeatherProfile` |
 | Asteroid belt visible in system map | EX | Visual; statistical resource index shown |
 | Named asteroid expeditions | V3+ | Robotic mission dispatched; resource payload returned after transit |
@@ -5985,7 +5990,7 @@ All config files are loaded once at pipeline init before any stage runs. Constan
 - Resolves RWA-B4 blocker
 
 **v0.3**
-- Corrected Status and Scope: removed incorrect "2000–2025 on a single planet" framing; game has no forced end state (GDD §19); Era 5 is open-ended
+- Corrected Status and Scope: removed incorrect "2000–2025 on a single planet" framing; game has no forced end state (GDD §19); Era 12 is open-ended
 - Added `PlanetaryParameters` struct with all pipeline-driving constants
 - Added `HydrologyMode` enum: Active / PalaeoActive / Cryogenic / None; controls Stage 3 behavior
 - Added `BodyType` enum: Terrestrial / IcyMoon / Asteroid / SpaceStation
