@@ -717,7 +717,7 @@ TEST_CASE("technique: the dawn is not a blank slate but it is not the Bronze Age
 // about how long a society takes over it.
 // ===========================================================================
 
-TEST_CASE("era advance: knowing is not enough — an era needs the capacity to use it",
+TEST_CASE("era advance: knowing is not enough - an era needs the capacity to use it",
           "[technology][era-advance][no-rails]") {
     // The flying-car case: the knowledge exists, the capacity does not. And its mirror,
     // which is the one the model could never express while the era was global — a society

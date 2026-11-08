@@ -341,7 +341,7 @@ TEST_CASE("player_loop: a saved game reloads to the state it was saved in", "[pl
     REQUIRE_THAT(resumed.world.player->age, WithinAbs(age, 0.0001f));
 }
 
-TEST_CASE("player_loop: the save image is complete — save, load, save is byte-identical",
+TEST_CASE("player_loop: the save image is complete - save, load, save is byte-identical",
           "[player_loop]") {
     // Anything the save covers must survive the trip unchanged. This is the
     // check that catches a field written but not read, or read into the wrong

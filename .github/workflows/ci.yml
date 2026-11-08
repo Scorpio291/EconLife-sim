@@ -398,6 +398,18 @@ jobs:
           fi
           echo "Dependency direction check passed."
 
+      - name: Verify test names are ASCII
+        run: |
+          # ctest passes each Catch2 test name back to the test binary as a filter.
+          # On Windows that round trip mangles non-ASCII characters (an em dash
+          # arrives as "ΓÇö"), the filter matches nothing and the test fails there
+          # while passing on Linux. Keep test names ASCII.
+          if grep -rnP '(TEST_CASE|TEST_CASE_METHOD|SCENARIO)\((\s*\w+\s*,)?\s*"[^"]*[^\x00-\x7F]' simulation/tests; then
+            echo "ERROR: test names must be ASCII (use '-' for a dash)."
+            exit 1
+          fi
+          echo "Test name check passed."
+
       - name: Verify no std::rand or system time in simulation
         run: |
           # Check for forbidden randomness sources.

@@ -892,7 +892,7 @@ TEST_CASE("calibration: balanced NPC in normal conditions acts (does not fall to
     }
 }
 
-TEST_CASE("calibration: zero formal employment — informal work keeps a worker acting",
+TEST_CASE("calibration: zero formal employment - informal work keeps a worker acting",
           "[npc_behavior][tier5][calibration]") {
     auto state = make_test_world_state(1);
     auto prov = make_test_province(0);

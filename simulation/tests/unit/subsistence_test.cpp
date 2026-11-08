@@ -321,7 +321,7 @@ TEST_CASE("manorialism: tithe concentrates proto-capital to lords, conserved",
     CHECK_THAT(sum, WithinAbs(total, 1e-3f));
 }
 
-TEST_CASE("manorialism: lordship is EMERGENT — the wealthiest resident collects the tithe",
+TEST_CASE("manorialism: lordship is EMERGENT - the wealthiest resident collects the tithe",
           "[subsistence][tier1]") {
     // Ten resident heads in a feudal province; one of them (id 107, mid-list) is far
     // richer than the rest. The tithe must flow to HIM — rank, not array position.
@@ -973,7 +973,7 @@ TEST_CASE("ecology: desertification needs both the ploughing and the clearance",
         CHECK(bare < wooded * 1.5f);
 }
 
-TEST_CASE("no rails: sparable is not spared — somebody has to be able to claim it",
+TEST_CASE("no rails: sparable is not spared - somebody has to be able to claim it",
           "[subsistence][tier2][no-rails]") {
     // A non-farmer eats grain somebody else grew and gave up, so somebody had to be able
     // to find it, measure it and enforce a share. Without this the model asserted that

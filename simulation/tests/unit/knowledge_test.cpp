@@ -306,7 +306,7 @@ TEST_CASE("knowledge: a society forgets what it can no longer carry",
     CHECK(produced_knowledge(mod, collapsed) < 0.0);
 }
 
-TEST_CASE("knowledge: writing is the ratchet — literate societies forget less",
+TEST_CASE("knowledge: writing is the ratchet - literate societies forget less",
           "[knowledge][tier1][collapse]") {
     // Identical collapse, different institutions. Era 1 carries knowledge orally
     // (elders); by era 4 the same people are scholars with records. The literate
@@ -369,7 +369,7 @@ TEST_CASE("knowledge: an oral culture cannot write, and loses inherited records"
     CHECK(change < 0.0f);
 }
 
-TEST_CASE("knowledge: records are a FLOOR under forgetting — the ratchet",
+TEST_CASE("knowledge: records are a FLOOR under forgetting - the ratchet",
           "[knowledge][tier1][records]") {
     // The same collapsed society, with and without a written corpus. Without
     // records it forgets catastrophically; with them the books survive the
