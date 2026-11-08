@@ -307,7 +307,9 @@ struct RegionalMarket {
     uint32_t good_id;
     uint32_t province_id;  // province this market belongs to (not region_id)
     float spot_price;
-    float equilibrium_price;  // recalculated each tick
+    float equilibrium_price;  // the good's base-price reference, set at world generation;
+                              // price_engine never overwrites it. The price the market
+                              // clears at is PriceEngineModule::clearing_price().
     float adjustment_rate;    // good-type dependent: financial fast, housing slow
     float supply;             // local production this tick + transit arrivals this tick (§18.9)
                    // goods in transit to this province are NOT included until arrival_tick

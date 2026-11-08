@@ -22,6 +22,7 @@
 #include "core/world_gen/world_generator.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/political_cycle/political_cycle_module.h"
 #include "modules/register_base_game_modules.h"
 #include "modules/technology/technology_types.h"
 
@@ -73,12 +74,59 @@ struct Snapshot {
     // National governance (player's home nation = nations[0])
     double national_legitimacy = 0.5;
     int home_government_type = 0;
+    // Every nation, in world.nations order: its legitimacy, and the target its
+    // provinces' conditions set (population-weighted, as political_cycle rolls it
+    // up), with the target's four terms so a gap can be traced to its cause.
+    struct NationView {
+        double legitimacy = 0.0, target = 0.0, population = 0.0;
+        double trust_term = 0.0, stability_term = 0.0, grievance_term = 0.0,
+               unemployment_term = 0.0;
+    };
+    std::vector<NationView> nations;
     double price_spread = 0.0;
 };
 
 inline bool is_criminal_role(NPCRole r) {
     return r == NPCRole::criminal_operator || r == NPCRole::criminal_enforcer ||
            r == NPCRole::fixer;
+}
+
+// One nation's legitimacy and its causal target, computed the way political_cycle
+// does: each province's clamped target, weighted by population. The terms are the
+// same weighting applied to each input (they sum to the target when no province's
+// target was clamped).
+inline Snapshot::NationView nation_snapshot(const WorldState& w, const Nation& nation,
+                                            const PoliticalCycleConfig& cfg = {}) {
+    Snapshot::NationView out;
+    out.legitimacy = static_cast<double>(nation.political_cycle.national_legitimacy);
+    double weight = 0.0;
+    for (const auto& p : w.provinces) {
+        if (p.nation_id != nation.id)
+            continue;
+        const float unemployment = p.cohort_stats ? p.cohort_stats->unemployment_rate : 0.0f;
+        const double pop =
+            p.cohort_stats ? static_cast<double>(p.cohort_stats->total_population) : 0.0;
+        const double wt = pop > 0.0 ? pop : 1.0;
+        const auto f = [](float x) { return static_cast<double>(x); };
+        out.target += wt * f(PoliticalCycleModule::compute_legitimacy_target(
+                               p.community.institutional_trust, p.conditions.stability_score,
+                               p.community.grievance_level, unemployment, cfg));
+        out.trust_term += wt * f(cfg.legitimacy_trust_weight * p.community.institutional_trust);
+        out.stability_term +=
+            wt * f(cfg.legitimacy_stability_weight * p.conditions.stability_score);
+        out.grievance_term -= wt * f(cfg.legitimacy_grievance_weight * p.community.grievance_level);
+        out.unemployment_term -= wt * f(cfg.legitimacy_unemployment_weight * unemployment);
+        weight += wt;
+        out.population += pop;
+    }
+    if (weight > 0.0) {
+        out.target /= weight;
+        out.trust_term /= weight;
+        out.stability_term /= weight;
+        out.grievance_term /= weight;
+        out.unemployment_term /= weight;
+    }
+    return out;
 }
 
 inline Snapshot capture(const WorldState& w) {
@@ -189,6 +237,8 @@ inline Snapshot capture(const WorldState& w) {
         s.mean_resource_access /= static_cast<double>(np);
         s.mean_response_stage /= static_cast<double>(np);
     }
+    for (const auto& n : w.nations)
+        s.nations.push_back(nation_snapshot(w, n));
     if (!w.nations.empty()) {
         s.national_legitimacy = w.nations[0].political_cycle.national_legitimacy;
         s.home_government_type = static_cast<int>(w.nations[0].government_type);
@@ -218,11 +268,16 @@ inline Snapshot capture(const WorldState& w) {
 // the REAL modules — layoffs, memories, grievance grounding, escalation, regime
 // response — rather than by writing grievance directly. Default: no-op.
 using TickHook = std::function<void(WorldState&, uint32_t)>;
+// Configure hook: invoked once on the registered orchestrator before the first
+// tick, to set up a counterfactual through a module's own controls (e.g. the
+// random-event roll switched off). Default: no-op.
+using ConfigureHook = std::function<void(TickOrchestrator&)>;
 
 inline std::vector<Snapshot> run_world_years(uint64_t seed, uint32_t npc_count, uint32_t years,
                                              float criminal_baseline = 0.10f,
                                              int force_government_type = -1,
-                                             const TickHook& post_tick = {}) {
+                                             const TickHook& post_tick = {},
+                                             const ConfigureHook& configure = {}) {
     WorldGeneratorConfig config{};
     config.seed = seed;
     config.province_count = 6;
@@ -240,6 +295,8 @@ inline std::vector<Snapshot> run_world_years(uint64_t seed, uint32_t npc_count, 
     TickOrchestrator orch;
     register_base_game_modules(orch);
     orch.finalize_registration();
+    if (configure)
+        configure(orch);
     ThreadPool pool(1);
 
     std::vector<Snapshot> series;

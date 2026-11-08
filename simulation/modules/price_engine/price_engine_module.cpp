@@ -88,15 +88,19 @@ void PriceEngineModule::execute(const WorldState& state, DeltaBuffer& delta) {
 // ===========================================================================
 
 float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market) const {
+    return clearing_price(market, pe_cfg_);
+}
+
+float PriceEngineModule::clearing_price(const RegionalMarket& market, const PriceEngineConfig& pe) {
     // Use equilibrium_price as proxy for base_price (RegionalMarket has no
     // base_price field). Fall back to default if zero or negative.
     float base_price = market.equilibrium_price;
     if (base_price <= 0.0f) {
-        base_price = pe_cfg_.default_base_price;
+        base_price = pe.default_base_price;
     }
 
     // Effective supply: prevent division by zero.
-    float effective_supply = std::max(market.supply, pe_cfg_.supply_floor);
+    float effective_supply = std::max(market.supply, pe.supply_floor);
 
     // Demand/supply ratio drives equilibrium.
     float demand_supply_ratio = market.demand_buffer / effective_supply;
@@ -109,7 +113,7 @@ float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market)
     if (market.export_price_floor > 0.0f) {
         floor_price = market.export_price_floor;
     } else {
-        floor_price = base_price * pe_cfg_.export_floor_coeff;
+        floor_price = base_price * pe.export_floor_coeff;
     }
 
     // Compute effective ceiling.
@@ -117,7 +121,7 @@ float PriceEngineModule::compute_equilibrium_price(const RegionalMarket& market)
     if (market.import_price_ceiling > 0.0f) {
         ceiling_price = market.import_price_ceiling;
     } else {
-        ceiling_price = base_price * pe_cfg_.import_ceiling_coeff;
+        ceiling_price = base_price * pe.import_ceiling_coeff;
     }
 
     // Clamp to [floor, ceiling].

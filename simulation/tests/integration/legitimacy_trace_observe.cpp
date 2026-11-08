@@ -59,6 +59,11 @@ struct Ledger {
     // [field][module][province] accumulated change this year.
     std::map<std::string, std::vector<double>> year[kFields];
     std::vector<float> last[kFields];  // value at the previous probe
+    // Economic volatility as random_events sees it when it rolls: summed per
+    // province over the year by the probe that runs just before it.
+    const RandomEventsModule* events = nullptr;
+    std::vector<double> roll_volatility;
+    uint32_t roll_ticks = 0;
 };
 
 class StabilityProbe final : public ITickModule {
@@ -84,6 +89,13 @@ class StabilityProbe final : public ITickModule {
     }
     void execute(const WorldState& state, DeltaBuffer&) override {
         const size_t n = state.provinces.size();
+        if (before_ == "random_events" && ledger_.events) {
+            ledger_.roll_volatility.resize(n, 0.0);
+            for (size_t p = 0; p < n; ++p)
+                ledger_.roll_volatility[p] +=
+                    D(ledger_.events->compute_economic_volatility(state, state.provinces[p]));
+            ++ledger_.roll_ticks;
+        }
         for (int f = 0; f < kFields; ++f) {
             auto& last = ledger_.last[f];
             if (last.size() != n) {
@@ -159,6 +171,7 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
             if (auto* r = dynamic_cast<const RandomEventsModule*>(m.get()))
                 events = r;
         REQUIRE(events != nullptr);
+        ledger.events = events;
 
         ThreadPool pool(1);
         uint32_t seen_event_id = 0;
@@ -166,6 +179,8 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
             for (auto& fl : ledger.year)
                 for (auto& [_, v] : fl)
                     std::fill(v.begin(), v.end(), 0.0);
+            std::fill(ledger.roll_volatility.begin(), ledger.roll_volatility.end(), 0.0);
+            ledger.roll_ticks = 0;
             // Per province: events started this year by category, and the stability
             // each started event will cost over its life (immediate + per-tick x duration).
             const size_t np = world.provinces.size();
@@ -242,7 +257,10 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
                     0.45 * st, 0.50 * gr, 0.30 * un);
             }
             // The event roll's inputs, as random_events reads them: rate multiplier
-            // (1 + 1.5 climate)(1 + instability)(1 + mean |spot - eq| / eq).
+            // (1 + 1.5 climate)(1 + instability) x volatility. Volatility is the module's
+            // own (spot against the clearing price), averaged over the year at the moment
+            // random_events rolls; "vs reference" is the old reading at year end
+            // (spot against the base-price reference), kept to show what it measured.
             for (const auto& p : world.provinces) {
                 double dev = 0, worst = 0;
                 int n = 0;
@@ -256,13 +274,16 @@ TEST_CASE("legitimacy trace: who moves stability, by module and province", "[.le
                         ++n;
                     }
                 }
-                const double vol = 1.0 + (n ? dev / n : 0.0);
+                const double ref = 1.0 + (n ? dev / n : 0.0);
+                const double vol = ledger.roll_ticks && p.id < ledger.roll_volatility.size()
+                                       ? ledger.roll_volatility[p.id] / ledger.roll_ticks
+                                       : 1.0;
                 const double cs = p.climate.climate_stress_current;
                 const double inst = 1.0 - D(p.conditions.stability_score);
                 std::printf(
-                    "  roll p%u: climate %.3f instab %.3f volatility %.3f (%d markets, "
-                    "worst dev %.2f) -> rate x%.2f = %.2f events/yr\n",
-                    p.id, cs, inst, vol, n, worst, (1 + 1.5 * cs) * (1 + inst) * vol,
+                    "  roll p%u: climate %.3f instab %.3f volatility %.3f (vs reference %.3f, "
+                    "%d markets, worst dev %.2f) -> rate x%.2f = %.2f events/yr\n",
+                    p.id, cs, inst, vol, ref, n, worst, (1 + 1.5 * cs) * (1 + inst) * vol,
                     0.15 * 12 * (1 + 1.5 * cs) * (1 + inst) * vol);
             }
             {

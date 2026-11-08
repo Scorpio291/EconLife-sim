@@ -5,6 +5,7 @@
 // severity/duration bounds, evidence generation, event expiry, and
 // deterministic reproducibility.
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -540,9 +541,12 @@ TEST_CASE("test_module_name_and_ordering", "[random_events][tier1]") {
     // See random_events_module.cpp::execute() for the rationale.
     REQUIRE(module.is_province_parallel() == false);
 
+    // After price_engine: the volatility it reads is only defined once the
+    // tick's markets have cleared (see compute_economic_volatility).
     auto after = module.runs_after();
-    REQUIRE(after.size() == 1);
+    REQUIRE(after.size() == 2);
     REQUIRE(after[0] == "calendar");
+    REQUIRE(after[1] == "price_engine");
 }
 
 // =============================================================================
@@ -948,6 +952,60 @@ TEST_CASE("test_neighbouring_world_seeds_draw_independent_histories", "[random_e
     REQUIRE(a.size() >= 20);
     REQUIRE(b.size() >= 20);
     CHECK(shared_events(a, b) * 10 < b.size());
+}
+
+// =============================================================================
+// Test: economic volatility measures a market out of balance, not a price level
+//
+// The modifier used to compare spot_price with RegionalMarket::equilibrium_price,
+// which price_engine keeps as the good's base-price reference and never updates.
+// A good nobody in the province produces clears at import parity (3 x the
+// reference), so the modifier read ~3 in every province of the emergence baseline
+// and tripled the event rate with no market moving. The modifier now measures the
+// gap between spot and the price the market currently clears at.
+// =============================================================================
+
+namespace {
+
+RegionalMarket make_market(uint32_t good_id, float reference, float spot, float supply,
+                           float demand) {
+    RegionalMarket m{};
+    m.good_id = good_id;
+    m.province_id = 0;
+    m.equilibrium_price = reference;
+    m.spot_price = spot;
+    m.supply = supply;
+    m.demand_buffer = demand;
+    return m;
+}
+
+}  // namespace
+
+TEST_CASE("test_market_at_import_parity_is_not_volatile", "[random_events][tier1]") {
+    // No local supply, steady demand: the market clears at the import ceiling
+    // (import_ceiling_coeff x reference) and spot has arrived there.
+    const PriceEngineConfig pe{};
+    RandomEventsModule module({}, pe);
+    WorldState ws = make_test_world_state(42, 0);
+    ws.provinces.push_back(make_test_province(0));
+    for (uint32_t g = 1; g <= 4; ++g)
+        ws.regional_markets.push_back(
+            make_market(g, 10.0f, 10.0f * pe.import_ceiling_coeff, 0.0f, 50.0f));
+    CHECK(module.compute_economic_volatility(ws, ws.provinces[0]) == 1.0f);
+}
+
+TEST_CASE("test_market_off_its_clearing_price_is_volatile", "[random_events][tier1]") {
+    // Supply equals demand, so the market clears at the reference price; a spot
+    // knocked 40% above it is a market out of balance.
+    const PriceEngineConfig pe{};
+    RandomEventsModule module({}, pe);
+    WorldState ws = make_test_world_state(42, 0);
+    ws.provinces.push_back(make_test_province(0));
+    ws.regional_markets.push_back(make_market(1, 10.0f, 14.0f, 50.0f, 50.0f));
+    ws.regional_markets.push_back(make_market(2, 10.0f, 10.0f, 50.0f, 50.0f));
+    // Mean gap (0.4 + 0) / 2.
+    CHECK(module.compute_economic_volatility(ws, ws.provinces[0]) ==
+          Catch::Approx(1.2f).epsilon(1e-6));
 }
 
 // ─── Cross-module trigger: pending_random_event_triggers drain ──────────────
