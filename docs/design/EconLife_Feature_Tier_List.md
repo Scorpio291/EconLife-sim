@@ -5,6 +5,9 @@ Cross-document fixes applied: C1; Pass 5 Session 3 (FT-B1, COM-B1); Pass 5 Sessi
 
 ---
 
+> **Era numbering (2026-10-08, decision V5):** every era number in this document follows `packages/base_game/eras/eras.csv` — Era 1 = Neolithic … Era 7 = Industrial, **Era 8 = Turn of the Millennium (2000)**, Era 12 = Transition (2024), Era 17 = Divergence. Before this date this document counted Era 1 = 2000; those references were shifted by +7. Prefer the `era_key` (e.g. `turn_of_millennium`) when writing new text. See `EconLife_Simulation_Foundation_v01.md` §5.
+
+
 ## How to Read This Document
 
 Every system in the GDD is assigned to one of three tiers:
@@ -33,8 +36,15 @@ Each tier entry includes a **rationale** and, where relevant, **dependencies** �
 | NPC delay principle / consequence queue | V1 | Without this, consequences feel arbitrary |
 | Significant NPC promotion from background population | V1 | Needed for union organizers, witnesses, investigators to emerge |
 | Background population cohort simulation | V1 | Required for labor markets, voting, consumer demand |
-| GIS-seeded real-world map (Option B) | V1 | Real-world geographic, resource, climate, and demographic data provides the base world via the GIS pipeline; produces the same world.json format as the procedural WorldGen pipeline |
-| Procedural world generation (WorldGen pipeline) | V1 | 11-stage procedural pipeline (tectonics → erosion → hydrology → atmosphere → soils → biomes → features → resources → population → commentary → output); H3 hexagonal grid (res 2–9); ProvinceLink adjacency; deterministic seed-based generation; produces world.json in identical format to GIS pipeline. See WorldGen v0.17. |
+| GIS-seeded real-world map (Option B) | EX | **Decision V6 (2026-10-08): the procedural world is the V1 default; a GIS-derived Earth is a later scenario.** When built, the GIS pipeline must produce the same world.json contract as the procedural pipeline (see Simulation Foundation §3). No GIS loader exists in code as of 2026-10-08. |
+| Procedural world generation (WorldGen pipeline) | V1 | **The V1 default world source (decision V6).** 11-stage procedural pipeline (tectonics → erosion → hydrology → atmosphere → soils → biomes → features → resources → population → commentary → output); H3 hexagonal grid (res 2–9); ProvinceLink adjacency; deterministic seed-based generation; produces world.json in identical format to GIS pipeline. See WorldGen v0.17. |
+| Planet-wide coarse physical generation | V1 | **Decision V3 (2026-10-08).** Stages 1–8 (tectonics → resources) run over the whole globe on a coarse H3 grid (res 2–3); the LOD 0 window (V1: 6 provinces) is refined from it. Planet-scale processes (plates, circulation cells, monsoons, ocean currents, drainage basins) are only meaningful at planet scale. See Simulation Foundation §2. |
+| `PlanetaryParameters` as single source of physical truth | V1 | **Decision V3/V6.** Gravity, radius, atmosphere, rotation, tilt, magnetic field and age live only here; the World Class hazard axes for gravity/radiation/atmosphere/geology are derived from it, not set beside it. |
+| Biota generator (species pool with traits, biosphere timeline) | V1 | **Decision V2 (2026-10-08).** Generated once per world: per biome, a species pool with traits (domesticable crop/animal, pathogen reservoir, predator pressure, fibre/timber) and a biosphere timeline that gates fossil-fuel and biogenic deposits. Disease and predator hazard derive from it. The contract must allow a real speciation simulation to replace the generator later. |
+| Biological evolution / speciation simulation | EX | **Decision V2.** Replaces the biota generator behind the same contract once the foundation is mature. |
+| Information latency per link (information travels with its carrier) | V1 | **Decision V4 (2026-10-08).** Supersedes "information is instant". Each link carries a latency set by the fastest communication technology a society holds on it (runner, horse, ship, telegraph, radio, network); the speed of light is the floor. Same link model as grain logistics (mass cost + latency). |
+| World Class (hazard classification) | V1 | **Decision D8.** A derived classification of the generated world (Garden → Extreme, Earth ≈ 12), computed from the physical and biota layers. Not a free dial. |
+| Player choice of planet type at world creation | EX | **Decision D8.** Presets choose planetary/biota parameters (and thereby the World Class); later exposed to the player. |
 | Configurable world parameters | V1 | WorldGenParameters struct exposes seed, province count, resource richness, climate volatility, corruption baseline, and criminal activity baseline; scenario files override for starting-condition variation |
 | Multi-nation playable (LOD 0) | EX | V1 ships with 6 provinces in the player's home nation at full LOD 0 simulation; additional nations can be promoted from LOD 1 to LOD 0 in expansion |
 
@@ -50,14 +60,15 @@ Each tier entry includes a **rationale** and, where relevant, **dependencies** �
 | Multiple nations | EX | Depends on: V1 nation working well |
 | Dynamic diplomatic relationships between nations | EX | Depends on: multiple nations |
 | War as simulation failure mode | EX | Depends on: multiple nations; too much scope for V1 |
-| Historical-to-present simulation (Year 2000–Era 5) | V1 | Starting conditions loaded from GIS-derived world.json and scenario file; time advances through eras as global conditions change |
-| Mechanical history generation (forward-simulated pre-game history) | EXTENSION (adopted 2026-06-16) | Architect decision: the starting world becomes the *true outcome* of running the orchestrator from a minimal planet-wide founding seed (settlements/firms/nations/economies develop, crash, evolve), rather than a hand-seeded snapshot with backward-narrated history. **Timeline spans the full arc — earliest history → agrarian → industrial → modern → space age and beyond — and the player chooses the entry era and place (year 2000 becomes just one selectable point).** Scope is the **whole planet at LOD 2** (statistical), player's chosen region materialized to LOD 0 at entry. The era system becomes the spine and must extend backward (no pre-2000 eras exist today; the arc is currently 2000→~2250). Goods/recipes/tech already carry `era_available` gating (mechanism exists); per-era *content* + per-era economic regimes across the whole span are the major (generational, staged) lift. Beyond documented V1. Plan: docs/design/EconLife_Mechanical_History_Generation_Plan.md. Full-detail-everywhere (LOD 0 globally) remains EX. |
+| Historical-to-present simulation (Year 2000–Era 12) | V1 | Starting conditions are the outcome of mechanical history on the generated planet (decision V6), plus the scenario file; time advances through eras as global conditions change |
+| Mechanical history generation (forward-simulated pre-game history) | V1 (foundation) | **Re-tiered 2026-10-08 (decision V1: build the foundation properly; play scope can wait).** The starting world is the true outcome of running the orchestrator from a minimal founding seed on the generated planet (LOD 2 planet-wide, LOD 0 window at entry). This is how V1 produces its year-2000 world. Plan: docs/design/EconLife_Mechanical_History_Generation_Plan.md. Full-detail-everywhere (LOD 0 globally) remains EX. |
+| Playable entry in pre-modern eras (eras 1–7) | EX | **Decision V1.** History before 2000 is generated, not played, in V1. Choosing an earlier entry era/place needs per-era play content (goods, recipes, scene cards, UI) and is post-V1. Note: `eras.csv` `v1_in_scope` marks eras 1–12 as in scope for the *simulation*; it does not make them playable entry points. |
 | Scenario file system | V1 | Named data-file-defined world configurations controlling starting year, resource distribution, tech levels, climate index; required for world variation and core moddability |
 | LOD simulation system | V1 | Player's nation at full simulation (LOD 0); trade partners at simplified simulation (LOD 1); rest of world at statistical simulation (LOD 2); enables global price signals without proportional compute cost |
 | Climate-redistributed agricultural productivity | V1 | Affects resource distribution; core to setting |
 | Automation-displaced labor baseline | V1 | Affects labor market and inequality baseline |
 | Pervasive surveillance infrastructure (nation-variable) | V1 | Affects criminal OPSEC systems |
-| CBDC / crypto landscape | V1 | Cryptocurrency does not exist at Year 2000 start; emerges as R&D unlock in Era 2 (see R&D doc); affects money laundering mechanics in later eras |
+| CBDC / crypto landscape | V1 | Cryptocurrency does not exist at Year 2000 start; emerges as R&D unlock in Era 9 (see R&D doc); affects money laundering mechanics in later eras |
 
 ---
 
@@ -122,10 +133,10 @@ Each tier entry includes a **rationale** and, where relevant, **dependencies** �
 | Heavy manufacturing | V1 | Required for industrial economy |
 | Consumer goods manufacturing | V1 | Required for consumer demand simulation |
 | Pharmaceutical manufacturing | V1 | Required for drug precursor overlap |
-| Combustion vehicle manufacturing | V1 | Available from Era 1; standard industrial assembly from game start |
-| Electric vehicle manufacturing | V1 | Era-locked to Era 2+ (requires battery_technology node); requires electric_motor, battery_pack components |
-| Solar panel manufacturing | EX | Era 3+; expansion photovoltaic production |
-| Aircraft component manufacturing | EX | Era 2+; expansion aerospace sub-assembly supply chain |
+| Combustion vehicle manufacturing | V1 | Available from Era 8; standard industrial assembly from game start |
+| Electric vehicle manufacturing | V1 | Era-locked to Era 9+ (requires battery_technology node); requires electric_motor, battery_pack components |
+| Solar panel manufacturing | EX | Era 10+; expansion photovoltaic production |
+| Aircraft component manufacturing | EX | Era 9+; expansion aerospace sub-assembly supply chain |
 | Distribution layer (trucking, rail, shipping, warehousing) | V1 | Required for supply chain to function |
 | Pipeline infrastructure | EX | Extreme capital cost, niche use case; expansion |
 | Air freight | EX | High-value perishables; expansion |
@@ -365,6 +376,18 @@ Each tier entry includes a **rationale** and, where relevant, **dependencies** �
 
 ---
 
+## Deep Future (post-EX, once the simulation is mature)
+
+**Decision D5 (2026-10-08):** AGI, fusion and similar technologies are no longer cut. They arrive through the technology wheel like any other technique, once the simulation is mature, and are what make travel to other planets and beyond possible. They remain out of V1 and EX.
+
+| System | Tier | Rationale |
+|---|---|---|
+| Fusion power, AGI, brain-computer interfaces | Deep future | Reached through the technology wheel (eras 13–17), not scripted. Replaces the earlier Cut List entry. |
+| Solar system as playable space (Phase 0 bodies, moons, orbital transport) | Deep future | WorldGen §Solar System Generation; Phase 0 parameters (insolation, year/day length, tides) feed V1 generation silently. |
+| Interstellar latency and divergence (eras 16–17) | Deep future | Logistics & Political Scale doc; the speed of light as the hard latency floor. |
+| Speculative links (FTL, jump gates, relativistic comms) | Deep future | A configurable per-link frontier that lowers the latency/throughput cost; the mechanic stays the same (Logistics §4). |
+
+
 ## Cut List
 
 Systems not pursued in any tier. Documented here so the decision is explicit and doesn't need to be re-litigated.
@@ -379,7 +402,6 @@ Systems not pursued in any tier. Documented here so the decision is explicit and
 | Online learning platform | Too adjacent to real-world product; no game design payoff |
 | Defense and aerospace manufacturing | No design payoff; prohibitive content scope |
 | War as V1 feature | Failure mode, not feature; requires multi-nation which is expansion |
-| Brain-computer interfaces / AGI / fusion | Science-fictional discontinuities explicitly excluded from setting |
 | Scripted story events | Violates emergent narrative principle; never permitted |
 
 ---
