@@ -147,7 +147,7 @@ jobs:
             "build/simulation/tests/determinism/${{ matrix.build_type }}/econlife_golden_dump.exe" \
             "build/simulation/tests/determinism/${{ matrix.build_type }}/econlife_golden_dump"; do
             if [ -x "$candidate" ] || [ -f "$candidate" ]; then
-              "$candidate" --seed 42 --ticks 30 --npcs 200 --provinces 4 --out golden/hash.txt
+              "$candidate" --seed 42 --ticks 30 --npcs 200 --provinces 4 --out golden/hash.txt --trace golden/trace.txt
               break
             fi
           done
@@ -163,7 +163,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: golden-${{ matrix.os }}-${{ matrix.build_type }}
-          path: golden/hash.txt
+          path: |
+            golden/hash.txt
+            golden/trace.txt
           retention-days: 30
 
   cross-platform-determinism:
@@ -212,6 +214,16 @@ jobs:
           done
           if [ "$mismatch" = "1" ]; then
             echo "Cross-platform determinism gate FAILED — same seed produced different bytes across cells."
+            # Locate the split: the first differing trace lines name the tick
+            # and the state family (then the field) that diverged first.
+            ref_trace="golden/$ref_cell/trace.txt"
+            for cell in "${!SEEN[@]}"; do
+              t="golden/$cell/trace.txt"
+              if [ "$cell" != "$ref_cell" ] && [ -f "$t" ] && [ -f "$ref_trace" ]; then
+                echo "--- first differences: $ref_cell vs $cell"
+                diff "$ref_trace" "$t" | head -60 || true
+              fi
+            done
             exit 1
           fi
           echo "All ${#SEEN[@]} cells agree on hash $ref."

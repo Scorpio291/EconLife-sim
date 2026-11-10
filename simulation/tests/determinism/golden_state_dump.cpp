@@ -176,6 +176,140 @@ std::string sha256_hex(const std::vector<uint8_t>& bytes) {
     return out;
 }
 
+// ── Per-tick trace ──────────────────────────────────────────────────────────
+// When two cells disagree on the final hash, the hash alone says only THAT
+// they diverged. The trace says WHEN and WHERE: one line per tick with the
+// full-state hash and an FNV-1a fingerprint of each major state family, then
+// (for the first ticks) the raw bits of every market and province scalar.
+// The CI comparison job diffs traces of disagreeing cells, so the first
+// differing line names the tick and the field family that split first.
+
+struct Fnv {
+    uint64_t h = 1469598103934665603ULL;
+    void bytes(const void* p, size_t n) {
+        const auto* b = static_cast<const uint8_t*>(p);
+        for (size_t i = 0; i < n; ++i) {
+            h ^= b[i];
+            h *= 1099511628211ULL;
+        }
+    }
+    void f(float v) { bytes(&v, sizeof(v)); }
+    void u(uint64_t v) { bytes(&v, sizeof(v)); }
+};
+
+uint32_t bits(float v) {
+    uint32_t b;
+    std::memcpy(&b, &v, sizeof(b));
+    return b;
+}
+
+void province_scalars(const Province& p, std::vector<std::pair<const char*, float>>& out) {
+    out.clear();
+    out.push_back({"pop_median_age", p.demographics.median_age});
+    out.push_back({"education", p.demographics.education_level});
+    out.push_back({"infrastructure", p.infrastructure_rating});
+    out.push_back({"agri_productivity", p.agricultural_productivity});
+    out.push_back({"cohesion", p.community.cohesion});
+    out.push_back({"grievance", p.community.grievance_level});
+    out.push_back({"trust", p.community.institutional_trust});
+    out.push_back({"resource_access", p.community.resource_access});
+    out.push_back({"approval", p.political.approval_rating});
+    out.push_back({"corruption", p.political.corruption_index});
+    out.push_back({"stability", p.conditions.stability_score});
+    out.push_back({"inequality", p.conditions.inequality_index});
+    out.push_back({"compliance", p.conditions.regulatory_compliance_index});
+    out.push_back({"drought", p.conditions.drought_modifier});
+    out.push_back({"flood", p.conditions.flood_modifier});
+    out.push_back({"trauma", p.historical_trauma_index});
+    out.push_back({"fish_stock", p.fisheries.current_stock});
+    if (const auto* c = p.cohort_stats.get()) {
+        out.push_back({"c.addiction", c->addiction_rate});
+        out.push_back({"c.crime", c->crime_rate});
+        out.push_back({"c.formal_employment", c->formal_employment_rate});
+        out.push_back({"c.sick", c->sick_rate});
+        out.push_back({"c.homeless", c->homeless_rate});
+        out.push_back({"c.unemployment", c->unemployment_rate});
+        out.push_back({"c.subsistence", c->subsistence_surplus_ratio});
+        out.push_back({"c.food_store", c->food_store});
+        out.push_back({"c.capital", c->productive_capital});
+        out.push_back({"c.soil", c->soil_health});
+        out.push_back({"c.knowledge", c->knowledge_level});
+        out.push_back({"c.mean_income", c->mean_income});
+        out.push_back({"c.gini", c->gini_coefficient});
+        out.push_back({"c.wage_anchor", c->regional_wage_anchor});
+        out.push_back({"c.nutrition", c->nutrition});
+        out.push_back({"c.health", c->health});
+        out.push_back({"c.schooling", c->schooling});
+        out.push_back({"c.total_pop", static_cast<float>(c->total_population)});
+    }
+}
+
+void write_trace_tick(std::FILE* f, const WorldState& w, uint32_t detail_through_tick) {
+    Fnv nations, provinces, npcs, markets, businesses;
+    for (const auto& n : w.nations) {
+        nations.u(n.id);
+        nations.f(n.political_cycle.national_approval);
+        nations.f(n.political_cycle.national_legitimacy);
+    }
+    std::vector<std::pair<const char*, float>> scal;
+    for (const auto& p : w.provinces) {
+        province_scalars(p, scal);
+        provinces.u(p.id);
+        for (const auto& kv : scal)
+            provinces.f(kv.second);
+    }
+    for (const auto& n : w.significant_npcs) {
+        npcs.u(n.id);
+        npcs.f(n.capital);
+        npcs.f(n.social_capital);
+        npcs.f(n.risk_tolerance);
+        npcs.u(n.memory_log.size());
+        npcs.u(n.relationships.size());
+    }
+    for (const auto& m : w.regional_markets) {
+        markets.u(m.good_id);
+        markets.u(m.province_id);
+        markets.f(m.spot_price);
+        markets.f(m.supply);
+        markets.f(m.demand_buffer);
+        markets.f(m.import_price_ceiling);
+        markets.f(m.export_price_floor);
+    }
+    for (const auto& b : w.npc_businesses) {
+        businesses.u(b.id);
+        businesses.f(b.cash);
+        businesses.f(b.revenue_per_tick);
+        businesses.f(b.cost_per_tick);
+        businesses.f(b.market_share);
+    }
+    std::string full = sha256_hex(PersistenceModule::serialize(w));
+    std::fprintf(
+        f,
+        "tick %u state=%.16s nations=%016llx provinces=%016llx npcs=%016llx "
+        "markets=%016llx businesses=%016llx\n",
+        w.current_tick, full.c_str(), static_cast<unsigned long long>(nations.h),
+        static_cast<unsigned long long>(provinces.h), static_cast<unsigned long long>(npcs.h),
+        static_cast<unsigned long long>(markets.h), static_cast<unsigned long long>(businesses.h));
+    if (w.current_tick > detail_through_tick)
+        return;
+    for (const auto& p : w.provinces) {
+        province_scalars(p, scal);
+        for (const auto& kv : scal)
+            std::fprintf(f, "  t%u province %u %s %08x %.9g\n", w.current_tick, p.id, kv.first,
+                         bits(kv.second), static_cast<double>(kv.second));
+    }
+    for (const auto& m : w.regional_markets) {
+        std::fprintf(f, "  t%u market g%u p%u spot %08x supply %08x demand %08x\n", w.current_tick,
+                     m.good_id, m.province_id, bits(m.spot_price), bits(m.supply),
+                     bits(m.demand_buffer));
+    }
+    for (const auto& n : w.significant_npcs) {
+        std::fprintf(f, "  t%u npc %u capital %08x social %08x mem %zu rel %zu\n", w.current_tick,
+                     n.id, bits(n.capital), bits(n.social_capital), n.memory_log.size(),
+                     n.relationships.size());
+    }
+}
+
 // ── CLI parsing ─────────────────────────────────────────────────────────────
 
 struct Args {
@@ -184,6 +318,7 @@ struct Args {
     uint32_t npcs = 200;
     uint32_t provinces = 4;
     std::string out_path;
+    std::string trace_path;  // optional: per-tick fingerprints for locating a divergence
 };
 
 void print_usage(const char* prog) {
@@ -193,7 +328,8 @@ void print_usage(const char* prog) {
                  "  --ticks N       Ticks to simulate (default: 30)\n"
                  "  --npcs N        Significant NPC count (default: 200)\n"
                  "  --provinces N   Province count (default: 4)\n"
-                 "  --out PATH      Output file for SHA-256 hex digest (required)\n",
+                 "  --out PATH      Output file for SHA-256 hex digest (required)\n"
+                 "  --trace PATH    Also write per-tick fingerprints (optional)\n",
                  prog);
 }
 
@@ -217,6 +353,8 @@ bool parse_args(int argc, char** argv, Args& out) {
             out.npcs = static_cast<uint32_t>(std::strtoul(v, nullptr, 10));
         } else if (std::strcmp(a, "--provinces") == 0) {
             out.provinces = static_cast<uint32_t>(std::strtoul(v, nullptr, 10));
+        } else if (std::strcmp(a, "--trace") == 0) {
+            out.trace_path = v;
         } else if (std::strcmp(a, "--out") == 0) {
             out.out_path = v;
         } else {
@@ -262,7 +400,23 @@ int main(int argc, char** argv) {
 
     ThreadPool pool(1);
 
-    run_ticks(world, orchestrator, pool, args.ticks);
+    std::FILE* trace = nullptr;
+    if (!args.trace_path.empty()) {
+        trace = std::fopen(args.trace_path.c_str(), "w");
+        if (!trace) {
+            std::fprintf(stderr, "[golden_dump] could not open %s for writing\n",
+                         args.trace_path.c_str());
+            return 1;
+        }
+        write_trace_tick(trace, world, /*detail_through_tick=*/3);
+    }
+    for (uint32_t i = 0; i < args.ticks; ++i) {
+        run_ticks(world, orchestrator, pool, 1);
+        if (trace)
+            write_trace_tick(trace, world, /*detail_through_tick=*/3);
+    }
+    if (trace)
+        std::fclose(trace);
 
     // Serialize through the persistence layer — it walks every WorldState
     // field in canonical order and emits a flat byte stream (the LZ4 wrapper
