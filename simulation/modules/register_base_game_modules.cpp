@@ -93,7 +93,8 @@ void register_base_game_modules(TickOrchestrator& orchestrator, const PackageCon
         std::make_unique<BusinessLifecycleModule>(config.business_lifecycle));
     orchestrator.register_module(std::make_unique<ProductionModule>(config.production));
     orchestrator.register_module(std::make_unique<SceneCardsModule>(config.scene_cards));
-    orchestrator.register_module(std::make_unique<RandomEventsModule>(config.random_events));
+    orchestrator.register_module(
+        std::make_unique<RandomEventsModule>(config.random_events, config.price_engine));
     orchestrator.register_module(std::make_unique<SupplyChainModule>(config.supply_chain_module));
     orchestrator.register_module(std::make_unique<LaborMarketModule>(config.labor_module));
     orchestrator.register_module(

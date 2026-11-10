@@ -14,7 +14,10 @@ namespace econlife {
 // Forward declaration — full class defined in random_events_module.cpp
 class RandomEventsModule : public ITickModule {
    public:
-    explicit RandomEventsModule(const RandomEventsConfig& cfg = {});
+    // price_cfg is price_engine's: economic volatility is measured against the price
+    // each market clears at, which only price_engine's rule defines.
+    explicit RandomEventsModule(const RandomEventsConfig& cfg = {},
+                                const PriceEngineConfig& price_cfg = {});
 
     std::string_view name() const noexcept override;
     std::string_view package_id() const noexcept override;
@@ -45,8 +48,13 @@ class RandomEventsModule : public ITickModule {
     void clear_base_rate_override();
     uint32_t allocate_event_id();
 
+    // 1 + the mean gap between each market's spot price and the price it currently
+    // clears at, relative to that clearing price. 1 when every market has settled.
+    float compute_economic_volatility(const WorldState& state, const Province& province) const;
+
    private:
     RandomEventsConfig cfg_;
+    PriceEngineConfig price_cfg_;
     std::vector<RandomEventTemplate> templates_;
     std::vector<ActiveRandomEvent> active_events_;
     uint32_t next_event_id_;
@@ -65,7 +73,6 @@ class RandomEventsModule : public ITickModule {
                                  const ActiveRandomEvent& event, DeltaBuffer& province_delta);
     void apply_human_per_tick(const WorldState& state, const Province& province,
                               const ActiveRandomEvent& event, DeltaBuffer& province_delta);
-    float compute_economic_volatility(const WorldState& state, const Province& province) const;
     EventCategory select_category(float climate_stress, float instability, float infra_rating,
                                   float economic_volatility, DeterministicRNG& rng) const;
     const RandomEventTemplate* select_template(EventCategory category, const Province& province,

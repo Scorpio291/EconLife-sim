@@ -18,6 +18,13 @@ namespace econlife::h3_utils {
 // Throws std::runtime_error if H3 returns an error code.
 H3Index lat_lng_to_cell(double lat_deg, double lng_deg, int resolution);
 
+// Latitude/longitude (degrees) of a cell's centre. Throws std::runtime_error on H3 error.
+struct LatLngDeg {
+    double lat;
+    double lng;
+};
+LatLngDeg cell_center_lat_lng(H3Index cell);
+
 // Return all immediate neighbors of a cell (grid ring at distance 1).
 // Returns 5 cells for pentagons, 6 cells for regular hexagons.
 // Throws std::runtime_error on H3 error.

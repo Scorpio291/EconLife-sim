@@ -341,11 +341,23 @@ inline PlayerRun run(const RunConfig& cfg) {
 // (That most facility firms sit idle is a world-economy finding, recorded in
 // the run telemetry as firms_with_facility vs firms_with_facility_earning. It
 // is not the player's problem to solve and not this milestone's to fix.)
+//
+// On a NO. An owner accepts a 7x offer about three times in four (fair is 6x),
+// and the start province may hold nothing the opening balance can buy that day.
+// A person who is turned down, or finds nothing in reach, looks again the next
+// week; so does the script, until the player owns a firm or has an offer in due
+// diligence. Without that, every ratchet below rested on one roll of one world.
 // ---------------------------------------------------------------------------
 inline ActionScript buy_a_business_at_tick(uint32_t at_tick, float offer_multiple = 7.0f) {
     return [at_tick, offer_multiple](WorldState& w, uint32_t tick) {
-        if (tick != at_tick || !w.player)
+        if (tick < at_tick || (tick - at_tick) % 7 != 0 || !w.player)
             return;
+        for (const auto& biz : w.npc_businesses)
+            if (biz.owner_id == w.player->id)
+                return;  // already a business owner
+        for (const auto& acq : w.pending_business_acquisitions)
+            if (acq.buyer_id == w.player->id && acq.stage == PendingTxStage::pending)
+                return;  // an accepted offer is in due diligence
         const NPCBusiness* best = nullptr;
         float best_price = 0.0f;
         for (const auto& biz : w.npc_businesses) {

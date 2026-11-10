@@ -5,6 +5,7 @@
 // severity/duration bounds, evidence generation, event expiry, and
 // deterministic reproducibility.
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -540,9 +541,12 @@ TEST_CASE("test_module_name_and_ordering", "[random_events][tier1]") {
     // See random_events_module.cpp::execute() for the rationale.
     REQUIRE(module.is_province_parallel() == false);
 
+    // After price_engine: the volatility it reads is only defined once the
+    // tick's markets have cleared (see compute_economic_volatility).
     auto after = module.runs_after();
-    REQUIRE(after.size() == 1);
+    REQUIRE(after.size() == 2);
     REQUIRE(after[0] == "calendar");
+    REQUIRE(after[1] == "price_engine");
 }
 
 // =============================================================================
@@ -884,6 +888,124 @@ TEST_CASE("test_different_seeds_different_events", "[random_events][tier1]") {
         }
     }
     REQUIRE(any_difference);
+}
+
+// =============================================================================
+// Test: every (world seed, tick, province) draws its own stream
+//
+// The roll used to be seeded with world_seed ^ tick ^ province.id. XOR folds the
+// three together, so province p at tick t drew exactly what province 0 drew at
+// tick t ^ p, and world seed 43 drew exactly what seed 42 drew a tick earlier or
+// later. In the orchestrated baseline every province suffered the same events one
+// tick apart and seeds 42-45 all lived one history. These tests count the events
+// two runs share (same template, same severity): a shared stream shares nearly
+// all of them, independent streams essentially none.
+// =============================================================================
+
+namespace {
+
+std::vector<ActiveRandomEvent> roll_events(uint64_t seed, uint32_t provinces, uint32_t ticks) {
+    RandomEventsModule module;
+    module.set_base_rate(3.0f);  // ~10% per tick, so a year yields dozens of events
+    WorldState ws = make_test_world_state(seed, 0);
+    for (uint32_t p = 0; p < provinces; ++p)
+        ws.provinces.push_back(make_test_province(p, 0.3f, 0.7f, 0.5f));
+    for (uint32_t tick = 0; tick < ticks; ++tick) {
+        ws.current_tick = tick;
+        for (uint32_t p = 0; p < provinces; ++p) {
+            DeltaBuffer db{};
+            module.execute_province(p, ws, db);
+        }
+    }
+    return module.active_events();
+}
+
+// Events of `b` whose template and severity also occur in `a`.
+size_t shared_events(const std::vector<ActiveRandomEvent>& a,
+                     const std::vector<ActiveRandomEvent>& b) {
+    size_t shared = 0;
+    for (const auto& e : b)
+        for (const auto& f : a)
+            if (e.template_id == f.template_id && e.severity == f.severity) {
+                ++shared;
+                break;
+            }
+    return shared;
+}
+
+}  // namespace
+
+TEST_CASE("test_provinces_draw_independent_event_streams", "[random_events][tier1]") {
+    // Two provinces in identical condition: only the stream can tell them apart.
+    const auto events = roll_events(42, 2, 360);
+    std::vector<ActiveRandomEvent> p0, p1;
+    for (const auto& e : events)
+        (e.province_id == 0 ? p0 : p1).push_back(e);
+    REQUIRE(p0.size() >= 20);
+    REQUIRE(p1.size() >= 20);
+    CHECK(shared_events(p0, p1) * 10 < p1.size());
+}
+
+TEST_CASE("test_neighbouring_world_seeds_draw_independent_histories", "[random_events][tier1]") {
+    const auto a = roll_events(42, 1, 360);
+    const auto b = roll_events(43, 1, 360);
+    REQUIRE(a.size() >= 20);
+    REQUIRE(b.size() >= 20);
+    CHECK(shared_events(a, b) * 10 < b.size());
+}
+
+// =============================================================================
+// Test: economic volatility measures a market out of balance, not a price level
+//
+// The modifier used to compare spot_price with RegionalMarket::equilibrium_price,
+// which price_engine keeps as the good's base-price reference and never updates.
+// A good nobody in the province produces clears at import parity (3 x the
+// reference), so the modifier read ~3 in every province of the emergence baseline
+// and tripled the event rate with no market moving. The modifier now measures the
+// gap between spot and the price the market currently clears at.
+// =============================================================================
+
+namespace {
+
+RegionalMarket make_market(uint32_t good_id, float reference, float spot, float supply,
+                           float demand) {
+    RegionalMarket m{};
+    m.good_id = good_id;
+    m.province_id = 0;
+    m.equilibrium_price = reference;
+    m.spot_price = spot;
+    m.supply = supply;
+    m.demand_buffer = demand;
+    return m;
+}
+
+}  // namespace
+
+TEST_CASE("test_market_at_import_parity_is_not_volatile", "[random_events][tier1]") {
+    // No local supply, steady demand: the market clears at the import ceiling
+    // (import_ceiling_coeff x reference) and spot has arrived there.
+    const PriceEngineConfig pe{};
+    RandomEventsModule module({}, pe);
+    WorldState ws = make_test_world_state(42, 0);
+    ws.provinces.push_back(make_test_province(0));
+    for (uint32_t g = 1; g <= 4; ++g)
+        ws.regional_markets.push_back(
+            make_market(g, 10.0f, 10.0f * pe.import_ceiling_coeff, 0.0f, 50.0f));
+    CHECK(module.compute_economic_volatility(ws, ws.provinces[0]) == 1.0f);
+}
+
+TEST_CASE("test_market_off_its_clearing_price_is_volatile", "[random_events][tier1]") {
+    // Supply equals demand, so the market clears at the reference price; a spot
+    // knocked 40% above it is a market out of balance.
+    const PriceEngineConfig pe{};
+    RandomEventsModule module({}, pe);
+    WorldState ws = make_test_world_state(42, 0);
+    ws.provinces.push_back(make_test_province(0));
+    ws.regional_markets.push_back(make_market(1, 10.0f, 14.0f, 50.0f, 50.0f));
+    ws.regional_markets.push_back(make_market(2, 10.0f, 10.0f, 50.0f, 50.0f));
+    // Mean gap (0.4 + 0) / 2.
+    CHECK(module.compute_economic_volatility(ws, ws.provinces[0]) ==
+          Catch::Approx(1.2f).epsilon(1e-6));
 }
 
 // ─── Cross-module trigger: pending_random_event_triggers drain ──────────────

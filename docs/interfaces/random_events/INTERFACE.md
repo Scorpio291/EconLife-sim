@@ -28,7 +28,7 @@ Rolls for random occurrences each tick per province using a Poisson probability 
 - Calendar module has executed (date context available for seasonal event weighting).
 - Province conditions (climate_stress_current, instability, infrastructure_rating) are current for this tick.
 - Event template registry loaded from `/data/events/event_templates.json` at startup; immutable during session.
-- RNG state is deterministic and reproducible from `world_seed + current_tick + province_id`.
+- RNG state is deterministic and reproducible from `world_seed`, `current_tick` and `province_id`, derived as `DeterministicRNG(world_seed).fork(current_tick).fork(province_id)` so that every (seed, tick, province) draws an independent stream. Combining the three by XOR or addition is forbidden: it makes province p at tick t draw what province 0 drew at tick t ^ p, and neighbouring world seeds draw each other's history.
 
 ## Postconditions
 - Each LOD 0 province has been evaluated for a new random event firing via the Poisson model.
@@ -38,6 +38,7 @@ Rolls for random occurrences each tick per province using a Poisson probability 
 - Evidence tokens generated exactly once per qualifying event (tracked by `evidence_generated` flag on ActiveRandomEvent).
 
 ## Invariants
+- `economic_volatility_modifier = 1 + mean over the province's markets of |spot_price − clearing_price| / clearing_price`, where `clearing_price` is `PriceEngineModule::clearing_price(market, PriceEngineConfig)` (base reference × demand/supply, held between the export floor and the import ceiling). It is NOT measured against `RegionalMarket::equilibrium_price`, which is the good's base-price reference and is never updated: against it a good settled at import parity reads 200% out of line forever. A settled market contributes 0; only a market out of balance (e.g. after an economic event shifts its spot) raises the rate.
 - Poisson probability formula: `p_event_this_tick = 1.0 - exp(-adjusted_rate / ticks_per_month)` where `adjusted_rate = base_rate * (1.0 + climate_stress * climate_amplifier) * (1.0 + instability * instability_amplifier) * economic_volatility_modifier`.
 - `random_event_base_rate` default: 0.15 events per province per month (~1.8/year at baseline).
 - `climate_event_amplifier` default: 1.5; `instability_event_amplifier` default: 1.0.
@@ -62,7 +63,7 @@ Rolls for random occurrences each tick per province using a Poisson probability 
 - Active event count expected to be low (0-3 per province typically); linear scan acceptable.
 
 ## Dependencies
-- runs_after: ["calendar"]
+- runs_after: ["calendar", "price_engine"] — markets must have cleared this tick before economic volatility is read (TDD §19 places random events at tick step 25, after prices).
 - runs_before: []
 
 ## Test Scenarios

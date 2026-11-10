@@ -8,7 +8,8 @@
 
 #include "core/world_state/apply_deltas.h"  // markets_in_province
 #include "core/world_state/player.h"        // PlayerCharacter (complete type for state.player->)
-#include "modules/scene_cards/card_seed.h"  // seed_card
+#include "modules/price_engine/price_engine_module.h"  // clearing_price
+#include "modules/scene_cards/card_seed.h"             // seed_card
 
 namespace econlife {
 
@@ -69,8 +70,9 @@ static std::vector<RandomEventTemplate> get_default_templates() {
 // RandomEventsModule — out-of-line method implementations
 // =============================================================================
 
-RandomEventsModule::RandomEventsModule(const RandomEventsConfig& cfg)
-    : cfg_(cfg), templates_(get_default_templates()), next_event_id_(1) {}
+RandomEventsModule::RandomEventsModule(const RandomEventsConfig& cfg,
+                                       const PriceEngineConfig& price_cfg)
+    : cfg_(cfg), price_cfg_(price_cfg), templates_(get_default_templates()), next_event_id_(1) {}
 
 std::string_view RandomEventsModule::name() const noexcept {
     return "random_events";
@@ -83,7 +85,13 @@ ModuleScope RandomEventsModule::scope() const noexcept {
 }
 
 std::vector<std::string_view> RandomEventsModule::runs_after() const {
-    return {"calendar"};
+    // After price_engine, as the TDD places random events (step 25) late in the
+    // tick. Economic volatility compares spot with the price each market clears at,
+    // and that is only defined once the tick's markets have cleared: a market's
+    // supply is a stock that production adds to and consumption draws down during
+    // the tick, so read from the top of the tick it sat near the export floor and
+    // the measure averaged ~7 in every province with no price moving.
+    return {"calendar", "price_engine"};
 }
 
 bool RandomEventsModule::is_province_parallel() const noexcept {
@@ -99,9 +107,13 @@ void RandomEventsModule::execute_province(uint32_t province_idx, const WorldStat
     if (province.lod_level != SimulationLOD::full)
         return;
 
-    uint64_t rng_seed = state.world_seed ^ static_cast<uint64_t>(state.current_tick) ^
-                        static_cast<uint64_t>(province.id);
-    DeterministicRNG rng(rng_seed);
+    // One stream per (world seed, tick, province), each fork avalanching the bits.
+    // The seed used to be world_seed ^ tick ^ province.id: XOR let province p at
+    // tick t draw exactly what province 0 drew at tick t ^ p, and neighbouring world
+    // seeds draw each other's history, so every province suffered the same events a
+    // tick apart and seeds 42-45 lived one history.
+    DeterministicRNG rng =
+        DeterministicRNG(state.world_seed).fork(state.current_tick).fork(province.id);
 
     process_active_events(state, province, province_delta);
     roll_for_new_event(state, province, rng, province_delta);
@@ -409,14 +421,18 @@ void RandomEventsModule::roll_for_new_event(const WorldState& state, const Provi
 
 float RandomEventsModule::compute_economic_volatility(const WorldState& state,
                                                       const Province& province) const {
+    // Measured against the price each market clears at, not against
+    // RegionalMarket::equilibrium_price: price_engine keeps that field as the good's
+    // base reference and never updates it, so a good with no local supply, settled
+    // at import parity, read as a market 200% out of line forever. Only meaningful
+    // after price_engine has run this tick (see runs_after).
     float total_deviation = 0.0f;
     uint32_t count = 0;
     for (uint32_t i : markets_in_province(state, province.id)) {
         const auto& market = state.regional_markets[i];
-        if (market.equilibrium_price > 0.0f) {
-            float deviation =
-                std::abs(market.spot_price - market.equilibrium_price) / market.equilibrium_price;
-            total_deviation += deviation;
+        const float clearing = PriceEngineModule::clearing_price(market, price_cfg_);
+        if (clearing > 0.0f) {
+            total_deviation += std::abs(market.spot_price - clearing) / clearing;
             ++count;
         }
     }

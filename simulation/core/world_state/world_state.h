@@ -60,6 +60,7 @@ struct WorldState {
         named_features;  // Stage 10.1; geographic features (UI/encyclopedia only)
     std::vector<PreGameEvent> pre_game_events;  // Stage 10.3; living-memory events (NPC seeding)
     LoadingCommentary loading_commentary;       // Stage 10.4; world-specific loading screen text
+    NationSeedReport nation_seed_report;        // Stage 9.5.1 diagnostic; not persisted
     std::unordered_map<H3Index, uint32_t> h3_province_map;  // H3Index → province array index
 
     // --- NPC Population ---

@@ -55,6 +55,11 @@ class PriceEngineModule : public ITickModule {
     // Step 1: Compute the clamped equilibrium price for a single market.
     float compute_equilibrium_price(const RegionalMarket& market) const;
 
+    // The price `market` clears at this tick under price_engine's rule: the base
+    // reference scaled by demand / supply, held between the export floor and the
+    // import ceiling. Static so other modules measure against the same rule.
+    static float clearing_price(const RegionalMarket& market, const PriceEngineConfig& pe);
+
     // Step 2: Compute the new spot price after sticky adjustment.
     float compute_sticky_adjustment(float spot_price, float equilibrium_price,
                                     float adjustment_rate) const;
