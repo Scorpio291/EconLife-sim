@@ -5,8 +5,11 @@
 // it hands the modules is the shipped package config.
 //
 //   AC-01 parity        the emergence harness setup and the game (CLI) setup
-//                       produce bit-identical initial state, and stay identical
-//                       through the first ticks (same module parameters).
+//                       produce the same initial state in every sampled field
+//                       (world_fingerprint.h lists them; bit-exact on those
+//                       fields, not a full-state proof), and stay equal through
+//                       the first ticks, which shows behaviourally that the
+//                       modules run with the same parameters.
 //   AC-02 completeness  a production-economy world has recipes, facility types
 //                       and instantiated facilities.
 //   AC-03 fail-fast     a missing recipe directory, a missing facility-type file,
@@ -177,6 +180,7 @@ TEST_CASE("EL-SLICE-01 AC-02: an economy test world has recipes and facilities",
     CHECK(r.technology_nodes_loaded > 0);
     CHECK(r.eras_loaded > 0);
     CHECK(r.occupations_loaded > 0);
+    CHECK(r.scene_cards_loaded > 0);
     CHECK(r.content_substitutions.empty());
     REQUIRE(r.facilities > 0);
     REQUIRE(s->world.facilities.size() == r.facilities);
@@ -254,6 +258,84 @@ TEST_CASE("EL-SLICE-01 AC-03: a mistyped config value fails visibly",
         std::ofstream(p, std::ios::trunc) << j.dump(2);
     }
     expect_bootstrap_error(pkg.path(), "load_package_config");
+}
+
+TEST_CASE("EL-SLICE-01 AC-03: an empty config object fails instead of using header defaults",
+          "[integration][bootstrap][el_slice_01]") {
+    // Parses fine, holds nothing: load_package_config would fill every field
+    // from the header while the session claimed package configuration.
+    PackageCopy pkg("empty_modules_json");
+    pkg.write("config/modules.json", "{}");
+    expect_bootstrap_error(pkg.path(), "empty or not an object");
+}
+
+TEST_CASE("EL-SLICE-01 AC-03: a config file lacking a required section fails",
+          "[integration][bootstrap][el_slice_01]") {
+    PackageCopy pkg("no_npc_behavior_section");
+    const fs::path p = pkg.root / "config" / "modules.json";
+    nlohmann::json j;
+    {
+        std::ifstream in(p);
+        j = nlohmann::json::parse(in);
+    }
+    j.erase("npc_behavior_module");
+    std::ofstream(p, std::ios::trunc) << j.dump(2);
+    expect_bootstrap_error(pkg.path(), "/npc_behavior_module");
+}
+
+TEST_CASE("EL-SLICE-01 AC-03: a config file lacking inaction_threshold fails",
+          "[integration][bootstrap][el_slice_01]") {
+    PackageCopy pkg("no_inaction_threshold");
+    const fs::path p = pkg.root / "config" / "modules.json";
+    nlohmann::json j;
+    {
+        std::ifstream in(p);
+        j = nlohmann::json::parse(in);
+    }
+    j["npc_behavior_module"].erase("inaction_threshold");
+    std::ofstream(p, std::ios::trunc) << j.dump(2);
+    expect_bootstrap_error(pkg.path(), "/npc_behavior_module/inaction_threshold");
+}
+
+TEST_CASE("EL-SLICE-01 AC-03: a scene-card catalogue with no usable template fails",
+          "[integration][bootstrap][el_slice_01]") {
+    SECTION("header only") {
+        PackageCopy pkg("cards_header_only");
+        std::string header;
+        {
+            std::ifstream in(pkg.root / "scene_cards" / "business_path.csv");
+            std::getline(in, header);
+        }
+        pkg.write("scene_cards/business_path.csv", header + "\n");
+        expect_bootstrap_error(pkg.path(), "0 usable templates");
+    }
+    SECTION("malformed rows") {
+        PackageCopy pkg("cards_malformed");
+        pkg.write("scene_cards/business_path.csv", "not,a,card\nstill,not,one\n");
+        expect_bootstrap_error(pkg.path(), "0 usable templates");
+    }
+}
+
+TEST_CASE("EL-SLICE-01 AC-03: an undeclared world override fails the strict bootstrap",
+          "[integration][bootstrap][el_slice_01]") {
+    GameSetup setup{};
+    setup.seed = kSeed;
+    setup.npc_count = kNpcs;
+    setup.province_count = kProvinces;
+    setup.policy = ContentPolicy::strict;
+    setup.override_world_config = [](WorldGeneratorConfig& g) { g.criminal_baseline = 0.5f; };
+    REQUIRE_THROWS_AS(create_game_session(setup), BootstrapError);
+
+    GameSetup post = setup;
+    post.override_world_config = nullptr;
+    post.override_generated_world = [](WorldState&) {};
+    REQUIRE_THROWS_AS(create_game_session(post), BootstrapError);
+
+    // Declared, the same hook is accepted and reported.
+    setup.declared_overrides.push_back("criminal_baseline=0.5");
+    auto s = create_game_session(setup);
+    REQUIRE(s->report.declared_overrides.size() == 1);
+    CHECK(format_bootstrap_report(s->report).find("criminal_baseline=0.5") != std::string::npos);
 }
 
 TEST_CASE("EL-SLICE-01 AC-03: a world that generates zero facilities fails its contract",

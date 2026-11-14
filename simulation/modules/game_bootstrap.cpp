@@ -14,6 +14,7 @@
 #include "core/world_gen/technology_catalog.h"
 #include "core/world_state/player.h"
 #include "modules/register_base_game_modules.h"
+#include "modules/scene_cards/scene_card_catalog.h"
 
 namespace econlife {
 
@@ -41,6 +42,79 @@ bool directory_has_csv(const std::string& dir) {
 
 [[noreturn]] void fail(const std::string& what) {
     throw BootstrapError("EL-SLICE-01 bootstrap contract violated: " + what);
+}
+
+// Keys that must be present for the strict policy. Two kinds:
+//  - every top-level section load_package_config reads from that file (taken
+//    from the loader's j.value("<section>", object()) calls), so an emptied or
+//    truncated file cannot fall back to header defaults section by section;
+//  - leaf parameters known to differ between header and package (review N2/N10),
+//    where a silent fallback changes the game measurably.
+// A missing leaf key NOT listed here still falls back to its header default:
+// the loader has no record of which keys it found. An exhaustive check needs the
+// key map asked for in review N10 (follow-up F6).
+struct RequiredConfigKey {
+    const char* file;
+    std::string pointer;  // RFC 6901 JSON pointer
+};
+
+const std::vector<RequiredConfigKey>& required_config_keys() {
+    static const std::vector<RequiredConfigKey> keys = [] {
+        std::vector<RequiredConfigKey> k;
+        auto sections = [&k](const char* file, std::initializer_list<const char*> names) {
+            for (const char* n : names)
+                k.push_back({file, std::string("/") + n});
+        };
+        sections("economy.json", {"financial", "labor_market", "npc_business", "price_model",
+                                  "safety_ceilings", "supply_chain", "trade"});
+        sections("npc.json", {"npc_behavior", "relationships"});
+        sections("consequence_delays.json", {"consequence_delays"});
+        sections("business_lifecycle.json", {"emerging_sectors", "stranded_sectors"});
+        sections("modules.json", {"addiction",
+                                  "alternative_identity",
+                                  "antitrust",
+                                  "commodity_trading",
+                                  "community_response",
+                                  "criminal_operations",
+                                  "currency_exchange",
+                                  "designer_drug",
+                                  "drug_economy",
+                                  "facility_signals",
+                                  "financial_distribution",
+                                  "government_budget",
+                                  "healthcare",
+                                  "influence_network",
+                                  "investigator_engine",
+                                  "labor_module",
+                                  "lod_system",
+                                  "media_system",
+                                  "money_laundering",
+                                  "npc_behavior_module",
+                                  "npc_business",
+                                  "npc_spending",
+                                  "obligation_network",
+                                  "political_cycle",
+                                  "population_aging",
+                                  "price_engine",
+                                  "protection_rackets",
+                                  "random_events",
+                                  "real_estate",
+                                  "regional_conditions",
+                                  "scene_cards",
+                                  "seasonal_agriculture",
+                                  "supply_chain_module",
+                                  "trade_infrastructure",
+                                  "trust_updates",
+                                  "weapons_trafficking"});
+        k.push_back({"modules.json", "/npc_behavior_module/inaction_threshold"});
+        k.push_back({"modules.json", "/npc_spending/default_base_demand_units"});
+        k.push_back({"modules.json", "/npc_spending/default_base_price"});
+        k.push_back({"economy.json", "/supply_chain/surplus_decay_rate_per_tick"});
+        k.push_back({"production_config.json", "/tech_tier_output_bonus_per_tier"});
+        k.push_back({"rnd_config.json", "/maturation_rate_coeff"});
+        return k;
+    }();
+    return keys;
 }
 
 // Strict pre-flight. Every check runs the SAME loader world generation runs, so
@@ -107,8 +181,13 @@ void validate_strict_inputs(const BaseGamePaths& p) {
             fail("occupation catalogue at " + p.occupations_dir +
                  " loaded 0 occupations (built-in default refused)");
     }
-    if (!directory_has_csv(p.scene_cards_dir))
-        fail("scene card catalogue at " + p.scene_cards_dir + " has no CSV");
+    {
+        // The module's own loader: it skips malformed rows, so a CSV that exists
+        // but holds no usable template would otherwise pass as "loaded".
+        SceneCardCatalog cards;
+        if (cards.load_from_directory(p.scene_cards_dir) == 0 || cards.size() == 0)
+            fail("scene card catalogue at " + p.scene_cards_dir + " loaded 0 usable templates");
+    }
 
     // Config: every file load_package_config reads must exist and parse.
     // load_package_config itself substitutes {} for a missing file, and a parse
@@ -119,11 +198,23 @@ void validate_strict_inputs(const BaseGamePaths& p) {
         if (!in.is_open())
             fail("missing required config file " + path.string() +
                  " (header defaults would be substituted)");
+        nlohmann::json parsed;
         try {
-            const nlohmann::json parsed = nlohmann::json::parse(in);
-            (void)parsed;
+            parsed = nlohmann::json::parse(in);
         } catch (const std::exception& e) {
             fail("config file " + path.string() + " does not parse: " + e.what());
+        }
+        // A file that parses but carries nothing is as silent as a missing one:
+        // load_package_config fills every field from the header.
+        if (!parsed.is_object() || parsed.empty())
+            fail("config file " + path.string() +
+                 " is empty or not an object (header defaults would be substituted)");
+        for (const auto& req : required_config_keys()) {
+            if (req.file != file)
+                continue;
+            if (!parsed.contains(nlohmann::json::json_pointer(req.pointer)))
+                fail("config file " + path.string() + " lacks required key " + req.pointer +
+                     " (header default would be substituted)");
         }
     }
 }
@@ -210,8 +301,15 @@ std::unique_ptr<GameSession> create_game_session(const GameSetup& setup) {
     if (!setup.config_dir_override.empty())
         paths.config_dir = setup.config_dir_override;
 
-    if (strict)
+    if (strict) {
+        // A hook that changes the world must be named, or the report would
+        // describe a scenario world as the game's.
+        const bool has_hook = static_cast<bool>(setup.override_world_config) ||
+                              static_cast<bool>(setup.override_generated_world);
+        if (has_hook && setup.declared_overrides.empty())
+            fail("a world override hook is set but declared_overrides is empty");
         validate_strict_inputs(paths);
+    }
 
     auto session = std::make_unique<GameSession>();
     BootstrapReport& rep = session->report;
@@ -286,6 +384,10 @@ std::unique_ptr<GameSession> create_game_session(const GameSetup& setup) {
     rep.technology_nodes_loaded = w.technology_catalog ? w.technology_catalog->all().size() : 0;
     rep.eras_loaded = w.era_catalog.size();
     rep.occupations_loaded = w.occupation_catalog.size();
+    if (!paths.scene_cards_dir.empty()) {
+        SceneCardCatalog cards;
+        rep.scene_cards_loaded = cards.load_from_directory(paths.scene_cards_dir);
+    }
     rep.provinces = w.provinces.size();
     rep.npcs = w.significant_npcs.size();
     rep.businesses = w.npc_businesses.size();
@@ -341,7 +443,7 @@ std::string format_bootstrap_report(const BootstrapReport& r) {
     o << "  catalogues: goods=" << r.goods_loaded << " recipes=" << r.recipes_loaded
       << " facility_types=" << r.facility_types_loaded
       << " tech_nodes=" << r.technology_nodes_loaded << " eras=" << r.eras_loaded
-      << " occupations=" << r.occupations_loaded << "\n";
+      << " occupations=" << r.occupations_loaded << " scene_cards=" << r.scene_cards_loaded << "\n";
     o << "  world: provinces=" << r.provinces << " npcs=" << r.npcs
       << " businesses=" << r.businesses << " facilities=" << r.facilities
       << " markets=" << r.markets << " modules=" << r.modules_registered << "\n";

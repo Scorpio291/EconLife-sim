@@ -26,8 +26,12 @@
 //             substitution is recorded in the report so a caller can print it.
 //   strict  — for anything that claims to exercise the production economy.
 //             Missing package files, catalogues that load empty, unparsable
-//             config and a generated world with zero facilities throw
-//             BootstrapError instead of being substituted.
+//             or empty config files, config files lacking a required section
+//             or critical key, undeclared world-override hooks and a generated
+//             world with zero facilities throw BootstrapError instead of being
+//             substituted. Not covered: a leaf config key outside the required
+//             list still falls back to its header default (see
+//             required_config_keys() in the .cpp and review N10).
 
 #include <cstdint>
 #include <functional>
@@ -136,6 +140,7 @@ struct BootstrapReport {
     std::size_t technology_nodes_loaded = 0;
     std::size_t eras_loaded = 0;
     std::size_t occupations_loaded = 0;
+    std::size_t scene_cards_loaded = 0;
 
     // World as instantiated.
     std::size_t provinces = 0;

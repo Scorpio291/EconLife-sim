@@ -1,13 +1,19 @@
 #pragma once
 
-// World fingerprint — per-component hashes over initialised WorldState fields,
-// used to prove two bootstraps built the SAME world (EL-SLICE-01 AC-01, AC-05).
+// World fingerprint — SAMPLED-STATE parity (EL-SLICE-01 AC-01, AC-05).
 //
-// Hashes cover the fields a behavioural run depends on: provinces (conditions,
-// population, natural capital), NPCs, businesses, facilities, markets, recipes,
-// nations, era and the player. Floats are hashed by bit pattern, so "equal"
-// means bit-identical, not approximately equal. Component hashes are kept apart
-// so a mismatch names the layer that diverged.
+// Per-layer hashes over a chosen set of WorldState fields: provinces (conditions,
+// community, population, natural capital), NPCs (status, role, capital, province,
+// motivations, full memory log), businesses, facilities, markets, recipes,
+// nations, era and the player. Floats are hashed by bit pattern, so the sampled
+// fields are compared bit for bit.
+//
+// What it does NOT prove: equality of fields that are not listed here, or of
+// module parameters. Two worlds with equal fingerprints are equal in the
+// sampled fields only. Module-parameter equality is tested behaviourally (the
+// worlds must stay equal through several ticks), not field by field. This is
+// deliberately not a second serialiser; a full-state comparison belongs to the
+// persistence layer (save files), not here.
 
 #include <cstdint>
 #include <cstring>
@@ -99,7 +105,18 @@ inline WorldFingerprint take(const WorldState& w) {
             h.pod(n.role);
             h.pod(n.capital);
             h.pod(n.current_province_id);
+            h.pod(n.home_province_id);
+            for (float wgt : n.motivations.weights)
+                h.pod(wgt);
             h.pod(n.memory_log.size());
+            for (const auto& m : n.memory_log) {
+                h.pod(m.tick_timestamp);
+                h.pod(m.type);
+                h.pod(m.subject_id);
+                h.pod(m.emotional_weight);
+                h.pod(m.decay);
+                h.pod(m.is_actionable);
+            }
         }
         f.npcs = h.value();
         f.n_npcs = w.significant_npcs.size();
