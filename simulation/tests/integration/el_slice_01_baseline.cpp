@@ -20,7 +20,9 @@
 //   EL_SEEDS        comma-separated seeds (default 42,43,44)
 //   EL_LEGACY       1 = also run the pre-EL-SLICE-01 harness world
 
+#if !defined(_WIN32)
 #include <sys/resource.h>
+#endif
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
@@ -57,10 +59,15 @@ std::vector<uint64_t> env_seeds() {
     return out;
 }
 
+// Process-wide peak resident set (cumulative across seeds in one process).
 long peak_rss_kb() {
+#if defined(_WIN32)
+    return -1;  // not measured on Windows
+#else
     struct rusage ru {};
     getrusage(RUSAGE_SELF, &ru);
     return ru.ru_maxrss;  // kilobytes on Linux
+#endif
 }
 
 void print_series(const std::vector<Snapshot>& series) {
