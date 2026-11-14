@@ -88,6 +88,7 @@ add_subdirectory(persistence)
 # Module registration — links all module libraries into a single target.
 add_library(econlife_modules STATIC
     register_base_game_modules.cpp
+    game_bootstrap.cpp
     history_generator.cpp
 )
 

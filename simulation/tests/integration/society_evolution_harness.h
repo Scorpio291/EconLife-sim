@@ -9,6 +9,11 @@
 // Companion to emergence_harness.h (which observes a modern, era-5 world). This one
 // is the lab for the world-spectrum / World-Class work; see
 // docs/design/EconLife_World_Spectrum_and_Evolution_Plan.md.
+//
+// SCOPE (EL-SLICE-01): A dawn (era 1, founding-seed) laboratory world with goods and technology
+// only and header-default module config. It is not the game's start and its results are not
+// evidence about the shipped game; moving it onto create_game_session() with a declared
+// starting-era override is follow-up work.
 
 #include <algorithm>
 #include <cstdint>

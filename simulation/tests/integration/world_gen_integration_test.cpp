@@ -8,6 +8,11 @@
 // 3. CSV-loaded goods create valid market dynamics
 // 4. Province diversity produces meaningful economic differentiation
 // 5. Edge cases: orphaned refs, extreme values, empty provinces
+//
+// SCOPE (EL-SLICE-01): World-generation invariants only (no crash, no NaN, values in range, no
+// orphaned refs). Most cases load goods only and register modules with header
+// defaults; they say nothing about the production economy. Behavioural claims
+// about the game belong in a create_game_session() test (modules/game_bootstrap.h).
 
 #include <h3api.h>
 

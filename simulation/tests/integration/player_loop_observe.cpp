@@ -111,24 +111,16 @@ TEST_CASE("player loop: one year in the life", "[.player-loop-observe]") {
 namespace {
 
 struct Sitting {
-    PackageConfig pkg;  // must outlive the orchestrator: set_config keeps a pointer
-    WorldState world;
-    TickOrchestrator orch;
+    // The game's own session (create_game_session, strict content policy).
+    std::unique_ptr<GameSession> gs;
+    WorldState& world;
+    TickOrchestrator& orch;
     ThreadPool pool{1};
 
-    Sitting() : pkg(load_package_config(econlife::player_loop::find_package_dir("config"))) {
-        WorldGeneratorConfig gen{};
-        gen.seed = 42;
-        gen.province_count = 6;
-        gen.npc_count = 500;
-        econlife::player_loop::set_content_directories(gen);
-        auto result = WorldGenerator::generate_with_player(gen);
-        world = std::move(result.world);
-        world.player = std::make_unique<PlayerCharacter>(std::move(result.player));
-        register_base_game_modules(orch, pkg);
-        orch.set_config(pkg);
-        orch.finalize_registration();
-    }
+    Sitting()
+        : gs(econlife::player_loop::make_session(42, 500, 6)),
+          world(gs->world),
+          orch(gs->orchestrator) {}
 
     void play(uint32_t n, const econlife::player_loop::ActionScript& script = {}) {
         for (uint32_t i = 0; i < n; ++i) {

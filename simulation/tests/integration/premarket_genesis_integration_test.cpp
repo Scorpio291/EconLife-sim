@@ -9,6 +9,9 @@
 //   - founder endowments are CONSERVED transfers (no wealth created or destroyed),
 //   - manors appear exactly in manorial regimes,
 //   - the whole materialization is deterministic.
+//
+// SCOPE (EL-SLICE-01): World-generation materialization only (medieval-band entry); no tick is
+// run under the package config, so this is not a behavioural test of the game.
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>

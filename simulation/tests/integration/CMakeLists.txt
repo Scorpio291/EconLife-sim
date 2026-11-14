@@ -7,6 +7,7 @@ add_executable(econlife_integration_tests
     premarket_genesis_integration_test.cpp
     history_gen_integration_test.cpp
     society_evolution_test.cpp
+    bootstrap_parity_test.cpp
 )
 
 target_link_libraries(econlife_integration_tests PRIVATE
@@ -57,6 +58,7 @@ add_executable(econlife_emergence_tests
     emergence_observe.cpp
     emergence_test.cpp
     society_evolution_observe.cpp
+    el_slice_01_baseline.cpp
 )
 
 target_link_libraries(econlife_emergence_tests PRIVATE

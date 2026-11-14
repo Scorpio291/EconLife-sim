@@ -3,6 +3,9 @@
 //
 // These tests validate that multiple subsystems interacting over time
 // produce expected emergent outcomes defined in the GDD.
+//
+// SCOPE (EL-SLICE-01): Cross-system fixtures built by hand with direct delta application; no
+// generated world and no package config. Not evidence about the shipped game.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
