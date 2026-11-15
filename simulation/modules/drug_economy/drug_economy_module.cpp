@@ -365,7 +365,7 @@ void DrugEconomyModule::execute_province(uint32_t province_idx, const WorldState
 
         for (uint32_t idx : npc_indices) {
             const NPC& npc = state.significant_npcs[idx];
-            if (npc.status != NPCStatus::active)
+            if (!is_present(npc.status))
                 continue;
             if (npc.addiction_state.stage != AddictionStage::none)
                 continue;

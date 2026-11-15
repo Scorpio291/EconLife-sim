@@ -272,7 +272,7 @@ void AntitrustModule::run_monthly_check(const WorldState& state, DeltaBuffer& de
             if (prov_id < state.npc_indices_by_province.size()) {
                 for (uint32_t idx : state.npc_indices_by_province[prov_id]) {
                     const NPC& npc = state.significant_npcs[idx];
-                    if (npc.role == NPCRole::politician && npc.status == NPCStatus::active) {
+                    if (npc.role == NPCRole::politician && is_present(npc.status)) {
                         proposer = npc.id;
                         break;
                     }

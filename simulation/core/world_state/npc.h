@@ -82,12 +82,38 @@ enum class NPCRole : uint8_t {
 // ============================================================================
 
 enum class NPCStatus : uint8_t {
-    active = 0,      // Normal operation; participates in tick processing
+    active = 0,      // Present and free; took a discretionary daily action this tick
     imprisoned = 1,  // Removed from active behavior; may re-enter on release
     dead = 2,        // Permanently inactive; retained for forensic/memory references
     fled = 3,        // Left the region; may return under specific conditions
-    waiting = 4,     // Active but chose inaction this tick (EV below threshold)
+    waiting = 4,     // Present and free; took NO discretionary daily action this tick
 };
+
+// ----------------------------------------------------------------------------
+// The `waiting` contract (EL-SLICE-N2)
+// ----------------------------------------------------------------------------
+// NPCStatus mixes two questions. Capacity: is the NPC in the world and free
+// (active, waiting) or removed from it (imprisoned, dead, fled)? Discretion:
+// did the NPC pick one of npc_behavior's daily actions this tick (active) or
+// judge none of them worth taking (waiting)?
+//
+// `waiting` answers only the second question. A waiting NPC is present and
+// free: it ages, eats and spends, holds and is paid for its job, can be hired,
+// keeps its office, role duties and memberships, forms memories of events it
+// witnesses, counts in its community and province, and is exposed to
+// investigation and prosecution. The only thing it does not do is the
+// discretionary daily action it declined (and that action's direct effects:
+// the informal wage of `work`, the purchase of `shop`, a migration, ...).
+// It is re-evaluated every tick and returns to `active` as soon as an
+// affordable action clears the inaction threshold.
+//
+// Consumers that ask "is this NPC in the world and free?" use is_present().
+// Only consumers that ask "did this NPC take a discretionary action today?"
+// may distinguish active from waiting (npc_behavior itself, and the
+// unemployment count in labor_market: no formal job and no informal work).
+inline constexpr bool is_present(NPCStatus s) noexcept {
+    return s == NPCStatus::active || s == NPCStatus::waiting;
+}
 
 // ============================================================================
 // InvestigatorMeter — first-class per-NPC investigation pressure meter.

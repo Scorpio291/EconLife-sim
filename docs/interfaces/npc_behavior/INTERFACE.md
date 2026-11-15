@@ -11,7 +11,7 @@ Evaluates each significant NPC's motivations, selects daily actions via the expe
 - `provinces[].npcs[].known_evidence[]` — KnowledgeMap of evidence tokens the NPC is aware of, with confidence (0.0-1.0) decaying at config.knowledge.confidence_decay_rate per tick
 - `provinces[].npcs[].known_relationships[]` — KnowledgeMap of relational knowledge
 - `provinces[].npcs[].risk_tolerance` — 0.0-1.0; willingness to act on knowledge; drifts toward baseline over time
-- `provinces[].npcs[].status` — NPCStatus (active, imprisoned, dead, fled, waiting); only active and waiting NPCs are evaluated
+- `provinces[].npcs[].status` — NPCStatus (active, imprisoned, dead, fled, waiting); only present NPCs (`is_present()`: active or waiting) are evaluated. See "The waiting contract" below.
 - `provinces[].conditions` — regional stability_score, crime_rate, criminal_dominance_index affecting NPC risk assessments
 - `provinces[].market_data` — current prices and employment data influencing economic decisions
 - `provinces[].community` — grievance_level, institutional_trust feeding opposition formation checks
@@ -19,7 +19,7 @@ Evaluates each significant NPC's motivations, selects daily actions via the expe
 - `evidence_pool[]` — active evidence tokens that NPCs may become aware of or act on
 - `deferred_work_queue` — pending DeferredWorkItems for this tick (NPC relationship decay batches every 30 ticks, knowledge confidence decay)
 - `config.npc_decision_model.*` — utility weight overrides per NPC type for routine decisions
-- `config.inaction_threshold_default` — proposed default 0.10; NPCs with best_action EV below this threshold choose inaction
+- `npc_behavior_module.inaction_threshold` (modules.json, shipped 0.10) — a FRACTION, not an absolute EV: an NPC chooses inaction when its best affordable action's net utility is below this fraction of its own largest motivation weight (`relative_utility`). See "The waiting contract".
 - `config.risk.*` — MIN_RISK_DISCOUNT (default 0.05), RISK_SENSITIVITY_COEFF (default 2.0)
 - `config.trust_ev_bonus` — relationship modifier scaling on expected value
 - `config.satisfaction_decay_rate` — 0.002; approximately 500-tick half-life for worker satisfaction computation
@@ -28,7 +28,7 @@ Evaluates each significant NPC's motivations, selects daily actions via the expe
 ## Outputs (to DeltaBuffer)
 - `npc_deltas[]` — one NPCDelta per NPC that changed state this tick:
   - `capital_delta` (additive) — money gained or spent from actions (shopping, bribes, fines)
-  - `new_status` (replacement) — status transitions (active to waiting when EV below threshold; active to fled on flight action)
+  - `new_status` (replacement) — status transitions (active to waiting when the best action's relative utility is below inaction_threshold; waiting to active when it is not; active to fled on flight action)
   - `new_memory_entry` (append) — new MemoryEntry formed from this tick's events, observations, interactions, or hearsay
   - `updated_relationship` (upsert by target_npc_id) — trust, fear, obligation_balance changes from interactions
   - `motivation_delta` (additive) — slow motivation weight shifts driven by accumulated memory
@@ -46,7 +46,7 @@ Evaluates each significant NPC's motivations, selects daily actions via the expe
 ## Postconditions
 - Every active NPC has been evaluated (or skipped via lazy evaluation if no state change since last full evaluation).
 - Action-specific consequences only: an NPC queues a `ConsequenceDelta`/evidence only when its chosen action warrants one (whistleblow, criminal_activity, defection). Routine actions (work, shop, socialize, rest) queue NO consequence — an earlier placeholder emitted one `social_consequence` per acting NPC per tick, which at full population activity is a firehose (hundreds/tick) that pinned community `grievance_level` at the ceiling. Community reaction to routine life flows through NPC memory into `community_response`, the sole owner of `grievance_level`.
-- NPCs whose best_action EV was below inaction_threshold have status set to waiting.
+- NPCs whose best affordable action has relative utility (net_utility / max motivation weight) below inaction_threshold have status set to waiting; a waiting NPC whose best action clears the gate is set back to active. A waiting NPC writes no action memory, no action capital change and no action evidence.
 - All new MemoryEntry items respect MAX_MEMORY_ENTRIES cap; if at cap, lowest-decay entry is archived before append.
 - Knowledge confidence values have decayed by config.knowledge.confidence_decay_rate for entries not reinforced this tick.
 - Relationship updates respect recovery_ceiling constraint: trust cannot exceed recovery_ceiling after update.
@@ -61,6 +61,20 @@ Evaluates each significant NPC's motivations, selects daily actions via the expe
 - Same seed + same inputs = identical NPC decisions and delta output (deterministic action selection; ties broken by recency, close-call variance uses seeded RNG).
 - Province-parallel execution: Province A's NPC behavior does not depend on Province B's results within the same tick.
 - Knowledge confidence values remain in [0.0, 1.0].
+
+## The waiting contract (EL-SLICE-N2, 2026-11-15)
+
+`NPCStatus` mixes two questions. **Capacity:** is the NPC in the world and free (`active`, `waiting`) or removed from it (`imprisoned`, `dead`, `fled`)? **Discretion:** did the NPC take one of this module's daily actions this tick (`active`) or judge none worth taking (`waiting`)? `waiting` answers only the second. The canonical definition is the comment above `is_present()` in `core/world_state/npc.h`.
+
+Rules:
+- When an NPC's best affordable action has `net_utility / max(motivation weights) < inaction_threshold`, then its status becomes `waiting` and it takes no daily action this tick (no action memory, capital change, evidence or migration).
+- When a `waiting` NPC's best affordable action clears the gate, then its status returns to `active` that tick. Waiting NPCs are re-evaluated every tick.
+- When a consumer asks whether an NPC is in the world and free (aging, health, addiction, consumption, employment and wages, hiring, quitting, role duties, offices and votes, organisation membership, investigation, witnessing events, community and province aggregates), then it uses `is_present(status)` and treats `waiting` exactly like `active`.
+- Only a consumer that asks "did this NPC take a discretionary action today?" may distinguish them. Today that is this module and the unemployment count in `labor_market` (no formal job and no informal work).
+
+Why the gate is relative: net utility is `sum(w × p × m) × risk_discount` with weights normalised to sum to 1 over 8 OutcomeTypes, so its absolute size carries the factor 1/8 of that normalisation. An absolute threshold therefore changes meaning with the size of the enum. The gate compares the action against the NPC's own scale instead: a certain (p = 1), full (m = 1), unrisky payoff on its strongest motive is worth `max(w)` to it.
+
+Consumer audit (31 `status == active` sites on main @ 907e2a8): 30 sites changed to `is_present()`, one kept (labor_market unemployment, which already counted waiting-without-job as unemployed). The per-site table is in the EL-SLICE-N2 handoff.
 
 ## Failure Modes
 - NPC with corrupted MotivationVector (weights not summing to 1.0): log warning, renormalize weights, continue.
@@ -83,10 +97,11 @@ Evaluates each significant NPC's motivations, selects daily actions via the expe
 - runs_before: [] (end of Pass 1 chain; nothing in the current tick depends on this module's output)
 
 ## Test Scenarios
-- `test_high_ev_action_selected_over_inaction`: Set up an NPC with one available action whose expected_value exceeds inaction_threshold (default 0.10). Verify the NPC queues a DeferredWorkItem and status remains active (not waiting).
-- `test_below_threshold_produces_waiting_status`: Set up an NPC where all candidate actions produce EV below inaction_threshold. Verify NPC status is set to waiting and no DeferredWorkItem is queued.
+- `test_high_ev_action_selected_over_inaction`: Set up an NPC with one available action whose relative utility exceeds inaction_threshold (shipped 0.10). Verify the NPC queues a DeferredWorkItem and status remains active (not waiting).
+- `test_below_threshold_produces_waiting_status`: Set up an NPC where all candidate actions produce relative utility below inaction_threshold. Verify NPC status is set to waiting and no DeferredWorkItem is queued.
 - `test_motivation_vector_drives_action_preference`: Create two NPCs with identical situations but different MotivationVector weights (one prioritizes financial_gain, the other career_advance). Provide two available actions, one aligned to each motivation. Verify each NPC selects the action aligned with their dominant motivation.
 - `test_memory_decay_archives_old_entries`: Create an NPC at memory cap (500 entries). Add a new memory via the behavior engine. Verify the entry with the lowest decay value was archived and memory_log.size() remains at 500.
 - `test_risk_discount_reduces_high_exposure_ev`: Create an NPC with risk_tolerance 0.3 and an action with exposure_risk 0.8. Verify the expected_value is reduced by risk_discount factor max(0.05, 1.0 - (0.8 - 0.3) * 2.0) = 0.05.
 - `test_relationship_modifier_boosts_cooperative_action`: Create an NPC with trust 0.8 toward a target. Provide a cooperative action targeting that NPC. Verify EV is multiplied by (1.0 + 0.8 * config.trust_ev_bonus), producing a higher EV than the same action with neutral trust.
 - `test_whistleblower_eligibility_triggers_correctly`: Set up a worker NPC with worker_satisfaction below 0.35, a witnessed_illegal_activity memory with emotional_weight below -0.6, and risk_tolerance above 0.4. Verify the NPC's candidate actions include a whistleblower action. Then remove one condition (raise satisfaction above 0.35) and verify the whistleblower action is no longer available.
+- `N2 contract 1-4` (tests/unit/npc_waiting_contract_test.cpp): viable action taken; no viable action -> waiting with no action effects; gate invariant to weight normalisation; waiting NPC is paid, can be hired, counts in the labour force, ages, stays a registered investigator; witnessing a crime gives a waiting ideological worker a whistleblow action and it returns to active.

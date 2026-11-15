@@ -192,8 +192,7 @@ void WeaponsTraffickingModule::execute_province(uint32_t province_idx, const Wor
                 if (province.id < state.npc_indices_by_province.size()) {
                     for (uint32_t idx : state.npc_indices_by_province[province.id]) {
                         const NPC& npc = state.significant_npcs[idx];
-                        if (npc.role != NPCRole::law_enforcement ||
-                            npc.status != NPCStatus::active) {
+                        if (npc.role != NPCRole::law_enforcement || !is_present(npc.status)) {
                             continue;
                         }
                         // InvestigatorMeter spike — cannot be suppressed by

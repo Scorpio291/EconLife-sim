@@ -200,13 +200,169 @@ size_t NpcBehaviorModule::memory_type_to_outcome_index(MemoryType type) {
 }
 
 // ===========================================================================
+// Candidate generation and choice (exposed for tests and observers)
+// ===========================================================================
+
+NpcBehaviorModule::ProvinceContext NpcBehaviorModule::province_context(
+    const WorldState& state, uint32_t province_idx) const {
+    const auto& province = state.provinces[province_idx];
+    ProvinceContext ctx{};
+    ctx.crime_rate = province.cohort_stats->crime_rate;
+    ctx.stability = province.conditions.stability_score;
+    ctx.employment_rate = province.cohort_stats->formal_employment_rate;
+    // Informal labor floor: formal scarcity degrades pay toward subsistence,
+    // never to zero — there is always some work for willing bodies. Without
+    // this floor, wage = base_wage × employment_rate is a death spiral (low
+    // employment → worthless work → mass inaction → lower employment).
+    ctx.effective_employment = std::max(ctx.employment_rate, cfg_.informal_wage_floor);
+    return ctx;
+}
+
+std::vector<NpcBehaviorModule::ActionCandidate> NpcBehaviorModule::generate_candidates(
+    const NPC& npc, const WorldState& state, const ProvinceContext& ctx) const {
+    const float crime_rate = ctx.crime_rate;
+    const float stability = ctx.stability;
+    const float employment_rate = ctx.employment_rate;
+    const float effective_employment = ctx.effective_employment;
+
+    std::vector<ActionCandidate> candidates;
+
+    // work: probability scales with the effective (formal-or-informal)
+    // employment rate
+    float work_prob = std::min(1.0f, 0.5f + effective_employment * 0.4f);
+    candidates.push_back(
+        {DailyAction::work, {{OutcomeType::financial_gain, work_prob, 0.5f}}, 0.0f, -2.0f, 0.0f});
+
+    // shop: magnitude scales inversely with price (stability proxy)
+    float shop_mag = std::min(1.0f, 0.2f + stability * 0.2f);
+    float shop_cost = std::min(npc.capital, npc.capital * cfg_.shop_cost_fraction);
+    candidates.push_back({DailyAction::shop,
+                          {{OutcomeType::security_gain, 0.7f, shop_mag}},
+                          0.0f,
+                          -2.0f,
+                          shop_cost});
+
+    // socialize: trust modifier from best relationship
+    {
+        float best_trust = -2.0f;
+        for (const auto& rel : npc.relationships) {
+            if (rel.trust > best_trust) {
+                best_trust = rel.trust;
+            }
+        }
+        candidates.push_back({DailyAction::socialize,
+                              {{OutcomeType::relationship_repair, 0.6f, 0.4f}},
+                              0.0f,
+                              best_trust,
+                              0.0f});
+    }
+
+    // rest: always available
+    candidates.push_back(
+        {DailyAction::rest, {{OutcomeType::self_preservation, 0.9f, 0.2f}}, 0.0f, -2.0f, 0.0f});
+
+    // seek_employment: probability scales inversely with employment rate
+    float seek_prob = std::min(1.0f, 0.3f + (1.0f - employment_rate) * 0.4f);
+    candidates.push_back({DailyAction::seek_employment,
+                          {{OutcomeType::career_advance, seek_prob, 0.6f}},
+                          0.1f,
+                          -2.0f,
+                          0.0f});
+
+    // criminal_activity: magnitude scales with crime rate, risk scales with stability
+    float crim_mag = std::min(1.0f, 0.4f + crime_rate * 0.6f);
+    float crim_risk = std::max(0.3f, 0.8f - crime_rate * 0.5f);
+    candidates.push_back({DailyAction::criminal_activity,
+                          {{OutcomeType::financial_gain, 0.5f, crim_mag}},
+                          crim_risk,
+                          -2.0f,
+                          0.0f});
+
+    // migrate: available if satisfaction is low and another province exists
+    if (state.provinces.size() > 1 && stability < 0.4f) {
+        candidates.push_back({DailyAction::migrate,
+                              {{OutcomeType::security_gain, 0.4f, 0.5f},
+                               {OutcomeType::self_preservation, 0.3f, 0.4f}},
+                              0.2f,
+                              -2.0f,
+                              0.0f});
+    }
+
+    // whistleblow: eligibility check per spec
+    if (npc.role == NPCRole::worker || npc.role == NPCRole::middle_manager ||
+        npc.role == NPCRole::accountant) {
+        float satisfaction = worker_satisfaction(npc);
+        bool has_witnessed = false;
+        for (const auto& mem : npc.memory_log) {
+            if (mem.type == MemoryType::witnessed_illegal_activity &&
+                mem.emotional_weight < -0.6f) {
+                has_witnessed = true;
+                break;
+            }
+        }
+        if (satisfaction < 0.35f && has_witnessed && npc.risk_tolerance > 0.4f) {
+            candidates.push_back({DailyAction::whistleblow,
+                                  {{OutcomeType::ideological, 0.6f, 0.7f},
+                                   {OutcomeType::self_preservation, 0.3f, 0.3f}},
+                                  0.6f,
+                                  -2.0f,
+                                  0.0f});
+        }
+    }
+
+    return candidates;
+}
+
+float NpcBehaviorModule::relative_utility(const NPC& npc, float net_utility) {
+    float top = 0.0f;
+    for (float w : npc.motivations.weights)
+        top = std::max(top, w);
+    if (!(top > 0.0f))
+        return 0.0f;  // no motivation at all: nothing is worth doing
+    return net_utility / top;
+}
+
+bool NpcBehaviorModule::chooses_to_act(const NPC& npc, const ActionChoice& choice) const {
+    return relative_utility(npc, choice.best.net_utility) >= mcfg_.inaction_threshold;
+}
+
+NpcBehaviorModule::ActionChoice NpcBehaviorModule::choose_action(
+    const NPC& npc, const std::vector<ActionCandidate>& candidates) const {
+    // --- Evaluate all candidates and find the best ---
+    ActionEvaluation best_eval{};
+    best_eval.net_utility = -1.0f;
+    float best_cost = 0.0f;
+
+    for (const auto& candidate : candidates) {
+        // Skip actions the NPC can't afford.
+        if (candidate.capital_cost > npc.capital) {
+            continue;
+        }
+
+        ActionEvaluation eval =
+            evaluate_action(npc, candidate.action, candidate.outcomes, candidate.exposure_risk,
+                            candidate.trust_target, mcfg_.trust_ev_bonus);
+
+        // NaN guard.
+        if (std::isnan(eval.net_utility)) {
+            eval.net_utility = 0.0f;
+        }
+
+        if (eval.net_utility > best_eval.net_utility) {
+            best_eval = eval;
+            best_cost = candidate.capital_cost;
+        }
+    }
+
+    return {best_eval, best_cost};
+}
+
+// ===========================================================================
 // NpcBehaviorModule — per-province tick execution
 // ===========================================================================
 
 void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState& state,
                                          DeltaBuffer& province_delta) {
-    const auto& province = state.provinces[province_idx];
-
     // Collect NPCs in this province — both active and waiting are evaluated.
     // Read through the precomputed bucket index instead of scanning all NPCs;
     // the orchestrator and apply_deltas keep the index fresh.
@@ -230,14 +386,10 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
               [](const NPC* a, const NPC* b) { return a->id < b->id; });
 
     // Read province conditions for context-sensitive candidate generation.
-    float crime_rate = province.cohort_stats->crime_rate;
-    float stability = province.conditions.stability_score;
-    float employment_rate = province.cohort_stats->formal_employment_rate;
-    // Informal labor floor: formal scarcity degrades pay toward subsistence,
-    // never to zero — there is always some work for willing bodies. Without
-    // this floor, wage = base_wage × employment_rate is a death spiral (low
-    // employment → worthless work → mass inaction → lower employment).
-    float effective_employment = std::max(employment_rate, cfg_.informal_wage_floor);
+    const ProvinceContext ctx = province_context(state, province_idx);
+    const float crime_rate = ctx.crime_rate;
+    const float stability = ctx.stability;
+    const float effective_employment = ctx.effective_employment;
 
     // Process each NPC.
     for (const NPC* npc_ptr : province_npcs) {
@@ -264,135 +416,17 @@ void NpcBehaviorModule::execute_province(uint32_t province_idx, const WorldState
             ke.confidence = std::max(0.0f, std::min(1.0f, ke.confidence));
         }
 
-        // --- Step 3: Generate context-sensitive action candidates ---
-        struct ActionCandidate {
-            DailyAction action;
-            std::vector<ActionOutcome> outcomes;
-            float exposure_risk;
-            float trust_target;  // -2.0f means no trust modifier
-            float capital_cost;  // capital spent if chosen
-        };
-
-        std::vector<ActionCandidate> candidates;
-
-        // work: probability scales with the effective (formal-or-informal)
-        // employment rate
-        float work_prob = std::min(1.0f, 0.5f + effective_employment * 0.4f);
-        candidates.push_back({DailyAction::work,
-                              {{OutcomeType::financial_gain, work_prob, 0.5f}},
-                              0.0f,
-                              -2.0f,
-                              0.0f});
-
-        // shop: magnitude scales inversely with price (stability proxy)
-        float shop_mag = std::min(1.0f, 0.2f + stability * 0.2f);
-        float shop_cost = std::min(npc.capital, npc.capital * cfg_.shop_cost_fraction);
-        candidates.push_back({DailyAction::shop,
-                              {{OutcomeType::security_gain, 0.7f, shop_mag}},
-                              0.0f,
-                              -2.0f,
-                              shop_cost});
-
-        // socialize: trust modifier from best relationship
-        {
-            float best_trust = -2.0f;
-            for (const auto& rel : npc.relationships) {
-                if (rel.trust > best_trust) {
-                    best_trust = rel.trust;
-                }
-            }
-            candidates.push_back({DailyAction::socialize,
-                                  {{OutcomeType::relationship_repair, 0.6f, 0.4f}},
-                                  0.0f,
-                                  best_trust,
-                                  0.0f});
-        }
-
-        // rest: always available
-        candidates.push_back(
-            {DailyAction::rest, {{OutcomeType::self_preservation, 0.9f, 0.2f}}, 0.0f, -2.0f, 0.0f});
-
-        // seek_employment: probability scales inversely with employment rate
-        float seek_prob = std::min(1.0f, 0.3f + (1.0f - employment_rate) * 0.4f);
-        candidates.push_back({DailyAction::seek_employment,
-                              {{OutcomeType::career_advance, seek_prob, 0.6f}},
-                              0.1f,
-                              -2.0f,
-                              0.0f});
-
-        // criminal_activity: magnitude scales with crime rate, risk scales with stability
-        float crim_mag = std::min(1.0f, 0.4f + crime_rate * 0.6f);
-        float crim_risk = std::max(0.3f, 0.8f - crime_rate * 0.5f);
-        candidates.push_back({DailyAction::criminal_activity,
-                              {{OutcomeType::financial_gain, 0.5f, crim_mag}},
-                              crim_risk,
-                              -2.0f,
-                              0.0f});
-
-        // migrate: available if satisfaction is low and another province exists
-        if (state.provinces.size() > 1 && stability < 0.4f) {
-            candidates.push_back({DailyAction::migrate,
-                                  {{OutcomeType::security_gain, 0.4f, 0.5f},
-                                   {OutcomeType::self_preservation, 0.3f, 0.4f}},
-                                  0.2f,
-                                  -2.0f,
-                                  0.0f});
-        }
-
-        // whistleblow: eligibility check per spec
-        if (npc.role == NPCRole::worker || npc.role == NPCRole::middle_manager ||
-            npc.role == NPCRole::accountant) {
-            float satisfaction = worker_satisfaction(npc);
-            bool has_witnessed = false;
-            for (const auto& mem : npc.memory_log) {
-                if (mem.type == MemoryType::witnessed_illegal_activity &&
-                    mem.emotional_weight < -0.6f) {
-                    has_witnessed = true;
-                    break;
-                }
-            }
-            if (satisfaction < 0.35f && has_witnessed && npc.risk_tolerance > 0.4f) {
-                candidates.push_back({DailyAction::whistleblow,
-                                      {{OutcomeType::ideological, 0.6f, 0.7f},
-                                       {OutcomeType::self_preservation, 0.3f, 0.3f}},
-                                      0.6f,
-                                      -2.0f,
-                                      0.0f});
-            }
-        }
-
-        // --- Evaluate all candidates and find the best ---
-        ActionEvaluation best_eval{};
-        best_eval.net_utility = -1.0f;
-        float best_cost = 0.0f;
-
-        for (const auto& candidate : candidates) {
-            // Skip actions the NPC can't afford.
-            if (candidate.capital_cost > npc.capital) {
-                continue;
-            }
-
-            ActionEvaluation eval =
-                evaluate_action(npc, candidate.action, candidate.outcomes, candidate.exposure_risk,
-                                candidate.trust_target, mcfg_.trust_ev_bonus);
-
-            // NaN guard.
-            if (std::isnan(eval.net_utility)) {
-                eval.net_utility = 0.0f;
-            }
-
-            if (eval.net_utility > best_eval.net_utility) {
-                best_eval = eval;
-                best_cost = candidate.capital_cost;
-            }
-        }
+        // --- Step 3: Generate context-sensitive action candidates and choose ---
+        const ActionChoice choice = choose_action(npc, generate_candidates(npc, state, ctx));
+        const ActionEvaluation& best_eval = choice.best;
+        const float best_cost = choice.cost;
 
         // --- Step 4: Write NPC delta ---
         NPCDelta npc_delta{};
         npc_delta.npc_id = npc.id;
 
-        if (best_eval.net_utility < mcfg_.inaction_threshold) {
-            // Below threshold: set to waiting.
+        if (!chooses_to_act(npc, choice)) {
+            // No discretionary action worth taking today: waiting (npc.h contract).
             npc_delta.new_status = NPCStatus::waiting;
         } else {
             // Above threshold: if was waiting, return to active.

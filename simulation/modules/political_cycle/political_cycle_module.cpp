@@ -135,7 +135,7 @@ void poll_legislators(const WorldState& state, LegislativeProposal& proposal,
     float votes_for = 0.0f;
     float votes_against = 0.0f;
     for (const auto& npc : state.significant_npcs) {
-        if (npc.status != NPCStatus::active || npc.role != NPCRole::politician)
+        if (!is_present(npc.status) || npc.role != NPCRole::politician)
             continue;
         float alignment = npc.motivations.weights[static_cast<size_t>(OutcomeType::ideological)];
         float obligation_bonus = 0.0f;
@@ -181,7 +181,7 @@ void PoliticalCycleModule::form_offices(const WorldState& state) {
         uint32_t politician = 0;
         uint32_t leader = 0;
         for (const auto& npc : state.significant_npcs) {
-            if (npc.status != NPCStatus::active || npc.current_province_id != prov.id)
+            if (!is_present(npc.status) || npc.current_province_id != prov.id)
                 continue;
             if (npc.role == NPCRole::politician && (politician == 0 || npc.id < politician))
                 politician = npc.id;
@@ -483,7 +483,7 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
             uint32_t challenger = 0;
             if (prov) {
                 for (const auto& npc : state.significant_npcs) {
-                    if (npc.status != NPCStatus::active || npc.current_province_id != prov->id)
+                    if (!is_present(npc.status) || npc.current_province_id != prov->id)
                         continue;
                     if (npc.role != NPCRole::politician || npc.id == incumbent)
                         continue;
@@ -541,7 +541,7 @@ void PoliticalCycleModule::execute(const WorldState& state, DeltaBuffer& delta) 
             // proposal per tick — the same helper ~10 other modules already use.
             const NPC* sponsor =
                 lookup_npc_by_id(state, static_cast<uint32_t>(proposal.sponsor_id));
-            const bool sponsor_active = sponsor != nullptr && sponsor->status == NPCStatus::active;
+            const bool sponsor_active = sponsor != nullptr && is_present(sponsor->status);
             if (!sponsor_active) {
                 proposal.status = LegislativeProposalStatus::failed;
                 continue;

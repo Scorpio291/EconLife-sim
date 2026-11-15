@@ -26,6 +26,7 @@ add_executable(econlife_unit_tests
     commodity_trading_test.cpp
     real_estate_test.cpp
     npc_behavior_test.cpp
+    npc_waiting_contract_test.cpp
     banking_test.cpp
     government_budget_test.cpp
     healthcare_test.cpp

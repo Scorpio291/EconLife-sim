@@ -89,11 +89,12 @@ void LaborMarketModule::generate_job_postings(const WorldState& state) {
         if (!p.filled && p.expires_tick > state.current_tick)
             ++open_postings[p.business_id];
 
-    // Unemployed (no formal employer), active NPCs per province, sorted by id
-    // for deterministic applicant selection.
+    // Unemployed (no formal employer) NPCs per province who are present and
+    // free (active or waiting — see the waiting contract in npc.h), sorted by
+    // id for deterministic applicant selection.
     std::unordered_map<uint32_t, std::vector<uint32_t>> unemployed_by_province;
     for (const auto& npc : state.significant_npcs) {
-        if (npc.status != NPCStatus::active)
+        if (!is_present(npc.status))
             continue;
         const EmploymentRecord* rec = find_employment(npc.id);
         if (rec && rec->employer_business_id != 0)
@@ -261,7 +262,12 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
     //     work, not unemployment.
     //   - unemployed: status == waiting without a formal employer — the NPC
     //     judged no action worth taking; out of work entirely.
-    // Labor force (denominator) = active + waiting. The previous version
+    // Labor force (denominator) = present NPCs (active + waiting, is_present()).
+    // This is the one consumer that deliberately distinguishes waiting from
+    // active (EL-SLICE-N2 contract, npc.h): waiting means no discretionary
+    // action, hence no informal work. [PRECISION] "active" overstates informal
+    // work — an NPC that chose shop or socialize is counted informally
+    // employed; only `work` pays the informal wage. The previous version
     // excluded `waiting` NPCs from the sample and counted every non-formal
     // active NPC as unemployed, which pinned unemployment at 1.0 the moment the
     // (still unwired) formal hiring market produced zero records.
@@ -271,7 +277,7 @@ void LaborMarketModule::execute_province(uint32_t province_idx, const WorldState
         uint32_t unemployed_count = 0;
         for (uint32_t idx : state.npc_indices_by_province[province_idx]) {
             const NPC& npc = state.significant_npcs[idx];
-            if (npc.status != NPCStatus::active && npc.status != NPCStatus::waiting)
+            if (!is_present(npc.status))
                 continue;  // imprisoned/dead/fled are out of the labor force
             ++labor_force;
             const EmploymentRecord* rec = find_employment(npc.id);
@@ -341,7 +347,7 @@ void LaborMarketModule::process_wage_payments(uint32_t province_id, const WorldS
             continue;
         if (npc->current_province_id != province_id)
             continue;
-        if (npc->status != NPCStatus::active)
+        if (!is_present(npc->status))
             continue;
 
         province_records.push_back(i);
@@ -450,7 +456,7 @@ void LaborMarketModule::process_hiring_decisions(uint32_t province_id, const Wor
             const NPC* npc = find_npc(state, app.applicant_npc_id);
             if (!npc)
                 continue;
-            if (npc->status != NPCStatus::active)
+            if (!is_present(npc->status))
                 continue;
 
             // Check NPC is not already employed.
@@ -522,7 +528,7 @@ void LaborMarketModule::process_voluntary_departures(uint32_t province_id, const
             continue;
         if (npc->current_province_id != province_id)
             continue;
-        if (npc->status != NPCStatus::active)
+        if (!is_present(npc->status))
             continue;
 
         province_employed.push_back(i);

@@ -66,7 +66,7 @@ void TrustUpdatesModule::execute_province(uint32_t province_idx, const WorldStat
 
     for (uint32_t idx : npc_indices) {
         const NPC& npc = state.significant_npcs[idx];
-        if (npc.status != NPCStatus::active)
+        if (!is_present(npc.status))
             continue;
 
         const uint32_t npc_id = npc.id;

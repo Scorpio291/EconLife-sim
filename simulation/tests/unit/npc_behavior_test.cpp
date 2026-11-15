@@ -853,7 +853,9 @@ TEST_CASE("test_npcs_from_other_provinces_not_processed", "[npc_behavior][tier5]
 TEST_CASE("test_npc_behavior_constants", "[npc_behavior][tier5]") {
     // 0.03 per the GDD §3 calibration: the gate sits at the bottom of the
     // achievable EV scale (see the [calibration] tests).
-    REQUIRE_THAT(NpcBehaviorModuleConfig{}.inaction_threshold, WithinAbs(0.03f, 0.001f));
+    // EL-SLICE-N2: the gate became a fraction of the NPC's own top motivation
+    // weight; the header now carries the package value.
+    REQUIRE_THAT(NpcBehaviorModuleConfig{}.inaction_threshold, WithinAbs(0.10f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModuleConfig{}.min_risk_discount, WithinAbs(0.05f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModuleConfig{}.risk_sensitivity_coeff, WithinAbs(2.0f, 0.001f));
     REQUIRE_THAT(NpcBehaviorModuleConfig{}.trust_ev_bonus, WithinAbs(0.3f, 0.001f));
@@ -884,7 +886,8 @@ TEST_CASE("calibration: balanced NPC in normal conditions acts (does not fall to
     module.execute_province(0, state, delta);
 
     // The NPC must NOT be set to waiting; its best candidate (work, EV ≈
-    // 0.125 × 0.78 × 0.5 ≈ 0.049) clears the calibrated threshold.
+    // 0.125 × 0.78 × 0.5 ≈ 0.049, i.e. 0.39 of its top weight 0.125) clears
+    // the gate (EL-SLICE-N2: relative utility vs inaction_threshold 0.10).
     for (const auto& d : delta.npc_deltas) {
         if (d.npc_id == 100 && d.new_status.has_value()) {
             REQUIRE(*d.new_status != NPCStatus::waiting);
@@ -911,8 +914,9 @@ TEST_CASE("calibration: zero formal employment - informal work keeps a worker ac
     module.execute_province(0, state, delta);
 
     // There is always some kind of work for willing bodies: with the informal
-    // floor (effective employment 0.30 → work EV ≈ 0.30 × 0.62 × 0.5 ≈ 0.093)
-    // the worker keeps acting and earns informal income rather than idling.
+    // floor (effective employment 0.30 → work EV ≈ 0.30 × 0.62 × 0.5 ≈ 0.093,
+    // 0.31 of its top weight 0.30) the worker keeps acting and earns informal
+    // income rather than idling.
     bool stayed_active = true;
     bool earned_income = false;
     for (const auto& d : delta.npc_deltas) {
@@ -949,7 +953,8 @@ TEST_CASE("calibration: dismal conditions + mismatched profile can still produce
     DeltaBuffer delta{};
     module.execute_province(0, state, delta);
 
-    // The inaction gate still has teeth: this NPC waits.
+    // The inaction gate still has teeth: this NPC waits (best: socialize,
+    // 0.05 × 0.6 × 0.4 ≈ 0.012, i.e. 0.027 of its top weight 0.45 < 0.10).
     bool went_waiting = false;
     for (const auto& d : delta.npc_deltas) {
         if (d.npc_id == 100 && d.new_status.has_value() && *d.new_status == NPCStatus::waiting) {

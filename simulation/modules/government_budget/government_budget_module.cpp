@@ -200,7 +200,7 @@ void GovernmentBudgetModule::process_quarterly_taxes(const WorldState& state, De
         }
 
         for (const auto& npc : state.significant_npcs) {
-            if (npc.status != NPCStatus::active)
+            if (!is_present(npc.status))
                 continue;
             auto fit = province_factors.find(npc.current_province_id);
             const float redistribution = fit != province_factors.end() ? fit->second.first : 1.0f;
