@@ -132,8 +132,15 @@ TEST_CASE("Criminal subsystem: orgs form and seed rackets + laundering end-to-en
 // regression shows exactly where it re-stalls. (Was the open emergence ratchet;
 // the break was raid cases seeded at `moderate` severity — below the custodial
 // floor — so convictions only ever fined.)
+// [!shouldfail] — KNOWN DEFECT N2, owner decision D1 = (b), 2026-11-15 (EL-SLICE-01,
+// PR #32). In the game's world (shipped inaction_threshold 0.10) ~97% of NPCs are
+// `waiting` from tick 1, so law enforcement never acts and the loop records 0
+// cases. With 0.03 in an otherwise identical setup it closes (54 cases, 23
+// custodial). The expectations below are unchanged. Catch2 reports this test
+// as FAILED the moment the loop closes again: remove the tag in the N2 fix.
+// See /reports/EconLife_Handoff_EL-SLICE-01_2026-11-14.md §7.1.
 TEST_CASE("Criminal justice loop closes: detection to imprisonment",
-          "[integration][criminal][justice]") {
+          "[integration][criminal][justice][!shouldfail]") {
     // The game's world (EL-SLICE-01): shipped content and package config, strict
     // policy. Declared override: criminal baseline 0.10 (the game uses 0.05).
     auto session = create_game_session(criminal_setup(42, 300, 0.10f));
