@@ -7,6 +7,10 @@
 //      re-fired and compounded on all 365 ticks of the year (review finding).
 //   2. Conservation: plunder moves wealth between residents; the world total is
 //      unchanged (nothing minted, nothing destroyed).
+//
+// SCOPE (EL-SLICE-01): A constructed mechanism fixture: a founding-seed world with hand-set
+// populations and capitals and a hand-built PackageConfig. It proves warfare's
+// cadence and conservation, not anything about the shipped game world.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>

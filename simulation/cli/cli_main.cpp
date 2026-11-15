@@ -23,6 +23,7 @@
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
 #include "interactive_json.h"
+#include "modules/game_bootstrap.h"
 #include "modules/persistence/persistence_module.h"
 #include "modules/persistence/save_file.h"
 #include "modules/register_base_game_modules.h"
@@ -168,56 +169,6 @@ static CliArgs parse_args(int argc, char* argv[]) {
     return args;
 }
 
-// Auto-detect a base_game subdirectory by searching upward.
-static std::string find_base_game_path(const char* subpath) {
-    namespace fs = std::filesystem;
-    static const char* prefixes[] = {
-        "packages/base_game",
-        "../packages/base_game",
-        "../../packages/base_game",
-        "../../../packages/base_game",
-    };
-    for (const auto* prefix : prefixes) {
-        auto path = fs::path(prefix) / subpath;
-        if (fs::exists(path)) {
-            return fs::canonical(path).string();
-        }
-    }
-    return "";
-}
-
-static std::string find_goods_directory() {
-    return find_base_game_path("goods");
-}
-
-static std::string find_config_directory() {
-    return find_base_game_path("config");
-}
-
-static std::string find_recipes_directory() {
-    return find_base_game_path("recipes");
-}
-
-static std::string find_facility_types_filepath() {
-    return find_base_game_path("facility_types/facility_types.csv");
-}
-
-static std::string find_scene_cards_directory() {
-    return find_base_game_path("scene_cards");
-}
-
-static std::string find_technology_directory() {
-    return find_base_game_path("technology");
-}
-
-static std::string find_eras_directory() {
-    return find_base_game_path("eras");
-}
-
-static std::string find_occupations_directory() {
-    return find_base_game_path("occupations");
-}
-
 static void print_header() {
     std::printf("%-6s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s\n", "Tick",
                 "AvgCapital", "AvgPrice", "Stability", "Crime", "Grievance", "Cohesion", "BizCash");
@@ -285,43 +236,37 @@ int main(int argc, char* argv[]) {
                  static_cast<unsigned long long>(args.seed), args.npc_count, args.province_count,
                  args.ticks, args.threads);
 
-    // 1. Create world using WorldGenerator
-    WorldGeneratorConfig gen_config{};
-    gen_config.seed = args.seed;
-    gen_config.province_count = args.province_count;
-    gen_config.npc_count = args.npc_count;
-    gen_config.max_good_tier = args.max_good_tier;
+    // 1-3. World, package config and module registration through the shared
+    // bootstrap (modules/game_bootstrap.h) — the same path every behavioural
+    // integration test uses. Lenient policy: missing content keeps the CLI's
+    // historical fallbacks, and the report below says which were taken.
+    GameSetup setup{};
+    setup.seed = args.seed;
+    setup.npc_count = args.npc_count;
+    setup.province_count = args.province_count;
+    setup.max_good_tier = args.max_good_tier;
+    setup.goods_dir_override = args.goods_dir;
+    setup.config_dir_override = args.config_dir;
+    setup.policy = ContentPolicy::lenient;
+    std::unique_ptr<GameSession> session = create_game_session(setup);
+    WorldState& world = session->world;
+    TickOrchestrator& orchestrator = session->orchestrator;
+    const BaseGamePaths& paths = session->report.paths;
 
-    // Resolve goods directory.
-    if (!args.goods_dir.empty()) {
-        gen_config.goods_directory = args.goods_dir;
-    } else {
-        gen_config.goods_directory = find_goods_directory();
-    }
-
-    gen_config.recipes_directory = find_recipes_directory();
-    gen_config.facility_types_filepath = find_facility_types_filepath();
-    gen_config.technology_directory = find_technology_directory();
-    gen_config.eras_directory = find_eras_directory();
-    gen_config.occupations_directory = find_occupations_directory();
-
-    if (!gen_config.goods_directory.empty()) {
-        std::fprintf(diag, "Goods directory: %s\n", gen_config.goods_directory.c_str());
+    if (!paths.goods_dir.empty()) {
+        std::fprintf(diag, "Goods directory: %s\n", paths.goods_dir.c_str());
     } else {
         std::fprintf(diag, "Goods directory: not found (using fallback goods)\n");
     }
-    if (!gen_config.recipes_directory.empty()) {
-        std::fprintf(diag, "Recipes directory: %s\n", gen_config.recipes_directory.c_str());
+    if (!paths.recipes_dir.empty()) {
+        std::fprintf(diag, "Recipes directory: %s\n", paths.recipes_dir.c_str());
     }
-    if (!gen_config.facility_types_filepath.empty()) {
-        std::fprintf(diag, "Facility types: %s\n", gen_config.facility_types_filepath.c_str());
+    if (!paths.facility_types_csv.empty()) {
+        std::fprintf(diag, "Facility types: %s\n", paths.facility_types_csv.c_str());
     }
-    if (!gen_config.technology_directory.empty()) {
-        std::fprintf(diag, "Technology data: %s\n", gen_config.technology_directory.c_str());
+    if (!paths.technology_dir.empty()) {
+        std::fprintf(diag, "Technology data: %s\n", paths.technology_dir.c_str());
     }
-
-    auto [world, player] = WorldGenerator::generate_with_player(gen_config);
-    world.player = std::make_unique<PlayerCharacter>(std::move(player));
 
     std::fprintf(diag,
                  "World generated: %zu provinces, %zu NPCs, %zu businesses, %zu markets, "
@@ -330,25 +275,17 @@ int main(int argc, char* argv[]) {
                  world.regional_markets.size(), world.facilities.size(),
                  world.loaded_recipes.size());
 
-    // 2. Load config (auto-detect or use override path).
-    std::string config_dir = args.config_dir.empty() ? find_config_directory() : args.config_dir;
-    PackageConfig pkg_config = load_package_config(config_dir);
-    if (!config_dir.empty()) {
-        std::fprintf(diag, "Config directory: %s\n", config_dir.c_str());
+    if (!paths.config_dir.empty()) {
+        std::fprintf(diag, "Config directory: %s\n", paths.config_dir.c_str());
     } else {
         std::fprintf(diag, "Config directory: not found (using spec defaults)\n");
     }
-    pkg_config.scene_cards.card_catalog_directory = find_scene_cards_directory();
     std::fprintf(diag, "Scene card catalog: %s\n",
-                 pkg_config.scene_cards.card_catalog_directory.empty()
+                 session->config.scene_cards.card_catalog_directory.empty()
                      ? "not found (cards will not be raised)"
-                     : pkg_config.scene_cards.card_catalog_directory.c_str());
+                     : session->config.scene_cards.card_catalog_directory.c_str());
+    std::fprintf(diag, "%s", format_bootstrap_report(session->report).c_str());
 
-    // 3. Set up orchestrator
-    TickOrchestrator orchestrator;
-    register_base_game_modules(orchestrator, pkg_config);
-    orchestrator.set_config(pkg_config);
-    orchestrator.finalize_registration();
     std::fprintf(diag, "Registered %zu modules, topological sort OK.\n\n",
                  orchestrator.modules().size());
 

@@ -10,10 +10,24 @@
 //
 // Used by emergence_observe.cpp (dumps the series) and emergence_test.cpp
 // (asserts behavioral invariants).
+//
+// THE WORLD IS THE GAME'S WORLD (EL-SLICE-01). The session is built by
+// create_game_session() in modules/game_bootstrap.h — the same call econlife_cli
+// makes — under ContentPolicy::strict: every catalogue and every package JSON
+// must load, and a world with zero production facilities fails before tick 1.
+// Until 2026-11-14 this harness loaded only the goods catalogue and no package
+// config, so the suite ran a world with 0 recipes, 0 facilities and header-
+// default module parameters (inaction_threshold 0.03 instead of the shipped
+// 0.10). Only seed, NPC count and province count may differ from the game, plus
+// the overrides a caller DECLARES (criminal baseline, forced regime, tick hook),
+// which are recorded in the bootstrap report.
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <functional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -22,25 +36,11 @@
 #include "core/world_gen/world_generator.h"
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
+#include "modules/game_bootstrap.h"
 #include "modules/register_base_game_modules.h"
 #include "modules/technology/technology_types.h"
 
 namespace econlife::emergence {
-
-inline std::string find_goods_dir() {
-    namespace fs = std::filesystem;
-    static const char* candidates[] = {
-        "packages/base_game/goods",
-        "../packages/base_game/goods",
-        "../../packages/base_game/goods",
-        "../../../packages/base_game/goods",
-    };
-    for (const auto* c : candidates) {
-        if (fs::exists(c) && fs::is_directory(c))
-            return fs::canonical(c).string();
-    }
-    return "";
-}
 
 struct Snapshot {
     uint32_t tick = 0;
@@ -74,6 +74,10 @@ struct Snapshot {
     double national_legitimacy = 0.5;
     int home_government_type = 0;
     double price_spread = 0.0;
+    // World size as it stands at this tick (EL-SLICE-01 telemetry).
+    std::size_t npcs = 0, provinces = 0, facilities = 0, facilities_staffed = 0;
+    std::vector<float> province_stability;    // per province, index order
+    std::vector<double> province_population;  // cohort total_population per province
 };
 
 inline bool is_criminal_role(NPCRole r) {
@@ -204,11 +208,120 @@ inline Snapshot capture(const WorldState& w) {
         }
     }
     s.price_spread = (pmax >= pmin) ? (pmax - pmin) : 0.0;
+
+    s.npcs = w.significant_npcs.size();
+    s.provinces = np;
+    s.facilities = w.facilities.size();
+    for (const auto& f : w.facilities)
+        if (f.worker_count > 0)
+            ++s.facilities_staffed;
+    s.province_stability.reserve(np);
+    s.province_population.reserve(np);
+    for (const auto& p : w.provinces) {
+        s.province_stability.push_back(p.conditions.stability_score);
+        s.province_population.push_back(p.cohort_stats ? p.cohort_stats->total_population : 0.0);
+    }
     return s;
+}
+
+using TickHook = std::function<void(WorldState&, uint32_t)>;
+
+// criminal_baseline sentinel: keep the game's WorldGeneratorConfig value.
+inline constexpr float kGameCriminalBaseline = -1.0f;
+
+// What a run is asked to be. Everything not listed comes from the package.
+struct RunSpec {
+    uint64_t seed = 42;
+    uint32_t npc_count = 500;
+    uint32_t province_count = 6;
+    uint32_t ticks = 365;
+    // Snapshot cadence: always tick 0 and the final tick; additionally every
+    // `snapshot_every` ticks (0 = off) and at each tick listed in `snapshot_at`.
+    uint32_t snapshot_every = 365;
+    std::vector<uint32_t> snapshot_at;
+    // Declared scenario overrides (recorded in the bootstrap report).
+    float criminal_baseline = kGameCriminalBaseline;
+    int force_government_type = -1;
+    TickHook post_tick{};
+    // Stop early once the run has used this much wall time (0 = no limit).
+    // The stop is recorded, never hidden.
+    double wall_budget_seconds = 0.0;
+    // Package root override (fail-fast tests point this at a broken copy).
+    std::string package_root;
+};
+
+struct EmergenceRun {
+    BootstrapReport bootstrap;
+    std::vector<Snapshot> series;
+    uint32_t ticks_completed = 0;
+    double init_seconds = 0.0;
+    double run_seconds = 0.0;
+    bool stopped_on_budget = false;
+};
+
+inline GameSetup make_setup(const RunSpec& spec) {
+    GameSetup setup{};
+    setup.seed = spec.seed;
+    setup.npc_count = spec.npc_count;
+    setup.province_count = spec.province_count;
+    setup.package_root = spec.package_root;
+    setup.policy = ContentPolicy::strict;
+    if (spec.criminal_baseline >= 0.0f) {
+        const float cb = spec.criminal_baseline;
+        setup.override_world_config = [cb](WorldGeneratorConfig& g) { g.criminal_baseline = cb; };
+        setup.declared_overrides.push_back("criminal_baseline=" + std::to_string(cb));
+    }
+    if (spec.force_government_type >= 0) {
+        const int gt = spec.force_government_type;
+        setup.override_generated_world = [gt](WorldState& w) {
+            for (auto& n : w.nations)
+                n.government_type = static_cast<GovernmentType>(gt);
+        };
+        setup.declared_overrides.push_back("force_government_type=" + std::to_string(gt));
+    }
+    if (spec.post_tick)
+        setup.declared_overrides.push_back("post_tick hook (exogenous shock)");
+    return setup;
+}
+
+inline EmergenceRun run_world(const RunSpec& spec) {
+    using clock = std::chrono::steady_clock;
+    const auto t0 = clock::now();
+    std::unique_ptr<GameSession> session = create_game_session(make_setup(spec));
+    const auto t1 = clock::now();
+
+    EmergenceRun out;
+    out.bootstrap = session->report;
+    out.init_seconds = std::chrono::duration<double>(t1 - t0).count();
+
+    WorldState& world = session->world;
+    ThreadPool pool(1);
+    const std::set<uint32_t> at(spec.snapshot_at.begin(), spec.snapshot_at.end());
+    out.series.push_back(capture(world));
+    for (uint32_t t = 1; t <= spec.ticks; ++t) {
+        session->orchestrator.execute_tick(world, pool);
+        if (spec.post_tick)
+            spec.post_tick(world, t);
+        out.ticks_completed = t;
+        const bool budget_hit =
+            spec.wall_budget_seconds > 0.0 &&
+            std::chrono::duration<double>(clock::now() - t1).count() > spec.wall_budget_seconds;
+        if (t == spec.ticks || at.count(t) != 0 ||
+            (spec.snapshot_every != 0 && t % spec.snapshot_every == 0) || budget_hit)
+            out.series.push_back(capture(world));
+        if (budget_hit && t < spec.ticks) {
+            out.stopped_on_budget = true;
+            break;
+        }
+    }
+    out.run_seconds = std::chrono::duration<double>(clock::now() - t1).count();
+    return out;
 }
 
 // Run a freshly generated V1-scale world for `years` in-game years, capturing a
 // snapshot at year 0 and after each year. Returns the time series.
+// criminal_baseline: kGameCriminalBaseline keeps the game's value; anything else
+// is a declared override.
 // force_government_type: if >= 0, overrides every nation's government_type after
 // generation (cast from GovernmentType) so a regime's unrest-response branch can
 // be exercised regardless of what world-gen happened to pick.
@@ -217,45 +330,21 @@ inline Snapshot capture(const WorldState& w) {
 // between ticks (e.g. a demand/revenue collapse) so the unrest cascade runs through
 // the REAL modules — layoffs, memories, grievance grounding, escalation, regime
 // response — rather than by writing grievance directly. Default: no-op.
-using TickHook = std::function<void(WorldState&, uint32_t)>;
-
 inline std::vector<Snapshot> run_world_years(uint64_t seed, uint32_t npc_count, uint32_t years,
-                                             float criminal_baseline = 0.10f,
+                                             float criminal_baseline = kGameCriminalBaseline,
                                              int force_government_type = -1,
                                              const TickHook& post_tick = {}) {
-    WorldGeneratorConfig config{};
-    config.seed = seed;
-    config.province_count = 6;
-    config.npc_count = npc_count;
-    config.criminal_baseline = criminal_baseline;
-    config.goods_directory = find_goods_dir();
-
-    auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = std::make_unique<PlayerCharacter>(std::move(player));
-    if (force_government_type >= 0) {
-        for (auto& n : world.nations)
-            n.government_type = static_cast<GovernmentType>(force_government_type);
-    }
-
-    TickOrchestrator orch;
-    register_base_game_modules(orch);
-    orch.finalize_registration();
-    ThreadPool pool(1);
-
-    std::vector<Snapshot> series;
-    series.reserve(years + 1);
-    series.push_back(capture(world));
-    uint32_t global_tick = 0;
-    for (uint32_t y = 0; y < years; ++y) {
-        for (uint32_t t = 0; t < 365; ++t) {
-            orch.execute_tick(world, pool);
-            ++global_tick;
-            if (post_tick)
-                post_tick(world, global_tick);
-        }
-        series.push_back(capture(world));
-    }
-    return series;
+    RunSpec spec;
+    spec.seed = seed;
+    spec.npc_count = npc_count;
+    spec.ticks = years * 365u;
+    spec.snapshot_every = 365;
+    spec.criminal_baseline = criminal_baseline;
+    spec.force_government_type = force_government_type;
+    spec.post_tick = post_tick;
+    EmergenceRun run = run_world(spec);
+    std::printf("%s", format_bootstrap_report(run.bootstrap).c_str());
+    return std::move(run.series);
 }
 
 // A persistent economic-deprivation shock applied between ticks: during

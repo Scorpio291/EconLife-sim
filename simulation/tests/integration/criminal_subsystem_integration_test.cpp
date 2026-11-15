@@ -21,6 +21,7 @@
 #include "core/world_state/player.h"
 #include "core/world_state/world_state.h"
 #include "modules/criminal_operations/criminal_operations_module.h"
+#include "modules/game_bootstrap.h"
 #include "modules/investigator_engine/investigator_engine_module.h"
 #include "modules/legal_process/legal_process_module.h"
 #include "modules/money_laundering/money_laundering_module.h"
@@ -31,19 +32,18 @@ using namespace econlife;
 
 namespace {
 
-std::string find_goods_dir() {
-    namespace fs = std::filesystem;
-    static const char* candidates[] = {
-        "packages/base_game/goods",
-        "../packages/base_game/goods",
-        "../../packages/base_game/goods",
-        "../../../packages/base_game/goods",
+// The game's session with the one declared override these scenarios need.
+GameSetup criminal_setup(uint64_t seed, uint32_t npcs, float criminal_baseline) {
+    GameSetup setup{};
+    setup.seed = seed;
+    setup.npc_count = npcs;
+    setup.province_count = 6;
+    setup.policy = ContentPolicy::strict;
+    setup.override_world_config = [criminal_baseline](WorldGeneratorConfig& g) {
+        g.criminal_baseline = criminal_baseline;
     };
-    for (const auto* c : candidates) {
-        if (fs::exists(c) && fs::is_directory(c))
-            return fs::canonical(c).string();
-    }
-    return "";
+    setup.declared_overrides.push_back("criminal_baseline=" + std::to_string(criminal_baseline));
+    return setup;
 }
 
 template <typename T>
@@ -64,15 +64,10 @@ bool is_criminal_role(NPCRole r) {
 
 TEST_CASE("Criminal subsystem: orgs form and seed rackets + laundering end-to-end",
           "[integration][criminal][orchestrator]") {
-    WorldGeneratorConfig config{};
-    config.seed = 20002;
-    config.province_count = 6;
-    config.npc_count = 300;            // ~9% are criminal roles -> several per province
-    config.criminal_baseline = 0.15f;  // elevate dominance for clarity
-    config.goods_directory = find_goods_dir();
-
-    auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = std::make_unique<PlayerCharacter>(std::move(player));
+    // The game's world (EL-SLICE-01): shipped content and package config, strict
+    // policy. Declared override: criminal baseline 0.15 to elevate dominance.
+    auto session = create_game_session(criminal_setup(20002, 300, 0.15f));
+    WorldState& world = session->world;
 
     // Sanity: world gen actually seeded criminal NPCs, otherwise the scenario
     // would be vacuous.
@@ -83,9 +78,7 @@ TEST_CASE("Criminal subsystem: orgs form and seed rackets + laundering end-to-en
     }
     REQUIRE(criminal_npcs > 0);
 
-    TickOrchestrator orchestrator;
-    register_base_game_modules(orchestrator);
-    orchestrator.finalize_registration();
+    TickOrchestrator& orchestrator = session->orchestrator;
     ThreadPool pool(1);
 
     // A handful of ticks is enough: formation + seeding happen on the first
@@ -139,20 +132,20 @@ TEST_CASE("Criminal subsystem: orgs form and seed rackets + laundering end-to-en
 // regression shows exactly where it re-stalls. (Was the open emergence ratchet;
 // the break was raid cases seeded at `moderate` severity — below the custodial
 // floor — so convictions only ever fined.)
+// [!shouldfail] — KNOWN DEFECT N2, owner decision D1 = (b), 2026-11-15 (EL-SLICE-01,
+// PR #32). In the game's world (shipped inaction_threshold 0.10) ~97% of NPCs are
+// `waiting` from tick 1, so law enforcement never acts and the loop records 0
+// cases. With 0.03 in an otherwise identical setup it closes (54 cases, 23
+// custodial). The expectations below are unchanged. Catch2 reports this test
+// as FAILED the moment the loop closes again: remove the tag in the N2 fix.
+// See /reports/EconLife_Handoff_EL-SLICE-01_2026-11-14.md §7.1.
 TEST_CASE("Criminal justice loop closes: detection to imprisonment",
-          "[integration][criminal][justice]") {
-    WorldGeneratorConfig config{};
-    config.seed = 42;
-    config.province_count = 6;
-    config.npc_count = 300;
-    config.criminal_baseline = 0.10f;
-    config.goods_directory = find_goods_dir();
-    auto [world, player] = WorldGenerator::generate_with_player(config);
-    world.player = std::make_unique<PlayerCharacter>(std::move(player));
-
-    TickOrchestrator orch;
-    register_base_game_modules(orch);
-    orch.finalize_registration();
+          "[integration][criminal][justice][!shouldfail]") {
+    // The game's world (EL-SLICE-01): shipped content and package config, strict
+    // policy. Declared override: criminal baseline 0.10 (the game uses 0.05).
+    auto session = create_game_session(criminal_setup(42, 300, 0.10f));
+    WorldState& world = session->world;
+    TickOrchestrator& orch = session->orchestrator;
     ThreadPool pool(1);
 
     // Count LE/investigator NPCs and criminal businesses, and co-location.

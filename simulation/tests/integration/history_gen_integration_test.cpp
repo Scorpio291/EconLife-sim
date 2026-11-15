@@ -2,6 +2,9 @@
 // generate a world, then run the orchestrator forward for pre-game years.
 // Validates that the forward-run path is sound — founding-seed worlds advance
 // cleanly and deterministically; full-seed economies survive a multi-year run.
+//
+// SCOPE (EL-SLICE-01): Forward-run soundness of the history driver with PackageConfig{} by design;
+// not a behavioural test of the shipped game world.
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>

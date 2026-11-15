@@ -31,6 +31,7 @@
 #include "core/world_state/player.h"
 #include "core/world_state/player_action_queue.h"
 #include "core/world_state/world_state.h"
+#include "modules/game_bootstrap.h"
 #include "modules/register_base_game_modules.h"
 
 namespace econlife::player_loop {
@@ -51,28 +52,17 @@ inline std::string find_goods_dir() {
     return find_package_dir("goods");
 }
 
-// The content a real session loads. A world generated without recipes has no
-// production to speak of, so a harness that skips them is not exercising the
-// game the player plays — and a determinism defect in the recipe-driven path
-// would go unseen.
-inline void set_content_directories(WorldGeneratorConfig& gen) {
-    namespace fs = std::filesystem;
-    gen.goods_directory = find_goods_dir();
-    gen.recipes_directory = find_package_dir("recipes");
-    gen.technology_directory = find_package_dir("technology");
-    gen.eras_directory = find_package_dir("eras");
-    gen.occupations_directory = find_package_dir("occupations");
-
-    // Facility types are what turn recipes into places that make things.
-    // Without this file world-gen creates NO facilities at all, production
-    // falls back to the abstract revenue path for every firm, and a harness
-    // that skips it is not running the economy the player buys into.
-    const std::string ft_dir = find_package_dir("facility_types");
-    if (!ft_dir.empty()) {
-        const fs::path csv = fs::path(ft_dir) / "facility_types.csv";
-        if (fs::exists(csv))
-            gen.facility_types_filepath = csv.string();
-    }
+// The session a real player gets: create_game_session() from
+// modules/game_bootstrap.h, the call econlife_cli makes, under the strict policy
+// (every catalogue and package JSON must load; a world without facilities fails
+// before tick 1). Only seed and sizes differ from the game.
+inline std::unique_ptr<GameSession> make_session(uint64_t seed, uint32_t npcs, uint32_t provinces) {
+    GameSetup setup{};
+    setup.seed = seed;
+    setup.npc_count = npcs;
+    setup.province_count = provinces;
+    setup.policy = ContentPolicy::strict;
+    return create_game_session(setup);
 }
 
 // ---------------------------------------------------------------------------
@@ -213,25 +203,10 @@ struct RunConfig {
 // run — drive a scripted player through the real orchestrator.
 // ---------------------------------------------------------------------------
 inline PlayerRun run(const RunConfig& cfg) {
-    WorldGeneratorConfig gen{};
-    gen.seed = cfg.seed;
-    gen.province_count = cfg.province_count;
-    gen.npc_count = cfg.npc_count;
-    set_content_directories(gen);
-
-    auto [world, player] = WorldGenerator::generate_with_player(gen);
-    world.player = std::make_unique<PlayerCharacter>(std::move(player));
-
-    TickOrchestrator orch;
-    // The config outlives every tick below: set_config keeps a POINTER to it,
-    // so it must not be a temporary or a narrower scope than the orchestrator.
-    PackageConfig pkg = load_package_config(find_package_dir("config"));
-    // The authored card copy. Without it a seeded card finds no template and
-    // is dropped, so a harness that skips it measures a player nobody talks to.
-    pkg.scene_cards.card_catalog_directory = find_package_dir("scene_cards");
-    register_base_game_modules(orch, pkg);
-    orch.set_config(pkg);
-    orch.finalize_registration();
+    std::unique_ptr<GameSession> session =
+        make_session(cfg.seed, cfg.npc_count, cfg.province_count);
+    WorldState& world = session->world;
+    TickOrchestrator& orch = session->orchestrator;
     ThreadPool pool(1);
 
     PlayerRun out;

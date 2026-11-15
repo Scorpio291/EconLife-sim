@@ -239,45 +239,17 @@ TEST_CASE("player_loop: the player's business responds to the choices they make"
 
 namespace {
 
-// Build the same world the harness does, so a save test exercises the real
-// registration order (module-private state is keyed by module name).
-WorldState build_world(uint64_t seed, uint32_t npcs, uint32_t provinces) {
-    WorldGeneratorConfig gen{};
-    gen.seed = seed;
-    gen.province_count = provinces;
-    gen.npc_count = npcs;
-    set_content_directories(gen);
-    // NB: bind the whole result rather than structured bindings — you cannot
-    // move out of a structured binding, so `return w;` would try to copy a
-    // WorldState (whose copy constructor is deleted).
-    auto result = WorldGenerator::generate_with_player(gen);
-    result.world.player = std::make_unique<PlayerCharacter>(std::move(result.player));
-    return std::move(result.world);
-}
-
+// The same session the harness and the game build (create_game_session), so a
+// save test exercises the real registration order (module-private state is
+// keyed by module name) under the shipped package config.
 struct Session {
-    // The config must outlive the orchestrator: TickOrchestrator::set_config
-    // stores a POINTER to it, so a constructor-local would leave config_
-    // dangling the moment the constructor returned. It is a member for that
-    // reason and no other.
-    PackageConfig pkg;
-    WorldState world;
-    TickOrchestrator orch;
+    std::unique_ptr<GameSession> gs;
+    WorldState& world;
+    TickOrchestrator& orch;
     ThreadPool pool{1};
 
     explicit Session(uint64_t seed, uint32_t npcs, uint32_t provinces)
-        : pkg(load_package_config(find_package_dir("config"))),
-          world(build_world(seed, npcs, provinces)) {
-        // The authored card copy, same as a real session loads.
-        pkg.scene_cards.card_catalog_directory = find_package_dir("scene_cards");
-        // Register with the package configs a real session uses, not module
-        // defaults: a determinism defect that only appears under the shipped
-        // configuration is one a player would meet and a test with defaults
-        // would never see.
-        register_base_game_modules(orch, pkg);
-        orch.set_config(pkg);
-        orch.finalize_registration();
-    }
+        : gs(make_session(seed, npcs, provinces)), world(gs->world), orch(gs->orchestrator) {}
 
     void tick(uint32_t n) {
         for (uint32_t i = 0; i < n; ++i) {
