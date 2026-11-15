@@ -60,6 +60,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ── Floating-point determinism ───────────────────────────────────────────────
+# Same seed + same inputs must give the same bytes on every compiler, build
+# type and CPU baseline. GCC and Clang contract `a*b + c` into one fused
+# multiply-add whenever the target has FMA, and an FMA rounds once where the
+# written expression rounds twice — a 1-ULP difference that compounds tick on
+# tick. Whether it happens depends on the optimisation level (-O0 never fuses)
+# and on the default -march (Ubuntu 26.04's GCC 15 targets x86-64-v3, which has
+# FMA), so contraction made Release and Debug disagree from tick 1. Forbid it
+# everywhere, dependencies included (h3 computes geometry the world is built
+# from). MSVC does not contract under its default /fp:precise.
+if(NOT MSVC)
+    add_compile_options(-ffp-contract=off)
+endif()
+
 # ── Options ──────────────────────────────────────────────────────────────────
 option(ECONLIFE_BUILD_TESTS "Build test targets" ON)
 option(ECONLIFE_BUILD_BENCHMARKS "Build benchmark targets" ON)
