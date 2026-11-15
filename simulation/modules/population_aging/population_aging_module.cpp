@@ -658,7 +658,7 @@ void PopulationAgingModule::execute_province(uint32_t province_idx, const WorldS
     if (is_annual_tick(state.current_tick)) {
         DeterministicRNG tick_rng(state.world_seed ^ static_cast<uint64_t>(state.current_tick));
         for (const auto& npc : state.significant_npcs) {
-            if (npc.status != NPCStatus::active || npc.current_province_id != province.id)
+            if (!is_present(npc.status) || npc.current_province_id != province.id)
                 continue;
             NPCDelta nd;
             nd.npc_id = npc.id;

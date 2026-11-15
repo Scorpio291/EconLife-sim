@@ -102,7 +102,7 @@ void InvestigatorEngineModule::init_for_tick(const WorldState& state) {
     // for deterministic insertion order.
     std::vector<const NPC*> all_investigators;
     for (const auto& npc : state.significant_npcs) {
-        if (npc.status != NPCStatus::active)
+        if (!is_present(npc.status))
             continue;
         if (npc.role == NPCRole::law_enforcement || npc.role == NPCRole::regulator ||
             npc.role == NPCRole::journalist || npc.role == NPCRole::ngo_investigator) {
@@ -173,7 +173,7 @@ void InvestigatorEngineModule::execute_province(uint32_t province_idx, const Wor
     if (province.id < state.npc_indices_by_province.size()) {
         for (uint32_t idx : state.npc_indices_by_province[province.id]) {
             const NPC& npc = state.significant_npcs[idx];
-            if (npc.status != NPCStatus::active)
+            if (!is_present(npc.status))
                 continue;
             if (npc.role == NPCRole::law_enforcement || npc.role == NPCRole::regulator ||
                 npc.role == NPCRole::journalist || npc.role == NPCRole::ngo_investigator) {

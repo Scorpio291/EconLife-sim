@@ -316,7 +316,7 @@ void InformantSystemModule::execute(const WorldState& state, DeltaBuffer& delta)
                 const NPC* lead_le = nullptr;
                 for (uint32_t idx : state.npc_indices_by_province[npc->current_province_id]) {
                     const NPC& cand = state.significant_npcs[idx];
-                    if (cand.role != NPCRole::law_enforcement || cand.status != NPCStatus::active)
+                    if (cand.role != NPCRole::law_enforcement || !is_present(cand.status))
                         continue;
                     if (!lead_le || cand.id < lead_le->id)
                         lead_le = &cand;

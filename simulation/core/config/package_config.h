@@ -2039,15 +2039,17 @@ struct FinancialDistributionConfig {
 };
 
 struct NpcBehaviorModuleConfig {
-    // Inaction gate, calibrated to the achievable EV scale (GDD §3: routine
-    // decisions pick the highest-utility action; `waiting` is an edge state).
-    // EV = motivation_weight × probability × magnitude: a balanced NPC's best
-    // candidate lands at ~0.05 in normal conditions and ~0.11 at the
-    // financially-driven extreme. At 0.03, NPCs act in normal conditions and
-    // only idle when conditions are dismal AND their motivation profile poorly
-    // matches the available actions. (The previous 0.10 sat ABOVE the entire
-    // achievable scale, so ~96% of NPCs fell to `waiting` from day one.)
-    float inaction_threshold = 0.03f;
+    // Inaction gate (EL-SLICE-N2). A fraction, not an absolute utility: an NPC
+    // takes no discretionary action today (status `waiting`) when its best
+    // affordable action is worth less than this share of what a certain, full,
+    // unrisky payoff on its own strongest motive would be worth to it
+    // (NpcBehaviorModule::relative_utility). The previous absolute gate compared
+    // against utilities that carry the 1/8 of the motivation normalisation, so
+    // its meaning depended on the size of the OutcomeType enum; the 0.03 that
+    // stood here was calibrated on that scale and has no meaning on this one.
+    // Same value as the package (modules.json) so the header holds no second
+    // opinion on this key.
+    float inaction_threshold = 0.10f;
     float min_risk_discount = 0.05f;
     float risk_sensitivity_coeff = 2.0f;
     float trust_ev_bonus = 0.3f;

@@ -92,8 +92,7 @@ void MediaSystemModule::create_stories_from_journalists(const WorldState& state,
             // Find journalist NPC
             const NPC* journalist = nullptr;
             if (const NPC* candidate = lookup_npc_by_id(state, journalist_id)) {
-                if (candidate->role == NPCRole::journalist &&
-                    candidate->status == NPCStatus::active) {
+                if (candidate->role == NPCRole::journalist && is_present(candidate->status)) {
                     journalist = candidate;
                 }
             }

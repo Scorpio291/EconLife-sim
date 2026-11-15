@@ -46,7 +46,7 @@ void HealthcareModule::execute_province(uint32_t province_idx, const WorldState&
             continue;
         if (npc->current_province_id != province_idx)
             continue;
-        if (npc->status != NPCStatus::active)
+        if (!is_present(npc->status))
             continue;
 
         province_npcs.push_back(&record);

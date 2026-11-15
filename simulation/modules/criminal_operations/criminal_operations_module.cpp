@@ -58,7 +58,7 @@ float CriminalOperationsModule::compute_le_heat(const CriminalOrganization& org,
 
     float max_heat = 0.0f;
     for (const auto& npc : npcs) {
-        if (npc.status == NPCStatus::active && members.count(npc.id)) {
+        if (is_present(npc.status) && members.count(npc.id)) {
             max_heat = std::max(max_heat, npc.investigator_meter.current_level);
         }
     }
@@ -144,7 +144,7 @@ void CriminalOperationsModule::form_organizations(const WorldState& state, Delta
     std::map<uint32_t, std::vector<uint32_t>> criminal_npcs_by_province;
     std::map<uint32_t, uint32_t> leader_by_province;
     for (const auto& npc : state.significant_npcs) {
-        if (npc.status != NPCStatus::active || !is_criminal_role(npc.role))
+        if (!is_present(npc.status) || !is_criminal_role(npc.role))
             continue;
         criminal_npcs_by_province[npc.current_province_id].push_back(npc.id);
         if (npc.role == NPCRole::criminal_operator) {

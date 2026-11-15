@@ -21,7 +21,7 @@ namespace econlife {
 // Forward declarations
 struct WorldState;
 struct DeltaBuffer;
-struct ActionOutcome;
+// ActionOutcome is defined in core/world_state/npc.h (included above).
 
 // ---------------------------------------------------------------------------
 // NpcBehaviorModule — ITickModule implementation for NPC daily behavior
@@ -95,6 +95,56 @@ class NpcBehaviorModule : public ITickModule {
 
     // Map MemoryType to the closest OutcomeType for motivation shift.
     static size_t memory_type_to_outcome_index(MemoryType type);
+
+    // --- Daily decision, exposed for tests and observers ---
+
+    // Province conditions the candidate generator reads.
+    struct ProvinceContext {
+        float crime_rate = 0.0f;
+        float stability = 0.0f;
+        float employment_rate = 0.0f;       // formal employment rate
+        float effective_employment = 0.0f;  // max(formal, informal_wage_floor)
+    };
+
+    // One discretionary action the NPC could take today.
+    struct ActionCandidate {
+        DailyAction action;
+        std::vector<ActionOutcome> outcomes;
+        float exposure_risk;
+        float trust_target;  // -2.0f means no trust modifier
+        float capital_cost;  // capital spent if chosen
+    };
+
+    // The best affordable candidate. best.net_utility is -1 when none is affordable.
+    struct ActionChoice {
+        ActionEvaluation best;
+        float cost = 0.0f;
+    };
+
+    ProvinceContext province_context(const WorldState& state, uint32_t province_idx) const;
+    std::vector<ActionCandidate> generate_candidates(const NPC& npc, const WorldState& state,
+                                                     const ProvinceContext& ctx) const;
+    ActionChoice choose_action(const NPC& npc,
+                               const std::vector<ActionCandidate>& candidates) const;
+    // The inaction decision (EL-SLICE-N2). An action's net utility is
+    //   sum(motivation_weight x probability x magnitude) x risk_discount
+    // and the motivation weights are normalised to sum to 1 across the 8
+    // OutcomeTypes. Its absolute size therefore carries a factor that comes from
+    // that normalisation (a balanced NPC has 1/8 on each motive), not from the
+    // action: the same NPC and the same action would score half as much if the
+    // enum had 16 entries. A fixed absolute threshold compared against it is not
+    // scale-free — at 0.10 it sat above ~97% of every NPC's best option in the
+    // game world, before anything had happened.
+    //
+    // The gate therefore compares like with like: the best action's net utility
+    // as a fraction of the NPC's own largest motivation weight, i.e. of what a
+    // certain (p = 1), full (m = 1), unrisky payoff on the thing it cares most
+    // about would be worth to it. `inaction_threshold` is that fraction. An NPC
+    // waits when nothing it can do today is worth that share of what it most
+    // wants — typically because no available action serves its dominant motives.
+    static float relative_utility(const NPC& npc, float net_utility);
+    bool chooses_to_act(const NPC& npc, const ActionChoice& choice) const;
+    float inaction_threshold() const { return mcfg_.inaction_threshold; }
 
    private:
     NpcBehaviorModuleConfig mcfg_;

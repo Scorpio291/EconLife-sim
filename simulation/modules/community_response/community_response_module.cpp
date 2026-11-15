@@ -132,13 +132,13 @@ void CommunityResponseModule::execute(const WorldState& state, DeltaBuffer& delt
     for (uint32_t pi = 0; pi < state.provinces.size(); ++pi) {
         const auto& province = state.provinces[pi];
 
-        // Collect active residents of this province via the home_province
+        // Collect present residents (active or waiting) of this province via the home_province
         // bucket index, sorted by id ascending.
         std::vector<const NPC*> province_npcs;
         if (province.id < state.npc_indices_by_home_province.size()) {
             for (uint32_t idx : state.npc_indices_by_home_province[province.id]) {
                 const NPC& npc = state.significant_npcs[idx];
-                if (npc.status == NPCStatus::active) {
+                if (is_present(npc.status)) {
                     province_npcs.push_back(&npc);
                 }
             }

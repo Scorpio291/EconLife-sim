@@ -302,7 +302,7 @@ void RandomEventsModule::apply_accident_per_tick(const WorldState& state, const 
     if (province.id < state.npc_indices_by_province.size()) {
         for (uint32_t idx : state.npc_indices_by_province[province.id]) {
             const NPC& npc = state.significant_npcs[idx];
-            if (npc.status != NPCStatus::active)
+            if (!is_present(npc.status))
                 continue;
             NPCDelta nd{};
             nd.npc_id = npc.id;
@@ -579,7 +579,7 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             if (province.id < state.npc_indices_by_province.size()) {
                 for (uint32_t idx : state.npc_indices_by_province[province.id]) {
                     const NPC& npc = state.significant_npcs[idx];
-                    if (npc.status != NPCStatus::active)
+                    if (!is_present(npc.status))
                         continue;
                     NPCDelta nd{};
                     nd.npc_id = npc.id;
@@ -619,7 +619,7 @@ void RandomEventsModule::apply_immediate_effects(const WorldState& state, const 
             if (province.id < state.npc_indices_by_province.size()) {
                 for (uint32_t idx : state.npc_indices_by_province[province.id]) {
                     const NPC& npc = state.significant_npcs[idx];
-                    if (npc.status != NPCStatus::active)
+                    if (!is_present(npc.status))
                         continue;
                     NPCDelta nd{};
                     nd.npc_id = npc.id;

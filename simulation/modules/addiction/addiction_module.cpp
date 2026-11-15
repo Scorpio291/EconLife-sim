@@ -172,7 +172,7 @@ void AddictionModule::execute_province(uint32_t province_idx, const WorldState& 
         const NPC& npc_ref = state.significant_npcs[idx];
         const NPC* npc = &npc_ref;
         const uint32_t npc_id = npc_ref.id;
-        if (npc->status != NPCStatus::active)
+        if (!is_present(npc->status))
             continue;
 
         // Per-NPC addiction state lives on NPC::addiction_state.

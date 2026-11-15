@@ -158,7 +158,7 @@ void RegionalConditionsModule::execute_province(uint32_t province_idx, const Wor
     uint32_t active_npc_count = 0;    // tracked-actor sample size in this province
     std::vector<float> npc_capitals;  // for significant-NPC wealth concentration
     for (const auto& npc : state.significant_npcs) {
-        if (npc.status != NPCStatus::active || npc.current_province_id != province.id)
+        if (!is_present(npc.status) || npc.current_province_id != province.id)
             continue;
         ++active_npc_count;
         npc_capitals.push_back(npc.capital);

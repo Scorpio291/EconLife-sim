@@ -124,7 +124,7 @@ void NpcSpendingModule::execute_province(uint32_t province_idx, const WorldState
     if (province.id < state.npc_indices_by_province.size()) {
         for (uint32_t idx : state.npc_indices_by_province[province.id]) {
             const NPC& npc = state.significant_npcs[idx];
-            if (npc.status == NPCStatus::active) {
+            if (is_present(npc.status)) {
                 province_npcs.push_back(&npc);
             }
         }

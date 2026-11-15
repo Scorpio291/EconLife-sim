@@ -287,7 +287,7 @@ void RealEstateModule::execute_province(uint32_t province_idx, const WorldState&
             if (npc_idx >= state.significant_npcs.size())
                 continue;
             const NPC& npc = state.significant_npcs[npc_idx];
-            if (npc.status != NPCStatus::active)
+            if (!is_present(npc.status))
                 continue;
             ++active_count;
             if (npc.capital < affordability_threshold) {
